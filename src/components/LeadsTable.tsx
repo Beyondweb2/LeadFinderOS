@@ -20,7 +20,11 @@ import {
   ArrowUpDown,
   Filter,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  PhoneCall,
+  PhoneOff,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -35,9 +39,13 @@ import {
 } from '@/components/ui/tooltip';
 import type { Lead, WebsiteStatus } from '@/types/lead';
 
+const ITEMS_PER_PAGE = 25;
+
 interface LeadsTableProps {
   leads: Lead[];
   onExport: () => void;
+  onAddToCallList?: (lead: Lead) => void;
+  isInCallList?: (leadId: string) => boolean;
 }
 
 type SortField = 'name' | 'rating' | 'reviewCount' | 'websiteStatus' | 'confidence';
@@ -50,7 +58,7 @@ const statusOrder: Record<WebsiteStatus, number> = {
   HAS_OWN_WEBSITE: 3,
 };
 
-export function LeadsTable({ leads, onExport }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToCallList, isInCallList }: LeadsTableProps) {
   const [sortField, setSortField] = useState<SortField>('websiteStatus');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [statusFilters, setStatusFilters] = useState<WebsiteStatus[]>([
@@ -59,6 +67,7 @@ export function LeadsTable({ leads, onExport }: LeadsTableProps) {
     'HAS_OWN_WEBSITE',
     'UNCERTAIN',
   ]);
+  const [currentPage, setCurrentPage] = useState(1);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -98,6 +107,17 @@ export function LeadsTable({ leads, onExport }: LeadsTableProps) {
 
     return result;
   }, [leads, sortField, sortDirection, statusFilters]);
+
+  // Reset to page 1 when filters change
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [statusFilters, leads]);
+
+  const totalPages = Math.ceil(filteredAndSortedLeads.length / ITEMS_PER_PAGE);
+  const paginatedLeads = filteredAndSortedLeads.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   const noWebsiteCount = leads.filter((l) => l.websiteStatus === 'NO_WEBSITE').length;
 
@@ -188,17 +208,18 @@ export function LeadsTable({ leads, onExport }: LeadsTableProps) {
                   <SortButton field="confidence">Conf.</SortButton>
                 </TableHead>
                 <TableHead className="w-[100px]">Links</TableHead>
+                <TableHead className="w-[50px]"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredAndSortedLeads.length === 0 ? (
+              {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                     No leads match your current filters.
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredAndSortedLeads.map((lead, index) => (
+                paginatedLeads.map((lead, index) => (
                   <TableRow 
                     key={lead.id}
                     className="border-border hover:bg-muted/30 animate-fade-in"
@@ -298,12 +319,98 @@ export function LeadsTable({ leads, onExport }: LeadsTableProps) {
                         )}
                       </div>
                     </TableCell>
+                    <TableCell>
+                      {onAddToCallList && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className={`h-8 w-8 ${
+                                isInCallList?.(lead.id)
+                                  ? 'text-primary bg-primary/10'
+                                  : 'hover:bg-muted hover:text-primary'
+                              }`}
+                              onClick={() => onAddToCallList(lead)}
+                              disabled={isInCallList?.(lead.id)}
+                            >
+                              {isInCallList?.(lead.id) ? (
+                                <PhoneOff className="h-4 w-4" />
+                              ) : (
+                                <PhoneCall className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {isInCallList?.(lead.id) 
+                              ? 'Already in call list' 
+                              : 'Add to call list'}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+                    </TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
         </div>
+        
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
+            <p className="text-sm text-muted-foreground">
+              Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSortedLeads.length)} of {filteredAndSortedLeads.length} results
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="border-border"
+              >
+                <ChevronLeft className="h-4 w-4 mr-1" />
+                Previous
+              </Button>
+              <div className="flex items-center gap-1">
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  let pageNum: number;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <Button
+                      key={pageNum}
+                      variant={currentPage === pageNum ? 'default' : 'outline'}
+                      size="sm"
+                      className={`w-8 h-8 p-0 ${currentPage === pageNum ? 'bg-primary' : 'border-border'}`}
+                      onClick={() => setCurrentPage(pageNum)}
+                    >
+                      {pageNum}
+                    </Button>
+                  );
+                })}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="border-border"
+              >
+                Next
+                <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

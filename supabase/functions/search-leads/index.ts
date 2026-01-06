@@ -218,17 +218,33 @@ async function searchPlaces(
   
   const { lat, lng } = geocodeData.results[0].geometry.location;
   
-  // Search for places
-  const searchUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&keyword=${encodeURIComponent(keyword)}&key=${apiKey}`;
-  const searchRes = await fetch(searchUrl);
-  const searchData = await searchRes.json();
+  // Search for places with pagination
+  const allResults: any[] = [];
+  let nextPageToken: string | undefined;
   
-  if (searchData.status !== 'OK' && searchData.status !== 'ZERO_RESULTS') {
-    console.error('Places search failed:', searchData.status, searchData.error_message);
-    throw new Error(`Search failed: ${searchData.error_message || searchData.status}`);
-  }
+  do {
+    const searchUrl = nextPageToken
+      ? `https://maps.googleapis.com/maps/api/place/nearbysearch/json?pagetoken=${nextPageToken}&key=${apiKey}`
+      : `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&keyword=${encodeURIComponent(keyword)}&key=${apiKey}`;
+    
+    const searchRes = await fetch(searchUrl);
+    const searchData = await searchRes.json();
+    
+    if (searchData.status !== 'OK' && searchData.status !== 'ZERO_RESULTS') {
+      console.error('Places search failed:', searchData.status, searchData.error_message);
+      throw new Error(`Search failed: ${searchData.error_message || searchData.status}`);
+    }
+    
+    allResults.push(...(searchData.results || []));
+    nextPageToken = searchData.next_page_token;
+    
+    // Google requires a short delay before using the next_page_token
+    if (nextPageToken) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  } while (nextPageToken && allResults.length < 60); // Max ~60 results (3 pages)
   
-  return searchData.results || [];
+  return allResults;
 }
 
 async function getPlaceDetails(placeId: string, apiKey: string): Promise<any> {

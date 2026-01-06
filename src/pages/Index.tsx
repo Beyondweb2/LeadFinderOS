@@ -1,10 +1,20 @@
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
+import { CallListSheet } from '@/components/CallListSheet';
 import { useLeadSearch } from '@/hooks/useLeadSearch';
+import { useCallList } from '@/hooks/useCallList';
 import { Flame, Target, Zap } from 'lucide-react';
 
 const Index = () => {
   const { leads, isLoading, search, exportToCsv } = useLeadSearch();
+  const { 
+    callList, 
+    addToCallList, 
+    removeFromCallList, 
+    clearCallList, 
+    isInCallList,
+    exportCallListToCsv 
+  } = useCallList();
 
   return (
     <div className="min-h-screen bg-background">
@@ -33,15 +43,23 @@ const Index = () => {
                 </div>
               </div>
               
-              <div className="flex items-center gap-6 text-sm text-muted-foreground">
-                <div className="flex items-center gap-2">
-                  <Flame className="h-4 w-4 text-status-hot" />
-                  <span>Hot leads = No website</span>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-6 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-2">
+                    <Flame className="h-4 w-4 text-status-hot" />
+                    <span>Hot leads = No website</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-4 w-4 text-primary" />
+                    <span>AI-powered classification</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <Zap className="h-4 w-4 text-primary" />
-                  <span>AI-powered classification</span>
-                </div>
+                <CallListSheet 
+                  callList={callList}
+                  onRemove={removeFromCallList}
+                  onClear={clearCallList}
+                  onExport={exportCallListToCsv}
+                />
               </div>
             </div>
           </div>
@@ -57,7 +75,12 @@ const Index = () => {
           {/* Results Section */}
           {leads.length > 0 && (
             <section className="animate-fade-in">
-              <LeadsTable leads={leads} onExport={exportToCsv} />
+              <LeadsTable 
+                leads={leads} 
+                onExport={exportToCsv}
+                onAddToCallList={addToCallList}
+                isInCallList={isInCallList}
+              />
             </section>
           )}
 
