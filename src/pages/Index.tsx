@@ -3,6 +3,7 @@ import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { CallListSheet } from '@/components/CallListSheet';
 import { ContactDialog } from '@/components/ContactDialog';
+import { UserMenu } from '@/components/UserMenu';
 import { useLeadSearch } from '@/hooks/useLeadSearch';
 import { useCallList } from '@/hooks/useCallList';
 import { useContactTracking } from '@/hooks/useContactTracking';
@@ -71,6 +72,7 @@ const Index = () => {
                   onClear={clearCallList}
                   onExport={exportCallListToCsv}
                 />
+                <UserMenu />
               </div>
             </div>
           </div>
