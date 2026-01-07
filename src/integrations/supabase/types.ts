@@ -23,6 +23,7 @@ export type Database = {
           lead_name: string
           notes: string | null
           outcome: Database["public"]["Enums"]["call_outcome"]
+          user_id: string
         }
         Insert: {
           contacted_at?: string
@@ -32,6 +33,7 @@ export type Database = {
           lead_name: string
           notes?: string | null
           outcome: Database["public"]["Enums"]["call_outcome"]
+          user_id: string
         }
         Update: {
           contacted_at?: string
@@ -41,6 +43,7 @@ export type Database = {
           lead_name?: string
           notes?: string | null
           outcome?: Database["public"]["Enums"]["call_outcome"]
+          user_id?: string
         }
         Relationships: []
       }
