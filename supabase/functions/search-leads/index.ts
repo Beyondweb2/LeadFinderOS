@@ -1,10 +1,37 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Input validation schema
+const SearchRequestSchema = z.object({
+  keyword: z.string()
+    .min(1, 'Keyword is required')
+    .max(100, 'Keyword must be less than 100 characters')
+    .transform(s => s.trim()),
+  location: z.string()
+    .min(1, 'Location is required')
+    .max(200, 'Location must be less than 200 characters')
+    .transform(s => s.trim()),
+  radius: z.number()
+    .int('Radius must be an integer')
+    .min(100, 'Minimum radius is 100 meters')
+    .max(50000, 'Maximum radius is 50km')
+    .default(5000),
+  minRating: z.number()
+    .min(0, 'Rating must be between 0 and 5')
+    .max(5, 'Rating must be between 0 and 5')
+    .optional(),
+  minReviews: z.number()
+    .int('Review count must be an integer')
+    .min(0, 'Review count cannot be negative')
+    .max(10000, 'Review count limit is 10000')
+    .optional(),
+});
 
 // Directory / Platform Blacklist - URLs that don't count as having a website
 const DIRECTORY_BLACKLIST = new Set([
@@ -38,14 +65,6 @@ const PLATFORM_PATTERNS = [
   /\.notion\.site$/i,
 ];
 
-interface SearchRequest {
-  keyword: string;
-  location: string;
-  radius: number;
-  minRating?: number;
-  minReviews?: number;
-}
-
 interface Lead {
   id: string;
   name: string;
@@ -60,6 +79,26 @@ interface Lead {
   confidence: number;
   reason: string;
   businessStatus?: string;
+}
+
+// Rate limiter for per-user request throttling
+const rateLimiter = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const limit = rateLimiter.get(userId);
+  
+  if (!limit || now > limit.resetAt) {
+    rateLimiter.set(userId, { count: 1, resetAt: now + 60000 }); // 1 minute window
+    return true;
+  }
+  
+  if (limit.count >= 10) { // 10 requests per minute
+    return false;
+  }
+  
+  limit.count++;
+  return true;
 }
 
 function extractDomain(url: string): string | null {
@@ -103,7 +142,7 @@ async function classifyWithAI(
     return {
       status: 'UNCERTAIN',
       confidence: 0.3,
-      reason: 'AI verification unavailable - API key not configured',
+      reason: 'AI verification unavailable',
     };
   }
 
@@ -196,7 +235,7 @@ Is this the business's own website or a directory listing?`,
     return {
       status: 'UNCERTAIN',
       confidence: 0.3,
-      reason: `AI verification error: ${error instanceof Error ? error.message : 'Unknown'}`,
+      reason: 'AI verification error',
     };
   }
 }
@@ -214,7 +253,7 @@ async function searchPlaces(
   
   if (geocodeData.status !== 'OK' || !geocodeData.results?.[0]) {
     console.error('Geocoding failed:', geocodeData.status);
-    throw new Error(`Could not find location: ${location}`);
+    throw new Error('Location not found');
   }
   
   const { lat, lng } = geocodeData.results[0].geometry.location;
@@ -233,7 +272,7 @@ async function searchPlaces(
     
     if (searchData.status !== 'OK' && searchData.status !== 'ZERO_RESULTS') {
       console.error('Places search failed:', searchData.status, searchData.error_message);
-      throw new Error(`Search failed: ${searchData.error_message || searchData.status}`);
+      throw new Error('Search service temporarily unavailable');
     }
     
     allResults.push(...(searchData.results || []));
@@ -275,6 +314,39 @@ async function getPlaceDetails(placeId: string, apiKey: string): Promise<any> {
   return data.result;
 }
 
+// Error sanitization - return safe messages to clients
+function sanitizeError(error: unknown): { message: string; status: number } {
+  if (error instanceof z.ZodError) {
+    return {
+      message: 'Invalid input: ' + error.errors.map(e => e.message).join(', '),
+      status: 400
+    };
+  }
+  
+  if (error instanceof Error) {
+    console.error('Detailed error:', error);
+    
+    if (error.message === 'Location not found') {
+      return {
+        message: 'Location not found. Please check the address and try again.',
+        status: 400
+      };
+    }
+    
+    if (error.message.includes('Search service')) {
+      return {
+        message: 'Search service temporarily unavailable. Please try again later.',
+        status: 503
+      };
+    }
+  }
+  
+  return {
+    message: 'An unexpected error occurred. Please try again.',
+    status: 500
+  };
+}
+
 serve(async (req) => {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -282,11 +354,20 @@ serve(async (req) => {
   }
 
   try {
+    // Check request size limit (10KB max)
+    const contentLength = req.headers.get('content-length');
+    if (contentLength && parseInt(contentLength) > 10000) {
+      return new Response(
+        JSON.stringify({ error: 'Request too large' }),
+        { status: 413, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized - Authentication required' }),
+        JSON.stringify({ error: 'Authentication required. Please sign in.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -303,28 +384,47 @@ serve(async (req) => {
     if (claimsError || !claimsData?.claims) {
       console.error('Auth error:', claimsError);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized - Invalid token' }),
+        JSON.stringify({ error: 'Authentication required. Please sign in.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const userId = claimsData.claims.sub;
+    const userId = claimsData.claims.sub as string;
     console.log(`Authenticated request from user: ${userId}`);
 
-    const { keyword, location, radius, minRating, minReviews }: SearchRequest = await req.json();
-    
-    if (!keyword || !location) {
+    // Check rate limit
+    if (!checkRateLimit(userId)) {
       return new Response(
-        JSON.stringify({ error: 'keyword and location are required' }),
+        JSON.stringify({ error: 'Too many requests. Please wait a moment and try again.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Parse and validate input
+    const body = await req.json();
+    const validationResult = SearchRequestSchema.safeParse(body);
+    
+    if (!validationResult.success) {
+      return new Response(
+        JSON.stringify({ 
+          error: 'Invalid input',
+          details: validationResult.error.errors.map(e => ({
+            field: e.path.join('.'),
+            message: e.message
+          }))
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
+    const { keyword, location, radius, minRating, minReviews } = validationResult.data;
+
     const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
     if (!GOOGLE_MAPS_API_KEY) {
+      console.error('GOOGLE_MAPS_API_KEY not configured');
       return new Response(
-        JSON.stringify({ error: 'Google Maps API key not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({ error: 'Service temporarily unavailable. Please try again later.' }),
+        { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
@@ -408,10 +508,10 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Search error:', error);
+    const { message, status } = sanitizeError(error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: message }),
+      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
