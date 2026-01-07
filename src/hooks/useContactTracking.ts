@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
 export type CallOutcome = 
@@ -17,12 +18,14 @@ export interface LeadContact {
   outcome: CallOutcome;
   notes: string | null;
   contacted_at: string;
+  user_id: string;
 }
 
 export function useContactTracking() {
   const [contacts, setContacts] = useState<LeadContact[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const fetchContacts = useCallback(async () => {
     const { data, error } = await supabase
@@ -48,6 +51,15 @@ export function useContactTracking() {
     outcome: CallOutcome,
     notes?: string
   ) => {
+    if (!user) {
+      toast({
+        title: 'Not authenticated',
+        description: 'Please log in to track contacts.',
+        variant: 'destructive',
+      });
+      return null;
+    }
+
     setIsLoading(true);
     
     const { data, error } = await supabase
@@ -57,6 +69,7 @@ export function useContactTracking() {
         lead_name: leadName,
         outcome,
         notes: notes || null,
+        user_id: user.id,
       })
       .select()
       .single();
@@ -80,7 +93,7 @@ export function useContactTracking() {
     });
 
     return data as LeadContact;
-  }, [toast]);
+  }, [toast, user]);
 
   const getContactsForLead = useCallback((leadId: string) => {
     return contacts.filter((c) => c.lead_id === leadId);
