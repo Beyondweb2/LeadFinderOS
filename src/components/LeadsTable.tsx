@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from './StatusBadge';
+import { ContactStatusBadge } from './ContactStatusBadge';
 import { 
   ExternalLink, 
   MapPin, 
@@ -24,7 +25,8 @@ import {
   PhoneCall,
   PhoneOff,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  MessageSquarePlus
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -38,6 +40,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { Lead, WebsiteStatus } from '@/types/lead';
+import type { LeadContact } from '@/hooks/useContactTracking';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -46,6 +49,8 @@ interface LeadsTableProps {
   onExport: () => void;
   onAddToCallList?: (lead: Lead) => void;
   isInCallList?: (leadId: string) => boolean;
+  onLogContact?: (lead: Lead) => void;
+  getLatestContact?: (leadId: string) => LeadContact | undefined;
 }
 
 type SortField = 'name' | 'rating' | 'reviewCount' | 'websiteStatus' | 'confidence';
@@ -58,7 +63,7 @@ const statusOrder: Record<WebsiteStatus, number> = {
   HAS_OWN_WEBSITE: 3,
 };
 
-export function LeadsTable({ leads, onExport, onAddToCallList, isInCallList }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToCallList, isInCallList, onLogContact, getLatestContact }: LeadsTableProps) {
   const [sortField, setSortField] = useState<SortField>('websiteStatus');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [statusFilters, setStatusFilters] = useState<WebsiteStatus[]>([
@@ -207,14 +212,15 @@ export function LeadsTable({ leads, onExport, onAddToCallList, isInCallList }: L
                 <TableHead className="w-[90px]">
                   <SortButton field="confidence">Conf.</SortButton>
                 </TableHead>
+                <TableHead className="w-[120px]">Contact Status</TableHead>
                 <TableHead className="w-[100px]">Links</TableHead>
-                <TableHead className="w-[50px]"></TableHead>
+                <TableHead className="w-[80px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                     No leads match your current filters.
                   </TableCell>
                 </TableRow>
@@ -284,6 +290,26 @@ export function LeadsTable({ leads, onExport, onAddToCallList, isInCallList }: L
                       </Badge>
                     </TableCell>
                     <TableCell>
+                      {getLatestContact?.(lead.id) ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div>
+                              <ContactStatusBadge outcome={getLatestContact(lead.id)!.outcome} />
+                            </div>
+                          </TooltipTrigger>
+                          <TooltipContent side="left" className="max-w-[250px] bg-popover border-border">
+                            {getLatestContact(lead.id)?.notes ? (
+                              <p className="text-sm">{getLatestContact(lead.id)?.notes}</p>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">No notes</p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-muted-foreground/50 text-xs">Not contacted</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
@@ -320,34 +346,51 @@ export function LeadsTable({ leads, onExport, onAddToCallList, isInCallList }: L
                       </div>
                     </TableCell>
                     <TableCell>
-                      {onAddToCallList && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={`h-8 w-8 ${
-                                isInCallList?.(lead.id)
-                                  ? 'text-primary bg-primary/10'
-                                  : 'hover:bg-muted hover:text-primary'
-                              }`}
-                              onClick={() => onAddToCallList(lead)}
-                              disabled={isInCallList?.(lead.id)}
-                            >
-                              {isInCallList?.(lead.id) ? (
-                                <PhoneOff className="h-4 w-4" />
-                              ) : (
-                                <PhoneCall className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {isInCallList?.(lead.id) 
-                              ? 'Already in call list' 
-                              : 'Add to call list'}
-                          </TooltipContent>
-                        </Tooltip>
-                      )}
+                      <div className="flex items-center gap-1">
+                        {onLogContact && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 hover:bg-muted hover:text-primary"
+                                onClick={() => onLogContact(lead)}
+                              >
+                                <MessageSquarePlus className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Log contact</TooltipContent>
+                          </Tooltip>
+                        )}
+                        {onAddToCallList && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={`h-8 w-8 ${
+                                  isInCallList?.(lead.id)
+                                    ? 'text-primary bg-primary/10'
+                                    : 'hover:bg-muted hover:text-primary'
+                                }`}
+                                onClick={() => onAddToCallList(lead)}
+                                disabled={isInCallList?.(lead.id)}
+                              >
+                                {isInCallList?.(lead.id) ? (
+                                  <PhoneOff className="h-4 w-4" />
+                                ) : (
+                                  <PhoneCall className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {isInCallList?.(lead.id) 
+                                ? 'Already in call list' 
+                                : 'Add to call list'}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
