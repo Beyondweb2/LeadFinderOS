@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { CallListSheet } from '@/components/CallListSheet';
+import { ContactDialog } from '@/components/ContactDialog';
 import { useLeadSearch } from '@/hooks/useLeadSearch';
 import { useCallList } from '@/hooks/useCallList';
+import { useContactTracking } from '@/hooks/useContactTracking';
 import { Flame, Target, Zap } from 'lucide-react';
+import type { Lead } from '@/types/lead';
 
 const Index = () => {
   const { leads, isLoading, search, exportToCsv } = useLeadSearch();
@@ -15,6 +19,13 @@ const Index = () => {
     isInCallList,
     exportCallListToCsv 
   } = useCallList();
+  const { 
+    markAsContacted, 
+    getLatestContact, 
+    isLoading: isContactLoading 
+  } = useContactTracking();
+  
+  const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
 
   return (
     <div className="min-h-screen bg-background">
@@ -80,6 +91,8 @@ const Index = () => {
                 onExport={exportToCsv}
                 onAddToCallList={addToCallList}
                 isInCallList={isInCallList}
+                onLogContact={(lead) => setContactDialogLead(lead)}
+                getLatestContact={getLatestContact}
               />
             </section>
           )}
@@ -100,6 +113,15 @@ const Index = () => {
             </section>
           )}
         </main>
+
+        {/* Contact Dialog */}
+        <ContactDialog
+          lead={contactDialogLead}
+          open={!!contactDialogLead}
+          onOpenChange={(open) => !open && setContactDialogLead(null)}
+          onSubmit={markAsContacted}
+          isLoading={isContactLoading}
+        />
 
         {/* Footer */}
         <footer className="border-t border-border/50 py-6 mt-auto">
