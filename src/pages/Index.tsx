@@ -18,7 +18,8 @@ const Index = () => {
     removeFromCallList, 
     clearCallList, 
     isInCallList,
-    exportCallListToCsv 
+    exportCallListToCsv,
+    importCallListFromCsv
   } = useCallList();
   const { 
     markAsContacted, 
@@ -71,6 +72,7 @@ const Index = () => {
                   onRemove={removeFromCallList}
                   onClear={clearCallList}
                   onExport={exportCallListToCsv}
+                  onImport={importCallListFromCsv}
                 />
                 <UserMenu />
               </div>
