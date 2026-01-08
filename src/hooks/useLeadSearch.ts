@@ -8,9 +8,63 @@ export function useLeadSearch() {
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
-  const search = async (filters: SearchFilters) => {
+  const checkPreviousSearch = async (filters: SearchFilters): Promise<{ searched: boolean; date?: string; count?: number }> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return { searched: false };
+
+    const normalizedLocation = filters.location.toLowerCase().trim();
+    const normalizedKeyword = filters.keyword.toLowerCase().trim();
+
+    const { data } = await supabase
+      .from('search_history')
+      .select('searched_at, results_count')
+      .eq('user_id', user.id)
+      .ilike('location', normalizedLocation)
+      .ilike('keyword', normalizedKeyword)
+      .order('searched_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (data) {
+      return { 
+        searched: true, 
+        date: new Date(data.searched_at).toLocaleDateString(),
+        count: data.results_count
+      };
+    }
+    return { searched: false };
+  };
+
+  const saveSearch = async (filters: SearchFilters, resultsCount: number) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    await supabase.from('search_history').insert({
+      user_id: user.id,
+      keyword: filters.keyword.toLowerCase().trim(),
+      location: filters.location.toLowerCase().trim(),
+      radius: filters.radius,
+      results_count: resultsCount,
+    });
+  };
+
+  const search = async (filters: SearchFilters, forceSearch = false) => {
     setIsLoading(true);
     try {
+      // Check if already searched
+      if (!forceSearch) {
+        const previous = await checkPreviousSearch(filters);
+        if (previous.searched) {
+          toast({
+            title: 'Already searched',
+            description: `You searched "${filters.keyword}" in "${filters.location}" on ${previous.date} (${previous.count} results). Search again to refresh.`,
+            variant: 'destructive',
+          });
+          setIsLoading(false);
+          return { alreadySearched: true };
+        }
+      }
+
       const { data, error } = await supabase.functions.invoke<SearchResponse>('search-leads', {
         body: filters,
       });
@@ -27,6 +81,7 @@ export function useLeadSearch() {
 
       if (data) {
         setLeads(data.leads);
+        await saveSearch(filters, data.leads.length);
         toast({
           title: 'Search complete',
           description: `Found ${data.leads.length} businesses. ${data.leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length} without websites.`,
