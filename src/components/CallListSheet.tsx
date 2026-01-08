@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -16,7 +17,8 @@ import {
   X, 
   Download, 
   Trash2,
-  ExternalLink 
+  ExternalLink,
+  Upload
 } from 'lucide-react';
 import type { Lead } from '@/types/lead';
 
@@ -25,9 +27,24 @@ interface CallListSheetProps {
   onRemove: (leadId: string) => void;
   onClear: () => void;
   onExport: () => void;
+  onImport: (file: File) => void;
 }
 
-export function CallListSheet({ callList, onRemove, onClear, onExport }: CallListSheetProps) {
+export function CallListSheet({ callList, onRemove, onClear, onExport, onImport }: CallListSheetProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      onImport(file);
+      e.target.value = '';
+    }
+  };
+
   return (
     <Sheet>
       <SheetTrigger asChild>
@@ -61,25 +78,43 @@ export function CallListSheet({ callList, onRemove, onClear, onExport }: CallLis
         </SheetHeader>
         
         <div className="mt-6 space-y-4">
-          {callList.length > 0 && (
-            <div className="flex gap-2">
-              <Button 
-                onClick={onExport} 
-                className="flex-1 bg-primary hover:bg-primary/90"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Export CSV
-              </Button>
-              <Button 
-                onClick={onClear} 
-                variant="outline" 
-                className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Clear All
-              </Button>
-            </div>
-          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          
+          <div className="flex gap-2">
+            <Button 
+              onClick={handleImportClick} 
+              variant="outline"
+              className="flex-1"
+            >
+              <Upload className="mr-2 h-4 w-4" />
+              Import CSV
+            </Button>
+            {callList.length > 0 && (
+              <>
+                <Button 
+                  onClick={onExport} 
+                  className="flex-1 bg-primary hover:bg-primary/90"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export CSV
+                </Button>
+                <Button 
+                  onClick={onClear} 
+                  variant="outline" 
+                  className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Clear All
+                </Button>
+              </>
+            )}
+          </div>
           
           {callList.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
