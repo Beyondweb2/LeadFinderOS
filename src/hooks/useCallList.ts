@@ -1,14 +1,14 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead } from '@/types/lead';
 
 export function useCallList() {
   const [callList, setCallList] = useState<Lead[]>([]);
-  const [addedHistory, setAddedHistory] = useState<Set<string>>(new Set());
+  const addedHistoryRef = useRef<Set<string>>(new Set());
   const { toast } = useToast();
 
   const addToCallList = useCallback((lead: Lead) => {
-    if (addedHistory.has(lead.id)) {
+    if (addedHistoryRef.current.has(lead.id)) {
       toast({
         title: 'Previously added',
         description: `${lead.name} has already been added to the call list before.`,
@@ -17,13 +17,13 @@ export function useCallList() {
       return;
     }
 
-    setAddedHistory((prev) => new Set(prev).add(lead.id));
+    addedHistoryRef.current.add(lead.id);
     setCallList((prev) => [...prev, lead]);
     toast({
       title: 'Added to call list',
       description: `${lead.name} added to your call list.`,
     });
-  }, [addedHistory, toast]);
+  }, [toast]);
 
   const removeFromCallList = useCallback((leadId: string) => {
     setCallList((prev) => {
