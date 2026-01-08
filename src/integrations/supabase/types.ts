@@ -47,6 +47,36 @@ export type Database = {
         }
         Relationships: []
       }
+      search_history: {
+        Row: {
+          id: string
+          keyword: string
+          location: string
+          radius: number
+          results_count: number
+          searched_at: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          keyword: string
+          location: string
+          radius: number
+          results_count?: number
+          searched_at?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          keyword?: string
+          location?: string
+          radius?: number
+          results_count?: number
+          searched_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
