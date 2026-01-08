@@ -60,28 +60,23 @@ export function useCallList() {
       return;
     }
 
+    // Format compatible with external CRM apps
     const headers = [
-      'Business Name',
-      'Category',
-      'Address',
-      'Phone',
-      'Rating',
-      'Review Count',
-      'Google Maps URL',
-      'Website URL',
-      'Website Status',
+      'businessName',
+      'contactPerson',
+      'phone',
+      'email',
+      'googleMapsUrl',
+      'notes',
     ];
 
     const rows = callList.map((lead) => [
       lead.name,
-      lead.category || '',
-      lead.address,
+      '', // contactPerson - not available
       lead.phone || '',
-      lead.rating?.toString() || '',
-      lead.reviewCount?.toString() || '',
+      '', // email - not available
       lead.googleMapsUrl,
-      lead.websiteUrl || '',
-      lead.websiteStatus,
+      `${lead.category || ''} | ${lead.address}`, // notes - include category and address as context
     ]);
 
     const csvContent = [headers, ...rows]
