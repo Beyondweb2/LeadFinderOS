@@ -130,12 +130,73 @@ function isDirectoryUrl(url: string): boolean {
   return false;
 }
 
+// Normalize business name for comparison (lowercase, remove special chars)
+function normalizeForComparison(text: string): string {
+  return text.toLowerCase()
+    .replace(/[^a-z0-9]/g, '')
+    .replace(/limited|ltd|llc|inc|corp|co|plc|services|service/g, '');
+}
+
+// Check if domain likely belongs to the business (heuristic)
+function domainMatchesBusiness(domain: string, businessName: string): { matches: boolean; confidence: number; reason: string } {
+  const normalizedDomain = normalizeForComparison(domain.replace(/\.(com|co\.uk|org|net|uk|io|biz)$/i, ''));
+  const normalizedName = normalizeForComparison(businessName);
+  
+  // Strong match: domain contains significant part of business name
+  if (normalizedDomain.length >= 4 && normalizedName.includes(normalizedDomain)) {
+    return { 
+      matches: true, 
+      confidence: 0.9, 
+      reason: `Domain "${domain}" contains business name pattern` 
+    };
+  }
+  
+  // Strong match: business name contains domain
+  if (normalizedName.length >= 4 && normalizedDomain.includes(normalizedName)) {
+    return { 
+      matches: true, 
+      confidence: 0.85, 
+      reason: `Business name matches domain "${domain}"` 
+    };
+  }
+  
+  // Partial match: check for word overlap
+  const domainWords = normalizedDomain.match(/.{3,}/g) || [];
+  const nameWords = normalizedName.match(/.{3,}/g) || [];
+  
+  for (const dWord of domainWords) {
+    if (dWord.length >= 4 && normalizedName.includes(dWord)) {
+      return { 
+        matches: true, 
+        confidence: 0.75, 
+        reason: `Domain contains keyword "${dWord}" from business name` 
+      };
+    }
+  }
+  
+  return { matches: false, confidence: 0, reason: '' };
+}
+
 async function classifyWithAI(
   businessName: string,
   websiteUrl: string,
   category?: string
 ): Promise<{ status: 'HAS_OWN_WEBSITE' | 'DIRECTORY_ONLY' | 'UNCERTAIN'; confidence: number; reason: string }> {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  const domain = extractDomain(websiteUrl);
+  
+  // First, apply heuristic check - if domain clearly matches business name, it's likely their site
+  if (domain) {
+    const heuristicResult = domainMatchesBusiness(domain, businessName);
+    if (heuristicResult.matches && heuristicResult.confidence >= 0.85) {
+      console.log(`Heuristic match for ${businessName}: ${heuristicResult.reason}`);
+      return {
+        status: 'HAS_OWN_WEBSITE',
+        confidence: heuristicResult.confidence,
+        reason: heuristicResult.reason,
+      };
+    }
+  }
   
   if (!LOVABLE_API_KEY) {
     console.error('LOVABLE_API_KEY not configured');
@@ -145,8 +206,6 @@ async function classifyWithAI(
       reason: 'AI verification unavailable',
     };
   }
-
-  const domain = extractDomain(websiteUrl);
   
   try {
     const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -160,25 +219,37 @@ async function classifyWithAI(
         messages: [
           {
             role: 'system',
-            content: `You are a website classifier. Your job is to determine if a URL represents a business's OWN website or just a directory/listing/profile page.
+            content: `You are an expert website classifier for a lead generation tool. Your job is to determine if a URL represents a business's OWN website or just a directory/listing/profile page.
 
-Rules:
-- HAS_OWN_WEBSITE: The business has their own branded website with their services, location, and contact info
-- DIRECTORY_ONLY: The URL is a listing/profile on a directory, marketplace, social media, or lead-generation platform
-- UNCERTAIN: Cannot determine (parked domain, broken, unclear ownership)
+THINK STEP BY STEP:
+1. Does the domain contain the business name or key words from it? (e.g., "liteupelectrical.com" for "Lite-Up Electrical Services" = likely their own site)
+2. Is this a known directory, marketplace, review site, or social media platform?
+3. Does the URL structure suggest a profile page? (e.g., /biz/, /profile/, /p/, /business/)
+
+CLASSIFICATION RULES:
+- HAS_OWN_WEBSITE: The domain appears to be owned by the business (contains their name/brand, .com/.co.uk with relevant keywords)
+- DIRECTORY_ONLY: The URL is clearly a listing on a third-party site (directories like yell.com, yelp.com, checkatrade, social media, review aggregators, food delivery apps, etc.)
+- UNCERTAIN: Cannot determine (generic domain, unclear ownership, parked/broken domain)
+
+IMPORTANT HEURISTICS:
+- If domain contains business name words → likely HAS_OWN_WEBSITE (e.g., "smithplumbing.co.uk" for "Smith Plumbing")
+- If URL path contains /biz/, /business/, /profile/, /listing/ → likely DIRECTORY_ONLY
+- Facebook, Instagram, Yelp, TripAdvisor, Google, etc. are ALWAYS directories
+- Generic domain + business keywords in domain → likely HAS_OWN_WEBSITE
 
 Respond ONLY with valid JSON in this exact format:
-{"status": "HAS_OWN_WEBSITE" | "DIRECTORY_ONLY" | "UNCERTAIN", "confidence": 0.0-1.0, "reason": "brief explanation"}`,
+{"status": "HAS_OWN_WEBSITE" | "DIRECTORY_ONLY" | "UNCERTAIN", "confidence": 0.0-1.0, "reason": "brief explanation of your reasoning"}`,
           },
           {
             role: 'user',
-            content: `Classify this website:
+            content: `Classify this website for lead generation purposes:
+
 Business Name: ${businessName}
 Business Category: ${category || 'Unknown'}
 Website URL: ${websiteUrl}
 Domain: ${domain}
 
-Is this the business's own website or a directory listing?`,
+Think about whether "${domain}" looks like it could be the business's own branded domain or a third-party directory page.`,
           },
         ],
       }),
