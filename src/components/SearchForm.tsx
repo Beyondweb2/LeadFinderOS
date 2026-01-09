@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
+import { UKLocationsList } from '@/components/UKLocationsList';
 import type { SearchFilters } from '@/types/lead';
 
 interface SearchFormProps {
@@ -71,6 +72,7 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                   className="pl-10 bg-input border-border focus:ring-primary"
                 />
               </div>
+              <UKLocationsList onLocationSelect={setLocation} />
             </div>
 
             <div className="space-y-2">
