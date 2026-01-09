@@ -2,11 +2,9 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
-import { CallListSheet } from '@/components/CallListSheet';
 import { ContactDialog } from '@/components/ContactDialog';
 import { UserMenu } from '@/components/UserMenu';
 import { useLeadSearch } from '@/hooks/useLeadSearch';
-import { useCallList } from '@/hooks/useCallList';
 import { useContactTracking } from '@/hooks/useContactTracking';
 import { useOutreach } from '@/hooks/useOutreach';
 import { Flame, Target, Zap, ClipboardList } from 'lucide-react';
@@ -16,21 +14,11 @@ import type { Lead } from '@/types/lead';
 const Index = () => {
   const { leads, isLoading, search, exportToCsv } = useLeadSearch();
   const { 
-    callList, 
-    addToCallList, 
-    removeFromCallList, 
-    clearCallList, 
-    isInCallList,
-    exportCallListToCsv,
-    importCallListFromCsv
-  } = useCallList();
-  const { 
     markAsContacted, 
     getLatestContact, 
     isLoading: isContactLoading 
   } = useContactTracking();
   const { addLead: addToOutreach, isInOutreach } = useOutreach();
-  
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
 
   return (
@@ -77,13 +65,6 @@ const Index = () => {
                     Outreach CRM
                   </Link>
                 </Button>
-                <CallListSheet 
-                  callList={callList}
-                  onRemove={removeFromCallList}
-                  onClear={clearCallList}
-                  onExport={exportCallListToCsv}
-                  onImport={importCallListFromCsv}
-                />
                 <UserMenu />
               </div>
             </div>
@@ -103,8 +84,6 @@ const Index = () => {
               <LeadsTable 
                 leads={leads} 
                 onExport={exportToCsv}
-                onAddToCallList={addToCallList}
-                isInCallList={isInCallList}
                 onLogContact={(lead) => setContactDialogLead(lead)}
                 getLatestContact={getLatestContact}
                 onAddToOutreach={addToOutreach}

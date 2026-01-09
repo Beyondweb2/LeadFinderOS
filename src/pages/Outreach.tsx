@@ -72,6 +72,7 @@ const Outreach = () => {
               leads={leads}
               onLeadClick={setSelectedLead}
               onStatusChange={updateStatus}
+              onNextActionChange={updateNextAction}
             />
           )}
         </main>
