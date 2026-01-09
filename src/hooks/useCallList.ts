@@ -79,8 +79,15 @@ export function useCallList() {
       `${lead.category || ''} | ${lead.address}`, // notes - include category and address as context
     ]);
 
+    const escapeCell = (cell: string) => {
+      if (cell.includes(',') || cell.includes('"') || cell.includes('\n')) {
+        return `"${cell.replace(/"/g, '""')}"`;
+      }
+      return cell;
+    };
+
     const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
+      .map((row) => row.map(escapeCell).join(','))
       .join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
