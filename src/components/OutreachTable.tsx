@@ -27,14 +27,15 @@ import {
   ClipboardList
 } from 'lucide-react';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
-import { NextActionBadge } from './NextActionBadge';
-import type { OutreachLead, LeadStatus } from '@/types/outreach';
+import { NextActionEditor } from './NextActionEditor';
+import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
 import { STATUS_OPTIONS } from '@/types/outreach';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
   onLeadClick: (lead: OutreachLead) => void;
   onStatusChange: (leadId: string, status: LeadStatus) => void;
+  onNextActionChange: (leadId: string, action: NextActionType, date?: string) => void;
 }
 
 const ITEMS_PER_PAGE = 15;
@@ -42,7 +43,7 @@ const ITEMS_PER_PAGE = 15;
 type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at';
 type SortDirection = 'asc' | 'desc';
 
-export function OutreachTable({ leads, onLeadClick, onStatusChange }: OutreachTableProps) {
+export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextActionChange }: OutreachTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('next_action_date');
@@ -192,9 +193,8 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange }: OutreachTa
                 <TableHead className="w-[150px]">
                   <SortButton field="status">Status</SortButton>
                 </TableHead>
-                <TableHead className="w-[160px]">Next Action</TableHead>
-                <TableHead className="w-[120px]">
-                  <SortButton field="next_action_date">Due Date</SortButton>
+                <TableHead className="w-[200px]">
+                  <SortButton field="next_action_date">Next Action</SortButton>
                 </TableHead>
                 <TableHead className="w-[80px]">Links</TableHead>
               </TableRow>
@@ -247,29 +247,12 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange }: OutreachTa
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell>
-                      <NextActionBadge action={lead.next_action} />
-                    </TableCell>
-                    <TableCell>
-                      {lead.next_action_date ? (
-                        <span
-                          className={`text-sm ${
-                            new Date(lead.next_action_date) < new Date(new Date().setHours(0, 0, 0, 0))
-                              ? 'text-red-400'
-                              : new Date(lead.next_action_date).toDateString() === new Date().toDateString()
-                              ? 'text-yellow-400'
-                              : 'text-muted-foreground'
-                          }`}
-                        >
-                          {new Date(lead.next_action_date).toLocaleDateString('en-GB', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          })}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
+                    <TableCell colSpan={2} onClick={(e) => e.stopPropagation()}>
+                      <NextActionEditor
+                        action={lead.next_action}
+                        date={lead.next_action_date}
+                        onUpdate={(action, date) => onNextActionChange(lead.id, action, date)}
+                      />
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       {lead.google_maps_url && (

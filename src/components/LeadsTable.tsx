@@ -22,8 +22,6 @@ import {
   Filter,
   ChevronDown,
   ChevronUp,
-  PhoneCall,
-  PhoneOff,
   ChevronLeft,
   ChevronRight,
   MessageSquarePlus,
@@ -49,8 +47,6 @@ const ITEMS_PER_PAGE = 25;
 interface LeadsTableProps {
   leads: Lead[];
   onExport: () => void;
-  onAddToCallList?: (lead: Lead) => void;
-  isInCallList?: (leadId: string) => boolean;
   onLogContact?: (lead: Lead) => void;
   getLatestContact?: (leadId: string) => LeadContact | undefined;
   onAddToOutreach?: (lead: Lead) => Promise<any>;
@@ -67,7 +63,7 @@ const statusOrder: Record<WebsiteStatus, number> = {
   HAS_OWN_WEBSITE: 3,
 };
 
-export function LeadsTable({ leads, onExport, onAddToCallList, isInCallList, onLogContact, getLatestContact, onAddToOutreach, isInOutreach }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, onAddToOutreach, isInOutreach }: LeadsTableProps) {
   const [sortField, setSortField] = useState<SortField>('websiteStatus');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [statusFilters, setStatusFilters] = useState<WebsiteStatus[]>([
@@ -364,34 +360,6 @@ export function LeadsTable({ leads, onExport, onAddToCallList, isInCallList, onL
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Log contact</TooltipContent>
-                          </Tooltip>
-                        )}
-                        {onAddToCallList && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className={`h-8 w-8 ${
-                                  isInCallList?.(lead.id)
-                                    ? 'text-primary bg-primary/10'
-                                    : 'hover:bg-muted hover:text-primary'
-                                }`}
-                                onClick={() => onAddToCallList(lead)}
-                                disabled={isInCallList?.(lead.id)}
-                              >
-                                {isInCallList?.(lead.id) ? (
-                                  <PhoneOff className="h-4 w-4" />
-                                ) : (
-                                  <PhoneCall className="h-4 w-4" />
-                                )}
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {isInCallList?.(lead.id) 
-                                ? 'Already in call list' 
-                                : 'Add to call list'}
-                            </TooltipContent>
                           </Tooltip>
                         )}
                         {onAddToOutreach && (
