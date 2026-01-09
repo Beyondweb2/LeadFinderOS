@@ -47,6 +47,92 @@ export type Database = {
         }
         Relationships: []
       }
+      outreach_activities: {
+        Row: {
+          activity_type: string
+          created_at: string
+          description: string
+          id: string
+          lead_id: string
+          user_id: string
+        }
+        Insert: {
+          activity_type: string
+          created_at?: string
+          description: string
+          id?: string
+          lead_id: string
+          user_id: string
+        }
+        Update: {
+          activity_type?: string
+          created_at?: string
+          description?: string
+          id?: string
+          lead_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "outreach_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      outreach_leads: {
+        Row: {
+          address: string | null
+          business_name: string
+          category: string | null
+          created_at: string
+          email: string | null
+          google_maps_url: string | null
+          id: string
+          next_action: Database["public"]["Enums"]["next_action_type"] | null
+          next_action_date: string | null
+          notes: string | null
+          phone: string | null
+          status: Database["public"]["Enums"]["lead_status"]
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          address?: string | null
+          business_name: string
+          category?: string | null
+          created_at?: string
+          email?: string | null
+          google_maps_url?: string | null
+          id?: string
+          next_action?: Database["public"]["Enums"]["next_action_type"] | null
+          next_action_date?: string | null
+          notes?: string | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          address?: string | null
+          business_name?: string
+          category?: string | null
+          created_at?: string
+          email?: string | null
+          google_maps_url?: string | null
+          id?: string
+          next_action?: Database["public"]["Enums"]["next_action_type"] | null
+          next_action_date?: string | null
+          notes?: string | null
+          phone?: string | null
+          status?: Database["public"]["Enums"]["lead_status"]
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       search_history: {
         Row: {
           id: string
@@ -92,6 +178,21 @@ export type Database = {
         | "callback_scheduled"
         | "wrong_number"
         | "left_voicemail"
+      lead_status:
+        | "not_contacted"
+        | "contacted"
+        | "call_back"
+        | "not_answered"
+        | "on_hold"
+        | "wants_draft"
+        | "interested"
+        | "not_interested"
+      next_action_type:
+        | "call"
+        | "follow_up"
+        | "send_draft"
+        | "remove_if_no_reply"
+        | "none"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -226,6 +327,23 @@ export const Constants = {
         "callback_scheduled",
         "wrong_number",
         "left_voicemail",
+      ],
+      lead_status: [
+        "not_contacted",
+        "contacted",
+        "call_back",
+        "not_answered",
+        "on_hold",
+        "wants_draft",
+        "interested",
+        "not_interested",
+      ],
+      next_action_type: [
+        "call",
+        "follow_up",
+        "send_draft",
+        "remove_if_no_reply",
+        "none",
       ],
     },
   },

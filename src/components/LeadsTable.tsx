@@ -26,7 +26,9 @@ import {
   PhoneOff,
   ChevronLeft,
   ChevronRight,
-  MessageSquarePlus
+  MessageSquarePlus,
+  ClipboardList,
+  Check
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -51,6 +53,8 @@ interface LeadsTableProps {
   isInCallList?: (leadId: string) => boolean;
   onLogContact?: (lead: Lead) => void;
   getLatestContact?: (leadId: string) => LeadContact | undefined;
+  onAddToOutreach?: (lead: Lead) => Promise<any>;
+  isInOutreach?: (leadName: string, googleMapsUrl?: string) => boolean;
 }
 
 type SortField = 'name' | 'rating' | 'reviewCount' | 'websiteStatus' | 'confidence';
@@ -63,7 +67,7 @@ const statusOrder: Record<WebsiteStatus, number> = {
   HAS_OWN_WEBSITE: 3,
 };
 
-export function LeadsTable({ leads, onExport, onAddToCallList, isInCallList, onLogContact, getLatestContact }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToCallList, isInCallList, onLogContact, getLatestContact, onAddToOutreach, isInOutreach }: LeadsTableProps) {
   const [sortField, setSortField] = useState<SortField>('websiteStatus');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [statusFilters, setStatusFilters] = useState<WebsiteStatus[]>([
@@ -387,6 +391,34 @@ export function LeadsTable({ leads, onExport, onAddToCallList, isInCallList, onL
                               {isInCallList?.(lead.id) 
                                 ? 'Already in call list' 
                                 : 'Add to call list'}
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
+                        {onAddToOutreach && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={`h-8 w-8 ${
+                                  isInOutreach?.(lead.name, lead.googleMapsUrl)
+                                    ? 'text-green-500 bg-green-500/10'
+                                    : 'hover:bg-muted hover:text-primary'
+                                }`}
+                                onClick={() => onAddToOutreach(lead)}
+                                disabled={isInOutreach?.(lead.name, lead.googleMapsUrl)}
+                              >
+                                {isInOutreach?.(lead.name, lead.googleMapsUrl) ? (
+                                  <Check className="h-4 w-4" />
+                                ) : (
+                                  <ClipboardList className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {isInOutreach?.(lead.name, lead.googleMapsUrl)
+                                ? 'Already in outreach'
+                                : 'Add to outreach CRM'}
                             </TooltipContent>
                           </Tooltip>
                         )}

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { CallListSheet } from '@/components/CallListSheet';
@@ -7,7 +8,9 @@ import { UserMenu } from '@/components/UserMenu';
 import { useLeadSearch } from '@/hooks/useLeadSearch';
 import { useCallList } from '@/hooks/useCallList';
 import { useContactTracking } from '@/hooks/useContactTracking';
-import { Flame, Target, Zap } from 'lucide-react';
+import { useOutreach } from '@/hooks/useOutreach';
+import { Flame, Target, Zap, ClipboardList } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { Lead } from '@/types/lead';
 
 const Index = () => {
@@ -26,6 +29,7 @@ const Index = () => {
     getLatestContact, 
     isLoading: isContactLoading 
   } = useContactTracking();
+  const { addLead: addToOutreach, isInOutreach } = useOutreach();
   
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
 
@@ -67,6 +71,12 @@ const Index = () => {
                     <span>AI-powered classification</span>
                   </div>
                 </div>
+                <Button variant="outline" asChild>
+                  <Link to="/outreach">
+                    <ClipboardList className="h-4 w-4 mr-2" />
+                    Outreach CRM
+                  </Link>
+                </Button>
                 <CallListSheet 
                   callList={callList}
                   onRemove={removeFromCallList}
@@ -97,6 +107,8 @@ const Index = () => {
                 isInCallList={isInCallList}
                 onLogContact={(lead) => setContactDialogLead(lead)}
                 getLatestContact={getLatestContact}
+                onAddToOutreach={addToOutreach}
+                isInOutreach={isInOutreach}
               />
             </section>
           )}
