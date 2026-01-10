@@ -65,16 +65,19 @@ export function useOutreach() {
       return null;
     }
 
-    // Check if lead already exists
-    const existing = leads.find(
-      (l) => l.business_name === lead.name || l.google_maps_url === lead.googleMapsUrl
-    );
-    
-    if (existing) {
+    // Check if lead was EVER added before (even if deleted) using outreach_history
+    const { data: historyMatch } = await supabase
+      .from('outreach_history')
+      .select('id')
+      .or(`business_name.eq.${lead.name},google_maps_url.eq.${lead.googleMapsUrl}`)
+      .limit(1)
+      .maybeSingle();
+
+    if (historyMatch) {
       toast({
-        title: 'Already in outreach',
-        description: `${lead.name} is already in your outreach list.`,
-        variant: 'default',
+        title: 'Previously added',
+        description: `${lead.name} was already added to your outreach list before.`,
+        variant: 'destructive',
       });
       return null;
     }
@@ -108,6 +111,13 @@ export function useOutreach() {
     const newLead = data as OutreachLead;
     setLeads((prev) => [...prev, newLead]);
 
+    // Track in history (so we remember even if deleted later)
+    await supabase.from('outreach_history').insert({
+      user_id: user.id,
+      business_name: lead.name,
+      google_maps_url: lead.googleMapsUrl || null,
+    });
+
     // Log activity
     await logActivity(newLead.id, 'added', `Added ${lead.name} to outreach list`);
 
@@ -117,7 +127,7 @@ export function useOutreach() {
     });
 
     return newLead;
-  }, [user, leads, toast]);
+  }, [user, toast]);
 
   const updateLead = useCallback(async (
     leadId: string,
@@ -234,7 +244,8 @@ export function useOutreach() {
     return data as OutreachActivity;
   }, [user]);
 
-  const isInOutreach = useCallback((leadName: string, googleMapsUrl?: string) => {
+  const isInOutreach = useCallback((leadName: string, googleMapsUrl?: string): boolean => {
+    // Check current leads only (for UI state - fast, sync check)
     return leads.some(
       (l) => l.business_name === leadName || (googleMapsUrl && l.google_maps_url === googleMapsUrl)
     );

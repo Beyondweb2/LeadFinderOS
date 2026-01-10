@@ -82,6 +82,30 @@ export type Database = {
           },
         ]
       }
+      outreach_history: {
+        Row: {
+          added_at: string
+          business_name: string
+          google_maps_url: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          added_at?: string
+          business_name: string
+          google_maps_url?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          added_at?: string
+          business_name?: string
+          google_maps_url?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       outreach_leads: {
         Row: {
           address: string | null
