@@ -48,23 +48,9 @@ export function useLeadSearch() {
     });
   };
 
-  const search = async (filters: SearchFilters, forceSearch = false) => {
+  const search = async (filters: SearchFilters) => {
     setIsLoading(true);
     try {
-      // Check if already searched
-      if (!forceSearch) {
-        const previous = await checkPreviousSearch(filters);
-        if (previous.searched) {
-          toast({
-            title: 'Already searched',
-            description: `You searched "${filters.keyword}" in "${filters.location}" on ${previous.date} (${previous.count} results). Search again to refresh.`,
-            variant: 'destructive',
-          });
-          setIsLoading(false);
-          return { alreadySearched: true };
-        }
-      }
-
       const { data, error } = await supabase.functions.invoke<SearchResponse>('search-leads', {
         body: filters,
       });
