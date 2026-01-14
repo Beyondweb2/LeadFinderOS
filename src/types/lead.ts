@@ -26,6 +26,7 @@ export interface SearchFilters {
   radius: number;
   minRating?: number;
   minReviews?: number;
+  requirePhone?: boolean;
 }
 
 export interface SearchResponse {

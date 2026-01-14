@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, MapPin, Radius, Star, MessageSquare, Loader2 } from 'lucide-react';
+import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,6 +8,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
 import { UKLocationsList } from '@/components/UKLocationsList';
+import { Switch } from '@/components/ui/switch';
 import type { SearchFilters } from '@/types/lead';
 
 interface SearchFormProps {
@@ -20,7 +21,8 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
   const [location, setLocation] = useState('');
   const [radius, setRadius] = useState(5);
   const [minRating, setMinRating] = useState(0);
-  const [minReviews, setMinReviews] = useState(0);
+  const [minReviews, setMinReviews] = useState(2); // Default to 2 to filter out inactive businesses
+  const [requirePhone, setRequirePhone] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -33,6 +35,7 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
       radius: radius * 1000, // Convert to meters
       minRating: minRating > 0 ? minRating : undefined,
       minReviews: minReviews > 0 ? minReviews : undefined,
+      requirePhone,
     });
   };
 
@@ -102,7 +105,7 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-4">
-              <div className="grid gap-4 md:grid-cols-2 max-w-lg">
+              <div className="grid gap-4 md:grid-cols-3 max-w-2xl">
                 <div className="space-y-2">
                   <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
                     <Star className="h-4 w-4" />
@@ -127,8 +130,24 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                     onValueChange={(value) => setMinReviews(value[0])}
                     min={0}
                     max={100}
-                    step={5}
+                    step={1}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
+                    <Phone className="h-4 w-4" />
+                    Require Phone Number
+                  </Label>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Switch
+                      checked={requirePhone}
+                      onCheckedChange={setRequirePhone}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {requirePhone ? 'Only show businesses with phone' : 'Show all businesses'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </CollapsibleContent>
