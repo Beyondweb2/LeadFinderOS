@@ -517,7 +517,10 @@ serve(async (req) => {
 
         // Apply filters
         if (minRating && (!details.rating || details.rating < minRating)) continue;
-        if (minReviews && (!details.user_ratings_total || details.user_ratings_total < minReviews)) continue;
+        
+        // Always require at least 2 reviews (hard floor to filter inactive businesses)
+        const effectiveMinReviews = Math.max(minReviews || 0, 2);
+        if (!details.user_ratings_total || details.user_ratings_total < effectiveMinReviews) continue;
         
         // Skip businesses without phone numbers (unlikely to be reachable)
         const phone = details.international_phone_number || details.formatted_phone_number;
