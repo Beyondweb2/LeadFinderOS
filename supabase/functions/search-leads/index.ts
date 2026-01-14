@@ -30,7 +30,9 @@ const SearchRequestSchema = z.object({
     .int('Review count must be an integer')
     .min(0, 'Review count cannot be negative')
     .max(10000, 'Review count limit is 10000')
-    .optional(),
+    .default(2), // Default to 2 minimum reviews to filter out inactive businesses
+  requirePhone: z.boolean()
+    .default(true), // Default to requiring a phone number
 });
 
 // Directory / Platform Blacklist - URLs that don't count as having a website
@@ -488,7 +490,7 @@ serve(async (req) => {
       );
     }
 
-    const { keyword, location, radius, minRating, minReviews } = validationResult.data;
+    const { keyword, location, radius, minRating, minReviews, requirePhone } = validationResult.data;
 
     const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
     if (!GOOGLE_MAPS_API_KEY) {
@@ -516,6 +518,13 @@ serve(async (req) => {
         // Apply filters
         if (minRating && (!details.rating || details.rating < minRating)) continue;
         if (minReviews && (!details.user_ratings_total || details.user_ratings_total < minReviews)) continue;
+        
+        // Skip businesses without phone numbers (unlikely to be reachable)
+        const phone = details.international_phone_number || details.formatted_phone_number;
+        if (requirePhone && !phone) continue;
+        
+        // Skip permanently closed businesses
+        if (details.business_status === 'CLOSED_PERMANENTLY') continue;
 
         const websiteUrl = details.website;
         const category = details.types?.[0]?.replace(/_/g, ' ') || undefined;
