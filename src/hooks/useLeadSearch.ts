@@ -123,24 +123,34 @@ export function useLeadSearch() {
       lead.reason,
     ]);
 
-    const csvContent = [headers, ...rows]
+    const BOM = '\uFEFF';
+    const csvContent = BOM + [headers, ...rows]
       .map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(','))
-      .join('\n');
+      .join('\r\n');
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `leads-${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    try {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `leads-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
 
-    toast({
-      title: 'Export complete',
-      description: `Exported ${leads.length} leads to CSV.`,
-    });
+      toast({
+        title: 'Export complete',
+        description: `Exported ${leads.length} leads to CSV.`,
+      });
+    } catch (err) {
+      console.error('CSV export failed:', err);
+      toast({
+        title: 'Export failed',
+        description: 'Failed to export leads to CSV. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   return {
