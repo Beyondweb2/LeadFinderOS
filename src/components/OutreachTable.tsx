@@ -64,6 +64,20 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
       return;
     }
 
+    // Standard CSV escape: only quote if cell contains comma, quote, CR, or LF
+    const csvEscape = (value: string): string => {
+      if (/[",\r\n]/.test(value)) {
+        return `"${value.replace(/"/g, '""')}"`;
+      }
+      return value;
+    };
+
+    // Normalize date to YYYY-MM-DD format
+    const normalizeDate = (dateStr: string | null): string => {
+      if (!dateStr) return '';
+      return dateStr.split('T')[0];
+    };
+
     const headers = ['businessName', 'contactPerson', 'phone', 'email', 'googleMapsUrl', 'notes', 'status', 'nextAction', 'nextActionDate', 'country', 'address', 'category'];
     const rows = filteredAndSortedLeads.map((lead) => [
       lead.business_name,
@@ -74,14 +88,14 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
       lead.notes || '',
       lead.status,
       lead.next_action || '',
-      lead.next_action_date || '',
+      normalizeDate(lead.next_action_date),
       lead.country || '',
       lead.address || '',
       lead.category || '',
     ]);
 
     const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .map((row) => row.map((cell) => csvEscape(String(cell))).join(','))
       .join('\r\n');
 
     try {
