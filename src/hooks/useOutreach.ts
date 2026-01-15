@@ -66,12 +66,27 @@ export function useOutreach() {
     }
 
     // Check if lead was EVER added before (even if deleted) using outreach_history
-    const { data: historyMatch } = await supabase
+    // Use separate parameterized queries to prevent PostgREST injection
+    const { data: nameMatch } = await supabase
       .from('outreach_history')
       .select('id')
-      .or(`business_name.eq.${lead.name},google_maps_url.eq.${lead.googleMapsUrl}`)
+      .eq('business_name', lead.name)
       .limit(1)
       .maybeSingle();
+    
+    let historyMatch = nameMatch;
+    
+    // If no match by name and we have a URL, check by URL
+    if (!historyMatch && lead.googleMapsUrl) {
+      const { data: urlMatch } = await supabase
+        .from('outreach_history')
+        .select('id')
+        .eq('google_maps_url', lead.googleMapsUrl)
+        .limit(1)
+        .maybeSingle();
+      
+      historyMatch = urlMatch;
+    }
 
     if (historyMatch) {
       toast({
