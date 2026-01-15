@@ -54,7 +54,7 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [currentPage, setCurrentPage] = useState(1);
 
-  const exportToCsv = () => {
+  const exportToCsv = (mode: 'crm' | 'import' = 'crm') => {
     if (filteredAndSortedLeads.length === 0) {
       toast({
         title: 'No leads to export',
@@ -72,14 +72,33 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
       return value;
     };
 
-    // Normalize date to YYYY-MM-DD format
     const normalizeDate = (dateStr: string | null): string => {
       if (!dateStr) return '';
       return dateStr.split('T')[0];
     };
 
-    const headers = ['businessName', 'contactPerson', 'phone', 'email', 'googleMapsUrl', 'notes', 'status', 'nextAction', 'nextActionDate', 'country', 'address', 'category'];
-    const rows = filteredAndSortedLeads.map((lead) => [
+    const buildCsv = (headers: string[], rows: Array<Array<string | number | null | undefined>>) => {
+      return [headers, ...rows]
+        .map((row) => row.map((cell) => csvEscape(String(cell ?? ''))).join(','))
+        .join('\r\n');
+    };
+
+    const crmHeaders = [
+      'businessName',
+      'contactPerson',
+      'phone',
+      'email',
+      'googleMapsUrl',
+      'notes',
+      'status',
+      'nextAction',
+      'nextActionDate',
+      'country',
+      'address',
+      'category',
+    ];
+
+    const crmRows = filteredAndSortedLeads.map((lead) => [
       lead.business_name,
       '', // contactPerson - not stored in this app
       lead.phone || '',
@@ -94,16 +113,28 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
       lead.category || '',
     ]);
 
-    const csvContent = [headers, ...rows]
-      .map((row) => row.map((cell) => csvEscape(String(cell))).join(','))
-      .join('\r\n');
+    // Other app importer (per its UI): requires businessName, optionally accepts only these columns
+    const importHeaders = ['businessName', 'contactPerson', 'phone', 'email', 'googleMapsUrl', 'notes'];
+    const importRows = filteredAndSortedLeads.map((lead) => [
+      lead.business_name,
+      '',
+      lead.phone || '',
+      lead.email || '',
+      lead.google_maps_url || '',
+      lead.notes || '',
+    ]);
+
+    const csvContent = mode === 'import' ? buildCsv(importHeaders, importRows) : buildCsv(crmHeaders, crmRows);
 
     try {
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `outreach-leads-${new Date().toISOString().split('T')[0]}.csv`;
+      link.download =
+        mode === 'import'
+          ? `import-businesses-${new Date().toISOString().split('T')[0]}.csv`
+          : `outreach-leads-${new Date().toISOString().split('T')[0]}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -228,11 +259,20 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
             <Button
               variant="outline"
               size="sm"
-              onClick={exportToCsv}
+              onClick={() => exportToCsv('import')}
               className="bg-background"
             >
               <Download className="h-4 w-4 mr-2" />
-              Export CSV
+              Export Import CSV
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportToCsv('crm')}
+              className="bg-background"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export CRM CSV
             </Button>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
