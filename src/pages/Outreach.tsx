@@ -16,6 +16,7 @@ const Outreach = () => {
     updateNextAction,
     updateNotes,
     deleteLead,
+    deleteAllLeads,
     fetchActivities,
   } = useOutreach();
 
@@ -73,6 +74,7 @@ const Outreach = () => {
               onLeadClick={setSelectedLead}
               onStatusChange={updateStatus}
               onNextActionChange={updateNextAction}
+              onRemoveAll={deleteAllLeads}
             />
           )}
         </main>
