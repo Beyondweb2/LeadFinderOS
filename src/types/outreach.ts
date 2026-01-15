@@ -15,6 +15,8 @@ export type NextActionType =
   | 'remove_if_no_reply'
   | 'none';
 
+export type Country = 'UK' | 'AUS';
+
 export interface OutreachLead {
   id: string;
   user_id: string;
@@ -28,6 +30,7 @@ export interface OutreachLead {
   next_action: NextActionType | null;
   next_action_date: string | null;
   notes: string | null;
+  country: Country | null;
   created_at: string;
   updated_at: string;
 }

@@ -7,7 +7,7 @@ import { Slider } from '@/components/ui/slider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
-import { UKLocationsList } from '@/components/UKLocationsList';
+import { QuickLocationsList, type Country } from '@/components/QuickLocationsList';
 import { Switch } from '@/components/ui/switch';
 import type { SearchFilters } from '@/types/lead';
 
@@ -24,6 +24,7 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
   const [minReviews, setMinReviews] = useState(2); // Default to 2 to filter out inactive businesses
   const [requirePhone, setRequirePhone] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedCountry, setSelectedCountry] = useState<Country>('UK');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,6 +37,7 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
       minRating: minRating > 0 ? minRating : undefined,
       minReviews: minReviews > 0 ? minReviews : undefined,
       requirePhone,
+      country: selectedCountry,
     });
   };
 
@@ -75,7 +77,10 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                   className="pl-10 bg-input border-border focus:ring-primary"
                 />
               </div>
-              <UKLocationsList onLocationSelect={setLocation} />
+              <QuickLocationsList onLocationSelect={(loc, country) => {
+                setLocation(loc);
+                setSelectedCountry(country);
+              }} />
             </div>
 
             <div className="space-y-2">
