@@ -64,20 +64,20 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
       return;
     }
 
-    const headers = ['Business Name', 'Phone', 'Email', 'Status', 'Next Action', 'Next Action Date', 'Country', 'Address', 'Category', 'Notes', 'Google Maps URL', 'Created At'];
+    const headers = ['businessName', 'contactPerson', 'phone', 'email', 'googleMapsUrl', 'notes', 'status', 'nextAction', 'nextActionDate', 'country', 'address', 'category'];
     const rows = filteredAndSortedLeads.map((lead) => [
       lead.business_name,
+      '', // contactPerson - not stored in this app
       lead.phone || '',
       lead.email || '',
+      lead.google_maps_url || '',
+      lead.notes || '',
       lead.status,
       lead.next_action || '',
       lead.next_action_date || '',
       lead.country || '',
       lead.address || '',
       lead.category || '',
-      lead.notes || '',
-      lead.google_maps_url || '',
-      lead.created_at,
     ]);
 
     const BOM = '\uFEFF';
