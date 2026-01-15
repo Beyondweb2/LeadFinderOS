@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
-import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
+import type { OutreachLead, LeadStatus, NextActionType, Country } from '@/types/outreach';
 import { STATUS_OPTIONS } from '@/types/outreach';
 
 interface OutreachTableProps {
@@ -46,6 +46,7 @@ type SortDirection = 'asc' | 'desc';
 export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextActionChange }: OutreachTableProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
+  const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('next_action_date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -67,6 +68,11 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
     // Filter by status
     if (statusFilter !== 'all') {
       result = result.filter((lead) => lead.status === statusFilter);
+    }
+
+    // Filter by country
+    if (countryFilter !== 'all') {
+      result = result.filter((lead) => lead.country === countryFilter);
     }
 
     // Sort
@@ -94,7 +100,7 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
     });
 
     return result;
-  }, [leads, searchQuery, statusFilter, sortField, sortDirection]);
+  }, [leads, searchQuery, statusFilter, countryFilter, sortField, sortDirection]);
 
   const totalPages = Math.ceil(filteredAndSortedLeads.length / ITEMS_PER_PAGE);
   const paginatedLeads = filteredAndSortedLeads.slice(
@@ -178,6 +184,22 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
                 ))}
               </SelectContent>
             </Select>
+            <Select
+              value={countryFilter}
+              onValueChange={(v) => {
+                setCountryFilter(v as Country | 'all');
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-[120px] bg-background">
+                <SelectValue placeholder="Country" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Countries</SelectItem>
+                <SelectItem value="UK">🇬🇧 UK</SelectItem>
+                <SelectItem value="AUS">🇦🇺 Australia</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </CardHeader>
@@ -215,7 +237,14 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
                     className="border-border/50 cursor-pointer hover:bg-muted/30"
                     onClick={() => onLeadClick(lead)}
                   >
-                    <TableCell className="font-medium">{lead.business_name}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        {lead.country === 'AUS' && (
+                          <span className="text-xs" title="Australia">🇦🇺</span>
+                        )}
+                        {lead.business_name}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {lead.phone ? (
                         <a

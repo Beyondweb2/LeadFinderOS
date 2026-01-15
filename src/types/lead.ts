@@ -20,6 +20,8 @@ export interface Lead {
   businessStatus?: string;
 }
 
+export type Country = 'UK' | 'AUS';
+
 export interface SearchFilters {
   keyword: string;
   location: string;
@@ -27,6 +29,7 @@ export interface SearchFilters {
   minRating?: number;
   minReviews?: number;
   requirePhone?: boolean;
+  country?: Country;
 }
 
 export interface SearchResponse {

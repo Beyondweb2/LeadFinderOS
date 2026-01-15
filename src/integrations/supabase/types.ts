@@ -86,6 +86,7 @@ export type Database = {
         Row: {
           added_at: string
           business_name: string
+          country: string | null
           google_maps_url: string | null
           id: string
           user_id: string
@@ -93,6 +94,7 @@ export type Database = {
         Insert: {
           added_at?: string
           business_name: string
+          country?: string | null
           google_maps_url?: string | null
           id?: string
           user_id: string
@@ -100,6 +102,7 @@ export type Database = {
         Update: {
           added_at?: string
           business_name?: string
+          country?: string | null
           google_maps_url?: string | null
           id?: string
           user_id?: string
@@ -111,6 +114,7 @@ export type Database = {
           address: string | null
           business_name: string
           category: string | null
+          country: string | null
           created_at: string
           email: string | null
           google_maps_url: string | null
@@ -127,6 +131,7 @@ export type Database = {
           address?: string | null
           business_name: string
           category?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           google_maps_url?: string | null
@@ -143,6 +148,7 @@ export type Database = {
           address?: string | null
           business_name?: string
           category?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           google_maps_url?: string | null

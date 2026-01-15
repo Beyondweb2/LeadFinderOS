@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from '@/types/outreach';
+import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country } from '@/types/outreach';
 import type { Lead } from '@/types/lead';
 
 export function useOutreach() {
@@ -55,7 +55,7 @@ export function useOutreach() {
     fetchLeads();
   }, [fetchLeads]);
 
-  const addLead = useCallback(async (lead: Lead) => {
+  const addLead = useCallback(async (lead: Lead, country: Country = 'UK') => {
     if (!user) {
       toast({
         title: 'Not authenticated',
@@ -110,6 +110,7 @@ export function useOutreach() {
         status: 'not_contacted' as LeadStatus,
         next_action: 'call' as NextActionType,
         next_action_date: new Date().toISOString().split('T')[0],
+        country,
       })
       .select()
       .single();
@@ -131,6 +132,7 @@ export function useOutreach() {
       user_id: user.id,
       business_name: lead.name,
       google_maps_url: lead.googleMapsUrl || null,
+      country,
     });
 
     // Log activity

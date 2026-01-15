@@ -9,7 +9,7 @@ import { useContactTracking } from '@/hooks/useContactTracking';
 import { useOutreach } from '@/hooks/useOutreach';
 import { Flame, Target, Zap, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { Lead } from '@/types/lead';
+import type { Lead, Country } from '@/types/lead';
 
 const Index = () => {
   const { leads, isLoading, search, exportToCsv } = useLeadSearch();
@@ -20,6 +20,7 @@ const Index = () => {
   } = useContactTracking();
   const { addLead: addToOutreach, isInOutreach } = useOutreach();
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
+  const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
 
   return (
     <div className="min-h-screen bg-background">
@@ -75,7 +76,13 @@ const Index = () => {
         <main className="container py-8 space-y-8">
           {/* Search Section */}
           <section>
-            <SearchForm onSearch={search} isLoading={isLoading} />
+            <SearchForm 
+              onSearch={(filters) => {
+                setLastSearchCountry(filters.country || 'UK');
+                search(filters);
+              }} 
+              isLoading={isLoading} 
+            />
           </section>
 
           {/* Results Section */}
@@ -86,7 +93,7 @@ const Index = () => {
                 onExport={exportToCsv}
                 onLogContact={(lead) => setContactDialogLead(lead)}
                 getLatestContact={getLatestContact}
-                onAddToOutreach={addToOutreach}
+                onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry)}
                 isInOutreach={isInOutreach}
               />
             </section>
