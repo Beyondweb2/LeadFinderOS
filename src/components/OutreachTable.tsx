@@ -80,8 +80,7 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
       lead.category || '',
     ]);
 
-    const BOM = '\uFEFF';
-    const csvContent = BOM + [headers, ...rows]
+    const csvContent = [headers, ...rows]
       .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
       .join('\r\n');
 
