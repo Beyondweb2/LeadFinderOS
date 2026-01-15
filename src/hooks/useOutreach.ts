@@ -172,6 +172,35 @@ export function useOutreach() {
     return updatedLead;
   }, [toast]);
 
+  const deleteLead = useCallback(async (leadId: string, silent = false) => {
+    const lead = leads.find((l) => l.id === leadId);
+    
+    const { error } = await supabase
+      .from('outreach_leads')
+      .delete()
+      .eq('id', leadId);
+
+    if (error) {
+      toast({
+        title: 'Error deleting lead',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    setLeads((prev) => prev.filter((l) => l.id !== leadId));
+    
+    if (!silent) {
+      toast({
+        title: 'Lead removed',
+        description: lead ? `${lead.business_name} removed from outreach.` : 'Lead removed.',
+      });
+    }
+
+    return true;
+  }, [leads, toast]);
+
   const updateStatus = useCallback(async (leadId: string, status: LeadStatus) => {
     const lead = leads.find((l) => l.id === leadId);
     const result = await updateLead(leadId, { status });
@@ -179,9 +208,14 @@ export function useOutreach() {
     if (result && lead) {
       await logActivity(leadId, 'status_change', `Status changed to ${status.replace('_', ' ')}`);
     }
+
+    // Auto-remove if status set to not_interested
+    if (result && status === 'not_interested') {
+      await deleteLead(leadId, true);
+    }
     
     return result;
-  }, [leads, updateLead]);
+  }, [leads, updateLead, deleteLead]);
 
   const updateNextAction = useCallback(async (
     leadId: string,
@@ -208,32 +242,33 @@ export function useOutreach() {
     return updateLead(leadId, { notes });
   }, [updateLead]);
 
-  const deleteLead = useCallback(async (leadId: string) => {
-    const lead = leads.find((l) => l.id === leadId);
-    
+
+  const deleteAllLeads = useCallback(async () => {
+    if (!user || leads.length === 0) return false;
+
     const { error } = await supabase
       .from('outreach_leads')
       .delete()
-      .eq('id', leadId);
+      .eq('user_id', user.id);
 
     if (error) {
       toast({
-        title: 'Error deleting lead',
+        title: 'Error removing leads',
         description: error.message,
         variant: 'destructive',
       });
       return false;
     }
 
-    setLeads((prev) => prev.filter((l) => l.id !== leadId));
+    setLeads([]);
     
     toast({
-      title: 'Lead removed',
-      description: lead ? `${lead.business_name} removed from outreach.` : 'Lead removed.',
+      title: 'All leads removed',
+      description: 'Your outreach pipeline has been cleared.',
     });
 
     return true;
-  }, [leads, toast]);
+  }, [user, leads.length, toast]);
 
   const logActivity = useCallback(async (
     leadId: string,
@@ -278,6 +313,7 @@ export function useOutreach() {
     updateNextAction,
     updateNotes,
     deleteLead,
+    deleteAllLeads,
     fetchActivities,
     logActivity,
     isInOutreach,

@@ -25,7 +25,8 @@ import {
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Download
+  Download,
+  Trash2
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
@@ -38,6 +39,7 @@ interface OutreachTableProps {
   onLeadClick: (lead: OutreachLead) => void;
   onStatusChange: (leadId: string, status: LeadStatus) => void;
   onNextActionChange: (leadId: string, action: NextActionType, date?: string) => void;
+  onRemoveAll: () => void;
 }
 
 const ITEMS_PER_PAGE = 15;
@@ -45,7 +47,7 @@ const ITEMS_PER_PAGE = 15;
 type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at';
 type SortDirection = 'asc' | 'desc';
 
-export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextActionChange }: OutreachTableProps) {
+export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextActionChange, onRemoveAll }: OutreachTableProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
@@ -256,6 +258,15 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
             </CardTitle>
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={onRemoveAll}
+              disabled={leads.length === 0}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Remove All
+            </Button>
             <Button
               variant="outline"
               size="sm"
