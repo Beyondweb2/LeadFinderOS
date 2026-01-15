@@ -24,8 +24,10 @@ import {
   ArrowUpDown,
   ChevronLeft,
   ChevronRight,
-  ClipboardList
+  ClipboardList,
+  Download
 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
 import type { OutreachLead, LeadStatus, NextActionType, Country } from '@/types/outreach';
@@ -44,12 +46,69 @@ type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at';
 type SortDirection = 'asc' | 'desc';
 
 export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextActionChange }: OutreachTableProps) {
+  const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
   const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('next_action_date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [currentPage, setCurrentPage] = useState(1);
+
+  const exportToCsv = () => {
+    if (filteredAndSortedLeads.length === 0) {
+      toast({
+        title: 'No leads to export',
+        description: 'There are no leads matching your current filters.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const headers = ['Business Name', 'Phone', 'Email', 'Status', 'Next Action', 'Next Action Date', 'Country', 'Address', 'Category', 'Notes', 'Google Maps URL', 'Created At'];
+    const rows = filteredAndSortedLeads.map((lead) => [
+      lead.business_name,
+      lead.phone || '',
+      lead.email || '',
+      lead.status,
+      lead.next_action || '',
+      lead.next_action_date || '',
+      lead.country || '',
+      lead.address || '',
+      lead.category || '',
+      lead.notes || '',
+      lead.google_maps_url || '',
+      lead.created_at,
+    ]);
+
+    const BOM = '\uFEFF';
+    const csvContent = BOM + [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\r\n');
+
+    try {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `outreach-leads-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Export complete',
+        description: `Exported ${filteredAndSortedLeads.length} leads to CSV.`,
+      });
+    } catch (err) {
+      console.error('CSV export failed:', err);
+      toast({
+        title: 'Export failed',
+        description: 'Failed to export leads to CSV. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const filteredAndSortedLeads = useMemo(() => {
     let result = [...leads];
@@ -153,6 +212,15 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
             </CardTitle>
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToCsv}
+              className="bg-background"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
+            </Button>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
