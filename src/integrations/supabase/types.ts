@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      checked_businesses: {
+        Row: {
+          business_name: string
+          checked_at: string
+          google_maps_url: string | null
+          id: string
+          user_id: string
+        }
+        Insert: {
+          business_name: string
+          checked_at?: string
+          google_maps_url?: string | null
+          id?: string
+          user_id: string
+        }
+        Update: {
+          business_name?: string
+          checked_at?: string
+          google_maps_url?: string | null
+          id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       lead_contacts: {
         Row: {
           contacted_at: string
