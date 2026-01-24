@@ -5,9 +5,15 @@ import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
 import type { Lead } from '@/types/lead';
 
+interface OutreachHistoryEntry {
+  business_name: string;
+  google_maps_url: string | null;
+}
+
 export function useOutreach() {
   const [leads, setLeads] = useState<OutreachLead[]>([]);
   const [activities, setActivities] = useState<OutreachActivity[]>([]);
+  const [outreachHistory, setOutreachHistory] = useState<OutreachHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
@@ -36,6 +42,21 @@ export function useOutreach() {
     setLeads(data as OutreachLead[]);
   }, [user, toast]);
 
+  const fetchOutreachHistory = useCallback(async () => {
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from('outreach_history')
+      .select('business_name, google_maps_url');
+
+    if (error) {
+      console.error('Error fetching outreach history:', error);
+      return;
+    }
+
+    setOutreachHistory(data as OutreachHistoryEntry[]);
+  }, [user]);
+
   const fetchActivities = useCallback(async (leadId: string) => {
     const { data, error } = await supabase
       .from('outreach_activities')
@@ -53,7 +74,8 @@ export function useOutreach() {
 
   useEffect(() => {
     fetchLeads();
-  }, [fetchLeads]);
+    fetchOutreachHistory();
+  }, [fetchLeads, fetchOutreachHistory]);
 
   const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website') => {
     if (!user) {
@@ -135,6 +157,12 @@ export function useOutreach() {
       google_maps_url: lead.googleMapsUrl || null,
       country,
     });
+
+    // Update local history cache
+    setOutreachHistory((prev) => [...prev, { 
+      business_name: lead.name, 
+      google_maps_url: lead.googleMapsUrl || null 
+    }]);
 
     // Log activity
     await logActivity(newLead.id, 'added', `Added ${lead.name} to outreach list`);
@@ -298,11 +326,11 @@ export function useOutreach() {
   }, [user]);
 
   const isInOutreach = useCallback((leadName: string, googleMapsUrl?: string): boolean => {
-    // Check current leads only (for UI state - fast, sync check)
-    return leads.some(
-      (l) => l.business_name === leadName || (googleMapsUrl && l.google_maps_url === googleMapsUrl)
+    // Check against outreach history (includes all businesses ever added, even if deleted)
+    return outreachHistory.some(
+      (h) => h.business_name === leadName || (googleMapsUrl && h.google_maps_url === googleMapsUrl)
     );
-  }, [leads]);
+  }, [outreachHistory]);
 
   return {
     leads,
