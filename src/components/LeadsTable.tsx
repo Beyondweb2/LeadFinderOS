@@ -26,7 +26,8 @@ import {
   ChevronRight,
   MessageSquarePlus,
   ClipboardList,
-  Check
+  Check,
+  Eye
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -52,6 +53,8 @@ interface LeadsTableProps {
   getLatestContact?: (leadId: string) => LeadContact | undefined;
   onAddToOutreach?: (lead: Lead, listType: ListType) => Promise<any>;
   isInOutreach?: (leadName: string, googleMapsUrl?: string) => boolean;
+  onMapLinkClick?: (businessName: string, googleMapsUrl?: string) => void;
+  isChecked?: (businessName: string, googleMapsUrl?: string) => boolean;
 }
 
 type SortField = 'name' | 'rating' | 'reviewCount' | 'websiteStatus' | 'confidence';
@@ -64,7 +67,7 @@ const statusOrder: Record<WebsiteStatus, number> = {
   HAS_OWN_WEBSITE: 3,
 };
 
-export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, onAddToOutreach, isInOutreach }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked }: LeadsTableProps) {
   const [sortField, setSortField] = useState<SortField>('websiteStatus');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [statusFilters, setStatusFilters] = useState<WebsiteStatus[]>([
@@ -312,21 +315,46 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 hover:bg-muted"
-                          asChild
-                        >
-                          <a
-                            href={lead.googleMapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="View on Google Maps"
+                        {isChecked?.(lead.name, lead.googleMapsUrl) ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground bg-muted/50"
+                                asChild
+                              >
+                                <a
+                                  href={lead.googleMapsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="Already checked"
+                                  onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </a>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Already checked</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 hover:bg-muted"
+                            asChild
                           >
-                            <MapPin className="h-4 w-4 text-primary" />
-                          </a>
-                        </Button>
+                            <a
+                              href={lead.googleMapsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              title="View on Google Maps"
+                              onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                            >
+                              <MapPin className="h-4 w-4 text-primary" />
+                            </a>
+                          </Button>
+                        )}
                         {lead.websiteUrl && (
                           <Button
                             variant="ghost"

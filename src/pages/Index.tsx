@@ -7,6 +7,7 @@ import { UserMenu } from '@/components/UserMenu';
 import { useLeadSearch } from '@/hooks/useLeadSearch';
 import { useContactTracking } from '@/hooks/useContactTracking';
 import { useOutreach } from '@/hooks/useOutreach';
+import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { Flame, Target, Zap, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Lead, Country } from '@/types/lead';
@@ -20,6 +21,7 @@ const Index = () => {
     isLoading: isContactLoading 
   } = useContactTracking();
   const { addLead: addToOutreach, isInOutreach } = useOutreach();
+  const { markAsChecked, isChecked } = useCheckedBusinesses();
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
 
@@ -96,6 +98,8 @@ const Index = () => {
                 getLatestContact={getLatestContact}
                 onAddToOutreach={(lead, listType: ListType) => addToOutreach(lead, lastSearchCountry, listType)}
                 isInOutreach={isInOutreach}
+                onMapLinkClick={markAsChecked}
+                isChecked={isChecked}
               />
             </section>
           )}
