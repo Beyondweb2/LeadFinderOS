@@ -26,7 +26,8 @@ import {
   ChevronRight,
   ClipboardList,
   Download,
-  Trash2
+  Trash2,
+  Copy
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
@@ -266,6 +267,34 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
             >
               <Trash2 className="h-4 w-4 mr-2" />
               Remove All
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const phones = filteredAndSortedLeads
+                  .map((l) => l.phone)
+                  .filter(Boolean)
+                  .join('\n');
+                if (!phones) {
+                  toast({
+                    title: 'No phone numbers',
+                    description: 'No phone numbers found in the current list.',
+                    variant: 'destructive',
+                  });
+                  return;
+                }
+                navigator.clipboard.writeText(phones);
+                toast({
+                  title: 'Copied!',
+                  description: `${phones.split('\n').length} phone numbers copied to clipboard.`,
+                });
+              }}
+              disabled={leads.length === 0}
+              className="bg-background"
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Copy Phones
             </Button>
             <Button
               variant="outline"
