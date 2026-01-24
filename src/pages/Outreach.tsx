@@ -4,9 +4,10 @@ import { OutreachTable } from '@/components/OutreachTable';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { UserMenu } from '@/components/UserMenu';
 import { useOutreach } from '@/hooks/useOutreach';
-import { Target, ClipboardList, Search, Loader2 } from 'lucide-react';
+import { ClipboardList, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { OutreachLead } from '@/types/outreach';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import type { OutreachLead, ListType } from '@/types/outreach';
 
 const Outreach = () => {
   const {
@@ -21,6 +22,9 @@ const Outreach = () => {
   } = useOutreach();
 
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
+  const [activeList, setActiveList] = useState<ListType>('no_website');
+
+  const filteredLeads = leads.filter((lead) => lead.list_type === activeList);
 
   return (
     <div className="min-h-screen bg-background">
@@ -64,19 +68,43 @@ const Outreach = () => {
 
         {/* Main Content */}
         <main className="container py-8">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
-            <OutreachTable
-              leads={leads}
-              onLeadClick={setSelectedLead}
-              onStatusChange={updateStatus}
-              onNextActionChange={updateNextAction}
-              onRemoveAll={deleteAllLeads}
-            />
-          )}
+          <Tabs value={activeList} onValueChange={(v) => setActiveList(v as ListType)} className="space-y-6">
+            <TabsList className="grid w-full max-w-md grid-cols-2">
+              <TabsTrigger value="no_website">
+                No Website ({leads.filter((l) => l.list_type === 'no_website').length})
+              </TabsTrigger>
+              <TabsTrigger value="broken_website">
+                Broken Website ({leads.filter((l) => l.list_type === 'broken_website').length})
+              </TabsTrigger>
+            </TabsList>
+
+            {isLoading ? (
+              <div className="flex items-center justify-center py-16">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              </div>
+            ) : (
+              <>
+                <TabsContent value="no_website">
+                  <OutreachTable
+                    leads={filteredLeads}
+                    onLeadClick={setSelectedLead}
+                    onStatusChange={updateStatus}
+                    onNextActionChange={updateNextAction}
+                    onRemoveAll={deleteAllLeads}
+                  />
+                </TabsContent>
+                <TabsContent value="broken_website">
+                  <OutreachTable
+                    leads={filteredLeads}
+                    onLeadClick={setSelectedLead}
+                    onStatusChange={updateStatus}
+                    onNextActionChange={updateNextAction}
+                    onRemoveAll={deleteAllLeads}
+                  />
+                </TabsContent>
+              </>
+            )}
+          </Tabs>
         </main>
 
         {/* Lead Detail Dialog */}

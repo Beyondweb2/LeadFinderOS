@@ -10,6 +10,7 @@ import { useOutreach } from '@/hooks/useOutreach';
 import { Flame, Target, Zap, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Lead, Country } from '@/types/lead';
+import type { ListType } from '@/types/outreach';
 
 const Index = () => {
   const { leads, isLoading, search, exportToCsv } = useLeadSearch();
@@ -93,7 +94,7 @@ const Index = () => {
                 onExport={exportToCsv}
                 onLogContact={(lead) => setContactDialogLead(lead)}
                 getLatestContact={getLatestContact}
-                onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry)}
+                onAddToOutreach={(lead, listType: ListType) => addToOutreach(lead, lastSearchCountry, listType)}
                 isInOutreach={isInOutreach}
               />
             </section>

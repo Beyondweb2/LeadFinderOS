@@ -14,8 +14,14 @@ export type NextActionType =
   | 'send_draft'
   | 'remove_if_no_reply'
   | 'none';
-
 export type Country = 'UK' | 'AUS';
+
+export type ListType = 'no_website' | 'broken_website';
+
+export const LIST_TYPE_OPTIONS: { value: ListType; label: string }[] = [
+  { value: 'no_website', label: 'No Website' },
+  { value: 'broken_website', label: 'Broken Website' },
+];
 
 export interface OutreachLead {
   id: string;
@@ -31,6 +37,7 @@ export interface OutreachLead {
   next_action_date: string | null;
   notes: string | null;
   country: Country | null;
+  list_type: ListType;
   created_at: string;
   updated_at: string;
 }
