@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { Phone, Clock, FileText, Trash2, Circle } from 'lucide-react';
+import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle } from 'lucide-react';
 import type { NextActionType } from '@/types/outreach';
 
 interface NextActionBadgeProps {
@@ -8,6 +8,26 @@ interface NextActionBadgeProps {
 }
 
 const actionConfig: Record<NextActionType, { label: string; icon: React.ReactNode; className: string }> = {
+  send_initial_text: {
+    label: 'Send Initial Text',
+    icon: <MessageSquare className="h-3 w-3" />,
+    className: 'text-green-400',
+  },
+  send_voice_note: {
+    label: 'Send Voice Note',
+    icon: <Mic className="h-3 w-3" />,
+    className: 'text-purple-400',
+  },
+  send_follow_up: {
+    label: 'Send Follow-up',
+    icon: <RefreshCw className="h-3 w-3" />,
+    className: 'text-amber-400',
+  },
+  check_3_day_removal: {
+    label: 'Check 3-Day Removal',
+    icon: <AlertTriangle className="h-3 w-3" />,
+    className: 'text-red-400',
+  },
   call: {
     label: 'Call',
     icon: <Phone className="h-3 w-3" />,

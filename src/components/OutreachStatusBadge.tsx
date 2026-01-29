@@ -10,6 +10,22 @@ const statusConfig: Record<LeadStatus, { label: string; className: string }> = {
     label: 'Not Contacted',
     className: 'bg-muted text-muted-foreground border-muted',
   },
+  sent_initial_text: {
+    label: 'Sent Initial Text',
+    className: 'bg-green-500/20 text-green-400 border-green-500/30',
+  },
+  replied: {
+    label: 'Replied',
+    className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  },
+  sent_voice_note: {
+    label: 'Sent Voice Note',
+    className: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  },
+  awaiting_decision: {
+    label: 'Awaiting Decision',
+    className: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+  },
   contacted: {
     label: 'Contacted',
     className: 'bg-blue-500/20 text-blue-400 border-blue-500/30',

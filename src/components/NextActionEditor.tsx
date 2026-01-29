@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Phone, Clock, FileText, Trash2, Circle } from 'lucide-react';
+import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import type { NextActionType } from '@/types/outreach';
@@ -26,6 +26,10 @@ interface NextActionEditorProps {
 }
 
 const actionIcons: Record<NextActionType, React.ReactNode> = {
+  send_initial_text: <MessageSquare className="h-3 w-3" />,
+  send_voice_note: <Mic className="h-3 w-3" />,
+  send_follow_up: <RefreshCw className="h-3 w-3" />,
+  check_3_day_removal: <AlertTriangle className="h-3 w-3" />,
   call: <Phone className="h-3 w-3" />,
   follow_up: <Clock className="h-3 w-3" />,
   send_draft: <FileText className="h-3 w-3" />,
@@ -34,6 +38,10 @@ const actionIcons: Record<NextActionType, React.ReactNode> = {
 };
 
 const actionColors: Record<NextActionType, string> = {
+  send_initial_text: 'text-green-400',
+  send_voice_note: 'text-purple-400',
+  send_follow_up: 'text-amber-400',
+  check_3_day_removal: 'text-red-400',
   call: 'text-blue-400',
   follow_up: 'text-orange-400',
   send_draft: 'text-cyan-400',
