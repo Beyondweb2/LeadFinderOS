@@ -220,6 +220,42 @@ export type Database = {
         }
         Relationships: []
       }
+      templates: {
+        Row: {
+          category: string
+          content: string
+          created_at: string
+          id: string
+          is_default: boolean | null
+          template_type: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          category: string
+          content: string
+          created_at?: string
+          id?: string
+          is_default?: boolean | null
+          template_type: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          category?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_default?: boolean | null
+          template_type?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -244,12 +280,20 @@ export type Database = {
         | "wants_draft"
         | "interested"
         | "not_interested"
+        | "sent_initial_text"
+        | "replied"
+        | "sent_voice_note"
+        | "awaiting_decision"
       next_action_type:
         | "call"
         | "follow_up"
         | "send_draft"
         | "remove_if_no_reply"
         | "none"
+        | "send_initial_text"
+        | "send_voice_note"
+        | "send_follow_up"
+        | "check_3_day_removal"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -394,6 +438,10 @@ export const Constants = {
         "wants_draft",
         "interested",
         "not_interested",
+        "sent_initial_text",
+        "replied",
+        "sent_voice_note",
+        "awaiting_decision",
       ],
       next_action_type: [
         "call",
@@ -401,6 +449,10 @@ export const Constants = {
         "send_draft",
         "remove_if_no_reply",
         "none",
+        "send_initial_text",
+        "send_voice_note",
+        "send_follow_up",
+        "check_3_day_removal",
       ],
     },
   },

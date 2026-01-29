@@ -6,14 +6,23 @@ export type LeadStatus =
   | 'on_hold'
   | 'wants_draft'
   | 'interested'
-  | 'not_interested';
+  | 'not_interested'
+  | 'sent_initial_text'
+  | 'replied'
+  | 'sent_voice_note'
+  | 'awaiting_decision';
 
 export type NextActionType = 
   | 'call'
   | 'follow_up'
   | 'send_draft'
   | 'remove_if_no_reply'
-  | 'none';
+  | 'none'
+  | 'send_initial_text'
+  | 'send_voice_note'
+  | 'send_follow_up'
+  | 'check_3_day_removal';
+
 export type Country = 'UK' | 'AUS';
 
 export type ListType = 'no_website' | 'broken_website';
@@ -21,6 +30,37 @@ export type ListType = 'no_website' | 'broken_website';
 export const LIST_TYPE_OPTIONS: { value: ListType; label: string }[] = [
   { value: 'no_website', label: 'No Website' },
   { value: 'broken_website', label: 'Broken Website' },
+];
+
+export type TemplateType = 'text' | 'voice_script';
+
+export type TemplateCategory = 
+  | 'initial'
+  | 'follow_up'
+  | 'no_website'
+  | 'poor_website'
+  | 'coming_soon'
+  | 'other';
+
+export interface Template {
+  id: string;
+  user_id: string;
+  template_type: TemplateType;
+  category: TemplateCategory;
+  title: string;
+  content: string;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export const TEMPLATE_CATEGORY_OPTIONS: { value: TemplateCategory; label: string }[] = [
+  { value: 'initial', label: 'Initial Contact' },
+  { value: 'follow_up', label: 'Follow-up' },
+  { value: 'no_website', label: 'No Website' },
+  { value: 'poor_website', label: 'Poor Website' },
+  { value: 'coming_soon', label: 'Coming Soon' },
+  { value: 'other', label: 'Other' },
 ];
 
 export interface OutreachLead {
@@ -53,6 +93,10 @@ export interface OutreachActivity {
 
 export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'not_contacted', label: 'Not Contacted' },
+  { value: 'sent_initial_text', label: 'Sent Initial Text' },
+  { value: 'replied', label: 'Replied' },
+  { value: 'sent_voice_note', label: 'Sent Voice Note' },
+  { value: 'awaiting_decision', label: 'Awaiting Decision' },
   { value: 'contacted', label: 'Contacted' },
   { value: 'call_back', label: 'Call Back' },
   { value: 'not_answered', label: 'Not Answered' },
@@ -63,6 +107,10 @@ export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
 ];
 
 export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
+  { value: 'send_initial_text', label: 'Send Initial Text' },
+  { value: 'send_voice_note', label: 'Send Voice Note' },
+  { value: 'send_follow_up', label: 'Send Follow-up' },
+  { value: 'check_3_day_removal', label: 'Check 3-Day Removal' },
   { value: 'call', label: 'Call' },
   { value: 'follow_up', label: 'Follow-up' },
   { value: 'send_draft', label: 'Send Draft' },
