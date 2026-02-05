@@ -1,4 +1,4 @@
- import { useState, useEffect, useCallback } from 'react';
+ import { useState, useEffect, useCallback, useRef } from 'react';
  import { supabase } from '@/integrations/supabase/client';
  import { useAuth } from './useAuth';
  
@@ -8,6 +8,7 @@
    subscriptionEnd: string | null;
    isLoading: boolean;
    error: string | null;
+   status: string | null;
  }
  
  export function useSubscription() {
@@ -18,17 +19,45 @@
      subscriptionEnd: null,
      isLoading: true,
      error: null,
+     status: null,
    });
+   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
  
-   const checkSubscription = useCallback(async () => {
+   const checkSubscription = useCallback(async (skipLocalCheck = false) => {
      if (!session?.access_token) {
-       setState(prev => ({ ...prev, isLoading: false, subscribed: false }));
+       setState(prev => ({ ...prev, isLoading: false, subscribed: false, status: null }));
        return;
      }
  
      try {
        setState(prev => ({ ...prev, isLoading: true, error: null }));
        
+       // First check local database for cached subscription (faster)
+       if (!skipLocalCheck && user?.id) {
+         const { data: localSub, error: localError } = await supabase
+           .from('subscriptions')
+           .select('*')
+           .eq('user_id', user.id)
+           .maybeSingle();
+ 
+         if (!localError && localSub) {
+           const validStatuses = ['active', 'trialing', 'past_due'];
+           const isValid = validStatuses.includes(localSub.status);
+           
+           setState({
+             subscribed: isValid,
+             productId: null,
+             subscriptionEnd: localSub.current_period_end,
+             isLoading: false,
+             error: null,
+             status: localSub.status,
+           });
+           
+           if (!isValid) return;
+         }
+       }
+       
+       // Fall back to Stripe API check
        const { data, error } = await supabase.functions.invoke('check-subscription', {
          headers: {
            Authorization: `Bearer ${session.access_token}`,
@@ -43,6 +72,7 @@
          subscriptionEnd: data.subscription_end ?? null,
          isLoading: false,
          error: null,
+         status: data.subscription_status ?? null,
        });
      } catch (err) {
        console.error('Subscription check failed:', err);
@@ -52,7 +82,7 @@
          error: err instanceof Error ? err.message : 'Failed to check subscription',
        }));
      }
-   }, [session?.access_token]);
+   }, [session?.access_token, user?.id]);
  
    // Check subscription on mount and when user changes
    useEffect(() => {
@@ -65,11 +95,47 @@
          subscriptionEnd: null,
          isLoading: false,
          error: null,
+         status: null,
        });
      }
    }, [user, checkSubscription]);
  
-   // Periodic refresh every 60 seconds
+   // Set up realtime subscription for instant updates
+   useEffect(() => {
+     if (!user?.id) return;
+ 
+     if (channelRef.current) {
+       supabase.removeChannel(channelRef.current);
+     }
+ 
+     const channel = supabase
+       .channel(`subscriptions:${user.id}`)
+       .on(
+         'postgres_changes',
+         {
+           event: '*',
+           schema: 'public',
+           table: 'subscriptions',
+           filter: `user_id=eq.${user.id}`,
+         },
+         (payload) => {
+           console.log('Subscription changed via realtime:', payload);
+           checkSubscription();
+         }
+       )
+       .subscribe();
+ 
+     channelRef.current = channel;
+ 
+     return () => {
+       if (channelRef.current) {
+         supabase.removeChannel(channelRef.current);
+         channelRef.current = null;
+       }
+     };
+   }, [user?.id, checkSubscription]);
+ 
+   // Periodic refresh every 60 seconds as fallback
    useEffect(() => {
      if (!user) return;
      
