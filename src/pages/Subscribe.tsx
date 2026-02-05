@@ -1,6 +1,7 @@
- import { useState } from 'react';
+ import { useState, useCallback } from 'react';
  import { useNavigate } from 'react-router-dom';
  import { useSubscription } from '@/hooks/useSubscription';
+ import { useAuth } from '@/hooks/useAuth';
  import { Button } from '@/components/ui/button';
  import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
  import { Target, Check, Loader2, CreditCard, ArrowLeft } from 'lucide-react';
@@ -19,8 +20,14 @@
  const Subscribe = () => {
    const [isLoading, setIsLoading] = useState(false);
    const { createCheckout, subscribed, isLoading: subLoading } = useSubscription();
+   const { signOut } = useAuth();
    const { toast } = useToast();
    const navigate = useNavigate();
+ 
+   const handleBackToLogin = useCallback(async () => {
+     await signOut();
+     navigate('/auth');
+   }, [signOut, navigate]);
  
    const handleSubscribe = async () => {
      setIsLoading(true);
@@ -55,7 +62,7 @@
          <Button
            variant="ghost"
            className="mb-6"
-           onClick={() => navigate('/auth')}
+           onClick={handleBackToLogin}
          >
            <ArrowLeft className="mr-2 h-4 w-4" />
            Back to login
