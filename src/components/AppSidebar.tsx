@@ -79,7 +79,7 @@ export function AppSidebar() {
           <img 
             src="/favicon.png" 
             alt="LeadFinder Logo" 
-            className="h-10 w-10 rounded-lg shrink-0"
+            className="h-14 w-14 shrink-0"
           />
           {!isCollapsed && (
             <div className="overflow-hidden">
