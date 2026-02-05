@@ -8,6 +8,7 @@ import type { Lead } from '@/types/lead';
 interface OutreachHistoryEntry {
   business_name: string;
   google_maps_url: string | null;
+   phone: string | null;
 }
 
 export function useOutreach() {
@@ -172,12 +173,14 @@ export function useOutreach() {
       business_name: lead.name,
       google_maps_url: lead.googleMapsUrl || null,
       country,
+       phone: lead.phone || null,
     });
 
     // Update local history cache
     setOutreachHistory((prev) => [...prev, { 
       business_name: lead.name, 
-      google_maps_url: lead.googleMapsUrl || null 
+       google_maps_url: lead.googleMapsUrl || null,
+       phone: lead.phone || null,
     }]);
 
     // Log activity
@@ -509,6 +512,55 @@ export function useOutreach() {
     return (data || []) as OutreachLead[];
   }, [user]);
 
+   // Bulk lookup phone numbers for leads missing them
+   const bulkLookupPhones = useCallback(async (leadIds?: string[]): Promise<{ updated: number; total: number }> => {
+     if (!user) return { updated: 0, total: 0 };
+ 
+     // If no specific IDs provided, get all leads missing phone numbers
+     const idsToLookup = leadIds || [...leads, ...archivedLeads]
+       .filter(l => !l.phone)
+       .map(l => l.id);
+ 
+     if (idsToLookup.length === 0) {
+       toast({
+         title: 'No leads to update',
+         description: 'All leads already have phone numbers.',
+       });
+       return { updated: 0, total: 0 };
+     }
+ 
+     toast({
+       title: 'Looking up phone numbers',
+       description: `Searching for ${idsToLookup.length} businesses...`,
+     });
+ 
+     try {
+       const { data, error } = await supabase.functions.invoke('lookup-phones', {
+         body: { leadIds: idsToLookup },
+       });
+ 
+       if (error) throw error;
+ 
+       // Refresh leads to get updated phone numbers
+       await fetchLeads();
+ 
+       toast({
+         title: 'Phone lookup complete',
+         description: `Found ${data.updated} of ${data.total} phone numbers.`,
+       });
+ 
+       return { updated: data.updated, total: data.total };
+     } catch (error) {
+       console.error('Bulk phone lookup error:', error);
+       toast({
+         title: 'Lookup failed',
+         description: 'Could not complete phone number lookup.',
+         variant: 'destructive',
+       });
+       return { updated: 0, total: 0 };
+     }
+   }, [user, leads, archivedLeads, fetchLeads, toast]);
+ 
   return {
     leads,
     archivedLeads,
@@ -529,6 +581,8 @@ export function useOutreach() {
     fetchActivities,
     logActivity,
     isInOutreach,
+     bulkLookupPhones,
+     fetchLeads,
     refetch: fetchLeads,
   };
 }

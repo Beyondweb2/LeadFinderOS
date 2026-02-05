@@ -113,6 +113,7 @@ export type Database = {
           country: string | null
           google_maps_url: string | null
           id: string
+          phone: string | null
           user_id: string
         }
         Insert: {
@@ -121,6 +122,7 @@ export type Database = {
           country?: string | null
           google_maps_url?: string | null
           id?: string
+          phone?: string | null
           user_id: string
         }
         Update: {
@@ -129,6 +131,7 @@ export type Database = {
           country?: string | null
           google_maps_url?: string | null
           id?: string
+          phone?: string | null
           user_id?: string
         }
         Relationships: []
