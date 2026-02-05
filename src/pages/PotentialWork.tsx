@@ -57,9 +57,8 @@
  
    // Filter to only show interested leads (potential work)
    const potentialWorkLeads = useMemo(() => {
-     const interestedStatuses: LeadStatus[] = ['interested', 'wants_draft', 'on_hold', 'contacted', 'call_back'];
-     
-     let result = leads.filter((lead) => interestedStatuses.includes(lead.status));
+    // Filter by is_potential_work flag (set automatically when status becomes interested, wants_draft, etc.)
+    let result = leads.filter((lead) => lead.is_potential_work);
      
      if (searchQuery) {
        const query = searchQuery.toLowerCase();
