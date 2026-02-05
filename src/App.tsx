@@ -4,8 +4,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+ import { ProtectedRoute } from "@/components/ProtectedRoute";
  import { SubscriptionGate } from "@/components/SubscriptionGate";
+ import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -17,6 +18,7 @@ import NotFound from "./pages/NotFound";
  import ArchivePage from "./pages/Archive";
  import PotentialWorkPage from "./pages/PotentialWork";
  import { LeadSearchProvider } from "./contexts/LeadSearchContext";
+ import Landing from "./pages/Landing";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +39,14 @@ const App = () => (
                    <Subscribe />
                  </ProtectedRoute>
                } 
+             />
+             <Route 
+               path="/landing" 
+              element={
+                <PublicRoute>
+                  <Landing />
+                </PublicRoute>
+              } 
              />
             <Route 
               path="/" 
