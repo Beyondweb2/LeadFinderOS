@@ -5,9 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+ import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { AppLayout } from "@/components/AppLayout";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
+ import Subscribe from "./pages/Subscribe";
 import Outreach from "./pages/Outreach";
 import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
@@ -28,13 +30,23 @@ const App = () => (
           <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<Auth />} />
+             <Route 
+               path="/subscribe" 
+               element={
+                 <ProtectedRoute>
+                   <Subscribe />
+                 </ProtectedRoute>
+               } 
+             />
             <Route 
               path="/" 
               element={
                 <ProtectedRoute>
-                  <AppLayout>
-                    <Index />
-                  </AppLayout>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <Index />
+                     </AppLayout>
+                   </SubscriptionGate>
                 </ProtectedRoute>
               } 
             />
@@ -42,9 +54,11 @@ const App = () => (
               path="/dashboard" 
               element={
                 <ProtectedRoute>
-                  <AppLayout>
-                    <Dashboard />
-                  </AppLayout>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <Dashboard />
+                     </AppLayout>
+                   </SubscriptionGate>
                 </ProtectedRoute>
               } 
             />
@@ -52,9 +66,11 @@ const App = () => (
               path="/outreach" 
               element={
                 <ProtectedRoute>
-                  <AppLayout>
-                    <Outreach />
-                  </AppLayout>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <Outreach />
+                     </AppLayout>
+                   </SubscriptionGate>
                 </ProtectedRoute>
               } 
             />
@@ -62,9 +78,11 @@ const App = () => (
               path="/archive" 
               element={
                 <ProtectedRoute>
-                  <AppLayout>
-                    <ArchivePage />
-                  </AppLayout>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <ArchivePage />
+                     </AppLayout>
+                   </SubscriptionGate>
                 </ProtectedRoute>
               } 
             />
@@ -72,9 +90,11 @@ const App = () => (
               path="/potential-work" 
               element={
                 <ProtectedRoute>
-                  <AppLayout>
-                    <PotentialWorkPage />
-                  </AppLayout>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <PotentialWorkPage />
+                     </AppLayout>
+                   </SubscriptionGate>
                 </ProtectedRoute>
               } 
             />
@@ -82,9 +102,11 @@ const App = () => (
               path="/templates" 
               element={
                 <ProtectedRoute>
-                  <AppLayout>
-                    <Templates />
-                  </AppLayout>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <Templates />
+                     </AppLayout>
+                   </SubscriptionGate>
                 </ProtectedRoute>
               } 
             />
