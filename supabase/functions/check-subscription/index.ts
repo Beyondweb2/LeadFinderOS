@@ -60,25 +60,30 @@
      // Check for active subscription
      const subscriptions = await stripe.subscriptions.list({
        customer: customerId,
-       status: "active",
        limit: 1,
      });
  
-     const hasActiveSub = subscriptions.data.length > 0;
+      // Filter for subscriptions that grant access (active, trialing, or past_due with grace period)
+      const validStatuses = ['active', 'trialing', 'past_due'];
+      const validSubscription = subscriptions.data.find((sub: { status: string }) => validStatuses.includes(sub.status));
+      
+      const hasActiveSub = !!validSubscription;
      let productId: string | null = null;
      let subscriptionEnd: string | null = null;
+      let subscriptionStatus: string | null = null;
  
      if (hasActiveSub) {
-       const subscription = subscriptions.data[0];
-       subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
+        subscriptionEnd = new Date(validSubscription.current_period_end * 1000).toISOString();
+        subscriptionStatus = validSubscription.status;
        
-       const priceProduct = subscription.items.data[0].price.product;
+        const priceProduct = validSubscription.items.data[0].price.product;
        productId = typeof priceProduct === 'string' ? priceProduct : priceProduct.id;
        
        logStep("Active subscription found", { 
-         subscriptionId: subscription.id, 
+          subscriptionId: validSubscription.id, 
          endDate: subscriptionEnd,
-         productId 
+          productId,
+          status: subscriptionStatus
        });
      } else {
        logStep("No active subscription found");
@@ -87,7 +92,8 @@
      return new Response(JSON.stringify({
        subscribed: hasActiveSub,
        product_id: productId,
-       subscription_end: subscriptionEnd
+        subscription_end: subscriptionEnd,
+        subscription_status: subscriptionStatus
      }), {
        headers: { ...corsHeaders, "Content-Type": "application/json" },
        status: 200,
