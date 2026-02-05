@@ -9,6 +9,7 @@
    isLoading: boolean;
    error: string | null;
    status: string | null;
+   isAdmin: boolean;
  }
  
  export function useSubscription() {
@@ -20,8 +21,23 @@
      isLoading: true,
      error: null,
      status: null,
+     isAdmin: false,
    });
    const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+ 
+   // Check if user has admin role
+   const checkAdminRole = useCallback(async (): Promise<boolean> => {
+     if (!user?.id) return false;
+     
+     const { data, error } = await supabase
+       .from('user_roles')
+       .select('role')
+       .eq('user_id', user.id)
+       .eq('role', 'admin')
+       .maybeSingle();
+     
+     return !error && data !== null;
+   }, [user?.id]);
  
    const checkSubscription = useCallback(async (skipLocalCheck = false) => {
      if (!session?.access_token) {
@@ -31,6 +47,21 @@
  
      try {
        setState(prev => ({ ...prev, isLoading: true, error: null }));
+       
+       // First check if user is admin (bypass subscription check)
+       const isAdmin = await checkAdminRole();
+       if (isAdmin) {
+         setState({
+           subscribed: true,
+           productId: null,
+           subscriptionEnd: null,
+           isLoading: false,
+           error: null,
+           status: 'admin',
+           isAdmin: true,
+         });
+         return;
+       }
        
        // First check local database for cached subscription (faster)
        if (!skipLocalCheck && user?.id) {
@@ -51,6 +82,7 @@
              isLoading: false,
              error: null,
              status: localSub.status,
+             isAdmin: false,
            });
            
            if (!isValid) return;
@@ -73,6 +105,7 @@
          isLoading: false,
          error: null,
          status: data.subscription_status ?? null,
+         isAdmin: false,
        });
      } catch (err) {
        console.error('Subscription check failed:', err);
@@ -82,7 +115,7 @@
          error: err instanceof Error ? err.message : 'Failed to check subscription',
        }));
      }
-   }, [session?.access_token, user?.id]);
+   }, [session?.access_token, user?.id, checkAdminRole]);
  
    // Check subscription on mount and when user changes
    useEffect(() => {
@@ -96,6 +129,7 @@
          isLoading: false,
          error: null,
          status: null,
+         isAdmin: false,
        });
      }
    }, [user, checkSubscription]);
