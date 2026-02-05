@@ -46,6 +46,7 @@
  
    const handleMarkInterested = async (lead: OutreachLead) => {
      await updateStatus(lead.id, 'interested');
+   await unarchiveLead(lead.id);
    };
  
    const handleBulkLookup = async () => {
