@@ -1,17 +1,21 @@
- import { Link } from 'react-router-dom';
- import { Button } from '@/components/ui/button';
- import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
- import {
-   Target,
-   Search,
-   ClipboardList,
-   Phone,
-   FileText,
-   Download,
-   Zap,
-   Check,
-   ArrowRight,
- } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Target,
+  Search,
+  ClipboardList,
+  Phone,
+  FileText,
+  Download,
+  Zap,
+  Check,
+  ArrowRight,
+  X,
+  CheckCircle,
+} from 'lucide-react';
+import oldWayImage from '@/assets/old-way-maps.png';
+import newWayImage from '@/assets/new-way-leadfinder.png';
  
  const FEATURES = [
    {
@@ -129,10 +133,59 @@
              </Button>
            </div>
          </div>
-       </section>
- 
-       {/* Features Section */}
-       <section className="relative z-10 py-20 bg-card/30">
+        </section>
+
+        {/* Before/After Comparison Section */}
+        <section className="relative z-10 py-20 bg-card/30">
+          <div className="container mx-auto px-4">
+            <h2 className="text-3xl md:text-4xl font-bold text-center mb-4">
+              Stop Searching <span className="text-gradient-primary">Manually</span>
+            </h2>
+            <p className="text-muted-foreground text-center max-w-xl mx-auto mb-12">
+              Finding businesses without websites used to mean hours of manual Google Maps searching. Not anymore.
+            </p>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+              {/* Old Way */}
+              <div className="relative">
+                <div className="absolute -top-4 left-4 z-10 flex items-center gap-2 bg-destructive/90 text-destructive-foreground px-4 py-2 rounded-full font-semibold text-sm shadow-lg">
+                  <X className="h-4 w-4" />
+                  The Old Way
+                </div>
+                <div className="rounded-xl overflow-hidden border border-destructive/30 bg-card/50 p-2">
+                  <img
+                    src={oldWayImage}
+                    alt="Manually searching Google Maps for businesses"
+                    className="w-full h-auto rounded-lg opacity-80"
+                  />
+                </div>
+                <p className="text-muted-foreground text-sm text-center mt-4">
+                  Scrolling through Google Maps, clicking each pin, checking for websites one by one...
+                </p>
+              </div>
+
+              {/* New Way */}
+              <div className="relative">
+                <div className="absolute -top-4 left-4 z-10 flex items-center gap-2 bg-primary/90 text-primary-foreground px-4 py-2 rounded-full font-semibold text-sm shadow-lg">
+                  <CheckCircle className="h-4 w-4" />
+                  With LeadFinder
+                </div>
+                <div className="rounded-xl overflow-hidden border border-primary/30 bg-card/50 p-2 glow-effect">
+                  <img
+                    src={newWayImage}
+                    alt="LeadFinder showing filtered list of businesses without websites"
+                    className="w-full h-auto rounded-lg"
+                  />
+                </div>
+                <p className="text-muted-foreground text-sm text-center mt-4">
+                  Instantly see which businesses don't have websites, sorted and ready to contact.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Features Section */}
+        <section className="relative z-10 py-20">
          <div className="container mx-auto px-4">
            <h2 className="text-3xl md:text-4xl font-bold text-center mb-4">
              Everything You Need to
