@@ -4,44 +4,6 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { Template, TemplateType, TemplateCategory } from '@/types/outreach';
 
-const DEFAULT_TEMPLATES: Omit<Template, 'id' | 'user_id' | 'created_at' | 'updated_at'>[] = [
-  {
-    template_type: 'text',
-    category: 'initial',
-    title: 'Initial Text',
-    content: 'Hi, are you taking on work?',
-    is_default: true,
-  },
-  {
-    template_type: 'text',
-    category: 'follow_up',
-    title: 'Follow-up Text',
-    content: 'Did you get my voice note?',
-    is_default: true,
-  },
-  {
-    template_type: 'voice_script',
-    category: 'no_website',
-    title: 'No Website Pitch',
-    content: `Hi, I noticed you don't have a website yet. I build websites for local businesses like yours - simple, professional sites that help customers find you and learn about your services. Would you be interested in seeing some examples of what I could create for you?`,
-    is_default: true,
-  },
-  {
-    template_type: 'voice_script',
-    category: 'poor_website',
-    title: 'Poor Website Pitch',
-    content: `Hi, I was looking at your current website and thought there might be some ways to improve it - maybe make it faster, more mobile-friendly, or just give it a fresh modern look. I specialize in redesigning websites for local businesses. Would you be open to a quick chat about what could be done?`,
-    is_default: true,
-  },
-  {
-    template_type: 'voice_script',
-    category: 'coming_soon',
-    title: 'Coming Soon Pitch',
-    content: `Hi, I saw your website says coming soon. I build websites for local businesses and could help you get something up and running quickly. Would you be interested in seeing some examples of my work?`,
-    is_default: true,
-  },
-];
-
 export function useTemplates() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -79,43 +41,11 @@ export function useTemplates() {
     setTemplates(typedData);
   }, [user, toast]);
 
-  const initializeDefaults = useCallback(async () => {
-    if (!user) return;
-
-    // Check if user has any templates
-    const { count, error } = await supabase
-      .from('templates')
-      .select('*', { count: 'exact', head: true });
-
-    if (error) {
-      console.error('Error checking templates:', error);
-      return;
-    }
-
-    // If no templates, create defaults
-    if (count === 0) {
-      const templatesWithUser = DEFAULT_TEMPLATES.map((t) => ({
-        ...t,
-        user_id: user.id,
-      }));
-
-      const { error: insertError } = await supabase
-        .from('templates')
-        .insert(templatesWithUser);
-
-      if (insertError) {
-        console.error('Error creating default templates:', insertError);
-      } else {
-        await fetchTemplates();
-      }
-    }
-  }, [user, fetchTemplates]);
-
   useEffect(() => {
     if (user) {
-      fetchTemplates().then(() => initializeDefaults());
+       fetchTemplates();
     }
-  }, [user, fetchTemplates, initializeDefaults]);
+   }, [user, fetchTemplates]);
 
   const createTemplate = useCallback(async (
     template: Pick<Template, 'template_type' | 'category' | 'title' | 'content'>
