@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone } from 'lucide-react';
+import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -25,6 +25,7 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
   const [requirePhone, setRequirePhone] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country>('UK');
+  const [deepSearch, setDeepSearch] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +39,7 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
       minReviews: minReviews > 0 ? minReviews : undefined,
       requirePhone,
       country: selectedCountry,
+      deepSearch,
     });
   };
 
@@ -151,6 +153,22 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                     />
                     <span className="text-xs text-muted-foreground">
                       {requirePhone ? 'Only show businesses with phone' : 'Show all businesses'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
+                    <Zap className="h-4 w-4" />
+                    Deep Search
+                  </Label>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Switch
+                      checked={deepSearch}
+                      onCheckedChange={setDeepSearch}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      {deepSearch ? 'Grid search for 200+ results (slower)' : 'Standard search (up to 60 results)'}
                     </span>
                   </div>
                 </div>

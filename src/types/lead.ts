@@ -30,6 +30,7 @@ export interface SearchFilters {
   minReviews?: number;
   requirePhone?: boolean;
   country?: Country;
+  deepSearch?: boolean;
 }
 
 export interface SearchResponse {

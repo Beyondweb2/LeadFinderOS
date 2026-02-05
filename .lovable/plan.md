@@ -2,6 +2,8 @@
 
 # Lead Finder Restructure - Simplified Workflow
 
+## Implementation Status: ✅ COMPLETED
+
 ## Overview
 
 Transform the app into a streamlined, saleable business lead generation and outreach tool with these core improvements:
@@ -241,6 +243,34 @@ When user searches in archive:
 2. Query: `phone ILIKE '%' || searchDigits || '%'`
 3. Show matching leads in results
 4. Click to open full lead dialog
+
+---
+
+## Completed Changes
+
+### ✅ Phase 1: Database Updates
+- Added `is_archived` boolean column to `outreach_leads`
+- Created index for fast filtering by archive status
+
+### ✅ Phase 2: Deep Search Implementation  
+- Added `deepSearch` parameter to search schema
+- Implemented `generateGridPoints()` for grid-based searching
+- Searches now run at multiple points in parallel with deduplication by `place_id`
+- Toggle added to SearchForm under Advanced Filters
+
+### ✅ Phase 3: UI Changes
+- Removed tabs (No Website / Broken Website)
+- Added Active/Archive view toggle
+- Added checkbox column with Select All
+- Added bulk "Copy X Phones" button (format: `447477932564, 447477932565`)
+- Added Archive/Unarchive buttons for selected leads
+- Added phone search in Archive view
+
+### ✅ Phase 4: Hook Updates
+- Added `archivedLeads` state
+- Added `archiveLead`, `unarchiveLead` functions
+- Added `archiveMultiple`, `unarchiveMultiple` for bulk operations
+- Added `searchArchivedByPhone` function
 
 ---
 

@@ -33,6 +33,8 @@ const SearchRequestSchema = z.object({
     .default(2), // Default to 2 minimum reviews to filter out inactive businesses
   requirePhone: z.boolean()
     .default(true), // Default to requiring a phone number
+  deepSearch: z.boolean()
+    .default(false), // Enable grid-based multi-point search
 });
 
 // Directory / Platform Blacklist - URLs that don't count as having a website
@@ -313,13 +315,51 @@ Think about whether "${domain}" looks like it could be the business's own brande
   }
 }
 
-async function searchPlaces(
-  keyword: string,
-  location: string,
-  radius: number,
-  apiKey: string
-): Promise<any[]> {
-  // First, geocode the location
+// Generate grid points for deep search
+function generateGridPoints(centerLat: number, centerLng: number, radiusMeters: number): Array<{lat: number, lng: number, radius: number}> {
+  // Calculate grid size based on radius
+  // For larger areas, use more grid points with overlap
+  const points: Array<{lat: number, lng: number, radius: number}> = [];
+  
+  // Determine grid dimensions based on search radius
+  let gridSize: number;
+  let cellRadius: number;
+  
+  if (radiusMeters >= 40000) {
+    gridSize = 5; // 5x5 = 25 points for 40km+
+    cellRadius = radiusMeters / 3; // Overlap cells
+  } else if (radiusMeters >= 20000) {
+    gridSize = 4; // 4x4 = 16 points for 20-40km
+    cellRadius = radiusMeters / 2.5;
+  } else if (radiusMeters >= 10000) {
+    gridSize = 3; // 3x3 = 9 points for 10-20km
+    cellRadius = radiusMeters / 2;
+  } else {
+    gridSize = 2; // 2x2 = 4 points for smaller areas
+    cellRadius = radiusMeters / 1.5;
+  }
+  
+  // Calculate step size in degrees (approximate)
+  // 1 degree latitude ≈ 111km, longitude varies by latitude
+  const latStep = (radiusMeters * 2 / (gridSize - 1)) / 111000;
+  const lngStep = latStep / Math.cos(centerLat * Math.PI / 180);
+  
+  // Generate grid centered on the search location
+  const halfGrid = (gridSize - 1) / 2;
+  
+  for (let i = 0; i < gridSize; i++) {
+    for (let j = 0; j < gridSize; j++) {
+      const lat = centerLat + (i - halfGrid) * latStep;
+      const lng = centerLng + (j - halfGrid) * lngStep;
+      points.push({ lat, lng, radius: cellRadius });
+    }
+  }
+  
+  return points;
+}
+
+// Geocode a location to get coordinates
+async function geocodeLocation(location: string, apiKey: string): Promise<{lat: number, lng: number}> {
   const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`;
   const geocodeRes = await fetch(geocodeUrl);
   const geocodeData = await geocodeRes.json();
@@ -329,9 +369,17 @@ async function searchPlaces(
     throw new Error('Location not found');
   }
   
-  const { lat, lng } = geocodeData.results[0].geometry.location;
-  
-  // Search for places with pagination
+  return geocodeData.results[0].geometry.location;
+}
+
+// Search places at a specific coordinate
+async function searchPlacesAtPoint(
+  keyword: string,
+  lat: number,
+  lng: number,
+  radius: number,
+  apiKey: string
+): Promise<any[]> {
   const allResults: any[] = [];
   let nextPageToken: string | undefined;
   
@@ -345,7 +393,7 @@ async function searchPlaces(
     
     if (searchData.status !== 'OK' && searchData.status !== 'ZERO_RESULTS') {
       console.error('Places search failed:', searchData.status, searchData.error_message);
-      throw new Error('Search service temporarily unavailable');
+      break; // Don't throw, just stop this point's search
     }
     
     allResults.push(...(searchData.results || []));
@@ -355,7 +403,61 @@ async function searchPlaces(
     if (nextPageToken) {
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
-  } while (nextPageToken && allResults.length < 60); // Max ~60 results (3 pages)
+  } while (nextPageToken && allResults.length < 60);
+  
+  return allResults;
+}
+
+async function searchPlaces(
+  keyword: string,
+  location: string,
+  radius: number,
+  apiKey: string,
+  deepSearch: boolean = false
+): Promise<any[]> {
+  // Geocode the location first
+  const { lat, lng } = await geocodeLocation(location, apiKey);
+  
+  if (!deepSearch) {
+    // Standard single-point search
+    return searchPlacesAtPoint(keyword, lat, lng, radius, apiKey);
+  }
+  
+  // Deep search: grid-based multi-point search
+  console.log(`Deep search enabled: generating grid for ${radius}m radius`);
+  const gridPoints = generateGridPoints(lat, lng, radius);
+  console.log(`Generated ${gridPoints.length} grid points`);
+  
+  // Search all grid points in parallel (with concurrency limit)
+  const allResults: any[] = [];
+  const seenPlaceIds = new Set<string>();
+  
+  // Process in batches of 5 to avoid overwhelming the API
+  const batchSize = 5;
+  for (let i = 0; i < gridPoints.length; i += batchSize) {
+    const batch = gridPoints.slice(i, i + batchSize);
+    const batchResults = await Promise.all(
+      batch.map(point => 
+        searchPlacesAtPoint(keyword, point.lat, point.lng, point.radius, apiKey)
+          .catch(err => {
+            console.error(`Error searching at point (${point.lat}, ${point.lng}):`, err);
+            return [];
+          })
+      )
+    );
+    
+    // Deduplicate by place_id
+    for (const results of batchResults) {
+      for (const place of results) {
+        if (!seenPlaceIds.has(place.place_id)) {
+          seenPlaceIds.add(place.place_id);
+          allResults.push(place);
+        }
+      }
+    }
+    
+    console.log(`Batch ${Math.floor(i / batchSize) + 1}: Found ${allResults.length} unique places so far`);
+  }
   
   return allResults;
 }
@@ -490,7 +592,7 @@ serve(async (req) => {
       );
     }
 
-    const { keyword, location, radius, minRating, minReviews, requirePhone } = validationResult.data;
+    const { keyword, location, radius, minRating, minReviews, requirePhone, deepSearch } = validationResult.data;
 
     const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
     if (!GOOGLE_MAPS_API_KEY) {
@@ -501,10 +603,10 @@ serve(async (req) => {
       );
     }
 
-    console.log(`Searching for "${keyword}" in "${location}" within ${radius}m`);
+    console.log(`Searching for "${keyword}" in "${location}" within ${radius}m (deepSearch: ${deepSearch})`);
 
     // Search places
-    const places = await searchPlaces(keyword, location, radius, GOOGLE_MAPS_API_KEY);
+    const places = await searchPlaces(keyword, location, radius, GOOGLE_MAPS_API_KEY, deepSearch);
     console.log(`Found ${places.length} places`);
 
     // Get details for each place and classify
