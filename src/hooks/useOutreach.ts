@@ -262,20 +262,48 @@ export function useOutreach() {
     const lead = leads.find((l) => l.id === leadId);
     const archivedLead = archivedLeads.find((l) => l.id === leadId);
     const targetLead = lead || archivedLead;
+
+    // Determine if this should be marked as potential work
+    const potentialWorkStatuses: LeadStatus[] = ['interested', 'wants_draft', 'reviewing_draft', 'paid_for_draft', 'completed'];
+    const isPotentialWork = potentialWorkStatuses.includes(status);
+
+    // Update both status and is_potential_work flag
+    const { data, error } = await supabase
+      .from('outreach_leads')
+      .update({ status, is_potential_work: isPotentialWork })
+      .eq('id', leadId)
+      .select()
+      .single();
+
+    if (error) {
+      toast({
+        title: 'Error updating status',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    const updatedLead = data as OutreachLead;
+
+    // Update in correct list based on archived status
+    if (updatedLead.is_archived) {
+      setArchivedLeads((prev) => prev.map((l) => (l.id === leadId ? updatedLead : l)));
+    } else {
+      setLeads((prev) => prev.map((l) => (l.id === leadId ? updatedLead : l)));
+    }
     
-    const result = await updateLead(leadId, { status });
-    
-    if (result && targetLead) {
+    if (targetLead) {
       await logActivity(leadId, 'status_change', `Status changed to ${status.replace('_', ' ')}`);
     }
 
     // Auto-remove if status set to not_interested
-    if (result && status === 'not_interested') {
+    if (status === 'not_interested') {
       await deleteLead(leadId, true);
     }
     
-    return result;
-  }, [leads, archivedLeads, updateLead, deleteLead]);
+    return updatedLead;
+  }, [leads, archivedLeads, toast, deleteLead]);
 
   const updateNextAction = useCallback(async (
     leadId: string,
