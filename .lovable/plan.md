@@ -1,101 +1,131 @@
 
-# Landing Page Implementation Plan
+
+# Stripe Webhooks for Instant Access Revocation
 
 ## Overview
-Create a compelling marketing landing page for unauthenticated visitors that showcases LeadFinder Pro's features, pricing, and includes clear calls-to-action to subscribe.
+Implement a Stripe webhook handler that instantly revokes app access when a user unsubscribes, cancels, or their payment fails. This replaces the current 60-second polling delay with near-instant access control.
 
-## User Flow
+## How It Works
+
 ```text
-New Visitor
-    |
-    v
-Landing Page (/)
-    |
-    +-- "Start Free Trial" / "Subscribe" --> /auth (sign up)
-    |
-    +-- "Sign In" --> /auth (login)
-    |
-    v
-After Auth --> Subscription Check --> /subscribe or App
+User Cancels in Stripe Portal
+          |
+          v
+    Stripe sends webhook event
+    (customer.subscription.deleted/updated)
+          |
+          v
+    Edge Function receives event
+          |
+          +-- Verify webhook signature
+          |
+          +-- Extract customer email
+          |
+          +-- Update subscriptions table
+          |
+          v
+    Frontend checks subscriptions table
+    (realtime or on next request)
+          |
+          v
+    User is immediately blocked
 ```
 
-## Design Approach
+## Database Changes
 
-### Visual Style
-- Match the existing dark professional theme with teal/cyan primary color
-- Use the existing `glass-panel` and gradient effects from the design system
-- Include animated elements for engagement (subtle glow effects, fade-ins)
-- Fully responsive for mobile and desktop
+Create a `subscriptions` table to cache subscription status locally:
 
-### Page Sections
+| Column | Type | Description |
+|--------|------|-------------|
+| id | uuid | Primary key |
+| user_id | uuid | References auth user |
+| stripe_customer_id | text | Stripe customer ID |
+| stripe_subscription_id | text | Stripe subscription ID |
+| status | text | active, canceled, past_due, etc. |
+| current_period_end | timestamptz | When subscription ends |
+| updated_at | timestamptz | Last update time |
 
-1. **Hero Section**
-   - Bold headline: "Find Businesses Without Websites"
-   - Subheadline explaining the value proposition
-   - Primary CTA: "Get Started" button
-   - Secondary CTA: "Sign In" link
-   - Optional: Animated mockup or illustration
+RLS policies will ensure users can only read their own subscription data.
 
-2. **Features Grid**
-   - 6 key features with icons:
-     - Lead Search (find businesses without websites)
-     - CRM Pipeline (track outreach progress)
-     - Contact Tracking (log calls and messages)
-     - Templates (email and voice note scripts)
-     - Export Tools (CSV export for external use)
-     - Smart Classification (AI-powered lead scoring)
+## Edge Function: stripe-webhook
 
-3. **How It Works**
-   - 3-step process explanation:
-     - Step 1: Search for businesses in your target area
-     - Step 2: Add hot leads to your pipeline
-     - Step 3: Track outreach and close deals
+A new edge function that:
 
-4. **Pricing Card**
-   - LeadFinder Pro at 19.99/month
-   - Feature list (matching the Subscribe page)
-   - CTA button to start subscription
+1. Receives POST requests from Stripe
+2. Verifies the webhook signature using `STRIPE_WEBHOOK_SECRET`
+3. Handles these events:
+   - `customer.subscription.created` - Creates/updates subscription record
+   - `customer.subscription.updated` - Updates status (handles downgrades, payment failures)
+   - `customer.subscription.deleted` - Marks subscription as cancelled
+   - `invoice.payment_failed` - Marks subscription as past_due
+4. Uses the customer email to find the matching user in your database
+5. Updates the `subscriptions` table accordingly
 
-5. **Footer**
-   - Simple footer with branding
-   - Links to sign in/sign up
+## Frontend Changes
+
+### Update useSubscription hook
+
+1. Query the local `subscriptions` table first (faster than calling Stripe API)
+2. Fall back to calling `check-subscription` if no local record exists
+3. Enable Supabase Realtime on the `subscriptions` table for instant UI updates
+4. When a webhook updates the database, the UI reacts immediately
+
+### Update SubscriptionGate
+
+- Check both the local database AND the Stripe API for redundancy
+- Prioritize the local database for speed
+- Show a "subscription cancelled" message instead of just redirecting
+
+---
+
+## Setup Required (Manual Steps)
+
+### 1. Add Webhook Endpoint in Stripe Dashboard
+
+1. Go to Stripe Dashboard > Developers > Webhooks
+2. Click "Add endpoint"
+3. Enter URL: `https://hhbdvgsnjequwooynxpr.supabase.co/functions/v1/stripe-webhook`
+4. Select events:
+   - `customer.subscription.created`
+   - `customer.subscription.updated`
+   - `customer.subscription.deleted`
+   - `invoice.payment_failed`
+5. Copy the "Signing secret" (starts with `whsec_`)
+
+### 2. Add Webhook Secret
+
+You'll need to add the `STRIPE_WEBHOOK_SECRET` as a secret in your project.
 
 ---
 
 ## Technical Details
 
-### New Components
-- `src/pages/Landing.tsx` - The main landing page component
+### New Files
+- `supabase/functions/stripe-webhook/index.ts` - Webhook handler edge function
 
-### Route Configuration Changes
-Update `src/App.tsx` to:
-- Add a new `/landing` route for the landing page (public, no auth required)
-- Modify the `/` route logic to redirect unauthenticated users to `/landing`
-- Or alternatively, make `/` render Landing for guests and Index for authenticated+subscribed users
+### Modified Files
+- `src/hooks/useSubscription.ts` - Query local database first, add realtime subscription
+- `src/components/SubscriptionGate.tsx` - Add "subscription cancelled" messaging
 
-### Recommended Approach
-Create a wrapper component or modify the existing route structure:
-- Unauthenticated users visiting `/` see the Landing page
-- Authenticated users are handled by ProtectedRoute + SubscriptionGate as before
+### Database Migration
+- Create `subscriptions` table with RLS policies
+- Enable realtime on the table
 
-### Styling
-- Use existing Tailwind classes and CSS variables
-- Leverage existing components: Button, Card, Badge
-- Add any new animations inline or extend index.css if needed
+### Config Updates
+- `supabase/config.toml` - Add `[functions.stripe-webhook]` with `verify_jwt = false` (webhooks don't have JWT)
 
-### Icons Used
-From lucide-react (already installed):
-- Target (branding)
-- Search (lead search feature)
-- ClipboardList (CRM feature)
-- Phone/MessageSquare (contact tracking)
-- FileText (templates)
-- Download (export)
-- Zap (AI classification)
-- Check (feature checkmarks)
-- ArrowRight (CTAs)
+### Webhook Signature Verification
+The edge function will use Stripe's `constructEvent` method:
 
-### Mobile Responsiveness
-- Hero: Stack elements vertically on mobile
-- Features: 1 column on mobile, 2 on tablet, 3 on desktop
-- Pricing: Full-width card on mobile
+```typescript
+const sig = req.headers.get("stripe-signature");
+const event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
+```
+
+This ensures only genuine Stripe events are processed, preventing spoofed requests.
+
+### Security Considerations
+- Webhook endpoint is public (no JWT) but protected by Stripe signature verification
+- Service role key used to update subscriptions table (bypasses RLS for system updates)
+- Frontend queries use anon key with RLS (users can only see their own data)
+
