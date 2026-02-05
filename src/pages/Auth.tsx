@@ -127,7 +127,7 @@ const Auth = () => {
             <img 
               src="/favicon.png" 
               alt="LeadFinder Logo" 
-              className="h-16 w-16 rounded-xl"
+              className="h-32 w-32"
             />
           </div>
           <CardTitle className="text-2xl font-bold">
