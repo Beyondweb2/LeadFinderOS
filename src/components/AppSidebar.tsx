@@ -19,7 +19,9 @@ import {
   FileText,
   Target,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Archive,
+  Briefcase
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -42,6 +44,18 @@ const navItems = [
     url: '/outreach', 
     icon: ClipboardList,
     description: 'Manage your pipeline'
+  },
+  { 
+    title: 'Archive', 
+    url: '/archive', 
+    icon: Archive,
+    description: 'Archived businesses'
+  },
+  { 
+    title: 'Potential Work', 
+    url: '/potential-work', 
+    icon: Briefcase,
+    description: 'Interested leads'
   },
   { 
     title: 'Templates', 

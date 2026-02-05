@@ -2,22 +2,21 @@ import { useState } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { ContactDialog } from '@/components/ContactDialog';
-import { useLeadSearch } from '@/hooks/useLeadSearch';
+ import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 import { useContactTracking } from '@/hooks/useContactTracking';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { Flame, Target, Zap } from 'lucide-react';
 import type { Lead, Country } from '@/types/lead';
-import type { ListType } from '@/types/outreach';
 
 const Index = () => {
-  const { leads, isLoading, search, exportToCsv } = useLeadSearch();
+  const { leads, isLoading, search, exportToCsv } = useLeadSearchContext();
   const { 
     markAsContacted, 
     getLatestContact, 
     isLoading: isContactLoading 
   } = useContactTracking();
-  const { addLead: addToOutreach, isInOutreach } = useOutreach();
+  const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
@@ -63,7 +62,7 @@ const Index = () => {
             onExport={exportToCsv}
             onLogContact={(lead) => setContactDialogLead(lead)}
             getLatestContact={getLatestContact}
-            onAddToOutreach={(lead, listType: ListType) => addToOutreach(lead, lastSearchCountry, listType)}
+            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
             isInOutreach={isInOutreach}
             onMapLinkClick={markAsChecked}
             isChecked={isChecked}

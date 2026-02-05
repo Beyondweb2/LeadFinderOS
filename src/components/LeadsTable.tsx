@@ -42,7 +42,6 @@ import {
 } from '@/components/ui/tooltip';
 import type { Lead, WebsiteStatus } from '@/types/lead';
 import type { LeadContact } from '@/hooks/useContactTracking';
-import type { ListType } from '@/types/outreach';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -51,7 +50,7 @@ interface LeadsTableProps {
   onExport: () => void;
   onLogContact?: (lead: Lead) => void;
   getLatestContact?: (leadId: string) => LeadContact | undefined;
-  onAddToOutreach?: (lead: Lead, listType: ListType) => Promise<any>;
+  onAddToOutreach?: (lead: Lead) => Promise<any>;
   isInOutreach?: (leadName: string, googleMapsUrl?: string) => boolean;
   onMapLinkClick?: (businessName: string, googleMapsUrl?: string) => void;
   isChecked?: (businessName: string, googleMapsUrl?: string) => boolean;
@@ -407,31 +406,19 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                               <TooltipContent>Already in outreach</TooltipContent>
                             </Tooltip>
                           ) : (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 hover:bg-muted hover:text-primary"
+                                  onClick={() => onAddToOutreach(lead)}
                                 >
                                   <ClipboardList className="h-4 w-4" />
                                 </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="bg-popover border-border">
-                                <DropdownMenuCheckboxItem
-                                  checked={false}
-                                  onCheckedChange={() => onAddToOutreach(lead, 'no_website')}
-                                >
-                                  Add to No Website list
-                                </DropdownMenuCheckboxItem>
-                                <DropdownMenuCheckboxItem
-                                  checked={false}
-                                  onCheckedChange={() => onAddToOutreach(lead, 'broken_website')}
-                                >
-                                  Add to Broken Website list
-                                </DropdownMenuCheckboxItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                              </TooltipTrigger>
+                              <TooltipContent>Add to CRM</TooltipContent>
+                            </Tooltip>
                           )
                         )}
                       </div>

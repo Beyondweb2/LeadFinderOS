@@ -12,6 +12,9 @@ import Outreach from "./pages/Outreach";
 import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
 import NotFound from "./pages/NotFound";
+ import ArchivePage from "./pages/Archive";
+ import PotentialWorkPage from "./pages/PotentialWork";
+ import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 
 const queryClient = new QueryClient();
 
@@ -21,7 +24,8 @@ const App = () => (
       <TooltipProvider>
         <Toaster />
         <Sonner />
-        <BrowserRouter>
+        <LeadSearchProvider>
+          <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route 
@@ -55,6 +59,26 @@ const App = () => (
               } 
             />
             <Route 
+              path="/archive" 
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <ArchivePage />
+                  </AppLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/potential-work" 
+              element={
+                <ProtectedRoute>
+                  <AppLayout>
+                    <PotentialWorkPage />
+                  </AppLayout>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
               path="/templates" 
               element={
                 <ProtectedRoute>
@@ -67,7 +91,8 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
-        </BrowserRouter>
+          </BrowserRouter>
+        </LeadSearchProvider>
       </TooltipProvider>
     </AuthProvider>
   </QueryClientProvider>

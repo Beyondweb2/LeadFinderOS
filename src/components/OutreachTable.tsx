@@ -386,53 +386,11 @@ export function OutreachTable({
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                const phonesToCopy = selectedIds.size > 0
-                  ? filteredAndSortedLeads.filter(l => selectedIds.has(l.id))
-                  : filteredAndSortedLeads;
-                const phones = phonesToCopy
-                  .map((l) => l.phone)
-                  .filter(Boolean)
-                  .map(p => p!.replace(/\D/g, '').replace(/^\+/, ''))
-                  .filter(p => p.length > 0)
-                  .join(', ');
-                if (!phones) {
-                  toast({
-                    title: 'No phone numbers',
-                    description: 'No phone numbers found in the current list.',
-                    variant: 'destructive',
-                  });
-                  return;
-                }
-                navigator.clipboard.writeText(phones);
-                toast({
-                  title: 'Copied!',
-                  description: `${phones.split(', ').length} phone numbers copied in bulk format.`,
-                });
-              }}
-              disabled={leads.length === 0}
-              className="bg-background"
-            >
-              <Copy className="h-4 w-4 mr-2" />
-              Copy Phones
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportToCsv('import')}
-              className="bg-background"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export Import CSV
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => exportToCsv('crm')}
               className="bg-background"
             >
               <Download className="h-4 w-4 mr-2" />
-              Export CRM CSV
+              Export CSV
             </Button>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

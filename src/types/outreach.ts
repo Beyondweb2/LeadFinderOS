@@ -10,7 +10,11 @@ export type LeadStatus =
   | 'sent_initial_text'
   | 'replied'
   | 'sent_voice_note'
-  | 'awaiting_decision';
+  | 'awaiting_decision'
+  | 'waiting'
+  | 'reviewing_draft'
+  | 'paid_for_draft'
+  | 'completed';
 
 export type NextActionType = 
   | 'call'
@@ -105,6 +109,10 @@ export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'wants_draft', label: 'Wants a Draft' },
   { value: 'interested', label: 'Interested' },
   { value: 'not_interested', label: 'Not Interested' },
+  { value: 'waiting', label: 'Waiting' },
+  { value: 'reviewing_draft', label: 'Reviewing Draft' },
+  { value: 'paid_for_draft', label: 'Paid for Draft' },
+  { value: 'completed', label: 'Completed (Client)' },
 ];
 
 export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
