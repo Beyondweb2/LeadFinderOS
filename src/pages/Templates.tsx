@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   Loader2, 
   Plus, 
@@ -28,7 +29,8 @@ import {
   Pencil, 
   Trash2,
   MessageSquare,
-  Mic
+  Mic,
+  X
 } from 'lucide-react';
 import type { Template, TemplateType, TemplateCategory } from '@/types/outreach';
 import { TEMPLATE_CATEGORY_OPTIONS } from '@/types/outreach';
@@ -46,6 +48,7 @@ const Templates = () => {
   const [activeTab, setActiveTab] = useState<TemplateType>('text');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [viewingTemplate, setViewingTemplate] = useState<Template | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     content: '',
@@ -70,6 +73,10 @@ const Templates = () => {
       category: template.category,
     });
     setIsDialogOpen(true);
+  };
+
+  const openViewDialog = (template: Template) => {
+    setViewingTemplate(template);
   };
 
   const handleSubmit = async () => {
@@ -97,8 +104,11 @@ const Templates = () => {
     }
   };
 
-  const TemplateCard = ({ template }: { template: Template }) => (
-    <Card className="bg-card/50 border-border/50">
+  const TemplateCard = ({ template, onClick }: { template: Template; onClick: () => void }) => (
+    <Card 
+      className="bg-card/50 border-border/50 cursor-pointer hover:border-primary/50 transition-colors"
+      onClick={onClick}
+    >
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
           <div>
@@ -107,7 +117,7 @@ const Templates = () => {
               {TEMPLATE_CATEGORY_OPTIONS.find((c) => c.value === template.category)?.label || template.category}
             </CardDescription>
           </div>
-          <div className="flex gap-1">
+          <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
             <Button
               variant="ghost"
               size="icon"
@@ -196,7 +206,11 @@ const Templates = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {textTemplates.map((template) => (
-                <TemplateCard key={template.id} template={template} />
+                <TemplateCard 
+                  key={template.id} 
+                  template={template} 
+                  onClick={() => openViewDialog(template)}
+                />
               ))}
             </div>
           )}
@@ -220,7 +234,11 @@ const Templates = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2">
               {voiceTemplates.map((template) => (
-                <TemplateCard key={template.id} template={template} />
+                <TemplateCard 
+                  key={template.id} 
+                  template={template} 
+                  onClick={() => openViewDialog(template)}
+                />
               ))}
             </div>
           )}
@@ -292,6 +310,60 @@ const Templates = () => {
               disabled={!formData.title.trim() || !formData.content.trim()}
             >
               {editingTemplate ? 'Save Changes' : 'Create Template'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Template Dialog (Full Screen Popup) */}
+      <Dialog open={!!viewingTemplate} onOpenChange={(open) => !open && setViewingTemplate(null)}>
+        <DialogContent className="sm:max-w-[700px] max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle className="text-xl flex items-center gap-2">
+              {viewingTemplate?.template_type === 'voice_script' ? (
+                <Mic className="h-5 w-5" />
+              ) : (
+                <MessageSquare className="h-5 w-5" />
+              )}
+              {viewingTemplate?.title}
+            </DialogTitle>
+            <DialogDescription>
+              {TEMPLATE_CATEGORY_OPTIONS.find((c) => c.value === viewingTemplate?.category)?.label || viewingTemplate?.category}
+            </DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[50vh]">
+            <div className="py-4">
+              <p className="text-lg leading-relaxed whitespace-pre-wrap">
+                {viewingTemplate?.content}
+              </p>
+            </div>
+          </ScrollArea>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (viewingTemplate) {
+                  copyToClipboard(viewingTemplate.content, viewingTemplate.title);
+                }
+              }}
+            >
+              <Copy className="h-4 w-4 mr-2" />
+              Copy
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (viewingTemplate) {
+                  openEditDialog(viewingTemplate);
+                  setViewingTemplate(null);
+                }
+              }}
+            >
+              <Pencil className="h-4 w-4 mr-2" />
+              Edit
+            </Button>
+            <Button onClick={() => setViewingTemplate(null)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

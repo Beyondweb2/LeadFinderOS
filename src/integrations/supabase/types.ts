@@ -144,6 +144,7 @@ export type Database = {
           google_maps_url: string | null
           id: string
           is_archived: boolean
+          is_potential_work: boolean
           list_type: string
           next_action: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date: string | null
@@ -163,6 +164,7 @@ export type Database = {
           google_maps_url?: string | null
           id?: string
           is_archived?: boolean
+          is_potential_work?: boolean
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null
@@ -182,6 +184,7 @@ export type Database = {
           google_maps_url?: string | null
           id?: string
           is_archived?: boolean
+          is_potential_work?: boolean
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null
@@ -287,6 +290,10 @@ export type Database = {
         | "replied"
         | "sent_voice_note"
         | "awaiting_decision"
+        | "waiting"
+        | "reviewing_draft"
+        | "paid_for_draft"
+        | "completed"
       next_action_type:
         | "call"
         | "follow_up"
@@ -445,6 +452,10 @@ export const Constants = {
         "replied",
         "sent_voice_note",
         "awaiting_decision",
+        "waiting",
+        "reviewing_draft",
+        "paid_for_draft",
+        "completed",
       ],
       next_action_type: [
         "call",
