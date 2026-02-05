@@ -374,13 +374,14 @@ export function OutreachTable({
             )}
             {!isArchiveView && (
               <Button
-                variant="destructive"
+               variant="outline"
                 size="sm"
                 onClick={onRemoveAll}
                 disabled={leads.length === 0}
+               className="bg-background"
               >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Remove All
+               <Archive className="h-4 w-4 mr-2" />
+               Archive All
               </Button>
             )}
             <Button

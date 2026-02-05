@@ -301,31 +301,34 @@ export function useOutreach() {
 
 
   const deleteAllLeads = useCallback(async () => {
-    if (!user || leads.length === 0) return false;
+   if (!user) return false;
 
     const { error } = await supabase
       .from('outreach_leads')
-      .delete()
-      .eq('user_id', user.id);
+     .update({ is_archived: true })
+     .eq('user_id', user.id)
+     .eq('is_archived', false);
 
     if (error) {
       toast({
-        title: 'Error removing leads',
+       title: 'Error archiving leads',
         description: error.message,
         variant: 'destructive',
       });
       return false;
     }
 
+   // Move all leads to archived list
+   setArchivedLeads((prev) => [...leads.map(l => ({ ...l, is_archived: true })), ...prev]);
     setLeads([]);
     
     toast({
-      title: 'All leads removed',
-      description: 'Your outreach pipeline has been cleared.',
+     title: 'All leads archived',
+     description: `${leads.length} leads moved to archive.`,
     });
 
     return true;
-  }, [user, leads.length, toast]);
+ }, [user, leads, toast]);
 
   const logActivity = useCallback(async (
     leadId: string,
