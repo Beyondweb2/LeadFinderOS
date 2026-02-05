@@ -143,6 +143,7 @@ export type Database = {
           email: string | null
           google_maps_url: string | null
           id: string
+          is_archived: boolean
           list_type: string
           next_action: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date: string | null
@@ -161,6 +162,7 @@ export type Database = {
           email?: string | null
           google_maps_url?: string | null
           id?: string
+          is_archived?: boolean
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null
@@ -179,6 +181,7 @@ export type Database = {
           email?: string | null
           google_maps_url?: string | null
           id?: string
+          is_archived?: boolean
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null

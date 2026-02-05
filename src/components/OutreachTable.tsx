@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -27,7 +28,9 @@ import {
   ClipboardList,
   Download,
   Trash2,
-  Copy
+  Copy,
+  Archive,
+  ArchiveRestore
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
@@ -41,6 +44,10 @@ interface OutreachTableProps {
   onStatusChange: (leadId: string, status: LeadStatus) => void;
   onNextActionChange: (leadId: string, action: NextActionType, date?: string) => void;
   onRemoveAll: () => void;
+  onArchive?: (leadId: string) => void;
+  onArchiveSelected?: (leadIds: string[]) => void;
+  showArchiveButton?: boolean;
+  isArchiveView?: boolean;
 }
 
 const ITEMS_PER_PAGE = 15;
@@ -48,7 +55,17 @@ const ITEMS_PER_PAGE = 15;
 type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at';
 type SortDirection = 'asc' | 'desc';
 
-export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextActionChange, onRemoveAll }: OutreachTableProps) {
+export function OutreachTable({ 
+  leads, 
+  onLeadClick, 
+  onStatusChange, 
+  onNextActionChange, 
+  onRemoveAll,
+  onArchive,
+  onArchiveSelected,
+  showArchiveButton = true,
+  isArchiveView = false,
+}: OutreachTableProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
@@ -56,12 +73,70 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
   const [sortField, setSortField] = useState<SortField>('next_action_date');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Selection handlers
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredAndSortedLeads.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredAndSortedLeads.map(l => l.id)));
+    }
+  };
+
+  const handleSelectOne = (leadId: string, checked: boolean) => {
+    const newSet = new Set(selectedIds);
+    if (checked) {
+      newSet.add(leadId);
+    } else {
+      newSet.delete(leadId);
+    }
+    setSelectedIds(newSet);
+  };
+
+  // Copy selected phones in bulk format: "447477932564, 447477932565"
+  const copySelectedPhones = () => {
+    const phones = filteredAndSortedLeads
+      .filter(l => selectedIds.has(l.id) && l.phone)
+      .map(l => l.phone!.replace(/\D/g, '').replace(/^\+/, ''))
+      .filter(p => p.length > 0);
+    
+    if (phones.length === 0) {
+      toast({
+        title: 'No phone numbers',
+        description: 'No phone numbers found in selected leads.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    navigator.clipboard.writeText(phones.join(', '));
+    toast({
+      title: 'Copied!',
+      description: `${phones.length} phone numbers copied in bulk format.`,
+    });
+  };
+
+  // Archive selected leads
+  const handleArchiveSelected = () => {
+    if (selectedIds.size === 0) return;
+    if (onArchiveSelected) {
+      onArchiveSelected(Array.from(selectedIds));
+      setSelectedIds(new Set());
+    }
+  };
 
   const exportToCsv = (mode: 'crm' | 'import' = 'crm') => {
-    if (filteredAndSortedLeads.length === 0) {
+    const leadsToExport = selectedIds.size > 0 
+      ? filteredAndSortedLeads.filter(l => selectedIds.has(l.id))
+      : filteredAndSortedLeads;
+      
+    if (leadsToExport.length === 0) {
       toast({
         title: 'No leads to export',
-        description: 'There are no leads matching your current filters.',
+        description: selectedIds.size > 0 
+          ? 'No leads selected for export.'
+          : 'There are no leads matching your current filters.',
         variant: 'destructive',
       });
       return;
@@ -101,7 +176,7 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
       'category',
     ];
 
-    const crmRows = filteredAndSortedLeads.map((lead) => [
+    const crmRows = leadsToExport.map((lead) => [
       lead.business_name,
       '', // contactPerson - not stored in this app
       lead.phone || '',
@@ -118,7 +193,7 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
 
     // Other app importer (per its UI): requires businessName, optionally accepts only these columns
     const importHeaders = ['businessName', 'contactPerson', 'phone', 'email', 'googleMapsUrl', 'notes'];
-    const importRows = filteredAndSortedLeads.map((lead) => [
+    const importRows = leadsToExport.map((lead) => [
       lead.business_name,
       '',
       lead.phone || '',
@@ -145,7 +220,7 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
 
       toast({
         title: 'Export complete',
-        description: `Exported ${filteredAndSortedLeads.length} leads to CSV.`,
+        description: `Exported ${leadsToExport.length} leads to CSV.`,
       });
     } catch (err) {
       console.error('CSV export failed:', err);
@@ -247,11 +322,16 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
           <div className="flex items-center gap-3">
             <ClipboardList className="h-5 w-5 text-primary" />
             <CardTitle className="text-lg">
-              Outreach Pipeline
+              {isArchiveView ? 'Archived Leads' : 'Outreach Pipeline'}
               <span className="ml-2 text-sm font-normal text-muted-foreground">
                 ({leads.length} leads)
               </span>
-              {overdueCount > 0 && (
+              {selectedIds.size > 0 && (
+                <span className="ml-2 text-sm font-normal text-primary">
+                  {selectedIds.size} selected
+                </span>
+              )}
+              {!isArchiveView && overdueCount > 0 && (
                 <span className="ml-2 text-sm font-normal text-red-400">
                   {overdueCount} overdue
                 </span>
@@ -259,23 +339,63 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
             </CardTitle>
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={onRemoveAll}
-              disabled={leads.length === 0}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Remove All
-            </Button>
+            {selectedIds.size > 0 && (
+              <>
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={copySelectedPhones}
+                  className="bg-primary"
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Copy {selectedIds.size} Phones
+                </Button>
+                {showArchiveButton && onArchiveSelected && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleArchiveSelected}
+                    className="bg-background"
+                  >
+                    {isArchiveView ? (
+                      <>
+                        <ArchiveRestore className="h-4 w-4 mr-2" />
+                        Unarchive {selectedIds.size}
+                      </>
+                    ) : (
+                      <>
+                        <Archive className="h-4 w-4 mr-2" />
+                        Archive {selectedIds.size}
+                      </>
+                    )}
+                  </Button>
+                )}
+              </>
+            )}
+            {!isArchiveView && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={onRemoveAll}
+                disabled={leads.length === 0}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Remove All
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
-                const phones = filteredAndSortedLeads
+                const phonesToCopy = selectedIds.size > 0
+                  ? filteredAndSortedLeads.filter(l => selectedIds.has(l.id))
+                  : filteredAndSortedLeads;
+                const phones = phonesToCopy
                   .map((l) => l.phone)
                   .filter(Boolean)
-                  .join('\n');
+                  .map(p => p!.replace(/\D/g, '').replace(/^\+/, ''))
+                  .filter(p => p.length > 0)
+                  .join(', ');
                 if (!phones) {
                   toast({
                     title: 'No phone numbers',
@@ -287,7 +407,7 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
                 navigator.clipboard.writeText(phones);
                 toast({
                   title: 'Copied!',
-                  description: `${phones.split('\n').length} phone numbers copied to clipboard.`,
+                  description: `${phones.split(', ').length} phone numbers copied in bulk format.`,
                 });
               }}
               disabled={leads.length === 0}
@@ -369,6 +489,13 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
           <Table>
             <TableHeader>
               <TableRow className="border-border/50 hover:bg-transparent">
+                <TableHead className="w-[50px]">
+                  <Checkbox
+                    checked={selectedIds.size === filteredAndSortedLeads.length && filteredAndSortedLeads.length > 0}
+                    onCheckedChange={handleSelectAll}
+                    aria-label="Select all"
+                  />
+                </TableHead>
                 <TableHead className="w-[250px]">
                   <SortButton field="business_name">Business</SortButton>
                 </TableHead>
@@ -385,9 +512,11 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
             <TableBody>
               {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     {leads.length === 0
-                      ? 'No leads in your outreach pipeline yet. Add leads from the search results.'
+                      ? isArchiveView 
+                        ? 'No archived leads yet.'
+                        : 'No leads in your outreach pipeline yet. Add leads from the search results.'
                       : 'No leads match your filters.'}
                   </TableCell>
                 </TableRow>
@@ -398,6 +527,13 @@ export function OutreachTable({ leads, onLeadClick, onStatusChange, onNextAction
                     className="border-border/50 cursor-pointer hover:bg-muted/30"
                     onClick={() => onLeadClick(lead)}
                   >
+                    <TableCell onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedIds.has(lead.id)}
+                        onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
+                        aria-label={`Select ${lead.business_name}`}
+                      />
+                    </TableCell>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         {lead.country === 'AUS' && (

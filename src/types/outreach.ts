@@ -80,6 +80,7 @@ export interface OutreachLead {
   list_type: ListType;
   created_at: string;
   updated_at: string;
+  is_archived?: boolean;
 }
 
 export interface OutreachActivity {
