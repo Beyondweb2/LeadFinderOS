@@ -17,6 +17,7 @@ import {
   Search, 
   ClipboardList, 
   FileText,
+  Target,
   ChevronLeft,
   ChevronRight,
   Archive,
@@ -76,11 +77,9 @@ export function AppSidebar() {
     >
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-3">
-          <img 
-            src="/favicon.png" 
-            alt="LeadFinder Logo" 
-            className="h-14 w-14 shrink-0"
-          />
+          <div className="p-2 rounded-lg bg-sidebar-primary/10 border border-sidebar-primary/20 shrink-0">
+            <Target className="h-5 w-5 text-sidebar-primary" />
+          </div>
           {!isCollapsed && (
             <div className="overflow-hidden">
               <h1 className="text-lg font-bold tracking-tight truncate">
