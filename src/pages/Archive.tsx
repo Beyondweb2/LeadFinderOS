@@ -1,10 +1,10 @@
- import { useState, useEffect, useMemo } from 'react';
+ import { useState, useMemo } from 'react';
  import { useOutreach } from '@/hooks/useOutreach';
  import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
  import { Input } from '@/components/ui/input';
  import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
  import { Button } from '@/components/ui/button';
- import { Search, Archive, Phone, MapPin, ExternalLink, Star } from 'lucide-react';
+ import { Search, Archive, Phone, MapPin, ExternalLink, Star, Loader2, PhoneCall } from 'lucide-react';
  import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
  import { OutreachStatusBadge } from '@/components/OutreachStatusBadge';
  import type { OutreachLead } from '@/types/outreach';
@@ -19,10 +19,17 @@
      deleteLead,
      fetchActivities,
      unarchiveLead,
+     bulkLookupPhones,
    } = useOutreach();
  
    const [phoneQuery, setPhoneQuery] = useState('');
    const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
+   const [isLookingUp, setIsLookingUp] = useState(false);
+ 
+   // Count leads missing phone numbers
+   const missingPhoneCount = useMemo(() => 
+     archivedLeads.filter(l => !l.phone).length,
+   [archivedLeads]);
  
    // Real-time search with typeahead
    const filteredLeads = useMemo(() => {
@@ -39,6 +46,16 @@
  
    const handleMarkInterested = async (lead: OutreachLead) => {
      await updateStatus(lead.id, 'interested');
+   };
+ 
+   const handleBulkLookup = async () => {
+     setIsLookingUp(true);
+     try {
+       const missingIds = archivedLeads.filter(l => !l.phone).map(l => l.id);
+       await bulkLookupPhones(missingIds);
+     } finally {
+       setIsLookingUp(false);
+     }
    };
  
    if (isLoading) {
@@ -64,7 +81,29 @@
        {/* Search Bar */}
        <Card className="bg-card/50 border-border/50">
          <CardHeader className="pb-3">
-           <CardTitle className="text-base">Search by Phone</CardTitle>
+           <div className="flex items-center justify-between">
+             <CardTitle className="text-base">Search by Phone</CardTitle>
+             {missingPhoneCount > 0 && (
+               <Button
+                 variant="outline"
+                 size="sm"
+                 onClick={handleBulkLookup}
+                 disabled={isLookingUp}
+               >
+                 {isLookingUp ? (
+                   <>
+                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                     Looking up...
+                   </>
+                 ) : (
+                   <>
+                     <PhoneCall className="mr-2 h-4 w-4" />
+                     Lookup {missingPhoneCount} Missing Phones
+                   </>
+                 )}
+               </Button>
+             )}
+           </div>
          </CardHeader>
          <CardContent>
            <div className="relative max-w-md">
