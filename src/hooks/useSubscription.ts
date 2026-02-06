@@ -1,181 +1,200 @@
- import { useState, useEffect, useCallback, useRef } from 'react';
- import { supabase } from '@/integrations/supabase/client';
- import { useAuth } from './useAuth';
- 
- interface SubscriptionState {
-   subscribed: boolean;
-   productId: string | null;
-   subscriptionEnd: string | null;
-   isLoading: boolean;
-   error: string | null;
-   status: string | null;
-   isAdmin: boolean;
- }
- 
- export function useSubscription() {
-   const { user, session } = useAuth();
-   const [state, setState] = useState<SubscriptionState>({
-     subscribed: false,
-     productId: null,
-     subscriptionEnd: null,
-     isLoading: true,
-     error: null,
-     status: null,
-     isAdmin: false,
-   });
-   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
- 
-   // Check if user has admin role
-   const checkAdminRole = useCallback(async (): Promise<boolean> => {
-     if (!user?.id) return false;
-     
-     const { data, error } = await supabase
-       .from('user_roles')
-       .select('role')
-       .eq('user_id', user.id)
-       .eq('role', 'admin')
-       .maybeSingle();
-     
-     return !error && data !== null;
-   }, [user?.id]);
- 
-   const checkSubscription = useCallback(async (skipLocalCheck = false) => {
-     if (!session?.access_token) {
-       setState(prev => ({ ...prev, isLoading: false, subscribed: false, status: null }));
-       return;
-     }
- 
-     try {
-       setState(prev => ({ ...prev, isLoading: true, error: null }));
-       
-       // First check if user is admin (bypass subscription check)
-       const isAdmin = await checkAdminRole();
-       if (isAdmin) {
-         setState({
-           subscribed: true,
-           productId: null,
-           subscriptionEnd: null,
-           isLoading: false,
-           error: null,
-           status: 'admin',
-           isAdmin: true,
-         });
-         return;
-       }
-       
-       // First check local database for cached subscription (faster)
-       if (!skipLocalCheck && user?.id) {
-         const { data: localSub, error: localError } = await supabase
-           .from('subscriptions')
-           .select('*')
-           .eq('user_id', user.id)
-           .maybeSingle();
- 
-         if (!localError && localSub) {
-           const validStatuses = ['active', 'trialing', 'past_due'];
-           const isValid = validStatuses.includes(localSub.status);
-           
-           setState({
-             subscribed: isValid,
-             productId: null,
-             subscriptionEnd: localSub.current_period_end,
-             isLoading: false,
-             error: null,
-             status: localSub.status,
-             isAdmin: false,
-           });
-           
-           if (!isValid) return;
-         }
-       }
-       
-       // Fall back to Stripe API check
-       const { data, error } = await supabase.functions.invoke('check-subscription', {
-         headers: {
-           Authorization: `Bearer ${session.access_token}`,
-         },
-       });
- 
-       if (error) throw error;
- 
-       setState({
-         subscribed: data.subscribed ?? false,
-         productId: data.product_id ?? null,
-         subscriptionEnd: data.subscription_end ?? null,
-         isLoading: false,
-         error: null,
-         status: data.subscription_status ?? null,
-         isAdmin: false,
-       });
-     } catch (err) {
-       console.error('Subscription check failed:', err);
-       setState(prev => ({
-         ...prev,
-         isLoading: false,
-         error: err instanceof Error ? err.message : 'Failed to check subscription',
-       }));
-     }
-   }, [session?.access_token, user?.id, checkAdminRole]);
- 
-   // Check subscription on mount and when user changes
-   useEffect(() => {
-     if (user) {
-       checkSubscription();
-     } else {
-       setState({
-         subscribed: false,
-         productId: null,
-         subscriptionEnd: null,
-         isLoading: false,
-         error: null,
-         status: null,
-         isAdmin: false,
-       });
-     }
-   }, [user, checkSubscription]);
- 
-   // Set up realtime subscription for instant updates
-   useEffect(() => {
-     if (!user?.id) return;
- 
-     if (channelRef.current) {
-       supabase.removeChannel(channelRef.current);
-     }
- 
-     const channel = supabase
-       .channel(`subscriptions:${user.id}`)
-       .on(
-         'postgres_changes',
-         {
-           event: '*',
-           schema: 'public',
-           table: 'subscriptions',
-           filter: `user_id=eq.${user.id}`,
-         },
-         (payload) => {
-           console.log('Subscription changed via realtime:', payload);
-           checkSubscription();
-         }
-       )
-       .subscribe();
- 
-     channelRef.current = channel;
- 
-     return () => {
-       if (channelRef.current) {
-         supabase.removeChannel(channelRef.current);
-         channelRef.current = null;
-       }
-     };
-   }, [user?.id, checkSubscription]);
- 
-   // Periodic refresh every 60 seconds as fallback
-   useEffect(() => {
-     if (!user) return;
-     
-     const interval = setInterval(checkSubscription, 60000);
-     return () => clearInterval(interval);
-   }, [user, checkSubscription]);
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from './useAuth';
+
+interface SubscriptionState {
+  subscribed: boolean;
+  productId: string | null;
+  subscriptionEnd: string | null;
+  isLoading: boolean;
+  error: string | null;
+  status: string | null;
+  isAdmin: boolean;
+}
+
+export function useSubscription() {
+  const { user, session } = useAuth();
+  const [state, setState] = useState<SubscriptionState>({
+    subscribed: false,
+    productId: null,
+    subscriptionEnd: null,
+    isLoading: true,
+    error: null,
+    status: null,
+    isAdmin: false,
+  });
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  
+  // Stabilize user ID reference to prevent unnecessary effect re-runs
+  const userIdRef = useRef<string | null>(null);
+  const accessTokenRef = useRef<string | null>(null);
+
+  // Check if user has admin role
+  const checkAdminRole = useCallback(async (userId: string): Promise<boolean> => {
+    const { data, error } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('role', 'admin')
+      .maybeSingle();
+    
+    return !error && data !== null;
+  }, []);
+
+  const checkSubscription = useCallback(async (skipLocalCheck = false) => {
+    const userId = userIdRef.current;
+    const accessToken = accessTokenRef.current;
+    
+    if (!accessToken || !userId) {
+      setState(prev => ({ ...prev, isLoading: false, subscribed: false, status: null }));
+      return;
+    }
+
+    try {
+      setState(prev => ({ ...prev, isLoading: true, error: null }));
+      
+      // First check if user is admin (bypass subscription check)
+      const isAdmin = await checkAdminRole(userId);
+      if (isAdmin) {
+        setState({
+          subscribed: true,
+          productId: null,
+          subscriptionEnd: null,
+          isLoading: false,
+          error: null,
+          status: 'admin',
+          isAdmin: true,
+        });
+        return;
+      }
+      
+      // First check local database for cached subscription (faster)
+      if (!skipLocalCheck) {
+        const { data: localSub, error: localError } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        if (!localError && localSub) {
+          const validStatuses = ['active', 'trialing', 'past_due'];
+          const isValid = validStatuses.includes(localSub.status);
+          
+          setState({
+            subscribed: isValid,
+            productId: null,
+            subscriptionEnd: localSub.current_period_end,
+            isLoading: false,
+            error: null,
+            status: localSub.status,
+            isAdmin: false,
+          });
+          
+          if (!isValid) return;
+        }
+      }
+      
+      // Fall back to Stripe API check
+      const { data, error } = await supabase.functions.invoke('check-subscription', {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (error) throw error;
+
+      setState({
+        subscribed: data.subscribed ?? false,
+        productId: data.product_id ?? null,
+        subscriptionEnd: data.subscription_end ?? null,
+        isLoading: false,
+        error: null,
+        status: data.subscription_status ?? null,
+        isAdmin: false,
+      });
+    } catch (err) {
+      console.error('Subscription check failed:', err);
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: err instanceof Error ? err.message : 'Failed to check subscription',
+      }));
+    }
+  }, [checkAdminRole]);
+
+  // Update refs and check subscription only when user ID actually changes
+  useEffect(() => {
+    const newUserId = user?.id ?? null;
+    const newAccessToken = session?.access_token ?? null;
+    
+    // Only trigger if user ID actually changed (not just token refresh)
+    if (newUserId !== userIdRef.current) {
+      userIdRef.current = newUserId;
+      accessTokenRef.current = newAccessToken;
+      
+      if (newUserId) {
+        checkSubscription();
+      } else {
+        setState({
+          subscribed: false,
+          productId: null,
+          subscriptionEnd: null,
+          isLoading: false,
+          error: null,
+          status: null,
+          isAdmin: false,
+        });
+      }
+    } else if (newAccessToken !== accessTokenRef.current) {
+      // Token refreshed but same user - just update ref, no re-fetch needed
+      accessTokenRef.current = newAccessToken;
+    }
+  }, [user?.id, session?.access_token, checkSubscription]);
+
+  // Set up realtime subscription for instant updates
+  useEffect(() => {
+    const userId = userIdRef.current;
+    if (!userId) return;
+
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+    }
+
+    const channel = supabase
+      .channel(`subscriptions:${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'subscriptions',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          console.log('Subscription changed via realtime:', payload);
+          checkSubscription();
+        }
+      )
+      .subscribe();
+
+    channelRef.current = channel;
+
+    return () => {
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [user?.id, checkSubscription]);
+
+  // Periodic refresh every 5 minutes as fallback (was 60s - too aggressive)
+  useEffect(() => {
+    const userId = userIdRef.current;
+    if (!userId) return;
+    
+    const interval = setInterval(() => checkSubscription(), 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [user?.id, checkSubscription]);
  
    const createCheckout = async () => {
      if (!session?.access_token) {

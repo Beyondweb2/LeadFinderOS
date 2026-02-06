@@ -22,23 +22,23 @@ const Index = () => {
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       {/* Page Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Find Leads</h1>
-          <p className="text-muted-foreground">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-center sm:text-left">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Find Leads</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">
             Search for businesses without websites
           </p>
         </div>
-        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2">
-            <Flame className="h-4 w-4 text-status-hot" />
-            <span>Hot leads = No website</span>
+        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Flame className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-status-hot" />
+            <span>Hot = No website</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-primary" />
-            <span>AI-powered classification</span>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+            <span>AI-powered</span>
           </div>
         </div>
       </div>

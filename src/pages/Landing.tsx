@@ -65,20 +65,22 @@ const PRICING_FEATURES = [
 ];
 
 // Video section component with sound toggle
+// Starts muted (required for autoplay) - user can unmute
 const VideoSection = () => {
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const toggleMute = () => {
     if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
+      const newMuted = !isMuted;
+      videoRef.current.muted = newMuted;
+      setIsMuted(newMuted);
     }
   };
 
   return (
-    <section className="relative z-10 pb-16 md:pb-24">
-      <div className="container mx-auto px-4">
+    <section className="relative z-10 pb-16 md:pb-24 px-4">
+      <div className="container mx-auto">
         <div className="relative max-w-4xl mx-auto">
           {/* Glow effect behind video */}
           <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-primary/20 via-accent/10 to-primary/10 blur-2xl opacity-40" />
@@ -90,6 +92,7 @@ const VideoSection = () => {
               className="w-full h-auto"
               autoPlay 
               loop 
+              muted
               playsInline
             >
               <source src={demoVideo} type="video/mp4" />
@@ -99,13 +102,13 @@ const VideoSection = () => {
             {/* Sound toggle button */}
             <button
               onClick={toggleMute}
-              className="absolute bottom-4 right-4 p-2.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
+              className="absolute bottom-3 right-3 md:bottom-4 md:right-4 p-2 md:p-2.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
               aria-label={isMuted ? "Unmute video" : "Mute video"}
             >
               {isMuted ? (
-                <VolumeX className="h-5 w-5" />
+                <VolumeX className="h-4 w-4 md:h-5 md:w-5" />
               ) : (
-                <Volume2 className="h-5 w-5" />
+                <Volume2 className="h-4 w-4 md:h-5 md:w-5" />
               )}
             </button>
           </div>
@@ -163,48 +166,51 @@ const Landing = () => {
 
       {/* Header */}
       <header className="relative z-10 border-b border-white/[0.06] backdrop-blur-md bg-background/60">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 glow-effect">
-              <Target className="h-5 w-5 text-primary" />
+        <div className="container mx-auto px-4 py-3 sm:py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 border border-primary/20 glow-effect">
+              <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             </div>
-            <span className="text-lg font-semibold tracking-tight">
-              Lead<span className="text-gradient-primary">Finder</span> Pro
+            <span className="text-base sm:text-lg font-semibold tracking-tight">
+              Lead<span className="text-gradient-primary">Finder</span> <span className="hidden xs:inline">Pro</span>
             </span>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" className="text-muted-foreground hover:text-foreground" asChild>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm px-2 sm:px-4" asChild>
               <Link to="/auth">Sign In</Link>
             </Button>
-            <Button asChild className="btn-premium font-medium">
-              <Link to="/auth">Get Started</Link>
+            <Button asChild className="btn-premium font-medium text-sm px-3 sm:px-4">
+              <Link to="/auth">
+                <span className="hidden sm:inline">Get Started</span>
+                <span className="sm:hidden">Start</span>
+              </Link>
             </Button>
           </div>
         </div>
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-24 pb-32 md:pt-32 md:pb-40">
-        <div className="container mx-auto px-4 text-center">
+      <section className="relative z-10 pt-12 pb-16 sm:pt-16 sm:pb-24 md:pt-24 md:pb-32 lg:pt-32 lg:pb-40 px-4">
+        <div className="container mx-auto text-center">
           {/* Tagline badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full border border-primary/20 bg-primary/5 text-primary text-sm font-medium mb-8 backdrop-blur-sm">
-            <Zap className="h-3.5 w-3.5" />
+          <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full border border-primary/20 bg-primary/5 text-primary text-xs sm:text-sm font-medium mb-6 sm:mb-8 backdrop-blur-sm">
+            <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
             <span>Lead generation for web professionals</span>
           </div>
           
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-[1.1] tracking-tight">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-4 sm:mb-6 leading-[1.1] tracking-tight">
             <span className="text-gradient-subtle">Find Businesses</span>
             <br />
             <span className="text-gradient-primary">Without Websites</span>
           </h1>
           
-          <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
+          <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8 sm:mb-10 leading-relaxed px-2">
             Discover local businesses that need your web design services. 
             Search any location, track your outreach, and close more deals.
           </p>
           
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button size="lg" className="btn-premium text-base font-semibold px-8 py-6 h-auto" asChild>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+            <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto w-full sm:w-auto" asChild>
               <Link to="/auth">
                 Get Started
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -213,7 +219,7 @@ const Landing = () => {
             <Button 
               size="lg" 
               variant="outline" 
-              className="text-base px-8 py-6 h-auto border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-muted-foreground hover:text-foreground backdrop-blur-sm" 
+              className="text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 h-auto border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-muted-foreground hover:text-foreground backdrop-blur-sm w-full sm:w-auto" 
               asChild
             >
               <Link to="/auth">Sign In</Link>
@@ -221,15 +227,15 @@ const Landing = () => {
           </div>
           
           {/* Stats bar */}
-          <div className="mt-20 flex flex-wrap justify-center gap-12 md:gap-20">
+          <div className="mt-12 sm:mt-16 md:mt-20 flex flex-wrap justify-center gap-8 sm:gap-12 md:gap-20">
             {[
               { value: '10,000+', label: 'Businesses' },
               { value: 'Global', label: 'Coverage' },
               { value: '∞', label: 'Searches' },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
-                <div className="text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">{stat.value}</div>
-                <div className="text-sm text-muted-foreground mt-1 font-medium">{stat.label}</div>
+                <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">{stat.value}</div>
+                <div className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -240,24 +246,24 @@ const Landing = () => {
       <VideoSection />
 
       {/* Before/After Comparison Section */}
-      <section className="relative z-10 py-24 md:py-32">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 tracking-tight">
+      <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
+        <div className="container mx-auto">
+          <div className="text-center mb-10 sm:mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
               Stop Searching <span className="text-gradient-primary">Manually</span>
             </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-lg">
+            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
               Finding businesses without websites used to mean hours of manual searching. Not anymore.
             </p>
           </div>
           
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 max-w-6xl mx-auto">
             {/* Old Way */}
             <div className="relative group">
               <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-destructive/30 via-destructive/10 to-transparent opacity-60" />
-              <div className="relative rounded-2xl overflow-hidden border border-destructive/20 bg-card/80 backdrop-blur-sm p-4">
-                <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-destructive/90 text-white px-3 py-1.5 rounded-full font-semibold text-xs uppercase tracking-wide shadow-lg">
-                  <X className="h-3.5 w-3.5" />
+              <div className="relative rounded-2xl overflow-hidden border border-destructive/20 bg-card/80 backdrop-blur-sm p-3 sm:p-4">
+                <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 bg-destructive/90 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg">
+                  <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                   The Old Way
                 </div>
                 <div className="rounded-xl overflow-hidden">
@@ -267,7 +273,7 @@ const Landing = () => {
                     className="w-full h-auto"
                   />
                 </div>
-                <p className="text-muted-foreground text-sm text-center mt-4 px-2">
+                <p className="text-muted-foreground text-xs sm:text-sm text-center mt-3 sm:mt-4 px-1 sm:px-2">
                   Scrolling through Google Maps, clicking each pin, checking for websites one by one...
                 </p>
               </div>
@@ -278,9 +284,9 @@ const Landing = () => {
               {/* Glow effect */}
               <div className="absolute -inset-2 rounded-3xl bg-gradient-to-br from-primary/25 via-primary/10 to-accent/10 blur-xl opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
               <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/40 via-primary/20 to-transparent" />
-              <div className="relative rounded-2xl overflow-hidden border border-primary/30 bg-card/90 backdrop-blur-sm p-4 glow-effect">
-                <div className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-primary text-primary-foreground px-3 py-1.5 rounded-full font-semibold text-xs uppercase tracking-wide shadow-lg">
-                  <CheckCircle className="h-3.5 w-3.5" />
+              <div className="relative rounded-2xl overflow-hidden border border-primary/30 bg-card/90 backdrop-blur-sm p-3 sm:p-4 glow-effect">
+                <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 bg-primary text-primary-foreground px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg">
+                  <CheckCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                   With LeadFinder
                 </div>
                 <div className="rounded-xl overflow-hidden">
@@ -290,7 +296,7 @@ const Landing = () => {
                     className="w-full h-auto"
                   />
                 </div>
-                <p className="text-muted-foreground text-sm text-center mt-4 px-2">
+                <p className="text-muted-foreground text-xs sm:text-sm text-center mt-3 sm:mt-4 px-1 sm:px-2">
                   Instantly see which businesses don't have websites, sorted and ready to contact.
                 </p>
               </div>
@@ -300,19 +306,19 @@ const Landing = () => {
       </section>
 
       {/* Features Section */}
-      <section className="relative z-10 py-24 md:py-32">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 tracking-tight">
+      <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
+        <div className="container mx-auto">
+          <div className="text-center mb-10 sm:mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
               Everything You Need to
               <span className="text-gradient-primary"> Close More Deals</span>
             </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-lg">
+            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
               A complete toolkit for finding, tracking, and converting leads into paying clients.
             </p>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
             {FEATURES.map((feature) => (
               <Card
                 key={feature.title}
@@ -321,14 +327,14 @@ const Landing = () => {
                 {/* Hover glow */}
                 <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 
-                <CardHeader className="relative pb-2">
-                  <div className="p-3 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/10 w-fit mb-4 group-hover:border-primary/25 transition-colors duration-500">
-                    <feature.icon className="h-5 w-5 text-primary" strokeWidth={1.5} />
+                <CardHeader className="relative pb-2 p-4 sm:p-6 sm:pb-2">
+                  <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/10 w-fit mb-3 sm:mb-4 group-hover:border-primary/25 transition-colors duration-500">
+                    <feature.icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" strokeWidth={1.5} />
                   </div>
-                  <CardTitle className="text-lg font-semibold tracking-tight">{feature.title}</CardTitle>
+                  <CardTitle className="text-base sm:text-lg font-semibold tracking-tight">{feature.title}</CardTitle>
                 </CardHeader>
-                <CardContent className="relative pt-0">
-                  <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+                <CardContent className="relative pt-0 p-4 sm:p-6 sm:pt-0">
+                  <p className="text-muted-foreground text-xs sm:text-sm leading-relaxed">{feature.description}</p>
                 </CardContent>
               </Card>
             ))}
@@ -337,59 +343,59 @@ const Landing = () => {
       </section>
 
       {/* Pricing Section */}
-      <section className="relative z-10 py-24 md:py-32">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4 tracking-tight">
+      <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
+        <div className="container mx-auto">
+          <div className="text-center mb-10 sm:mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
               Simple, Transparent <span className="text-gradient-primary">Pricing</span>
             </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-lg">
+            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
               One plan with everything you need. Cancel anytime.
             </p>
           </div>
           
           <div className="relative max-w-md mx-auto">
             {/* Glow background */}
-            <div className="absolute -inset-8 rounded-3xl bg-gradient-to-br from-primary/20 via-accent/10 to-primary/10 blur-3xl opacity-50" />
+            <div className="absolute -inset-4 sm:-inset-8 rounded-3xl bg-gradient-to-br from-primary/20 via-accent/10 to-primary/10 blur-2xl sm:blur-3xl opacity-50" />
             <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/40 via-primary/20 to-accent/20" />
             
             <Card className="relative glass-panel-strong border-0 overflow-hidden">
               {/* Top accent line */}
               <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary to-transparent" />
               
-              <CardHeader className="text-center pb-2 pt-8">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold uppercase tracking-wide mx-auto mb-4">
-                  <Zap className="h-3 w-3" />
+              <CardHeader className="text-center pb-2 pt-6 sm:pt-8 px-4 sm:px-6">
+                <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] sm:text-xs font-semibold uppercase tracking-wide mx-auto mb-3 sm:mb-4">
+                  <Zap className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                   Most Popular
                 </div>
-                <CardTitle className="text-2xl font-bold tracking-tight">LeadFinder Pro</CardTitle>
-                <div className="mt-6">
-                  <span className="text-5xl font-bold tracking-tight">£19.99</span>
-                  <span className="text-muted-foreground ml-1">/month</span>
+                <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">LeadFinder Pro</CardTitle>
+                <div className="mt-4 sm:mt-6">
+                  <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
+                  <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                 </div>
               </CardHeader>
               
-              <CardContent className="pt-8">
-                <ul className="space-y-4">
+              <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
+                <ul className="space-y-3 sm:space-y-4">
                   {PRICING_FEATURES.map((feature) => (
-                    <li key={feature} className="flex items-center gap-3">
-                      <div className="flex-shrink-0 p-1 rounded-full bg-primary/10 border border-primary/20">
-                        <Check className="h-3.5 w-3.5 text-primary" strokeWidth={2.5} />
+                    <li key={feature} className="flex items-center gap-2.5 sm:gap-3">
+                      <div className="flex-shrink-0 p-0.5 sm:p-1 rounded-full bg-primary/10 border border-primary/20">
+                        <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-primary" strokeWidth={2.5} />
                       </div>
-                      <span className="text-foreground/90 text-sm">{feature}</span>
+                      <span className="text-foreground/90 text-xs sm:text-sm">{feature}</span>
                     </li>
                   ))}
                 </ul>
               </CardContent>
               
-              <CardFooter className="pt-6 pb-8 flex-col gap-4">
-                <Button size="lg" className="w-full btn-premium text-base font-semibold py-6 h-auto" asChild>
+              <CardFooter className="pt-4 sm:pt-6 pb-6 sm:pb-8 flex-col gap-3 sm:gap-4 px-4 sm:px-6">
+                <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-5 sm:py-6 h-auto" asChild>
                   <Link to="/auth">
                     Get Started
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
-                <p className="text-xs text-muted-foreground text-center">
+                <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
                   Secure payment via Stripe. Cancel anytime.
                 </p>
               </CardFooter>
@@ -399,18 +405,18 @@ const Landing = () => {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/[0.06] py-12 mt-12">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-8">
-            <div className="flex items-center gap-2.5">
+      <footer className="relative z-10 border-t border-white/[0.06] py-8 sm:py-10 md:py-12 mt-8 sm:mt-12 px-4">
+        <div className="container mx-auto">
+          <div className="flex flex-col items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-lg bg-primary/10 border border-primary/20">
-                <Target className="h-4 w-4 text-primary" />
+                <Target className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
               </div>
-              <span className="font-semibold tracking-tight">
+              <span className="font-semibold tracking-tight text-sm sm:text-base">
                 Lead<span className="text-gradient-primary">Finder</span> Pro
               </span>
             </div>
-            <div className="flex items-center gap-8 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 md:gap-8 text-xs sm:text-sm text-muted-foreground">
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
                 Sign In
               </Link>
@@ -424,13 +430,13 @@ const Landing = () => {
           </div>
           
           {/* Disclaimer + Copyright */}
-          <div className="border-t border-white/[0.04] pt-8 text-center space-y-3">
-            <p className="text-xs text-muted-foreground/70 max-w-2xl mx-auto leading-relaxed">
+          <div className="border-t border-white/[0.04] pt-6 sm:pt-8 text-center space-y-2 sm:space-y-3">
+            <p className="text-[10px] sm:text-xs text-muted-foreground/70 max-w-2xl mx-auto leading-relaxed px-2">
               Disclaimer: LeadFinder Pro uses AI classification and third-party data sources. 
               Results are not guaranteed to be 100% accurate and may contain errors. 
               Please verify business information independently before taking action.
             </p>
-            <p className="text-xs text-muted-foreground/50">
+            <p className="text-[10px] sm:text-xs text-muted-foreground/50">
               © {new Date().getFullYear()} LeadFinder Pro. All rights reserved.
             </p>
           </div>

@@ -330,55 +330,58 @@ export function OutreachTable({
 
   return (
     <Card className="bg-card/50 border-border/50 backdrop-blur-sm">
-      <CardHeader className="border-b border-border/50">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <ClipboardList className="h-5 w-5 text-primary" />
-            <CardTitle className="text-lg">
-              {isArchiveView ? 'Archived Leads' : 'Outreach Pipeline'}
-              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                ({leads.length} leads)
+      <CardHeader className="border-b border-border/50 px-4 sm:px-6">
+        <div className="flex flex-col gap-3 sm:gap-4">
+          {/* Title row */}
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            <CardTitle className="text-base sm:text-lg">
+              {isArchiveView ? 'Archived' : 'Pipeline'}
+              <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-muted-foreground">
+                ({leads.length})
               </span>
               {selectedIds.size > 0 && (
-                <span className="ml-2 text-sm font-normal text-primary">
-                  {selectedIds.size} selected
+                <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-primary">
+                  {selectedIds.size} sel
                 </span>
               )}
               {!isArchiveView && overdueCount > 0 && (
-                <span className="ml-2 text-sm font-normal text-red-400">
-                  {overdueCount} overdue
+                <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-red-400">
+                  {overdueCount} due
                 </span>
               )}
             </CardTitle>
           </div>
-          <div className="flex gap-2">
+          
+          {/* Actions row */}
+          <div className="flex flex-wrap gap-2">
             {selectedIds.size > 0 && (
               <>
                 <Button
                   variant="default"
                   size="sm"
                   onClick={copySelectedPhones}
-                  className="bg-primary"
+                  className="bg-primary text-xs h-8"
                 >
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy {selectedIds.size} Phones
+                  <Copy className="h-3.5 w-3.5 mr-1.5" />
+                  Copy {selectedIds.size}
                 </Button>
                 {showArchiveButton && onArchiveSelected && (
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={handleArchiveSelected}
-                    className="bg-background"
+                    className="bg-background text-xs h-8"
                   >
                     {isArchiveView ? (
                       <>
-                        <ArchiveRestore className="h-4 w-4 mr-2" />
-                        Unarchive {selectedIds.size}
+                        <ArchiveRestore className="h-3.5 w-3.5 mr-1.5" />
+                        Restore
                       </>
                     ) : (
                       <>
-                        <Archive className="h-4 w-4 mr-2" />
-                        Archive {selectedIds.size}
+                        <Archive className="h-3.5 w-3.5 mr-1.5" />
+                        Archive
                       </>
                     )}
                   </Button>
@@ -391,31 +394,35 @@ export function OutreachTable({
                 size="sm"
                 onClick={onRemoveAll}
                 disabled={leads.length === 0}
-               className="bg-background"
+               className="bg-background text-xs h-8"
               >
-               <Archive className="h-4 w-4 mr-2" />
-               Archive All
+               <Archive className="h-3.5 w-3.5 mr-1.5" />
+               <span className="hidden sm:inline">Archive </span>All
               </Button>
             )}
             <Button
               variant="outline"
               size="sm"
               onClick={() => exportToCsv('crm')}
-              className="bg-background"
+              className="bg-background text-xs h-8"
             >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              <span className="hidden sm:inline">Export </span>CSV
             </Button>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          </div>
+          
+          {/* Filters row */}
+          <div className="flex flex-wrap gap-2">
+            <div className="relative flex-1 min-w-[140px] max-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
-                placeholder="Search businesses..."
+                placeholder="Search..."
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="pl-9 w-[200px] bg-background"
+                className="pl-8 h-8 text-xs bg-background"
               />
             </div>
             <Select
@@ -425,8 +432,8 @@ export function OutreachTable({
                 setCurrentPage(1);
               }}
             >
-              <SelectTrigger className="w-[160px] bg-background">
-                <SelectValue placeholder="Filter by status" />
+              <SelectTrigger className="w-[120px] sm:w-[140px] bg-background h-8 text-xs">
+                <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
@@ -444,13 +451,13 @@ export function OutreachTable({
                 setCurrentPage(1);
               }}
             >
-              <SelectTrigger className="w-[120px] bg-background">
+              <SelectTrigger className="w-[90px] sm:w-[100px] bg-background h-8 text-xs">
                 <SelectValue placeholder="Country" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Countries</SelectItem>
+                <SelectItem value="all">All</SelectItem>
                 <SelectItem value="UK">🇬🇧 UK</SelectItem>
-                <SelectItem value="AUS">🇦🇺 Australia</SelectItem>
+                <SelectItem value="AUS">🇦🇺 AUS</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -461,39 +468,39 @@ export function OutreachTable({
           <Table>
             <TableHeader>
               <TableRow className="border-border/50 hover:bg-transparent">
-                <TableHead className="w-[50px]">
+                <TableHead className="w-[40px] sm:w-[50px]">
                   <Checkbox
                     checked={selectedIds.size === filteredAndSortedLeads.length && filteredAndSortedLeads.length > 0}
                     onCheckedChange={handleSelectAll}
                     aria-label="Select all"
                   />
                 </TableHead>
-                <TableHead className="w-[250px]">
+                <TableHead className="min-w-[150px] sm:w-[250px]">
                   <SortButton field="business_name">Business</SortButton>
                 </TableHead>
-                <TableHead className="w-[140px]">Phone</TableHead>
+                <TableHead className="min-w-[100px] sm:w-[140px]">Phone</TableHead>
                 {!readOnly && (
                   <>
-                    <TableHead className="w-[150px]">
+                    <TableHead className="min-w-[100px] sm:w-[150px]">
                       <SortButton field="status">Status</SortButton>
                     </TableHead>
-                    <TableHead className="w-[200px]">
+                    <TableHead className="min-w-[140px] sm:w-[200px]">
                       <SortButton field="next_action_date">Next Action</SortButton>
                     </TableHead>
                   </>
                 )}
-                <TableHead className="w-[80px]">Links</TableHead>
+                <TableHead className="w-[60px] sm:w-[80px]">Links</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={readOnly ? 4 : 6} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={readOnly ? 4 : 6} className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
                     {leads.length === 0
                       ? isArchiveView 
                         ? 'No archived leads yet.'
-                        : 'No leads in your outreach pipeline yet. Add leads from the search results.'
-                      : 'No leads match your filters.'}
+                        : 'No leads yet. Add from search.'
+                      : 'No leads match filters.'}
                   </TableCell>
                 </TableRow>
               ) : (

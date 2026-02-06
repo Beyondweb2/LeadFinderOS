@@ -18,7 +18,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <AppSidebar />
         
         <main className="flex-1 relative z-10 overflow-auto">
-          <div className="container py-8">
+          <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
             {children}
           </div>
         </main>
