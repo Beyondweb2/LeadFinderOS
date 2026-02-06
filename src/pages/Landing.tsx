@@ -245,34 +245,33 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-12 pb-16 sm:pt-16 sm:pb-24 md:pt-24 md:pb-32 lg:pt-32 lg:pb-40 px-4">
+      <section className="relative z-10 pt-8 pb-12 sm:pt-16 sm:pb-24 md:pt-24 md:pb-32 lg:pt-32 lg:pb-40 px-4">
         <div className="container mx-auto text-center">
-          {/* Tagline badge - fixed brand blue */}
+          {/* Tagline badge - hidden on mobile */}
           <div 
-            className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium mb-6 sm:mb-8 backdrop-blur-sm"
+            className="hidden sm:inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium mb-8 backdrop-blur-sm"
             style={{ 
               border: '1px solid hsl(210 100% 50% / 0.2)', 
               background: 'hsl(210 100% 50% / 0.05)',
               color: 'hsl(210 100% 50%)'
             }}
           >
-            <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+            <Zap className="h-3.5 w-3.5" />
             <span>Lead generation for web professionals</span>
           </div>
           
-          <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-4 sm:mb-6 leading-[1.1] tracking-tight">
+          <h1 className="text-[2rem] leading-[1.15] sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight px-2 sm:px-0">
             <span className="text-gradient-subtle">Find Businesses</span>
             <br />
             <span className="text-gradient-primary">Without Websites</span>
           </h1>
           
-          <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-8 sm:mb-10 leading-relaxed px-2">
-            Discover local businesses that need your web design services. 
-            Search any location, track your outreach, and close more deals.
+          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-6 sm:mb-10 leading-relaxed px-4 sm:px-2">
+            Discover local businesses that need your web design services.
           </p>
           
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-            <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto w-full sm:w-auto" asChild>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4 px-2 sm:px-0">
+            <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-4 sm:py-6 h-auto w-full sm:w-auto" asChild>
               <Link to="/auth">
                 Get Started
                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -281,22 +280,22 @@ const Landing = () => {
             <Button 
               size="lg" 
               variant="outline" 
-              className="text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 h-auto border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-muted-foreground hover:text-foreground backdrop-blur-sm w-full sm:w-auto" 
+              className="text-sm sm:text-base px-6 sm:px-8 py-4 sm:py-6 h-auto border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-muted-foreground hover:text-foreground backdrop-blur-sm w-full sm:w-auto" 
               asChild
             >
               <Link to="/auth">Sign In</Link>
             </Button>
           </div>
           
-          {/* Stats bar */}
-          <div className="mt-12 sm:mt-16 md:mt-20 flex flex-wrap justify-center gap-8 sm:gap-12 md:gap-20">
+          {/* Stats bar - more compact on mobile */}
+          <div className="mt-8 sm:mt-16 md:mt-20 flex flex-wrap justify-center gap-6 sm:gap-12 md:gap-20">
             <CountUpStat target={10000} suffix="+" label="Businesses" />
             <div className="text-center">
-              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">∞</div>
+              <div className="text-xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">∞</div>
               <div className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
           </div>
