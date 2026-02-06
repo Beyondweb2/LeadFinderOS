@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -7,8 +7,12 @@ import type { Template, TemplateType, TemplateCategory } from '@/types/outreach'
 export function useTemplates() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasFetched, setHasFetched] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  // Track the user ID to prevent refetches on auth token refreshes
+  const userIdRef = useRef<string | null>(null);
 
   const fetchTemplates = useCallback(async () => {
     if (!user) return;
@@ -39,13 +43,25 @@ export function useTemplates() {
     })) as Template[];
 
     setTemplates(typedData);
+    setHasFetched(true);
   }, [user, toast]);
 
+  // Only fetch when user ID actually changes, not on every auth state change
   useEffect(() => {
-    if (user) {
-       fetchTemplates();
+    const currentUserId = user?.id ?? null;
+    
+    // Only refetch if user ID changed (login/logout), not on token refresh
+    if (currentUserId !== userIdRef.current) {
+      userIdRef.current = currentUserId;
+      if (currentUserId && !hasFetched) {
+        fetchTemplates();
+      } else if (!currentUserId) {
+        // User logged out - clear templates
+        setTemplates([]);
+        setHasFetched(false);
+      }
     }
-   }, [user, fetchTemplates]);
+  }, [user?.id, hasFetched, fetchTemplates]);
 
   const createTemplate = useCallback(async (
     template: Pick<Template, 'template_type' | 'category' | 'title' | 'content'>
