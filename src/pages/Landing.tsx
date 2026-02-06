@@ -20,6 +20,7 @@ import {
 import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
 import demoVideo from '@/assets/leadfinder-demo.mp4';
+import appLogo from '@/assets/logo.png';
 
 const FEATURES = [
   {
@@ -75,7 +76,7 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
       ([entry]) => {
         if (entry.isIntersecting && !hasAnimated) {
           setHasAnimated(true);
-          const duration = 2000;
+          const duration = 3500;
           const steps = 60;
           const increment = target / steps;
           let current = 0;
@@ -220,20 +221,11 @@ const Landing = () => {
         />
       </div>
 
-      {/* Header */}
-      <header className="relative z-10 border-b border-white/[0.06] backdrop-blur-md bg-background/60">
+      {/* Header - blends into hero */}
+      <header className="relative z-10 backdrop-blur-sm bg-transparent">
         <div className="container mx-auto px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div 
-              className="p-1.5 sm:p-2 rounded-lg"
-              style={{ 
-                background: 'hsl(210 100% 50% / 0.1)', 
-                border: '1px solid hsl(210 100% 50% / 0.2)',
-                boxShadow: '0 0 20px hsl(210 100% 50% / 0.15)'
-              }}
-            >
-              <Target className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(210 100% 50%)' }} />
-            </div>
+            <img src={appLogo} alt="LeadFinder Pro" className="h-8 w-8 sm:h-9 sm:w-9" />
             <span className="text-base sm:text-lg font-semibold tracking-tight">
               Lead<span className="text-gradient-primary">Finder</span> <span className="hidden xs:inline">Pro</span>
             </span>
@@ -525,15 +517,7 @@ const Landing = () => {
         <div className="container mx-auto">
           <div className="flex flex-col items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div className="flex items-center gap-2">
-              <div 
-                className="p-1.5 rounded-lg"
-                style={{ 
-                  background: 'hsl(210 100% 50% / 0.1)', 
-                  border: '1px solid hsl(210 100% 50% / 0.2)'
-                }}
-              >
-                <Target className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: 'hsl(210 100% 50%)' }} />
-              </div>
+              <img src={appLogo} alt="LeadFinder Pro" className="h-7 w-7 sm:h-8 sm:w-8" />
               <span className="font-semibold tracking-tight text-sm sm:text-base">
                 Lead<span className="text-gradient-primary">Finder</span> Pro
               </span>
