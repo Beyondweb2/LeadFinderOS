@@ -123,10 +123,10 @@ import newWayImage from '@/assets/new-way-leadfinder.png';
            </p>
            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
              <Button size="lg" className="glow-effect" asChild>
-               <Link to="/auth">
-                 Start Free Trial
-                 <ArrowRight className="ml-2 h-5 w-5" />
-               </Link>
+                <Link to="/auth">
+                  Get Started
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
              </Button>
              <Button size="lg" variant="outline" asChild>
                <Link to="/auth">Sign In</Link>
