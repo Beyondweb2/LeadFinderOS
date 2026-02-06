@@ -15,9 +15,20 @@ import type { SearchFilters } from '@/types/lead';
 interface SearchFormProps {
   onSearch: (filters: SearchFilters) => void;
   isLoading: boolean;
+  isOnTrial?: boolean;
+  searchesRemaining?: number;
+  dailyLimit?: number;
+  subscribed?: boolean;
 }
 
-export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
+export function SearchForm({ 
+  onSearch, 
+  isLoading, 
+  isOnTrial = false, 
+  searchesRemaining = 3, 
+  dailyLimit = 3,
+  subscribed = false 
+}: SearchFormProps) {
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
   const [radius, setRadius] = useState(5);
@@ -104,98 +115,120 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
             </div>
           </div>
 
-          {/* Advanced Filters */}
-          <Collapsible open={showFilters} onOpenChange={setShowFilters}>
-            <CollapsibleTrigger asChild>
-              <Button variant="ghost" type="button" className="text-muted-foreground hover:text-foreground text-xs sm:text-sm">
-                <ChevronDown className={`h-4 w-4 mr-1.5 sm:mr-2 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
-                Advanced Filters
-              </Button>
-            </CollapsibleTrigger>
-            <CollapsibleContent className="pt-4">
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 max-w-4xl">
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
-                    <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    Min Rating: {minRating > 0 ? minRating.toFixed(1) : 'Any'}
-                  </Label>
-                  <Slider
-                    value={[minRating]}
-                    onValueChange={(value) => setMinRating(value[0])}
-                    min={0}
-                    max={5}
-                    step={0.5}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
-                    <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    Min Reviews: {minReviews > 0 ? minReviews : 'Any'}
-                  </Label>
-                  <Slider
-                    value={[minReviews]}
-                    onValueChange={(value) => setMinReviews(value[0])}
-                    min={0}
-                    max={100}
-                    step={1}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
-                    <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    Require Phone
-                  </Label>
-                  <div className="flex items-center gap-2 pt-1">
-                    <Switch
-                      checked={requirePhone}
-                      onCheckedChange={setRequirePhone}
+          {/* Advanced Filters - Hidden by default for trial users */}
+          {subscribed && (
+            <Collapsible open={showFilters} onOpenChange={setShowFilters}>
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" type="button" className="text-muted-foreground hover:text-foreground text-xs sm:text-sm">
+                  <ChevronDown className={`h-4 w-4 mr-1.5 sm:mr-2 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+                  Advanced Filters
+                </Button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 max-w-4xl">
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
+                      <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      Min Rating: {minRating > 0 ? minRating.toFixed(1) : 'Any'}
+                    </Label>
+                    <Slider
+                      value={[minRating]}
+                      onValueChange={(value) => setMinRating(value[0])}
+                      min={0}
+                      max={5}
+                      step={0.5}
                     />
-                    <span className="text-[10px] sm:text-xs text-muted-foreground">
-                      {requirePhone ? 'With phone' : 'All'}
-                    </span>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
+                      <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      Min Reviews: {minReviews > 0 ? minReviews : 'Any'}
+                    </Label>
+                    <Slider
+                      value={[minReviews]}
+                      onValueChange={(value) => setMinReviews(value[0])}
+                      min={0}
+                      max={100}
+                      step={1}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
+                      <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      Require Phone
+                    </Label>
+                    <div className="flex items-center gap-2 pt-1">
+                      <Switch
+                        checked={requirePhone}
+                        onCheckedChange={setRequirePhone}
+                      />
+                      <span className="text-[10px] sm:text-xs text-muted-foreground">
+                        {requirePhone ? 'With phone' : 'All'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
+                      <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                      Deep Search
+                    </Label>
+                    <div className="flex items-center gap-2 pt-1">
+                      <Switch
+                        checked={deepSearch}
+                        onCheckedChange={setDeepSearch}
+                      />
+                      <span className="text-[10px] sm:text-xs text-muted-foreground">
+                        {deepSearch ? '200+ results' : 'Up to 60'}
+                      </span>
+                    </div>
                   </div>
                 </div>
+              </CollapsibleContent>
+            </Collapsible>
+          )}
 
-                <div className="space-y-2">
-                  <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
-                    <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-                    Deep Search
-                  </Label>
-                  <div className="flex items-center gap-2 pt-1">
-                    <Switch
-                      checked={deepSearch}
-                      onCheckedChange={setDeepSearch}
-                    />
-                    <span className="text-[10px] sm:text-xs text-muted-foreground">
-                      {deepSearch ? '200+ results' : 'Up to 60'}
-                    </span>
-                  </div>
+          {/* Submit Button with Trial Indicator */}
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            {/* Trial searches remaining indicator */}
+            {isOnTrial && !subscribed && (
+              <div className="flex items-center gap-2 text-sm">
+                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${
+                  searchesRemaining === 0 
+                    ? 'bg-destructive/10 text-destructive' 
+                    : searchesRemaining === 1 
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                      : 'bg-primary/10 text-primary'
+                }`}>
+                  <Search className="h-3.5 w-3.5" />
+                  <span className="font-medium">
+                    {searchesRemaining} search{searchesRemaining !== 1 ? 'es' : ''} remaining today
+                  </span>
                 </div>
               </div>
-            </CollapsibleContent>
-          </Collapsible>
-
-          {/* Submit Button */}
-          <div className="flex justify-center sm:justify-end">
-            <Button 
-              type="submit" 
-              disabled={isLoading || !keyword.trim() || !location.trim()}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 sm:px-8 glow-effect w-full sm:w-auto text-sm sm:text-base"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Searching...
-                </>
-              ) : (
-                <>
-                  <Search className="mr-2 h-4 w-4" />
-                  Find Leads
-                </>
-              )}
-            </Button>
+            )}
+            
+            <div className={`flex justify-center sm:justify-end ${isOnTrial && !subscribed ? '' : 'w-full'}`}>
+              <Button 
+                type="submit" 
+                disabled={isLoading || !keyword.trim() || !location.trim()}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 sm:px-8 glow-effect w-full sm:w-auto text-sm sm:text-base"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Searching...
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-2 h-4 w-4" />
+                    Find Leads
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </form>
       </CardContent>
