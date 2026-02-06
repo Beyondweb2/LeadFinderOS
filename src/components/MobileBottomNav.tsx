@@ -7,15 +7,18 @@ import {
   Archive,
   Briefcase,
   DollarSign,
-  MoreHorizontal
+  MoreHorizontal,
+  Palette
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { AccentColorPicker } from './AccentColorPicker';
 
 const mainNavItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
@@ -95,6 +98,16 @@ export function MobileBottomNav() {
                 </DropdownMenuItem>
               );
             })}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild onSelect={(e) => e.preventDefault()}>
+              <div className="flex items-center gap-3 cursor-pointer">
+                <Palette className="h-4 w-4" />
+                <span>Theme Color</span>
+                <div className="ml-auto">
+                  <AccentColorPicker />
+                </div>
+              </div>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
