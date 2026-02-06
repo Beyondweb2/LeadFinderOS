@@ -112,32 +112,49 @@
  
        logStep("Found user", { userId: user.id });
  
-       // Determine the status to store
-       let status = subscription.status;
-       if (event.type === "invoice.payment_failed") {
-         status = "past_due";
-       } else if (event.type === "customer.subscription.deleted") {
-         status = "canceled";
-       }
- 
-       // Upsert subscription record
-       const { error: upsertError } = await supabaseAdmin
-         .from("subscriptions")
-         .upsert({
-           user_id: user.id,
-           stripe_customer_id: customerId,
-           stripe_subscription_id: subscription.id,
-           status: status,
-           current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-           updated_at: new Date().toISOString(),
-         }, {
-           onConflict: "stripe_subscription_id",
-         });
- 
-       if (upsertError) {
-         logStep("Failed to upsert subscription", { error: upsertError.message });
-         throw new Error(`Database error: ${upsertError.message}`);
-       }
+        // Determine the status to store
+        let status = subscription.status;
+        if (event.type === "invoice.payment_failed") {
+          status = "past_due";
+        } else if (event.type === "customer.subscription.deleted") {
+          status = "canceled";
+        }
+
+        // Upsert subscription record
+        const { error: upsertError } = await supabaseAdmin
+          .from("subscriptions")
+          .upsert({
+            user_id: user.id,
+            stripe_customer_id: customerId,
+            stripe_subscription_id: subscription.id,
+            status: status,
+            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: "stripe_subscription_id",
+          });
+
+        if (upsertError) {
+          logStep("Failed to upsert subscription", { error: upsertError.message });
+          throw new Error(`Database error: ${upsertError.message}`);
+        }
+
+        // Update user_trials.plan_status based on subscription status
+        const validStatuses = ['active', 'trialing'];
+        const newPlanStatus = validStatuses.includes(status) ? 'active' : 
+                             (status === 'canceled' ? 'cancelled' : 'expired');
+        
+        const { error: trialUpdateError } = await supabaseAdmin
+          .from("user_trials")
+          .update({ plan_status: newPlanStatus })
+          .eq('user_id', user.id);
+
+        if (trialUpdateError) {
+          logStep("Failed to update user_trials plan_status", { error: trialUpdateError.message });
+          // Don't throw - subscription record was saved successfully
+        } else {
+          logStep("Updated user_trials plan_status", { userId: user.id, planStatus: newPlanStatus });
+        }
  
        logStep("Subscription record updated", { userId: user.id, status });
      }
