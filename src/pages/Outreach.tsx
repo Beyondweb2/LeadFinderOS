@@ -30,11 +30,11 @@ const Outreach = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Outreach CRM</h1>
-        <p className="text-muted-foreground">
+      <div className="text-center sm:text-left">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">
           Manage your lead pipeline
         </p>
       </div>

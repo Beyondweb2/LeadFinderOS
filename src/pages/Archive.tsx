@@ -214,35 +214,37 @@ const ArchivePage = () => {
    }
  
    return (
-     <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-            <Archive className="h-6 w-6" />
-            Archive
-            <span className="text-base font-normal text-muted-foreground">
+     <div className="space-y-4 sm:space-y-6">
+        <div className="text-center sm:text-left">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex flex-col sm:flex-row items-center gap-2 justify-center sm:justify-start">
+            <div className="flex items-center gap-2">
+              <Archive className="h-5 w-5 sm:h-6 sm:w-6" />
+              <span>Archive</span>
+            </div>
+            <span className="text-sm sm:text-base font-normal text-muted-foreground">
               ({archivedLeads.length} businesses)
             </span>
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground mt-1">
             Search archived businesses by phone number
           </p>
         </div>
  
        {/* Search Bar */}
        <Card className="bg-card/50 border-border/50">
-         <CardHeader className="pb-3">
-           <div className="flex items-center justify-between flex-wrap gap-3">
-             <CardTitle className="text-base">Search by Phone</CardTitle>
-             <div className="flex items-center gap-2">
+         <CardHeader className="pb-3 px-4 sm:px-6">
+           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+             <CardTitle className="text-sm sm:text-base">Search by Phone</CardTitle>
+             <div className="flex flex-wrap items-center gap-2">
                {selectedIds.size > 0 && (
                  <Button
                    variant="default"
                    size="sm"
                    onClick={copySelectedPhones}
-                   className="bg-primary"
+                   className="bg-primary text-xs sm:text-sm"
                  >
-                   <Copy className="h-4 w-4 mr-2" />
-                   Copy {selectedIds.size} Phones
+                   <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                   Copy {selectedIds.size}
                  </Button>
                )}
                <Button
@@ -250,9 +252,10 @@ const ArchivePage = () => {
                  size="sm"
                  onClick={copyAllFilteredPhones}
                  disabled={filteredLeads.filter(l => l.phone).length === 0}
+                 className="text-xs sm:text-sm"
                >
-                 <Copy className="h-4 w-4 mr-2" />
-                 Copy All Filtered ({filteredLeads.filter(l => l.phone).length})
+                 <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                 <span className="hidden sm:inline">Copy All </span>({filteredLeads.filter(l => l.phone).length})
                </Button>
                {missingPhoneCount > 0 && (
                  <Button
@@ -260,16 +263,18 @@ const ArchivePage = () => {
                    size="sm"
                    onClick={handleBulkLookup}
                    disabled={isLookingUp}
+                   className="text-xs sm:text-sm"
                  >
                    {isLookingUp ? (
                      <>
-                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                       Looking up...
+                       <Loader2 className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                       <span className="hidden sm:inline">Looking up...</span>
+                       <span className="sm:hidden">...</span>
                      </>
                    ) : (
                      <>
-                       <PhoneCall className="mr-2 h-4 w-4" />
-                       Lookup {missingPhoneCount} Missing
+                       <PhoneCall className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                       <span className="hidden sm:inline">Lookup </span>{missingPhoneCount}
                      </>
                    )}
                  </Button>
@@ -277,23 +282,23 @@ const ArchivePage = () => {
              </div>
            </div>
          </CardHeader>
-         <CardContent>
-           <div className="relative max-w-md">
+         <CardContent className="px-4 sm:px-6">
+           <div className="relative max-w-full sm:max-w-md">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
              <Input
                placeholder="Start typing a phone number..."
                value={phoneQuery}
                onChange={(e) => setPhoneQuery(e.target.value)}
-               className="pl-9"
+               className="pl-9 text-sm"
              />
            </div>
            {phoneQuery && (
-             <p className="mt-2 text-sm text-muted-foreground">
+             <p className="mt-2 text-xs sm:text-sm text-muted-foreground">
                Showing {filteredLeads.length} of {archivedLeads.length} archived leads
              </p>
            )}
            {selectedIds.size > 0 && (
-             <p className="mt-2 text-sm text-primary">
+             <p className="mt-2 text-xs sm:text-sm text-primary">
                {selectedIds.size} selected
              </p>
            )}

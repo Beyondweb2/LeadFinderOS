@@ -46,38 +46,38 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
 
   return (
     <Card className="glass-panel border-border/50">
-      <CardContent className="p-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
+      <CardContent className="p-4 sm:p-6">
+        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
           {/* Main Search Fields */}
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="keyword" className="text-sm font-medium text-foreground/80">
+              <Label htmlFor="keyword" className="text-xs sm:text-sm font-medium text-foreground/80">
                 Business Type
               </Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="keyword"
-                  placeholder="e.g. plumber, electrician, bakery"
+                  placeholder="e.g. plumber, electrician"
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
-                  className="pl-10 bg-input border-border focus:ring-primary"
+                  className="pl-10 bg-input border-border focus:ring-primary text-sm"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="location" className="text-sm font-medium text-foreground/80">
+              <Label htmlFor="location" className="text-xs sm:text-sm font-medium text-foreground/80">
                 Location
               </Label>
               <div className="relative">
                 <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   id="location"
-                  placeholder="City, postcode, or address"
+                  placeholder="City or postcode"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
-                  className="pl-10 bg-input border-border focus:ring-primary"
+                  className="pl-10 bg-input border-border focus:ring-primary text-sm"
                 />
               </div>
               <QuickLocationsList onLocationSelect={(loc, country) => {
@@ -86,12 +86,12 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
               }} />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-sm font-medium text-foreground/80">
-                Search Radius: {radius} km
+            <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+              <Label className="text-xs sm:text-sm font-medium text-foreground/80">
+                Radius: {radius} km
               </Label>
               <div className="relative flex items-center gap-3 pt-1">
-                <Radius className="h-4 w-4 text-muted-foreground" />
+                <Radius className="h-4 w-4 text-muted-foreground flex-shrink-0" />
               <Slider
                   value={[radius]}
                   onValueChange={(value) => setRadius(value[0])}
@@ -107,16 +107,16 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
           {/* Advanced Filters */}
           <Collapsible open={showFilters} onOpenChange={setShowFilters}>
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" type="button" className="text-muted-foreground hover:text-foreground">
-                <ChevronDown className={`h-4 w-4 mr-2 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+              <Button variant="ghost" type="button" className="text-muted-foreground hover:text-foreground text-xs sm:text-sm">
+                <ChevronDown className={`h-4 w-4 mr-1.5 sm:mr-2 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
                 Advanced Filters
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="pt-4">
-              <div className="grid gap-4 md:grid-cols-3 max-w-2xl">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 max-w-4xl">
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
-                    <Star className="h-4 w-4" />
+                  <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
+                    <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     Min Rating: {minRating > 0 ? minRating.toFixed(1) : 'Any'}
                   </Label>
                   <Slider
@@ -129,8 +129,8 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
-                    <MessageSquare className="h-4 w-4" />
+                  <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
+                    <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     Min Reviews: {minReviews > 0 ? minReviews : 'Any'}
                   </Label>
                   <Slider
@@ -143,24 +143,24 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
-                    <Phone className="h-4 w-4" />
-                    Require Phone Number
+                  <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
+                    <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                    Require Phone
                   </Label>
                   <div className="flex items-center gap-2 pt-1">
                     <Switch
                       checked={requirePhone}
                       onCheckedChange={setRequirePhone}
                     />
-                    <span className="text-xs text-muted-foreground">
-                      {requirePhone ? 'Only show businesses with phone' : 'Show all businesses'}
+                    <span className="text-[10px] sm:text-xs text-muted-foreground">
+                      {requirePhone ? 'With phone' : 'All'}
                     </span>
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-sm font-medium text-foreground/80 flex items-center gap-2">
-                    <Zap className="h-4 w-4" />
+                  <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
+                    <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     Deep Search
                   </Label>
                   <div className="flex items-center gap-2 pt-1">
@@ -168,8 +168,8 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                       checked={deepSearch}
                       onCheckedChange={setDeepSearch}
                     />
-                    <span className="text-xs text-muted-foreground">
-                      {deepSearch ? 'Grid search for 200+ results (slower)' : 'Standard search (up to 60 results)'}
+                    <span className="text-[10px] sm:text-xs text-muted-foreground">
+                      {deepSearch ? '200+ results' : 'Up to 60'}
                     </span>
                   </div>
                 </div>
@@ -178,11 +178,11 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
           </Collapsible>
 
           {/* Submit Button */}
-          <div className="flex justify-end">
+          <div className="flex justify-center sm:justify-end">
             <Button 
               type="submit" 
               disabled={isLoading || !keyword.trim() || !location.trim()}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-8 glow-effect"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 sm:px-8 glow-effect w-full sm:w-auto text-sm sm:text-base"
             >
               {isLoading ? (
                 <>
