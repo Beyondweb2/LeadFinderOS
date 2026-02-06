@@ -22,6 +22,46 @@ import newWayImage from '@/assets/new-way-leadfinder.png';
 import demoVideo from '@/assets/leadfinder-demo.mp4';
 import appLogo from '@/assets/logo.png';
 import videoPoster from '@/assets/video-poster.jpg';
+import { useScrollReveal } from '@/hooks/useScrollReveal';
+
+// Scroll reveal wrapper component
+const ScrollReveal = ({ 
+  children, 
+  className = '', 
+  delay = 0,
+  direction = 'up' 
+}: { 
+  children: React.ReactNode; 
+  className?: string;
+  delay?: number;
+  direction?: 'up' | 'down' | 'left' | 'right';
+}) => {
+  const { ref, isVisible } = useScrollReveal({ threshold: 0.1 });
+  
+  const getTransform = () => {
+    switch (direction) {
+      case 'up': return 'translateY(40px)';
+      case 'down': return 'translateY(-40px)';
+      case 'left': return 'translateX(40px)';
+      case 'right': return 'translateX(-40px)';
+      default: return 'translateY(40px)';
+    }
+  };
+  
+  return (
+    <div
+      ref={ref}
+      className={className}
+      style={{
+        opacity: isVisible ? 1 : 0,
+        transform: isVisible ? 'translate(0)' : getTransform(),
+        transition: `opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1) ${delay}ms, transform 0.8s cubic-bezier(0.16, 1, 0.3, 1) ${delay}ms`,
+      }}
+    >
+      {children}
+    </div>
+  );
+};
 
 const FEATURES = [
   {
@@ -125,7 +165,7 @@ const VideoSection = () => {
   };
 
   return (
-    <section className="relative z-10 pb-16 md:pb-24 px-4">
+    <ScrollReveal className="relative z-10 pb-16 md:pb-24 px-4">
       <div className="container mx-auto">
         <div className="relative max-w-4xl mx-auto">
           {/* Glow effect behind video - fixed brand blue */}
@@ -159,7 +199,7 @@ const VideoSection = () => {
               Your browser does not support the video tag.
             </video>
             
-            {/* Sound toggle button */}
+      {/* Sound toggle button */}
             <button
               onClick={toggleMute}
               className="absolute bottom-3 right-3 md:bottom-4 md:right-4 p-2 md:p-2.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
@@ -174,7 +214,7 @@ const VideoSection = () => {
           </div>
         </div>
       </div>
-    </section>
+    </ScrollReveal>
   );
 };
 
@@ -311,74 +351,78 @@ const Landing = () => {
       {/* Before/After Comparison Section */}
       <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
         <div className="container mx-auto">
-          <div className="text-center mb-10 sm:mb-12 md:mb-16">
+          <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
               Stop Searching <span className="text-gradient-primary">Manually</span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
               Finding businesses without websites used to mean hours of manual searching. Not anymore.
             </p>
-          </div>
+          </ScrollReveal>
           
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 max-w-6xl mx-auto">
             {/* Old Way */}
-            <div className="relative group">
-              <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-destructive/30 via-destructive/10 to-transparent opacity-60" />
-              <div className="relative rounded-2xl overflow-hidden border border-destructive/20 bg-card/80 backdrop-blur-sm p-3 sm:p-4">
-                <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 bg-destructive/90 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg">
-                  <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                  The Old Way
+            <ScrollReveal delay={100} direction="left">
+              <div className="relative group">
+                <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-destructive/30 via-destructive/10 to-transparent opacity-60" />
+                <div className="relative rounded-2xl overflow-hidden border border-destructive/20 bg-card/80 backdrop-blur-sm p-3 sm:p-4">
+                  <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 bg-destructive/90 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg">
+                    <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                    The Old Way
+                  </div>
+                  <div className="rounded-xl overflow-hidden">
+                    <img
+                      src={oldWayImage}
+                      alt="Manually searching Google Maps for businesses"
+                      className="w-full h-auto"
+                    />
+                  </div>
+                  <p className="text-muted-foreground text-xs sm:text-sm text-center mt-3 sm:mt-4 px-1 sm:px-2">
+                    Scrolling through Google Maps, clicking each pin, checking for websites one by one...
+                  </p>
                 </div>
-                <div className="rounded-xl overflow-hidden">
-                  <img
-                    src={oldWayImage}
-                    alt="Manually searching Google Maps for businesses"
-                    className="w-full h-auto"
-                  />
-                </div>
-                <p className="text-muted-foreground text-xs sm:text-sm text-center mt-3 sm:mt-4 px-1 sm:px-2">
-                  Scrolling through Google Maps, clicking each pin, checking for websites one by one...
-                </p>
               </div>
-            </div>
+            </ScrollReveal>
 
             {/* New Way */}
-            <div className="relative group">
-              {/* Glow effect - fixed brand blue */}
-              <div 
-                className="absolute -inset-2 rounded-3xl blur-xl opacity-60 group-hover:opacity-80 transition-opacity duration-500"
-                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.25), hsl(210 100% 50% / 0.1), hsl(220 80% 45% / 0.1))' }}
-              />
-              <div 
-                className="absolute -inset-px rounded-2xl"
-                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.4), hsl(210 100% 50% / 0.2), transparent)' }}
-              />
-              <div 
-                className="relative rounded-2xl overflow-hidden bg-card/90 backdrop-blur-sm p-3 sm:p-4"
-                style={{ 
-                  border: '1px solid hsl(210 100% 50% / 0.3)',
-                  boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)'
-                }}
-              >
+            <ScrollReveal delay={200} direction="right">
+              <div className="relative group">
+                {/* Glow effect - fixed brand blue */}
                 <div 
-                  className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg"
-                  style={{ background: 'hsl(210 100% 50%)', color: 'hsl(220 40% 4%)' }}
+                  className="absolute -inset-2 rounded-3xl blur-xl opacity-60 group-hover:opacity-80 transition-opacity duration-500"
+                  style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.25), hsl(210 100% 50% / 0.1), hsl(220 80% 45% / 0.1))' }}
+                />
+                <div 
+                  className="absolute -inset-px rounded-2xl"
+                  style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.4), hsl(210 100% 50% / 0.2), transparent)' }}
+                />
+                <div 
+                  className="relative rounded-2xl overflow-hidden bg-card/90 backdrop-blur-sm p-3 sm:p-4"
+                  style={{ 
+                    border: '1px solid hsl(210 100% 50% / 0.3)',
+                    boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)'
+                  }}
                 >
-                  <CheckCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                  With LeadFinder
+                  <div 
+                    className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg"
+                    style={{ background: 'hsl(210 100% 50%)', color: 'hsl(220 40% 4%)' }}
+                  >
+                    <CheckCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                    With LeadFinder
+                  </div>
+                  <div className="rounded-xl overflow-hidden">
+                    <img
+                      src={newWayImage}
+                      alt="LeadFinder showing filtered list of businesses without websites"
+                      className="w-full h-auto"
+                    />
+                  </div>
+                  <p className="text-muted-foreground text-xs sm:text-sm text-center mt-3 sm:mt-4 px-1 sm:px-2">
+                    Instantly see which businesses don't have websites, sorted and ready to contact.
+                  </p>
                 </div>
-                <div className="rounded-xl overflow-hidden">
-                  <img
-                    src={newWayImage}
-                    alt="LeadFinder showing filtered list of businesses without websites"
-                    className="w-full h-auto"
-                  />
-                </div>
-                <p className="text-muted-foreground text-xs sm:text-sm text-center mt-3 sm:mt-4 px-1 sm:px-2">
-                  Instantly see which businesses don't have websites, sorted and ready to contact.
-                </p>
               </div>
-            </div>
+            </ScrollReveal>
           </div>
         </div>
       </section>
@@ -386,7 +430,7 @@ const Landing = () => {
       {/* Features Section */}
       <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
         <div className="container mx-auto">
-          <div className="text-center mb-10 sm:mb-12 md:mb-16">
+          <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
               Everything You Need to
               <span className="text-gradient-primary"> Close More Deals</span>
@@ -394,37 +438,38 @@ const Landing = () => {
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
               A complete toolkit for finding, tracking, and converting leads into paying clients.
             </p>
-          </div>
+          </ScrollReveal>
           
           <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-5">
-            {FEATURES.map((feature) => (
-              <Card
-                key={feature.title}
-                className="group relative glass-panel-strong border-white/[0.06] transition-all duration-500 overflow-hidden"
-                style={{ ['--hover-border' as string]: 'hsl(210 100% 50% / 0.3)' }}
-              >
-                {/* Hover glow - fixed brand blue */}
-                <div 
-                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                  style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.03), transparent)' }}
-                />
-                
-                <CardHeader className="relative pb-1 sm:pb-2 p-3 sm:p-6">
+            {FEATURES.map((feature, index) => (
+              <ScrollReveal key={feature.title} delay={index * 100}>
+                <Card
+                  className="group relative glass-panel-strong border-white/[0.06] transition-all duration-500 overflow-hidden h-full"
+                  style={{ ['--hover-border' as string]: 'hsl(210 100% 50% / 0.3)' }}
+                >
+                  {/* Hover glow - fixed brand blue */}
                   <div 
-                    className="p-2 sm:p-3 rounded-xl w-fit mb-2 sm:mb-4 transition-colors duration-500"
-                    style={{ 
-                      background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
-                      border: '1px solid hsl(210 100% 50% / 0.1)'
-                    }}
-                  >
-                    <feature.icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
-                  </div>
-                  <CardTitle className="text-sm sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</CardTitle>
-                </CardHeader>
-                <CardContent className="relative pt-0 p-3 sm:p-6 sm:pt-0">
-                  <p className="text-muted-foreground text-[11px] sm:text-sm leading-relaxed">{feature.description}</p>
-                </CardContent>
-              </Card>
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.03), transparent)' }}
+                  />
+                  
+                  <CardHeader className="relative pb-1 sm:pb-2 p-3 sm:p-6">
+                    <div 
+                      className="p-2 sm:p-3 rounded-xl w-fit mb-2 sm:mb-4 transition-colors duration-500"
+                      style={{ 
+                        background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
+                        border: '1px solid hsl(210 100% 50% / 0.1)'
+                      }}
+                    >
+                      <feature.icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                    </div>
+                    <CardTitle className="text-sm sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="relative pt-0 p-3 sm:p-6 sm:pt-0">
+                    <p className="text-muted-foreground text-[11px] sm:text-sm leading-relaxed">{feature.description}</p>
+                  </CardContent>
+                </Card>
+              </ScrollReveal>
             ))}
           </div>
         </div>
@@ -433,84 +478,86 @@ const Landing = () => {
       {/* Pricing Section */}
       <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
         <div className="container mx-auto">
-          <div className="text-center mb-10 sm:mb-12 md:mb-16">
+          <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
               Simple, Transparent <span className="text-gradient-primary">Pricing</span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
               One plan with everything you need. Cancel anytime.
             </p>
-          </div>
+          </ScrollReveal>
           
-          <div className="relative max-w-md mx-auto">
-            {/* Glow background - fixed brand blue */}
-            <div 
-              className="absolute -inset-4 sm:-inset-8 rounded-3xl blur-2xl sm:blur-3xl opacity-50"
-              style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
-            />
-            <div 
-              className="absolute -inset-px rounded-2xl"
-              style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.4), hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.2))' }}
-            />
-            
-            <Card className="relative glass-panel-strong border-0 overflow-hidden">
-              {/* Top accent line - fixed brand blue */}
+          <ScrollReveal delay={150}>
+            <div className="relative max-w-md mx-auto">
+              {/* Glow background - fixed brand blue */}
               <div 
-                className="absolute top-0 left-0 right-0 h-px"
-                style={{ background: 'linear-gradient(to right, transparent, hsl(210 100% 50%), transparent)' }}
+                className="absolute -inset-4 sm:-inset-8 rounded-3xl blur-2xl sm:blur-3xl opacity-50"
+                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
+              />
+              <div 
+                className="absolute -inset-px rounded-2xl"
+                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.4), hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.2))' }}
               />
               
-              <CardHeader className="text-center pb-2 pt-6 sm:pt-8 px-4 sm:px-6">
+              <Card className="relative glass-panel-strong border-0 overflow-hidden">
+                {/* Top accent line - fixed brand blue */}
                 <div 
-                  className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold uppercase tracking-wide mx-auto mb-3 sm:mb-4"
-                  style={{ 
-                    background: 'hsl(210 100% 50% / 0.1)', 
-                    border: '1px solid hsl(210 100% 50% / 0.2)',
-                    color: 'hsl(210 100% 50%)'
-                  }}
-                >
-                  <Zap className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                  Most Popular
-                </div>
-                <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
-                <div className="mt-4 sm:mt-6">
-                  <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
-                  <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
-                </div>
-              </CardHeader>
-              
-              <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
-                <ul className="space-y-3 sm:space-y-4">
-                  {PRICING_FEATURES.map((feature) => (
-                    <li key={feature} className="flex items-center gap-2.5 sm:gap-3">
-                      <div 
-                        className="flex-shrink-0 p-0.5 sm:p-1 rounded-full"
-                        style={{ 
-                          background: 'hsl(210 100% 50% / 0.1)', 
-                          border: '1px solid hsl(210 100% 50% / 0.2)'
-                        }}
-                      >
-                        <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={2.5} />
-                      </div>
-                      <span className="text-foreground/90 text-xs sm:text-sm">{feature}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-              
-              <CardFooter className="pt-4 sm:pt-6 pb-6 sm:pb-8 flex-col gap-3 sm:gap-4 px-4 sm:px-6">
-                <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-5 sm:py-6 h-auto" asChild>
-                  <Link to="/auth">
-                    Get Started
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-                <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
-                  Secure payment via Stripe. Cancel anytime.
-                </p>
-              </CardFooter>
-            </Card>
-          </div>
+                  className="absolute top-0 left-0 right-0 h-px"
+                  style={{ background: 'linear-gradient(to right, transparent, hsl(210 100% 50%), transparent)' }}
+                />
+                
+                <CardHeader className="text-center pb-2 pt-6 sm:pt-8 px-4 sm:px-6">
+                  <div 
+                    className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold uppercase tracking-wide mx-auto mb-3 sm:mb-4"
+                    style={{ 
+                      background: 'hsl(210 100% 50% / 0.1)', 
+                      border: '1px solid hsl(210 100% 50% / 0.2)',
+                      color: 'hsl(210 100% 50%)'
+                    }}
+                  >
+                    <Zap className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                    Most Popular
+                  </div>
+                  <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
+                  <div className="mt-4 sm:mt-6">
+                    <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
+                    <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
+                  <ul className="space-y-3 sm:space-y-4">
+                    {PRICING_FEATURES.map((feature) => (
+                      <li key={feature} className="flex items-center gap-2.5 sm:gap-3">
+                        <div 
+                          className="flex-shrink-0 p-0.5 sm:p-1 rounded-full"
+                          style={{ 
+                            background: 'hsl(210 100% 50% / 0.1)', 
+                            border: '1px solid hsl(210 100% 50% / 0.2)'
+                          }}
+                        >
+                          <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={2.5} />
+                        </div>
+                        <span className="text-foreground/90 text-xs sm:text-sm">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </CardContent>
+                
+                <CardFooter className="pt-4 sm:pt-6 pb-6 sm:pb-8 flex-col gap-3 sm:gap-4 px-4 sm:px-6">
+                  <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-5 sm:py-6 h-auto" asChild>
+                    <Link to="/auth">
+                      Get Started
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Link>
+                  </Button>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
+                    Secure payment via Stripe. Cancel anytime.
+                  </p>
+                </CardFooter>
+              </Card>
+            </div>
+          </ScrollReveal>
         </div>
       </section>
 
