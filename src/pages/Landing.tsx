@@ -478,7 +478,7 @@ const Landing = () => {
                   <Zap className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                   Most Popular
                 </div>
-                <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">LeadFinder Pro</CardTitle>
+                <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
                 <div className="mt-4 sm:mt-6">
                   <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                   <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
