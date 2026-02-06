@@ -50,20 +50,24 @@
        logStep("Found existing Stripe customer", { customerId });
      }
  
-     // Create checkout session
-     const session = await stripe.checkout.sessions.create({
-       customer: customerId,
-       customer_email: customerId ? undefined : user.email,
-       line_items: [
-         {
-           price: "price_1SxN38Gi4ps7kJ7R8UE1kYGS",
-           quantity: 1,
-         },
-       ],
-       mode: "subscription",
-       success_url: `${req.headers.get("origin")}/`,
-       cancel_url: `${req.headers.get("origin")}/subscribe`,
-     });
+      // Create checkout session
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        customer_email: customerId ? undefined : user.email,
+        line_items: [
+          {
+            price: "price_1SxN38Gi4ps7kJ7R8UE1kYGS",
+            quantity: 1,
+          },
+        ],
+        mode: "subscription",
+        subscription_data: {
+          trial_period_days: 7,
+        },
+        payment_method_collection: "always",
+        success_url: `${req.headers.get("origin")}/app?checkout=success`,
+        cancel_url: `${req.headers.get("origin")}/app?checkout=cancel`,
+      });
  
      logStep("Checkout session created", { sessionId: session.id });
  
