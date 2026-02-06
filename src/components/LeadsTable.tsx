@@ -197,7 +197,88 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
         </div>
       </CardHeader>
       <CardContent>
-        <div className="rounded-lg border border-border overflow-hidden">
+        {/* Mobile View */}
+        <div className="md:hidden space-y-2">
+          {paginatedLeads.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No leads match your current filters.
+            </div>
+          ) : (
+            paginatedLeads.map((lead, index) => (
+              <div
+                key={lead.id}
+                className="flex items-center justify-between p-3 rounded-lg border border-border bg-card/50 animate-fade-in"
+                style={{ animationDelay: `${index * 20}ms` }}
+              >
+                <div className="flex-1 min-w-0 mr-3">
+                  <p className="font-medium text-sm truncate">{lead.name}</p>
+                  <div className="mt-1">
+                    <StatusBadge status={lead.websiteStatus} />
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {isChecked?.(lead.name, lead.googleMapsUrl) ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 text-muted-foreground bg-muted/50"
+                      asChild
+                    >
+                      <a
+                        href={lead.googleMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </a>
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 hover:bg-muted"
+                      asChild
+                    >
+                      <a
+                        href={lead.googleMapsUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                      >
+                        <MapPin className="h-4 w-4 text-primary" />
+                      </a>
+                    </Button>
+                  )}
+                  {onAddToOutreach && (
+                    isInOutreach?.(lead.name, lead.googleMapsUrl) ? (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 text-green-500 bg-green-500/10"
+                        disabled
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 hover:bg-muted hover:text-primary"
+                        onClick={() => onAddToOutreach(lead)}
+                      >
+                        <ClipboardList className="h-4 w-4" />
+                      </Button>
+                    )
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* Desktop View */}
+        <div className="hidden md:block rounded-lg border border-border overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
