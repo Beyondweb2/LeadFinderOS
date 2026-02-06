@@ -9,22 +9,25 @@
  import { OutreachStatusBadge } from '@/components/OutreachStatusBadge';
  import type { OutreachLead } from '@/types/outreach';
  
- const ArchivePage = () => {
-   const {
-     archivedLeads,
-     isLoading,
-     updateStatus,
-     updateNextAction,
-     updateNotes,
-     deleteLead,
-     fetchActivities,
-     unarchiveLead,
-     bulkLookupPhones,
-   } = useOutreach();
- 
-   const [phoneQuery, setPhoneQuery] = useState('');
-   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
-   const [isLookingUp, setIsLookingUp] = useState(false);
+const ITEMS_PER_PAGE = 50;
+
+const ArchivePage = () => {
+  const {
+    archivedLeads,
+    isLoading,
+    updateStatus,
+    updateNextAction,
+    updateNotes,
+    deleteLead,
+    fetchActivities,
+    unarchiveLead,
+    bulkLookupPhones,
+  } = useOutreach();
+
+  const [phoneQuery, setPhoneQuery] = useState('');
+  const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
  
   // Count leads missing phone numbers
   const missingPhoneCount = useMemo(() => 
@@ -43,6 +46,17 @@
       return leadDigits.includes(digitsOnly);
     });
   }, [archivedLeads, phoneQuery]);
+
+  // Reset to page 1 when search changes
+  useMemo(() => {
+    setCurrentPage(1);
+  }, [phoneQuery]);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredLeads.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const endIndex = startIndex + ITEMS_PER_PAGE;
+  const paginatedLeads = filteredLeads.slice(startIndex, endIndex);
 
   const handleMarkInterested = async (lead: OutreachLead) => {
     await updateStatus(lead.id, 'interested');
@@ -83,15 +97,18 @@
  
    return (
      <div className="space-y-6">
-       <div>
-         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-           <Archive className="h-6 w-6" />
-           Archive
-         </h1>
-         <p className="text-muted-foreground">
-           Search archived businesses by phone number
-         </p>
-       </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+            <Archive className="h-6 w-6" />
+            Archive
+            <span className="text-base font-normal text-muted-foreground">
+              ({archivedLeads.length} businesses)
+            </span>
+          </h1>
+          <p className="text-muted-foreground">
+            Search archived businesses by phone number
+          </p>
+        </div>
  
        {/* Search Bar */}
        <Card className="bg-card/50 border-border/50">
@@ -153,14 +170,14 @@
                  </TableRow>
                </TableHeader>
                <TableBody>
-                 {filteredLeads.length === 0 ? (
-                   <TableRow>
-                     <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
-                       {phoneQuery ? 'No archived leads match this phone number.' : 'No archived leads yet.'}
-                     </TableCell>
-                   </TableRow>
-                 ) : (
-                   filteredLeads.slice(0, 50).map((lead) => (
+                  {paginatedLeads.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                        {phoneQuery ? 'No archived leads match this phone number.' : 'No archived leads yet.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedLeads.map((lead) => (
                      <TableRow
                        key={lead.id}
                        className="border-border/50 hover:bg-muted/30 cursor-pointer"
@@ -237,11 +254,41 @@
                  )}
                </TableBody>
              </Table>
-           </div>
-         </CardContent>
-       </Card>
- 
-       {/* Lead Detail Dialog */}
+            </div>
+          </CardContent>
+          
+          {/* Pagination Controls */}
+          {filteredLeads.length > ITEMS_PER_PAGE && (
+            <div className="flex items-center justify-between border-t border-border/50 px-6 py-4">
+              <p className="text-sm text-muted-foreground">
+                Showing {startIndex + 1}-{Math.min(endIndex, filteredLeads.length)} of {filteredLeads.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </Button>
+                <span className="text-sm text-muted-foreground px-2">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Lead Detail Dialog */}
        <OutreachLeadDialog
          lead={selectedLead}
          open={!!selectedLead}
