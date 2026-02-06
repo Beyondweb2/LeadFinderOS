@@ -1,64 +1,66 @@
 
 
-# Fix: Stripe Checkout Not Opening
+# Plan: Speed Up Video Loading on Landing Page
 
-## Problem Identified
+## Current Implementation
 
-Based on the edge function logs, the checkout session **is being created successfully** - I can see multiple successful checkout sessions in the logs (e.g., `cs_live_a1rs0QburcVrz8mfmlDvThWbMj2B5k6xLBWqS66hyl4Sk3DEnmgznvNDln`). The URL is being returned correctly.
+The video is currently implemented as a simple `<video>` tag with:
+- `autoPlay`, `loop`, `muted`, `playsInline` attributes
+- Direct import of the MP4 file from `src/assets/leadfinder-demo.mp4`
+- No loading optimization or preloading strategy
 
-The issue is that the code uses `window.open(url, '_blank')` to open Stripe in a new tab, which **most mobile browsers and many desktop browsers block as a popup**. Since the `window.open()` call happens after an async operation (waiting for the edge function response), it's no longer considered a "trusted" user action and gets blocked.
+## Recommended Optimizations
 
-## Solution
+### 1. Add `preload="auto"` Attribute
+Tell the browser to start downloading the video immediately when the page loads, rather than waiting.
 
-Change from opening in a new tab to redirecting the current page directly to Stripe checkout using `window.location.href`. This approach:
-- Works on all browsers including mobile
-- Is never blocked by popup blockers
-- Is actually the recommended approach for payment flows
+### 2. Add Poster Image (Loading Placeholder)
+Display a static image while the video loads, so users see content immediately instead of a blank space.
 
-## Changes Required
+### 3. Add `fetchpriority="high"` 
+Signal to the browser that this video is high priority for loading.
 
-### 1. Update `src/hooks/useSubscription.ts`
+### 4. Consider Video Hosting (Future Enhancement)
+For even faster loading, the video could be moved to a CDN like Cloudflare or Supabase Storage. This is optional but worth mentioning.
 
-Change the `createCheckout` function:
+---
 
-```typescript
-// Before (blocked by popup blockers)
-if (data?.url) {
-  window.open(data.url, '_blank');
-}
+## Technical Changes
 
-// After (works everywhere)
-if (data?.url) {
-  window.location.href = data.url;
-}
+### File: `src/pages/Landing.tsx`
+
+Update the `VideoSection` component's video element:
+
+```tsx
+<video 
+  ref={videoRef}
+  className="w-full h-auto"
+  autoPlay 
+  loop 
+  muted
+  playsInline
+  preload="auto"
+  poster="/placeholder.svg"  // Or create a video thumbnail
+>
+  <source src={demoVideo} type="video/mp4" />
+  Your browser does not support the video tag.
+</video>
 ```
 
-### 2. Update `openCustomerPortal` function (same file)
+### Optional: Create a Video Poster Image
+For the best user experience, we can extract the first frame of your video as a poster image. This shows users something immediately while the video downloads.
 
-Apply the same fix for consistency:
+---
 
-```typescript
-// Before
-if (data?.url) {
-  window.open(data.url, '_blank');
-}
+## Summary
 
-// After  
-if (data?.url) {
-  window.location.href = data.url;
-}
-```
+| Change | Impact |
+|--------|--------|
+| Add `preload="auto"` | Browser starts loading video immediately |
+| Add poster image | Shows placeholder while video loads |
+| Keep video bundled | Vite already optimizes the import |
 
-## Why This Works
-
-- `window.location.href` redirects the current page instead of opening a new tab
-- This is never blocked by popup blockers because it's a navigation, not a popup
-- Users return to the app after completing checkout (via the success_url configured in the edge function)
-- This is the standard approach recommended by Stripe for checkout flows
-
-## Technical Note
-
-The success and cancel URLs are already configured correctly in the edge function:
-- Success: `${origin}/` (redirects to home page after payment)
-- Cancel: `${origin}/subscribe` (returns to subscribe page if cancelled)
+These changes will make the video appear to load faster by:
+1. Starting the download earlier
+2. Showing a placeholder so the space isn't blank
 
