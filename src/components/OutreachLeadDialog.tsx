@@ -46,6 +46,8 @@ interface OutreachLeadDialogProps {
   onUpdateNotes: (leadId: string, notes: string) => Promise<any>;
   onDelete: (leadId: string) => Promise<boolean>;
   fetchActivities: (leadId: string) => Promise<OutreachActivity[]>;
+  /** When true, hides status and next action editing */
+  readOnly?: boolean;
 }
 
 export function OutreachLeadDialog({
@@ -57,6 +59,7 @@ export function OutreachLeadDialog({
   onUpdateNotes,
   onDelete,
   fetchActivities,
+  readOnly = false,
 }: OutreachLeadDialogProps) {
   const [notes, setNotes] = useState('');
   const [activities, setActivities] = useState<OutreachActivity[]>([]);
@@ -114,21 +117,25 @@ export function OutreachLeadDialog({
               <div>
                 <DialogTitle className="text-xl">{lead.business_name}</DialogTitle>
                 <div className="mt-1">
-                  <Select
-                    value={lead.status}
-                    onValueChange={(v) => onUpdateStatus(lead.id, v as LeadStatus)}
-                  >
-                    <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
-                      <OutreachStatusBadge status={lead.status} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUS_OPTIONS.map((opt) => (
-                        <SelectItem key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {readOnly ? (
+                    <OutreachStatusBadge status={lead.status} />
+                  ) : (
+                    <Select
+                      value={lead.status}
+                      onValueChange={(v) => onUpdateStatus(lead.id, v as LeadStatus)}
+                    >
+                      <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+                        <OutreachStatusBadge status={lead.status} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
             </div>
@@ -142,94 +149,96 @@ export function OutreachLeadDialog({
 
         <ScrollArea className="flex-1 pr-4">
           <div className="space-y-6 py-4">
-            {/* Next Action Section */}
-            <div className="rounded-lg border border-border bg-muted/30 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2 text-primary">
-                  <Pencil className="h-4 w-4" />
-                  <span className="font-medium">Manual Next Action</span>
+            {/* Next Action Section - Only show if not readOnly */}
+            {!readOnly && (
+              <div className="rounded-lg border border-border bg-muted/30 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2 text-primary">
+                    <Pencil className="h-4 w-4" />
+                    <span className="font-medium">Manual Next Action</span>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsEditingAction(!isEditingAction)}
+                  >
+                    <Pencil className="h-3 w-3 mr-1" />
+                    Edit
+                  </Button>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setIsEditingAction(!isEditingAction)}
-                >
-                  <Pencil className="h-3 w-3 mr-1" />
-                  Edit
-                </Button>
-              </div>
 
-              {isEditingAction ? (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Action</Label>
-                      <Select
-                        value={selectedAction}
-                        onValueChange={(v) => setSelectedAction(v as NextActionType)}
+                {isEditingAction ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Action</Label>
+                        <Select
+                          value={selectedAction}
+                          onValueChange={(v) => setSelectedAction(v as NextActionType)}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {NEXT_ACTION_OPTIONS.map((opt) => (
+                              <SelectItem key={opt.value} value={opt.value}>
+                                {opt.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label className="text-xs text-muted-foreground">Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                'w-full justify-start text-left font-normal',
+                                !selectedDate && 'text-muted-foreground'
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {selectedDate ? format(selectedDate, 'PPP') : 'Pick a date'}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={selectedDate}
+                              onSelect={setSelectedDate}
+                              initialFocus
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={handleSaveAction}>
+                        Save
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setIsEditingAction(false)}
                       >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {NEXT_ACTION_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Date</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="outline"
-                            className={cn(
-                              'w-full justify-start text-left font-normal',
-                              !selectedDate && 'text-muted-foreground'
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {selectedDate ? format(selectedDate, 'PPP') : 'Pick a date'}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0" align="start">
-                          <Calendar
-                            mode="single"
-                            selected={selectedDate}
-                            onSelect={setSelectedDate}
-                            initialFocus
-                          />
-                        </PopoverContent>
-                      </Popover>
+                        Cancel
+                      </Button>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleSaveAction}>
-                      Save
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setIsEditingAction(false)}
-                    >
-                      Cancel
-                    </Button>
+                ) : (
+                  <div className="rounded-md bg-primary/10 border border-primary/20 p-3">
+                    <NextActionBadge 
+                      action={lead.next_action} 
+                      date={lead.next_action_date} 
+                    />
                   </div>
-                </div>
-              ) : (
-                <div className="rounded-md bg-primary/10 border border-primary/20 p-3">
-                  <NextActionBadge 
-                    action={lead.next_action} 
-                    date={lead.next_action_date} 
-                  />
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
 
-            <Separator />
+            {!readOnly && <Separator />}
 
             {/* Contact Information */}
             <div>

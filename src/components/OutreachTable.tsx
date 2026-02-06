@@ -48,6 +48,8 @@ interface OutreachTableProps {
   onArchiveSelected?: (leadIds: string[]) => void;
   showArchiveButton?: boolean;
   isArchiveView?: boolean;
+  /** When true, hides status and next action editing (for simplified Outreach CRM view) */
+  readOnly?: boolean;
 }
 
 const ITEMS_PER_PAGE = 15;
@@ -65,6 +67,7 @@ export function OutreachTable({
   onArchiveSelected,
   showArchiveButton = true,
   isArchiveView = false,
+  readOnly = false,
 }: OutreachTableProps) {
   const { toast } = useToast();
   const [searchQuery, setSearchQuery] = useState('');
@@ -459,19 +462,23 @@ export function OutreachTable({
                   <SortButton field="business_name">Business</SortButton>
                 </TableHead>
                 <TableHead className="w-[140px]">Phone</TableHead>
-                <TableHead className="w-[150px]">
-                  <SortButton field="status">Status</SortButton>
-                </TableHead>
-                <TableHead className="w-[200px]">
-                  <SortButton field="next_action_date">Next Action</SortButton>
-                </TableHead>
+                {!readOnly && (
+                  <>
+                    <TableHead className="w-[150px]">
+                      <SortButton field="status">Status</SortButton>
+                    </TableHead>
+                    <TableHead className="w-[200px]">
+                      <SortButton field="next_action_date">Next Action</SortButton>
+                    </TableHead>
+                  </>
+                )}
                 <TableHead className="w-[80px]">Links</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={readOnly ? 4 : 6} className="text-center py-8 text-muted-foreground">
                     {leads.length === 0
                       ? isArchiveView 
                         ? 'No archived leads yet.'
@@ -515,30 +522,34 @@ export function OutreachTable({
                         <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Select
-                        value={lead.status}
-                        onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
-                      >
-                        <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
-                          <OutreachStatusBadge status={lead.status} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {STATUS_OPTIONS.map((opt) => (
-                            <SelectItem key={opt.value} value={opt.value}>
-                              {opt.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell colSpan={2} onClick={(e) => e.stopPropagation()}>
-                      <NextActionEditor
-                        action={lead.next_action}
-                        date={lead.next_action_date}
-                        onUpdate={(action, date) => onNextActionChange(lead.id, action, date)}
-                      />
-                    </TableCell>
+                    {!readOnly && (
+                      <>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Select
+                            value={lead.status}
+                            onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
+                          >
+                            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+                              <OutreachStatusBadge status={lead.status} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STATUS_OPTIONS.map((opt) => (
+                                <SelectItem key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell colSpan={2} onClick={(e) => e.stopPropagation()}>
+                          <NextActionEditor
+                            action={lead.next_action}
+                            date={lead.next_action_date}
+                            onUpdate={(action, date) => onNextActionChange(lead.id, action, date)}
+                          />
+                        </TableCell>
+                      </>
+                    )}
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       {lead.google_maps_url && (
                         <a

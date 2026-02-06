@@ -22,7 +22,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Archive,
-  Briefcase
+  Briefcase,
+  DollarSign
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -57,6 +58,12 @@ const navItems = [
     url: '/potential-work', 
     icon: Briefcase,
     description: 'Interested leads'
+  },
+  { 
+    title: 'Paid Clients', 
+    url: '/paid-clients', 
+    icon: DollarSign,
+    description: 'Completed payments'
   },
   { 
     title: 'Templates', 
