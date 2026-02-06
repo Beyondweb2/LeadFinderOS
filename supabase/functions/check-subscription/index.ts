@@ -24,24 +24,49 @@
      if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
      logStep("Stripe key verified");
  
-      // Create a user-context client to validate the token
+      // Validate the token using a service-role client (do NOT rely on cookie-based sessions)
       const authHeader = req.headers.get("Authorization");
-      if (!authHeader) throw new Error("No authorization header provided");
+      if (!authHeader) {
+        logStep("No authorization header provided, returning unsubscribed state");
+        return new Response(JSON.stringify({ subscribed: false }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
       logStep("Authorization header found");
+
+      const token = authHeader.replace("Bearer ", "").trim();
+      if (!token) {
+        logStep("Empty bearer token, returning unsubscribed state");
+        return new Response(JSON.stringify({ subscribed: false }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
 
       const supabaseClient = createClient(
         Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
-        { 
-          global: { headers: { Authorization: authHeader } },
-          auth: { persistSession: false } 
-        }
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+        { auth: { persistSession: false } }
       );
 
-      const { data: userData, error: userError } = await supabaseClient.auth.getUser();
-      if (userError) throw new Error(`Authentication error: ${userError.message}`);
+      const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
+      if (userError) {
+        logStep("Authentication failed, returning unsubscribed state", { message: userError.message });
+        return new Response(JSON.stringify({ subscribed: false }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
       const user = userData.user;
-      if (!user?.email) throw new Error("User not authenticated or email not available");
+      if (!user?.email) {
+        logStep("No user email, returning unsubscribed state");
+        return new Response(JSON.stringify({ subscribed: false }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
       logStep("User authenticated", { userId: user.id, email: user.email });
  
      const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
