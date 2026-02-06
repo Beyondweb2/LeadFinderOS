@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 const STORAGE_KEY = 'leadfinder-accent';
-const DEFAULT_ACCENT = '173 80% 45%';
+const DEFAULT_ACCENT = '210 100% 50%'; // Electric Blue - brand default
 
 function parseHSL(hsl: string): { h: number; s: number; l: number } {
   const parts = hsl.split(' ');
