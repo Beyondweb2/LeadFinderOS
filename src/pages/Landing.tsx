@@ -263,7 +263,8 @@ const Landing = () => {
           <h1 className="text-[2rem] leading-[1.15] sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight px-2 sm:px-0">
             <span className="text-gradient-subtle">Find Businesses</span>
             <br />
-            <span className="text-gradient-primary">Without Websites</span>
+            <span className="text-gradient-subtle">Without </span>
+            <span className="text-gradient-purple">Websites</span>
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-6 sm:mb-10 leading-relaxed px-4 sm:px-2">
