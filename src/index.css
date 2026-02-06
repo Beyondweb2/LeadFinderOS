@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    /* Dark futuristic theme - black + deep blue + cyan */
+    /* Dark futuristic theme - black + deep blue */
     --background: 222 47% 4%;
     --foreground: 210 40% 98%;
 
@@ -16,8 +16,8 @@
     --popover: 220 40% 8%;
     --popover-foreground: 210 40% 98%;
 
-    /* Cyan accent - futuristic tech feel */
-    --primary: 195 100% 50%;
+    /* Blue accent - futuristic tech feel */
+    --primary: 210 100% 50%;
     --primary-foreground: 220 40% 4%;
 
     --secondary: 220 40% 10%;
@@ -26,7 +26,7 @@
     --muted: 220 40% 8%;
     --muted-foreground: 215 20% 50%;
 
-    --accent: 200 80% 45%;
+    --accent: 210 80% 45%;
     --accent-foreground: 210 40% 98%;
 
     --destructive: 0 72% 55%;
@@ -34,7 +34,7 @@
 
     --border: 220 30% 12%;
     --input: 220 30% 10%;
-    --ring: 195 100% 50%;
+    --ring: 210 100% 50%;
 
     --radius: 0.625rem;
 
@@ -48,28 +48,28 @@
     --status-uncertain: 215 20% 45%;
     --status-uncertain-foreground: 0 0% 100%;
 
-    /* Cyan/blue gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(195 100% 50%), hsl(210 100% 45%));
+    /* Blue gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(210 100% 50%), hsl(220 100% 45%));
     --gradient-card: linear-gradient(180deg, hsl(220 40% 8%), hsl(220 40% 5%));
-    --gradient-glow: radial-gradient(ellipse at center, hsl(195 100% 50% / 0.15), transparent 70%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(210 100% 50% / 0.15), transparent 70%);
     --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(210 100% 50% / 0.20), transparent 60%);
 
-    /* Shadows with cyan glow */
+    /* Shadows with blue glow */
     --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.4);
     --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.5);
     --shadow-lg: 0 10px 40px hsl(0 0% 0% / 0.6);
-    --shadow-glow: 0 0 20px hsl(195 100% 50% / 0.25), 0 0 40px hsl(195 100% 50% / 0.1);
-    --shadow-glow-lg: 0 0 60px hsl(195 100% 50% / 0.2), 0 0 120px hsl(210 100% 50% / 0.1);
+    --shadow-glow: 0 0 20px hsl(210 100% 50% / 0.25), 0 0 40px hsl(210 100% 50% / 0.1);
+    --shadow-glow-lg: 0 0 60px hsl(210 100% 50% / 0.2), 0 0 120px hsl(210 100% 50% / 0.1);
 
     /* Sidebar - keeping for shadcn compatibility */
     --sidebar-background: 220 40% 6%;
     --sidebar-foreground: 210 40% 95%;
-    --sidebar-primary: 195 100% 50%;
+    --sidebar-primary: 210 100% 50%;
     --sidebar-primary-foreground: 220 40% 4%;
     --sidebar-accent: 220 40% 10%;
     --sidebar-accent-foreground: 210 40% 98%;
     --sidebar-border: 220 30% 12%;
-    --sidebar-ring: 195 100% 50%;
+    --sidebar-ring: 210 100% 50%;
   }
 }
 

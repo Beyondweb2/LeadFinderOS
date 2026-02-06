@@ -130,11 +130,11 @@ const Landing = () => {
             background: 'radial-gradient(ellipse 120% 80% at 50% -30%, hsl(210 100% 15% / 0.5), transparent 60%)',
           }}
         />
-        {/* Cyan accent glow - top center */}
+        {/* Blue accent glow - top center */}
         <div 
           className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[600px]"
           style={{ 
-            background: 'radial-gradient(ellipse 100% 70% at 50% 0%, hsl(195 100% 50% / 0.08), transparent 70%)',
+            background: 'radial-gradient(ellipse 100% 70% at 50% 0%, hsl(210 100% 50% / 0.08), transparent 70%)',
           }}
         />
         {/* Subtle blue glow - bottom right */}
@@ -156,11 +156,11 @@ const Landing = () => {
         />
         <div 
           className="absolute top-[40%] right-[10%] w-[500px] h-[500px] rounded-full blur-[160px] animate-float opacity-30"
-          style={{ background: 'hsl(195 100% 50% / 0.06)', animationDelay: '-4s' }}
+          style={{ background: 'hsl(210 100% 50% / 0.06)', animationDelay: '-4s' }}
         />
         <div 
           className="absolute bottom-[10%] left-[30%] w-[400px] h-[400px] rounded-full blur-[140px] animate-float opacity-25"
-          style={{ background: 'hsl(200 100% 45% / 0.05)', animationDelay: '-2s' }}
+          style={{ background: 'hsl(210 100% 45% / 0.05)', animationDelay: '-2s' }}
         />
       </div>
 
