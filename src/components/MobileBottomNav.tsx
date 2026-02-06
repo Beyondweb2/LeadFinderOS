@@ -4,7 +4,7 @@ import {
   Search, 
   ClipboardList, 
   FileText,
-  Archive,
+  MessageSquare,
   Briefcase,
   DollarSign,
   MoreHorizontal,
@@ -26,7 +26,7 @@ const mainNavItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Search', url: '/', icon: Search },
   { title: 'CRM', url: '/outreach', icon: ClipboardList },
-  { title: 'Archive', url: '/archive', icon: Archive },
+  { title: 'Texted', url: '/archive', icon: MessageSquare },
 ];
 
 const moreNavItems = [

@@ -31,12 +31,12 @@ const Index = () => {
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const hasRunAutoSearch = useRef(false);
 
-  // Auto-search for first-time users
+  // Auto-search for first-time users (doesn't count toward trial limit)
   useEffect(() => {
     if (hasCheckedFirstTime && isFirstTime && !hasRunAutoSearch.current && !isLoading) {
       hasRunAutoSearch.current = true;
       
-      // Run automatic search with defaults
+      // Run automatic search with defaults - skip trial count since this is a demo
       search({
         keyword: 'Electrician',
         location: 'London, UK',
@@ -44,7 +44,7 @@ const Index = () => {
         requirePhone: true,
         country: 'UK' as Country,
         deepSearch: false,
-      });
+      }, true); // skipTrialCount = true for auto-search
       
       // Mark first login as complete
       markFirstLoginComplete();

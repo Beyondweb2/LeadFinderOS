@@ -20,7 +20,7 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  Archive,
+  MessageSquare,
   Briefcase,
   DollarSign
 } from 'lucide-react';
@@ -45,13 +45,13 @@ const navItems = [
     title: 'Outreach CRM', 
     url: '/outreach', 
     icon: ClipboardList,
-    description: 'Manage your pipeline'
+    description: 'Copy numbers & send texts'
   },
   { 
-    title: 'Archive', 
+    title: 'Texted', 
     url: '/archive', 
-    icon: Archive,
-    description: 'Archived businesses'
+    icon: MessageSquare,
+    description: 'Businesses you\'ve messaged'
   },
   { 
     title: 'Potential Work', 

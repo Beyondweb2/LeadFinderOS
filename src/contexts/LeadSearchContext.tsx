@@ -17,7 +17,7 @@ interface TrialLimitError {
 interface LeadSearchContextType {
   leads: Lead[];
   isLoading: boolean;
-  search: (filters: SearchFilters) => Promise<void>;
+  search: (filters: SearchFilters, skipTrialCount?: boolean) => Promise<void>;
   exportToCsv: () => void;
   trialLimitError: TrialLimitError | null;
   clearTrialLimitError: () => void;
@@ -88,7 +88,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     });
   };
 
-  const search = useCallback(async (filters: SearchFilters) => {
+  const search = useCallback(async (filters: SearchFilters, skipTrialCount: boolean = false) => {
     setIsLoading(true);
     setTrialLimitError(null);
     
@@ -97,7 +97,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     
     try {
       const { data, error } = await supabase.functions.invoke<SearchResponse>('search-leads', {
-        body: filters,
+        body: { ...filters, skipTrialCount },
       });
 
       if (error) {
