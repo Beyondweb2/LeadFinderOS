@@ -64,37 +64,40 @@ const PRICING_FEATURES = [
 const Landing = () => {
   return (
     <div className="min-h-screen bg-background overflow-hidden">
-      {/* Global background effects */}
+      {/* Smooth background effects */}
       <div className="fixed inset-0 pointer-events-none">
-        {/* Hero gradient glow */}
+        {/* Hero gradient glow - smoother and softer */}
         <div 
-          className="absolute top-0 left-1/2 -translate-x-1/2 w-[150%] h-[600px]"
-          style={{ background: 'var(--gradient-hero)' }}
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[200%] h-[800px]"
+          style={{ 
+            background: 'radial-gradient(ellipse 100% 60% at 50% -10%, hsl(173 80% 45% / 0.18), transparent 70%)',
+          }}
         />
-        {/* Grid pattern overlay */}
-        <div className="absolute inset-0 bg-grid-pattern opacity-40" />
-        {/* Noise texture */}
-        <div className="absolute inset-0 bg-noise" />
-        {/* Bottom section glow */}
+        {/* Subtle ambient glow - bottom right */}
         <div 
-          className="absolute bottom-0 right-0 w-[80%] h-[600px]"
-          style={{ background: 'var(--gradient-section)' }}
+          className="absolute bottom-0 right-0 w-full h-[500px]"
+          style={{ 
+            background: 'radial-gradient(ellipse 80% 60% at 70% 100%, hsl(173 80% 45% / 0.06), transparent 60%)',
+          }}
+        />
+        {/* Subtle ambient glow - left side */}
+        <div 
+          className="absolute top-1/3 left-0 w-[600px] h-[600px]"
+          style={{ 
+            background: 'radial-gradient(circle at center, hsl(173 80% 45% / 0.04), transparent 60%)',
+          }}
         />
       </div>
 
-      {/* Floating orbs for visual interest */}
+      {/* Soft floating orbs */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden">
         <div 
-          className="absolute top-20 left-[10%] w-72 h-72 rounded-full blur-[100px] animate-float"
-          style={{ background: 'hsl(173 80% 45% / 0.1)' }}
+          className="absolute top-20 left-[10%] w-[500px] h-[500px] rounded-full blur-[150px] animate-float"
+          style={{ background: 'hsl(173 80% 45% / 0.06)' }}
         />
         <div 
-          className="absolute top-[60%] right-[5%] w-96 h-96 rounded-full blur-[120px] animate-float"
-          style={{ background: 'hsl(173 80% 45% / 0.08)', animationDelay: '-3s' }}
-        />
-        <div 
-          className="absolute bottom-20 left-[20%] w-64 h-64 rounded-full blur-[80px] animate-float"
-          style={{ background: 'hsl(200 80% 50% / 0.05)', animationDelay: '-1.5s' }}
+          className="absolute top-[50%] right-[5%] w-[600px] h-[600px] rounded-full blur-[180px] animate-float"
+          style={{ background: 'hsl(173 80% 45% / 0.05)', animationDelay: '-3s' }}
         />
       </div>
 
@@ -314,26 +317,39 @@ const Landing = () => {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-border/50 py-12 mt-12">
-        <div className="container mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-lg bg-primary/10 border border-primary/20">
-              <Target className="h-4 w-4 text-primary" />
+        <div className="container mx-auto px-4">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-6">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-primary/10 border border-primary/20">
+                <Target className="h-4 w-4 text-primary" />
+              </div>
+              <span className="font-semibold">
+                Lead<span className="text-gradient-primary">Finder</span> Pro
+              </span>
             </div>
-            <span className="font-semibold">
-              Lead<span className="text-gradient-primary">Finder</span> Pro
-            </span>
+            <div className="flex items-center gap-6 text-sm text-muted-foreground">
+              <Link to="/auth" className="hover:text-foreground transition-colors">
+                Sign In
+              </Link>
+              <Link to="/auth" className="hover:text-foreground transition-colors">
+                Get Started
+              </Link>
+              <Link to="/terms" className="hover:text-foreground transition-colors">
+                Terms & Conditions
+              </Link>
+            </div>
           </div>
-          <div className="flex items-center gap-6 text-sm text-muted-foreground">
-            <Link to="/auth" className="hover:text-foreground transition-colors">
-              Sign In
-            </Link>
-            <Link to="/auth" className="hover:text-foreground transition-colors">
-              Get Started
-            </Link>
+          {/* Disclaimer + Copyright */}
+          <div className="border-t border-border/30 pt-6 text-center space-y-2">
+            <p className="text-xs text-muted-foreground/70 max-w-2xl mx-auto">
+              Disclaimer: LeadFinder Pro uses AI classification and third-party data sources. 
+              Results are not guaranteed to be 100% accurate and may contain errors. 
+              Please verify business information independently before taking action.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              © {new Date().getFullYear()} LeadFinder Pro. All rights reserved.
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground">
-            © {new Date().getFullYear()} LeadFinder Pro. All rights reserved.
-          </p>
         </div>
       </footer>
     </div>

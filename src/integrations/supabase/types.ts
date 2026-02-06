@@ -38,6 +38,27 @@ export type Database = {
         }
         Relationships: []
       }
+      copied_phones: {
+        Row: {
+          copied_at: string
+          id: string
+          lead_id: string
+          user_id: string
+        }
+        Insert: {
+          copied_at?: string
+          id?: string
+          lead_id: string
+          user_id: string
+        }
+        Update: {
+          copied_at?: string
+          id?: string
+          lead_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       lead_contacts: {
         Row: {
           contacted_at: string

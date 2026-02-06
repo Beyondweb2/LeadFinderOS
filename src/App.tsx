@@ -21,6 +21,7 @@ import PotentialWorkPage from "./pages/PotentialWork";
 import PaidClientsPage from "./pages/PaidClients";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 import Landing from "./pages/Landing";
+import Terms from "./pages/Terms";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -59,6 +60,7 @@ const App = () => (
                 </PublicRoute>
               } 
              />
+             <Route path="/terms" element={<Terms />} />
             <Route 
               path="/" 
               element={
