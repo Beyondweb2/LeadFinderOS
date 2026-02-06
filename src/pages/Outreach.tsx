@@ -34,8 +34,8 @@ const Outreach = () => {
       {/* Page Header */}
       <div className="text-center sm:text-left">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">
-          Manage your lead pipeline
+        <p className="text-sm sm:text-base text-muted-foreground max-w-lg">
+          Copy phone numbers for your bulk message sender. Once you've copied numbers, send them to Archive to track responses.
         </p>
       </div>
 

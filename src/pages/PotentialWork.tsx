@@ -330,8 +330,8 @@ const PotentialWorkPage = () => {
           <Briefcase className="h-6 w-6" />
           Potential Work
         </h1>
-        <p className="text-muted-foreground">
-          Manage interested leads through your sales pipeline
+        <p className="text-muted-foreground max-w-lg">
+          Track potential clients who've responded to your outreach. Manage their status through your sales pipeline from interested to completed.
         </p>
       </div>
 
