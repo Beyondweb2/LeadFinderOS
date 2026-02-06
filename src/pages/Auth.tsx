@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
 import appLogo from '@/assets/logo.png';
 
 const authSchema = z.object({
@@ -20,11 +21,43 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRedirectingToCheckout, setIsRedirectingToCheckout] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   
   const { signIn, signUp, user, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Helper to redirect new signups to Stripe checkout
+  const redirectToCheckout = async () => {
+    try {
+      setIsRedirectingToCheckout(true);
+      
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (!sessionData?.session?.access_token) {
+        throw new Error('No session available');
+      }
+
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        headers: {
+          Authorization: `Bearer ${sessionData.session.access_token}`,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    } catch (err) {
+      console.error('Checkout redirect failed:', err);
+      setIsRedirectingToCheckout(false);
+      toast({
+        title: 'Error',
+        description: 'Failed to start checkout. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -97,8 +130,11 @@ const Auth = () => {
         } else {
           toast({
             title: 'Account created!',
-            description: 'You have been signed in automatically.',
+            description: 'Redirecting to start your free trial...',
           });
+          // Redirect to Stripe checkout for card details and trial
+          await redirectToCheckout();
+          return; // Don't set isSubmitting to false - we're redirecting
         }
       }
     } finally {
@@ -106,10 +142,13 @@ const Auth = () => {
     }
   };
 
-  if (isLoading) {
+  if (isLoading || isRedirectingToCheckout) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {isRedirectingToCheckout && (
+          <p className="text-sm text-muted-foreground">Setting up your free trial...</p>
+        )}
       </div>
     );
   }
@@ -133,8 +172,14 @@ const Auth = () => {
           <CardDescription>
             {isLogin 
               ? 'Sign in to find businesses without websites' 
-              : 'Create an account to start finding leads'}
+              : 'Start your 7-day free trial — no charge today'}
           </CardDescription>
+          {!isLogin && (
+            <div className="flex items-center justify-center gap-2 mt-2 text-xs text-muted-foreground">
+              <CreditCard className="h-3.5 w-3.5" />
+              <span>Card required to start trial</span>
+            </div>
+          )}
         </CardHeader>
         
         <form onSubmit={handleSubmit}>
