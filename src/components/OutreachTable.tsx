@@ -30,9 +30,11 @@ import {
   Trash2,
   Copy,
   Archive,
-  ArchiveRestore
+  ArchiveRestore,
+  CheckCheck
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useCopiedPhones } from '@/hooks/useCopiedPhones';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
 import type { OutreachLead, LeadStatus, NextActionType, Country } from '@/types/outreach';
@@ -70,6 +72,7 @@ export function OutreachTable({
   readOnly = false,
 }: OutreachTableProps) {
   const { toast } = useToast();
+  const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
   const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
@@ -98,9 +101,11 @@ export function OutreachTable({
   };
 
   // Copy selected phones in bulk format: "447477932564, 447477932565"
-  const copySelectedPhones = () => {
-    const phones = filteredAndSortedLeads
-      .filter(l => selectedIds.has(l.id) && l.phone)
+  const copySelectedPhones = async () => {
+    const leadsWithPhones = filteredAndSortedLeads
+      .filter(l => selectedIds.has(l.id) && l.phone);
+    
+    const phones = leadsWithPhones
       .map(l => l.phone!.replace(/\D/g, '').replace(/^\+/, ''))
       .filter(p => p.length > 0);
     
@@ -114,6 +119,11 @@ export function OutreachTable({
     }
     
     navigator.clipboard.writeText(phones.join(', '));
+    
+    // Mark all as copied in backend
+    const leadIds = leadsWithPhones.map(l => l.id);
+    await markMultipleAsCopied(leadIds);
+    
     toast({
       title: 'Copied!',
       description: `${phones.length} phone numbers copied in bulk format.`,
@@ -510,14 +520,21 @@ export function OutreachTable({
                     </TableCell>
                     <TableCell>
                       {lead.phone ? (
-                        <a
-                          href={`tel:${lead.phone}`}
-                          className="text-primary hover:underline flex items-center gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Phone className="h-3 w-3" />
-                          {lead.phone}
-                        </a>
+                        <div className="flex items-center gap-1">
+                          <a
+                            href={`tel:${lead.phone}`}
+                            className="text-primary hover:underline flex items-center gap-1"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Phone className="h-3 w-3" />
+                            {lead.phone}
+                          </a>
+                          {isPhoneCopied(lead.id) && (
+                            <span title="Copied">
+                              <CheckCheck className="h-3.5 w-3.5 text-primary ml-1" />
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}

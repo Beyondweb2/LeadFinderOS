@@ -57,9 +57,18 @@ export function useLeadSearch() {
 
       if (error) {
         console.error('Search error:', error);
+        
+        // Check for network/connection errors
+        const errorMessage = error.message?.toLowerCase() || '';
+        const isNetworkError = errorMessage.includes('failed to send') || 
+                               errorMessage.includes('network') ||
+                               errorMessage.includes('fetch');
+        
         toast({
           title: 'Search failed',
-          description: error.message || 'Failed to search for businesses. Please try again.',
+          description: isNetworkError 
+            ? 'Network error - please check your connection and try again.'
+            : (error.message || 'Failed to search for businesses. Please try again.'),
           variant: 'destructive',
         });
         return;
@@ -77,7 +86,7 @@ export function useLeadSearch() {
       console.error('Search error:', err);
       toast({
         title: 'Search failed',
-        description: 'An unexpected error occurred. Please try again.',
+        description: 'Connection error - please check your internet and try again.',
         variant: 'destructive',
       });
     } finally {

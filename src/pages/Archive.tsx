@@ -1,14 +1,35 @@
- import { useState, useMemo } from 'react';
- import { useOutreach } from '@/hooks/useOutreach';
- import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
- import { Input } from '@/components/ui/input';
- import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
- import { Button } from '@/components/ui/button';
- import { Search, Archive, Phone, MapPin, ExternalLink, Star, Loader2, PhoneCall } from 'lucide-react';
- import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
- import { OutreachStatusBadge } from '@/components/OutreachStatusBadge';
- import type { OutreachLead } from '@/types/outreach';
- 
+import { useState, useMemo } from 'react';
+import { useOutreach } from '@/hooks/useOutreach';
+import { useCopiedPhones } from '@/hooks/useCopiedPhones';
+import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { 
+  Search, 
+  Archive, 
+  Phone, 
+  MapPin, 
+  ExternalLink, 
+  Star, 
+  Loader2, 
+  PhoneCall, 
+  Copy,
+  CheckCheck 
+} from 'lucide-react';
+import { 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableHead, 
+  TableHeader, 
+  TableRow 
+} from '@/components/ui/table';
+import { OutreachStatusBadge } from '@/components/OutreachStatusBadge';
+import { useToast } from '@/hooks/use-toast';
+import type { OutreachLead } from '@/types/outreach';
+
 const ITEMS_PER_PAGE = 50;
 
 const ArchivePage = () => {
@@ -24,10 +45,14 @@ const ArchivePage = () => {
     bulkLookupPhones,
   } = useOutreach();
 
+  const { isPhoneCopied, markAsCopied, markMultipleAsCopied } = useCopiedPhones();
+  const { toast } = useToast();
+
   const [phoneQuery, setPhoneQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
  
   // Count leads missing phone numbers
   const missingPhoneCount = useMemo(() => 
@@ -58,6 +83,101 @@ const ArchivePage = () => {
   const endIndex = startIndex + ITEMS_PER_PAGE;
   const paginatedLeads = filteredLeads.slice(startIndex, endIndex);
 
+  // Selection handlers
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredLeads.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredLeads.map(l => l.id)));
+    }
+  };
+
+  const handleSelectOne = (leadId: string, checked: boolean) => {
+    const newSet = new Set(selectedIds);
+    if (checked) {
+      newSet.add(leadId);
+    } else {
+      newSet.delete(leadId);
+    }
+    setSelectedIds(newSet);
+  };
+
+  // Copy selected phones in bulk format: "447477932564, 447477932565"
+  const copySelectedPhones = async () => {
+    const leadsWithPhones = filteredLeads
+      .filter(l => selectedIds.has(l.id) && l.phone);
+    
+    const phones = leadsWithPhones
+      .map(l => l.phone!.replace(/\D/g, '').replace(/^\+/, ''))
+      .filter(p => p.length > 0);
+    
+    if (phones.length === 0) {
+      toast({
+        title: 'No phone numbers',
+        description: 'No phone numbers found in selected leads.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    navigator.clipboard.writeText(phones.join(', '));
+    
+    // Mark all as copied
+    const leadIds = leadsWithPhones.map(l => l.id);
+    await markMultipleAsCopied(leadIds);
+    
+    toast({
+      title: 'Copied!',
+      description: `${phones.length} phone numbers copied in bulk format.`,
+    });
+  };
+
+  // Copy all filtered phones
+  const copyAllFilteredPhones = async () => {
+    const leadsWithPhones = filteredLeads.filter(l => l.phone);
+    
+    const phones = leadsWithPhones
+      .map(l => l.phone!.replace(/\D/g, '').replace(/^\+/, ''))
+      .filter(p => p.length > 0);
+    
+    if (phones.length === 0) {
+      toast({
+        title: 'No phone numbers',
+        description: 'No phone numbers found in filtered leads.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    navigator.clipboard.writeText(phones.join(', '));
+    
+    // Mark all as copied
+    const leadIds = leadsWithPhones.map(l => l.id);
+    await markMultipleAsCopied(leadIds);
+    
+    toast({
+      title: 'Copied!',
+      description: `${phones.length} phone numbers copied in bulk format.`,
+    });
+  };
+
+  // Copy single phone
+  const copySinglePhone = async (lead: OutreachLead, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!lead.phone) return;
+    
+    const phone = lead.phone.replace(/\D/g, '').replace(/^\+/, '');
+    navigator.clipboard.writeText(phone);
+    
+    await markAsCopied(lead.id);
+    
+    toast({
+      title: 'Copied!',
+      description: `Phone number copied.`,
+    });
+  };
+
   const handleMarkInterested = async (lead: OutreachLead) => {
     await updateStatus(lead.id, 'interested');
     await unarchiveLead(lead.id);
@@ -70,12 +190,10 @@ const ArchivePage = () => {
       
       // Process in batches of 50 (API limit)
       const batchSize = 50;
-      let totalUpdated = 0;
       
       for (let i = 0; i < missingIds.length; i += batchSize) {
         const batch = missingIds.slice(i, i + batchSize);
-        const result = await bulkLookupPhones(batch);
-        totalUpdated += result.updated;
+        await bulkLookupPhones(batch);
         
         // Small delay between batches
         if (i + batchSize < missingIds.length) {
@@ -113,28 +231,50 @@ const ArchivePage = () => {
        {/* Search Bar */}
        <Card className="bg-card/50 border-border/50">
          <CardHeader className="pb-3">
-           <div className="flex items-center justify-between">
+           <div className="flex items-center justify-between flex-wrap gap-3">
              <CardTitle className="text-base">Search by Phone</CardTitle>
-             {missingPhoneCount > 0 && (
+             <div className="flex items-center gap-2">
+               {selectedIds.size > 0 && (
+                 <Button
+                   variant="default"
+                   size="sm"
+                   onClick={copySelectedPhones}
+                   className="bg-primary"
+                 >
+                   <Copy className="h-4 w-4 mr-2" />
+                   Copy {selectedIds.size} Phones
+                 </Button>
+               )}
                <Button
                  variant="outline"
                  size="sm"
-                 onClick={handleBulkLookup}
-                 disabled={isLookingUp}
+                 onClick={copyAllFilteredPhones}
+                 disabled={filteredLeads.filter(l => l.phone).length === 0}
                >
-                 {isLookingUp ? (
-                   <>
-                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                     Looking up...
-                   </>
-                 ) : (
-                   <>
-                     <PhoneCall className="mr-2 h-4 w-4" />
-                     Lookup {missingPhoneCount} Missing Phones
-                   </>
-                 )}
+                 <Copy className="h-4 w-4 mr-2" />
+                 Copy All Filtered ({filteredLeads.filter(l => l.phone).length})
                </Button>
-             )}
+               {missingPhoneCount > 0 && (
+                 <Button
+                   variant="outline"
+                   size="sm"
+                   onClick={handleBulkLookup}
+                   disabled={isLookingUp}
+                 >
+                   {isLookingUp ? (
+                     <>
+                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                       Looking up...
+                     </>
+                   ) : (
+                     <>
+                       <PhoneCall className="mr-2 h-4 w-4" />
+                       Lookup {missingPhoneCount} Missing
+                     </>
+                   )}
+                 </Button>
+               )}
+             </div>
            </div>
          </CardHeader>
          <CardContent>
@@ -152,6 +292,11 @@ const ArchivePage = () => {
                Showing {filteredLeads.length} of {archivedLeads.length} archived leads
              </p>
            )}
+           {selectedIds.size > 0 && (
+             <p className="mt-2 text-sm text-primary">
+               {selectedIds.size} selected
+             </p>
+           )}
          </CardContent>
        </Card>
  
@@ -162,8 +307,15 @@ const ArchivePage = () => {
              <Table>
                <TableHeader>
                  <TableRow className="border-border/50">
+                   <TableHead className="w-[50px]">
+                     <Checkbox
+                       checked={selectedIds.size === filteredLeads.length && filteredLeads.length > 0}
+                       onCheckedChange={handleSelectAll}
+                       aria-label="Select all"
+                     />
+                   </TableHead>
                    <TableHead className="w-[250px]">Business</TableHead>
-                   <TableHead className="w-[150px]">Phone</TableHead>
+                   <TableHead className="w-[180px]">Phone</TableHead>
                    <TableHead className="w-[200px]">Address</TableHead>
                    <TableHead className="w-[120px]">Status</TableHead>
                    <TableHead className="w-[150px]">Actions</TableHead>
@@ -172,86 +324,115 @@ const ArchivePage = () => {
                <TableBody>
                   {paginatedLeads.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                      <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                         {phoneQuery ? 'No archived leads match this phone number.' : 'No archived leads yet.'}
                       </TableCell>
                     </TableRow>
                   ) : (
-                    paginatedLeads.map((lead) => (
-                     <TableRow
-                       key={lead.id}
-                       className="border-border/50 hover:bg-muted/30 cursor-pointer"
-                       onClick={() => setSelectedLead(lead)}
-                     >
-                       <TableCell>
-                         <div className="flex flex-col">
-                           <span className="font-medium truncate max-w-[230px]">
-                             {lead.business_name}
-                           </span>
-                           {lead.category && (
-                             <span className="text-xs text-muted-foreground truncate">
-                               {lead.category}
-                             </span>
-                           )}
-                         </div>
-                       </TableCell>
-                       <TableCell>
-                         {lead.phone ? (
-                           <div className="flex items-center gap-1">
-                             <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                             <span className="font-mono text-sm">{lead.phone}</span>
-                           </div>
-                         ) : (
-                           <span className="text-muted-foreground">—</span>
-                         )}
-                       </TableCell>
-                       <TableCell>
-                         {lead.address ? (
-                           <div className="flex items-center gap-1">
-                             <MapPin className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                             <span className="truncate max-w-[180px] text-muted-foreground text-sm">
-                               {lead.address}
-                             </span>
-                           </div>
-                         ) : (
-                           <span className="text-muted-foreground">—</span>
-                         )}
-                       </TableCell>
-                       <TableCell>
-                         <OutreachStatusBadge status={lead.status} />
-                       </TableCell>
-                       <TableCell>
-                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                           <Button
-                             variant="default"
-                             size="sm"
-                             onClick={() => handleMarkInterested(lead)}
-                            className="bg-primary hover:bg-primary/90"
-                           >
-                             <Star className="h-3.5 w-3.5 mr-1" />
-                             Interested
-                           </Button>
-                           {lead.google_maps_url && (
-                             <Button
-                               variant="ghost"
-                               size="icon"
-                               className="h-8 w-8"
-                               asChild
-                             >
-                               <a
-                                 href={lead.google_maps_url}
-                                 target="_blank"
-                                 rel="noopener noreferrer"
-                               >
-                                 <ExternalLink className="h-4 w-4" />
-                               </a>
-                             </Button>
-                           )}
-                         </div>
-                       </TableCell>
-                     </TableRow>
-                   ))
-                 )}
+                    paginatedLeads.map((lead) => {
+                      const phoneCopied = isPhoneCopied(lead.id);
+                      
+                      return (
+                        <TableRow
+                          key={lead.id}
+                          className="border-border/50 hover:bg-muted/30 cursor-pointer"
+                          onClick={() => setSelectedLead(lead)}
+                        >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Checkbox
+                              checked={selectedIds.has(lead.id)}
+                              onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
+                              aria-label={`Select ${lead.business_name}`}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-col">
+                              <span className="font-medium truncate max-w-[230px]">
+                                {lead.business_name}
+                              </span>
+                              {lead.category && (
+                                <span className="text-xs text-muted-foreground truncate">
+                                  {lead.category}
+                                </span>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            {lead.phone ? (
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1">
+                                  <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                                  <span className="font-mono text-sm">{lead.phone}</span>
+                                </div>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7"
+                                  onClick={(e) => copySinglePhone(lead, e)}
+                                  title={phoneCopied ? 'Already copied' : 'Copy phone number'}
+                                >
+                                  {phoneCopied ? (
+                                    <CheckCheck className="h-3.5 w-3.5 text-primary" />
+                                  ) : (
+                                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                                  )}
+                                </Button>
+                                {phoneCopied && (
+                                  <span className="text-xs text-primary">Copied</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {lead.address ? (
+                              <div className="flex items-center gap-1">
+                                <MapPin className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                                <span className="truncate max-w-[180px] text-muted-foreground text-sm">
+                                  {lead.address}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <OutreachStatusBadge status={lead.status} />
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => handleMarkInterested(lead)}
+                               className="bg-primary hover:bg-primary/90"
+                              >
+                                <Star className="h-3.5 w-3.5 mr-1" />
+                                Interested
+                              </Button>
+                              {lead.google_maps_url && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  asChild
+                                >
+                                  <a
+                                    href={lead.google_maps_url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <ExternalLink className="h-4 w-4" />
+                                  </a>
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  )}
                </TableBody>
              </Table>
             </div>
