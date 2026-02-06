@@ -33,6 +33,8 @@ const SearchRequestSchema = z.object({
     .min(0, 'Review count cannot be negative')
     .max(10000, 'Review count limit is 10000')
     .default(2), // Default to 2 minimum reviews to filter out inactive businesses
+  skipTrialCount: z.boolean()
+    .default(false), // Skip counting this search toward trial limit (for auto-demo searches)
   requirePhone: z.boolean()
     .default(true), // Default to requiring a phone number
   deepSearch: z.boolean()
@@ -623,9 +625,18 @@ serve(async (req) => {
             const shouldResetDaily = lastSearchDate !== today;
             const currentSearchesToday = shouldResetDaily ? 0 : trial.searches_today;
             
-            // Check daily limit for trial users (3 searches per day)
+            // Parse body to check for skipTrialCount flag (for auto-demo searches)
+            let skipTrialCount = false;
+            try {
+              const bodyClone = await req.clone().json();
+              skipTrialCount = bodyClone.skipTrialCount === true;
+            } catch {
+              // Ignore parsing errors
+            }
+            
+            // Check daily limit for trial users (3 searches per day) - unless skipping for demo
             const DAILY_TRIAL_LIMIT = 3;
-            if (currentSearchesToday >= DAILY_TRIAL_LIMIT) {
+            if (!skipTrialCount && currentSearchesToday >= DAILY_TRIAL_LIMIT) {
               console.log(`User ${userId} has reached daily trial limit (${currentSearchesToday}/${DAILY_TRIAL_LIMIT})`);
               return new Response(
                 JSON.stringify({ 
@@ -640,17 +651,21 @@ serve(async (req) => {
             
             isOnTrial = true;
             const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            console.log(`User ${userId} is on trial (${daysLeft} days remaining, ${currentSearchesToday + 1}/${DAILY_TRIAL_LIMIT} searches today)`);
             
-            // Increment search counts
-            await serviceClient
-              .from('user_trials')
-              .update({ 
-                searches_used: trial.searches_used + 1,
-                searches_today: currentSearchesToday + 1,
-                last_search_date: today
-              })
-              .eq('user_id', userId);
+            // Only increment search counts if not skipping for demo
+            if (!skipTrialCount) {
+              console.log(`User ${userId} is on trial (${daysLeft} days remaining, ${currentSearchesToday + 1}/${DAILY_TRIAL_LIMIT} searches today)`);
+              await serviceClient
+                .from('user_trials')
+                .update({ 
+                  searches_used: trial.searches_used + 1,
+                  searches_today: currentSearchesToday + 1,
+                  last_search_date: today
+                })
+                .eq('user_id', userId);
+            } else {
+              console.log(`User ${userId} is on trial - demo search (not counted toward limit)`);
+            }
           } else {
             console.log(`User ${userId} trial has expired`);
             // Update plan_status to expired if needed

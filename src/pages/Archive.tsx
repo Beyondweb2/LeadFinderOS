@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
   Search, 
-  Archive, 
+  MessageSquare, 
   Phone, 
   MapPin, 
   ExternalLink, 
@@ -218,15 +218,15 @@ const ArchivePage = () => {
         <div className="text-center sm:text-left">
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex flex-col sm:flex-row items-center gap-2 justify-center sm:justify-start">
             <div className="flex items-center gap-2">
-              <Archive className="h-5 w-5 sm:h-6 sm:w-6" />
-              <span>Archive</span>
+              <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6" />
+              <span>Texted</span>
             </div>
             <span className="text-sm sm:text-base font-normal text-muted-foreground">
               ({archivedLeads.length} businesses)
             </span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-lg">
-            Database of businesses you've messaged. When someone responds to your bulk texts, find them here and mark as "Interested" to add to Potential Work.
+            Businesses you've bulk texted. When someone responds, search by their phone number here and mark as "Interested" to move them to Potential Work.
           </p>
         </div>
  
