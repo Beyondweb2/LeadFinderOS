@@ -1,70 +1,57 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
-import { X, Clock, Sparkles, Crown } from 'lucide-react';
+import { X, Clock, Sparkles, Crown, CreditCard } from 'lucide-react';
 
 export function TrialBanner() {
-  const { isOnTrial, trialDaysRemaining, trialExpired, trialEndDate, isLoading: trialLoading } = useTrial();
-  const { subscribed, isLoading: subLoading } = useSubscription();
+  const { subscribed, isLoading, status, subscriptionEnd, openCustomerPortal } = useSubscription();
   const [dismissed, setDismissed] = useState(false);
-  const navigate = useNavigate();
 
-  // Don't show if loading, subscribed, or dismissed
-  if (trialLoading || subLoading || subscribed || dismissed) {
+  // Don't show if loading or dismissed
+  if (isLoading || dismissed) {
     return null;
   }
 
-  // Show expired banner
-  if (trialExpired) {
-    return (
-      <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-sm">
-            <Clock className="h-4 w-4 text-destructive shrink-0" />
-            <span className="text-destructive font-medium">
-              Your free trial has expired
-            </span>
-            <span className="text-muted-foreground hidden sm:inline">
-              — Subscribe to continue using LeadFinder
-            </span>
-          </div>
-          <Button 
-            size="sm" 
-            onClick={() => navigate('/subscribe')}
-            className="shrink-0"
-          >
-            <Crown className="h-3.5 w-3.5 mr-1.5" />
-            Upgrade to Pro
-          </Button>
-        </div>
-      </div>
-    );
+  // Calculate days until charge for trialing users
+  const getDaysUntilCharge = () => {
+    if (!subscriptionEnd) return 0;
+    const endDate = new Date(subscriptionEnd);
+    const now = new Date();
+    const msRemaining = endDate.getTime() - now.getTime();
+    return Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+  };
+
+  const isTrialing = status === 'trialing';
+  const daysUntilCharge = isTrialing ? getDaysUntilCharge() : 0;
+
+  // Don't show for active subscribers (not trialing)
+  if (subscribed && !isTrialing) {
+    return null;
   }
 
-  // Show trial banner with remaining days
-  if (isOnTrial) {
+  // Show banner for trialing users (card already on file)
+  if (isTrialing) {
     return (
       <div className="bg-primary/5 border-b border-primary/10 px-4 py-2">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm min-w-0">
-            <Sparkles className="h-4 w-4 text-primary shrink-0" />
+            <CreditCard className="h-4 w-4 text-primary shrink-0" />
             <span className="font-medium text-foreground/90 whitespace-nowrap">
-              {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''} left
+              {daysUntilCharge} day{daysUntilCharge !== 1 ? 's' : ''} until first charge
             </span>
             <span className="text-muted-foreground hidden sm:inline truncate">
-              — Unlock unlimited searches
+              — Enjoying full Pro access
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button 
               size="sm"
-              onClick={() => navigate('/subscribe')}
+              variant="outline"
+              onClick={() => openCustomerPortal()}
             >
-              <Crown className="h-3.5 w-3.5 mr-1.5" />
-              <span className="hidden sm:inline">Upgrade to Pro</span>
-              <span className="sm:hidden">Upgrade</span>
+              <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              <span className="hidden sm:inline">Manage Subscription</span>
+              <span className="sm:hidden">Manage</span>
             </Button>
             <Button
               size="icon"
@@ -76,6 +63,33 @@ export function TrialBanner() {
               <X className="h-4 w-4" />
             </Button>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Show expired/no subscription banner
+  if (!subscribed) {
+    return (
+      <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-sm">
+            <Clock className="h-4 w-4 text-destructive shrink-0" />
+            <span className="text-destructive font-medium">
+              No active subscription
+            </span>
+            <span className="text-muted-foreground hidden sm:inline">
+              — Subscribe to access LeadFinder
+            </span>
+          </div>
+          <Button 
+            size="sm" 
+            onClick={() => window.location.href = '/subscribe'}
+            className="shrink-0"
+          >
+            <Crown className="h-3.5 w-3.5 mr-1.5" />
+            Subscribe Now
+          </Button>
         </div>
       </div>
     );
