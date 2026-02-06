@@ -344,24 +344,36 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          last_search_date: string | null
+          plan_status: string
+          searches_today: number
           searches_used: number
           trial_days: number
+          trial_end_date: string
           trial_started_at: string
           user_id: string
         }
         Insert: {
           created_at?: string
           id?: string
+          last_search_date?: string | null
+          plan_status?: string
+          searches_today?: number
           searches_used?: number
           trial_days?: number
+          trial_end_date: string
           trial_started_at?: string
           user_id: string
         }
         Update: {
           created_at?: string
           id?: string
+          last_search_date?: string | null
+          plan_status?: string
+          searches_today?: number
           searches_used?: number
           trial_days?: number
+          trial_end_date?: string
           trial_started_at?: string
           user_id?: string
         }
