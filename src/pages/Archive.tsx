@@ -26,38 +26,52 @@
    const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
    const [isLookingUp, setIsLookingUp] = useState(false);
  
-   // Count leads missing phone numbers
-   const missingPhoneCount = useMemo(() => 
-     archivedLeads.filter(l => !l.phone).length,
-   [archivedLeads]);
- 
-   // Real-time search with typeahead
-   const filteredLeads = useMemo(() => {
-     if (!phoneQuery.trim()) return archivedLeads;
-     
-     const digitsOnly = phoneQuery.replace(/\D/g, '');
-     if (digitsOnly.length < 2) return archivedLeads;
-     
-     return archivedLeads.filter((lead) => {
-       const leadDigits = lead.phone?.replace(/\D/g, '') || '';
-       return leadDigits.includes(digitsOnly);
-     });
-   }, [archivedLeads, phoneQuery]);
- 
-   const handleMarkInterested = async (lead: OutreachLead) => {
-     await updateStatus(lead.id, 'interested');
-   await unarchiveLead(lead.id);
-   };
- 
-   const handleBulkLookup = async () => {
-     setIsLookingUp(true);
-     try {
-       const missingIds = archivedLeads.filter(l => !l.phone).map(l => l.id);
-       await bulkLookupPhones(missingIds);
-     } finally {
-       setIsLookingUp(false);
-     }
-   };
+  // Count leads missing phone numbers
+  const missingPhoneCount = useMemo(() => 
+    archivedLeads.filter(l => !l.phone).length,
+  [archivedLeads]);
+
+  // Real-time search with typeahead
+  const filteredLeads = useMemo(() => {
+    if (!phoneQuery.trim()) return archivedLeads;
+    
+    const digitsOnly = phoneQuery.replace(/\D/g, '');
+    if (digitsOnly.length < 2) return archivedLeads;
+    
+    return archivedLeads.filter((lead) => {
+      const leadDigits = lead.phone?.replace(/\D/g, '') || '';
+      return leadDigits.includes(digitsOnly);
+    });
+  }, [archivedLeads, phoneQuery]);
+
+  const handleMarkInterested = async (lead: OutreachLead) => {
+    await updateStatus(lead.id, 'interested');
+    await unarchiveLead(lead.id);
+  };
+
+  const handleBulkLookup = async () => {
+    setIsLookingUp(true);
+    try {
+      const missingIds = archivedLeads.filter(l => !l.phone).map(l => l.id);
+      
+      // Process in batches of 50 (API limit)
+      const batchSize = 50;
+      let totalUpdated = 0;
+      
+      for (let i = 0; i < missingIds.length; i += batchSize) {
+        const batch = missingIds.slice(i, i + batchSize);
+        const result = await bulkLookupPhones(batch);
+        totalUpdated += result.updated;
+        
+        // Small delay between batches
+        if (i + batchSize < missingIds.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
  
    if (isLoading) {
      return (
