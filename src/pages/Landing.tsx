@@ -21,6 +21,7 @@ import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
 import demoVideo from '@/assets/leadfinder-demo.mp4';
 import appLogo from '@/assets/logo.png';
+import videoPoster from '@/assets/video-poster.jpg';
 
 const FEATURES = [
   {
@@ -152,7 +153,7 @@ const VideoSection = () => {
               muted
               playsInline
               preload="auto"
-              poster="/placeholder.svg"
+              poster={videoPoster}
             >
               <source src={demoVideo} type="video/mp4" />
               Your browser does not support the video tag.
