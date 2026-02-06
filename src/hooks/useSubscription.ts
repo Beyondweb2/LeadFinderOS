@@ -94,14 +94,50 @@ export function useSubscription() {
         }
       }
       
-      // Fall back to Stripe API check
+      // Get fresh session before calling edge function
+      const { data: sessionData } = await supabase.auth.getSession();
+      const freshToken = sessionData?.session?.access_token;
+      
+      if (!freshToken) {
+        // Session expired - user needs to re-authenticate
+        setState({
+          subscribed: false,
+          productId: null,
+          subscriptionEnd: null,
+          isLoading: false,
+          error: null,
+          status: null,
+          isAdmin: false,
+        });
+        return;
+      }
+      
+      // Update the ref with fresh token
+      accessTokenRef.current = freshToken;
+      
+      // Fall back to Stripe API check with fresh token
       const { data, error } = await supabase.functions.invoke('check-subscription', {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${freshToken}`,
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // If auth error, treat as not subscribed rather than showing error
+        if (error.message?.includes('Auth') || error.message?.includes('authentication')) {
+          setState({
+            subscribed: false,
+            productId: null,
+            subscriptionEnd: null,
+            isLoading: false,
+            error: null,
+            status: null,
+            isAdmin: false,
+          });
+          return;
+        }
+        throw error;
+      }
 
       setState({
         subscribed: data.subscribed ?? false,
