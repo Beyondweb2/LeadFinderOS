@@ -232,6 +232,16 @@ const VideoSection = () => {
             </button>
           </div>
         </div>
+        
+        {/* CTA after video */}
+        <div className="text-center mt-8 sm:mt-12">
+          <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto text-sm sm:text-base" asChild>
+            <Link to="/auth">
+              Start Finding Leads
+              <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+            </Link>
+          </Button>
+        </div>
       </div>
     </ScrollReveal>
   );
@@ -468,6 +478,17 @@ const Landing = () => {
               </div>
             </ScrollReveal>
           </div>
+          
+          {/* CTA after comparison */}
+          <ScrollReveal delay={300} className="text-center mt-10 sm:mt-14">
+            <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto text-sm sm:text-base" asChild>
+              <Link to="/auth">
+                Try It Free
+                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+              </Link>
+            </Button>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-3">No credit card required</p>
+          </ScrollReveal>
         </div>
       </section>
 
@@ -532,6 +553,16 @@ const Landing = () => {
               </ScrollReveal>
             ))}
           </div>
+          
+          {/* CTA after features */}
+          <ScrollReveal delay={600} className="text-center mt-10 sm:mt-14">
+            <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto text-sm sm:text-base" asChild>
+              <Link to="/auth">
+                Get Started Now
+                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+              </Link>
+            </Button>
+          </ScrollReveal>
         </div>
       </section>
 
@@ -616,6 +647,45 @@ const Landing = () => {
                   </p>
                 </CardFooter>
               </Card>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* Final CTA Section */}
+      <section className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
+        <div className="container mx-auto">
+          <ScrollReveal className="text-center">
+            <div 
+              className="relative max-w-2xl mx-auto rounded-2xl sm:rounded-3xl p-6 sm:p-10 md:p-12 overflow-hidden"
+              style={{
+                background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.08), hsl(220 80% 45% / 0.04))',
+                border: '1px solid hsl(210 100% 50% / 0.15)',
+              }}
+            >
+              {/* Glow effect */}
+              <div 
+                className="absolute -inset-4 rounded-3xl blur-2xl opacity-40 pointer-events-none"
+                style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.15), transparent 70%)' }}
+              />
+              
+              <h2 className="relative text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4 tracking-tight">
+                Ready to Find Your Next Client?
+              </h2>
+              <p className="relative text-sm sm:text-base md:text-lg text-muted-foreground mb-6 sm:mb-8 max-w-lg mx-auto">
+                Join hundreds of web professionals using LeadFinder Pro to grow their business.
+              </p>
+              <div className="relative flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto text-sm sm:text-base w-full sm:w-auto" asChild>
+                  <Link to="/auth">
+                    Start Your Free Trial
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  </Link>
+                </Button>
+              </div>
+              <p className="relative text-[10px] sm:text-xs text-muted-foreground mt-4">
+                7-day free trial • No credit card required • Cancel anytime
+              </p>
             </div>
           </ScrollReveal>
         </div>

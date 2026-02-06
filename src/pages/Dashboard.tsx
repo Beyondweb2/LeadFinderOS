@@ -26,19 +26,19 @@ const Dashboard = () => {
   }
 
   return (
-     <div className="space-y-6">
+     <div className="space-y-4 sm:space-y-6">
        {/* Page Header */}
-       <div>
-         <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-         <p className="text-muted-foreground">
+       <div className="text-center sm:text-left">
+         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
+         <p className="text-sm sm:text-base text-muted-foreground">
            Track your performance and revenue
          </p>
        </div>
  
        {/* Primary Metrics - Revenue & Conversion */}
       <section>
-         <h2 className="text-sm font-medium text-muted-foreground mb-3">Performance</h2>
-         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Performance</h2>
+         <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
            <RevenueCard
              totalRevenue={metrics.totalRevenue}
              draftRevenue={metrics.draftRevenue}
@@ -68,49 +68,52 @@ const Dashboard = () => {
 
       {/* Quick Links */}
       <section>
-         <h2 className="text-sm font-medium text-muted-foreground mb-3">Quick Actions</h2>
-        <div className="grid gap-4 md:grid-cols-3">
+         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Quick Actions</h2>
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
           <Card className="bg-card/50 border-border/50 hover:bg-card/70 transition-colors cursor-pointer">
             <Link to="/">
-               <CardHeader className="pb-2">
-                 <div className="p-2 rounded-lg bg-primary/10 w-fit mb-2">
-                   <Search className="h-4 w-4 text-primary" />
+               <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
+                 <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 w-fit mb-1.5 sm:mb-2">
+                   <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
                  </div>
-                <CardTitle className="text-base">Search for Leads</CardTitle>
+                <CardTitle className="text-sm sm:text-base">Find Leads</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Find businesses without websites in your target area.
+              <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  <span className="hidden sm:inline">Find businesses without websites in your area.</span>
+                  <span className="sm:hidden">Search for businesses</span>
                 </p>
               </CardContent>
             </Link>
           </Card>
           <Card className="bg-card/50 border-border/50 hover:bg-card/70 transition-colors cursor-pointer">
             <Link to="/templates">
-               <CardHeader className="pb-2">
-                 <div className="p-2 rounded-lg bg-amber-500/10 w-fit mb-2">
-                   <FileText className="h-4 w-4 text-amber-500" />
+               <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
+                 <div className="p-1.5 sm:p-2 rounded-lg bg-amber-500/10 w-fit mb-1.5 sm:mb-2">
+                   <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500" />
                  </div>
-                <CardTitle className="text-base">Edit Templates</CardTitle>
+                <CardTitle className="text-sm sm:text-base">Templates</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Customize your text messages and voice note scripts.
+              <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  <span className="hidden sm:inline">Customize your outreach scripts.</span>
+                  <span className="sm:hidden">Edit scripts</span>
                 </p>
               </CardContent>
             </Link>
           </Card>
           <Card className="bg-card/50 border-border/50 hover:bg-card/70 transition-colors cursor-pointer">
             <Link to="/outreach">
-               <CardHeader className="pb-2">
-                 <div className="p-2 rounded-lg bg-blue-500/10 w-fit mb-2">
-                   <Users className="h-4 w-4 text-blue-500" />
+               <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
+                 <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/10 w-fit mb-1.5 sm:mb-2">
+                   <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
                  </div>
-                <CardTitle className="text-base">View Pipeline</CardTitle>
+                <CardTitle className="text-sm sm:text-base">Pipeline</CardTitle>
               </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground">
-                  Manage all your leads and track outreach progress.
+              <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
+                <p className="text-xs sm:text-sm text-muted-foreground">
+                  <span className="hidden sm:inline">Manage leads and track progress.</span>
+                  <span className="sm:hidden">Manage leads</span>
                 </p>
               </CardContent>
             </Link>
