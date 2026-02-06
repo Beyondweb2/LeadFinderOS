@@ -82,11 +82,23 @@ const VideoSection = () => {
     <section className="relative z-10 pb-16 md:pb-24 px-4">
       <div className="container mx-auto">
         <div className="relative max-w-4xl mx-auto">
-          {/* Glow effect behind video */}
-          <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-primary/20 via-accent/10 to-primary/10 blur-2xl opacity-40" />
-          <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/30 via-primary/15 to-transparent" />
+          {/* Glow effect behind video - fixed brand blue */}
+          <div 
+            className="absolute -inset-4 rounded-3xl blur-2xl opacity-40"
+            style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
+          />
+          <div 
+            className="absolute -inset-px rounded-2xl"
+            style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.15), transparent)' }}
+          />
           
-          <div className="relative rounded-2xl overflow-hidden border border-primary/20 bg-card/80 backdrop-blur-sm glow-effect">
+          <div 
+            className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm"
+            style={{ 
+              border: '1px solid hsl(210 100% 50% / 0.2)',
+              boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)'
+            }}
+          >
             <video 
               ref={videoRef}
               className="w-full h-auto"
@@ -168,8 +180,15 @@ const Landing = () => {
       <header className="relative z-10 border-b border-white/[0.06] backdrop-blur-md bg-background/60">
         <div className="container mx-auto px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 border border-primary/20 glow-effect">
-              <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            <div 
+              className="p-1.5 sm:p-2 rounded-lg"
+              style={{ 
+                background: 'hsl(210 100% 50% / 0.1)', 
+                border: '1px solid hsl(210 100% 50% / 0.2)',
+                boxShadow: '0 0 20px hsl(210 100% 50% / 0.15)'
+              }}
+            >
+              <Target className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(210 100% 50%)' }} />
             </div>
             <span className="text-base sm:text-lg font-semibold tracking-tight">
               Lead<span className="text-gradient-primary">Finder</span> <span className="hidden xs:inline">Pro</span>
@@ -192,8 +211,15 @@ const Landing = () => {
       {/* Hero Section */}
       <section className="relative z-10 pt-12 pb-16 sm:pt-16 sm:pb-24 md:pt-24 md:pb-32 lg:pt-32 lg:pb-40 px-4">
         <div className="container mx-auto text-center">
-          {/* Tagline badge */}
-          <div className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full border border-primary/20 bg-primary/5 text-primary text-xs sm:text-sm font-medium mb-6 sm:mb-8 backdrop-blur-sm">
+          {/* Tagline badge - fixed brand blue */}
+          <div 
+            className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full text-xs sm:text-sm font-medium mb-6 sm:mb-8 backdrop-blur-sm"
+            style={{ 
+              border: '1px solid hsl(210 100% 50% / 0.2)', 
+              background: 'hsl(210 100% 50% / 0.05)',
+              color: 'hsl(210 100% 50%)'
+            }}
+          >
             <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
             <span>Lead generation for web professionals</span>
           </div>
@@ -281,11 +307,26 @@ const Landing = () => {
 
             {/* New Way */}
             <div className="relative group">
-              {/* Glow effect */}
-              <div className="absolute -inset-2 rounded-3xl bg-gradient-to-br from-primary/25 via-primary/10 to-accent/10 blur-xl opacity-60 group-hover:opacity-80 transition-opacity duration-500" />
-              <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/40 via-primary/20 to-transparent" />
-              <div className="relative rounded-2xl overflow-hidden border border-primary/30 bg-card/90 backdrop-blur-sm p-3 sm:p-4 glow-effect">
-                <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 bg-primary text-primary-foreground px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg">
+              {/* Glow effect - fixed brand blue */}
+              <div 
+                className="absolute -inset-2 rounded-3xl blur-xl opacity-60 group-hover:opacity-80 transition-opacity duration-500"
+                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.25), hsl(210 100% 50% / 0.1), hsl(220 80% 45% / 0.1))' }}
+              />
+              <div 
+                className="absolute -inset-px rounded-2xl"
+                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.4), hsl(210 100% 50% / 0.2), transparent)' }}
+              />
+              <div 
+                className="relative rounded-2xl overflow-hidden bg-card/90 backdrop-blur-sm p-3 sm:p-4"
+                style={{ 
+                  border: '1px solid hsl(210 100% 50% / 0.3)',
+                  boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)'
+                }}
+              >
+                <div 
+                  className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg"
+                  style={{ background: 'hsl(210 100% 50%)', color: 'hsl(220 40% 4%)' }}
+                >
                   <CheckCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                   With LeadFinder
                 </div>
@@ -322,14 +363,24 @@ const Landing = () => {
             {FEATURES.map((feature) => (
               <Card
                 key={feature.title}
-                className="group relative glass-panel-strong border-white/[0.06] hover:border-primary/30 transition-all duration-500 overflow-hidden"
+                className="group relative glass-panel-strong border-white/[0.06] transition-all duration-500 overflow-hidden"
+                style={{ ['--hover-border' as string]: 'hsl(210 100% 50% / 0.3)' }}
               >
-                {/* Hover glow */}
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.03] to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                {/* Hover glow - fixed brand blue */}
+                <div 
+                  className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                  style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.03), transparent)' }}
+                />
                 
                 <CardHeader className="relative pb-2 p-4 sm:p-6 sm:pb-2">
-                  <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-primary/15 to-primary/5 border border-primary/10 w-fit mb-3 sm:mb-4 group-hover:border-primary/25 transition-colors duration-500">
-                    <feature.icon className="h-4 w-4 sm:h-5 sm:w-5 text-primary" strokeWidth={1.5} />
+                  <div 
+                    className="p-2.5 sm:p-3 rounded-xl w-fit mb-3 sm:mb-4 transition-colors duration-500"
+                    style={{ 
+                      background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
+                      border: '1px solid hsl(210 100% 50% / 0.1)'
+                    }}
+                  >
+                    <feature.icon className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
                   </div>
                   <CardTitle className="text-base sm:text-lg font-semibold tracking-tight">{feature.title}</CardTitle>
                 </CardHeader>
@@ -355,16 +406,32 @@ const Landing = () => {
           </div>
           
           <div className="relative max-w-md mx-auto">
-            {/* Glow background */}
-            <div className="absolute -inset-4 sm:-inset-8 rounded-3xl bg-gradient-to-br from-primary/20 via-accent/10 to-primary/10 blur-2xl sm:blur-3xl opacity-50" />
-            <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/40 via-primary/20 to-accent/20" />
+            {/* Glow background - fixed brand blue */}
+            <div 
+              className="absolute -inset-4 sm:-inset-8 rounded-3xl blur-2xl sm:blur-3xl opacity-50"
+              style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
+            />
+            <div 
+              className="absolute -inset-px rounded-2xl"
+              style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.4), hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.2))' }}
+            />
             
             <Card className="relative glass-panel-strong border-0 overflow-hidden">
-              {/* Top accent line */}
-              <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-primary to-transparent" />
+              {/* Top accent line - fixed brand blue */}
+              <div 
+                className="absolute top-0 left-0 right-0 h-px"
+                style={{ background: 'linear-gradient(to right, transparent, hsl(210 100% 50%), transparent)' }}
+              />
               
               <CardHeader className="text-center pb-2 pt-6 sm:pt-8 px-4 sm:px-6">
-                <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] sm:text-xs font-semibold uppercase tracking-wide mx-auto mb-3 sm:mb-4">
+                <div 
+                  className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold uppercase tracking-wide mx-auto mb-3 sm:mb-4"
+                  style={{ 
+                    background: 'hsl(210 100% 50% / 0.1)', 
+                    border: '1px solid hsl(210 100% 50% / 0.2)',
+                    color: 'hsl(210 100% 50%)'
+                  }}
+                >
                   <Zap className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                   Most Popular
                 </div>
@@ -379,8 +446,14 @@ const Landing = () => {
                 <ul className="space-y-3 sm:space-y-4">
                   {PRICING_FEATURES.map((feature) => (
                     <li key={feature} className="flex items-center gap-2.5 sm:gap-3">
-                      <div className="flex-shrink-0 p-0.5 sm:p-1 rounded-full bg-primary/10 border border-primary/20">
-                        <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-primary" strokeWidth={2.5} />
+                      <div 
+                        className="flex-shrink-0 p-0.5 sm:p-1 rounded-full"
+                        style={{ 
+                          background: 'hsl(210 100% 50% / 0.1)', 
+                          border: '1px solid hsl(210 100% 50% / 0.2)'
+                        }}
+                      >
+                        <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={2.5} />
                       </div>
                       <span className="text-foreground/90 text-xs sm:text-sm">{feature}</span>
                     </li>
@@ -409,8 +482,14 @@ const Landing = () => {
         <div className="container mx-auto">
           <div className="flex flex-col items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-primary/10 border border-primary/20">
-                <Target className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+              <div 
+                className="p-1.5 rounded-lg"
+                style={{ 
+                  background: 'hsl(210 100% 50% / 0.1)', 
+                  border: '1px solid hsl(210 100% 50% / 0.2)'
+                }}
+              >
+                <Target className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: 'hsl(210 100% 50%)' }} />
               </div>
               <span className="font-semibold tracking-tight text-sm sm:text-base">
                 Lead<span className="text-gradient-primary">Finder</span> Pro
