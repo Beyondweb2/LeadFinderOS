@@ -1,11 +1,12 @@
- import { useState, useCallback } from 'react';
- import { useNavigate } from 'react-router-dom';
- import { useSubscription } from '@/hooks/useSubscription';
- import { useAuth } from '@/hooks/useAuth';
- import { Button } from '@/components/ui/button';
- import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
- import { Target, Check, Loader2, CreditCard, ArrowLeft } from 'lucide-react';
- import { useToast } from '@/hooks/use-toast';
+import { useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useAuth } from '@/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Check, Loader2, CreditCard, ArrowLeft } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import appLogo from '@/assets/logo.png';
  
  const FEATURES = [
    'Unlimited lead searches',
@@ -69,14 +70,12 @@
          </Button>
  
          <Card className="bg-card/80 backdrop-blur-xl border-primary/20">
-           <CardHeader className="text-center pb-2">
-             <div className="flex justify-center mb-4">
-               <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-                 <Target className="h-8 w-8 text-primary" />
-               </div>
-             </div>
-             <CardTitle className="text-2xl font-bold">
-               Lead<span className="text-gradient-primary">Finder</span> Pro
+          <CardHeader className="text-center pb-2">
+              <div className="flex justify-center mb-4">
+                <img src={appLogo} alt="LeadFinder Pro" className="h-12 w-12" />
+              </div>
+              <CardTitle className="text-2xl font-bold">
+                Lead<span className="text-gradient-primary">Finder</span> Pro
              </CardTitle>
              <CardDescription className="text-lg">
                Get full access to all features
