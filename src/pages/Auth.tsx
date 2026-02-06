@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Loader2, CreditCard } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Loader2, CreditCard, Sparkles, Gift, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import appLogo from '@/assets/logo.png';
@@ -22,6 +23,7 @@ const Auth = () => {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRedirectingToCheckout, setIsRedirectingToCheckout] = useState(false);
+  const [showTrialModal, setShowTrialModal] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   
   const { signIn, signUp, user, isLoading } = useAuth();
@@ -31,6 +33,7 @@ const Auth = () => {
   // Helper to redirect new signups to Stripe checkout
   const redirectToCheckout = async () => {
     try {
+      setShowTrialModal(true);
       setIsRedirectingToCheckout(true);
       
       const { data: sessionData } = await supabase.auth.getSession();
@@ -51,6 +54,7 @@ const Auth = () => {
     } catch (err) {
       console.error('Checkout redirect failed:', err);
       setIsRedirectingToCheckout(false);
+      setShowTrialModal(false);
       toast({
         title: 'Error',
         description: 'Failed to start checkout. Please try again.',
@@ -142,19 +146,60 @@ const Auth = () => {
     }
   };
 
-  if (isLoading || isRedirectingToCheckout) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        {isRedirectingToCheckout && (
-          <p className="text-sm text-muted-foreground">Setting up your free trial...</p>
-        )}
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      {/* Free Trial Loading Modal */}
+      <Dialog open={showTrialModal} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-md border-primary/30 bg-card/95 backdrop-blur-xl" hideClose>
+          <div className="flex flex-col items-center justify-center py-8 gap-6">
+            {/* Animated ring */}
+            <div className="relative">
+              <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
+              <div className="relative h-20 w-20 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Gift className="h-8 w-8 text-primary animate-pulse" />
+              </div>
+            </div>
+            
+            {/* Text content */}
+            <div className="text-center space-y-2">
+              <h3 className="text-xl font-bold flex items-center justify-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Free Trial Loading
+                <Sparkles className="h-5 w-5 text-primary" />
+              </h3>
+              <p className="text-muted-foreground text-sm">
+                Setting up your 7-day free trial...
+              </p>
+            </div>
+            
+            {/* Benefits list */}
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Check className="h-4 w-4 text-primary" />
+                <span>Unlimited business searches</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Check className="h-4 w-4 text-primary" />
+                <span>Full CRM access</span>
+              </div>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Check className="h-4 w-4 text-primary" />
+                <span>No charge for 7 days</span>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Background glow effect */}
       <div 
         className="fixed inset-0 pointer-events-none opacity-30"
