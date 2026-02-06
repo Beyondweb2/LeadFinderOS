@@ -8,7 +8,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
-import { ThemeInitializer } from "@/components/ThemeInitializer";
+import { AccentInitializer } from "@/components/AccentInitializer";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Subscribe from "./pages/Subscribe";
@@ -36,7 +36,7 @@ const queryClient = new QueryClient({
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <ThemeInitializer>
+      <AccentInitializer>
         <TooltipProvider>
           <Toaster />
           <Sonner />
@@ -151,7 +151,7 @@ const App = () => (
             </BrowserRouter>
           </LeadSearchProvider>
         </TooltipProvider>
-      </ThemeInitializer>
+      </AccentInitializer>
     </AuthProvider>
   </QueryClientProvider>
 );

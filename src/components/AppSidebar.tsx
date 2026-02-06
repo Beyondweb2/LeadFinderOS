@@ -12,7 +12,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { UserMenu } from '@/components/UserMenu';
-import { ThemeCustomizer } from '@/components/ThemeCustomizer';
+import { AccentColorPicker } from '@/components/AccentColorPicker';
 import { 
   LayoutDashboard, 
   Search, 
@@ -152,7 +152,7 @@ export function AppSidebar() {
         )}>
           {!isCollapsed && <UserMenu />}
           <div className="flex items-center gap-1">
-            <ThemeCustomizer />
+            <AccentColorPicker />
             <Button
               variant="ghost"
               size="icon"
