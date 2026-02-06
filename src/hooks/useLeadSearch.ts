@@ -3,9 +3,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, SearchFilters, SearchResponse } from '@/types/lead';
 
+interface TrialLimitError {
+  searchesToday: number;
+  limit: number;
+}
+
 export function useLeadSearch() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [trialLimitError, setTrialLimitError] = useState<TrialLimitError | null>(null);
   const { toast } = useToast();
 
   const checkPreviousSearch = async (filters: SearchFilters): Promise<{ searched: boolean; date?: string; count?: number }> => {
@@ -48,8 +54,12 @@ export function useLeadSearch() {
     });
   };
 
+  const clearTrialLimitError = () => setTrialLimitError(null);
+
   const search = async (filters: SearchFilters) => {
     setIsLoading(true);
+    setTrialLimitError(null);
+    
     try {
       const { data, error } = await supabase.functions.invoke<SearchResponse>('search-leads', {
         body: filters,
@@ -57,6 +67,27 @@ export function useLeadSearch() {
 
       if (error) {
         console.error('Search error:', error);
+        
+        // Try to parse the error context for trial limit
+        try {
+          const errorContext = error.context;
+          if (errorContext && typeof errorContext === 'object') {
+            const body = await errorContext.json?.() || errorContext;
+            if (body?.code === 'TRIAL_LIMIT_REACHED') {
+              setTrialLimitError({
+                searchesToday: body.searches_today || 3,
+                limit: body.limit || 3,
+              });
+              return;
+            }
+          }
+        } catch {
+          // Check if error message indicates trial limit
+          if (error.message?.includes('Trial limit reached')) {
+            setTrialLimitError({ searchesToday: 3, limit: 3 });
+            return;
+          }
+        }
         
         // Check for network/connection errors
         const errorMessage = error.message?.toLowerCase() || '';
@@ -167,5 +198,7 @@ export function useLeadSearch() {
     isLoading,
     search,
     exportToCsv,
+    trialLimitError,
+    clearTrialLimitError,
   };
 }
