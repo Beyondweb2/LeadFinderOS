@@ -613,22 +613,37 @@ serve(async (req) => {
           .maybeSingle();
         
         if (trial) {
-          const trialStart = new Date(trial.trial_started_at);
-          const trialEnd = new Date(trialStart);
-          trialEnd.setDate(trialEnd.getDate() + trial.trial_days);
           const now = new Date();
+          const trialEnd = new Date(trial.trial_end_date);
           
-          if (now <= trialEnd) {
+          if (now <= trialEnd && trial.plan_status === 'trial') {
             isOnTrial = true;
-            console.log(`User ${userId} is on trial (${trial.trial_days - Math.ceil((now.getTime() - trialStart.getTime()) / (1000 * 60 * 60 * 24))} days remaining)`);
+            const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            console.log(`User ${userId} is on trial (${daysLeft} days remaining)`);
             
-            // Increment search count for trial users
+            // Check if we need to reset daily search count
+            const today = now.toISOString().split('T')[0];
+            const lastSearchDate = trial.last_search_date;
+            const shouldResetDaily = lastSearchDate !== today;
+            
+            // Increment search counts
             await serviceClient
               .from('user_trials')
-              .update({ searches_used: trial.searches_used + 1 })
+              .update({ 
+                searches_used: trial.searches_used + 1,
+                searches_today: shouldResetDaily ? 1 : trial.searches_today + 1,
+                last_search_date: today
+              })
               .eq('user_id', userId);
           } else {
             console.log(`User ${userId} trial has expired`);
+            // Update plan_status to expired if needed
+            if (trial.plan_status === 'trial') {
+              await serviceClient
+                .from('user_trials')
+                .update({ plan_status: 'expired' })
+                .eq('user_id', userId);
+            }
           }
         }
       }

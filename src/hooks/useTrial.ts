@@ -3,9 +3,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
 interface TrialState {
+  planStatus: 'trial' | 'active' | 'expired' | 'cancelled' | null;
   isOnTrial: boolean;
   trialDaysRemaining: number;
   trialExpired: boolean;
+  trialStartDate: string | null;
+  trialEndDate: string | null;
+  searchesToday: number;
   searchesUsed: number;
   isLoading: boolean;
 }
@@ -15,9 +19,13 @@ const SEARCHES_BEFORE_PROMPT = 5;
 export function useTrial() {
   const { user } = useAuth();
   const [state, setState] = useState<TrialState>({
+    planStatus: null,
     isOnTrial: false,
     trialDaysRemaining: 0,
     trialExpired: false,
+    trialStartDate: null,
+    trialEndDate: null,
+    searchesToday: 0,
     searchesUsed: 0,
     isLoading: true,
   });
@@ -44,27 +52,33 @@ export function useTrial() {
       if (!data) {
         // No trial record - user might have been created before trial system
         setState({
+          planStatus: 'expired',
           isOnTrial: false,
           trialDaysRemaining: 0,
           trialExpired: true,
+          trialStartDate: null,
+          trialEndDate: null,
+          searchesToday: 0,
           searchesUsed: 0,
           isLoading: false,
         });
         return;
       }
 
-      const trialStart = new Date(data.trial_started_at);
-      const trialEnd = new Date(trialStart);
-      trialEnd.setDate(trialEnd.getDate() + data.trial_days);
-      
       const now = new Date();
+      const trialEnd = new Date(data.trial_end_date);
       const daysRemaining = Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
       const expired = now > trialEnd;
+      const planStatus = expired ? 'expired' : (data.plan_status as TrialState['planStatus']);
 
       setState({
-        isOnTrial: !expired,
+        planStatus,
+        isOnTrial: planStatus === 'trial' && !expired,
         trialDaysRemaining: daysRemaining,
         trialExpired: expired,
+        trialStartDate: data.trial_started_at,
+        trialEndDate: data.trial_end_date,
+        searchesToday: data.searches_today,
         searchesUsed: data.searches_used,
         isLoading: false,
       });
