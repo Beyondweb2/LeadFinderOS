@@ -1,0 +1,103 @@
+import { Link, useLocation } from 'react-router-dom';
+import { 
+  LayoutDashboard, 
+  Search, 
+  ClipboardList, 
+  FileText,
+  Archive,
+  Briefcase,
+  DollarSign,
+  MoreHorizontal
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+const mainNavItems = [
+  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
+  { title: 'Search', url: '/', icon: Search },
+  { title: 'CRM', url: '/outreach', icon: ClipboardList },
+  { title: 'Templates', url: '/templates', icon: FileText },
+];
+
+const moreNavItems = [
+  { title: 'Archive', url: '/archive', icon: Archive },
+  { title: 'Potential Work', url: '/potential-work', icon: Briefcase },
+  { title: 'Paid Clients', url: '/paid-clients', icon: DollarSign },
+];
+
+export function MobileBottomNav() {
+  const location = useLocation();
+  const isMoreActive = moreNavItems.some(item => location.pathname === item.url);
+
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-card/95 backdrop-blur-xl border-t border-border safe-area-pb">
+      <div className="flex items-center justify-around h-16 px-2">
+        {mainNavItems.map((item) => {
+          const isActive = location.pathname === item.url;
+          return (
+            <Link
+              key={item.url}
+              to={item.url}
+              className={cn(
+                'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px]',
+                isActive 
+                  ? 'text-primary' 
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <item.icon className={cn(
+                'h-5 w-5',
+                isActive && 'drop-shadow-[0_0_8px_hsl(var(--primary))]'
+              )} />
+              <span className="text-[10px] font-medium">{item.title}</span>
+            </Link>
+          );
+        })}
+        
+        {/* More menu for additional pages */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={cn(
+                'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px]',
+                isMoreActive 
+                  ? 'text-primary' 
+                  : 'text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <MoreHorizontal className={cn(
+                'h-5 w-5',
+                isMoreActive && 'drop-shadow-[0_0_8px_hsl(var(--primary))]'
+              )} />
+              <span className="text-[10px] font-medium">More</span>
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 mb-2">
+            {moreNavItems.map((item) => {
+              const isActive = location.pathname === item.url;
+              return (
+                <DropdownMenuItem key={item.url} asChild>
+                  <Link
+                    to={item.url}
+                    className={cn(
+                      'flex items-center gap-3 cursor-pointer',
+                      isActive && 'text-primary'
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span>{item.title}</span>
+                  </Link>
+                </DropdownMenuItem>
+              );
+            })}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </nav>
+  );
+}
