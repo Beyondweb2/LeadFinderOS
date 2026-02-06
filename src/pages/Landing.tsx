@@ -3,12 +3,10 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  Target,
   Search,
   ClipboardList,
   Phone,
   FileText,
-  Download,
   Zap,
   Check,
   ArrowRight,
@@ -22,6 +20,11 @@ import newWayImage from '@/assets/new-way-leadfinder.png';
 import demoVideo from '@/assets/leadfinder-demo.mp4';
 import appLogo from '@/assets/logo.png';
 import videoPoster from '@/assets/video-poster.jpg';
+import featureCustomization from '@/assets/feature-customization.png';
+import featureContactTracking from '@/assets/feature-contact-tracking.png';
+import featureDashboard from '@/assets/feature-dashboard.png';
+import featureExport from '@/assets/feature-export.png';
+import featureClassification from '@/assets/feature-classification.png';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 
 // Scroll reveal wrapper component
@@ -65,34 +68,34 @@ const ScrollReveal = ({
 
 const FEATURES = [
   {
-    icon: Search,
-    title: 'Lead Search',
-    description: 'Find businesses without websites in any location using Google Maps data.',
-  },
-  {
-    icon: ClipboardList,
-    title: 'CRM Pipeline',
-    description: 'Track your outreach progress with a full-featured sales pipeline.',
+    icon: Zap,
+    title: 'Customization',
+    description: 'Personalize your workspace with custom themes and accent colors.',
+    image: featureCustomization,
   },
   {
     icon: Phone,
     title: 'Contact Tracking',
-    description: 'Log calls, messages, and outcomes for every lead you contact.',
+    description: 'Track potential clients through your sales pipeline from interested to completed.',
+    image: featureContactTracking,
+  },
+  {
+    icon: ClipboardList,
+    title: 'Smart Dashboard',
+    description: 'Track performance, revenue, conversions, and productivity all in one place.',
+    image: featureDashboard,
   },
   {
     icon: FileText,
-    title: 'Templates',
-    description: 'Use pre-built email and voice note scripts to speed up outreach.',
-  },
-  {
-    icon: Download,
     title: 'Export Tools',
-    description: 'Export your leads to CSV for use in external tools and campaigns.',
+    description: 'Full contact management with activity logs, notes, and action scheduling.',
+    image: featureExport,
   },
   {
-    icon: Zap,
+    icon: Search,
     title: 'Smart Classification',
-    description: 'Automatically classify leads as hot, directory-only, or has website.',
+    description: 'Automatically classify leads as hot, directory-only, or has website with confidence scores.',
+    image: featureClassification,
   },
 ];
 
@@ -440,33 +443,44 @@ const Landing = () => {
             </p>
           </ScrollReveal>
           
-          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-5">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {FEATURES.map((feature, index) => (
               <ScrollReveal key={feature.title} delay={index * 100}>
                 <Card
-                  className="group relative glass-panel-strong border-white/[0.06] transition-all duration-500 overflow-hidden h-full"
-                  style={{ ['--hover-border' as string]: 'hsl(210 100% 50% / 0.3)' }}
+                  className="group relative glass-panel-strong border-white/[0.06] transition-all duration-500 overflow-hidden h-full hover:border-[hsl(210_100%_50%_/_0.3)]"
                 >
                   {/* Hover glow - fixed brand blue */}
                   <div 
                     className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.03), transparent)' }}
+                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.05), transparent)' }}
                   />
                   
-                  <CardHeader className="relative pb-1 sm:pb-2 p-3 sm:p-6">
-                    <div 
-                      className="p-2 sm:p-3 rounded-xl w-fit mb-2 sm:mb-4 transition-colors duration-500"
-                      style={{ 
-                        background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
-                        border: '1px solid hsl(210 100% 50% / 0.1)'
-                      }}
-                    >
-                      <feature.icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                  {/* Screenshot image */}
+                  <div className="relative overflow-hidden rounded-t-lg">
+                    <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent z-10" />
+                    <img 
+                      src={feature.image} 
+                      alt={feature.title}
+                      className="w-full h-40 sm:h-48 object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                    />
+                  </div>
+                  
+                  <CardHeader className="relative pb-1 sm:pb-2 p-4 sm:p-5">
+                    <div className="flex items-center gap-3">
+                      <div 
+                        className="p-2 rounded-xl transition-colors duration-500 flex-shrink-0"
+                        style={{ 
+                          background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
+                          border: '1px solid hsl(210 100% 50% / 0.1)'
+                        }}
+                      >
+                        <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                      </div>
+                      <CardTitle className="text-base sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</CardTitle>
                     </div>
-                    <CardTitle className="text-sm sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</CardTitle>
                   </CardHeader>
-                  <CardContent className="relative pt-0 p-3 sm:p-6 sm:pt-0">
-                    <p className="text-muted-foreground text-[11px] sm:text-sm leading-relaxed">{feature.description}</p>
+                  <CardContent className="relative pt-0 p-4 sm:p-5 sm:pt-0">
+                    <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
                   </CardContent>
                 </Card>
               </ScrollReveal>
