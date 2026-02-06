@@ -208,27 +208,27 @@ export function useSubscription() {
      });
  
      if (error) throw error;
-     if (data?.url) {
-       window.open(data.url, '_blank');
-     }
-   };
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    };
  
-   const openCustomerPortal = async () => {
-     if (!session?.access_token) {
-       throw new Error('Not authenticated');
-     }
+    const openCustomerPortal = async () => {
+      if (!session?.access_token) {
+        throw new Error('Not authenticated');
+      }
  
-     const { data, error } = await supabase.functions.invoke('customer-portal', {
-       headers: {
-         Authorization: `Bearer ${session.access_token}`,
-       },
-     });
+      const { data, error } = await supabase.functions.invoke('customer-portal', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
  
-     if (error) throw error;
-     if (data?.url) {
-       window.open(data.url, '_blank');
-     }
-   };
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+      }
+    };
  
    return {
      ...state,
