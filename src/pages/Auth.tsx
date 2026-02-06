@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Target, Loader2 } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import appLogo from '@/assets/logo.png';
 
 const authSchema = z.object({
   email: z.string().trim().email({ message: 'Please enter a valid email address' }),
@@ -124,12 +125,10 @@ const Auth = () => {
       <Card className="w-full max-w-md relative z-10 bg-card/80 backdrop-blur-xl border-border/50">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
-            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20">
-              <Target className="h-8 w-8 text-primary" />
-            </div>
+            <img src={appLogo} alt="LeadFinder Pro" className="h-12 w-12" />
           </div>
           <CardTitle className="text-2xl font-bold">
-            Lead<span className="text-gradient-primary">Finder</span>
+            Lead<span className="text-gradient-primary">Finder</span> Pro
           </CardTitle>
           <CardDescription>
             {isLogin 
