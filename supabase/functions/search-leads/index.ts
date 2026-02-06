@@ -590,7 +590,11 @@ serve(async (req) => {
     const isAdmin = !!roleData;
 
     // Check subscription status (unless admin)
+    let hasActiveSubscription = false;
+    let isOnTrial = false;
+    
     if (!isAdmin) {
+      // First check for active subscription
       const { data: subscription } = await serviceClient
         .from('subscriptions')
         .select('status')
@@ -598,14 +602,48 @@ serve(async (req) => {
         .maybeSingle();
 
       const validStatuses = ['active', 'trialing', 'past_due'];
-      if (!subscription || !validStatuses.includes(subscription.status)) {
-        console.log(`User ${userId} has no active subscription`);
+      hasActiveSubscription = subscription && validStatuses.includes(subscription.status);
+      
+      if (!hasActiveSubscription) {
+        // Check if user is on trial
+        const { data: trial } = await serviceClient
+          .from('user_trials')
+          .select('*')
+          .eq('user_id', userId)
+          .maybeSingle();
+        
+        if (trial) {
+          const trialStart = new Date(trial.trial_started_at);
+          const trialEnd = new Date(trialStart);
+          trialEnd.setDate(trialEnd.getDate() + trial.trial_days);
+          const now = new Date();
+          
+          if (now <= trialEnd) {
+            isOnTrial = true;
+            console.log(`User ${userId} is on trial (${trial.trial_days - Math.ceil((now.getTime() - trialStart.getTime()) / (1000 * 60 * 60 * 24))} days remaining)`);
+            
+            // Increment search count for trial users
+            await serviceClient
+              .from('user_trials')
+              .update({ searches_used: trial.searches_used + 1 })
+              .eq('user_id', userId);
+          } else {
+            console.log(`User ${userId} trial has expired`);
+          }
+        }
+      }
+      
+      if (!hasActiveSubscription && !isOnTrial) {
+        console.log(`User ${userId} has no active subscription or valid trial`);
         return new Response(
-          JSON.stringify({ error: 'Active subscription required to access this feature.' }),
+          JSON.stringify({ error: 'Your trial has expired. Please subscribe to continue using LeadFinder.' }),
           { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      console.log(`User ${userId} has valid subscription: ${subscription.status}`);
+      
+      if (hasActiveSubscription) {
+        console.log(`User ${userId} has valid subscription`);
+      }
     } else {
       console.log(`User ${userId} is admin - bypassing subscription check`);
     }

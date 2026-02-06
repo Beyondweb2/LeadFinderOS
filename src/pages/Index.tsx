@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { ContactDialog } from '@/components/ContactDialog';
- import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
+import { UpgradePromptDialog } from '@/components/UpgradePromptDialog';
+import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 import { useContactTracking } from '@/hooks/useContactTracking';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
+import { useTrial } from '@/hooks/useTrial';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Flame, Target, Zap } from 'lucide-react';
 import type { Lead, Country } from '@/types/lead';
 
@@ -18,8 +21,25 @@ const Index = () => {
   } = useContactTracking();
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
+  const { searchesUsed, shouldShowUpgradePrompt, checkTrial } = useTrial();
+  const { subscribed } = useSubscription();
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+
+  // Check if we should show upgrade prompt after searches
+  useEffect(() => {
+    if (!subscribed && shouldShowUpgradePrompt()) {
+      setShowUpgradePrompt(true);
+    }
+  }, [searchesUsed, subscribed, shouldShowUpgradePrompt]);
+
+  // Refetch trial data after search completes
+  useEffect(() => {
+    if (!isLoading && leads.length > 0) {
+      checkTrial();
+    }
+  }, [isLoading, leads.length, checkTrial]);
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -93,6 +113,13 @@ const Index = () => {
         onOpenChange={(open) => !open && setContactDialogLead(null)}
         onSubmit={markAsContacted}
         isLoading={isContactLoading}
+      />
+
+      {/* Upgrade Prompt Dialog */}
+      <UpgradePromptDialog
+        open={showUpgradePrompt}
+        onOpenChange={setShowUpgradePrompt}
+        searchesUsed={searchesUsed}
       />
     </div>
   );
