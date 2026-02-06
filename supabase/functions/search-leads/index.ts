@@ -2,26 +2,12 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 
- // Allowed origins for CORS - restrict to known domains
- const ALLOWED_ORIGINS = [
-   'https://leadfinderapp.lovable.app',
-   'https://id-preview--da9919bb-3412-438c-91f0-7b1c8b8e5d96.lovable.app',
-   'http://localhost:5173',
-   'http://localhost:4173',
-   'http://localhost:8080',
- ];
- 
- function getCorsHeaders(origin: string | null): Record<string, string> {
-   const isAllowed = origin && ALLOWED_ORIGINS.some(allowed => 
-     origin === allowed || origin.endsWith('.lovable.app')
-   );
-   
-   return {
-     'Access-Control-Allow-Origin': isAllowed && origin ? origin : ALLOWED_ORIGINS[0],
-     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-     'Access-Control-Allow-Methods': 'POST, OPTIONS',
-   };
- }
+// CORS headers - allow all Lovable domains
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
 // Input validation schema
 const SearchRequestSchema = z.object({
@@ -542,10 +528,7 @@ function sanitizeError(error: unknown): { message: string; status: number } {
 }
 
 serve(async (req) => {
-   const origin = req.headers.get('origin');
-   const corsHeaders = getCorsHeaders(origin);
- 
-  // Handle CORS
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
