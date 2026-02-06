@@ -12,6 +12,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { UserMenu } from '@/components/UserMenu';
+import { ThemeCustomizer } from '@/components/ThemeCustomizer';
 import { 
   LayoutDashboard, 
   Search, 
@@ -83,7 +84,7 @@ export function AppSidebar() {
           {!isCollapsed && (
             <div className="overflow-hidden">
               <h1 className="text-lg font-bold tracking-tight truncate">
-                Lead<span className="text-sidebar-primary">Finder</span>
+                Lead<span className="text-sidebar-primary">Finder</span> Pro
               </h1>
               <p className="text-xs text-sidebar-foreground/60 truncate">
                 All-in-one CRM
@@ -143,18 +144,21 @@ export function AppSidebar() {
           isCollapsed ? 'justify-center' : 'justify-between'
         )}>
           {!isCollapsed && <UserMenu />}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSidebar}
-            className="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-          >
-            {isCollapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronLeft className="h-4 w-4" />
-            )}
-          </Button>
+          <div className="flex items-center gap-1">
+            <ThemeCustomizer />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              className="h-8 w-8 text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+            >
+              {isCollapsed ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
         </div>
       </SidebarFooter>
     </Sidebar>
