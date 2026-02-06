@@ -1,66 +1,78 @@
 
 
-# Plan: Speed Up Video Loading on Landing Page
+# Plan: Fix Trial Initialization for Existing Users & Improve Upgrade Screen Design
 
-## Current Implementation
+## Problem Summary
 
-The video is currently implemented as a simple `<video>` tag with:
-- `autoPlay`, `loop`, `muted`, `playsInline` attributes
-- Direct import of the MP4 file from `src/assets/leadfinder-demo.mp4`
-- No loading optimization or preloading strategy
+Two issues were identified:
 
-## Recommended Optimizations
+1. **Missing trial record**: Your account (`pauljsales@hotmail.co.uk`) was created before the trial system was implemented, so no `user_trials` record exists. The code treats missing records as "expired" and blocks access.
 
-### 1. Add `preload="auto"` Attribute
-Tell the browser to start downloading the video immediately when the page loads, rather than waiting.
-
-### 2. Add Poster Image (Loading Placeholder)
-Display a static image while the video loads, so users see content immediately instead of a blank space.
-
-### 3. Add `fetchpriority="high"` 
-Signal to the browser that this video is high priority for loading.
-
-### 4. Consider Video Hosting (Future Enhancement)
-For even faster loading, the video could be moved to a CDN like Cloudflare or Supabase Storage. This is optional but worth mentioning.
+2. **Visual inconsistency**: The "Trial Has Ended" screen in `SubscriptionGate.tsx` uses basic card styling that doesn't match the landing page's premium design (gradients, floating orbs, animations, glass effects).
 
 ---
 
-## Technical Changes
+## Solution
 
-### File: `src/pages/Landing.tsx`
+### Part 1: Data Fix (Database)
 
-Update the `VideoSection` component's video element:
+**Insert trial records for existing users who don't have one:**
 
-```tsx
-<video 
-  ref={videoRef}
-  className="w-full h-auto"
-  autoPlay 
-  loop 
-  muted
-  playsInline
-  preload="auto"
-  poster="/placeholder.svg"  // Or create a video thumbnail
->
-  <source src={demoVideo} type="video/mp4" />
-  Your browser does not support the video tag.
-</video>
-```
+This will create trial records for your account and any other early users, giving them proper access.
 
-### Optional: Create a Video Poster Image
-For the best user experience, we can extract the first frame of your video as a poster image. This shows users something immediately while the video downloads.
+### Part 2: Code Improvement - Defensive Trial Logic
+
+**Update `useTrial.ts`**:
+- When no trial record exists, auto-create one via an edge function instead of treating it as expired
+- This prevents future users from falling through the cracks
+
+### Part 3: Visual Redesign of SubscriptionGate
+
+**Transform the expired trial screen to match landing page styling:**
+
+| Current | Improved |
+|---------|----------|
+| Plain white cards | Glass-effect cards with backdrop blur |
+| No background effects | Floating blue orbs + gradient background |
+| Static layout | Scroll/fade animations |
+| Basic feature icons | Icon with gradient backgrounds |
+| "Upgrade to Pro" button | Premium gradient button matching landing page |
+
+**Specific changes:**
+- Add cinematic background with radial gradients matching landing page
+- Add subtle floating orb animations
+- Use glass-morphism cards (`bg-card/80 backdrop-blur-sm border-white/10`)
+- Apply premium button styling (`btn-premium` class)
+- Add scroll reveal animations
+- Improve mobile responsiveness (padding, text sizes)
+- Add visual hierarchy with gradient text for headline
 
 ---
 
-## Summary
+## Technical Details
 
-| Change | Impact |
-|--------|--------|
-| Add `preload="auto"` | Browser starts loading video immediately |
-| Add poster image | Shows placeholder while video loads |
-| Keep video bundled | Vite already optimizes the import |
+### Files to modify:
 
-These changes will make the video appear to load faster by:
-1. Starting the download earlier
-2. Showing a placeholder so the space isn't blank
+1. **`src/components/SubscriptionGate.tsx`**
+   - Replace background with gradient + floating orbs
+   - Update feature cards to use glass-morphism styling
+   - Apply `btn-premium` class to upgrade button
+   - Add fade-in animations
+   - Improve responsive padding and spacing
+
+2. **`src/hooks/useTrial.ts`** (optional enhancement)
+   - Add fallback logic to create trial record if missing
+   - Prevents future edge cases
+
+### Database changes:
+
+Insert trial records for existing users without them (your account + any others created before the trigger).
+
+---
+
+## Expected Result
+
+- Users created before the trial system will get proper trial records
+- The upgrade prompt screen will have the same premium visual quality as the landing page
+- Mobile view will be properly optimized with appropriate spacing and text sizes
 
