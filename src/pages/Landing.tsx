@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
+import demoVideo from '@/assets/leadfinder-demo.mp4';
 
 const FEATURES = [
   {
@@ -181,6 +182,30 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Video Demo Section */}
+      <section className="relative z-10 pb-16 md:pb-24">
+        <div className="container mx-auto px-4">
+          <div className="relative max-w-4xl mx-auto">
+            {/* Glow effect behind video */}
+            <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-primary/20 via-accent/10 to-primary/10 blur-2xl opacity-40" />
+            <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/30 via-primary/15 to-transparent" />
+            
+            <div className="relative rounded-2xl overflow-hidden border border-primary/20 bg-card/80 backdrop-blur-sm glow-effect">
+              <video 
+                className="w-full h-auto"
+                autoPlay 
+                loop 
+                muted 
+                playsInline
+              >
+                <source src={demoVideo} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Before/After Comparison Section */}
       <section className="relative z-10 py-24 md:py-32">
         <div className="container mx-auto px-4">
@@ -202,7 +227,7 @@ const Landing = () => {
                   <X className="h-3.5 w-3.5" />
                   The Old Way
                 </div>
-                <div className="rounded-xl overflow-hidden opacity-70 grayscale-[30%]">
+                <div className="rounded-xl overflow-hidden">
                   <img
                     src={oldWayImage}
                     alt="Manually searching Google Maps for businesses"
