@@ -96,7 +96,9 @@ export function useTrial() {
           if (newData) {
             const now = new Date();
             const trialEnd = new Date(newData.trial_end_date);
-            const daysRemaining = Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+            // Calculate days remaining - include current day (so day 1 shows as 7 days left)
+            const msRemaining = trialEnd.getTime() - now.getTime();
+            const daysRemaining = Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
             
             setState({
               planStatus: 'trial',
