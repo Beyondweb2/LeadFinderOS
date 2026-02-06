@@ -7,7 +7,8 @@ import { Slider } from '@/components/ui/slider';
 import { Card, CardContent } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { ChevronDown } from 'lucide-react';
-import { QuickLocationsList, type Country } from '@/components/QuickLocationsList';
+import { QuickLocationsList } from '@/components/QuickLocationsList';
+import type { Country } from '@/types/lead';
 import { Switch } from '@/components/ui/switch';
 import type { SearchFilters } from '@/types/lead';
 
@@ -24,7 +25,7 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
   const [minReviews, setMinReviews] = useState(2); // Default to 2 to filter out inactive businesses
   const [requirePhone, setRequirePhone] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<Country>('UK');
+  const [selectedCountry, setSelectedCountry] = useState<Country>('UK' as Country);
   const [deepSearch, setDeepSearch] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -91,11 +92,11 @@ export function SearchForm({ onSearch, isLoading }: SearchFormProps) {
               </Label>
               <div className="relative flex items-center gap-3 pt-1">
                 <Radius className="h-4 w-4 text-muted-foreground" />
-                <Slider
+              <Slider
                   value={[radius]}
                   onValueChange={(value) => setRadius(value[0])}
                   min={1}
-                  max={50}
+                  max={100}
                   step={1}
                   className="flex-1"
                 />

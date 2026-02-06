@@ -495,7 +495,7 @@ export function OutreachTable({
                     </TableCell>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
-                        {lead.country === 'AUS' && (
+                        {lead.country === 'Australia' && (
                           <span className="text-xs" title="Australia">🇦🇺</span>
                         )}
                         {lead.business_name}

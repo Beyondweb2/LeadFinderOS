@@ -51,12 +51,16 @@
     --gradient-primary: linear-gradient(135deg, hsl(173 80% 45%), hsl(173 80% 35%));
     --gradient-card: linear-gradient(180deg, hsl(222 47% 10%), hsl(222 47% 7%));
     --gradient-glow: radial-gradient(ellipse at center, hsl(173 80% 45% / 0.15), transparent 70%);
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(173 80% 45% / 0.25), transparent 60%);
+    --gradient-section: radial-gradient(ellipse 100% 80% at 80% 100%, hsl(173 80% 45% / 0.08), transparent 50%);
+    --gradient-mesh: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
 
     /* Shadows */
     --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.3);
     --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.4);
     --shadow-lg: 0 10px 30px hsl(0 0% 0% / 0.5);
     --shadow-glow: 0 0 20px hsl(173 80% 45% / 0.3);
+    --shadow-glow-lg: 0 0 60px hsl(173 80% 45% / 0.2), 0 0 120px hsl(173 80% 45% / 0.1);
 
     /* Sidebar - keeping for shadcn compatibility */
     --sidebar-background: 222 47% 8%;
@@ -132,6 +136,31 @@
     background-clip: text;
   }
 
+  .bg-grid-pattern {
+    background-image: 
+      linear-gradient(to right, hsl(var(--border) / 0.3) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.3) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+
+  .bg-dots-pattern {
+    background-image: radial-gradient(circle at 1px 1px, hsl(var(--muted-foreground) / 0.15) 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+
+  .bg-noise {
+    position: relative;
+  }
+
+  .bg-noise::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--gradient-mesh);
+    opacity: 0.03;
+    pointer-events: none;
+  }
+
   .animate-pulse-slow {
     animation: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
@@ -140,12 +169,25 @@
     animation: glow 2s ease-in-out infinite alternate;
   }
 
+  .animate-float {
+    animation: float 6s ease-in-out infinite;
+  }
+
   @keyframes glow {
     from {
       box-shadow: 0 0 10px hsl(173 80% 45% / 0.2);
     }
     to {
       box-shadow: 0 0 25px hsl(173 80% 45% / 0.4);
+    }
+  }
+
+  @keyframes float {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-10px);
     }
   }
 }
