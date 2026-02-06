@@ -1,49 +1,65 @@
 
-
-# Fix: Increase Maximum Search Radius to 100km
+# Prevent Re-adding Archived Businesses
 
 ## Problem
-The frontend slider was updated to allow 100km radius, but the backend edge function still validates a maximum of 50km. When users select a radius above 50km, the search fails with a validation error.
-
-## Root Cause
-There's a mismatch between:
-- **Frontend**: `SearchForm.tsx` slider allows 1-100km
-- **Backend**: `search-leads/index.ts` Zod schema limits radius to 50,000 meters (50km)
+Users can currently re-add businesses that are already in the archive. The duplicate prevention system checks `outreach_history`, but this may miss leads that were archived before history tracking was implemented or edge cases where history wasn't properly recorded.
 
 ## Solution
-Update the backend validation to allow up to 100km (100,000 meters).
+Enhance the duplicate prevention to check both `outreach_history` AND `outreach_leads` (including archived leads) before allowing a new lead to be added.
 
 ## Changes Required
 
-### 1. Update Edge Function Validation Schema
-**File:** `supabase/functions/search-leads/index.ts`
+### 1. Update `addLead` Function in `useOutreach.ts`
+Add an additional check against the `outreach_leads` table (including archived leads) before inserting a new lead.
 
-```text
-Location: Line 39
-Current:  .max(50000, 'Maximum radius is 50km')
-Update:   .max(100000, 'Maximum radius is 100km')
+**Current logic:**
+- Checks `outreach_history` table for business_name or google_maps_url match
+
+**New logic:**
+- Check `outreach_history` table (existing)
+- Also check `outreach_leads` table directly (new)
+- Block addition if found in either location
+
+### 2. Update `isInOutreach` Function
+Expand the check to also look at archived leads stored in local state.
+
+**Current:**
+```typescript
+const isInOutreach = useCallback((leadName: string, googleMapsUrl?: string): boolean => {
+  return outreachHistory.some(
+    (h) => h.business_name === leadName || (googleMapsUrl && h.google_maps_url === googleMapsUrl)
+  );
+}, [outreachHistory]);
 ```
 
-### 2. Adjust Grid Search Algorithm (Optional Optimization)
-The deep search grid generation already handles larger radii, but we may want to add an additional tier for very large searches (80-100km):
-
-```text
-Location: Lines 344-356
-Add condition for 80km+ searches to use 6x6 grid (36 points)
+**Updated:**
+```typescript
+const isInOutreach = useCallback((leadName: string, googleMapsUrl?: string): boolean => {
+  // Check history
+  const inHistory = outreachHistory.some(...);
+  
+  // Also check active leads
+  const inActive = leads.some(...);
+  
+  // Also check archived leads
+  const inArchived = archivedLeads.some(...);
+  
+  return inHistory || inActive || inArchived;
+}, [outreachHistory, leads, archivedLeads]);
 ```
 
-## Technical Details
+## Technical Implementation
 
-| Parameter | Before | After |
-|-----------|--------|-------|
-| Max Radius | 50,000m (50km) | 100,000m (100km) |
-| Validation Message | "Maximum radius is 50km" | "Maximum radius is 100km" |
+| Check Point | Source | Purpose |
+|-------------|--------|---------|
+| `outreach_history` | Database | Permanent record of all ever-added businesses |
+| `outreach_leads` (active) | Local state | Currently active leads |
+| `outreach_leads` (archived) | Local state | Leads in archive |
 
-## Impact
-- Single line change in the edge function
-- Edge function will be automatically redeployed
-- Immediate fix for users trying to search with larger radii
+## User Experience
+- When trying to add an archived business: Toast message "Previously added - This business is in your archive"
+- Search results will show a distinct indicator for archived businesses
+- Maintains clear differentiation between "Already in CRM" (active) vs "In Archive"
 
-## Note
-The frontend correctly converts km to meters before sending to the API (`radius * 1000`), so a 100km selection sends 100,000 meters to the backend.
-
+## Files to Modify
+- `src/hooks/useOutreach.ts` - Update `addLead` and `isInOutreach` functions
