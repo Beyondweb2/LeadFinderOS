@@ -24,22 +24,25 @@
      if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
      logStep("Stripe key verified");
  
-     const supabaseClient = createClient(
-       Deno.env.get("SUPABASE_URL") ?? "",
-       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-       { auth: { persistSession: false } }
-     );
- 
-     const authHeader = req.headers.get("Authorization");
-     if (!authHeader) throw new Error("No authorization header provided");
-     logStep("Authorization header found");
- 
-     const token = authHeader.replace("Bearer ", "");
-     const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-     if (userError) throw new Error(`Authentication error: ${userError.message}`);
-     const user = userData.user;
-     if (!user?.email) throw new Error("User not authenticated or email not available");
-     logStep("User authenticated", { userId: user.id, email: user.email });
+      // Create a user-context client to validate the token
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader) throw new Error("No authorization header provided");
+      logStep("Authorization header found");
+
+      const supabaseClient = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+        { 
+          global: { headers: { Authorization: authHeader } },
+          auth: { persistSession: false } 
+        }
+      );
+
+      const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+      if (userError) throw new Error(`Authentication error: ${userError.message}`);
+      const user = userData.user;
+      if (!user?.email) throw new Error("User not authenticated or email not available");
+      logStep("User authenticated", { userId: user.id, email: user.email });
  
      const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
      
