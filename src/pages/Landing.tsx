@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -63,6 +63,50 @@ const PRICING_FEATURES = [
   'Export leads to outreach',
   'Priority support',
 ];
+
+// Count-up animation component
+const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string; label: string }) => {
+  const [count, setCount] = useState(0);
+  const [hasAnimated, setHasAnimated] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !hasAnimated) {
+          setHasAnimated(true);
+          const duration = 2000;
+          const steps = 60;
+          const increment = target / steps;
+          let current = 0;
+          
+          const timer = setInterval(() => {
+            current += increment;
+            if (current >= target) {
+              setCount(target);
+              clearInterval(timer);
+            } else {
+              setCount(Math.floor(current));
+            }
+          }, duration / steps);
+        }
+      },
+      { threshold: 0.5 }
+    );
+
+    if (ref.current) observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, [target, hasAnimated]);
+
+  return (
+    <div ref={ref} className="text-center">
+      <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">
+        {count.toLocaleString()}{suffix}
+      </div>
+      <div className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">{label}</div>
+    </div>
+  );
+};
 
 // Video section component with sound toggle
 // Starts muted (required for autoplay) - user can unmute
@@ -254,16 +298,15 @@ const Landing = () => {
           
           {/* Stats bar */}
           <div className="mt-12 sm:mt-16 md:mt-20 flex flex-wrap justify-center gap-8 sm:gap-12 md:gap-20">
-            {[
-              { value: '10,000+', label: 'Businesses' },
-              { value: 'Global', label: 'Coverage' },
-              { value: '∞', label: 'Searches' },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">{stat.value}</div>
-                <div className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">{stat.label}</div>
-              </div>
-            ))}
+            <CountUpStat target={10000} suffix="+" label="Businesses" />
+            <div className="text-center">
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
+            </div>
+            <div className="text-center">
+              <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">∞</div>
+              <div className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">Searches</div>
+            </div>
           </div>
         </div>
       </section>
