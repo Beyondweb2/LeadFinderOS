@@ -27,22 +27,22 @@ export const LOCKED_COLORS = {
 // Curated cool-spectrum accent presets
 export const ACCENT_PRESETS = [
   { 
-    name: 'Cyan', 
-    hsl: '173 80% 45%',
-    hex: '#1FE3D3',
-    description: 'Default accent'
-  },
-  { 
     name: 'Electric Blue', 
     hsl: '210 100% 50%',
     hex: '#0080FF',
-    description: 'Bold & energetic'
+    description: 'Default accent'
   },
   { 
     name: 'Ice Blue', 
     hsl: '195 100% 50%',
     hex: '#00BFFF',
     description: 'Clean & modern'
+  },
+  { 
+    name: 'Cyan', 
+    hsl: '173 80% 45%',
+    hex: '#1FE3D3',
+    description: 'Bold & energetic'
   },
   { 
     name: 'Teal', 
