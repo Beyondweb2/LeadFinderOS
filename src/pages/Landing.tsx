@@ -154,7 +154,7 @@ const Landing = () => {
           <div className="mt-16 flex flex-wrap justify-center gap-8 md:gap-16">
             {[
               { value: '20+', label: 'Countries' },
-              { value: '100km', label: 'Search Radius' },
+              { value: 'Global', label: 'Coverage' },
               { value: '∞', label: 'Searches' },
             ].map((stat) => (
               <div key={stat.label} className="text-center">
@@ -188,7 +188,7 @@ const Landing = () => {
                   <img
                     src={oldWayImage}
                     alt="Manually searching Google Maps for businesses"
-                    className="w-full h-auto rounded-xl opacity-75 grayscale-[30%]"
+                    className="w-full h-auto rounded-xl"
                   />
                 </div>
                 <p className="text-muted-foreground text-sm text-center mt-4">
