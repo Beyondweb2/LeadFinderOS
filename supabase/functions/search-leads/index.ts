@@ -36,7 +36,7 @@ const SearchRequestSchema = z.object({
   radius: z.number()
     .int('Radius must be an integer')
     .min(100, 'Minimum radius is 100 meters')
-    .max(50000, 'Maximum radius is 50km')
+    .max(100000, 'Maximum radius is 100km')
     .default(5000),
   minRating: z.number()
     .min(0, 'Rating must be between 0 and 5')
@@ -341,8 +341,11 @@ function generateGridPoints(centerLat: number, centerLng: number, radiusMeters: 
   let gridSize: number;
   let cellRadius: number;
   
-  if (radiusMeters >= 40000) {
-    gridSize = 5; // 5x5 = 25 points for 40km+
+  if (radiusMeters >= 80000) {
+    gridSize = 6; // 6x6 = 36 points for 80km+
+    cellRadius = radiusMeters / 4; // More overlap for larger areas
+  } else if (radiusMeters >= 40000) {
+    gridSize = 5; // 5x5 = 25 points for 40-80km
     cellRadius = radiusMeters / 3; // Overlap cells
   } else if (radiusMeters >= 20000) {
     gridSize = 4; // 4x4 = 16 points for 20-40km
