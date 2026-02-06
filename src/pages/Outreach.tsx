@@ -39,7 +39,7 @@ const Outreach = () => {
         </p>
       </div>
 
-      {/* Lead Table */}
+      {/* Lead Table - readOnly mode hides status and next action editing */}
       <OutreachTable
         leads={leads}
         onLeadClick={setSelectedLead}
@@ -50,9 +50,10 @@ const Outreach = () => {
         onArchiveSelected={archiveMultiple}
         showArchiveButton={true}
         isArchiveView={false}
+        readOnly={true}
       />
 
-      {/* Lead Detail Dialog */}
+      {/* Lead Detail Dialog - readOnly mode */}
       <OutreachLeadDialog
         lead={selectedLead}
         open={!!selectedLead}
@@ -62,6 +63,7 @@ const Outreach = () => {
         onUpdateNotes={updateNotes}
         onDelete={deleteLead}
         fetchActivities={fetchActivities}
+        readOnly={true}
       />
     </div>
   );

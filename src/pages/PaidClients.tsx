@@ -22,7 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { OutreachStatusBadge } from '@/components/OutreachStatusBadge';
 import { NextActionBadge } from '@/components/NextActionBadge';
 import { 
-  Briefcase, 
+  DollarSign, 
   Phone, 
   Search, 
   Calendar as CalendarIcon, 
@@ -37,16 +37,6 @@ import {
 import { format } from 'date-fns';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
 
-// Potential work specific statuses (completed goes to Paid Clients page)
-const POTENTIAL_WORK_STATUSES: { value: LeadStatus; label: string }[] = [
-  { value: 'interested', label: 'Interested' },
-  { value: 'wants_draft', label: 'Wants a Draft' },
-  { value: 'on_hold', label: 'Waiting' },
-  { value: 'reviewing_draft', label: 'Reviewing Draft' },
-  { value: 'paid_for_draft', label: 'Paid for Draft' },
-  { value: 'completed', label: 'Completed → Paid Client' },
-];
-
 const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'none', label: 'None' },
   { value: 'call', label: 'Call' },
@@ -54,15 +44,14 @@ const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'send_draft', label: 'Send Draft' },
 ];
 
-interface LeadCardProps {
+interface ClientCardProps {
   lead: OutreachLead;
-  onStatusChange: (leadId: string, status: LeadStatus) => Promise<OutreachLead | null>;
   onNextActionChange: (leadId: string, action: NextActionType, date?: string) => Promise<OutreachLead | null>;
   onNotesChange: (leadId: string, notes: string) => Promise<OutreachLead | null>;
   onDelete: (leadId: string, silent?: boolean) => Promise<boolean>;
 }
 
-const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onDelete }: LeadCardProps) => {
+const ClientCard = ({ lead, onNextActionChange, onNotesChange, onDelete }: ClientCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const [nextAction, setNextAction] = useState<NextActionType>(lead.next_action || 'none');
@@ -86,33 +75,13 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
   };
 
   const handleDelete = async () => {
-    if (confirm('Are you sure you want to remove this lead?')) {
+    if (confirm('Are you sure you want to remove this client?')) {
       await onDelete(lead.id);
     }
   };
 
-  // Get status color for card accent
-  const getStatusColor = (status: LeadStatus) => {
-    switch (status) {
-      case 'interested':
-        return 'border-l-primary';
-      case 'wants_draft':
-        return 'border-l-yellow-500';
-      case 'on_hold':
-        return 'border-l-orange-500';
-      case 'reviewing_draft':
-        return 'border-l-blue-500';
-      case 'paid_for_draft':
-        return 'border-l-green-500';
-      case 'completed':
-        return 'border-l-emerald-500';
-      default:
-        return 'border-l-muted';
-    }
-  };
-
   return (
-    <Card className={`bg-card/80 border-border/50 border-l-4 ${getStatusColor(lead.status)} transition-all hover:shadow-lg`}>
+    <Card className="bg-card/80 border-border/50 border-l-4 border-l-emerald-500 transition-all hover:shadow-lg">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
@@ -151,35 +120,17 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
           )}
         </div>
 
-        {/* Status & Next Action Row */}
-        <div className="flex flex-wrap items-center gap-3">
-          <Select
-            value={lead.status}
-            onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
-          >
-            <SelectTrigger className="h-9 w-[160px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {POTENTIAL_WORK_STATUSES.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          {lead.next_action && lead.next_action !== 'none' && (
-            <div className="flex items-center gap-2">
-              <NextActionBadge action={lead.next_action} />
-              {lead.next_action_date && (
-                <span className="text-xs text-muted-foreground">
-                  {format(new Date(lead.next_action_date), 'MMM d')}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+        {/* Next Action Row */}
+        {lead.next_action && lead.next_action !== 'none' && (
+          <div className="flex items-center gap-2">
+            <NextActionBadge action={lead.next_action} />
+            {lead.next_action_date && (
+              <span className="text-xs text-muted-foreground">
+                {format(new Date(lead.next_action_date), 'MMM d')}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Notes Preview (collapsed) */}
         {!isExpanded && lead.notes && (
@@ -208,7 +159,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add notes about this lead..."
+                placeholder="Add notes about this client..."
                 rows={4}
                 className="resize-none"
               />
@@ -283,7 +234,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
   );
 };
 
-const PotentialWorkPage = () => {
+const PaidClientsPage = () => {
   const {
     leads,
     isLoading,
@@ -297,11 +248,11 @@ const PotentialWorkPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
 
-  // Filter to only show interested leads (potential work) - excludes completed/paid_for_draft which go to Paid Clients
-  const potentialWorkLeads = useMemo(() => {
-    const interestedStatuses: LeadStatus[] = ['interested', 'wants_draft', 'on_hold', 'reviewing_draft', 'paid_for_draft'];
+  // Filter to only show completed/paid clients
+  const paidClients = useMemo(() => {
+    const paidStatuses: LeadStatus[] = ['completed', 'paid_for_draft'];
     
-    let result = leads.filter((lead) => interestedStatuses.includes(lead.status));
+    let result = leads.filter((lead) => paidStatuses.includes(lead.status));
     
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -327,11 +278,11 @@ const PotentialWorkPage = () => {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <Briefcase className="h-6 w-6" />
-          Potential Work
+          <DollarSign className="h-6 w-6" />
+          Paid Clients
         </h1>
         <p className="text-muted-foreground">
-          Manage interested leads through your sales pipeline
+          Clients who have completed payment
         </p>
       </div>
 
@@ -347,24 +298,23 @@ const PotentialWorkPage = () => {
           />
         </div>
         <div className="text-sm text-muted-foreground">
-          {potentialWorkLeads.length} potential clients
+          {paidClients.length} paid clients
         </div>
       </div>
 
-      {/* Lead Cards Grid */}
-      {potentialWorkLeads.length === 0 ? (
+      {/* Client Cards Grid */}
+      {paidClients.length === 0 ? (
         <Card className="bg-card/50 border-border/50">
           <CardContent className="py-16 text-center text-muted-foreground">
-            No potential work leads yet. Mark leads as "Interested" in the Archive to see them here.
+            No paid clients yet. When leads complete payment, they'll appear here.
           </CardContent>
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {potentialWorkLeads.map((lead) => (
-            <LeadCard
+          {paidClients.map((lead) => (
+            <ClientCard
               key={lead.id}
               lead={lead}
-              onStatusChange={updateStatus}
               onNextActionChange={updateNextAction}
               onNotesChange={updateNotes}
               onDelete={deleteLead}
@@ -388,4 +338,4 @@ const PotentialWorkPage = () => {
   );
 };
 
-export default PotentialWorkPage;
+export default PaidClientsPage;

@@ -18,6 +18,7 @@ import Templates from "./pages/Templates";
 import NotFound from "./pages/NotFound";
 import ArchivePage from "./pages/Archive";
 import PotentialWorkPage from "./pages/PotentialWork";
+import PaidClientsPage from "./pages/PaidClients";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 import Landing from "./pages/Landing";
 
@@ -105,6 +106,18 @@ const App = () => (
                    <SubscriptionGate>
                      <AppLayout>
                        <PotentialWorkPage />
+                     </AppLayout>
+                   </SubscriptionGate>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/paid-clients" 
+              element={
+                <ProtectedRoute>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <PaidClientsPage />
                      </AppLayout>
                    </SubscriptionGate>
                 </ProtectedRoute>
