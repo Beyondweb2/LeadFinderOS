@@ -9,11 +9,18 @@ interface ExcludedBusiness {
   google_maps_url: string | null;
 }
 
+interface TrialLimitError {
+  searchesToday: number;
+  limit: number;
+}
+
 interface LeadSearchContextType {
   leads: Lead[];
   isLoading: boolean;
   search: (filters: SearchFilters) => Promise<void>;
   exportToCsv: () => void;
+  trialLimitError: TrialLimitError | null;
+  clearTrialLimitError: () => void;
 }
 
 const LeadSearchContext = createContext<LeadSearchContextType | null>(null);
@@ -22,8 +29,11 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [excludedBusinesses, setExcludedBusinesses] = useState<ExcludedBusiness[]>([]);
+  const [trialLimitError, setTrialLimitError] = useState<TrialLimitError | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+
+  const clearTrialLimitError = useCallback(() => setTrialLimitError(null), []);
 
   // Fetch all businesses to exclude (checked + outreach history + current leads)
   const fetchExcludedBusinesses = useCallback(async () => {
@@ -80,6 +90,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
 
   const search = useCallback(async (filters: SearchFilters) => {
     setIsLoading(true);
+    setTrialLimitError(null);
     
     // Refresh excluded businesses before searching
     await fetchExcludedBusinesses();
@@ -91,6 +102,31 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
 
       if (error) {
         console.error('Search error:', error);
+        
+        // Try to parse the error for trial limit
+        try {
+          const errorContext = error.context;
+          if (errorContext && typeof errorContext === 'object') {
+            // Handle FunctionsHttpError which has a json() method
+            const body = typeof errorContext.json === 'function' 
+              ? await errorContext.json() 
+              : errorContext;
+            if (body?.code === 'TRIAL_LIMIT_REACHED') {
+              setTrialLimitError({
+                searchesToday: body.searches_today || 3,
+                limit: body.limit || 3,
+              });
+              return;
+            }
+          }
+        } catch {
+          // Check if error message indicates trial limit
+          if (error.message?.includes('Trial limit reached')) {
+            setTrialLimitError({ searchesToday: 3, limit: 3 });
+            return;
+          }
+        }
+        
         toast({
           title: 'Search failed',
           description: error.message || 'Failed to search for businesses. Please try again.',
@@ -196,7 +232,14 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   }, [leads, toast]);
 
   return (
-    <LeadSearchContext.Provider value={{ leads, isLoading, search, exportToCsv }}>
+    <LeadSearchContext.Provider value={{ 
+      leads, 
+      isLoading, 
+      search, 
+      exportToCsv,
+      trialLimitError,
+      clearTrialLimitError,
+    }}>
       {children}
     </LeadSearchContext.Provider>
   );

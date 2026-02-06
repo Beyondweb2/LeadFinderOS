@@ -617,21 +617,37 @@ serve(async (req) => {
           const trialEnd = new Date(trial.trial_end_date);
           
           if (now <= trialEnd && trial.plan_status === 'trial') {
-            isOnTrial = true;
-            const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            console.log(`User ${userId} is on trial (${daysLeft} days remaining)`);
-            
             // Check if we need to reset daily search count
             const today = now.toISOString().split('T')[0];
             const lastSearchDate = trial.last_search_date;
             const shouldResetDaily = lastSearchDate !== today;
+            const currentSearchesToday = shouldResetDaily ? 0 : trial.searches_today;
+            
+            // Check daily limit for trial users (3 searches per day)
+            const DAILY_TRIAL_LIMIT = 3;
+            if (currentSearchesToday >= DAILY_TRIAL_LIMIT) {
+              console.log(`User ${userId} has reached daily trial limit (${currentSearchesToday}/${DAILY_TRIAL_LIMIT})`);
+              return new Response(
+                JSON.stringify({ 
+                  error: 'Trial limit reached – upgrade to continue unlimited searches.',
+                  code: 'TRIAL_LIMIT_REACHED',
+                  searches_today: currentSearchesToday,
+                  limit: DAILY_TRIAL_LIMIT
+                }),
+                { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+            
+            isOnTrial = true;
+            const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            console.log(`User ${userId} is on trial (${daysLeft} days remaining, ${currentSearchesToday + 1}/${DAILY_TRIAL_LIMIT} searches today)`);
             
             // Increment search counts
             await serviceClient
               .from('user_trials')
               .update({ 
                 searches_used: trial.searches_used + 1,
-                searches_today: shouldResetDaily ? 1 : trial.searches_today + 1,
+                searches_today: currentSearchesToday + 1,
                 last_search_date: today
               })
               .eq('user_id', userId);

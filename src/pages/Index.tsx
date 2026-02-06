@@ -3,6 +3,7 @@ import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { ContactDialog } from '@/components/ContactDialog';
 import { UpgradePromptDialog } from '@/components/UpgradePromptDialog';
+import { TrialLimitDialog } from '@/components/TrialLimitDialog';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 import { useContactTracking } from '@/hooks/useContactTracking';
 import { useOutreach } from '@/hooks/useOutreach';
@@ -13,7 +14,7 @@ import { Flame, Target, Zap } from 'lucide-react';
 import type { Lead, Country } from '@/types/lead';
 
 const Index = () => {
-  const { leads, isLoading, search, exportToCsv } = useLeadSearchContext();
+  const { leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError } = useLeadSearchContext();
   const { 
     markAsContacted, 
     getLatestContact, 
@@ -115,11 +116,19 @@ const Index = () => {
         isLoading={isContactLoading}
       />
 
-      {/* Upgrade Prompt Dialog */}
+      {/* Upgrade Prompt Dialog (after every 5 searches) */}
       <UpgradePromptDialog
         open={showUpgradePrompt}
         onOpenChange={setShowUpgradePrompt}
         searchesUsed={searchesUsed}
+      />
+
+      {/* Trial Limit Dialog (when daily limit reached) */}
+      <TrialLimitDialog
+        open={!!trialLimitError}
+        onOpenChange={(open) => !open && clearTrialLimitError()}
+        searchesToday={trialLimitError?.searchesToday || 3}
+        dailyLimit={trialLimitError?.limit || 3}
       />
     </div>
   );
