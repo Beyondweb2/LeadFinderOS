@@ -4,39 +4,23 @@ const STORAGE_KEY = 'leadfinder-theme';
 
 interface ThemeColors {
   primary: string;
-  background: string;
-  card: string;
-  accent: string;
 }
 
 function applyThemeToDocument(colors: ThemeColors) {
   const root = document.documentElement;
   
-  // Primary colors
+  // Only update primary/accent colors - background stays dark
   root.style.setProperty('--primary', colors.primary);
   root.style.setProperty('--ring', colors.primary);
   root.style.setProperty('--sidebar-primary', colors.primary);
   root.style.setProperty('--sidebar-ring', colors.primary);
   
-  // Background colors
-  root.style.setProperty('--background', colors.background);
-  
-  // Card colors
-  root.style.setProperty('--card', colors.card);
-  root.style.setProperty('--popover', colors.card);
-  root.style.setProperty('--sidebar-background', colors.card);
-  
-  // Accent colors
-  root.style.setProperty('--accent', colors.accent);
-  
-  // Update derived colors
-  const bgHue = colors.background.split(' ')[0];
-  root.style.setProperty('--secondary', `${bgHue} 47% 14%`);
-  root.style.setProperty('--muted', `${bgHue} 47% 12%`);
-  root.style.setProperty('--border', `${bgHue} 30% 18%`);
-  root.style.setProperty('--input', `${bgHue} 30% 15%`);
-  root.style.setProperty('--sidebar-accent', `${bgHue} 47% 14%`);
-  root.style.setProperty('--sidebar-border', `${bgHue} 30% 18%`);
+  // Derive accent from primary
+  const parts = colors.primary.split(' ');
+  const h = parts[0];
+  const s = parseInt(parts[1]) - 20;
+  const l = parseInt(parts[2]) - 10;
+  root.style.setProperty('--accent', `${h} ${s}% ${l}%`);
 }
 
 export function ThemeInitializer({ children }: { children: React.ReactNode }) {

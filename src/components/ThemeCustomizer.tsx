@@ -11,7 +11,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useTheme } from '@/hooks/useTheme';
 import { cn } from '@/lib/utils';
 
@@ -29,24 +28,15 @@ export function ThemeCustomizer() {
     resetTheme();
   };
 
-  // Parse HSL to individual values for color picker
-  const parseHsl = (hsl: string) => {
-    const parts = hsl.split(' ');
-    return {
-      h: parseInt(parts[0]) || 0,
-      s: parseInt(parts[1]) || 0,
-      l: parseInt(parts[2]) || 0,
-    };
-  };
-
   const hslToHex = (hsl: string) => {
-    const { h, s, l } = parseHsl(hsl);
-    const sNorm = s / 100;
-    const lNorm = l / 100;
+    const parts = hsl.split(' ');
+    const h = parseInt(parts[0]) || 0;
+    const s = (parseInt(parts[1]) || 0) / 100;
+    const l = (parseInt(parts[2]) || 0) / 100;
     
-    const c = (1 - Math.abs(2 * lNorm - 1)) * sNorm;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
     const x = c * (1 - Math.abs((h / 60) % 2 - 1));
-    const m = lNorm - c / 2;
+    const m = l - c / 2;
     
     let r = 0, g = 0, b = 0;
     
@@ -92,125 +82,64 @@ export function ThemeCustomizer() {
           <Palette className="h-4 w-4" />
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-[340px] sm:w-[400px]">
+      <SheetContent className="w-[320px]">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <Palette className="h-5 w-5 text-primary" />
-            Theme Customizer
+            Accent Color
           </SheetTitle>
           <SheetDescription>
-            Customize the look and feel of LeadFinder Pro
+            Choose your preferred accent color for buttons and icons
           </SheetDescription>
         </SheetHeader>
 
-        <Tabs defaultValue="presets" className="mt-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="presets">Presets</TabsTrigger>
-            <TabsTrigger value="custom">Custom</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="presets" className="mt-4 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+        <div className="mt-6 space-y-6">
+          {/* Preset Colors */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Presets</Label>
+            <div className="grid grid-cols-4 gap-2">
               {presets.map((preset, index) => (
                 <button
                   key={preset.name}
                   onClick={() => handlePresetSelect(index)}
                   className={cn(
-                    'relative p-3 rounded-lg border-2 transition-all text-left',
+                    'relative aspect-square rounded-lg border-2 transition-all flex items-center justify-center',
                     activePreset === index
-                      ? 'border-primary bg-primary/10'
-                      : 'border-border hover:border-primary/50'
+                      ? 'border-foreground scale-105'
+                      : 'border-border hover:border-foreground/50'
                   )}
+                  style={{ backgroundColor: `hsl(${preset.colors.primary})` }}
+                  title={preset.name}
                 >
-                  <div className="flex items-center gap-2 mb-2">
-                    <div
-                      className="w-6 h-6 rounded-full border border-border/50"
-                      style={{ backgroundColor: `hsl(${preset.colors.primary})` }}
-                    />
-                    <div
-                      className="w-4 h-4 rounded-full border border-border/50"
-                      style={{ backgroundColor: `hsl(${preset.colors.background})` }}
-                    />
-                  </div>
-                  <span className="text-xs font-medium">{preset.name}</span>
                   {activePreset === index && (
-                    <Check className="absolute top-2 right-2 h-4 w-4 text-primary" />
+                    <Check className="h-4 w-4 text-white drop-shadow-md" />
                   )}
                 </button>
               ))}
             </div>
-          </TabsContent>
+          </div>
 
-          <TabsContent value="custom" className="mt-4 space-y-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-sm">Primary Color (Buttons, Accents)</Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="color"
-                    value={hslToHex(theme.primary)}
-                    onChange={(e) => updateTheme({ primary: hexToHsl(e.target.value) })}
-                    className="w-12 h-10 p-1 cursor-pointer"
-                  />
-                  <div 
-                    className="flex-1 h-10 rounded-md border border-border"
-                    style={{ backgroundColor: `hsl(${theme.primary})` }}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm">Background Color</Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="color"
-                    value={hslToHex(theme.background)}
-                    onChange={(e) => updateTheme({ background: hexToHsl(e.target.value) })}
-                    className="w-12 h-10 p-1 cursor-pointer"
-                  />
-                  <div 
-                    className="flex-1 h-10 rounded-md border border-border"
-                    style={{ backgroundColor: `hsl(${theme.background})` }}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm">Card Background</Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="color"
-                    value={hslToHex(theme.card)}
-                    onChange={(e) => updateTheme({ card: hexToHsl(e.target.value) })}
-                    className="w-12 h-10 p-1 cursor-pointer"
-                  />
-                  <div 
-                    className="flex-1 h-10 rounded-md border border-border"
-                    style={{ backgroundColor: `hsl(${theme.card})` }}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label className="text-sm">Accent Color</Label>
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="color"
-                    value={hslToHex(theme.accent)}
-                    onChange={(e) => updateTheme({ accent: hexToHsl(e.target.value) })}
-                    className="w-12 h-10 p-1 cursor-pointer"
-                  />
-                  <div 
-                    className="flex-1 h-10 rounded-md border border-border"
-                    style={{ backgroundColor: `hsl(${theme.accent})` }}
-                  />
-                </div>
-              </div>
+          {/* Custom Color Picker */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Custom Color</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                type="color"
+                value={hslToHex(theme.primary)}
+                onChange={(e) => {
+                  setActivePreset(null);
+                  updateTheme({ primary: hexToHsl(e.target.value) });
+                }}
+                className="w-14 h-10 p-1 cursor-pointer"
+              />
+              <div 
+                className="flex-1 h-10 rounded-md border border-border"
+                style={{ backgroundColor: `hsl(${theme.primary})` }}
+              />
             </div>
-          </TabsContent>
-        </Tabs>
+          </div>
 
-        <div className="mt-6 pt-4 border-t border-border">
+          {/* Reset Button */}
           <Button
             variant="outline"
             onClick={handleReset}

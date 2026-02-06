@@ -2,86 +2,21 @@ import { useState, useEffect, useCallback } from 'react';
 
 export interface ThemeColors {
   primary: string;
-  background: string;
-  card: string;
-  accent: string;
 }
 
 const DEFAULT_THEME: ThemeColors = {
   primary: '173 80% 45%', // Teal/cyan
-  background: '222 47% 6%', // Dark blue
-  card: '222 47% 8%',
-  accent: '173 58% 35%',
 };
 
 const PRESET_THEMES: { name: string; colors: ThemeColors }[] = [
-  {
-    name: 'Default Teal',
-    colors: DEFAULT_THEME,
-  },
-  {
-    name: 'Ocean Blue',
-    colors: {
-      primary: '210 100% 50%',
-      background: '220 40% 8%',
-      card: '220 40% 10%',
-      accent: '210 80% 40%',
-    },
-  },
-  {
-    name: 'Purple Haze',
-    colors: {
-      primary: '270 70% 55%',
-      background: '280 30% 8%',
-      card: '280 30% 10%',
-      accent: '270 50% 45%',
-    },
-  },
-  {
-    name: 'Sunset Orange',
-    colors: {
-      primary: '25 95% 55%',
-      background: '20 30% 6%',
-      card: '20 30% 8%',
-      accent: '25 75% 45%',
-    },
-  },
-  {
-    name: 'Emerald Green',
-    colors: {
-      primary: '142 76% 45%',
-      background: '150 30% 6%',
-      card: '150 30% 8%',
-      accent: '142 56% 35%',
-    },
-  },
-  {
-    name: 'Rose Pink',
-    colors: {
-      primary: '350 80% 60%',
-      background: '340 25% 7%',
-      card: '340 25% 9%',
-      accent: '350 60% 50%',
-    },
-  },
-  {
-    name: 'Gold Rush',
-    colors: {
-      primary: '45 95% 50%',
-      background: '40 30% 6%',
-      card: '40 30% 8%',
-      accent: '45 75% 40%',
-    },
-  },
-  {
-    name: 'Cyber Cyan',
-    colors: {
-      primary: '185 100% 50%',
-      background: '200 50% 5%',
-      card: '200 50% 7%',
-      accent: '185 80% 40%',
-    },
-  },
+  { name: 'Teal', colors: { primary: '173 80% 45%' } },
+  { name: 'Ocean Blue', colors: { primary: '210 100% 50%' } },
+  { name: 'Purple', colors: { primary: '270 70% 55%' } },
+  { name: 'Orange', colors: { primary: '25 95% 55%' } },
+  { name: 'Emerald', colors: { primary: '142 76% 45%' } },
+  { name: 'Rose', colors: { primary: '350 80% 60%' } },
+  { name: 'Gold', colors: { primary: '45 95% 50%' } },
+  { name: 'Cyan', colors: { primary: '185 100% 50%' } },
 ];
 
 const STORAGE_KEY = 'leadfinder-theme';
@@ -89,31 +24,18 @@ const STORAGE_KEY = 'leadfinder-theme';
 function applyThemeToDocument(colors: ThemeColors) {
   const root = document.documentElement;
   
-  // Primary colors
+  // Only update primary/accent colors - background stays dark
   root.style.setProperty('--primary', colors.primary);
   root.style.setProperty('--ring', colors.primary);
   root.style.setProperty('--sidebar-primary', colors.primary);
   root.style.setProperty('--sidebar-ring', colors.primary);
   
-  // Background colors
-  root.style.setProperty('--background', colors.background);
-  
-  // Card colors
-  root.style.setProperty('--card', colors.card);
-  root.style.setProperty('--popover', colors.card);
-  root.style.setProperty('--sidebar-background', colors.card);
-  
-  // Accent colors
-  root.style.setProperty('--accent', colors.accent);
-  
-  // Update derived colors
-  const primaryHue = colors.primary.split(' ')[0];
-  root.style.setProperty('--secondary', `${colors.background.split(' ')[0]} 47% 14%`);
-  root.style.setProperty('--muted', `${colors.background.split(' ')[0]} 47% 12%`);
-  root.style.setProperty('--border', `${colors.background.split(' ')[0]} 30% 18%`);
-  root.style.setProperty('--input', `${colors.background.split(' ')[0]} 30% 15%`);
-  root.style.setProperty('--sidebar-accent', `${colors.background.split(' ')[0]} 47% 14%`);
-  root.style.setProperty('--sidebar-border', `${colors.background.split(' ')[0]} 30% 18%`);
+  // Derive accent from primary (slightly darker/muted version)
+  const parts = colors.primary.split(' ');
+  const h = parts[0];
+  const s = parseInt(parts[1]) - 20;
+  const l = parseInt(parts[2]) - 10;
+  root.style.setProperty('--accent', `${h} ${s}% ${l}%`);
 }
 
 export function useTheme() {
