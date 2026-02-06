@@ -25,6 +25,7 @@ import featureContactTracking from '@/assets/feature-contact-tracking.png';
 import featureDashboard from '@/assets/feature-dashboard.png';
 import featureExport from '@/assets/feature-export.png';
 import featureClassification from '@/assets/feature-classification.png';
+import featureTemplates from '@/assets/feature-templates.png';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 
 // Scroll reveal wrapper component
@@ -72,30 +73,43 @@ const FEATURES = [
     title: 'Customization',
     description: 'Personalize your workspace with custom themes and accent colors.',
     image: featureCustomization,
+    imageScale: 'scale-100',
   },
   {
     icon: Phone,
     title: 'Contact Tracking',
     description: 'Track potential clients through your sales pipeline from interested to completed.',
     image: featureContactTracking,
+    imageScale: 'scale-150',
+    imagePosition: 'object-[center_40%]',
   },
   {
     icon: ClipboardList,
     title: 'Smart Dashboard',
     description: 'Track performance, revenue, conversions, and productivity all in one place.',
     image: featureDashboard,
+    imageScale: 'scale-100',
+  },
+  {
+    icon: FileText,
+    title: 'Templates',
+    description: 'Pre-built text and voice scripts to speed up your outreach workflow.',
+    image: featureTemplates,
+    imageScale: 'scale-100',
   },
   {
     icon: FileText,
     title: 'Export Tools',
     description: 'Full contact management with activity logs, notes, and action scheduling.',
     image: featureExport,
+    imageScale: 'scale-100',
   },
   {
     icon: Search,
     title: 'Smart Classification',
     description: 'Automatically classify leads as hot, directory-only, or has website with confidence scores.',
     image: featureClassification,
+    imageScale: 'scale-100',
   },
 ];
 
@@ -461,7 +475,7 @@ const Landing = () => {
                     <img 
                       src={feature.image} 
                       alt={feature.title}
-                      className="w-full h-40 sm:h-48 object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                      className={`w-full h-40 sm:h-48 object-cover transition-transform duration-500 group-hover:scale-105 ${feature.imageScale || 'scale-100'} ${feature.imagePosition || 'object-top'}`}
                     />
                   </div>
                   
