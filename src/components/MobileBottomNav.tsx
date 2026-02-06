@@ -24,11 +24,11 @@ const mainNavItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Search', url: '/', icon: Search },
   { title: 'CRM', url: '/outreach', icon: ClipboardList },
-  { title: 'Templates', url: '/templates', icon: FileText },
+  { title: 'Archive', url: '/archive', icon: Archive },
 ];
 
 const moreNavItems = [
-  { title: 'Archive', url: '/archive', icon: Archive },
+  { title: 'Templates', url: '/templates', icon: FileText },
   { title: 'Potential Work', url: '/potential-work', icon: Briefcase },
   { title: 'Paid Clients', url: '/paid-clients', icon: DollarSign },
 ];
