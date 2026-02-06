@@ -89,18 +89,52 @@
      const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
      const supabase = createClient(supabaseUrl, supabaseServiceKey);
  
-     // Verify user token
-     const token = authHeader.replace('Bearer ', '');
-     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-     
-     if (authError || !user) {
-       return new Response(
-         JSON.stringify({ error: 'Invalid token' }),
-         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-       );
-     }
- 
-     const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
+      // Verify user token
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      
+      if (authError || !user) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid token' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const userId = user.id;
+      console.log(`Authenticated request from user: ${userId}`);
+
+      // Check if user has admin role (bypass subscription check)
+      const { data: roleData } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      const isAdmin = !!roleData;
+
+      // Check subscription status (unless admin)
+      if (!isAdmin) {
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('status')
+          .eq('user_id', userId)
+          .maybeSingle();
+
+        const validStatuses = ['active', 'trialing', 'past_due'];
+        if (!subscription || !validStatuses.includes(subscription.status)) {
+          console.log(`User ${userId} has no active subscription`);
+          return new Response(
+            JSON.stringify({ error: 'Active subscription required to access this feature.' }),
+            { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        console.log(`User ${userId} has valid subscription: ${subscription.status}`);
+      } else {
+        console.log(`User ${userId} is admin - bypassing subscription check`);
+      }
+
+      const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
      if (!GOOGLE_MAPS_API_KEY) {
        return new Response(
          JSON.stringify({ error: 'Service not configured' }),
@@ -125,7 +159,7 @@
        .from('outreach_leads')
        .select('id, business_name, address, google_maps_url')
        .in('id', limitedIds)
-       .eq('user_id', user.id)
+        .eq('user_id', userId)
        .is('phone', null);
  
      if (fetchError) {
@@ -169,7 +203,7 @@
            .from('outreach_leads')
            .update({ phone: result.phone })
            .eq('id', result.id)
-           .eq('user_id', user.id);
+           .eq('user_id', userId);
  
          if (!updateError) {
            updatedCount++;

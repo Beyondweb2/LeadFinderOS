@@ -572,6 +572,44 @@ serve(async (req) => {
     const userId = claimsData.claims.sub as string;
     console.log(`Authenticated request from user: ${userId}`);
 
+    // Create service role client for subscription/role checks
+    const serviceClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { persistSession: false } }
+    );
+
+    // Check if user has admin role (bypass subscription check)
+    const { data: roleData } = await serviceClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('role', 'admin')
+      .maybeSingle();
+
+    const isAdmin = !!roleData;
+
+    // Check subscription status (unless admin)
+    if (!isAdmin) {
+      const { data: subscription } = await serviceClient
+        .from('subscriptions')
+        .select('status')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      const validStatuses = ['active', 'trialing', 'past_due'];
+      if (!subscription || !validStatuses.includes(subscription.status)) {
+        console.log(`User ${userId} has no active subscription`);
+        return new Response(
+          JSON.stringify({ error: 'Active subscription required to access this feature.' }),
+          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      console.log(`User ${userId} has valid subscription: ${subscription.status}`);
+    } else {
+      console.log(`User ${userId} is admin - bypassing subscription check`);
+    }
+
     // Check rate limit
     if (!checkRateLimit(userId)) {
       return new Response(
