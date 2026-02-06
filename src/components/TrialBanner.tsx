@@ -47,21 +47,20 @@ export function TrialBanner() {
   if (isOnTrial) {
     return (
       <div className="bg-primary/5 border-b border-primary/10 px-4 py-2">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-sm">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm min-w-0">
             <Sparkles className="h-4 w-4 text-primary shrink-0" />
-            <span className="font-medium text-foreground/90">
-              {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''} left in your free trial
+            <span className="font-medium text-foreground/90 whitespace-nowrap">
+              {trialDaysRemaining} day{trialDaysRemaining !== 1 ? 's' : ''} left
             </span>
-            <span className="text-muted-foreground hidden md:inline">
-              — Unlock unlimited searches & full CRM access
+            <span className="text-muted-foreground hidden sm:inline truncate">
+              — Unlock unlimited searches
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <Button 
               size="sm"
               onClick={() => navigate('/subscribe')}
-              className="shrink-0"
             >
               <Crown className="h-3.5 w-3.5 mr-1.5" />
               <span className="hidden sm:inline">Upgrade to Pro</span>
