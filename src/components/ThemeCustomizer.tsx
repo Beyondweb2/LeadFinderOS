@@ -28,7 +28,8 @@ export function ThemeCustomizer() {
     resetTheme();
   };
 
-  const hslToHex = (hsl: string) => {
+  const hslToHex = (hsl: string | undefined) => {
+    if (!hsl) return '#000000';
     const parts = hsl.split(' ');
     const h = parseInt(parts[0]) || 0;
     const s = (parseInt(parts[1]) || 0) / 100;
