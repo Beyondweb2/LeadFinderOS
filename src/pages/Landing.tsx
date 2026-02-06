@@ -169,7 +169,7 @@ const Landing = () => {
           {/* Stats bar */}
           <div className="mt-20 flex flex-wrap justify-center gap-12 md:gap-20">
             {[
-              { value: '20+', label: 'Countries' },
+              { value: '10,000+', label: 'Businesses' },
               { value: 'Global', label: 'Coverage' },
               { value: '∞', label: 'Searches' },
             ].map((stat) => (
