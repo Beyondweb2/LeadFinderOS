@@ -40,17 +40,17 @@ export function TrialLimitDialog({ open, onOpenChange, searchesToday, dailyLimit
             <Lock className="h-6 w-6 text-destructive" />
           </div>
           <DialogTitle className="text-xl">
-            Trial limit reached
+            You've reached today's search limit
           </DialogTitle>
           <DialogDescription className="text-base">
-            You've used all {dailyLimit} of your daily searches. Upgrade to LeadFinder Pro for unlimited access.
+            Unlock unlimited searches with LeadFinder Pro
           </DialogDescription>
         </DialogHeader>
 
         <div className="py-4 space-y-4">
           <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
             <Clock className="h-4 w-4" />
-            <span>Your limit resets in 24 hours</span>
+            <span>{searchesToday} of {dailyLimit} daily searches used</span>
           </div>
           
           <ul className="space-y-2">
@@ -65,14 +65,14 @@ export function TrialLimitDialog({ open, onOpenChange, searchesToday, dailyLimit
 
         <DialogFooter className="flex-col gap-2 sm:flex-col">
           <Button onClick={handleUpgrade} className="w-full">
-            Upgrade to Pro – £19.99/mo
+            Upgrade to Pro
           </Button>
           <Button 
             variant="ghost" 
             onClick={() => onOpenChange(false)}
-            className="w-full"
+            className="w-full text-muted-foreground"
           >
-            I'll wait until tomorrow
+            Come back tomorrow
           </Button>
         </DialogFooter>
       </DialogContent>

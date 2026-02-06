@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { ContactDialog } from '@/components/ContactDialog';
@@ -10,7 +10,8 @@ import { useOutreach } from '@/hooks/useOutreach';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
-import { Flame, Target, Zap } from 'lucide-react';
+import { useFirstTimeUser } from '@/hooks/useFirstTimeUser';
+import { Flame, Target, Zap, Search } from 'lucide-react';
 import type { Lead, Country } from '@/types/lead';
 
 const Index = () => {
@@ -22,11 +23,33 @@ const Index = () => {
   } = useContactTracking();
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
-  const { searchesUsed, shouldShowUpgradePrompt, checkTrial } = useTrial();
+  const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit } = useTrial();
   const { subscribed } = useSubscription();
+  const { isFirstTime, hasChecked: hasCheckedFirstTime, markFirstLoginComplete } = useFirstTimeUser();
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const hasRunAutoSearch = useRef(false);
+
+  // Auto-search for first-time users
+  useEffect(() => {
+    if (hasCheckedFirstTime && isFirstTime && !hasRunAutoSearch.current && !isLoading) {
+      hasRunAutoSearch.current = true;
+      
+      // Run automatic search with defaults
+      search({
+        keyword: 'Electrician',
+        location: 'London, UK',
+        radius: 10000, // 10km in meters
+        requirePhone: true,
+        country: 'UK' as Country,
+        deepSearch: false,
+      });
+      
+      // Mark first login as complete
+      markFirstLoginComplete();
+    }
+  }, [hasCheckedFirstTime, isFirstTime, isLoading, search, markFirstLoginComplete]);
 
   // Check if we should show upgrade prompt after searches
   useEffect(() => {
@@ -41,6 +64,9 @@ const Index = () => {
       checkTrial();
     }
   }, [isLoading, leads.length, checkTrial]);
+
+  // Count businesses without websites
+  const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -71,9 +97,23 @@ const Index = () => {
             setLastSearchCountry(filters.country || 'UK');
             search(filters);
           }} 
-          isLoading={isLoading} 
+          isLoading={isLoading}
+          isOnTrial={isOnTrial}
+          searchesRemaining={searchesRemaining}
+          dailyLimit={dailyLimit}
+          subscribed={subscribed}
         />
       </section>
+
+      {/* Outcome-focused Results Header */}
+      {leads.length > 0 && noWebsiteCount > 0 && (
+        <div className="flex items-center justify-center gap-2 py-3 px-4 bg-primary/5 border border-primary/10 rounded-lg">
+          <Target className="h-5 w-5 text-primary" />
+          <span className="text-base font-medium text-foreground">
+            <span className="text-primary font-bold">{noWebsiteCount}</span> business{noWebsiteCount !== 1 ? 'es' : ''} here need{noWebsiteCount === 1 ? 's' : ''} a website
+          </span>
+        </div>
+      )}
 
       {/* Results Section */}
       {leads.length > 0 && (
@@ -95,7 +135,7 @@ const Index = () => {
       {leads.length === 0 && !isLoading && (
         <section className="text-center py-16">
           <div className="inline-flex p-4 rounded-full bg-muted/50 mb-6">
-            <Target className="h-12 w-12 text-muted-foreground" />
+            <Search className="h-12 w-12 text-muted-foreground" />
           </div>
           <h2 className="text-xl font-semibold text-foreground/80 mb-2">
             Ready to find leads

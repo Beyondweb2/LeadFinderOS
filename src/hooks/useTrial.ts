@@ -12,9 +12,12 @@ interface TrialState {
   searchesToday: number;
   searchesUsed: number;
   isLoading: boolean;
+  dailyLimit: number;
+  searchesRemaining: number;
 }
 
 const SEARCHES_BEFORE_PROMPT = 5;
+const DAILY_TRIAL_LIMIT = 3;
 
 export function useTrial() {
   const { user } = useAuth();
@@ -28,6 +31,8 @@ export function useTrial() {
     searchesToday: 0,
     searchesUsed: 0,
     isLoading: true,
+    dailyLimit: DAILY_TRIAL_LIMIT,
+    searchesRemaining: DAILY_TRIAL_LIMIT,
   });
 
   const checkTrial = useCallback(async () => {
@@ -61,6 +66,8 @@ export function useTrial() {
           searchesToday: 0,
           searchesUsed: 0,
           isLoading: false,
+          dailyLimit: DAILY_TRIAL_LIMIT,
+          searchesRemaining: 0,
         });
         return;
       }
@@ -70,6 +77,8 @@ export function useTrial() {
       const daysRemaining = Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
       const expired = now > trialEnd;
       const planStatus = expired ? 'expired' : (data.plan_status as TrialState['planStatus']);
+
+      const searchesRemaining = Math.max(0, DAILY_TRIAL_LIMIT - data.searches_today);
 
       setState({
         planStatus,
@@ -81,6 +90,8 @@ export function useTrial() {
         searchesToday: data.searches_today,
         searchesUsed: data.searches_used,
         isLoading: false,
+        dailyLimit: DAILY_TRIAL_LIMIT,
+        searchesRemaining,
       });
     } catch (err) {
       console.error('Trial check failed:', err);
