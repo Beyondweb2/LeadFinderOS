@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   Search,
   ClipboardList,
@@ -14,6 +15,7 @@ import {
   CheckCircle,
   Volume2,
   VolumeX,
+  Expand,
 } from 'lucide-react';
 import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
@@ -236,8 +238,33 @@ const VideoSection = () => {
 };
 
 const Landing = () => {
+  const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
+  
   return (
     <div className="min-h-screen bg-background overflow-hidden">
+      {/* Feature Image Modal */}
+      <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
+        <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
+          <div className="relative">
+            <button
+              onClick={() => setExpandedImage(null)}
+              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            {expandedImage && (
+              <div className="p-2">
+                <img 
+                  src={expandedImage.src} 
+                  alt={expandedImage.title}
+                  className="w-full h-auto rounded-lg"
+                />
+                <p className="text-center text-lg font-semibold mt-4 pb-2">{expandedImage.title}</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* Cinematic background */}
       <div className="fixed inset-0 pointer-events-none">
         {/* Deep blue gradient from top */}
@@ -305,58 +332,58 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-8 pb-12 sm:pt-16 sm:pb-24 md:pt-24 md:pb-32 lg:pt-32 lg:pb-40 px-4">
+      <section className="relative z-10 pt-12 pb-16 sm:pt-20 sm:pb-28 md:pt-28 md:pb-36 lg:pt-36 lg:pb-44 px-4">
         <div className="container mx-auto text-center">
-          {/* Tagline badge - hidden on mobile */}
+          {/* Tagline badge */}
           <div 
-            className="hidden sm:inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-medium mb-8 backdrop-blur-sm"
+            className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-6 sm:mb-8 backdrop-blur-sm"
             style={{ 
-              border: '1px solid hsl(210 100% 50% / 0.2)', 
-              background: 'hsl(210 100% 50% / 0.05)',
-              color: 'hsl(210 100% 50%)'
+              border: '1px solid hsl(210 100% 50% / 0.3)', 
+              background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.1), hsl(210 100% 50% / 0.05))',
+              color: 'hsl(210 100% 60%)'
             }}
           >
-            <Zap className="h-3.5 w-3.5" />
+            <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
             <span>Lead generation for web professionals</span>
           </div>
           
-          <h1 className="text-[2rem] leading-[1.15] sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight px-2 sm:px-0">
-            <span className="text-gradient-subtle">Find Businesses</span>
-            <br />
-            <span className="text-gradient-primary">Without Websites</span>
+          <h1 className="text-3xl leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-4 sm:mb-6 tracking-tight">
+            <span className="block text-foreground">Find Businesses</span>
+            <span className="block text-gradient-primary mt-1 sm:mt-2">Without Websites</span>
           </h1>
           
-          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-6 sm:mb-10 leading-relaxed px-4 sm:px-2">
-            Discover local businesses that need your web design services.
+          <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-xl mx-auto mb-8 sm:mb-12 leading-relaxed">
+            Discover local businesses that need your web design services. 
+            <span className="hidden sm:inline"> Stop scrolling Google Maps—start closing deals.</span>
           </p>
           
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4 px-2 sm:px-0">
-            <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-4 sm:py-6 h-auto w-full sm:w-auto" asChild>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+            <Button size="lg" className="btn-premium text-base font-semibold px-8 py-6 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/auth">
-                Get Started
-                <ArrowRight className="ml-2 h-4 w-4" />
+                Start Free Trial
+                <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
             </Button>
             <Button 
               size="lg" 
               variant="outline" 
-              className="text-sm sm:text-base px-6 sm:px-8 py-4 sm:py-6 h-auto border-white/10 bg-white/[0.02] hover:bg-white/[0.05] text-muted-foreground hover:text-foreground backdrop-blur-sm w-full sm:w-auto" 
+              className="text-base px-8 py-6 h-auto border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-foreground backdrop-blur-sm w-full sm:w-auto" 
               asChild
             >
               <Link to="/auth">Sign In</Link>
             </Button>
           </div>
           
-          {/* Stats bar - more compact on mobile */}
-          <div className="mt-8 sm:mt-16 md:mt-20 flex flex-wrap justify-center gap-6 sm:gap-12 md:gap-20">
-            <CountUpStat target={100000} suffix="+" label="Businesses" />
+          {/* Stats bar */}
+          <div className="mt-12 sm:mt-20 flex flex-wrap justify-center gap-8 sm:gap-16 md:gap-24">
+            <CountUpStat target={100000} suffix="+" label="Businesses Found" />
             <div className="text-center">
-              <div className="text-xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
+              <div className="text-2xl sm:text-4xl md:text-5xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-xs sm:text-sm text-muted-foreground mt-1.5 font-medium">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">∞</div>
-              <div className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">Searches</div>
+              <div className="text-2xl sm:text-4xl md:text-5xl font-bold text-gradient-primary tracking-tight">∞</div>
+              <div className="text-xs sm:text-sm text-muted-foreground mt-1.5 font-medium">Unlimited Searches</div>
             </div>
           </div>
         </div>
@@ -461,7 +488,8 @@ const Landing = () => {
             {FEATURES.map((feature, index) => (
               <ScrollReveal key={feature.title} delay={index * 100}>
                 <Card
-                  className="group relative glass-panel-strong border-white/[0.06] transition-all duration-500 overflow-hidden h-full hover:border-[hsl(210_100%_50%_/_0.3)]"
+                  className="group relative glass-panel-strong border-white/[0.06] transition-all duration-500 overflow-hidden h-full hover:border-[hsl(210_100%_50%_/_0.3)] cursor-pointer"
+                  onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
                 >
                   {/* Hover glow - fixed brand blue */}
                   <div 
@@ -471,7 +499,11 @@ const Landing = () => {
                   
                   {/* Screenshot image */}
                   <div className="relative overflow-hidden rounded-t-lg">
-                    <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent z-10" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent z-10 pointer-events-none" />
+                    {/* Expand icon overlay */}
+                    <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <Expand className="h-4 w-4 text-foreground" />
+                    </div>
                     <img 
                       src={feature.image} 
                       alt={feature.title}
