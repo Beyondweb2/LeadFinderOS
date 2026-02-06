@@ -289,7 +289,7 @@ const Landing = () => {
           
           {/* Stats bar - more compact on mobile */}
           <div className="mt-8 sm:mt-16 md:mt-20 flex flex-wrap justify-center gap-6 sm:gap-12 md:gap-20">
-            <CountUpStat target={10000} suffix="+" label="Businesses" />
+            <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
               <div className="text-xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
@@ -393,7 +393,7 @@ const Landing = () => {
             </p>
           </div>
           
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-5">
             {FEATURES.map((feature) => (
               <Card
                 key={feature.title}
@@ -406,20 +406,20 @@ const Landing = () => {
                   style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.03), transparent)' }}
                 />
                 
-                <CardHeader className="relative pb-2 p-4 sm:p-6 sm:pb-2">
+                <CardHeader className="relative pb-1 sm:pb-2 p-3 sm:p-6">
                   <div 
-                    className="p-2.5 sm:p-3 rounded-xl w-fit mb-3 sm:mb-4 transition-colors duration-500"
+                    className="p-2 sm:p-3 rounded-xl w-fit mb-2 sm:mb-4 transition-colors duration-500"
                     style={{ 
                       background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
                       border: '1px solid hsl(210 100% 50% / 0.1)'
                     }}
                   >
-                    <feature.icon className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                    <feature.icon className="h-3.5 w-3.5 sm:h-5 sm:w-5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
                   </div>
-                  <CardTitle className="text-base sm:text-lg font-semibold tracking-tight">{feature.title}</CardTitle>
+                  <CardTitle className="text-sm sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</CardTitle>
                 </CardHeader>
-                <CardContent className="relative pt-0 p-4 sm:p-6 sm:pt-0">
-                  <p className="text-muted-foreground text-xs sm:text-sm leading-relaxed">{feature.description}</p>
+                <CardContent className="relative pt-0 p-3 sm:p-6 sm:pt-0">
+                  <p className="text-muted-foreground text-[11px] sm:text-sm leading-relaxed">{feature.description}</p>
                 </CardContent>
               </Card>
             ))}
