@@ -1,3 +1,4 @@
+import { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +14,8 @@ import {
   ArrowRight,
   X,
   CheckCircle,
+  Volume2,
+  VolumeX,
 } from 'lucide-react';
 import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
@@ -60,6 +63,57 @@ const PRICING_FEATURES = [
   'Export leads to outreach',
   'Priority support',
 ];
+
+// Video section component with sound toggle
+const VideoSection = () => {
+  const [isMuted, setIsMuted] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  return (
+    <section className="relative z-10 pb-16 md:pb-24">
+      <div className="container mx-auto px-4">
+        <div className="relative max-w-4xl mx-auto">
+          {/* Glow effect behind video */}
+          <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-primary/20 via-accent/10 to-primary/10 blur-2xl opacity-40" />
+          <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/30 via-primary/15 to-transparent" />
+          
+          <div className="relative rounded-2xl overflow-hidden border border-primary/20 bg-card/80 backdrop-blur-sm glow-effect">
+            <video 
+              ref={videoRef}
+              className="w-full h-auto"
+              autoPlay 
+              loop 
+              playsInline
+            >
+              <source src={demoVideo} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+            
+            {/* Sound toggle button */}
+            <button
+              onClick={toggleMute}
+              className="absolute bottom-4 right-4 p-2.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
+              aria-label={isMuted ? "Unmute video" : "Mute video"}
+            >
+              {isMuted ? (
+                <VolumeX className="h-5 w-5" />
+              ) : (
+                <Volume2 className="h-5 w-5" />
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+};
 
 const Landing = () => {
   return (
@@ -183,28 +237,7 @@ const Landing = () => {
       </section>
 
       {/* Video Demo Section */}
-      <section className="relative z-10 pb-16 md:pb-24">
-        <div className="container mx-auto px-4">
-          <div className="relative max-w-4xl mx-auto">
-            {/* Glow effect behind video */}
-            <div className="absolute -inset-4 rounded-3xl bg-gradient-to-br from-primary/20 via-accent/10 to-primary/10 blur-2xl opacity-40" />
-            <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-primary/30 via-primary/15 to-transparent" />
-            
-            <div className="relative rounded-2xl overflow-hidden border border-primary/20 bg-card/80 backdrop-blur-sm glow-effect">
-              <video 
-                className="w-full h-auto"
-                autoPlay 
-                loop 
-                muted 
-                playsInline
-              >
-                <source src={demoVideo} type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-            </div>
-          </div>
-        </div>
-      </section>
+      <VideoSection />
 
       {/* Before/After Comparison Section */}
       <section className="relative z-10 py-24 md:py-32">
