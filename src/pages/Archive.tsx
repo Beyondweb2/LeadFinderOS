@@ -225,8 +225,8 @@ const ArchivePage = () => {
               ({archivedLeads.length} businesses)
             </span>
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Search archived businesses by phone number
+          <p className="text-sm text-muted-foreground mt-1 max-w-lg">
+            Database of businesses you've messaged. When someone responds to your bulk texts, find them here and mark as "Interested" to add to Potential Work.
           </p>
         </div>
  
