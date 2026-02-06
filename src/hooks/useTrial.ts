@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -34,6 +34,34 @@ export function useTrial() {
     dailyLimit: DAILY_TRIAL_LIMIT,
     searchesRemaining: DAILY_TRIAL_LIMIT,
   });
+  
+  const hasAttemptedEnsure = useRef(false);
+
+  const ensureTrialRecord = useCallback(async (): Promise<boolean> => {
+    if (!user?.id || hasAttemptedEnsure.current) return false;
+    hasAttemptedEnsure.current = true;
+    
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) return false;
+
+      const response = await supabase.functions.invoke('ensure-trial', {
+        headers: {
+          Authorization: `Bearer ${session.session.access_token}`,
+        },
+      });
+
+      if (response.error) {
+        console.error('Error ensuring trial:', response.error);
+        return false;
+      }
+
+      return response.data?.created === true;
+    } catch (err) {
+      console.error('Failed to ensure trial:', err);
+      return false;
+    }
+  }, [user?.id]);
 
   const checkTrial = useCallback(async () => {
     if (!user?.id) {
@@ -55,7 +83,39 @@ export function useTrial() {
       }
 
       if (!data) {
-        // No trial record - user might have been created before trial system
+        // No trial record - attempt to create one
+        const created = await ensureTrialRecord();
+        if (created) {
+          // Refetch after creation
+          const { data: newData } = await supabase
+            .from('user_trials')
+            .select('*')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          
+          if (newData) {
+            const now = new Date();
+            const trialEnd = new Date(newData.trial_end_date);
+            const daysRemaining = Math.max(0, Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+            
+            setState({
+              planStatus: 'trial',
+              isOnTrial: true,
+              trialDaysRemaining: daysRemaining,
+              trialExpired: false,
+              trialStartDate: newData.trial_started_at,
+              trialEndDate: newData.trial_end_date,
+              searchesToday: newData.searches_today,
+              searchesUsed: newData.searches_used,
+              isLoading: false,
+              dailyLimit: DAILY_TRIAL_LIMIT,
+              searchesRemaining: Math.max(0, DAILY_TRIAL_LIMIT - newData.searches_today),
+            });
+            return;
+          }
+        }
+        
+        // Still no data after attempt - treat as expired
         setState({
           planStatus: 'expired',
           isOnTrial: false,
@@ -97,9 +157,10 @@ export function useTrial() {
       console.error('Trial check failed:', err);
       setState(prev => ({ ...prev, isLoading: false }));
     }
-  }, [user?.id]);
+  }, [user?.id, ensureTrialRecord]);
 
   useEffect(() => {
+    hasAttemptedEnsure.current = false;
     checkTrial();
   }, [checkTrial]);
 
