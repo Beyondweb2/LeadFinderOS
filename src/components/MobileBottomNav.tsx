@@ -8,7 +8,8 @@ import {
   Briefcase,
   DollarSign,
   MoreHorizontal,
-  Palette
+  Palette,
+  LogOut
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -19,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { AccentColorPicker } from './AccentColorPicker';
+import { useAuth } from '@/hooks/useAuth';
 
 const mainNavItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
@@ -35,6 +37,7 @@ const moreNavItems = [
 
 export function MobileBottomNav() {
   const location = useLocation();
+  const { signOut } = useAuth();
   const isMoreActive = moreNavItems.some(item => location.pathname === item.url);
 
   return (
@@ -107,6 +110,14 @@ export function MobileBottomNav() {
                   <AccentColorPicker />
                 </div>
               </div>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem 
+              onClick={() => signOut()} 
+              className="text-destructive cursor-pointer"
+            >
+              <LogOut className="h-4 w-4 mr-3" />
+              <span>Sign out</span>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
