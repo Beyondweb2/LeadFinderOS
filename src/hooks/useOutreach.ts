@@ -136,6 +136,40 @@ export function useOutreach() {
       return null;
     }
 
+    // Also check outreach_leads table directly (including archived) to catch edge cases
+    const { data: existingLead } = await supabase
+      .from('outreach_leads')
+      .select('id, is_archived')
+      .eq('business_name', lead.name)
+      .limit(1)
+      .maybeSingle();
+
+    let leadMatch = existingLead;
+
+    // If no match by name and we have a URL, check by URL
+    if (!leadMatch && lead.googleMapsUrl) {
+      const { data: urlLead } = await supabase
+        .from('outreach_leads')
+        .select('id, is_archived')
+        .eq('google_maps_url', lead.googleMapsUrl)
+        .limit(1)
+        .maybeSingle();
+      
+      leadMatch = urlLead;
+    }
+
+    if (leadMatch) {
+      const message = leadMatch.is_archived 
+        ? `${lead.name} is in your archive.`
+        : `${lead.name} is already in your outreach list.`;
+      toast({
+        title: 'Previously added',
+        description: message,
+        variant: 'destructive',
+      });
+      return null;
+    }
+
     const { data, error } = await supabase
       .from('outreach_leads')
       .insert({
@@ -361,10 +395,22 @@ export function useOutreach() {
 
   const isInOutreach = useCallback((leadName: string, googleMapsUrl?: string): boolean => {
     // Check against outreach history (includes all businesses ever added, even if deleted)
-    return outreachHistory.some(
+    const inHistory = outreachHistory.some(
       (h) => h.business_name === leadName || (googleMapsUrl && h.google_maps_url === googleMapsUrl)
     );
-  }, [outreachHistory]);
+    
+    // Also check active leads
+    const inActive = leads.some(
+      (l) => l.business_name === leadName || (googleMapsUrl && l.google_maps_url === googleMapsUrl)
+    );
+    
+    // Also check archived leads
+    const inArchived = archivedLeads.some(
+      (l) => l.business_name === leadName || (googleMapsUrl && l.google_maps_url === googleMapsUrl)
+    );
+    
+    return inHistory || inActive || inArchived;
+  }, [outreachHistory, leads, archivedLeads]);
 
   // Archive a single lead
   const archiveLead = useCallback(async (leadId: string) => {
