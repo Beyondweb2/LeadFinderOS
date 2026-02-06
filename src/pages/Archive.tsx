@@ -1,11 +1,14 @@
 import { useState, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
+import { useSubscription } from '@/hooks/useSubscription';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Search, 
   MessageSquare, 
@@ -16,7 +19,8 @@ import {
   Loader2, 
   PhoneCall, 
   Copy,
-  CheckCheck 
+  CheckCheck,
+  Lock
 } from 'lucide-react';
 import { 
   Table, 
@@ -46,6 +50,7 @@ const ArchivePage = () => {
   } = useOutreach();
 
   const { isPhoneCopied, markAsCopied, markMultipleAsCopied } = useCopiedPhones();
+  const { subscribed, isLoading: isLoadingSubscription } = useSubscription();
   const { toast } = useToast();
 
   const [phoneQuery, setPhoneQuery] = useState('');
@@ -53,6 +58,9 @@ const ArchivePage = () => {
   const [isLookingUp, setIsLookingUp] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Non-subscribers can view but not interact
+  const isReadOnly = !subscribed && !isLoadingSubscription;
  
   // Count leads missing phone numbers
   const missingPhoneCount = useMemo(() => 
@@ -219,7 +227,7 @@ const ArchivePage = () => {
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight flex flex-col sm:flex-row items-center gap-2 justify-center sm:justify-start">
             <div className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5 sm:h-6 sm:w-6" />
-              <span>Texted</span>
+              <span>Contacted</span>
             </div>
             <span className="text-sm sm:text-base font-normal text-muted-foreground">
               ({archivedLeads.length} businesses)
@@ -229,57 +237,72 @@ const ArchivePage = () => {
             Businesses you've bulk texted. When someone responds, search by their phone number here and mark as "Interested" to move them to Potential Work.
           </p>
         </div>
+
+        {/* Subscribe banner for non-subscribers */}
+        {isReadOnly && (
+          <Alert className="border-primary/30 bg-primary/5">
+            <Lock className="h-4 w-4 text-primary" />
+            <AlertDescription className="flex items-center justify-between gap-4 flex-wrap">
+              <span>Subscribe for full access to manage your leads.</span>
+              <Button asChild size="sm" className="bg-primary">
+                <Link to="/subscribe">Subscribe Now</Link>
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
  
        {/* Search Bar */}
-       <Card className="bg-card/50 border-border/50">
+       <Card className={`bg-card/50 border-border/50 ${isReadOnly ? 'opacity-70' : ''}`}>
          <CardHeader className="pb-3 px-4 sm:px-6">
            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
              <CardTitle className="text-sm sm:text-base">Search by Phone</CardTitle>
-             <div className="flex flex-wrap items-center gap-2">
-               {selectedIds.size > 0 && (
-                 <Button
-                   variant="default"
-                   size="sm"
-                   onClick={copySelectedPhones}
-                   className="bg-primary text-xs sm:text-sm"
-                 >
-                   <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                   Copy {selectedIds.size}
-                 </Button>
-               )}
-               <Button
-                 variant="outline"
-                 size="sm"
-                 onClick={copyAllFilteredPhones}
-                 disabled={filteredLeads.filter(l => l.phone).length === 0}
-                 className="text-xs sm:text-sm"
-               >
-                 <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                 <span className="hidden sm:inline">Copy All </span>({filteredLeads.filter(l => l.phone).length})
-               </Button>
-               {missingPhoneCount > 0 && (
+             {!isReadOnly && (
+               <div className="flex flex-wrap items-center gap-2">
+                 {selectedIds.size > 0 && (
+                   <Button
+                     variant="default"
+                     size="sm"
+                     onClick={copySelectedPhones}
+                     className="bg-primary text-xs sm:text-sm"
+                   >
+                     <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                     Copy {selectedIds.size}
+                   </Button>
+                 )}
                  <Button
                    variant="outline"
                    size="sm"
-                   onClick={handleBulkLookup}
-                   disabled={isLookingUp}
+                   onClick={copyAllFilteredPhones}
+                   disabled={filteredLeads.filter(l => l.phone).length === 0}
                    className="text-xs sm:text-sm"
                  >
-                   {isLookingUp ? (
-                     <>
-                       <Loader2 className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
-                       <span className="hidden sm:inline">Looking up...</span>
-                       <span className="sm:hidden">...</span>
+                   <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
+                   <span className="hidden sm:inline">Copy All </span>({filteredLeads.filter(l => l.phone).length})
+                 </Button>
+                 {missingPhoneCount > 0 && (
+                   <Button
+                     variant="outline"
+                     size="sm"
+                     onClick={handleBulkLookup}
+                     disabled={isLookingUp}
+                     className="text-xs sm:text-sm"
+                   >
+                     {isLookingUp ? (
+                       <>
+                         <Loader2 className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4 animate-spin" />
+                         <span className="hidden sm:inline">Looking up...</span>
+                         <span className="sm:hidden">...</span>
                      </>
                    ) : (
                      <>
                        <PhoneCall className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                        <span className="hidden sm:inline">Lookup </span>{missingPhoneCount}
                      </>
-                   )}
-                 </Button>
-               )}
-             </div>
+                     )}
+                   </Button>
+                 )}
+               </div>
+             )}
            </div>
          </CardHeader>
          <CardContent className="px-4 sm:px-6">
@@ -316,6 +339,7 @@ const ArchivePage = () => {
                      <Checkbox
                        checked={selectedIds.size === filteredLeads.length && filteredLeads.length > 0}
                        onCheckedChange={handleSelectAll}
+                       disabled={isReadOnly}
                        aria-label="Select all"
                      />
                    </TableHead>
@@ -348,6 +372,7 @@ const ArchivePage = () => {
                               checked={selectedIds.has(lead.id)}
                               onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
                               aria-label={`Select ${lead.business_name}`}
+                              disabled={isReadOnly}
                             />
                           </TableCell>
                           <TableCell>
@@ -369,20 +394,22 @@ const ArchivePage = () => {
                                   <Phone className="h-3.5 w-3.5 text-muted-foreground" />
                                   <span className="font-mono text-sm">{lead.phone}</span>
                                 </div>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-7 w-7"
-                                  onClick={(e) => copySinglePhone(lead, e)}
-                                  title={phoneCopied ? 'Already copied' : 'Copy phone number'}
-                                >
-                                  {phoneCopied ? (
-                                    <CheckCheck className="h-3.5 w-3.5 text-primary" />
-                                  ) : (
-                                    <Copy className="h-3.5 w-3.5 text-muted-foreground" />
-                                  )}
-                                </Button>
-                                {phoneCopied && (
+                                {!isReadOnly && (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7"
+                                    onClick={(e) => copySinglePhone(lead, e)}
+                                    title={phoneCopied ? 'Already copied' : 'Copy phone number'}
+                                  >
+                                    {phoneCopied ? (
+                                      <CheckCheck className="h-3.5 w-3.5 text-primary" />
+                                    ) : (
+                                      <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                                    )}
+                                  </Button>
+                                )}
+                                {phoneCopied && !isReadOnly && (
                                   <span className="text-xs text-primary">Copied</span>
                                 )}
                               </div>
@@ -407,15 +434,19 @@ const ArchivePage = () => {
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                onClick={() => handleMarkInterested(lead)}
-                               className="bg-primary hover:bg-primary/90"
-                              >
-                                <Star className="h-3.5 w-3.5 mr-1" />
-                                Interested
-                              </Button>
+                              {!isReadOnly ? (
+                                <Button
+                                  variant="default"
+                                  size="sm"
+                                  onClick={() => handleMarkInterested(lead)}
+                                  className="bg-primary hover:bg-primary/90"
+                                >
+                                  <Star className="h-3.5 w-3.5 mr-1" />
+                                  Interested
+                                </Button>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">View only</span>
+                              )}
                               {lead.google_maps_url && (
                                 <Button
                                   variant="ghost"

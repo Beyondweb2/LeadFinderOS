@@ -48,7 +48,7 @@ const navItems = [
     description: 'Copy numbers & send texts'
   },
   { 
-    title: 'Texted', 
+    title: 'Contacted', 
     url: '/archive', 
     icon: MessageSquare,
     description: 'Businesses you\'ve messaged'

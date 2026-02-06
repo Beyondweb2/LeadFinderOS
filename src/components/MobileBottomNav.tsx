@@ -26,7 +26,7 @@ const mainNavItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Search', url: '/', icon: Search },
   { title: 'CRM', url: '/outreach', icon: ClipboardList },
-  { title: 'Texted', url: '/archive', icon: MessageSquare },
+  { title: 'Contacted', url: '/archive', icon: MessageSquare },
 ];
 
 const moreNavItems = [
