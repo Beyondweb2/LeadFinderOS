@@ -4,32 +4,34 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
- import { ProtectedRoute } from "@/components/ProtectedRoute";
- import { SubscriptionGate } from "@/components/SubscriptionGate";
- import { PublicRoute } from "@/components/PublicRoute";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { SubscriptionGate } from "@/components/SubscriptionGate";
+import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
+import { ThemeInitializer } from "@/components/ThemeInitializer";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
- import Subscribe from "./pages/Subscribe";
+import Subscribe from "./pages/Subscribe";
 import Outreach from "./pages/Outreach";
 import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
 import NotFound from "./pages/NotFound";
- import ArchivePage from "./pages/Archive";
- import PotentialWorkPage from "./pages/PotentialWork";
- import { LeadSearchProvider } from "./contexts/LeadSearchContext";
- import Landing from "./pages/Landing";
+import ArchivePage from "./pages/Archive";
+import PotentialWorkPage from "./pages/PotentialWork";
+import { LeadSearchProvider } from "./contexts/LeadSearchContext";
+import Landing from "./pages/Landing";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <LeadSearchProvider>
-          <BrowserRouter>
+      <ThemeInitializer>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <LeadSearchProvider>
+            <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<Auth />} />
              <Route 
@@ -123,9 +125,10 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
-          </BrowserRouter>
-        </LeadSearchProvider>
-      </TooltipProvider>
+            </BrowserRouter>
+          </LeadSearchProvider>
+        </TooltipProvider>
+      </ThemeInitializer>
     </AuthProvider>
   </QueryClientProvider>
 );
