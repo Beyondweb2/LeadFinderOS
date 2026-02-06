@@ -381,7 +381,7 @@ export function OutreachTable({
                     ) : (
                       <>
                         <Archive className="h-3.5 w-3.5 mr-1.5" />
-                        Archive
+                        Contacted
                       </>
                     )}
                   </Button>
@@ -397,7 +397,7 @@ export function OutreachTable({
                className="bg-background text-xs h-8"
               >
                <Archive className="h-3.5 w-3.5 mr-1.5" />
-               <span className="hidden sm:inline">Archive </span>All
+               <span className="hidden sm:inline">Contacted </span>All
               </Button>
             )}
             <Button
