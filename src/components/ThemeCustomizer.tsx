@@ -82,14 +82,14 @@ export function ThemeCustomizer() {
           <Palette className="h-4 w-4" />
         </Button>
       </SheetTrigger>
-      <SheetContent className="w-[320px]">
+      <SheetContent className="w-[340px]">
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <Palette className="h-5 w-5 text-primary" />
-            Accent Color
+            Theme Colors
           </SheetTitle>
           <SheetDescription>
-            Choose your preferred accent color for buttons and icons
+            Customize your app's accent and background colors
           </SheetDescription>
         </SheetHeader>
 
@@ -103,25 +103,37 @@ export function ThemeCustomizer() {
                   key={preset.name}
                   onClick={() => handlePresetSelect(index)}
                   className={cn(
-                    'relative aspect-square rounded-lg border-2 transition-all flex items-center justify-center',
+                    'relative aspect-square rounded-lg border-2 transition-all flex items-center justify-center overflow-hidden',
                     activePreset === index
                       ? 'border-foreground scale-105'
                       : 'border-border hover:border-foreground/50'
                   )}
-                  style={{ backgroundColor: `hsl(${preset.colors.primary})` }}
                   title={preset.name}
                 >
+                  {/* Background color bottom half */}
+                  <div 
+                    className="absolute inset-0"
+                    style={{ backgroundColor: `hsl(${preset.colors.background})` }}
+                  />
+                  {/* Primary color top half diagonal */}
+                  <div 
+                    className="absolute inset-0"
+                    style={{ 
+                      backgroundColor: `hsl(${preset.colors.primary})`,
+                      clipPath: 'polygon(0 0, 100% 0, 100% 50%, 0 100%)'
+                    }}
+                  />
                   {activePreset === index && (
-                    <Check className="h-4 w-4 text-white drop-shadow-md" />
+                    <Check className="relative z-10 h-4 w-4 text-white drop-shadow-md" />
                   )}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Custom Color Picker */}
+          {/* Accent Color Picker */}
           <div className="space-y-3">
-            <Label className="text-sm font-medium">Custom Color</Label>
+            <Label className="text-sm font-medium">Accent Color (Buttons, Icons)</Label>
             <div className="flex items-center gap-3">
               <Input
                 type="color"
@@ -135,6 +147,26 @@ export function ThemeCustomizer() {
               <div 
                 className="flex-1 h-10 rounded-md border border-border"
                 style={{ backgroundColor: `hsl(${theme.primary})` }}
+              />
+            </div>
+          </div>
+
+          {/* Background Color Picker */}
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Background Color</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                type="color"
+                value={hslToHex(theme.background)}
+                onChange={(e) => {
+                  setActivePreset(null);
+                  updateTheme({ background: hexToHsl(e.target.value) });
+                }}
+                className="w-14 h-10 p-1 cursor-pointer"
+              />
+              <div 
+                className="flex-1 h-10 rounded-md border border-border"
+                style={{ backgroundColor: `hsl(${theme.background})` }}
               />
             </div>
           </div>
