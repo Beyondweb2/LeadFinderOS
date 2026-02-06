@@ -299,17 +299,31 @@ export function useOutreach() {
     
     const result = await updateLead(leadId, { status });
     
-    if (result && targetLead) {
-      await logActivity(leadId, 'status_change', `Status changed to ${status.replace('_', ' ')}`);
+    // Log activity inline (avoid dependency issue with logActivity)
+    if (result && targetLead && user) {
+      await supabase.from('outreach_activities').insert({
+        lead_id: leadId,
+        user_id: user.id,
+        activity_type: 'status_change',
+        description: `Status changed to ${status.replace('_', ' ')}`,
+      });
     }
 
-    // Auto-remove if status set to not_interested
-    if (result && status === 'not_interested') {
-      await deleteLead(leadId, true);
+    // Auto-archive (not delete) if status set to not_interested - preserves data for future lookup
+    if (result && status === 'not_interested' && lead) {
+      const { error } = await supabase
+        .from('outreach_leads')
+        .update({ is_archived: true })
+        .eq('id', leadId);
+
+      if (!error) {
+        setLeads((prev) => prev.filter((l) => l.id !== leadId));
+        setArchivedLeads((prev) => [{ ...lead, is_archived: true, status: 'not_interested' }, ...prev]);
+      }
     }
     
     return result;
-  }, [leads, archivedLeads, updateLead, deleteLead]);
+  }, [leads, archivedLeads, updateLead, user]);
 
   const updateNextAction = useCallback(async (
     leadId: string,
@@ -412,22 +426,21 @@ export function useOutreach() {
     return inHistory || inActive || inArchived;
   }, [outreachHistory, leads, archivedLeads]);
 
-  // Archive a single lead
-  const archiveLead = useCallback(async (leadId: string) => {
-    const lead = leads.find((l) => l.id === leadId);
-    if (!lead) return false;
-
+  // Internal archive function (can be silent)
+  const archiveLeadInternal = useCallback(async (leadId: string, lead: OutreachLead, silent = false) => {
     const { error } = await supabase
       .from('outreach_leads')
       .update({ is_archived: true })
       .eq('id', leadId);
 
     if (error) {
-      toast({
-        title: 'Error archiving lead',
-        description: error.message,
-        variant: 'destructive',
-      });
+      if (!silent) {
+        toast({
+          title: 'Error archiving lead',
+          description: error.message,
+          variant: 'destructive',
+        });
+      }
       return false;
     }
 
@@ -435,13 +448,22 @@ export function useOutreach() {
     setLeads((prev) => prev.filter((l) => l.id !== leadId));
     setArchivedLeads((prev) => [{ ...lead, is_archived: true }, ...prev]);
     
-    toast({
-      title: 'Lead archived',
-      description: `${lead.business_name} moved to archive.`,
-    });
+    if (!silent) {
+      toast({
+        title: 'Lead archived',
+        description: `${lead.business_name} moved to archive.`,
+      });
+    }
 
     return true;
-  }, [leads, toast]);
+  }, [toast]);
+
+  // Archive a single lead (public API)
+  const archiveLead = useCallback(async (leadId: string) => {
+    const lead = leads.find((l) => l.id === leadId);
+    if (!lead) return false;
+    return archiveLeadInternal(leadId, lead, false);
+  }, [leads, archiveLeadInternal]);
 
   // Unarchive a single lead
   const unarchiveLead = useCallback(async (leadId: string) => {
