@@ -227,7 +227,7 @@ const Landing = () => {
           <div className="flex items-center gap-2">
             <img src={appLogo} alt="LeadFinder Pro" className="h-8 w-8 sm:h-9 sm:w-9" />
             <span className="text-base sm:text-lg font-semibold tracking-tight">
-              Lead<span className="text-gradient-primary">Finder</span> <span className="hidden xs:inline">Pro</span>
+              Lead<span className="text-gradient-primary">Finder</span> Pro
             </span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
