@@ -22,7 +22,8 @@ import {
   ChevronRight,
   MessageSquare,
   Briefcase,
-  DollarSign
+  DollarSign,
+  HelpCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -70,6 +71,12 @@ const navItems = [
     url: '/templates', 
     icon: FileText,
     description: 'Text & voice scripts'
+  },
+  { 
+    title: 'How to Use', 
+    url: '/how-to-use', 
+    icon: HelpCircle,
+    description: 'Step-by-step guide'
   },
 ];
 

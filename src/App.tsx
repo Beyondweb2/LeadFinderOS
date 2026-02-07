@@ -19,6 +19,7 @@ import NotFound from "./pages/NotFound";
 import ArchivePage from "./pages/Archive";
 import PotentialWorkPage from "./pages/PotentialWork";
 import PaidClientsPage from "./pages/PaidClients";
+import HowToUse from "./pages/HowToUse";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 import Landing from "./pages/Landing";
 import Terms from "./pages/Terms";
@@ -140,6 +141,18 @@ const App = () => (
                    <SubscriptionGate>
                      <AppLayout>
                        <Templates />
+                     </AppLayout>
+                   </SubscriptionGate>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/how-to-use" 
+              element={
+                <ProtectedRoute>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <HowToUse />
                      </AppLayout>
                    </SubscriptionGate>
                 </ProtectedRoute>

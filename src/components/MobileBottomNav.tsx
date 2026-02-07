@@ -9,7 +9,8 @@ import {
   DollarSign,
   MoreHorizontal,
   Palette,
-  LogOut
+  LogOut,
+  HelpCircle
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -33,6 +34,7 @@ const moreNavItems = [
   { title: 'Templates', url: '/templates', icon: FileText },
   { title: 'Potential Work', url: '/potential-work', icon: Briefcase },
   { title: 'Paid Clients', url: '/paid-clients', icon: DollarSign },
+  { title: 'How to Use', url: '/how-to-use', icon: HelpCircle },
 ];
 
 export function MobileBottomNav() {
