@@ -62,6 +62,7 @@ const App = () => (
               } 
              />
              <Route path="/terms" element={<Terms />} />
+             <Route path="/guide" element={<HowToUse />} />
             <Route 
               path="/" 
               element={
