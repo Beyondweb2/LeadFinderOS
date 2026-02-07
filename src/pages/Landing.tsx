@@ -348,6 +348,11 @@ const Landing = () => {
       {/* Hero Section */}
       <section className="relative z-10 pt-6 pb-8 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
         <div className="container mx-auto text-center">
+          {/* Logo icon - mobile only */}
+          <div className="sm:hidden flex justify-center mb-4">
+            <img src={appLogo} alt="LeadFinder Pro" className="h-14 w-14" />
+          </div>
+          
           {/* Tagline badge - hidden on very small screens */}
           <div 
             className="hidden xs:inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
