@@ -10,6 +10,7 @@ import {
   CarouselPrevious,
   CarouselNext,
 } from '@/components/ui/carousel';
+import Autoplay from 'embla-carousel-autoplay';
 import {
   Search,
   ClipboardList,
@@ -530,6 +531,13 @@ const Landing = () => {
             <div className="max-w-sm mx-auto">
               <Carousel
                 opts={{ loop: true }}
+                plugins={[
+                  Autoplay({
+                    delay: 4000,
+                    stopOnInteraction: true,
+                    stopOnMouseEnter: true,
+                  }),
+                ]}
                 className="w-full"
                 setApi={(api) => {
                   api?.on('select', () => {
