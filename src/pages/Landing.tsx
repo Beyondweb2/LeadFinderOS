@@ -31,7 +31,6 @@ import featureExport from '@/assets/feature-export.png';
 import featureClassification from '@/assets/feature-classification.png';
 import featureTemplates from '@/assets/feature-templates.png';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
-import { ReviewsSection } from '@/components/landing/ReviewsSection';
 import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
 
 // Scroll reveal wrapper component
@@ -50,10 +49,10 @@ const ScrollReveal = ({
   
   const getTransform = () => {
     switch (direction) {
-      case 'up': return 'translateY(40px)';
-      case 'down': return 'translateY(-40px)';
-      case 'left': return 'translateX(40px)';
-      case 'right': return 'translateX(-40px)';
+      case 'up': return 'translateY(30px)';
+      case 'down': return 'translateY(-30px)';
+      case 'left': return 'translateX(30px)';
+      case 'right': return 'translateX(-30px)';
       default: return 'translateY(40px)';
     }
   };
@@ -188,7 +187,7 @@ const VideoSection = () => {
   };
 
   return (
-    <ScrollReveal className="relative z-10 pb-12 sm:pb-16 md:pb-24 px-2 sm:px-4">
+    <ScrollReveal className="relative z-10 pb-10 sm:pb-14 md:pb-20 px-2 sm:px-4">
       <div className="container mx-auto">
         {/* Full-width on mobile, constrained on larger screens */}
         <div className="relative max-w-5xl mx-auto">
@@ -347,7 +346,7 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-8 pb-10 sm:pt-16 sm:pb-20 md:pt-28 md:pb-36 lg:pt-36 lg:pb-44 px-4">
+      <section className="relative z-10 pt-6 pb-8 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
         <div className="container mx-auto text-center">
           {/* Tagline badge - hidden on very small screens */}
           <div 
@@ -408,7 +407,7 @@ const Landing = () => {
       <VideoSection />
 
       {/* Before/After Comparison Section */}
-      <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
+      <section className="relative z-10 py-12 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
@@ -500,7 +499,7 @@ const Landing = () => {
       <HowItWorksSection ScrollReveal={ScrollReveal} />
 
       {/* Features Section */}
-      <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
+      <section className="relative z-10 py-12 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
@@ -574,7 +573,7 @@ const Landing = () => {
       </section>
 
       {/* Pricing Section */}
-      <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
+      <section className="relative z-10 py-12 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
@@ -661,8 +660,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Reviews Section */}
-      <ReviewsSection />
 
       {/* Final CTA Section */}
       <section className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
