@@ -268,27 +268,17 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                   {/* Content Side */}
                   <ScrollReveal className={`flex-1 w-full ${isEven ? 'lg:pl-4' : 'lg:pr-4'}`} delay={(index + 1) * 100 + 50} direction={textDirection}>
                     <div className="text-center lg:text-left">
-                      <div 
-                        className="inline-flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-lg sm:rounded-xl font-semibold text-base sm:text-lg md:text-xl mb-4 sm:mb-5 md:mb-6"
-                        style={{ 
-                          background: 'hsl(210 100% 50% / 0.15)',
-                          color: 'hsl(210 100% 60%)',
-                          border: '1px solid hsl(210 100% 50% / 0.3)'
-                        }}
-                      >
-                        {index + 1}
-                      </div>
-                      
-                      <div className="flex items-center gap-2.5 sm:gap-3 justify-center lg:justify-start mb-3 sm:mb-4 md:mb-5">
-                        <div 
-                          className="p-2.5 sm:p-3 rounded-lg sm:rounded-xl"
+                      <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4 md:mb-5">
+                        <span 
+                          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
                           style={{ 
-                            background: 'hsl(210 100% 50% / 0.1)',
-                            border: '1px solid hsl(210 100% 50% / 0.2)'
+                            background: 'hsl(210 100% 50% / 0.15)',
+                            color: 'hsl(210 100% 60%)',
+                            border: '1px solid hsl(210 100% 50% / 0.3)'
                           }}
                         >
-                          <step.icon className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" style={{ color: 'hsl(210 100% 50%)' }} />
-                        </div>
+                          {index + 1}
+                        </span>
                         <h3 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{step.title}</h3>
                       </div>
                       
