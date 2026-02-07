@@ -23,7 +23,7 @@ const Index = () => {
   } = useContactTracking();
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
-  const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit } = useTrial();
+  const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing } = useTrial();
   const { subscribed } = useSubscription();
   const { isFirstTime, hasChecked: hasCheckedFirstTime, markFirstLoginComplete } = useFirstTimeUser();
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
@@ -51,12 +51,12 @@ const Index = () => {
     }
   }, [hasCheckedFirstTime, isFirstTime, isLoading, search, markFirstLoginComplete]);
 
-  // Check if we should show upgrade prompt after searches
+  // Check if we should show upgrade prompt after searches (only for free trial users, not Stripe trialing)
   useEffect(() => {
-    if (!subscribed && shouldShowUpgradePrompt()) {
+    if (!subscribed && !isStripeTrialing && shouldShowUpgradePrompt()) {
       setShowUpgradePrompt(true);
     }
-  }, [searchesUsed, subscribed, shouldShowUpgradePrompt]);
+  }, [searchesUsed, subscribed, isStripeTrialing, shouldShowUpgradePrompt]);
 
   // Refetch trial data after search completes
   useEffect(() => {
