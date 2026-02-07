@@ -31,7 +31,7 @@ const STEPS = [
     title: 'View Lead Details',
     description: 'See business names, phone numbers, ratings, reviews, addresses, and direct Google Maps links. Filter by classification, check for websites, and add promising leads to your CRM.',
     image: step2Image,
-    badge: '10+ Data Points',
+    badge: '100,000+ Businesses',
   },
   {
     icon: MessageSquare,
