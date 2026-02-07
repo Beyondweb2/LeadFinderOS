@@ -31,9 +31,12 @@ import {
   Copy,
   CheckCheck,
   Star,
+  RefreshCw,
+  Loader2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
+import { supabase } from '@/integrations/supabase/client';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
 import type { OutreachLead, LeadStatus, NextActionType, Country } from '@/types/outreach';
@@ -51,6 +54,7 @@ interface OutreachTableProps {
   onDeleteSelected?: (leadIds: string[]) => void;
   onBulkStatusChange?: (leadIds: string[], status: LeadStatus) => void;
   onMarkAsInterested?: (leadIds: string[]) => void;
+  onRefreshLeads?: () => void;
   showArchiveButton?: boolean;
   isArchiveView?: boolean;
   /** When true, hides status and next action editing (for simplified Outreach CRM view) */
@@ -74,6 +78,7 @@ export function OutreachTable({
   onDeleteSelected,
   onBulkStatusChange,
   onMarkAsInterested,
+  onRefreshLeads,
   showArchiveButton = true,
   isArchiveView = false,
   readOnly = false,
@@ -87,6 +92,82 @@ export function OutreachTable({
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isRecoveringPhones, setIsRecoveringPhones] = useState(false);
+  const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
+
+  // Count leads missing phone numbers
+  const leadsWithMissingPhones = useMemo(() => {
+    return leads.filter(l => !l.phone);
+  }, [leads]);
+
+  // Recover missing phone numbers via edge function
+  const handleRecoverPhones = async () => {
+    if (leadsWithMissingPhones.length === 0) {
+      toast({
+        title: 'All phones available',
+        description: 'All leads already have phone numbers.',
+      });
+      return;
+    }
+
+    setIsRecoveringPhones(true);
+    setRecoveryProgress({ current: 0, total: leadsWithMissingPhones.length });
+    
+    const batchSize = 50;
+    let totalUpdated = 0;
+    let totalProcessed = 0;
+
+    try {
+      // Process in batches of 50
+      for (let i = 0; i < leadsWithMissingPhones.length; i += batchSize) {
+        const batch = leadsWithMissingPhones.slice(i, i + batchSize);
+        const leadIds = batch.map(l => l.id);
+
+        const { data, error } = await supabase.functions.invoke('lookup-phones', {
+          body: { leadIds },
+        });
+
+        if (error) {
+          console.error('Phone lookup error:', error);
+          toast({
+            title: 'Recovery error',
+            description: error.message || 'Failed to recover phone numbers.',
+            variant: 'destructive',
+          });
+          break;
+        }
+
+        totalUpdated += data?.updated || 0;
+        totalProcessed += batch.length;
+        setRecoveryProgress({ current: totalProcessed, total: leadsWithMissingPhones.length });
+
+        // Small delay between batches to avoid rate limits
+        if (i + batchSize < leadsWithMissingPhones.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      toast({
+        title: 'Phone recovery complete',
+        description: `Recovered ${totalUpdated} phone numbers from ${totalProcessed} leads.`,
+      });
+
+      // Refresh leads to show updated data
+      if (onRefreshLeads) {
+        onRefreshLeads();
+      }
+    } catch (err) {
+      console.error('Phone recovery error:', err);
+      toast({
+        title: 'Recovery failed',
+        description: 'An error occurred while recovering phone numbers.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRecoveringPhones(false);
+      setRecoveryProgress(null);
+    }
+  };
 
   // Selection handlers
   const handleSelectAll = () => {
@@ -383,7 +464,7 @@ export function OutreachTable({
                 </span>
               )}
               {!isArchiveView && overdueCount > 0 && (
-                <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-red-400">
+                <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-destructive">
                   {overdueCount} due
                 </span>
               )}
@@ -449,6 +530,30 @@ export function OutreachTable({
               <Download className="h-3.5 w-3.5 mr-1.5" />
               <span className="hidden sm:inline">Export </span>CSV
             </Button>
+            {/* Recover Missing Phones button - only show if there are leads missing phones */}
+            {!readOnly && leadsWithMissingPhones.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRecoverPhones}
+                disabled={isRecoveringPhones}
+                className="bg-background text-xs h-8"
+              >
+                {isRecoveringPhones ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    {recoveryProgress 
+                      ? `${recoveryProgress.current}/${recoveryProgress.total}` 
+                      : 'Recovering...'}
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                    Recover Phones ({leadsWithMissingPhones.length})
+                  </>
+                )}
+              </Button>
+            )}
           </div>
           
           {/* Filters row */}
