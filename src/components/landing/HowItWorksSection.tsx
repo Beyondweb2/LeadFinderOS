@@ -54,7 +54,7 @@ interface ScrollRevealProps {
 
 export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.ComponentType<ScrollRevealProps> }) => {
   return (
-    <section className="relative z-10 py-12 sm:py-16 md:py-24 lg:py-32 px-3 sm:px-4">
+    <section className="relative z-10 py-10 sm:py-14 md:py-20 lg:py-28 px-3 sm:px-4">
       <div className="container mx-auto">
         <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-20">
           <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-4 tracking-tight px-2">
@@ -65,7 +65,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
           </p>
         </ScrollReveal>
         
-        <div className="max-w-6xl mx-auto space-y-8 sm:space-y-12 md:space-y-20">
+        <div className="max-w-6xl mx-auto space-y-6 sm:space-y-10 md:space-y-16">
           {STEPS.map((step, index) => {
             const isEven = index % 2 === 0;
             return (
