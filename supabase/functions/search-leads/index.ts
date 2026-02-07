@@ -634,8 +634,8 @@ serve(async (req) => {
               // Ignore parsing errors
             }
             
-            // Check daily limit for trial users (3 searches per day) - unless skipping for demo
-            const DAILY_TRIAL_LIMIT = 3;
+            // Check daily limit for trial users (1 search per day) - unless skipping for demo
+            const DAILY_TRIAL_LIMIT = 1;
             if (!skipTrialCount && currentSearchesToday >= DAILY_TRIAL_LIMIT) {
               console.log(`User ${userId} has reached daily trial limit (${currentSearchesToday}/${DAILY_TRIAL_LIMIT})`);
               return new Response(
