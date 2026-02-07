@@ -266,7 +266,7 @@ const ArchivePage = () => {
                      className="bg-primary text-xs sm:text-sm"
                    >
                      <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                     Copy {selectedIds.size}
+                     Copy Numbers ({selectedIds.size})
                    </Button>
                  )}
                  <Button
@@ -277,7 +277,7 @@ const ArchivePage = () => {
                    className="text-xs sm:text-sm"
                  >
                    <Copy className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5 sm:mr-2" />
-                   <span className="hidden sm:inline">Copy All </span>({filteredLeads.filter(l => l.phone).length})
+                   <span className="hidden sm:inline">Copy All Numbers </span>({filteredLeads.filter(l => l.phone).length})
                  </Button>
                  {missingPhoneCount > 0 && (
                    <Button

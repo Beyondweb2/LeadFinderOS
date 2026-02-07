@@ -38,7 +38,7 @@ const STEPS = [
     title: 'Track Outreach',
     description: 'Manage responses and track interested leads through your sales pipeline',
     image: step4Image,
-    cropStyle: 'object-[65%_45%] scale-[1.8]', // Crop to show just the 2 business cards
+    cropStyle: 'object-[70%_38%] scale-[2.2]', // Crop to show both business cards centered
   },
 ];
 
