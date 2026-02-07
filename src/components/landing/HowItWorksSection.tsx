@@ -37,21 +37,21 @@ const STEPS = [
   },
   {
     icon: ClipboardList,
-    title: 'Review Results',
-    description: 'See business details, ratings, reviews, and addresses. Filter by classification and add promising leads to your CRM.',
+    title: 'Add to CRM',
+    description: 'See business details, ratings, reviews, and addresses. Filter by classification and add promising leads to your pipeline.',
     image: step2Image,
     badge: '100,000+ Businesses',
   },
   {
     icon: MessageSquare,
-    title: 'Reach Out & Track',
+    title: 'Start Outreach',
     description: 'Copy numbers to text or call directly. Mark leads as contacted, then click "Interested" when they respond positively.',
     image: step3Image,
     badge: 'Direct Outreach',
   },
   {
     icon: Users,
-    title: 'Monitor Your Stats',
+    title: 'Track Results',
     description: 'Track your outreach performance on the dashboard. See conversion rates, pipeline value, and activity metrics to optimise your sales process.',
     image: step4Image,
     badge: 'Full Analytics',
@@ -76,13 +76,13 @@ const MobileStepCard = ({
   onImageClick: (src: string, title: string) => void;
 }) => (
   <div className="flex flex-col items-center text-center px-1">
-    {/* Step number badge */}
+    {/* Step number badge - lighter style */}
     <div 
-      className="inline-flex items-center justify-center w-12 h-12 rounded-xl font-bold text-lg mb-3"
+      className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-semibold text-sm mb-3"
       style={{ 
-        background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
-        color: 'hsl(220 40% 4%)',
-        boxShadow: '0 0 30px hsl(210 100% 50% / 0.4)'
+        background: 'hsl(210 100% 50% / 0.15)',
+        color: 'hsl(210 100% 60%)',
+        border: '1px solid hsl(210 100% 50% / 0.3)'
       }}
     >
       {index + 1}
@@ -269,11 +269,11 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                   <ScrollReveal className={`flex-1 w-full ${isEven ? 'lg:pl-4' : 'lg:pr-4'}`} delay={(index + 1) * 100 + 50} direction={textDirection}>
                     <div className="text-center lg:text-left">
                       <div 
-                        className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl font-bold text-lg sm:text-xl md:text-2xl mb-4 sm:mb-5 md:mb-6"
+                        className="inline-flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 rounded-lg sm:rounded-xl font-semibold text-base sm:text-lg md:text-xl mb-4 sm:mb-5 md:mb-6"
                         style={{ 
-                          background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
-                          color: 'hsl(220 40% 4%)',
-                          boxShadow: '0 0 30px hsl(210 100% 50% / 0.4)'
+                          background: 'hsl(210 100% 50% / 0.15)',
+                          color: 'hsl(210 100% 60%)',
+                          border: '1px solid hsl(210 100% 50% / 0.3)'
                         }}
                       >
                         {index + 1}
