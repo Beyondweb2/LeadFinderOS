@@ -50,23 +50,23 @@ interface ScrollRevealProps {
 
 export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.ComponentType<ScrollRevealProps> }) => {
   return (
-    <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
+    <section className="relative z-10 py-12 sm:py-16 md:py-24 lg:py-32 px-3 sm:px-4">
       <div className="container mx-auto">
-        <ScrollReveal className="text-center mb-12 sm:mb-16 md:mb-20">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
+        <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-20">
+          <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-4 tracking-tight px-2">
             How It <span className="text-gradient-primary">Works</span>
           </h2>
-          <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
+          <p className="text-muted-foreground max-w-xl mx-auto text-xs sm:text-sm md:text-lg px-2">
             From search to sale in four simple steps
           </p>
         </ScrollReveal>
         
-        <div className="max-w-6xl mx-auto space-y-12 sm:space-y-16 md:space-y-20">
+        <div className="max-w-6xl mx-auto space-y-8 sm:space-y-12 md:space-y-20">
           {STEPS.map((step, index) => {
             const isEven = index % 2 === 0;
             return (
               <ScrollReveal key={step.title} delay={(index + 1) * 100}>
-                <div className={`flex flex-col ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-8 lg:gap-12`}>
+                <div className={`flex flex-col ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-4 sm:gap-6 lg:gap-12`}>
                   {/* Image Side - Fixed aspect ratio for consistent sizing */}
                   <div className="flex-1 w-full">
                     <div className="relative group">
@@ -97,10 +97,10 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                   
                   {/* Content Side */}
                   <div className={`flex-1 w-full ${isEven ? 'lg:pl-4' : 'lg:pr-4'}`}>
-                    <div className="text-center lg:text-left">
+                  <div className="text-center lg:text-left">
                       {/* Step number badge */}
                       <div 
-                        className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl font-bold text-lg sm:text-xl mb-4 sm:mb-6"
+                        className="inline-flex items-center justify-center w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-xl sm:rounded-2xl font-bold text-base sm:text-lg md:text-xl mb-3 sm:mb-4 md:mb-6"
                         style={{ 
                           background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
                           color: 'hsl(220 40% 4%)',
@@ -111,20 +111,20 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                       </div>
                       
                       {/* Icon and title row */}
-                      <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
+                      <div className="flex items-center gap-2 sm:gap-3 justify-center lg:justify-start mb-2 sm:mb-3 md:mb-4">
                         <div 
-                          className="p-2.5 rounded-xl"
+                          className="p-2 sm:p-2.5 rounded-lg sm:rounded-xl"
                           style={{ 
                             background: 'hsl(210 100% 50% / 0.1)',
                             border: '1px solid hsl(210 100% 50% / 0.2)'
                           }}
                         >
-                          <step.icon className="h-5 w-5 sm:h-6 sm:w-6" style={{ color: 'hsl(210 100% 50%)' }} />
+                          <step.icon className="h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6" style={{ color: 'hsl(210 100% 50%)' }} />
                         </div>
-                        <h3 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">{step.title}</h3>
+                        <h3 className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold tracking-tight">{step.title}</h3>
                       </div>
                       
-                      <p className="text-muted-foreground text-sm sm:text-base md:text-lg leading-relaxed max-w-md mx-auto lg:mx-0">
+                      <p className="text-muted-foreground text-xs sm:text-sm md:text-base lg:text-lg leading-relaxed max-w-md mx-auto lg:mx-0">
                         {step.description}
                       </p>
                     </div>
