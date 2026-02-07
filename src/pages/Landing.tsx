@@ -16,6 +16,8 @@ import {
   Volume2,
   VolumeX,
   Expand,
+  MessageSquare,
+  Gift,
 } from 'lucide-react';
 import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
@@ -29,6 +31,8 @@ import featureExport from '@/assets/feature-export.png';
 import featureClassification from '@/assets/feature-classification.png';
 import featureTemplates from '@/assets/feature-templates.png';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { ReviewsSection } from '@/components/landing/ReviewsSection';
+import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
 
 // Scroll reveal wrapper component
 const ScrollReveal = ({ 
@@ -403,169 +407,7 @@ const Landing = () => {
       <VideoSection />
 
       {/* How It Works Section */}
-      <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-              How It <span className="text-gradient-primary">Works</span>
-            </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              From search to sale in four simple steps
-            </p>
-          </ScrollReveal>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8 max-w-6xl mx-auto">
-            {/* Step 1 */}
-            <ScrollReveal delay={100}>
-              <div className="relative group">
-                {/* Step number */}
-                <div 
-                  className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-sm sm:text-base"
-                  style={{ 
-                    background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
-                    color: 'hsl(220 40% 4%)',
-                    boxShadow: '0 0 20px hsl(210 100% 50% / 0.4)'
-                  }}
-                >
-                  1
-                </div>
-                <div 
-                  className="relative rounded-2xl p-5 sm:p-6 pt-8 sm:pt-10 text-center h-full backdrop-blur-sm"
-                  style={{ 
-                    background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.05), hsl(220 80% 45% / 0.02))',
-                    border: '1px solid hsl(210 100% 50% / 0.15)'
-                  }}
-                >
-                  <div 
-                    className="mx-auto mb-4 p-3 rounded-xl w-fit"
-                    style={{ 
-                      background: 'hsl(210 100% 50% / 0.1)',
-                      border: '1px solid hsl(210 100% 50% / 0.2)'
-                    }}
-                  >
-                    <Search className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: 'hsl(210 100% 50%)' }} />
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-semibold mb-2 tracking-tight">Find Leads</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    Search by business type and location to find companies without websites
-                  </p>
-                </div>
-              </div>
-            </ScrollReveal>
-
-            {/* Step 2 */}
-            <ScrollReveal delay={200}>
-              <div className="relative group">
-                <div 
-                  className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-sm sm:text-base"
-                  style={{ 
-                    background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
-                    color: 'hsl(220 40% 4%)',
-                    boxShadow: '0 0 20px hsl(210 100% 50% / 0.4)'
-                  }}
-                >
-                  2
-                </div>
-                <div 
-                  className="relative rounded-2xl p-5 sm:p-6 pt-8 sm:pt-10 text-center h-full backdrop-blur-sm"
-                  style={{ 
-                    background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.05), hsl(220 80% 45% / 0.02))',
-                    border: '1px solid hsl(210 100% 50% / 0.15)'
-                  }}
-                >
-                  <div 
-                    className="mx-auto mb-4 p-3 rounded-xl w-fit"
-                    style={{ 
-                      background: 'hsl(210 100% 50% / 0.1)',
-                      border: '1px solid hsl(210 100% 50% / 0.2)'
-                    }}
-                  >
-                    <ClipboardList className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: 'hsl(210 100% 50%)' }} />
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-semibold mb-2 tracking-tight">Copy Numbers</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    Add leads to your CRM and bulk-copy phone numbers for outreach
-                  </p>
-                </div>
-              </div>
-            </ScrollReveal>
-
-            {/* Step 3 */}
-            <ScrollReveal delay={300}>
-              <div className="relative group">
-                <div 
-                  className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-sm sm:text-base"
-                  style={{ 
-                    background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
-                    color: 'hsl(220 40% 4%)',
-                    boxShadow: '0 0 20px hsl(210 100% 50% / 0.4)'
-                  }}
-                >
-                  3
-                </div>
-                <div 
-                  className="relative rounded-2xl p-5 sm:p-6 pt-8 sm:pt-10 text-center h-full backdrop-blur-sm"
-                  style={{ 
-                    background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.05), hsl(220 80% 45% / 0.02))',
-                    border: '1px solid hsl(210 100% 50% / 0.15)'
-                  }}
-                >
-                  <div 
-                    className="mx-auto mb-4 p-3 rounded-xl w-fit"
-                    style={{ 
-                      background: 'hsl(210 100% 50% / 0.1)',
-                      border: '1px solid hsl(210 100% 50% / 0.2)'
-                    }}
-                  >
-                    <Phone className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: 'hsl(210 100% 50%)' }} />
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-semibold mb-2 tracking-tight">Send Texts</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    Use your templates to send bulk texts and archive contacted leads
-                  </p>
-                </div>
-              </div>
-            </ScrollReveal>
-
-            {/* Step 4 */}
-            <ScrollReveal delay={400}>
-              <div className="relative group">
-                <div 
-                  className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center font-bold text-sm sm:text-base"
-                  style={{ 
-                    background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
-                    color: 'hsl(220 40% 4%)',
-                    boxShadow: '0 0 20px hsl(210 100% 50% / 0.4)'
-                  }}
-                >
-                  4
-                </div>
-                <div 
-                  className="relative rounded-2xl p-5 sm:p-6 pt-8 sm:pt-10 text-center h-full backdrop-blur-sm"
-                  style={{ 
-                    background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.05), hsl(220 80% 45% / 0.02))',
-                    border: '1px solid hsl(210 100% 50% / 0.15)'
-                  }}
-                >
-                  <div 
-                    className="mx-auto mb-4 p-3 rounded-xl w-fit"
-                    style={{ 
-                      background: 'hsl(210 100% 50% / 0.1)',
-                      border: '1px solid hsl(210 100% 50% / 0.2)'
-                    }}
-                  >
-                    <CheckCircle className="h-6 w-6 sm:h-7 sm:w-7" style={{ color: 'hsl(210 100% 50%)' }} />
-                  </div>
-                  <h3 className="text-lg sm:text-xl font-semibold mb-2 tracking-tight">Close Deals</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
-                    Track interested leads through your pipeline to paid clients
-                  </p>
-                </div>
-              </div>
-            </ScrollReveal>
-          </div>
-        </div>
-      </section>
+      <HowItWorksSection ScrollReveal={ScrollReveal} />
 
       {/* Before/After Comparison Section */}
       <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
@@ -763,22 +605,24 @@ const Landing = () => {
                 />
                 
                 <CardHeader className="text-center pb-2 pt-6 sm:pt-8 px-4 sm:px-6">
+                  {/* 7-Day Free Trial Badge */}
                   <div 
-                    className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1 rounded-full text-[10px] sm:text-xs font-semibold uppercase tracking-wide mx-auto mb-3 sm:mb-4"
+                    className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wide mx-auto mb-3 sm:mb-4"
                     style={{ 
-                      background: 'hsl(210 100% 50% / 0.1)', 
-                      border: '1px solid hsl(210 100% 50% / 0.2)',
-                      color: 'hsl(210 100% 50%)'
+                      background: 'linear-gradient(135deg, hsl(142 76% 36% / 0.2), hsl(142 76% 36% / 0.1))', 
+                      border: '1px solid hsl(142 76% 36% / 0.3)',
+                      color: 'hsl(142 76% 50%)'
                     }}
                   >
-                    <Zap className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-                    Most Popular
+                    <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                    7-Day Free Trial
                   </div>
                   <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
                   <div className="mt-4 sm:mt-6">
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-2">after 7-day free trial</p>
                 </CardHeader>
                 
                 <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
@@ -803,12 +647,12 @@ const Landing = () => {
                 <CardFooter className="pt-4 sm:pt-6 pb-6 sm:pb-8 flex-col gap-3 sm:gap-4 px-4 sm:px-6">
                   <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-5 sm:py-6 h-auto" asChild>
                     <Link to="/auth">
-                      Get Started
+                      Start Free Trial
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
                   <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
-                    Secure payment via Stripe. Cancel anytime.
+                    No commitment. Cancel anytime during trial.
                   </p>
                 </CardFooter>
               </Card>
@@ -816,6 +660,9 @@ const Landing = () => {
           </ScrollReveal>
         </div>
       </section>
+
+      {/* Reviews Section */}
+      <ReviewsSection />
 
       {/* Final CTA Section */}
       <section className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
