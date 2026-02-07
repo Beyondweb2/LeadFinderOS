@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
@@ -9,6 +9,7 @@ import {
   ArrowRight,
   ArrowDown,
   ExternalLink,
+  ArrowLeft,
 } from 'lucide-react';
 import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
@@ -82,6 +83,10 @@ const STEPS = [
 ];
 
 const HowToUse = () => {
+  const location = useLocation();
+  // If accessed via /guide (public route), show sign-up CTA
+  const isPublicGuide = location.pathname === '/guide';
+  
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 max-w-5xl">
       {/* Header */}
@@ -175,17 +180,36 @@ const HowToUse = () => {
             and track interested prospects through your sales pipeline. Now start finding your next client!
           </p>
           <div className="flex flex-wrap gap-3">
-            <Button asChild>
-              <Link to="/">
-                Start Finding Leads
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link to="/templates">
-                View Message Templates
-              </Link>
-            </Button>
+            {isPublicGuide ? (
+              <>
+                <Button asChild>
+                  <Link to="/auth">
+                    Start Free Trial
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link to="/landing">
+                    <ArrowLeft className="mr-2 h-4 w-4" />
+                    Back to Home
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button asChild>
+                  <Link to="/">
+                    Start Finding Leads
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link to="/templates">
+                    View Message Templates
+                  </Link>
+                </Button>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>

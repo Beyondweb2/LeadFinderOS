@@ -94,7 +94,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
         {/* Link to full guide */}
         <ScrollReveal delay={500} className="text-center mt-10 sm:mt-14">
           <Button variant="outline" size="lg" className="border-white/10 bg-white/[0.03] hover:bg-white/[0.06]" asChild>
-            <Link to="/how-to-use">
+            <Link to="/guide">
               View Detailed Guide
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
