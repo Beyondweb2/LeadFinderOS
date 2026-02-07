@@ -593,10 +593,10 @@ serve(async (req) => {
 
     // Check subscription status (unless admin)
     let hasActiveSubscription = false;
-    let isOnTrial = false;
+    let isOnAppTrial = false;
     
     if (!isAdmin) {
-      // First check for active subscription
+      // First check for Stripe subscription (active, trialing, or past_due)
       const { data: subscription } = await serviceClient
         .from('subscriptions')
         .select('status')
@@ -606,8 +606,12 @@ serve(async (req) => {
       const validStatuses = ['active', 'trialing', 'past_due'];
       hasActiveSubscription = subscription && validStatuses.includes(subscription.status);
       
-      if (!hasActiveSubscription) {
-        // Check if user is on trial
+      // If user has Stripe subscription (including trialing), allow unlimited searches
+      if (hasActiveSubscription) {
+        console.log(`User ${userId} has valid Stripe subscription (${subscription.status}) - unlimited searches`);
+        // Continue to search - no limits for Stripe subscribers/trialing users
+      } else {
+        // No Stripe subscription - check if user is on free app trial (1 search/day limit)
         const { data: trial } = await serviceClient
           .from('user_trials')
           .select('*')
@@ -634,10 +638,10 @@ serve(async (req) => {
               // Ignore parsing errors
             }
             
-            // Check daily limit for trial users (1 search per day) - unless skipping for demo
+            // Check daily limit for FREE trial users (1 search per day) - unless skipping for demo
             const DAILY_TRIAL_LIMIT = 1;
             if (!skipTrialCount && currentSearchesToday >= DAILY_TRIAL_LIMIT) {
-              console.log(`User ${userId} has reached daily trial limit (${currentSearchesToday}/${DAILY_TRIAL_LIMIT})`);
+              console.log(`Free trial user ${userId} has reached daily limit (${currentSearchesToday}/${DAILY_TRIAL_LIMIT})`);
               return new Response(
                 JSON.stringify({ 
                   error: 'Trial limit reached – upgrade to continue unlimited searches.',
@@ -649,12 +653,12 @@ serve(async (req) => {
               );
             }
             
-            isOnTrial = true;
+            isOnAppTrial = true;
             const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
             
             // Only increment search counts if not skipping for demo
             if (!skipTrialCount) {
-              console.log(`User ${userId} is on trial (${daysLeft} days remaining, ${currentSearchesToday + 1}/${DAILY_TRIAL_LIMIT} searches today)`);
+              console.log(`Free trial user ${userId} (${daysLeft} days remaining, ${currentSearchesToday + 1}/${DAILY_TRIAL_LIMIT} searches today)`);
               await serviceClient
                 .from('user_trials')
                 .update({ 
@@ -664,10 +668,10 @@ serve(async (req) => {
                 })
                 .eq('user_id', userId);
             } else {
-              console.log(`User ${userId} is on trial - demo search (not counted toward limit)`);
+              console.log(`Free trial user ${userId} - demo search (not counted toward limit)`);
             }
           } else {
-            console.log(`User ${userId} trial has expired`);
+            console.log(`User ${userId} free trial has expired`);
             // Update plan_status to expired if needed
             if (trial.plan_status === 'trial') {
               await serviceClient
@@ -677,18 +681,14 @@ serve(async (req) => {
             }
           }
         }
-      }
-      
-      if (!hasActiveSubscription && !isOnTrial) {
-        console.log(`User ${userId} has no active subscription or valid trial`);
-        return new Response(
-          JSON.stringify({ error: 'Your trial has expired. Please subscribe to continue using LeadFinder.' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      if (hasActiveSubscription) {
-        console.log(`User ${userId} has valid subscription`);
+        
+        if (!isOnAppTrial) {
+          console.log(`User ${userId} has no active subscription or valid trial`);
+          return new Response(
+            JSON.stringify({ error: 'Your trial has expired. Please subscribe to continue using LeadFinder.' }),
+            { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
       }
     } else {
       console.log(`User ${userId} is admin - bypassing subscription check`);

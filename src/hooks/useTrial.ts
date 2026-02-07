@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { useSubscription } from './useSubscription';
 
 interface TrialState {
   planStatus: 'trial' | 'active' | 'expired' | 'cancelled' | null;
@@ -14,6 +15,7 @@ interface TrialState {
   isLoading: boolean;
   dailyLimit: number;
   searchesRemaining: number;
+  isStripeTrialing: boolean;
 }
 
 const SEARCHES_BEFORE_PROMPT = 5;
@@ -21,6 +23,11 @@ const DAILY_TRIAL_LIMIT = 1;
 
 export function useTrial() {
   const { user } = useAuth();
+  const { status: stripeStatus, isLoading: isSubscriptionLoading } = useSubscription();
+  
+  // Stripe trialing users get unlimited access
+  const isStripeTrialing = stripeStatus === 'trialing';
+  
   const [state, setState] = useState<TrialState>({
     planStatus: null,
     isOnTrial: false,
@@ -33,6 +40,7 @@ export function useTrial() {
     isLoading: true,
     dailyLimit: DAILY_TRIAL_LIMIT,
     searchesRemaining: DAILY_TRIAL_LIMIT,
+    isStripeTrialing: false,
   });
   
   const hasAttemptedEnsure = useRef(false);
@@ -112,6 +120,7 @@ export function useTrial() {
               isLoading: false,
               dailyLimit: DAILY_TRIAL_LIMIT,
               searchesRemaining: Math.max(0, DAILY_TRIAL_LIMIT - newData.searches_today),
+              isStripeTrialing: false,
             });
             return;
           }
@@ -130,6 +139,7 @@ export function useTrial() {
           isLoading: false,
           dailyLimit: DAILY_TRIAL_LIMIT,
           searchesRemaining: 0,
+          isStripeTrialing: false,
         });
         return;
       }
@@ -154,6 +164,7 @@ export function useTrial() {
         isLoading: false,
         dailyLimit: DAILY_TRIAL_LIMIT,
         searchesRemaining,
+        isStripeTrialing: false,
       });
     } catch (err) {
       console.error('Trial check failed:', err);
@@ -178,8 +189,24 @@ export function useTrial() {
     await checkTrial();
   }, [user?.id, checkTrial]);
 
+  // If user has Stripe trialing status, override to unlimited searches
+  if (isStripeTrialing) {
+    return {
+      ...state,
+      isOnTrial: true,
+      isStripeTrialing: true,
+      searchesRemaining: Infinity,
+      dailyLimit: Infinity,
+      checkTrial,
+      shouldShowUpgradePrompt: () => false, // Never show for Stripe trialing users
+      incrementSearchCount,
+      SEARCHES_BEFORE_PROMPT,
+    };
+  }
+
   return {
     ...state,
+    isStripeTrialing: false,
     checkTrial,
     shouldShowUpgradePrompt,
     incrementSearchCount,
