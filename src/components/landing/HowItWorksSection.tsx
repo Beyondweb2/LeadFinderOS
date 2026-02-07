@@ -23,14 +23,14 @@ const STEPS = [
   },
   {
     icon: ClipboardList,
-    title: 'Copy Numbers',
-    description: 'Add leads to your CRM and bulk-copy phone numbers for outreach',
+    title: 'View Lead Details',
+    description: 'See business names, phone numbers, ratings, reviews, addresses, and direct Google Maps links. Filter by classification, check for websites, and add promising leads to your CRM.',
     image: step2Image,
   },
   {
     icon: MessageSquare,
-    title: 'Send Texts',
-    description: 'Use a bulk messenger app to reach hundreds of businesses at once',
+    title: 'Copy Numbers & Send',
+    description: 'Bulk-copy phone numbers from your CRM in one click, then paste into a bulk messenger app to reach hundreds of businesses at once.',
     image: step3Image,
   },
   {
