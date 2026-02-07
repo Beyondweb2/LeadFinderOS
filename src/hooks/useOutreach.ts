@@ -181,8 +181,8 @@ export function useOutreach() {
         address: lead.address,
         category: lead.category || null,
         status: 'not_contacted' as LeadStatus,
-        next_action: 'call' as NextActionType,
-        next_action_date: new Date().toISOString().split('T')[0],
+        next_action: 'none' as NextActionType,
+        next_action_date: null,
         country,
         list_type: listType,
       })
@@ -587,6 +587,89 @@ export function useOutreach() {
     return true;
   }, [archivedLeads, toast]);
 
+  // Mark a lead as interested (adds to Interested page while keeping in CRM)
+  const markAsInterested = useCallback(async (leadId: string) => {
+    const lead = leads.find((l) => l.id === leadId) || archivedLeads.find((l) => l.id === leadId);
+    if (!lead) return false;
+
+    const { error } = await supabase
+      .from('outreach_leads')
+      .update({ 
+        is_potential_work: true,
+        status: 'interested' as LeadStatus,
+      })
+      .eq('id', leadId);
+
+    if (error) {
+      toast({
+        title: 'Error updating lead',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    // Update local state
+    const updateLeadFn = (l: OutreachLead): OutreachLead => 
+      l.id === leadId ? { ...l, is_potential_work: true, status: 'interested' as LeadStatus } : l;
+    
+    setLeads((prev) => prev.map(updateLeadFn));
+    setArchivedLeads((prev) => prev.map(updateLeadFn));
+    
+    toast({
+      title: 'Added to Interested',
+      description: `${lead.business_name} added to your Interested pipeline.`,
+    });
+
+    // Log activity
+    if (user) {
+      await supabase.from('outreach_activities').insert({
+        lead_id: leadId,
+        user_id: user.id,
+        activity_type: 'interested',
+        description: 'Marked as interested and added to pipeline',
+      });
+    }
+
+    return true;
+  }, [leads, archivedLeads, user, toast]);
+
+  // Mark multiple leads as interested
+  const markMultipleAsInterested = useCallback(async (leadIds: string[]) => {
+    if (leadIds.length === 0) return false;
+
+    const { error } = await supabase
+      .from('outreach_leads')
+      .update({ 
+        is_potential_work: true,
+        status: 'interested' as LeadStatus,
+      })
+      .in('id', leadIds);
+
+    if (error) {
+      toast({
+        title: 'Error updating leads',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    // Update local state
+    const updateLeadFn = (l: OutreachLead): OutreachLead => 
+      leadIds.includes(l.id) ? { ...l, is_potential_work: true, status: 'interested' as LeadStatus } : l;
+    
+    setLeads((prev) => prev.map(updateLeadFn));
+    setArchivedLeads((prev) => prev.map(updateLeadFn));
+    
+    toast({
+      title: 'Added to Interested',
+      description: `${leadIds.length} leads added to your Interested pipeline.`,
+    });
+
+    return true;
+  }, [toast]);
+
   // Search archived leads by phone number
   const searchArchivedByPhone = useCallback(async (phoneQuery: string): Promise<OutreachLead[]> => {
     if (!user || !phoneQuery.trim()) return [];
@@ -675,12 +758,14 @@ export function useOutreach() {
     unarchiveLead,
     archiveMultiple,
     unarchiveMultiple,
+    markAsInterested,
+    markMultipleAsInterested,
     searchArchivedByPhone,
     fetchActivities,
     logActivity,
     isInOutreach,
-     bulkLookupPhones,
-     fetchLeads,
+    bulkLookupPhones,
+    fetchLeads,
     refetch: fetchLeads,
   };
 }

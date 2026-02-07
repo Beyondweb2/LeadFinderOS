@@ -23,6 +23,7 @@ const Outreach = () => {
     fetchActivities,
     archiveLead,
     archiveMultiple,
+    markMultipleAsInterested,
   } = useOutreach();
 
   const { subscribed, isLoading: isLoadingSubscription } = useSubscription();
@@ -84,6 +85,7 @@ const Outreach = () => {
         onArchive={archiveLead}
         onArchiveSelected={archiveMultiple}
         onDeleteSelected={deleteMultiple}
+        onMarkAsInterested={markMultipleAsInterested}
         showArchiveButton={false}
         isArchiveView={false}
         readOnly={isReadOnly}

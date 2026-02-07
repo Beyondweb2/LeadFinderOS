@@ -14,7 +14,6 @@ import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
 import step3Crm from '@/assets/howto-step3-crm.png';
 import step4Whatsapp from '@/assets/howto-step4-whatsapp.png';
-import step5Bulksend from '@/assets/howto-step5-bulksend.png';
 import step6Contacted from '@/assets/howto-step6-contacted.png';
 import step7Potential from '@/assets/howto-step7-potential.png';
 

@@ -85,6 +85,7 @@ export interface OutreachLead {
   created_at: string;
   updated_at: string;
   is_archived?: boolean;
+  is_potential_work?: boolean;
 }
 
 export interface OutreachActivity {

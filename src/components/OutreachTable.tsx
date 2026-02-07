@@ -29,7 +29,8 @@ import {
   Download,
   Trash2,
   Copy,
-  CheckCheck
+  CheckCheck,
+  Star,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
@@ -49,6 +50,7 @@ interface OutreachTableProps {
   onDelete?: (leadId: string) => void;
   onDeleteSelected?: (leadIds: string[]) => void;
   onBulkStatusChange?: (leadIds: string[], status: LeadStatus) => void;
+  onMarkAsInterested?: (leadIds: string[]) => void;
   showArchiveButton?: boolean;
   isArchiveView?: boolean;
   /** When true, hides status and next action editing (for simplified Outreach CRM view) */
@@ -71,6 +73,7 @@ export function OutreachTable({
   onDelete,
   onDeleteSelected,
   onBulkStatusChange,
+  onMarkAsInterested,
   showArchiveButton = true,
   isArchiveView = false,
   readOnly = false,
@@ -145,6 +148,14 @@ export function OutreachTable({
       title: 'Status updated',
       description: `${ids.length} lead${ids.length > 1 ? 's' : ''} marked as Contacted.`,
     });
+  };
+
+  // Mark selected leads as interested
+  const handleMarkAsInterested = () => {
+    if (selectedIds.size === 0 || !onMarkAsInterested) return;
+    const ids = Array.from(selectedIds);
+    onMarkAsInterested(ids);
+    setSelectedIds(new Set());
   };
 
   // Archive selected leads
@@ -393,15 +404,28 @@ export function OutreachTable({
                   Copy Numbers ({selectedIds.size})
                 </Button>
                 {!readOnly && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleMarkAsContacted}
-                    className="bg-background text-xs h-8"
-                  >
-                    <CheckCheck className="h-3.5 w-3.5 mr-1.5" />
-                    Mark Contacted
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleMarkAsContacted}
+                      className="bg-background text-xs h-8"
+                    >
+                      <CheckCheck className="h-3.5 w-3.5 mr-1.5" />
+                      Mark Contacted
+                    </Button>
+                    {onMarkAsInterested && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={handleMarkAsInterested}
+                        className="text-xs h-8"
+                      >
+                        <Star className="h-3.5 w-3.5 mr-1.5" />
+                        Interested
+                      </Button>
+                    )}
+                  </>
                 )}
                 {onDeleteSelected && !readOnly && (
                   <Button
