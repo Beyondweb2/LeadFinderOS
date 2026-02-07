@@ -48,6 +48,8 @@ interface OutreachTableProps {
   onRemoveAll: () => void;
   onArchive?: (leadId: string) => void;
   onArchiveSelected?: (leadIds: string[]) => void;
+  onDelete?: (leadId: string) => void;
+  onDeleteSelected?: (leadIds: string[]) => void;
   showArchiveButton?: boolean;
   isArchiveView?: boolean;
   /** When true, hides status and next action editing (for simplified Outreach CRM view) */
@@ -67,6 +69,8 @@ export function OutreachTable({
   onRemoveAll,
   onArchive,
   onArchiveSelected,
+  onDelete,
+  onDeleteSelected,
   showArchiveButton = true,
   isArchiveView = false,
   readOnly = false,
@@ -135,6 +139,15 @@ export function OutreachTable({
     if (selectedIds.size === 0) return;
     if (onArchiveSelected) {
       onArchiveSelected(Array.from(selectedIds));
+      setSelectedIds(new Set());
+    }
+  };
+
+  // Delete selected leads
+  const handleDeleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    if (onDeleteSelected) {
+      onDeleteSelected(Array.from(selectedIds));
       setSelectedIds(new Set());
     }
   };
@@ -364,7 +377,7 @@ export function OutreachTable({
                   className="bg-primary text-xs h-8"
                 >
                   <Copy className="h-3.5 w-3.5 mr-1.5" />
-                  Copy {selectedIds.size}
+                  Copy Numbers ({selectedIds.size})
                 </Button>
                 {showArchiveButton && onArchiveSelected && (
                   <Button
@@ -384,6 +397,17 @@ export function OutreachTable({
                         Contacted
                       </>
                     )}
+                  </Button>
+                )}
+                {onDeleteSelected && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteSelected}
+                    className="bg-background text-xs h-8 text-destructive hover:text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                    Remove
                   </Button>
                 )}
               </>

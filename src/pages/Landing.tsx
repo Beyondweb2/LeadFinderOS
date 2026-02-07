@@ -176,7 +176,7 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 // Video section component with sound toggle
 // Starts muted (required for autoplay) - user can unmute
 const VideoSection = () => {
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const toggleMute = () => {
@@ -213,7 +213,6 @@ const VideoSection = () => {
               className="w-full h-auto"
               autoPlay 
               loop 
-              muted
               playsInline
               preload="auto"
               poster={videoPoster}

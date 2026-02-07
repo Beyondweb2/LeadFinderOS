@@ -17,6 +17,7 @@ const Outreach = () => {
     updateNextAction,
     updateNotes,
     deleteLead,
+    deleteMultiple,
     deleteAllLeads,
     fetchActivities,
     archiveLead,
@@ -45,6 +46,23 @@ const Outreach = () => {
         <p className="text-sm sm:text-base text-muted-foreground max-w-lg">
           Copy phone numbers for your bulk message sender. Once you've copied numbers, send them to Archive to track responses.
         </p>
+        {/* Chrome Extension Tip */}
+        <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border/50 max-w-lg">
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">💡 Tip:</span> Use a WhatsApp bulk sender Chrome extension to message multiple leads at once.{' '}
+            <a 
+              href="https://chrome.google.com/webstore/category/extensions"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              Browse extensions →
+            </a>
+            <span className="block mt-1 text-[10px] text-muted-foreground/70">
+              See <Link to="/terms" className="underline hover:text-foreground">Terms & Conditions</Link> for third-party app disclaimer.
+            </span>
+          </p>
+        </div>
       </div>
 
       {/* Subscribe banner for non-subscribers */}
@@ -69,6 +87,7 @@ const Outreach = () => {
         onRemoveAll={deleteAllLeads}
         onArchive={archiveLead}
         onArchiveSelected={archiveMultiple}
+        onDeleteSelected={deleteMultiple}
         showArchiveButton={!isReadOnly}
         isArchiveView={false}
         readOnly={true}

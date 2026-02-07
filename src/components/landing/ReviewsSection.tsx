@@ -12,25 +12,25 @@ const REVIEWS: Review[] = [
   {
     name: 'James T.',
     role: 'Freelance Web Developer',
-    content: "I was spending hours on Google Maps trying to find businesses without websites. LeadFinder Pro does it in seconds. I've closed 3 new clients in my first month!",
+    content: "honestly was wasting so much time on maps before this. found like 3 clients first month which basically paid for itself. the whatsapp integration is what sold me tbh",
     avatar: 'JT',
   },
   {
     name: 'Sarah M.',
     role: 'Digital Agency Owner',
-    content: "Game changer for our lead generation. The bulk copy feature saves my team so much time. We've 5x'd our outreach volume without hiring anyone new.",
+    content: "we were doing this manually before and it took AGES. now my team just copies the numbers and sends bulk messages. probably 5x more outreach than before, no joke",
     avatar: 'SM',
   },
   {
     name: 'David R.',
     role: 'WordPress Developer',
-    content: "Finally a tool that actually works! The AI classification is surprisingly accurate. I focus only on hot leads now and my conversion rate has doubled.",
+    content: "the hot lead thing actually works?? thought it'd be useless but its pretty accurate. saves me calling businesses that already have sites. worth it for that alone",
     avatar: 'DR',
   },
   {
     name: 'Emily K.',
     role: 'Small Business Consultant',
-    content: "Simple, effective, and worth every penny. I love how I can track my entire pipeline from first contact to paid client. Best investment this year.",
+    content: "been using this for a few weeks now. super simple, does what it says. tracking potential clients from first text to payment is nice. definitely recommend giving it a go",
     avatar: 'EK',
   },
 ];
