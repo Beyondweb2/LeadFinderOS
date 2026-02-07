@@ -818,7 +818,7 @@ const Landing = () => {
             </div>
           </div>
           
-          {/* Disclaimer + Copyright */}
+          {/* Disclaimer + Copyright + Contact */}
           <div className="border-t border-white/[0.04] pt-6 sm:pt-8 text-center space-y-2 sm:space-y-3">
             <p className="text-[10px] sm:text-xs text-muted-foreground/70 max-w-2xl mx-auto leading-relaxed px-2">
               Disclaimer: LeadFinder Pro uses AI classification and third-party data sources. 
@@ -827,6 +827,9 @@ const Landing = () => {
             </p>
             <p className="text-[10px] sm:text-xs text-muted-foreground/50">
               © {new Date().getFullYear()} LeadFinder Pro. All rights reserved.
+            </p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground/40">
+              Need help? <a href="mailto:beyondwebcraft@outlook.com" className="hover:text-muted-foreground transition-colors">beyondwebcraft@outlook.com</a>
             </p>
           </div>
         </div>
