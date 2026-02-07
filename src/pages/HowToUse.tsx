@@ -8,7 +8,6 @@ import {
   CheckCircle,
   ArrowRight,
   ArrowDown,
-  ExternalLink,
   ArrowLeft,
 } from 'lucide-react';
 import step1Search from '@/assets/howto-step1-search.png';
@@ -39,30 +38,26 @@ const STEPS = [
   {
     number: 3,
     icon: ClipboardList,
-    title: 'Bulk Copy Phone Numbers',
-    description: 'Go to the Outreach CRM page. Select the businesses you want to contact by clicking the checkboxes, then click "Copy" to bulk copy all selected phone numbers to your clipboard.',
+    title: 'Copy Phone Numbers',
+    description: 'Go to the Outreach CRM page. Select the businesses you want to contact by clicking the checkboxes, then click "Copy" to copy all selected phone numbers to your clipboard.',
     image: step3Crm,
-    tip: 'Select all businesses in a batch for faster outreach. The phone numbers are copied comma-separated.',
+    tip: 'Having numbers ready makes it easy to cold call or text leads one by one.',
   },
   {
     number: 4,
     icon: MessageSquare,
-    title: 'Open Your Bulk Message Sender',
-    description: 'Open WhatsApp Web and your bulk message sender extension. We recommend tools like "WA Bulk Sender" which allow you to send messages to multiple numbers at once.',
+    title: 'Start Your Outreach',
+    description: 'Cold call businesses directly from your list, or send personalised text messages. A direct phone call often gets the best response - introduce yourself and your services.',
     image: step4Whatsapp,
-    tip: 'Keep WhatsApp Web open in your browser while sending. Messages are sent one by one with random intervals.',
-    externalLink: {
-      text: 'Get WA Bulk Sender (Chrome Extension)',
-      url: 'https://chrome.google.com/webstore/search/whatsapp%20bulk%20sender',
-    },
+    tip: 'Prepare a short pitch before calling. Keep it friendly and focus on how you can help their business.',
   },
   {
     number: 5,
     icon: MessageSquare,
-    title: 'Send Bulk Messages',
-    description: 'Paste the copied phone numbers into the "WhatsApp Numbers" field. Write your message template or select a saved one. Set your sending interval (6-10 seconds recommended) and click "Send".',
+    title: 'Send Personalised Messages',
+    description: 'For text outreach, send individual messages to each lead. A personal touch goes a long way - mention their business name and keep your message short and friendly.',
     image: step5Bulksend,
-    tip: 'Use a friendly, short message. Something like "Hi! Are you still taking on work?" works great.',
+    tip: 'Something like "Hi! I noticed [Business Name] doesn\'t have a website yet - I\'d love to help!" works well.',
   },
   {
     number: 6,
@@ -143,19 +138,6 @@ const HowToUse = () => {
                     {step.tip}
                   </p>
                 </div>
-                
-                {/* External link if present */}
-                {step.externalLink && (
-                  <a 
-                    href={step.externalLink.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 mt-4 text-sm text-primary hover:underline"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    {step.externalLink.text}
-                  </a>
-                )}
               </CardContent>
             </Card>
             
