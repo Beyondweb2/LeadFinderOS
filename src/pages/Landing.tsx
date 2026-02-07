@@ -491,7 +491,6 @@ const Landing = () => {
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-3">No credit card required</p>
           </ScrollReveal>
         </div>
       </section>
@@ -696,7 +695,7 @@ const Landing = () => {
                 </Button>
               </div>
               <p className="relative text-[10px] sm:text-xs text-muted-foreground mt-4">
-                7-day free trial • No credit card required • Cancel anytime
+                7-day free trial • Cancel anytime
               </p>
             </div>
           </ScrollReveal>
