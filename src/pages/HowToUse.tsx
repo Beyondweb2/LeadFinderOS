@@ -12,10 +12,8 @@ import {
 } from 'lucide-react';
 import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
-import step3Crm from '@/assets/howto-step3-crm.png';
-
-import step6Contacted from '@/assets/howto-step6-contacted.png';
-import step7Potential from '@/assets/howto-step7-potential.png';
+import step3Outreach from '@/assets/howto-step3-outreach.png';
+import step4Interested from '@/assets/howto-step7-potential.png';
 
 const STEPS = [
   {
@@ -37,25 +35,17 @@ const STEPS = [
   {
     number: 3,
     icon: MessageSquare,
-    title: 'Cold Call or Text Leads',
-    description: 'In the Outreach CRM, select businesses and copy their phone numbers, or call them directly. Mark leads as "Contacted" once you\'ve reached out.',
-    image: step3Crm,
+    title: 'Reach Out & Track Progress',
+    description: 'In the Outreach CRM, copy phone numbers to text leads or call them directly. Update their status as you go - mark as "Contacted" after reaching out, then click "Interested" when someone responds positively.',
+    image: step3Outreach,
     tip: 'A direct phone call often gets the best response. Prepare a short pitch and keep it friendly.',
   },
   {
     number: 4,
     icon: CheckCircle,
-    title: 'Mark Interested Leads',
-    description: 'When someone responds positively, select them and click "Interested" to add them to your Interested pipeline. The lead stays synced between both pages.',
-    image: step6Contacted,
-    tip: 'Respond quickly to interested leads - speed matters for conversions.',
-  },
-  {
-    number: 5,
-    icon: CheckCircle,
     title: 'Manage Your Pipeline',
     description: 'The Interested page shows all leads who responded positively. Track their status, add notes, schedule follow-ups, and move them through your pipeline until they become paid clients.',
-    image: step7Potential,
+    image: step4Interested,
     tip: 'Set next actions and dates to stay organized. Use notes to remember conversation details.',
   },
 ];
