@@ -74,10 +74,10 @@ const MobileStepCard = ({
   index: number; 
   onImageClick: (src: string, title: string) => void;
 }) => (
-  <div className="flex flex-col items-center text-center px-2">
+  <div className="flex flex-col items-center text-center px-1">
     {/* Step number badge */}
     <div 
-      className="inline-flex items-center justify-center w-12 h-12 rounded-xl font-bold text-lg mb-4"
+      className="inline-flex items-center justify-center w-12 h-12 rounded-xl font-bold text-lg mb-3"
       style={{ 
         background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
         color: 'hsl(220 40% 4%)',
@@ -87,25 +87,14 @@ const MobileStepCard = ({
       {index + 1}
     </div>
     
-    {/* Icon and title */}
-    <div className="flex items-center gap-2.5 justify-center mb-3">
-      <div 
-        className="p-2.5 rounded-lg"
-        style={{ 
-          background: 'hsl(210 100% 50% / 0.1)',
-          border: '1px solid hsl(210 100% 50% / 0.2)'
-        }}
-      >
-        <step.icon className="h-5 w-5" style={{ color: 'hsl(210 100% 50%)' }} />
-      </div>
-      <h3 className="text-lg font-bold tracking-tight">{step.title}</h3>
-    </div>
+    {/* Title only - no icon on mobile */}
+    <h3 className="text-xl font-bold tracking-tight mb-2">{step.title}</h3>
     
     <p className="text-muted-foreground text-sm leading-relaxed mb-4 max-w-xs">
       {step.description}
     </p>
     
-    {/* Image */}
+    {/* Bigger Image - no badge on mobile */}
     <div 
       className="relative group cursor-pointer w-full"
       onClick={() => onImageClick(step.image, step.title)}
@@ -115,7 +104,7 @@ const MobileStepCard = ({
         style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
       />
       <div 
-        className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10]"
+        className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9]"
         style={{ 
           border: '1px solid hsl(210 100% 50% / 0.2)',
           boxShadow: '0 0 20px hsl(210 100% 50% / 0.1)'
@@ -126,22 +115,10 @@ const MobileStepCard = ({
           alt={step.title}
           className="w-full h-full object-cover"
         />
-        {/* Badge */}
-        <div 
-          className="absolute top-2 right-2 px-2 py-1 rounded-full text-[10px] font-semibold backdrop-blur-md"
-          style={{ 
-            background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.9), hsl(220 80% 45% / 0.9))',
-            color: 'white',
-            boxShadow: '0 4px 12px hsl(210 100% 50% / 0.3)'
-          }}
-        >
-          {step.badge}
-        </div>
       </div>
     </div>
   </div>
 );
-
 export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.ComponentType<ScrollRevealProps> }) => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
