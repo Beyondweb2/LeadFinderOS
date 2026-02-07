@@ -4,6 +4,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselPrevious,
+  CarouselNext,
+} from '@/components/ui/carousel';
+import {
   Search,
   ClipboardList,
   Phone,
@@ -31,6 +38,7 @@ import featureExport from '@/assets/feature-export.png';
 import featureClassification from '@/assets/feature-classification.png';
 import featureTemplates from '@/assets/feature-templates.png';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
 
 // Scroll reveal wrapper component
@@ -253,7 +261,8 @@ const VideoSection = () => {
 
 const Landing = () => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
-  
+  const [featureIndex, setFeatureIndex] = useState(0);
+  const isMobile = useIsMobile();
   return (
     <div className="min-h-screen bg-background overflow-hidden">
       {/* Feature Image Modal */}
@@ -516,54 +525,127 @@ const Landing = () => {
             </p>
           </ScrollReveal>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {FEATURES.map((feature, index) => (
-              <ScrollReveal key={feature.title} delay={index * 100}>
-                <Card
-                  className="group relative glass-panel-strong border-white/[0.06] transition-all duration-500 overflow-hidden h-full hover:border-[hsl(210_100%_50%_/_0.3)] cursor-pointer"
-                  onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
-                >
-                  {/* Hover glow - fixed brand blue */}
-                  <div 
-                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.05), transparent)' }}
-                  />
-                  
-                  {/* Screenshot image */}
-                  <div className="relative overflow-hidden rounded-t-lg">
-                    <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent z-10 pointer-events-none" />
-                    {/* Expand icon overlay */}
-                    <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <Expand className="h-4 w-4 text-foreground" />
-                    </div>
-                    <img 
-                      src={feature.image} 
-                      alt={feature.title}
-                      className={`w-full h-40 sm:h-48 object-cover transition-transform duration-500 group-hover:scale-105 ${feature.imageScale || 'scale-100'} ${feature.imagePosition || 'object-top'}`}
-                    />
-                  </div>
-                  
-                  <CardHeader className="relative pb-1 sm:pb-2 p-4 sm:p-5">
-                    <div className="flex items-center gap-3">
+          {/* Mobile Carousel */}
+          {isMobile ? (
+            <div className="max-w-sm mx-auto">
+              <Carousel
+                opts={{ loop: true }}
+                className="w-full"
+                setApi={(api) => {
+                  api?.on('select', () => {
+                    setFeatureIndex(api.selectedScrollSnap());
+                  });
+                }}
+              >
+                <CarouselContent>
+                  {FEATURES.map((feature) => (
+                    <CarouselItem key={feature.title}>
                       <div 
-                        className="p-2 rounded-xl transition-colors duration-500 flex-shrink-0"
-                        style={{ 
-                          background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
-                          border: '1px solid hsl(210 100% 50% / 0.1)'
-                        }}
+                        className="flex flex-col items-center text-center px-1 cursor-pointer"
+                        onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
                       >
-                        <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                        {/* Feature Title */}
+                        <h3 className="text-lg font-bold tracking-tight mb-2">{feature.title}</h3>
+                        
+                        <p className="text-muted-foreground text-sm leading-relaxed mb-4 max-w-xs">
+                          {feature.description}
+                        </p>
+                        
+                        {/* Larger Image */}
+                        <div className="relative w-full">
+                          <div 
+                            className="absolute -inset-2 rounded-2xl blur-xl opacity-40"
+                            style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+                          />
+                          <div 
+                            className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9]"
+                            style={{ 
+                              border: '1px solid hsl(210 100% 50% / 0.2)',
+                              boxShadow: '0 0 20px hsl(210 100% 50% / 0.1)'
+                            }}
+                          >
+                            <img 
+                              src={feature.image} 
+                              alt={feature.title}
+                              className={`w-full h-full object-cover ${feature.imageScale || 'scale-100'} ${feature.imagePosition || 'object-top'}`}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <CardTitle className="text-base sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</CardTitle>
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                
+                <CarouselPrevious className="left-0 bg-background/80 border-primary/30 hover:bg-primary/20" />
+                <CarouselNext className="right-0 bg-background/80 border-primary/30 hover:bg-primary/20" />
+              </Carousel>
+              
+              {/* Dot indicators */}
+              <div className="flex justify-center gap-2 mt-6">
+                {FEATURES.map((_, index) => (
+                  <button
+                    key={index}
+                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                      featureIndex === index 
+                        ? 'w-6 bg-primary' 
+                        : 'bg-muted-foreground/30'
+                    }`}
+                    aria-label={`Go to feature ${index + 1}`}
+                  />
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* Desktop Grid */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {FEATURES.map((feature, index) => (
+                <ScrollReveal key={feature.title} delay={index * 100}>
+                  <Card
+                    className="group relative glass-panel-strong border-white/[0.06] transition-all duration-500 overflow-hidden h-full hover:border-[hsl(210_100%_50%_/_0.3)] cursor-pointer"
+                    onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
+                  >
+                    {/* Hover glow - fixed brand blue */}
+                    <div 
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
+                      style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.05), transparent)' }}
+                    />
+                    
+                    {/* Screenshot image */}
+                    <div className="relative overflow-hidden rounded-t-lg">
+                      <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent z-10 pointer-events-none" />
+                      {/* Expand icon overlay */}
+                      <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <Expand className="h-4 w-4 text-foreground" />
+                      </div>
+                      <img 
+                        src={feature.image} 
+                        alt={feature.title}
+                        className={`w-full h-40 sm:h-48 object-cover transition-transform duration-500 group-hover:scale-105 ${feature.imageScale || 'scale-100'} ${feature.imagePosition || 'object-top'}`}
+                      />
                     </div>
-                  </CardHeader>
-                  <CardContent className="relative pt-0 p-4 sm:p-5 sm:pt-0">
-                    <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
-                  </CardContent>
-                </Card>
-              </ScrollReveal>
-            ))}
-          </div>
+                    
+                    <CardHeader className="relative pb-1 sm:pb-2 p-4 sm:p-5">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="p-2 rounded-xl transition-colors duration-500 flex-shrink-0"
+                          style={{ 
+                            background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
+                            border: '1px solid hsl(210 100% 50% / 0.1)'
+                          }}
+                        >
+                          <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                        </div>
+                        <CardTitle className="text-base sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="relative pt-0 p-4 sm:p-5 sm:pt-0">
+                      <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+                    </CardContent>
+                  </Card>
+                </ScrollReveal>
+              ))}
+            </div>
+          )}
           
           {/* CTA after features */}
           <ScrollReveal delay={600} className="text-center mt-10 sm:mt-14">
