@@ -16,7 +16,7 @@ import Outreach from "./pages/Outreach";
 import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
 import NotFound from "./pages/NotFound";
-import ArchivePage from "./pages/Archive";
+
 import PotentialWorkPage from "./pages/PotentialWork";
 import PaidClientsPage from "./pages/PaidClients";
 import HowToUse from "./pages/HowToUse";
@@ -99,18 +99,7 @@ const App = () => (
                 </ProtectedRoute>
               } 
             />
-            <Route 
-              path="/archive" 
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <ArchivePage />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              } 
-            />
+            {/* Archive route removed - merged into Outreach */}
             <Route 
               path="/potential-work" 
               element={

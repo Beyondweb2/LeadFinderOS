@@ -20,7 +20,6 @@ import {
   FileText,
   ChevronLeft,
   ChevronRight,
-  MessageSquare,
   Briefcase,
   DollarSign,
   HelpCircle
@@ -46,19 +45,13 @@ const navItems = [
     title: 'Outreach CRM', 
     url: '/outreach', 
     icon: ClipboardList,
-    description: 'Copy numbers & send texts'
+    description: 'Cold call & gather numbers'
   },
   { 
-    title: 'Contacted', 
-    url: '/archive', 
-    icon: MessageSquare,
-    description: 'Businesses you\'ve messaged'
-  },
-  { 
-    title: 'Potential Work', 
+    title: 'Interested', 
     url: '/potential-work', 
     icon: Briefcase,
-    description: 'Interested leads'
+    description: 'Leads who want to work'
   },
   { 
     title: 'Paid Clients', 

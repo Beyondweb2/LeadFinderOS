@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { OutreachTable } from '@/components/OutreachTable';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
@@ -12,6 +12,7 @@ import type { OutreachLead } from '@/types/outreach';
 const Outreach = () => {
   const {
     leads,
+    archivedLeads,
     isLoading,
     updateStatus,
     updateNextAction,
@@ -26,6 +27,11 @@ const Outreach = () => {
 
   const { subscribed, isLoading: isLoadingSubscription } = useSubscription();
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
+
+  // Combine active and archived leads into one unified list
+  const allLeads = useMemo(() => {
+    return [...leads, ...archivedLeads];
+  }, [leads, archivedLeads]);
 
   // Non-subscribers can view but not interact
   const isReadOnly = !subscribed && !isLoadingSubscription;
@@ -44,23 +50,13 @@ const Outreach = () => {
       <div className="text-center sm:text-left">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
         <p className="text-sm sm:text-base text-muted-foreground max-w-lg">
-          Copy phone numbers for your bulk message sender. Once you've copied numbers, send them to Archive to track responses.
+          Cold call businesses or copy phone numbers for texting. Mark leads as "Contacted" once you've reached out, then move interested ones to your Interested list.
         </p>
-        {/* Chrome Extension Tip */}
+        {/* Workflow Tip */}
         <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border/50 max-w-lg">
           <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">💡 Tip:</span> Use a WhatsApp bulk sender Chrome extension to message multiple leads at once.{' '}
-            <a 
-              href="https://chrome.google.com/webstore/category/extensions"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              Browse extensions →
-            </a>
-            <span className="block mt-1 text-[10px] text-muted-foreground/70">
-              See <Link to="/terms" className="underline hover:text-foreground">Terms & Conditions</Link> for third-party app disclaimer.
-            </span>
+            <span className="font-medium text-foreground">💡 Workflow:</span> Select leads → Copy numbers or call directly → Mark as Contacted → Move interested leads to{' '}
+            <Link to="/potential-work" className="text-primary hover:underline">Interested</Link>
           </p>
         </div>
       </div>
@@ -78,9 +74,9 @@ const Outreach = () => {
         </Alert>
       )}
 
-      {/* Lead Table - readOnly mode hides status and next action editing */}
+      {/* Lead Table - now shows all leads with status management */}
       <OutreachTable
-        leads={leads}
+        leads={allLeads}
         onLeadClick={isReadOnly ? () => {} : setSelectedLead}
         onStatusChange={updateStatus}
         onNextActionChange={updateNextAction}
@@ -88,12 +84,12 @@ const Outreach = () => {
         onArchive={archiveLead}
         onArchiveSelected={archiveMultiple}
         onDeleteSelected={deleteMultiple}
-        showArchiveButton={!isReadOnly}
+        showArchiveButton={false}
         isArchiveView={false}
-        readOnly={true}
+        readOnly={isReadOnly}
       />
 
-      {/* Lead Detail Dialog - readOnly mode */}
+      {/* Lead Detail Dialog */}
       {!isReadOnly && (
         <OutreachLeadDialog
           lead={selectedLead}
@@ -104,7 +100,7 @@ const Outreach = () => {
           onUpdateNotes={updateNotes}
           onDelete={deleteLead}
           fetchActivities={fetchActivities}
-          readOnly={true}
+          readOnly={false}
         />
       )}
     </div>
