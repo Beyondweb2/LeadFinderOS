@@ -1,113 +1,136 @@
 
-# Plan: Fix Trial Banner Layout & Require Payment at Signup
 
-## Issues Identified
+## Summary
 
-### Issue 1: Trial Banner Cutoff with Expanded Sidebar
-Looking at the screenshot, when the sidebar is expanded, the trial banner text is being cut off (showing "ys left" instead of "7 days left"). This is because:
-- The `TrialBanner` is rendered **above** the sidebar in `AppLayout.tsx`
-- When the sidebar expands, it overlaps the banner content
-- The banner needs to account for sidebar width
+Currently, the trial system limits **all** trial users to 1 search per day. The user wants:
 
-### Issue 2: Payment Required at Signup
-Currently users can:
-1. Create account (free)
-2. Use the app with trial limitations
-3. Optionally upgrade later
+- **Stripe trial users (card upfront, 7-day trial via checkout)** → **Unlimited searches** + full access
+- **Free users (no card, just signed up)** → **1 search per day** + limited access
 
-**New flow requested:**
-1. Create account → Immediately redirect to Stripe Checkout with 7-day free trial
-2. Card details captured upfront (Stripe handles trial billing automatically)
-3. User gets full access during trial (no daily search limits)
-
-### Issue 3: Preventing Trial Abuse
-**Question asked:** "What's stopping them from signing up with another account and doing another free trial?"
-
-**Realistic mitigations:**
-- Stripe automatically associates payment methods with cards - same card can be flagged
-- Email verification adds friction to rapid account creation
-- Phone number verification (requires additional setup)
-- Most casual abusers won't bother creating new accounts with new cards
-
-**What we can implement now:**
-- The Stripe 7-day trial is tied to the payment method, so users need a unique card
-- We can check if a Stripe customer with that email already exists and deny trial
+This requires distinguishing between two types of users:
+1. **Stripe trialing** = Has a subscription with `status: 'trialing'` (paid trial, full access)
+2. **App trial** = Has `user_trials` record but no Stripe subscription (free trial, limited access)
 
 ---
 
-## Solution
+## Current vs New Model
 
-### Part 1: Fix Trial Banner Layout
-
-**File: `src/components/AppLayout.tsx`**
-- Move the `TrialBanner` inside the main content area, after the sidebar
-- Add left margin/padding that respects sidebar width
-- This ensures the banner content doesn't get hidden behind the sidebar
-
-### Part 2: Require Payment at Signup
-
-**File: `src/pages/Auth.tsx`**
-- After successful signup, redirect to Stripe Checkout instead of the app
-- The checkout already has `payment_method_collection: "always"` and `trial_period_days: 7`
-
-**File: `src/hooks/useAuth.tsx`**
-- Add a helper to trigger checkout flow immediately after signup
-
-**File: `supabase/functions/create-checkout/index.ts`**
-- Add check to prevent users who've already had a trial from getting another one
-- Check if Stripe customer already exists with active/cancelled subscriptions
-
-### Part 3: Update Trial Logic
-
-Since payment is required upfront:
-- The 7-day trial is now handled by **Stripe** (not local `user_trials` table)
-- The `check-subscription` function will see `trialing` status from Stripe
-- Simplify the trial system: remove daily search limits since they're paying customers
-
-**File: `src/components/TrialBanner.tsx`**
-- Update to show "7 days until first charge" instead of "free trial remaining"
-- This is more accurate since they've already committed to paying
+| User Type | Current Behavior | New Behavior |
+|-----------|------------------|--------------|
+| Stripe `trialing` | 1 search/day (wrong) | **Unlimited** searches |
+| Stripe `active` | Unlimited | Unlimited (no change) |
+| App trial (no card) | 1 search/day | 1 search/day (no change) |
+| Expired/No subscription | Blocked | Blocked (no change) |
 
 ---
 
-## Technical Changes
+## Implementation Plan
 
-### Files to modify:
+### 1. Update `search-leads` Edge Function
 
-1. **`src/components/AppLayout.tsx`**
-   - Restructure layout so trial banner respects sidebar width
-   - Move banner inside the flex container after sidebar
-
-2. **`src/pages/Auth.tsx`**
-   - After successful signup, call `createCheckout()` to redirect to Stripe
-   - Show loading state while redirecting to Stripe
-
-3. **`src/hooks/useAuth.tsx`**
-   - Add reference to checkout function or handle redirect in Auth page
-
-4. **`supabase/functions/create-checkout/index.ts`**
-   - Add logic to check if customer already had a subscription (trial abuse prevention)
-   - Return error if user already used trial
-
-5. **`src/components/TrialBanner.tsx`**
-   - Update messaging to reflect that trial is Stripe-managed
-   - Show "X days until first charge" for trialing users
-
----
-
-## User Flow After Changes
+Modify the subscription/trial checking logic to:
+- **Skip daily limit enforcement** for users with `subscribed: true` and `status: 'trialing'` (Stripe trial)
+- **Only enforce daily limit** for users on the app trial (no Stripe subscription)
 
 ```text
-1. User signs up with email/password
-2. Account created → Auto-redirect to Stripe Checkout
-3. User enters card details → 7-day trial starts (no charge yet)
-4. User gets full app access immediately
-5. After 7 days: Card charged £19.99/month automatically
-6. If they cancel during trial: No charge
+Current Flow:
+  Has subscription? → Allow unlimited
+  On app trial? → Enforce 1 search/day limit
+  Neither? → Block
+
+New Flow:
+  Has Stripe subscription (active OR trialing)? → Allow unlimited
+  On app trial (no Stripe)? → Enforce 1 search/day limit
+  Neither? → Block
 ```
 
-## Trial Abuse Prevention
+### 2. Update `useTrial` Hook
 
-- Stripe ties trials to payment methods - reusing same card = detected
-- Check if email already has a Stripe customer record with past subscriptions
-- Consider adding email verification requirement (optional future enhancement)
+The frontend hook should reflect that Stripe trialing users have no daily limit:
+- When `useSubscription` returns `status: 'trialing'`, set `searchesRemaining: Infinity` or similar
+- The `TrialLimitDialog` should only appear for app trial users, not Stripe trial users
+
+### 3. Update `TrialBanner` Component
+
+Ensure messaging is clear:
+- Stripe trialing users: Show "X days until first charge" (existing)
+- App trial users: Show "X searches remaining today" or "Subscribe for unlimited"
+
+### 4. Update `SubscriptionGate` Component
+
+No changes needed - it already allows access for both `subscribed` and `isOnTrial` users.
+
+---
+
+## Technical Details
+
+### Edge Function Changes (`search-leads/index.ts`)
+
+The key change is in the subscription check block (around line 598-692):
+
+```typescript
+// NEW: Check for Stripe subscription first (including trialing)
+const { data: subscription } = await serviceClient
+  .from('subscriptions')
+  .select('status')
+  .eq('user_id', userId)
+  .maybeSingle();
+
+const validStatuses = ['active', 'trialing', 'past_due'];
+const hasActiveSubscription = subscription && validStatuses.includes(subscription.status);
+
+// If user has Stripe subscription (including trialing), allow unlimited searches
+if (hasActiveSubscription) {
+  console.log(`User ${userId} has valid subscription (${subscription.status}) - unlimited searches`);
+  // Continue to search - no limits
+}
+else {
+  // Check app trial for free users
+  const { data: trial } = await serviceClient
+    .from('user_trials')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  
+  // ... enforce daily limit only here
+}
+```
+
+### Frontend Hook Changes (`useTrial.ts`)
+
+Add awareness of Stripe subscription status:
+
+```typescript
+// Import useSubscription status
+// If user has Stripe trialing status, they have unlimited searches
+const { status: stripeStatus } = useSubscription();
+const isStripeTrialing = stripeStatus === 'trialing';
+
+// Override limits for Stripe trial users
+if (isStripeTrialing) {
+  return {
+    ...state,
+    searchesRemaining: Infinity,
+    isOnTrial: true, // Still on trial but with full access
+  };
+}
+```
+
+---
+
+## Files to Modify
+
+1. **`supabase/functions/search-leads/index.ts`** - Core logic change: skip daily limit for Stripe trial users
+2. **`src/hooks/useTrial.ts`** - Set unlimited searches for Stripe trialing users
+3. **`src/components/TrialBanner.tsx`** - (Optional) Add messaging for free trial users
+4. **`src/pages/Index.tsx`** - (Minor) Update trial limit dialog conditions
+
+---
+
+## Testing Checklist
+
+1. **Stripe trialing user**: Search multiple times in one day → should work without limits
+2. **Free trial user (no card)**: Search twice → should see limit dialog after first search
+3. **Active subscriber**: Unlimited searches → no change
+4. **Expired trial**: Blocked → no change
+
