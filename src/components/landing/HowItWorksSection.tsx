@@ -20,25 +20,29 @@ const STEPS = [
     title: 'Find Leads',
     description: 'Search by business type and location to find companies without websites',
     image: step1Image,
+    badge: '20+ Countries',
   },
   {
     icon: ClipboardList,
     title: 'View Lead Details',
     description: 'See business names, phone numbers, ratings, reviews, addresses, and direct Google Maps links. Filter by classification, check for websites, and add promising leads to your CRM.',
     image: step2Image,
+    badge: '10+ Data Points',
   },
   {
     icon: MessageSquare,
     title: 'Copy Numbers & Send',
     description: 'Bulk-copy phone numbers in one click to paste into a bulk messenger app, or cold call businesses directly from the list.',
     image: step3Image,
+    badge: 'One-Click Copy',
   },
   {
     icon: Users,
     title: 'Track Outreach',
     description: 'Manage responses and track interested leads through your sales pipeline',
     image: step4Image,
-    cropStyle: 'object-[42%_58%] scale-[1.6]', // Center both business cards
+    cropStyle: 'object-[42%_58%] scale-[1.6]',
+    badge: 'Full Pipeline',
   },
 ];
 
@@ -67,8 +71,8 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             return (
               <ScrollReveal key={step.title} delay={(index + 1) * 100}>
                 <div className={`flex flex-col ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-4 sm:gap-6 lg:gap-12`}>
-                  {/* Image Side - Fixed aspect ratio for consistent sizing */}
-                  <div className="flex-1 w-full">
+                  {/* Image Side - Larger images */}
+                  <div className="flex-1 w-full lg:flex-[1.2]">
                     <div className="relative group">
                       {/* Glow effect */}
                       <div 
@@ -80,7 +84,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.1), transparent)' }}
                       />
                       <div 
-                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10]"
+                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9]"
                         style={{ 
                           border: '1px solid hsl(210 100% 50% / 0.2)',
                           boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
@@ -91,6 +95,17 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                           alt={step.title}
                           className={`w-full h-full object-cover ${step.cropStyle || ''}`}
                         />
+                        {/* Badge */}
+                        <div 
+                          className="absolute top-3 right-3 sm:top-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold backdrop-blur-md"
+                          style={{ 
+                            background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.9), hsl(220 80% 45% / 0.9))',
+                            color: 'white',
+                            boxShadow: '0 4px 12px hsl(210 100% 50% / 0.3)'
+                          }}
+                        >
+                          {step.badge}
+                        </div>
                       </div>
                     </div>
                   </div>
