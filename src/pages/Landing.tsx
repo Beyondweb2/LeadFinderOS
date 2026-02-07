@@ -75,10 +75,17 @@ const ScrollReveal = ({
 
 const FEATURES = [
   {
-    icon: Zap,
-    title: 'Customization',
-    description: 'Personalize your workspace with custom themes and accent colors.',
-    image: featureCustomization,
+    icon: Search,
+    title: 'Smart Classification',
+    description: 'Automatically classify leads as hot, directory-only, or has website with confidence scores.',
+    image: featureClassification,
+    imageScale: 'scale-100',
+  },
+  {
+    icon: ClipboardList,
+    title: 'Smart Dashboard',
+    description: 'Track performance, revenue, conversions, and productivity all in one place.',
+    image: featureDashboard,
     imageScale: 'scale-100',
   },
   {
@@ -88,13 +95,6 @@ const FEATURES = [
     image: featureContactTracking,
     imageScale: 'scale-150',
     imagePosition: 'object-[center_40%]',
-  },
-  {
-    icon: ClipboardList,
-    title: 'Smart Dashboard',
-    description: 'Track performance, revenue, conversions, and productivity all in one place.',
-    image: featureDashboard,
-    imageScale: 'scale-100',
   },
   {
     icon: FileText,
@@ -111,10 +111,10 @@ const FEATURES = [
     imageScale: 'scale-100',
   },
   {
-    icon: Search,
-    title: 'Smart Classification',
-    description: 'Automatically classify leads as hot, directory-only, or has website with confidence scores.',
-    image: featureClassification,
+    icon: Zap,
+    title: 'Customization',
+    description: 'Personalize your workspace with custom themes and accent colors.',
+    image: featureCustomization,
     imageScale: 'scale-100',
   },
 ];
