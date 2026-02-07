@@ -740,13 +740,13 @@ export function OutreachTable({
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-border/50">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-border/50 flex-wrap gap-2">
             <p className="text-sm text-muted-foreground">
               Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to{' '}
               {Math.min(currentPage * ITEMS_PER_PAGE, filteredAndSortedLeads.length)} of{' '}
               {filteredAndSortedLeads.length}
             </p>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
                 size="sm"
@@ -755,6 +755,25 @@ export function OutreachTable({
               >
                 <ChevronLeft className="h-4 w-4" />
               </Button>
+              
+              {/* Page selector dropdown */}
+              <Select
+                value={String(currentPage)}
+                onValueChange={(v) => setCurrentPage(Number(v))}
+              >
+                <SelectTrigger className="w-[80px] h-8 text-xs bg-background">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[200px] bg-background">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <SelectItem key={page} value={String(page)}>
+                      Page {page}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-muted-foreground">of {totalPages}</span>
+              
               <Button
                 variant="outline"
                 size="sm"
