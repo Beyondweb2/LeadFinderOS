@@ -23,8 +23,8 @@ import { AccentColorPicker } from './AccentColorPicker';
 import { useAuth } from '@/hooks/useAuth';
 
 const mainNavItems = [
-  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-  { title: 'Search', url: '/', icon: Search },
+  { title: 'Dashboard', url: '/', icon: LayoutDashboard },
+  { title: 'Search', url: '/find-leads', icon: Search },
   { title: 'CRM', url: '/outreach', icon: ClipboardList },
   { title: 'Interested', url: '/potential-work', icon: Briefcase },
 ];
