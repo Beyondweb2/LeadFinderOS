@@ -100,7 +100,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             const isEven = index % 2 === 0;
             return (
               <ScrollReveal key={step.title} delay={(index + 1) * 100}>
-                <div className={`flex flex-col ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-4 sm:gap-6 lg:gap-12`}>
+                <div className={`flex flex-col-reverse ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-4 sm:gap-6 lg:gap-12`}>
                   {/* Image Side - Larger images */}
                   <div className="flex-1 w-full lg:flex-[1.2]">
                     <div 
