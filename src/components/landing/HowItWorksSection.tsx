@@ -3,6 +3,13 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselPrevious,
+  CarouselNext,
+} from '@/components/ui/carousel';
+import {
   Search,
   ClipboardList,
   MessageSquare,
@@ -11,6 +18,7 @@ import {
   X,
   Expand,
 } from 'lucide-react';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 // Import how-to images
 import step1Image from '@/assets/howto-step1-search.png';
@@ -56,8 +64,88 @@ interface ScrollRevealProps {
   direction?: 'left' | 'right' | 'up' | 'down';
 }
 
+// Mobile step card component
+const MobileStepCard = ({ 
+  step, 
+  index, 
+  onImageClick 
+}: { 
+  step: typeof STEPS[0]; 
+  index: number; 
+  onImageClick: (src: string, title: string) => void;
+}) => (
+  <div className="flex flex-col items-center text-center px-2">
+    {/* Step number badge */}
+    <div 
+      className="inline-flex items-center justify-center w-12 h-12 rounded-xl font-bold text-lg mb-4"
+      style={{ 
+        background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
+        color: 'hsl(220 40% 4%)',
+        boxShadow: '0 0 30px hsl(210 100% 50% / 0.4)'
+      }}
+    >
+      {index + 1}
+    </div>
+    
+    {/* Icon and title */}
+    <div className="flex items-center gap-2.5 justify-center mb-3">
+      <div 
+        className="p-2.5 rounded-lg"
+        style={{ 
+          background: 'hsl(210 100% 50% / 0.1)',
+          border: '1px solid hsl(210 100% 50% / 0.2)'
+        }}
+      >
+        <step.icon className="h-5 w-5" style={{ color: 'hsl(210 100% 50%)' }} />
+      </div>
+      <h3 className="text-lg font-bold tracking-tight">{step.title}</h3>
+    </div>
+    
+    <p className="text-muted-foreground text-sm leading-relaxed mb-4 max-w-xs">
+      {step.description}
+    </p>
+    
+    {/* Image */}
+    <div 
+      className="relative group cursor-pointer w-full"
+      onClick={() => onImageClick(step.image, step.title)}
+    >
+      <div 
+        className="absolute -inset-2 rounded-2xl blur-xl opacity-40"
+        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+      />
+      <div 
+        className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10]"
+        style={{ 
+          border: '1px solid hsl(210 100% 50% / 0.2)',
+          boxShadow: '0 0 20px hsl(210 100% 50% / 0.1)'
+        }}
+      >
+        <img 
+          src={step.image} 
+          alt={step.title}
+          className="w-full h-full object-cover"
+        />
+        {/* Badge */}
+        <div 
+          className="absolute top-2 right-2 px-2 py-1 rounded-full text-[10px] font-semibold backdrop-blur-md"
+          style={{ 
+            background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.9), hsl(220 80% 45% / 0.9))',
+            color: 'white',
+            boxShadow: '0 4px 12px hsl(210 100% 50% / 0.3)'
+          }}
+        >
+          {step.badge}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
 export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.ComponentType<ScrollRevealProps> }) => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const isMobile = useIsMobile();
 
   return (
     <section className="relative z-10 py-10 sm:py-14 md:py-20 lg:py-28 px-3 sm:px-4">
@@ -95,99 +183,140 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
           </p>
         </ScrollReveal>
         
-        <div className="max-w-6xl mx-auto space-y-6 sm:space-y-10 md:space-y-16">
-          {STEPS.map((step, index) => {
-            const isEven = index % 2 === 0;
-            // Determine slide directions for opposing animations
-            const imageDirection = isEven ? 'left' : 'right';
-            const textDirection = isEven ? 'right' : 'left';
+        {/* Mobile Carousel */}
+        {isMobile ? (
+          <div className="max-w-sm mx-auto">
+            <Carousel
+              opts={{ loop: true }}
+              className="w-full"
+              setApi={(api) => {
+                api?.on('select', () => {
+                  setActiveIndex(api.selectedScrollSnap());
+                });
+              }}
+            >
+              <CarouselContent>
+                {STEPS.map((step, index) => (
+                  <CarouselItem key={step.title}>
+                    <MobileStepCard 
+                      step={step} 
+                      index={index}
+                      onImageClick={(src, title) => setExpandedImage({ src, title })}
+                    />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              
+              {/* Custom navigation arrows */}
+              <CarouselPrevious className="left-0 bg-background/80 border-primary/30 hover:bg-primary/20" />
+              <CarouselNext className="right-0 bg-background/80 border-primary/30 hover:bg-primary/20" />
+            </Carousel>
             
-            return (
-              <div key={step.title} className={`flex flex-col-reverse ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-4 sm:gap-6 lg:gap-12`}>
-                {/* Image Side - Larger images */}
-                <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={(index + 1) * 100} direction={imageDirection}>
-                  <div 
-                    className="relative group cursor-pointer"
-                    onClick={() => setExpandedImage({ src: step.image, title: step.title })}
-                  >
-                    {/* Glow effect */}
+            {/* Dot indicators */}
+            <div className="flex justify-center gap-2 mt-6">
+              {STEPS.map((_, index) => (
+                <button
+                  key={index}
+                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                    activeIndex === index 
+                      ? 'w-6 bg-primary' 
+                      : 'bg-muted-foreground/30'
+                  }`}
+                  aria-label={`Go to step ${index + 1}`}
+                />
+              ))}
+            </div>
+          </div>
+        ) : (
+          /* Desktop Layout - Original */
+          <div className="max-w-6xl mx-auto space-y-6 sm:space-y-10 md:space-y-16">
+            {STEPS.map((step, index) => {
+              const isEven = index % 2 === 0;
+              const imageDirection = isEven ? 'left' : 'right';
+              const textDirection = isEven ? 'right' : 'left';
+              
+              return (
+                <div key={step.title} className={`flex flex-col-reverse ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-4 sm:gap-6 lg:gap-12`}>
+                  {/* Image Side */}
+                  <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={(index + 1) * 100} direction={imageDirection}>
                     <div 
-                      className="absolute -inset-2 rounded-2xl blur-xl opacity-40 group-hover:opacity-60 transition-opacity duration-500"
-                      style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
-                    />
-                    <div 
-                      className="absolute -inset-px rounded-2xl"
-                      style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.1), transparent)' }}
-                    />
-                    <div 
-                      className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.02]"
-                      style={{ 
-                        border: '1px solid hsl(210 100% 50% / 0.2)',
-                        boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
-                      }}
+                      className="relative group cursor-pointer"
+                      onClick={() => setExpandedImage({ src: step.image, title: step.title })}
                     >
-                      <img 
-                        src={step.image} 
-                        alt={step.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      <div 
+                        className="absolute -inset-2 rounded-2xl blur-xl opacity-40 group-hover:opacity-60 transition-opacity duration-500"
+                        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
                       />
-                      {/* Expand icon overlay */}
-                      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <Expand className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
-                      </div>
-                      {/* Badge */}
                       <div 
-                        className="absolute top-3 right-3 sm:top-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold backdrop-blur-md"
+                        className="absolute -inset-px rounded-2xl"
+                        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.1), transparent)' }}
+                      />
+                      <div 
+                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.02]"
                         style={{ 
-                          background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.9), hsl(220 80% 45% / 0.9))',
-                          color: 'white',
-                          boxShadow: '0 4px 12px hsl(210 100% 50% / 0.3)'
+                          border: '1px solid hsl(210 100% 50% / 0.2)',
+                          boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
                         }}
                       >
-                        {step.badge}
+                        <img 
+                          src={step.image} 
+                          alt={step.title}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <Expand className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                        </div>
+                        <div 
+                          className="absolute top-3 right-3 sm:top-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold backdrop-blur-md"
+                          style={{ 
+                            background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.9), hsl(220 80% 45% / 0.9))',
+                            color: 'white',
+                            boxShadow: '0 4px 12px hsl(210 100% 50% / 0.3)'
+                          }}
+                        >
+                          {step.badge}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </ScrollReveal>
-                  
-                {/* Content Side */}
-                <ScrollReveal className={`flex-1 w-full ${isEven ? 'lg:pl-4' : 'lg:pr-4'}`} delay={(index + 1) * 100 + 50} direction={textDirection}>
-                  <div className="text-center lg:text-left">
-                    {/* Step number badge */}
-                    <div 
-                      className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl font-bold text-lg sm:text-xl md:text-2xl mb-4 sm:mb-5 md:mb-6"
-                      style={{ 
-                        background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
-                        color: 'hsl(220 40% 4%)',
-                        boxShadow: '0 0 30px hsl(210 100% 50% / 0.4)'
-                      }}
-                    >
-                      {index + 1}
-                    </div>
+                  </ScrollReveal>
                     
-                    {/* Icon and title row */}
-                    <div className="flex items-center gap-2.5 sm:gap-3 justify-center lg:justify-start mb-3 sm:mb-4 md:mb-5">
+                  {/* Content Side */}
+                  <ScrollReveal className={`flex-1 w-full ${isEven ? 'lg:pl-4' : 'lg:pr-4'}`} delay={(index + 1) * 100 + 50} direction={textDirection}>
+                    <div className="text-center lg:text-left">
                       <div 
-                        className="p-2.5 sm:p-3 rounded-lg sm:rounded-xl"
+                        className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-xl sm:rounded-2xl font-bold text-lg sm:text-xl md:text-2xl mb-4 sm:mb-5 md:mb-6"
                         style={{ 
-                          background: 'hsl(210 100% 50% / 0.1)',
-                          border: '1px solid hsl(210 100% 50% / 0.2)'
+                          background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
+                          color: 'hsl(220 40% 4%)',
+                          boxShadow: '0 0 30px hsl(210 100% 50% / 0.4)'
                         }}
                       >
-                        <step.icon className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" style={{ color: 'hsl(210 100% 50%)' }} />
+                        {index + 1}
                       </div>
-                      <h3 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{step.title}</h3>
+                      
+                      <div className="flex items-center gap-2.5 sm:gap-3 justify-center lg:justify-start mb-3 sm:mb-4 md:mb-5">
+                        <div 
+                          className="p-2.5 sm:p-3 rounded-lg sm:rounded-xl"
+                          style={{ 
+                            background: 'hsl(210 100% 50% / 0.1)',
+                            border: '1px solid hsl(210 100% 50% / 0.2)'
+                          }}
+                        >
+                          <step.icon className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" style={{ color: 'hsl(210 100% 50%)' }} />
+                        </div>
+                        <h3 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{step.title}</h3>
+                      </div>
+                      
+                      <p className="text-muted-foreground text-sm sm:text-base md:text-lg leading-relaxed max-w-md mx-auto lg:mx-0">
+                        {step.description}
+                      </p>
                     </div>
-                    
-                    <p className="text-muted-foreground text-sm sm:text-base md:text-lg leading-relaxed max-w-md mx-auto lg:mx-0">
-                      {step.description}
-                    </p>
-                  </div>
-                </ScrollReveal>
-              </div>
-            );
-          })}
-        </div>
+                  </ScrollReveal>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {/* Link to full guide */}
         <ScrollReveal delay={500} className="text-center mt-12 sm:mt-16">
