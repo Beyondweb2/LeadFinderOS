@@ -29,8 +29,6 @@ import {
   Download,
   Trash2,
   Copy,
-  Archive,
-  ArchiveRestore,
   CheckCheck
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -50,6 +48,7 @@ interface OutreachTableProps {
   onArchiveSelected?: (leadIds: string[]) => void;
   onDelete?: (leadId: string) => void;
   onDeleteSelected?: (leadIds: string[]) => void;
+  onBulkStatusChange?: (leadIds: string[], status: LeadStatus) => void;
   showArchiveButton?: boolean;
   isArchiveView?: boolean;
   /** When true, hides status and next action editing (for simplified Outreach CRM view) */
@@ -71,6 +70,7 @@ export function OutreachTable({
   onArchiveSelected,
   onDelete,
   onDeleteSelected,
+  onBulkStatusChange,
   showArchiveButton = true,
   isArchiveView = false,
   readOnly = false,
@@ -131,6 +131,19 @@ export function OutreachTable({
     toast({
       title: 'Copied!',
       description: `${phones.length} phone numbers copied in bulk format.`,
+    });
+  };
+
+  // Mark selected leads as contacted
+  const handleMarkAsContacted = () => {
+    if (selectedIds.size === 0) return;
+    const ids = Array.from(selectedIds);
+    // Update each lead's status to 'contacted'
+    ids.forEach(id => onStatusChange(id, 'contacted'));
+    setSelectedIds(new Set());
+    toast({
+      title: 'Status updated',
+      description: `${ids.length} lead${ids.length > 1 ? 's' : ''} marked as Contacted.`,
     });
   };
 
@@ -379,27 +392,18 @@ export function OutreachTable({
                   <Copy className="h-3.5 w-3.5 mr-1.5" />
                   Copy Numbers ({selectedIds.size})
                 </Button>
-                {showArchiveButton && onArchiveSelected && (
+                {!readOnly && (
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={handleArchiveSelected}
+                    onClick={handleMarkAsContacted}
                     className="bg-background text-xs h-8"
                   >
-                    {isArchiveView ? (
-                      <>
-                        <ArchiveRestore className="h-3.5 w-3.5 mr-1.5" />
-                        Restore
-                      </>
-                    ) : (
-                      <>
-                        <Archive className="h-3.5 w-3.5 mr-1.5" />
-                        Contacted
-                      </>
-                    )}
+                    <CheckCheck className="h-3.5 w-3.5 mr-1.5" />
+                    Mark Contacted
                   </Button>
                 )}
-                {onDeleteSelected && (
+                {onDeleteSelected && !readOnly && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -411,18 +415,6 @@ export function OutreachTable({
                   </Button>
                 )}
               </>
-            )}
-            {!isArchiveView && (
-              <Button
-               variant="outline"
-                size="sm"
-                onClick={onRemoveAll}
-                disabled={leads.length === 0}
-               className="bg-background text-xs h-8"
-              >
-               <Archive className="h-3.5 w-3.5 mr-1.5" />
-               <span className="hidden sm:inline">Contacted </span>All
-              </Button>
             )}
             <Button
               variant="outline"

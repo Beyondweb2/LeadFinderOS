@@ -4,7 +4,6 @@ import {
   Search, 
   ClipboardList, 
   FileText,
-  MessageSquare,
   Briefcase,
   DollarSign,
   MoreHorizontal,
@@ -27,12 +26,11 @@ const mainNavItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
   { title: 'Search', url: '/', icon: Search },
   { title: 'CRM', url: '/outreach', icon: ClipboardList },
-  { title: 'Contacted', url: '/archive', icon: MessageSquare },
+  { title: 'Interested', url: '/potential-work', icon: Briefcase },
 ];
 
 const moreNavItems = [
   { title: 'Templates', url: '/templates', icon: FileText },
-  { title: 'Potential Work', url: '/potential-work', icon: Briefcase },
   { title: 'Paid Clients', url: '/paid-clients', icon: DollarSign },
   { title: 'How to Use', url: '/how-to-use', icon: HelpCircle },
 ];
