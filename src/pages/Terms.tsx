@@ -94,7 +94,23 @@ const Terms = () => {
             </section>
 
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-foreground">6. Changes to Terms</h2>
+              <h2 className="text-lg font-semibold text-foreground">6. Third-Party Applications</h2>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                <strong className="text-foreground">Disclaimer:</strong> LeadFinder Pro may reference or 
+                suggest third-party applications (such as WhatsApp bulk messaging extensions) to enhance 
+                your workflow. We have no affiliation, partnership, or endorsement relationship with any 
+                of these third-party tools.
+              </p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                <strong className="text-foreground">Important:</strong> We are not responsible for any 
+                account restrictions, bans, or other penalties that may result from your use of third-party 
+                applications with messaging platforms like WhatsApp. Use of such tools is entirely at your 
+                own risk. Please review and comply with the terms of service of any platforms you use.
+              </p>
+            </section>
+
+            <section className="space-y-3">
+              <h2 className="text-lg font-semibold text-foreground">7. Changes to Terms</h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 We reserve the right to modify these terms at any time. Continued use of the service 
                 after changes constitutes acceptance of the new terms.
@@ -102,7 +118,7 @@ const Terms = () => {
             </section>
 
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold text-foreground">7. Contact</h2>
+              <h2 className="text-lg font-semibold text-foreground">8. Contact</h2>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 For questions about these terms, please contact us through the application.
               </p>

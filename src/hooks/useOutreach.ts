@@ -527,6 +527,35 @@ export function useOutreach() {
     return true;
   }, [leads, toast]);
 
+  // Delete multiple leads
+  const deleteMultiple = useCallback(async (leadIds: string[]) => {
+    if (leadIds.length === 0) return false;
+
+    const { error } = await supabase
+      .from('outreach_leads')
+      .delete()
+      .in('id', leadIds);
+
+    if (error) {
+      toast({
+        title: 'Error removing leads',
+        description: error.message,
+        variant: 'destructive',
+      });
+      return false;
+    }
+
+    setLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
+    setArchivedLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
+    
+    toast({
+      title: 'Leads removed',
+      description: `${leadIds.length} leads removed from CRM.`,
+    });
+
+    return true;
+  }, [toast]);
+
   // Unarchive multiple leads
   const unarchiveMultiple = useCallback(async (leadIds: string[]) => {
     if (leadIds.length === 0) return false;
@@ -640,6 +669,7 @@ export function useOutreach() {
     updateNextAction,
     updateNotes,
     deleteLead,
+    deleteMultiple,
     deleteAllLeads,
     archiveLead,
     unarchiveLead,
