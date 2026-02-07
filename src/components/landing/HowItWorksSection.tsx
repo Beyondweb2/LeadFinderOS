@@ -42,10 +42,10 @@ const STEPS = [
   },
   {
     icon: Users,
-    title: 'Close Deals',
-    description: 'Track interested leads through your sales pipeline with notes, follow-ups, and status updates until they become paying clients.',
+    title: 'Monitor Your Stats',
+    description: 'Track your outreach performance on the dashboard. See conversion rates, pipeline value, and activity metrics to optimise your sales process.',
     image: step4Image,
-    badge: 'Full Pipeline',
+    badge: 'Full Analytics',
   },
 ];
 
