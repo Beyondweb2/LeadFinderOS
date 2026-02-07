@@ -165,10 +165,10 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
     <div ref={ref} className="text-center">
-      <div className="text-2xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">
+      <div className="text-xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">
         {count.toLocaleString()}{suffix}
       </div>
-      <div className="text-xs sm:text-sm text-muted-foreground mt-1 font-medium">{label}</div>
+      <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">{label}</div>
     </div>
   );
 };
@@ -188,9 +188,10 @@ const VideoSection = () => {
   };
 
   return (
-    <ScrollReveal className="relative z-10 pb-16 md:pb-24 px-4">
+    <ScrollReveal className="relative z-10 pb-12 sm:pb-16 md:pb-24 px-2 sm:px-4">
       <div className="container mx-auto">
-        <div className="relative max-w-4xl mx-auto">
+        {/* Full-width on mobile, constrained on larger screens */}
+        <div className="relative max-w-5xl mx-auto">
           {/* Glow effect behind video - fixed brand blue */}
           <div 
             className="absolute -inset-4 rounded-3xl blur-2xl opacity-40"
@@ -238,8 +239,8 @@ const VideoSection = () => {
         </div>
         
         {/* CTA after video */}
-        <div className="text-center mt-8 sm:mt-12">
-          <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto text-sm sm:text-base" asChild>
+        <div className="text-center mt-6 sm:mt-10 md:mt-12">
+          <Button size="lg" className="btn-premium font-semibold px-5 sm:px-8 py-4 sm:py-6 h-auto text-sm sm:text-base" asChild>
             <Link to="/auth">
               Start Finding Leads
               <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
@@ -346,11 +347,11 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-12 pb-16 sm:pt-20 sm:pb-28 md:pt-28 md:pb-36 lg:pt-36 lg:pb-44 px-4">
+      <section className="relative z-10 pt-8 pb-10 sm:pt-16 sm:pb-20 md:pt-28 md:pb-36 lg:pt-36 lg:pb-44 px-4">
         <div className="container mx-auto text-center">
-          {/* Tagline badge */}
+          {/* Tagline badge - hidden on very small screens */}
           <div 
-            className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-6 sm:mb-8 backdrop-blur-sm"
+            className="hidden xs:inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
             style={{ 
               border: '1px solid hsl(210 100% 50% / 0.3)', 
               background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.1), hsl(210 100% 50% / 0.05))',
@@ -361,43 +362,43 @@ const Landing = () => {
             <span>Lead generation for web professionals</span>
           </div>
           
-          <h1 className="text-3xl leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-4 sm:mb-6 tracking-tight">
+          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
             <span className="block text-foreground">Find Businesses</span>
-            <span className="block text-gradient-primary mt-1 sm:mt-2">Without Websites</span>
+            <span className="block text-gradient-primary mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
           
-          <p className="text-base sm:text-lg md:text-xl text-muted-foreground max-w-xl mx-auto mb-8 sm:mb-12 leading-relaxed">
-            Discover local businesses that need your web design services. 
+          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-xl mx-auto mb-6 sm:mb-12 leading-relaxed px-2">
+            Discover local businesses that need your web design services.
             <span className="hidden sm:inline"> Stop scrolling Google Maps—start closing deals.</span>
           </p>
           
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-            <Button size="lg" className="btn-premium text-base font-semibold px-8 py-6 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
+            <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/auth">
                 Start Free Trial
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
             <Button 
               size="lg" 
               variant="outline" 
-              className="text-base px-8 py-6 h-auto border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-foreground backdrop-blur-sm w-full sm:w-auto" 
+              className="text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 h-auto border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-foreground backdrop-blur-sm w-full sm:w-auto" 
               asChild
             >
               <Link to="/auth">Sign In</Link>
             </Button>
           </div>
           
-          {/* Stats bar */}
-          <div className="mt-12 sm:mt-20 flex flex-wrap justify-center gap-8 sm:gap-16 md:gap-24">
+          {/* Stats bar - more compact on mobile */}
+          <div className="mt-8 sm:mt-16 md:mt-20 flex flex-wrap justify-center gap-6 sm:gap-12 md:gap-24">
             <CountUpStat target={100000} suffix="+" label="Businesses Found" />
             <div className="text-center">
-              <div className="text-2xl sm:text-4xl md:text-5xl font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-xs sm:text-sm text-muted-foreground mt-1.5 font-medium">Coverage</div>
+              <div className="text-xl sm:text-3xl md:text-5xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl sm:text-4xl md:text-5xl font-bold text-gradient-primary tracking-tight">∞</div>
-              <div className="text-xs sm:text-sm text-muted-foreground mt-1.5 font-medium">Unlimited Searches</div>
+              <div className="text-xl sm:text-3xl md:text-5xl font-bold text-gradient-primary tracking-tight">∞</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Unlimited Searches</div>
             </div>
           </div>
         </div>
