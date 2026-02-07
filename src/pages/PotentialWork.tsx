@@ -355,7 +355,7 @@ const PotentialWorkPage = () => {
       {potentialWorkLeads.length === 0 ? (
         <Card className="bg-card/50 border-border/50">
           <CardContent className="py-16 text-center text-muted-foreground">
-            No potential work leads yet. Mark leads as "Interested" in the Archive to see them here.
+            No interested leads yet. Mark leads as "Interested" in the Outreach CRM to see them here.
           </CardContent>
         </Card>
       ) : (

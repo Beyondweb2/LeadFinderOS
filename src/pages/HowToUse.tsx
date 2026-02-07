@@ -13,7 +13,7 @@ import {
 import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
 import step3Crm from '@/assets/howto-step3-crm.png';
-import step4Whatsapp from '@/assets/howto-step4-whatsapp.png';
+
 import step6Contacted from '@/assets/howto-step6-contacted.png';
 import step7Potential from '@/assets/howto-step7-potential.png';
 
@@ -36,33 +36,25 @@ const STEPS = [
   },
   {
     number: 3,
-    icon: ClipboardList,
-    title: 'Copy Phone Numbers',
-    description: 'Go to the Outreach CRM page. Select the businesses you want to contact by clicking the checkboxes, then click "Copy" to copy all selected phone numbers to your clipboard.',
+    icon: MessageSquare,
+    title: 'Cold Call or Text Leads',
+    description: 'In the Outreach CRM, select businesses and copy their phone numbers, or call them directly. Mark leads as "Contacted" once you\'ve reached out.',
     image: step3Crm,
-    tip: 'Having numbers ready makes it easy to cold call or text leads one by one.',
+    tip: 'A direct phone call often gets the best response. Prepare a short pitch and keep it friendly.',
   },
   {
     number: 4,
-    icon: MessageSquare,
-    title: 'Start Your Outreach',
-    description: 'Cold call businesses directly from your list, or send personalised text messages. A direct phone call often gets the best response - introduce yourself and your services.',
-    image: step4Whatsapp,
-    tip: 'Prepare a short pitch before calling. Keep it friendly and focus on how you can help their business.',
+    icon: CheckCircle,
+    title: 'Mark Interested Leads',
+    description: 'When someone responds positively, select them and click "Interested" to add them to your Interested pipeline. The lead stays synced between both pages.',
+    image: step6Contacted,
+    tip: 'Respond quickly to interested leads - speed matters for conversions.',
   },
   {
     number: 5,
     icon: CheckCircle,
-    title: 'Track Interested Replies',
-    description: 'When someone responds positively, click the "Interested" button in your CRM to add them to your Interested pipeline. The lead stays in your CRM and syncs with the Interested page.',
-    image: step6Contacted,
-    tip: 'Check your messages regularly. Quick responses to interested leads lead to more conversions.',
-  },
-  {
-    number: 6,
-    icon: CheckCircle,
     title: 'Manage Your Pipeline',
-    description: 'The Interested page shows all leads who responded positively. Track their status, add notes, schedule follow-ups, and move them through your sales pipeline until they become paid clients.',
+    description: 'The Interested page shows all leads who responded positively. Track their status, add notes, schedule follow-ups, and move them through your pipeline until they become paid clients.',
     image: step7Potential,
     tip: 'Set next actions and dates to stay organized. Use notes to remember conversation details.',
   },
@@ -82,7 +74,7 @@ const HowToUse = () => {
         </h1>
         <p className="text-muted-foreground text-sm md:text-base max-w-2xl">
           Follow this step-by-step guide to find businesses without websites, 
-          send bulk messages, and convert responses into paying clients.
+          reach out via cold calls or texts, and convert interested leads into paying clients.
         </p>
       </div>
 
@@ -149,8 +141,8 @@ const HowToUse = () => {
             🎉 That's the Complete Workflow!
           </h2>
           <p className="text-muted-foreground text-sm md:text-base mb-4 max-w-2xl">
-            You've learned how to find leads, bulk copy their numbers, send messages, 
-            and track interested prospects through your sales pipeline. Now start finding your next client!
+            You've learned how to find leads, reach out via calls or texts, 
+            and manage interested prospects through your sales pipeline. Now start finding your next client!
           </p>
           <div className="flex flex-wrap gap-3">
             {isPublicGuide ? (
