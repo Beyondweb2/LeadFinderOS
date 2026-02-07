@@ -30,7 +30,7 @@ const STEPS = [
   {
     icon: MessageSquare,
     title: 'Copy Numbers & Send',
-    description: 'Bulk-copy phone numbers from your CRM in one click, then paste into a bulk messenger app to reach hundreds of businesses at once.',
+    description: 'Bulk-copy phone numbers in one click to paste into a bulk messenger app, or cold call businesses directly from the list.',
     image: step3Image,
   },
   {
