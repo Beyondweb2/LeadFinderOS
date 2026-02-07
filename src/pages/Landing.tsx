@@ -176,7 +176,7 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 // Video section component with sound toggle
 // Starts muted (required for autoplay) - user can unmute
 const VideoSection = () => {
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const toggleMute = () => {
@@ -213,6 +213,7 @@ const VideoSection = () => {
               className="w-full h-auto"
               autoPlay 
               loop 
+              muted
               playsInline
               preload="auto"
               poster={videoPoster}
@@ -405,9 +406,6 @@ const Landing = () => {
       {/* Video Demo Section */}
       <VideoSection />
 
-      {/* How It Works Section */}
-      <HowItWorksSection ScrollReveal={ScrollReveal} />
-
       {/* Before/After Comparison Section */}
       <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
         <div className="container mx-auto">
@@ -497,6 +495,9 @@ const Landing = () => {
           </ScrollReveal>
         </div>
       </section>
+
+      {/* How It Works Section */}
+      <HowItWorksSection ScrollReveal={ScrollReveal} />
 
       {/* Features Section */}
       <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
