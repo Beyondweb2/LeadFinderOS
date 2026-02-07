@@ -31,13 +31,13 @@ import appLogo from '@/assets/logo.png';
 const navItems = [
   { 
     title: 'Dashboard', 
-    url: '/dashboard', 
+    url: '/', 
     icon: LayoutDashboard,
     description: 'Overview & today\'s tasks'
   },
   { 
     title: 'Find Leads', 
-    url: '/', 
+    url: '/find-leads', 
     icon: Search,
     description: 'Search for businesses'
   },

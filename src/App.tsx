@@ -69,6 +69,18 @@ const App = () => (
                 <ProtectedRoute>
                    <SubscriptionGate>
                      <AppLayout>
+                       <Dashboard />
+                     </AppLayout>
+                   </SubscriptionGate>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/find-leads" 
+              element={
+                <ProtectedRoute>
+                   <SubscriptionGate>
+                     <AppLayout>
                        <Index />
                      </AppLayout>
                    </SubscriptionGate>
