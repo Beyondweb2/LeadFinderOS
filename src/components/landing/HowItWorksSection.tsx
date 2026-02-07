@@ -1,11 +1,15 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   Search,
   ClipboardList,
   MessageSquare,
   Users,
   ArrowRight,
+  X,
+  Expand,
 } from 'lucide-react';
 
 // Import how-to images
@@ -53,8 +57,34 @@ interface ScrollRevealProps {
 }
 
 export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.ComponentType<ScrollRevealProps> }) => {
+  const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
+
   return (
     <section className="relative z-10 py-10 sm:py-14 md:py-20 lg:py-28 px-3 sm:px-4">
+      {/* Image Modal */}
+      <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
+        <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
+          <div className="relative">
+            <button
+              onClick={() => setExpandedImage(null)}
+              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            {expandedImage && (
+              <div className="p-2">
+                <img 
+                  src={expandedImage.src} 
+                  alt={expandedImage.title}
+                  className="w-full h-auto rounded-lg"
+                />
+                <p className="text-center text-lg font-semibold mt-4 pb-2">{expandedImage.title}</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="container mx-auto">
         <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-20">
           <h2 className="text-xl sm:text-2xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-4 tracking-tight px-2">
@@ -73,7 +103,10 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                 <div className={`flex flex-col ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-4 sm:gap-6 lg:gap-12`}>
                   {/* Image Side - Larger images */}
                   <div className="flex-1 w-full lg:flex-[1.2]">
-                    <div className="relative group">
+                    <div 
+                      className="relative group cursor-pointer"
+                      onClick={() => setExpandedImage({ src: step.image, title: step.title })}
+                    >
                       {/* Glow effect */}
                       <div 
                         className="absolute -inset-2 rounded-2xl blur-xl opacity-40 group-hover:opacity-60 transition-opacity duration-500"
@@ -84,7 +117,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.1), transparent)' }}
                       />
                       <div 
-                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9]"
+                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.02]"
                         style={{ 
                           border: '1px solid hsl(210 100% 50% / 0.2)',
                           boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
@@ -93,8 +126,12 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         <img 
                           src={step.image} 
                           alt={step.title}
-                          className={`w-full h-full object-cover ${step.cropStyle || ''}`}
+                          className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${step.cropStyle || ''}`}
                         />
+                        {/* Expand icon overlay */}
+                        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <Expand className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                        </div>
                         {/* Badge */}
                         <div 
                           className="absolute top-3 right-3 sm:top-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold backdrop-blur-md"
