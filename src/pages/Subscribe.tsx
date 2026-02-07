@@ -82,11 +82,19 @@ import appLogo from '@/assets/logo.png';
              </CardDescription>
            </CardHeader>
            
-           <CardContent className="space-y-6">
-             <div className="text-center">
-               <span className="text-4xl font-bold">£19.99</span>
-               <span className="text-muted-foreground">/month</span>
-             </div>
+            <CardContent className="space-y-6">
+              <div className="text-center">
+                <div className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
+                  7-Day Free Trial
+                </div>
+                <div>
+                  <span className="text-4xl font-bold">£19.99</span>
+                  <span className="text-muted-foreground">/month</span>
+                </div>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Try free for 7 days, then £19.99/month
+                </p>
+              </div>
  
              <ul className="space-y-3">
                {FEATURES.map((feature) => (
@@ -98,29 +106,29 @@ import appLogo from '@/assets/logo.png';
              </ul>
            </CardContent>
            
-           <CardFooter className="flex flex-col gap-3">
-             <Button 
-               onClick={handleSubscribe} 
-               className="w-full" 
-               size="lg"
-               disabled={isLoading || subLoading}
-             >
-               {isLoading ? (
-                 <>
-                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                   Starting checkout...
-                 </>
-               ) : (
-                 <>
-                   <CreditCard className="mr-2 h-4 w-4" />
-                   Subscribe Now
-                 </>
-               )}
-             </Button>
-             <p className="text-xs text-muted-foreground text-center">
-               Cancel anytime. Secure payment via Stripe.
-             </p>
-           </CardFooter>
+            <CardFooter className="flex flex-col gap-3">
+              <Button 
+                onClick={handleSubscribe} 
+                className="w-full" 
+                size="lg"
+                disabled={isLoading || subLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Starting checkout...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Start Free Trial
+                  </>
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground text-center">
+                Card required. Cancel anytime. Secure payment via Stripe.
+              </p>
+            </CardFooter>
          </Card>
        </div>
      </div>
