@@ -239,7 +239,7 @@ const VideoSection = () => {
         
         {/* CTA after video */}
         <div className="text-center mt-6 sm:mt-10 md:mt-12">
-          <Button size="lg" className="btn-premium font-semibold px-5 sm:px-8 py-4 sm:py-6 h-auto text-sm sm:text-base" asChild>
+          <Button size="lg" className="btn-premium font-semibold px-5 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
             <Link to="/auth">
               Start Finding Leads
               <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
@@ -372,7 +372,7 @@ const Landing = () => {
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
-            <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
+            <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/auth">
                 Start Free Trial
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
@@ -381,7 +381,7 @@ const Landing = () => {
             <Button 
               size="lg" 
               variant="outline" 
-              className="text-sm sm:text-base px-6 sm:px-8 py-5 sm:py-6 h-auto border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-foreground backdrop-blur-sm w-full sm:w-auto" 
+              className="text-sm sm:text-base px-6 sm:px-8 py-3 sm:py-4 h-auto border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-foreground backdrop-blur-sm w-full sm:w-auto" 
               asChild
             >
               <Link to="/auth">Sign In</Link>
@@ -485,7 +485,7 @@ const Landing = () => {
           
           {/* CTA after comparison */}
           <ScrollReveal delay={300} className="text-center mt-10 sm:mt-14">
-            <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto text-sm sm:text-base" asChild>
+            <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
               <Link to="/auth">
                 Try It Free
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
@@ -562,7 +562,7 @@ const Landing = () => {
           
           {/* CTA after features */}
           <ScrollReveal delay={600} className="text-center mt-10 sm:mt-14">
-            <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto text-sm sm:text-base" asChild>
+            <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
               <Link to="/auth">
                 Get Started Now
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
@@ -644,7 +644,7 @@ const Landing = () => {
                 </CardContent>
                 
                 <CardFooter className="pt-4 sm:pt-6 pb-6 sm:pb-8 flex-col gap-3 sm:gap-4 px-4 sm:px-6">
-                  <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-5 sm:py-6 h-auto" asChild>
+                  <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
                     <Link to="/auth">
                       Start Free Trial
                       <ArrowRight className="ml-2 h-4 w-4" />
@@ -685,7 +685,7 @@ const Landing = () => {
                 Join hundreds of web professionals using LeadFinder Pro to grow their business.
               </p>
               <div className="relative flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-5 sm:py-6 h-auto text-sm sm:text-base w-full sm:w-auto" asChild>
+                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base w-full sm:w-auto" asChild>
                   <Link to="/auth">
                     Start Your Free Trial
                     <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
