@@ -16,7 +16,7 @@ import {
 import step1Image from '@/assets/howto-step1-search.png';
 import step2Image from '@/assets/howto-step2-results.png';
 import step3Image from '@/assets/howto-step3-bulksender.png';
-import step4Image from '@/assets/howto-step4-track.png';
+import step4Image from '@/assets/howto-step4-dashboard.png';
 
 const STEPS = [
   {
@@ -45,7 +45,6 @@ const STEPS = [
     title: 'Track Outreach',
     description: 'Manage responses and track interested leads through your sales pipeline',
     image: step4Image,
-    cropStyle: 'object-[42%_58%] scale-[1.6]',
     badge: 'Full Pipeline',
   },
 ];
@@ -126,7 +125,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         <img 
                           src={step.image} 
                           alt={step.title}
-                          className={`w-full h-full object-cover transition-transform duration-500 group-hover:scale-105 ${step.cropStyle || ''}`}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                         />
                         {/* Expand icon overlay */}
                         <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
