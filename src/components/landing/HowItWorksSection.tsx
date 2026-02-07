@@ -15,8 +15,8 @@ import {
 // Import how-to images
 import step1Image from '@/assets/howto-step1-search.png';
 import step2Image from '@/assets/howto-step2-results.png';
-import step3Image from '@/assets/howto-step3-crm.png';
-import step4Image from '@/assets/howto-step4-dashboard.png';
+import step3Image from '@/assets/howto-step3-outreach.png';
+import step4Image from '@/assets/howto-step7-potential.png';
 
 const STEPS = [
   {
@@ -28,22 +28,22 @@ const STEPS = [
   },
   {
     icon: ClipboardList,
-    title: 'View Lead Details',
-    description: 'See business names, phone numbers, ratings, reviews, addresses, and direct Google Maps links. Filter by classification, check for websites, and add promising leads to your CRM.',
+    title: 'Review Results',
+    description: 'See business details, ratings, reviews, and addresses. Filter by classification and add promising leads to your CRM.',
     image: step2Image,
     badge: '100,000+ Businesses',
   },
   {
     icon: MessageSquare,
-    title: 'Call & Text Leads',
-    description: 'Cold call businesses directly from your list, or copy phone numbers to send personalised texts. Reach out however works best for you.',
+    title: 'Reach Out & Track',
+    description: 'Copy numbers to text or call directly. Mark leads as contacted, then click "Interested" when they respond positively.',
     image: step3Image,
     badge: 'Direct Outreach',
   },
   {
     icon: Users,
-    title: 'Track Outreach',
-    description: 'Manage responses and track interested leads through your sales pipeline',
+    title: 'Manage Pipeline',
+    description: 'Track interested leads through your sales pipeline with notes, follow-ups, and status updates until they become paying clients.',
     image: step4Image,
     badge: 'Full Pipeline',
   },
