@@ -16,7 +16,7 @@ import {
 import step1Image from '@/assets/howto-step1-search.png';
 import step2Image from '@/assets/howto-step2-results.png';
 import step3Image from '@/assets/howto-step3-outreach.png';
-import step4Image from '@/assets/howto-step7-potential.png';
+import step4Image from '@/assets/howto-step4-dashboard.png';
 
 const STEPS = [
   {
@@ -42,7 +42,7 @@ const STEPS = [
   },
   {
     icon: Users,
-    title: 'Manage Pipeline',
+    title: 'Close Deals',
     description: 'Track interested leads through your sales pipeline with notes, follow-ups, and status updates until they become paying clients.',
     image: step4Image,
     badge: 'Full Pipeline',
