@@ -4,6 +4,7 @@ import { OutreachTable } from '@/components/OutreachTable';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useTrial } from '@/hooks/useTrial';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Loader2, Lock } from 'lucide-react';
@@ -28,6 +29,7 @@ const Outreach = () => {
   } = useOutreach();
 
   const { subscribed, isLoading: isLoadingSubscription } = useSubscription();
+  const { isOnTrial, isLoading: isLoadingTrial } = useTrial();
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
 
   // Combine active and archived leads into one unified list
@@ -35,8 +37,10 @@ const Outreach = () => {
     return [...leads, ...archivedLeads];
   }, [leads, archivedLeads]);
 
-  // Non-subscribers can view but not interact
-  const isReadOnly = !subscribed && !isLoadingSubscription;
+  // Non-subscribers AND non-trial users can view but not interact
+  const isStillLoading = isLoadingSubscription || isLoadingTrial;
+  const hasAccess = subscribed || isOnTrial;
+  const isReadOnly = !hasAccess && !isStillLoading;
 
   if (isLoading) {
     return (
