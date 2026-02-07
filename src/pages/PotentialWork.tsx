@@ -328,10 +328,10 @@ const PotentialWorkPage = () => {
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Briefcase className="h-6 w-6" />
-          Potential Work
+          Interested
         </h1>
         <p className="text-muted-foreground max-w-lg">
-          Track potential clients who've responded to your outreach. Manage their status through your sales pipeline from interested to completed.
+          Track leads who've responded positively to your outreach. Manage their status through your sales pipeline from interested to completed.
         </p>
       </div>
 
