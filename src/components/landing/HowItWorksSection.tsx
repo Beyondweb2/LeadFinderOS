@@ -35,10 +35,10 @@ const STEPS = [
   },
   {
     icon: MessageSquare,
-    title: 'Copy Numbers & Send',
-    description: 'Bulk-copy phone numbers in one click to paste into a bulk messenger app, or cold call businesses directly from the list.',
+    title: 'Call & Text Leads',
+    description: 'Cold call businesses directly from your list, or copy phone numbers to send personalised texts. Reach out however works best for you.',
     image: step3Image,
-    badge: 'One-Click Copy',
+    badge: 'Direct Outreach',
   },
   {
     icon: Users,
