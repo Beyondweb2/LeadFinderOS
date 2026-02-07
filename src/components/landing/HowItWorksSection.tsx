@@ -4,7 +4,7 @@ import {
   Search,
   ClipboardList,
   MessageSquare,
-  CheckCircle,
+  Users,
   ArrowRight,
 } from 'lucide-react';
 
@@ -12,7 +12,7 @@ import {
 import step1Image from '@/assets/howto-step1-search.png';
 import step2Image from '@/assets/howto-step2-results.png';
 import step3Image from '@/assets/howto-step3-bulksender.png';
-import step4Image from '@/assets/howto-step4-closedeals.png';
+import step4Image from '@/assets/howto-step4-track.png';
 
 const STEPS = [
   {
@@ -34,10 +34,11 @@ const STEPS = [
     image: step3Image,
   },
   {
-    icon: CheckCircle,
-    title: 'Close Deals',
-    description: 'Track interested leads through your pipeline to paid clients',
+    icon: Users,
+    title: 'Track Outreach',
+    description: 'Manage responses and track interested leads through your sales pipeline',
     image: step4Image,
+    cropStyle: 'object-[65%_45%] scale-[1.8]', // Crop to show just the 2 business cards
   },
 ];
 
@@ -66,7 +67,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             return (
               <ScrollReveal key={step.title} delay={(index + 1) * 100}>
                 <div className={`flex flex-col ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-8 lg:gap-12`}>
-                  {/* Image Side */}
+                  {/* Image Side - Fixed aspect ratio for consistent sizing */}
                   <div className="flex-1 w-full">
                     <div className="relative group">
                       {/* Glow effect */}
@@ -79,7 +80,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.1), transparent)' }}
                       />
                       <div 
-                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm"
+                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10]"
                         style={{ 
                           border: '1px solid hsl(210 100% 50% / 0.2)',
                           boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
@@ -88,7 +89,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         <img 
                           src={step.image} 
                           alt={step.title}
-                          className="w-full h-auto"
+                          className={`w-full h-full object-cover ${step.cropStyle || ''}`}
                         />
                       </div>
                     </div>
