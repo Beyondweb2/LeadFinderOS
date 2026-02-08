@@ -221,7 +221,7 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-9 w-9 text-muted-foreground bg-muted/50"
+                      className="h-9 w-9 text-muted-foreground/50 bg-muted/30 cursor-default"
                       asChild
                     >
                       <a
@@ -255,17 +255,19 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-9 w-9 text-green-500 bg-green-500/10"
+                        className="h-9 w-9 text-muted-foreground/50 bg-muted/30 cursor-default"
                         disabled
+                        title="Already in CRM"
                       >
                         <Check className="h-4 w-4" />
                       </Button>
                     ) : (
                       <Button
-                        variant="ghost"
+                        variant="default"
                         size="icon"
-                        className="h-9 w-9 hover:bg-muted hover:text-primary"
+                        className="h-9 w-9 bg-primary hover:bg-primary/90"
                         onClick={() => onAddToOutreach(lead)}
+                        title="Add to CRM"
                       >
                         <ClipboardList className="h-4 w-4" />
                       </Button>
@@ -401,7 +403,7 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 text-muted-foreground bg-muted/50"
+                                className="h-8 w-8 text-muted-foreground/50 bg-muted/30 cursor-default"
                                 asChild
                               >
                                 <a
@@ -418,22 +420,27 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                             <TooltipContent>Already checked</TooltipContent>
                           </Tooltip>
                         ) : (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 hover:bg-muted"
-                            asChild
-                          >
-                            <a
-                              href={lead.googleMapsUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              title="View on Google Maps"
-                              onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
-                            >
-                              <MapPin className="h-4 w-4 text-primary" />
-                            </a>
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 hover:bg-muted"
+                                asChild
+                              >
+                                <a
+                                  href={lead.googleMapsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="View on Google Maps"
+                                  onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                                >
+                                  <MapPin className="h-4 w-4 text-primary" />
+                                </a>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>View on Maps</TooltipContent>
+                          </Tooltip>
                         )}
                         {lead.websiteUrl && (
                           <Button
@@ -478,24 +485,25 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-8 w-8 text-green-500 bg-green-500/10"
+                                  className="h-8 w-8 text-muted-foreground/50 bg-muted/30 cursor-default"
                                   disabled
                                 >
                                   <Check className="h-4 w-4" />
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>Already in outreach</TooltipContent>
+                              <TooltipContent>Already in CRM</TooltipContent>
                             </Tooltip>
                           ) : (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 hover:bg-muted hover:text-primary"
+                                  variant="default"
+                                  size="sm"
+                                  className="h-8 px-3 bg-primary hover:bg-primary/90"
                                   onClick={() => onAddToOutreach(lead)}
                                 >
-                                  <ClipboardList className="h-4 w-4" />
+                                  <ClipboardList className="h-4 w-4 mr-1" />
+                                  Add
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>Add to CRM</TooltipContent>
