@@ -477,6 +477,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      validate_affiliate_code: {
+        Args: { code_to_check: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
