@@ -14,6 +14,83 @@ export type Database = {
   }
   public: {
     Tables: {
+      affiliate_conversions: {
+        Row: {
+          affiliate_id: string
+          commission_amount: number
+          created_at: string
+          currency: string
+          first_payment_amount: number
+          id: string
+          paid_at: string
+          status: string
+          stripe_payment_intent_id: string | null
+          user_id: string
+        }
+        Insert: {
+          affiliate_id: string
+          commission_amount: number
+          created_at?: string
+          currency?: string
+          first_payment_amount: number
+          id?: string
+          paid_at?: string
+          status?: string
+          stripe_payment_intent_id?: string | null
+          user_id: string
+        }
+        Update: {
+          affiliate_id?: string
+          commission_amount?: number
+          created_at?: string
+          currency?: string
+          first_payment_amount?: number
+          id?: string
+          paid_at?: string
+          status?: string
+          stripe_payment_intent_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "affiliate_conversions_affiliate_id_fkey"
+            columns: ["affiliate_id"]
+            isOneToOne: false
+            referencedRelation: "affiliates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      affiliates: {
+        Row: {
+          code: string
+          commission_rate: number
+          created_at: string
+          email: string
+          id: string
+          is_active: boolean
+          name: string
+        }
+        Insert: {
+          code: string
+          commission_rate?: number
+          created_at?: string
+          email: string
+          id?: string
+          is_active?: boolean
+          name: string
+        }
+        Update: {
+          code?: string
+          commission_rate?: number
+          created_at?: string
+          email?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+        }
+        Relationships: []
+      }
       checked_businesses: {
         Row: {
           business_name: string
@@ -342,9 +419,12 @@ export type Database = {
       }
       user_trials: {
         Row: {
+          affiliate_attributed_at: string | null
+          affiliate_code: string | null
           created_at: string
           id: string
           last_search_date: string | null
+          paid_at: string | null
           plan_status: string
           searches_today: number
           searches_used: number
@@ -354,9 +434,12 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          affiliate_attributed_at?: string | null
+          affiliate_code?: string | null
           created_at?: string
           id?: string
           last_search_date?: string | null
+          paid_at?: string | null
           plan_status?: string
           searches_today?: number
           searches_used?: number
@@ -366,9 +449,12 @@ export type Database = {
           user_id: string
         }
         Update: {
+          affiliate_attributed_at?: string | null
+          affiliate_code?: string | null
           created_at?: string
           id?: string
           last_search_date?: string | null
+          paid_at?: string | null
           plan_status?: string
           searches_today?: number
           searches_used?: number

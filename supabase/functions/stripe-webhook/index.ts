@@ -53,111 +53,211 @@
        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
        { auth: { persistSession: false } }
      );
- 
-     // Handle subscription events
-     if (event.type.startsWith("customer.subscription.") || event.type === "invoice.payment_failed") {
-       let subscription: Stripe.Subscription;
-       let customerId: string;
- 
-       if (event.type === "invoice.payment_failed") {
-         const invoice = event.data.object as Stripe.Invoice;
-         customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id ?? '';
-         
-         // Get the subscription from the invoice
-         if (invoice.subscription) {
-           const subId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription.id;
-           subscription = await stripe.subscriptions.retrieve(subId);
-         } else {
-           logStep("Invoice has no subscription, skipping");
-           return new Response(JSON.stringify({ received: true }), {
-             headers: { ...corsHeaders, "Content-Type": "application/json" },
-             status: 200,
-           });
-         }
-       } else {
-         subscription = event.data.object as Stripe.Subscription;
-         customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
-       }
- 
-       logStep("Processing subscription", { 
-         subscriptionId: subscription.id, 
-         status: subscription.status,
-         customerId 
-       });
- 
-       // Get customer email to find user
-       const customer = await stripe.customers.retrieve(customerId);
-       if (customer.deleted || !customer.email) {
-         logStep("Customer deleted or no email", { customerId });
-         return new Response(JSON.stringify({ received: true }), {
-           headers: { ...corsHeaders, "Content-Type": "application/json" },
-           status: 200,
-         });
-       }
- 
-       logStep("Found customer", { email: customer.email });
- 
-       // Find user by email
-       const { data: users, error: userError } = await supabaseAdmin.auth.admin.listUsers();
-       if (userError) throw new Error(`Failed to list users: ${userError.message}`);
- 
-       const user = users.users.find(u => u.email === customer.email);
-       if (!user) {
-         logStep("No user found for email", { email: customer.email });
-         return new Response(JSON.stringify({ received: true }), {
-           headers: { ...corsHeaders, "Content-Type": "application/json" },
-           status: 200,
-         });
-       }
- 
-       logStep("Found user", { userId: user.id });
- 
-        // Determine the status to store
-        let status = subscription.status;
-        if (event.type === "invoice.payment_failed") {
-          status = "past_due";
-        } else if (event.type === "customer.subscription.deleted") {
-          status = "canceled";
+
+      // Handle checkout.session.completed for affiliate tracking
+      if (event.type === "checkout.session.completed") {
+        const session = event.data.object as Stripe.Checkout.Session;
+        logStep("Processing checkout.session.completed", { 
+          sessionId: session.id,
+          clientReferenceId: session.client_reference_id,
+          metadata: session.metadata
+        });
+
+        // Check if this is a paid checkout (not a trial-only)
+        if (session.payment_status === 'paid' && session.amount_total && session.amount_total > 0) {
+          const userId = session.client_reference_id;
+          const affiliateCode = session.metadata?.affiliate_code;
+          
+          if (userId && affiliateCode) {
+            logStep("First payment with affiliate code", { userId, affiliateCode });
+            
+            // Check if this user already has an affiliate conversion
+            const { data: existingConversion } = await supabaseAdmin
+              .from('affiliate_conversions')
+              .select('id')
+              .eq('user_id', userId)
+              .limit(1);
+            
+            if (!existingConversion || existingConversion.length === 0) {
+              // Find the affiliate by code
+              const { data: affiliate } = await supabaseAdmin
+                .from('affiliates')
+                .select('id, commission_rate')
+                .eq('code', affiliateCode)
+                .eq('is_active', true)
+                .single();
+              
+              if (affiliate) {
+                const commissionAmount = Math.floor(session.amount_total * Number(affiliate.commission_rate));
+                
+                // Create affiliate conversion
+                const { error: conversionError } = await supabaseAdmin
+                  .from('affiliate_conversions')
+                  .insert({
+                    affiliate_id: affiliate.id,
+                    user_id: userId,
+                    first_payment_amount: session.amount_total,
+                    commission_amount: commissionAmount,
+                    currency: session.currency || 'usd',
+                    status: 'pending',
+                    stripe_payment_intent_id: typeof session.payment_intent === 'string' 
+                      ? session.payment_intent 
+                      : session.payment_intent?.id,
+                  });
+                
+                if (conversionError) {
+                  logStep("Failed to create affiliate conversion", { error: conversionError.message });
+                } else {
+                  logStep("Affiliate conversion created", { 
+                    affiliateId: affiliate.id, 
+                    amount: session.amount_total,
+                    commission: commissionAmount
+                  });
+                }
+                
+                // Update user_trials.paid_at
+                await supabaseAdmin
+                  .from('user_trials')
+                  .update({ paid_at: new Date().toISOString() })
+                  .eq('user_id', userId);
+              } else {
+                logStep("Affiliate not found or inactive", { affiliateCode });
+              }
+            } else {
+              logStep("User already has affiliate conversion, skipping", { userId });
+            }
+          }
         }
+      }
 
-        // Upsert subscription record
-        const { error: upsertError } = await supabaseAdmin
-          .from("subscriptions")
-          .upsert({
-            user_id: user.id,
-            stripe_customer_id: customerId,
-            stripe_subscription_id: subscription.id,
-            status: status,
-            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
-            updated_at: new Date().toISOString(),
-          }, {
-            onConflict: "stripe_subscription_id",
-          });
-
-        if (upsertError) {
-          logStep("Failed to upsert subscription", { error: upsertError.message });
-          throw new Error(`Database error: ${upsertError.message}`);
-        }
-
-        // Update user_trials.plan_status based on subscription status
-        const validStatuses = ['active', 'trialing'];
-        const newPlanStatus = validStatuses.includes(status) ? 'active' : 
-                             (status === 'canceled' ? 'cancelled' : 'expired');
+      // Handle charge.refunded for voiding affiliate conversions
+      if (event.type === "charge.refunded") {
+        const charge = event.data.object as Stripe.Charge;
+        const paymentIntentId = typeof charge.payment_intent === 'string' 
+          ? charge.payment_intent 
+          : charge.payment_intent?.id;
         
-        const { error: trialUpdateError } = await supabaseAdmin
-          .from("user_trials")
-          .update({ plan_status: newPlanStatus })
-          .eq('user_id', user.id);
-
-        if (trialUpdateError) {
-          logStep("Failed to update user_trials plan_status", { error: trialUpdateError.message });
-          // Don't throw - subscription record was saved successfully
-        } else {
-          logStep("Updated user_trials plan_status", { userId: user.id, planStatus: newPlanStatus });
+        if (paymentIntentId) {
+          logStep("Processing refund for affiliate voiding", { paymentIntentId });
+          
+          const { error: voidError } = await supabaseAdmin
+            .from('affiliate_conversions')
+            .update({ status: 'void' })
+            .eq('stripe_payment_intent_id', paymentIntentId)
+            .eq('status', 'pending');
+          
+          if (voidError) {
+            logStep("Failed to void affiliate conversion", { error: voidError.message });
+          } else {
+            logStep("Affiliate conversion voided due to refund");
+          }
         }
- 
-       logStep("Subscription record updated", { userId: user.id, status });
-     }
+      }
+
+      // Handle subscription events
+      if (event.type.startsWith("customer.subscription.") || event.type === "invoice.payment_failed") {
+        let subscription: Stripe.Subscription;
+        let customerId: string;
+
+        if (event.type === "invoice.payment_failed") {
+          const invoice = event.data.object as Stripe.Invoice;
+          customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id ?? '';
+          
+          // Get the subscription from the invoice
+          if (invoice.subscription) {
+            const subId = typeof invoice.subscription === 'string' ? invoice.subscription : invoice.subscription.id;
+            subscription = await stripe.subscriptions.retrieve(subId);
+          } else {
+            logStep("Invoice has no subscription, skipping");
+            return new Response(JSON.stringify({ received: true }), {
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+              status: 200,
+            });
+          }
+        } else {
+          subscription = event.data.object as Stripe.Subscription;
+          customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
+        }
+
+        logStep("Processing subscription", { 
+          subscriptionId: subscription.id, 
+          status: subscription.status,
+          customerId 
+        });
+
+        // Get customer email to find user
+        const customer = await stripe.customers.retrieve(customerId);
+        if (customer.deleted || !customer.email) {
+          logStep("Customer deleted or no email", { customerId });
+          return new Response(JSON.stringify({ received: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          });
+        }
+
+        logStep("Found customer", { email: customer.email });
+
+        // Find user by email
+        const { data: users, error: userError } = await supabaseAdmin.auth.admin.listUsers();
+        if (userError) throw new Error(`Failed to list users: ${userError.message}`);
+
+        const user = users.users.find(u => u.email === customer.email);
+        if (!user) {
+          logStep("No user found for email", { email: customer.email });
+          return new Response(JSON.stringify({ received: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          });
+        }
+
+        logStep("Found user", { userId: user.id });
+
+         // Determine the status to store
+         let status = subscription.status;
+         if (event.type === "invoice.payment_failed") {
+           status = "past_due";
+         } else if (event.type === "customer.subscription.deleted") {
+           status = "canceled";
+         }
+
+         // Upsert subscription record
+         const { error: upsertError } = await supabaseAdmin
+           .from("subscriptions")
+           .upsert({
+             user_id: user.id,
+             stripe_customer_id: customerId,
+             stripe_subscription_id: subscription.id,
+             status: status,
+             current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+             updated_at: new Date().toISOString(),
+           }, {
+             onConflict: "stripe_subscription_id",
+           });
+
+         if (upsertError) {
+           logStep("Failed to upsert subscription", { error: upsertError.message });
+           throw new Error(`Database error: ${upsertError.message}`);
+         }
+
+         // Update user_trials.plan_status based on subscription status
+         const validStatuses = ['active', 'trialing'];
+         const newPlanStatus = validStatuses.includes(status) ? 'active' : 
+                              (status === 'canceled' ? 'cancelled' : 'expired');
+         
+         const { error: trialUpdateError } = await supabaseAdmin
+           .from("user_trials")
+           .update({ plan_status: newPlanStatus })
+           .eq('user_id', user.id);
+
+         if (trialUpdateError) {
+           logStep("Failed to update user_trials plan_status", { error: trialUpdateError.message });
+           // Don't throw - subscription record was saved successfully
+         } else {
+           logStep("Updated user_trials plan_status", { userId: user.id, planStatus: newPlanStatus });
+         }
+
+        logStep("Subscription record updated", { userId: user.id, status });
+      }
  
      return new Response(JSON.stringify({ received: true }), {
        headers: { ...corsHeaders, "Content-Type": "application/json" },
