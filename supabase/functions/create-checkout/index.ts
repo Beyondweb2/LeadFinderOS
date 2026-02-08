@@ -123,8 +123,8 @@ const logStep = (step: string, details?: unknown) => {
         ],
         mode: "subscription",
         payment_method_collection: "always",
-        success_url: `${req.headers.get("origin")}/app?checkout=success`,
-        cancel_url: `${req.headers.get("origin")}/app?checkout=cancel`,
+        success_url: `${req.headers.get("origin")}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${req.headers.get("origin")}/billing/cancel`,
       };
       
       // Add affiliate code to metadata if present

@@ -12,6 +12,8 @@ import { AccentInitializer } from "@/components/AccentInitializer";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Subscribe from "./pages/Subscribe";
+import BillingSuccess from "./pages/BillingSuccess";
+import BillingCancel from "./pages/BillingCancel";
 import Outreach from "./pages/Outreach";
 import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
@@ -51,6 +53,22 @@ const App = () => (
                element={
                  <ProtectedRoute>
                    <Subscribe />
+                 </ProtectedRoute>
+               } 
+              />
+             <Route 
+               path="/billing/success" 
+               element={
+                 <ProtectedRoute>
+                   <BillingSuccess />
+                 </ProtectedRoute>
+               } 
+             />
+             <Route 
+               path="/billing/cancel" 
+               element={
+                 <ProtectedRoute>
+                   <BillingCancel />
                  </ProtectedRoute>
                } 
              />
