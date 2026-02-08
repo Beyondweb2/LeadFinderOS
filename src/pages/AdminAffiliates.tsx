@@ -120,7 +120,7 @@ export default function AdminAffiliates() {
         description: 'You do not have admin privileges.',
         variant: 'destructive',
       });
-      navigate('/app');
+      navigate('/');
       return;
     }
     
@@ -330,7 +330,7 @@ export default function AdminAffiliates() {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/app')}>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <div>
