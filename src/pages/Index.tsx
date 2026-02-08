@@ -46,22 +46,22 @@ const Index = () => {
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
 
   return (
-    <div className="space-y-6 md:space-y-8">
-      {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="space-y-4 md:space-y-8">
+      {/* Page Header - Compact on mobile */}
+      <div className="flex flex-col gap-2 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-center sm:text-left">
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Find Leads</h1>
-          <p className="text-sm sm:text-base text-muted-foreground max-w-lg">
+          <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Find Leads</h1>
+          <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
             Find businesses without websites in any area. Search by business type and location, then add hot leads to your CRM.
           </p>
         </div>
-        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-3 sm:gap-4 text-xs sm:text-sm text-muted-foreground">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <Flame className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-status-hot" />
+        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Flame className="h-3 w-3 sm:h-4 sm:w-4 text-status-hot" />
             <span>Hot = No website</span>
           </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Zap className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
             <span>AI-powered</span>
           </div>
         </div>
@@ -84,9 +84,9 @@ const Index = () => {
 
       {/* Outcome-focused Results Header */}
       {leads.length > 0 && noWebsiteCount > 0 && (
-        <div className="flex items-center justify-center gap-2 py-3 px-4 bg-primary/5 border border-primary/10 rounded-lg">
-          <Target className="h-5 w-5 text-primary" />
-          <span className="text-base font-medium text-foreground">
+        <div className="flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-3 px-3 sm:px-4 bg-primary/5 border border-primary/10 rounded-lg">
+          <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+          <span className="text-sm sm:text-base font-medium text-foreground">
             <span className="text-primary font-bold">{noWebsiteCount}</span> business{noWebsiteCount !== 1 ? 'es' : ''} here need{noWebsiteCount === 1 ? 's' : ''} a website
           </span>
         </div>
