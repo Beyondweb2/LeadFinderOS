@@ -56,39 +56,39 @@ export function SearchForm({
   };
 
   return (
-    <Card className="glass-panel border-border/50">
-      <CardContent className="p-4 sm:p-6">
-        <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
+    <Card className="border-border/50 bg-card shadow-sm">
+      <CardContent className="p-3 sm:p-6">
+        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
           {/* Main Search Fields */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="keyword" className="text-xs sm:text-sm font-medium text-foreground/80">
+          <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="keyword" className="text-xs font-medium text-foreground/80">
                 Business Type
               </Label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                 <Input
                   id="keyword"
                   placeholder="e.g. plumber, electrician"
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
-                  className="pl-10 bg-input border-border focus:ring-primary text-sm"
+                  className="pl-8 sm:pl-10 h-9 sm:h-10 bg-input border-border focus:ring-primary text-sm"
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="location" className="text-xs sm:text-sm font-medium text-foreground/80">
+            <div className="space-y-1.5 sm:space-y-2">
+              <Label htmlFor="location" className="text-xs font-medium text-foreground/80">
                 Location
               </Label>
               <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <MapPin className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
                 <Input
                   id="location"
                   placeholder="City or postcode"
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
-                  className="pl-10 bg-input border-border focus:ring-primary text-sm"
+                  className="pl-8 sm:pl-10 h-9 sm:h-10 bg-input border-border focus:ring-primary text-sm"
                 />
               </div>
               <QuickLocationsList onLocationSelect={(loc, country) => {
@@ -97,13 +97,13 @@ export function SearchForm({
               }} />
             </div>
 
-            <div className="space-y-2 sm:col-span-2 lg:col-span-1">
-              <Label className="text-xs sm:text-sm font-medium text-foreground/80">
+            <div className="space-y-1.5 sm:space-y-2 sm:col-span-2 lg:col-span-1">
+              <Label className="text-xs font-medium text-foreground/80">
                 Radius: {radius} km
               </Label>
-              <div className="relative flex items-center gap-3 pt-1">
-                <Radius className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <Slider
+              <div className="relative flex items-center gap-2 sm:gap-3 pt-0.5">
+                <Radius className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
+                <Slider
                   value={[radius]}
                   onValueChange={(value) => setRadius(value[0])}
                   min={1}
@@ -119,16 +119,16 @@ export function SearchForm({
           {subscribed && (
             <Collapsible open={showFilters} onOpenChange={setShowFilters}>
               <CollapsibleTrigger asChild>
-                <Button variant="ghost" type="button" className="text-muted-foreground hover:text-foreground text-xs sm:text-sm">
-                  <ChevronDown className={`h-4 w-4 mr-1.5 sm:mr-2 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
+                <Button variant="ghost" type="button" className="text-muted-foreground hover:text-foreground text-xs h-8 px-2">
+                  <ChevronDown className={`h-3.5 w-3.5 mr-1.5 transition-transform ${showFilters ? 'rotate-180' : ''}`} />
                   Advanced Filters
                 </Button>
               </CollapsibleTrigger>
-              <CollapsibleContent className="pt-4">
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 max-w-4xl">
-                  <div className="space-y-2">
-                    <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
-                      <Star className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <CollapsibleContent className="pt-3 sm:pt-4">
+                <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4 max-w-4xl">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label className="text-xs font-medium text-foreground/80 flex items-center gap-1.5">
+                      <Star className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       Min Rating: {minRating > 0 ? minRating.toFixed(1) : 'Any'}
                     </Label>
                     <Slider
@@ -140,9 +140,9 @@ export function SearchForm({
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
-                      <MessageSquare className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label className="text-xs font-medium text-foreground/80 flex items-center gap-1.5">
+                      <MessageSquare className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       Min Reviews: {minReviews > 0 ? minReviews : 'Any'}
                     </Label>
                     <Slider
@@ -154,34 +154,36 @@ export function SearchForm({
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
-                      <Phone className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label className="text-xs font-medium text-foreground/80 flex items-center gap-1.5">
+                      <Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       Require Phone
                     </Label>
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-1.5 pt-0.5">
                       <Switch
                         checked={requirePhone}
                         onCheckedChange={setRequirePhone}
+                        className="scale-90"
                       />
-                      <span className="text-[10px] sm:text-xs text-muted-foreground">
+                      <span className="text-[10px] text-muted-foreground">
                         {requirePhone ? 'With phone' : 'All'}
                       </span>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-xs sm:text-sm font-medium text-foreground/80 flex items-center gap-1.5 sm:gap-2">
-                      <Zap className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label className="text-xs font-medium text-foreground/80 flex items-center gap-1.5">
+                      <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                       Deep Search
                     </Label>
-                    <div className="flex items-center gap-2 pt-1">
+                    <div className="flex items-center gap-1.5 pt-0.5">
                       <Switch
                         checked={deepSearch}
                         onCheckedChange={setDeepSearch}
+                        className="scale-90"
                       />
-                      <span className="text-[10px] sm:text-xs text-muted-foreground">
-                        {deepSearch ? '200+ results' : 'Up to 60'}
+                      <span className="text-[10px] text-muted-foreground">
+                        {deepSearch ? '200+' : 'Up to 60'}
                       </span>
                     </div>
                   </div>
@@ -191,20 +193,20 @@ export function SearchForm({
           )}
 
           {/* Submit Button with Trial Indicator */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
             {/* Trial searches remaining indicator */}
             {isOnTrial && !subscribed && (
-              <div className="flex items-center gap-2 text-sm">
-                <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full ${
+              <div className="flex items-center gap-2 text-xs sm:text-sm">
+                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
                   searchesRemaining === 0 
                     ? 'bg-destructive/10 text-destructive' 
                     : searchesRemaining === 1 
                       ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
                       : 'bg-primary/10 text-primary'
                 }`}>
-                  <Search className="h-3.5 w-3.5" />
+                  <Search className="h-3 w-3" />
                   <span className="font-medium">
-                    {searchesRemaining} search{searchesRemaining !== 1 ? 'es' : ''} remaining today
+                    {searchesRemaining} search{searchesRemaining !== 1 ? 'es' : ''} left today
                   </span>
                 </div>
               </div>
@@ -214,16 +216,16 @@ export function SearchForm({
               <Button 
                 type="submit" 
                 disabled={isLoading || !keyword.trim() || !location.trim()}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-6 sm:px-8 glow-effect w-full sm:w-auto text-sm sm:text-base"
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-9 sm:h-10 w-full sm:w-auto text-sm"
               >
                 {isLoading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
                     Searching...
                   </>
                 ) : (
                   <>
-                    <Search className="mr-2 h-4 w-4" />
+                    <Search className="mr-1.5 h-3.5 w-3.5" />
                     Find Leads
                   </>
                 )}
