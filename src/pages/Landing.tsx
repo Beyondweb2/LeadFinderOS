@@ -598,7 +598,7 @@ const Landing = () => {
           {isMobile ? (
             <div className="max-w-sm mx-auto">
               <Carousel
-                opts={{ loop: true }}
+                opts={{ loop: true, startIndex: 0 }}
                 plugins={[
                   Autoplay({
                     delay: 4000,
@@ -608,9 +608,12 @@ const Landing = () => {
                 ]}
                 className="w-full"
                 setApi={(api) => {
-                  api?.on('select', () => {
+                  if (api) {
                     setFeatureIndex(api.selectedScrollSnap());
-                  });
+                    api.on('select', () => {
+                      setFeatureIndex(api.selectedScrollSnap());
+                    });
+                  }
                 }}
               >
                 <CarouselContent>
@@ -652,8 +655,9 @@ const Landing = () => {
                   ))}
                 </CarouselContent>
                 
-                <CarouselPrevious className="left-0 bg-background/80 border-primary/30 hover:bg-primary/20" />
-                <CarouselNext className="right-0 bg-background/80 border-primary/30 hover:bg-primary/20" />
+                {/* Custom navigation arrows - matching How It Works section */}
+                <CarouselPrevious className="-left-1 h-10 w-10 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
+                <CarouselNext className="-right-1 h-10 w-10 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
               </Carousel>
               
               {/* Dot indicators */}
