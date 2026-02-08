@@ -66,20 +66,33 @@
        }
      }
 
+      // Get affiliate code from user_trials if present
+      const { data: trialData } = await supabaseClient
+        .from('user_trials')
+        .select('affiliate_code')
+        .eq('user_id', user.id)
+        .single();
+      
+      const affiliateCode = trialData?.affiliate_code || null;
+      logStep("Affiliate code check", { affiliateCode });
+
       // Create checkout session
       // Only offer trial if user has never had a subscription before
       const sessionConfig: {
         customer?: string;
         customer_email?: string;
+        client_reference_id: string;
+        metadata?: { affiliate_code?: string };
         line_items: Array<{ price: string; quantity: number }>;
         mode: "subscription";
-        subscription_data?: { trial_period_days: number };
+        subscription_data?: { trial_period_days: number; metadata?: { affiliate_code?: string } };
         payment_method_collection: "always";
         success_url: string;
         cancel_url: string;
       } = {
         customer: customerId,
         customer_email: customerId ? undefined : user.email,
+        client_reference_id: user.id,
         line_items: [
           {
             price: "price_1SxN38Gi4ps7kJ7R8UE1kYGS",
@@ -92,9 +105,17 @@
         cancel_url: `${req.headers.get("origin")}/app?checkout=cancel`,
       };
       
+      // Add affiliate code to metadata if present
+      if (affiliateCode) {
+        sessionConfig.metadata = { affiliate_code: affiliateCode };
+      }
+      
       // Only add trial for new customers who haven't had a subscription
       if (!hasHadSubscription) {
-        sessionConfig.subscription_data = { trial_period_days: 7 };
+        sessionConfig.subscription_data = { 
+          trial_period_days: 7,
+          metadata: affiliateCode ? { affiliate_code: affiliateCode } : undefined
+        };
         logStep("Adding 7-day trial to checkout");
       } else {
         logStep("Skipping trial - customer has previous subscription");

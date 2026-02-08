@@ -2,6 +2,10 @@ import { useState, useEffect, createContext, useContext, ReactNode } from 'react
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
+// Affiliate storage keys
+const AFFILIATE_STORAGE_KEY = 'leadfinder_affiliate_code';
+const AFFILIATE_EXPIRY_KEY = 'leadfinder_affiliate_expiry';
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -13,6 +17,25 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Get the stored affiliate code if not expired
+ */
+function getStoredAffiliateCode(): string | null {
+  const code = localStorage.getItem(AFFILIATE_STORAGE_KEY);
+  const expiry = localStorage.getItem(AFFILIATE_EXPIRY_KEY);
+  
+  if (!code || !expiry) return null;
+  
+  const expiryDate = new Date(expiry);
+  if (new Date() > expiryDate) {
+    localStorage.removeItem(AFFILIATE_STORAGE_KEY);
+    localStorage.removeItem(AFFILIATE_EXPIRY_KEY);
+    return null;
+  }
+  
+  return code;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -21,10 +44,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
+        
+        // On new signup, attach affiliate code if present
+        if (event === 'SIGNED_IN' && session?.user) {
+          const affiliateCode = getStoredAffiliateCode();
+          if (affiliateCode) {
+            // Update user_trials with affiliate code (only if not already set)
+            const { error } = await supabase
+              .from('user_trials')
+              .update({ 
+                affiliate_code: affiliateCode,
+                affiliate_attributed_at: new Date().toISOString()
+              })
+              .eq('user_id', session.user.id)
+              .is('affiliate_code', null);
+            
+            if (!error) {
+              console.log('[AUTH] Affiliate code attached:', affiliateCode);
+            }
+          }
+        }
       }
     );
 

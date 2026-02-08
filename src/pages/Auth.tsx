@@ -10,6 +10,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Loader2, CreditCard, Sparkles, Gift, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
+import { AffiliateCapture } from '@/components/AffiliateCapture';
 import appLogo from '@/assets/logo.png';
 
 const authSchema = z.object({
@@ -156,6 +157,8 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      {/* Capture affiliate codes from URL */}
+      <AffiliateCapture />
       {/* Free Trial Loading Modal */}
       <Dialog open={showTrialModal} onOpenChange={() => {}}>
         <DialogContent className="sm:max-w-md border-primary/30 bg-card/95 backdrop-blur-xl" hideClose>

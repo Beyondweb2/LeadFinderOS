@@ -20,6 +20,7 @@ import NotFound from "./pages/NotFound";
 import PotentialWorkPage from "./pages/PotentialWork";
 import PaidClientsPage from "./pages/PaidClients";
 import HowToUse from "./pages/HowToUse";
+import AdminAffiliates from "./pages/AdminAffiliates";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 import Landing from "./pages/Landing";
 import Terms from "./pages/Terms";
@@ -157,6 +158,15 @@ const App = () => (
                        <HowToUse />
                      </AppLayout>
                    </SubscriptionGate>
+                </ProtectedRoute>
+              } 
+            />
+            {/* Admin routes */}
+            <Route 
+              path="/admin/affiliates" 
+              element={
+                <ProtectedRoute>
+                  <AdminAffiliates />
                 </ProtectedRoute>
               } 
             />

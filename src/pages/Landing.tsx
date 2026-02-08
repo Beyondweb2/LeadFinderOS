@@ -41,6 +41,7 @@ import featureTemplates from '@/assets/feature-templates.png';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
+import { AffiliateCapture } from '@/components/AffiliateCapture';
 
 // Scroll reveal wrapper component
 const ScrollReveal = ({ 
@@ -266,6 +267,8 @@ const Landing = () => {
   const isMobile = useIsMobile();
   return (
     <div className="min-h-screen bg-background overflow-hidden">
+      {/* Capture affiliate codes from URL */}
+      <AffiliateCapture />
       {/* Feature Image Modal */}
       <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
         <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
