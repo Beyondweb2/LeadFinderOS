@@ -508,6 +508,7 @@ export type Database = {
         | "reviewing_draft"
         | "paid_for_draft"
         | "completed"
+        | "no_whatsapp"
       next_action_type:
         | "call"
         | "follow_up"
@@ -671,6 +672,7 @@ export const Constants = {
         "reviewing_draft",
         "paid_for_draft",
         "completed",
+        "no_whatsapp",
       ],
       next_action_type: [
         "call",

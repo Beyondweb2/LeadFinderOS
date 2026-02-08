@@ -16,7 +16,7 @@ const DEFAULT_TEMPLATES: Array<{
     template_type: 'text',
     category: 'initial',
     title: 'First Text - Friendly Opener',
-    content: `Hey! I came across your business on Google Maps and noticed you don't have a website yet. Are you looking to get one sorted at some point?`,
+    content: `Hi, is this the right number for {{business_name}}?`,
   },
   {
     template_type: 'text',

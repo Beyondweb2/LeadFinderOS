@@ -67,6 +67,11 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Not Int.',
     className: 'bg-red-500/20 text-red-400 border-red-500/30',
   },
+  no_whatsapp: {
+    label: 'No WhatsApp',
+    shortLabel: 'No WA',
+    className: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  },
   waiting: {
     label: 'Waiting',
     shortLabel: 'Waiting',
