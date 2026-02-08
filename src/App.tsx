@@ -9,6 +9,7 @@ import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
+import { RefSourceCapture } from "@/components/RefSourceCapture";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Subscribe from "./pages/Subscribe";
@@ -46,6 +47,7 @@ const App = () => (
           <Sonner />
           <LeadSearchProvider>
             <BrowserRouter>
+              <RefSourceCapture />
           <Routes>
             <Route path="/auth" element={<Auth />} />
              <Route 

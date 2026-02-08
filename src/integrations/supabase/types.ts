@@ -426,6 +426,7 @@ export type Database = {
           last_search_date: string | null
           paid_at: string | null
           plan_status: string
+          ref_source: string | null
           searches_today: number
           searches_used: number
           trial_days: number
@@ -441,6 +442,7 @@ export type Database = {
           last_search_date?: string | null
           paid_at?: string | null
           plan_status?: string
+          ref_source?: string | null
           searches_today?: number
           searches_used?: number
           trial_days?: number
@@ -456,6 +458,7 @@ export type Database = {
           last_search_date?: string | null
           paid_at?: string | null
           plan_status?: string
+          ref_source?: string | null
           searches_today?: number
           searches_used?: number
           trial_days?: number
