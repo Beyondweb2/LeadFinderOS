@@ -275,42 +275,43 @@ const PaidClientsPage = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-          <DollarSign className="h-6 w-6" />
+    <div className="space-y-3 sm:space-y-6">
+      {/* Page Header - Compact on mobile */}
+      <div className="text-center sm:text-left">
+        <h1 className="text-lg sm:text-2xl font-bold tracking-tight flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2">
+          <DollarSign className="h-4 w-4 sm:h-6 sm:w-6" />
           Paid Clients
         </h1>
-        <p className="text-muted-foreground">
+        <p className="text-xs sm:text-base text-muted-foreground">
           Clients who have completed payment
         </p>
       </div>
 
-      {/* Search & Stats */}
-      <div className="flex items-center justify-between gap-4">
+      {/* Search & Stats - Compact on mobile */}
+      <div className="flex items-center justify-between gap-2 sm:gap-4">
         <div className="relative max-w-md flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
           <Input
-            placeholder="Search by name or phone..."
+            placeholder="Search..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="pl-8 sm:pl-9 h-8 sm:h-10 text-sm"
           />
         </div>
-        <div className="text-sm text-muted-foreground">
-          {paidClients.length} paid clients
+        <div className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
+          {paidClients.length} clients
         </div>
       </div>
 
       {/* Client Cards Grid */}
       {paidClients.length === 0 ? (
         <Card className="bg-card/50 border-border/50">
-          <CardContent className="py-16 text-center text-muted-foreground">
+          <CardContent className="py-10 sm:py-16 text-center text-muted-foreground text-sm">
             No paid clients yet. When leads complete payment, they'll appear here.
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
           {paidClients.map((lead) => (
             <ClientCard
               key={lead.id}
