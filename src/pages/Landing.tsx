@@ -31,7 +31,7 @@ import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
 import demoVideo from '@/assets/leadfinder-demo.mp4';
 import appLogo from '@/assets/logo.png';
-import videoPoster from '@/assets/video-poster.png';
+
 import featureCustomization from '@/assets/feature-customization-new.png';
 import featureContactTracking from '@/assets/howto-step4-trackleads.png';
 import featureDashboard from '@/assets/howto-step4-dashboard.png';
@@ -222,7 +222,6 @@ const MobileHeroVideo = () => {
           muted
           playsInline
           preload="auto"
-          poster={videoPoster}
         >
           <source src={demoVideo} type="video/mp4" />
           Your browser does not support the video tag.
@@ -289,7 +288,7 @@ const VideoSection = () => {
               muted
               playsInline
               preload="auto"
-              poster={videoPoster}
+              
             >
               <source src={demoVideo} type="video/mp4" />
               Your browser does not support the video tag.
