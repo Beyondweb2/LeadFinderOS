@@ -1,65 +1,70 @@
 
-# Plan: Improve Bulk WhatsApp Dialog
+# WhatsApp Number Verification Feature
 
-## Overview
-Enhance the Bulk WhatsApp Sender with live preview showing the actual business name, and add important warnings about WhatsApp restrictions.
+## Summary
+Add the ability to check whether a phone number is registered on WhatsApp **before** clicking the WhatsApp button, so you know in advance if contacting via WhatsApp will work.
 
-## Changes
+## The Challenge
+Unfortunately, WhatsApp doesn't provide a free, official public API to check if a number is registered. The options that exist require:
 
-### 1. Live Message Preview
-**File:** `src/components/BulkWhatsAppDialog.tsx`
+1. **Third-party WhatsApp API services** (like 2Chat, Wassenger, Maytapi, Green-API) - These cost money (typically $15-50/month) and require connecting your own WhatsApp number to their service
+2. **WhatsApp Business API (official)** - Requires Meta Business verification and approval process
+3. **Trial-and-error tracking** - Mark numbers as "No WhatsApp" after you discover they don't work
 
-Add a preview section below the template editor that shows how the message will look with the current lead's business name inserted:
+## Recommended Approach: Quick "No WhatsApp" Marking
 
-```text
-┌─────────────────────────────────────┐
-│ Message Template                    │
-│ Use {{business_name}} to personalize│
-│ ┌─────────────────────────────────┐ │
-│ │ Hi {{business_name}},           │ │
-│ │ I noticed your business...      │ │
-│ └─────────────────────────────────┘ │
-│                                     │
-│ 📝 Preview for current lead:        │
-│ ┌─────────────────────────────────┐ │
-│ │ Hi Lite-Up Electrical Services, │ │
-│ │ I noticed your business...      │ │
-│ └─────────────────────────────────┘ │
-└─────────────────────────────────────┘
-```
+Since third-party APIs add cost and complexity, I recommend a streamlined workflow that lets you quickly mark numbers when you discover they don't have WhatsApp:
 
-- Show preview only when there's a current lead selected
-- Update preview in real-time as user edits template
-- Use a distinct background color to differentiate from editor
+### What You'll Get
 
-### 2. Add WhatsApp Risk Warning
-Add a prominent alert/warning at the top of the dialog:
+1. **Quick "Mark No WhatsApp" button** - Right next to the WhatsApp button, a single click marks the lead as "No WhatsApp" status when you return and find the number wasn't on WhatsApp
 
-```text
-⚠️ Important: Sending bulk messages may risk WhatsApp account restrictions.
-   Tips: Space out messages, personalize content, limit to 10-20 per day.
-```
+2. **Visual indicator on leads already marked** - Leads with "No WhatsApp" status will show a clear indicator so you don't waste time clicking them again
 
-- Use an `Alert` component with warning variant
-- Keep it concise but informative
-- Include a collapsible "Learn more" section with detailed tips
+3. **Hide WhatsApp button for "No WhatsApp" leads** - Once marked, the WhatsApp button disappears for that lead to prevent accidental clicks
 
-### 3. Add Delay Recommendation
-Between each send, suggest users wait before clicking next:
+4. **Filter out "No WhatsApp" leads** - Easy filter to hide leads you've already determined don't have WhatsApp
 
-```text
-💡 Wait 2-5 minutes before sending the next message
-```
+---
+
+## Optional: Third-Party API Integration
+
+If you'd like automatic verification before clicking, I can integrate with one of these services. This would:
+- Check each phone number when you add leads to your Outreach CRM
+- Show a WhatsApp icon (green checkmark = verified, gray X = no WhatsApp)
+- Requires subscribing to one of these services and providing an API key
+
+Let me know if you want to explore this option further.
+
+---
 
 ## Technical Details
 
-### Component Updates
-- Add `useMemo` to compute the preview message
-- Add an Alert component with tips
-- Style preview section with different background
+### Files to Create/Modify
 
-### No Database Changes Required
-This is purely a UI enhancement.
+| File | Change |
+|------|--------|
+| `src/components/OutreachTable.tsx` | Add "Mark No WA" quick action button next to WhatsApp button; hide WhatsApp button if status is `no_whatsapp` |
+| `src/components/OutreachMobileCard.tsx` | Same changes for mobile view |
+| `src/components/OutreachLeadDialog.tsx` | Add quick mark button in the lead details dialog |
 
-## Third-Party Disclaimer
-Add small text noting that LeadFinder Pro is not responsible for any WhatsApp account restrictions - users are solely responsible for their outreach methods (aligns with existing legal disclaimer in memory).
+### UI Changes
+
+**Desktop table row:**
+```text
+[Maps] [WhatsApp] [❌ No WA]  →  (after marking) →  [Maps] [No WhatsApp badge]
+```
+
+**Mobile card:**
+```text
+[Maps] [WhatsApp] [❌]  →  (after marking) →  [Maps] [No WA label]
+```
+
+### Logic Flow
+1. User clicks WhatsApp button → opens WhatsApp
+2. User returns, sees "number not on WhatsApp" message
+3. User clicks "Mark No WA" button (single click)
+4. Lead status changes to `no_whatsapp`
+5. WhatsApp button is replaced with a "No WA" indicator
+6. Lead can be filtered out of the active workflow
+
