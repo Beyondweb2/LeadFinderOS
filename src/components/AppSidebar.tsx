@@ -48,8 +48,8 @@ const navItems = [
     description: 'Cold call & gather numbers'
   },
   { 
-    title: 'Interested', 
-    url: '/potential-work', 
+    title: 'Track Leads', 
+    url: '/potential-work',
     icon: Briefcase,
     description: 'Leads who want to work'
   },
