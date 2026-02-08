@@ -30,7 +30,7 @@ export function useOutreach() {
       .from('outreach_leads')
       .select('*')
       .eq('is_archived', false)
-      .order('next_action_date', { ascending: true, nullsFirst: false });
+      .order('created_at', { ascending: false });
 
     // Fetch archived leads
     const { data: archivedData, error: archivedError } = await supabase
@@ -199,7 +199,7 @@ export function useOutreach() {
     }
 
     const newLead = data as OutreachLead;
-    setLeads((prev) => [...prev, newLead]);
+    setLeads((prev) => [newLead, ...prev]);
 
     // Track in history (so we remember even if deleted later)
     await supabase.from('outreach_history').insert({
