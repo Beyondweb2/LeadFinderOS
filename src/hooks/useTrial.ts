@@ -172,10 +172,24 @@ export function useTrial() {
     }
   }, [user?.id, ensureTrialRecord]);
 
+  // Stabilize user ID to prevent effect re-runs
+  const userIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    hasAttemptedEnsure.current = false;
-    checkTrial();
-  }, [checkTrial]);
+    const newUserId = user?.id ?? null;
+    
+    // Only trigger if user ID actually changed
+    if (newUserId !== userIdRef.current) {
+      userIdRef.current = newUserId;
+      hasAttemptedEnsure.current = false;
+      
+      if (newUserId) {
+        checkTrial();
+      } else {
+        setState(prev => ({ ...prev, isLoading: false }));
+      }
+    }
+  }, [user?.id, checkTrial]);
 
   const shouldShowUpgradePrompt = useCallback(() => {
     return state.searchesUsed > 0 && state.searchesUsed % SEARCHES_BEFORE_PROMPT === 0;

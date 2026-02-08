@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
@@ -81,7 +81,7 @@ const ArchivePage = () => {
   }, [archivedLeads, phoneQuery]);
 
   // Reset to page 1 when search changes
-  useMemo(() => {
+  useEffect(() => {
     setCurrentPage(1);
   }, [phoneQuery]);
 

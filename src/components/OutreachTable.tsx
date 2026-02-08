@@ -369,12 +369,28 @@ export function OutreachTable({
     // Filter by search
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      result = result.filter(
-        (lead) =>
-          lead.business_name.toLowerCase().includes(query) ||
-          lead.phone?.toLowerCase().includes(query) ||
-          lead.address?.toLowerCase().includes(query)
-      );
+      // Normalize query for phone search (remove spaces and non-digits)
+      const normalizedQuery = query.replace(/\s+/g, '');
+      const isPhoneSearch = /^\d+$/.test(normalizedQuery);
+      
+      result = result.filter((lead) => {
+        // Check business name and address normally
+        if (lead.business_name.toLowerCase().includes(query)) return true;
+        if (lead.address?.toLowerCase().includes(query)) return true;
+        
+        // For phone, normalize by removing spaces for comparison
+        if (lead.phone) {
+          const normalizedPhone = lead.phone.replace(/\s+/g, '').toLowerCase();
+          // If user typed only digits, compare normalized versions
+          if (isPhoneSearch) {
+            return normalizedPhone.includes(normalizedQuery);
+          }
+          // Otherwise do normal search
+          return normalizedPhone.includes(query.replace(/\s+/g, ''));
+        }
+        
+        return false;
+      });
     }
 
     // Filter by status
