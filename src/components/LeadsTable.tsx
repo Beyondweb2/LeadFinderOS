@@ -540,13 +540,12 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
-                                  variant="default"
-                                  size="sm"
-                                  className="h-8 px-3 bg-primary hover:bg-primary/90"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-green-500 hover:bg-muted hover:text-green-400"
                                   onClick={() => onAddToOutreach(lead)}
                                 >
-                                  <ClipboardList className="h-4 w-4 mr-1" />
-                                  Add
+                                  <ClipboardList className="h-4 w-4" />
                                 </Button>
                               </TooltipTrigger>
                               <TooltipContent>Add to CRM</TooltipContent>
