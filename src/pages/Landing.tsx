@@ -100,7 +100,7 @@ const FEATURES = [
   {
     icon: Phone,
     title: 'Contact Tracking',
-    description: 'Track potential clients through your sales pipeline from interested to completed.',
+    description: 'Manage potential clients from first contact to closed deal with status updates and notes.',
     image: featureContactTracking,
     imageScale: 'scale-150',
     imagePosition: 'object-[center_40%]',
