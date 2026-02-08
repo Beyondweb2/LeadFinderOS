@@ -63,9 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               .eq('user_id', session.user.id)
               .is('affiliate_code', null);
             
-            if (!error) {
-              console.log('[AUTH] Affiliate code attached:', affiliateCode);
-            }
+            // Successfully attached affiliate code (logging removed for production)
           }
         }
       }

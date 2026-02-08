@@ -21,8 +21,6 @@ export function AffiliateCapture() {
       localStorage.setItem(AFFILIATE_STORAGE_KEY, refCode);
       localStorage.setItem(AFFILIATE_EXPIRY_KEY, expiryDate.toISOString());
       
-      console.log('[AFFILIATE] Code captured:', refCode);
-      
       // Clean up URL without reloading (preserves other params)
       const url = new URL(window.location.href);
       url.searchParams.delete('ref');
