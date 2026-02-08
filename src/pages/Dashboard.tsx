@@ -2,8 +2,8 @@
  import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
  import { RevenueCard } from '@/components/dashboard/RevenueCard';
  import { ConversionCard } from '@/components/dashboard/ConversionCard';
- import { PipelineCard } from '@/components/dashboard/PipelineCard';
- import { ActivityCard } from '@/components/dashboard/ActivityCard';
+import { OutreachCard } from '@/components/dashboard/OutreachCard';
+import { ActivityCard } from '@/components/dashboard/ActivityCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -53,7 +53,7 @@ const Dashboard = () => {
              contactedCount={metrics.contactedCount}
              totalBusinessesAdded={metrics.totalBusinessesAdded}
            />
-          <PipelineCard
+          <OutreachCard
             totalBusinessesAdded={metrics.totalBusinessesAdded}
             addedToday={metrics.addedToday}
             addedYesterday={metrics.addedYesterday}
@@ -109,7 +109,7 @@ const Dashboard = () => {
                  <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/10 w-fit mb-1.5 sm:mb-2">
                    <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
                  </div>
-                <CardTitle className="text-sm sm:text-base">Pipeline</CardTitle>
+                <CardTitle className="text-sm sm:text-base">Outreach</CardTitle>
               </CardHeader>
               <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
                 <p className="text-xs sm:text-sm text-muted-foreground">
