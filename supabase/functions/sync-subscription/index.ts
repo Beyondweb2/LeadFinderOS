@@ -81,10 +81,17 @@ serve(async (req) => {
     }
 
     const subscriptionStatus = subscription.status;
-    const currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
-    const trialEnd = subscription.trial_end 
-      ? new Date(subscription.trial_end * 1000).toISOString() 
-      : null;
+    
+    // Safely handle timestamps - they might be null/undefined for trialing subscriptions
+    let currentPeriodEnd: string | null = null;
+    if (subscription.current_period_end && typeof subscription.current_period_end === 'number') {
+      currentPeriodEnd = new Date(subscription.current_period_end * 1000).toISOString();
+    }
+    
+    let trialEnd: string | null = null;
+    if (subscription.trial_end && typeof subscription.trial_end === 'number') {
+      trialEnd = new Date(subscription.trial_end * 1000).toISOString();
+    }
 
     logStep("Subscription details extracted", {
       subscriptionId: subscription.id,
