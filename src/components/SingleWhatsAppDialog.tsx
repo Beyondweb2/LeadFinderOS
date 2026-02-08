@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { MessageSquare, Send, AlertTriangle } from 'lucide-react';
+import { MessageSquare, Send, AlertTriangle, RotateCcw } from 'lucide-react';
 import { generateWhatsAppUrl } from '@/lib/leadUtils';
 
 interface SingleWhatsAppDialogProps {
@@ -21,9 +21,37 @@ interface SingleWhatsAppDialogProps {
 }
 
 const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
+const STORAGE_KEY = 'leadfinder_whatsapp_template';
 
 export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAppDialogProps) {
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
+  const [isModified, setIsModified] = useState(false);
+
+  // Load saved template from localStorage on mount
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      setTemplate(saved);
+      setIsModified(saved !== DEFAULT_TEMPLATE);
+    }
+  }, []);
+
+  // Save template to localStorage whenever it changes
+  const handleTemplateChange = (value: string) => {
+    setTemplate(value);
+    setIsModified(value !== DEFAULT_TEMPLATE);
+    localStorage.setItem(STORAGE_KEY, value);
+  };
+
+  // Reset to default
+  const handleReset = () => {
+    setTemplate(DEFAULT_TEMPLATE);
+    setIsModified(false);
+    localStorage.setItem(STORAGE_KEY, DEFAULT_TEMPLATE);
+  };
+
+  // Check if {{business_name}} placeholder is present
+  const hasBusinessNamePlaceholder = template.includes('{{business_name}}');
 
   // Live preview with business name replaced
   const previewMessage = useMemo(() => {
@@ -68,17 +96,36 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
           <div className="space-y-4">
             {/* Template Editor */}
             <div>
-              <Label htmlFor="template">Message Template</Label>
+              <div className="flex items-center justify-between mb-1">
+                <Label htmlFor="template">Message Template</Label>
+                {isModified && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleReset}
+                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    <RotateCcw className="h-3 w-3 mr-1" />
+                    Reset to default
+                  </Button>
+                )}
+              </div>
               <p className="text-xs text-muted-foreground mb-2">
                 Use <code className="bg-muted px-1 rounded">{`{{business_name}}`}</code> to personalize
               </p>
               <Textarea
                 id="template"
                 value={template}
-                onChange={(e) => setTemplate(e.target.value)}
+                onChange={(e) => handleTemplateChange(e.target.value)}
                 rows={5}
                 className="font-mono text-sm"
               />
+              {!hasBusinessNamePlaceholder && (
+                <p className="text-xs text-amber-500 mt-1.5 flex items-center gap-1">
+                  <AlertTriangle className="h-3 w-3" />
+                  Tip: Add {`{{business_name}}`} to personalize your message
+                </p>
+              )}
             </div>
 
             {/* Live Preview */}
