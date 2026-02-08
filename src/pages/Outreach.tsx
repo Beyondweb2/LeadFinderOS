@@ -25,6 +25,7 @@ const Outreach = () => {
     archiveLead,
     archiveMultiple,
     markMultipleAsInterested,
+    bulkImportLeads,
     fetchLeads,
   } = useOutreach();
 
@@ -92,6 +93,9 @@ const Outreach = () => {
         onDeleteSelected={deleteMultiple}
         onMarkAsInterested={markMultipleAsInterested}
         onRefreshLeads={fetchLeads}
+        onImportLeads={async (leadsToImport) => {
+          await bulkImportLeads(leadsToImport as any, 'UK');
+        }}
         showArchiveButton={false}
         isArchiveView={false}
         readOnly={isReadOnly}

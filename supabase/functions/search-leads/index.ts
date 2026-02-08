@@ -319,36 +319,48 @@ Think about whether "${domain}" looks like it could be the business's own brande
   }
 }
 
-// Generate grid points for deep search
+// Generate grid points for deep search with better coverage
 function generateGridPoints(centerLat: number, centerLng: number, radiusMeters: number): Array<{lat: number, lng: number, radius: number}> {
-  // Calculate grid size based on radius
-  // For larger areas, use more grid points with overlap
   const points: Array<{lat: number, lng: number, radius: number}> = [];
   
-  // Determine grid dimensions based on search radius
+  // Determine grid dimensions based on search radius - increased density for better coverage
   let gridSize: number;
   let cellRadius: number;
+  let overlapFactor: number;
   
   if (radiusMeters >= 80000) {
-    gridSize = 6; // 6x6 = 36 points for 80km+
-    cellRadius = radiusMeters / 4; // More overlap for larger areas
+    gridSize = 7; // 7x7 = 49 points for 80km+
+    cellRadius = radiusMeters / 5;
+    overlapFactor = 0.6; // 60% overlap for maximum coverage
   } else if (radiusMeters >= 40000) {
-    gridSize = 5; // 5x5 = 25 points for 40-80km
-    cellRadius = radiusMeters / 3; // Overlap cells
+    gridSize = 6; // 6x6 = 36 points for 40-80km
+    cellRadius = radiusMeters / 4;
+    overlapFactor = 0.5;
   } else if (radiusMeters >= 20000) {
-    gridSize = 4; // 4x4 = 16 points for 20-40km
-    cellRadius = radiusMeters / 2.5;
+    gridSize = 5; // 5x5 = 25 points for 20-40km
+    cellRadius = radiusMeters / 3;
+    overlapFactor = 0.5;
   } else if (radiusMeters >= 10000) {
-    gridSize = 3; // 3x3 = 9 points for 10-20km
+    gridSize = 4; // 4x4 = 16 points for 10-20km
     cellRadius = radiusMeters / 2;
+    overlapFactor = 0.4;
+  } else if (radiusMeters >= 5000) {
+    gridSize = 3; // 3x3 = 9 points for 5-10km
+    cellRadius = radiusMeters / 1.5;
+    overlapFactor = 0.4;
   } else {
     gridSize = 2; // 2x2 = 4 points for smaller areas
-    cellRadius = radiusMeters / 1.5;
+    cellRadius = radiusMeters;
+    overlapFactor = 0.3;
   }
   
-  // Calculate step size in degrees (approximate)
+  // Ensure minimum cell radius for API efficiency
+  cellRadius = Math.max(cellRadius, 1000);
+  
+  // Calculate step size with overlap (in degrees)
   // 1 degree latitude ≈ 111km, longitude varies by latitude
-  const latStep = (radiusMeters * 2 / (gridSize - 1)) / 111000;
+  const effectiveStep = (radiusMeters * 2 * (1 - overlapFactor)) / (gridSize - 1);
+  const latStep = effectiveStep / 111000;
   const lngStep = latStep / Math.cos(centerLat * Math.PI / 180);
   
   // Generate grid centered on the search location
@@ -360,6 +372,11 @@ function generateGridPoints(centerLat: number, centerLng: number, radiusMeters: 
       const lng = centerLng + (j - halfGrid) * lngStep;
       points.push({ lat, lng, radius: cellRadius });
     }
+  }
+  
+  // Always add center point to ensure we cover the exact search location
+  if (!points.some(p => p.lat === centerLat && p.lng === centerLng)) {
+    points.unshift({ lat: centerLat, lng: centerLng, radius: cellRadius });
   }
   
   return points;
@@ -379,7 +396,7 @@ async function geocodeLocation(location: string, apiKey: string): Promise<{lat: 
   return geocodeData.results[0].geometry.location;
 }
 
-// Search places at a specific coordinate
+// Search places at a specific coordinate with pagination
 async function searchPlacesAtPoint(
   keyword: string,
   lat: number,
@@ -389,6 +406,8 @@ async function searchPlacesAtPoint(
 ): Promise<any[]> {
   const allResults: any[] = [];
   let nextPageToken: string | undefined;
+  let pageCount = 0;
+  const maxPages = 3; // Google allows up to 3 pages of results (60 total)
   
   do {
     const searchUrl = nextPageToken
@@ -400,17 +419,55 @@ async function searchPlacesAtPoint(
     
     if (searchData.status !== 'OK' && searchData.status !== 'ZERO_RESULTS') {
       console.error('Places search failed:', searchData.status, searchData.error_message);
-      break; // Don't throw, just stop this point's search
+      break;
     }
     
     allResults.push(...(searchData.results || []));
     nextPageToken = searchData.next_page_token;
+    pageCount++;
     
     // Google requires a short delay before using the next_page_token
-    if (nextPageToken) {
+    if (nextPageToken && pageCount < maxPages) {
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
-  } while (nextPageToken && allResults.length < 60);
+  } while (nextPageToken && pageCount < maxPages);
+  
+  return allResults;
+}
+
+// Text search for additional coverage (different ranking algorithm)
+async function textSearchAtPoint(
+  keyword: string,
+  lat: number,
+  lng: number,
+  radius: number,
+  apiKey: string
+): Promise<any[]> {
+  const allResults: any[] = [];
+  let nextPageToken: string | undefined;
+  let pageCount = 0;
+  const maxPages = 2;
+  
+  do {
+    const searchUrl = nextPageToken
+      ? `https://maps.googleapis.com/maps/api/place/textsearch/json?pagetoken=${nextPageToken}&key=${apiKey}`
+      : `https://maps.googleapis.com/maps/api/place/textsearch/json?query=${encodeURIComponent(keyword)}&location=${lat},${lng}&radius=${radius}&key=${apiKey}`;
+    
+    const searchRes = await fetch(searchUrl);
+    const searchData = await searchRes.json();
+    
+    if (searchData.status !== 'OK' && searchData.status !== 'ZERO_RESULTS') {
+      break;
+    }
+    
+    allResults.push(...(searchData.results || []));
+    nextPageToken = searchData.next_page_token;
+    pageCount++;
+    
+    if (nextPageToken && pageCount < maxPages) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+    }
+  } while (nextPageToken && pageCount < maxPages);
   
   return allResults;
 }
@@ -425,45 +482,79 @@ async function searchPlaces(
   // Geocode the location first
   const { lat, lng } = await geocodeLocation(location, apiKey);
   
+  // Always use enhanced search for better coverage
+  // Standard search combines nearby + text search at center
+  const seenPlaceIds = new Set<string>();
+  const allResults: any[] = [];
+  
+  const addResults = (results: any[]) => {
+    for (const place of results) {
+      if (!seenPlaceIds.has(place.place_id)) {
+        seenPlaceIds.add(place.place_id);
+        allResults.push(place);
+      }
+    }
+  };
+  
   if (!deepSearch) {
-    // Standard single-point search
-    return searchPlacesAtPoint(keyword, lat, lng, radius, apiKey);
+    // Standard search: nearby + text search at center for better coverage
+    const [nearbyResults, textResults] = await Promise.all([
+      searchPlacesAtPoint(keyword, lat, lng, radius, apiKey),
+      textSearchAtPoint(keyword, lat, lng, radius, apiKey)
+    ]);
+    
+    addResults(nearbyResults);
+    addResults(textResults);
+    
+    console.log(`Standard search: ${nearbyResults.length} nearby + ${textResults.length} text = ${allResults.length} unique`);
+    return allResults;
   }
   
-  // Deep search: grid-based multi-point search
+  // Deep search: grid-based multi-point search with both nearby and text
   console.log(`Deep search enabled: generating grid for ${radius}m radius`);
   const gridPoints = generateGridPoints(lat, lng, radius);
   console.log(`Generated ${gridPoints.length} grid points`);
   
-  // Search all grid points in parallel (with concurrency limit)
-  const allResults: any[] = [];
-  const seenPlaceIds = new Set<string>();
-  
-  // Process in batches of 5 to avoid overwhelming the API
-  const batchSize = 5;
+  // Process in batches to avoid overwhelming the API
+  const batchSize = 4;
   for (let i = 0; i < gridPoints.length; i += batchSize) {
     const batch = gridPoints.slice(i, i + batchSize);
-    const batchResults = await Promise.all(
+    
+    // Run nearby search for each point in batch
+    const nearbyBatch = await Promise.all(
       batch.map(point => 
         searchPlacesAtPoint(keyword, point.lat, point.lng, point.radius, apiKey)
           .catch(err => {
-            console.error(`Error searching at point (${point.lat}, ${point.lng}):`, err);
+            console.error(`Nearby search error at (${point.lat}, ${point.lng}):`, err);
             return [];
           })
       )
     );
     
-    // Deduplicate by place_id
-    for (const results of batchResults) {
-      for (const place of results) {
-        if (!seenPlaceIds.has(place.place_id)) {
-          seenPlaceIds.add(place.place_id);
-          allResults.push(place);
-        }
+    for (const results of nearbyBatch) {
+      addResults(results);
+    }
+    
+    // For large searches, also run text search on some grid points
+    if (radius >= 20000 && i % (batchSize * 2) === 0) {
+      const textBatch = await Promise.all(
+        batch.slice(0, 2).map(point => 
+          textSearchAtPoint(keyword, point.lat, point.lng, point.radius, apiKey)
+            .catch(() => [])
+        )
+      );
+      
+      for (const results of textBatch) {
+        addResults(results);
       }
     }
     
     console.log(`Batch ${Math.floor(i / batchSize) + 1}: Found ${allResults.length} unique places so far`);
+    
+    // Small delay between batches
+    if (i + batchSize < gridPoints.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
   }
   
   return allResults;
