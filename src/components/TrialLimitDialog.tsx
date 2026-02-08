@@ -19,7 +19,7 @@ interface TrialLimitDialogProps {
 
 const BENEFITS = [
   'Unlimited lead searches',
-  'Full CRM & pipeline access',
+  'Full Outreach CRM access',
   'Contact tracking & notes',
   'Email & call templates',
 ];

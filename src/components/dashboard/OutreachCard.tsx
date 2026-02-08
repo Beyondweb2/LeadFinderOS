@@ -1,19 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Database, TrendingUp, TrendingDown, Minus, Calendar } from 'lucide-react';
 
-interface PipelineCardProps {
+interface OutreachCardProps {
   totalBusinessesAdded: number;
   addedToday: number;
   addedYesterday: number;
   avgPerDay: number;
 }
 
-export function PipelineCard({
+export function OutreachCard({
   totalBusinessesAdded,
   addedToday,
   addedYesterday,
   avgPerDay,
-}: PipelineCardProps) {
+}: OutreachCardProps) {
   // Calculate change from yesterday
   const change = addedToday - addedYesterday;
   const changePercent = addedYesterday > 0 
@@ -27,7 +27,7 @@ export function PipelineCard({
       <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
         <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
           <Database className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500" />
-          <span className="truncate">Pipeline</span>
+          <span className="truncate">Outreach CRM</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 sm:space-y-4 p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">

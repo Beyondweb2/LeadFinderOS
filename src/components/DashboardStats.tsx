@@ -86,7 +86,7 @@ export function DashboardStats({ leads }: DashboardStatsProps) {
       description: 'Potential clients',
     },
     {
-      title: 'Active Pipeline',
+      title: 'Active Leads',
       value: stats.totalActive,
       icon: Users,
       color: 'text-purple-500',
