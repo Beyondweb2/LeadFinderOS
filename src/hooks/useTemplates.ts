@@ -4,6 +4,71 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { Template, TemplateType, TemplateCategory } from '@/types/outreach';
 
+// Default templates for new users - casual, non-salesy
+const DEFAULT_TEMPLATES: Array<{
+  template_type: TemplateType;
+  category: TemplateCategory;
+  title: string;
+  content: string;
+}> = [
+  // Text message templates
+  {
+    template_type: 'text',
+    category: 'initial',
+    title: 'First Text - Friendly Opener',
+    content: `Hey! I came across your business on Google Maps and noticed you don't have a website yet. Are you looking to get one sorted at some point?`,
+  },
+  {
+    template_type: 'text',
+    category: 'initial',
+    title: 'First Text - Direct',
+    content: `Hi there, I help local businesses get online with simple websites. Saw you're not online yet - is that something you've been thinking about?`,
+  },
+  {
+    template_type: 'text',
+    category: 'follow_up',
+    title: 'Follow Up - Check In',
+    content: `Hey, just following up on my last message. No pressure at all - just wanted to check if you had any questions about getting a website going?`,
+  },
+  {
+    template_type: 'text',
+    category: 'follow_up',
+    title: 'Follow Up - Final',
+    content: `Hi again! Just checking in one more time. If you're not interested that's totally fine - just let me know either way and I'll stop bothering you 😊`,
+  },
+  {
+    template_type: 'text',
+    category: 'no_website',
+    title: 'No Website - Casual',
+    content: `Hey! Noticed your business isn't online yet. These days most people search online before visiting anywhere - happy to chat about getting you set up if you're interested?`,
+  },
+  {
+    template_type: 'text',
+    category: 'poor_website',
+    title: 'Outdated Website',
+    content: `Hi! I was looking at your website and it looks like it could use a refresh. Would you be open to chatting about giving it a modern update?`,
+  },
+  // Voice script templates
+  {
+    template_type: 'voice_script',
+    category: 'initial',
+    title: 'Voice Note - First Contact',
+    content: `Hey, hope you're having a good day! I came across your business and thought I'd reach out. I help local businesses get online with websites that actually bring in customers. Noticed you don't have one yet so thought I'd see if that's something you've been thinking about. Anyway, no pressure - just drop me a message if you want to chat about it. Cheers!`,
+  },
+  {
+    template_type: 'voice_script',
+    category: 'no_website',
+    title: 'Voice Note - No Website Pitch',
+    content: `Hi there! Quick voice note for you. I was looking for businesses like yours on Google and noticed you're not popping up in search results because there's no website. Most of your competitors are online now so you're probably missing out on quite a few customers. I could help you get something simple set up if you're interested - nothing fancy, just something that works. Let me know if you'd like to have a chat about it!`,
+  },
+  {
+    template_type: 'voice_script',
+    category: 'follow_up',
+    title: 'Voice Note - Follow Up',
+    content: `Hey, just me again! Sent you a message the other day about getting a website sorted. Totally understand if you're busy - just wanted to check if you got my message and if you had any questions. Let me know either way, no worries if it's not for you. Take care!`,
+  },
+];
+
 export function useTemplates() {
   const [templates, setTemplates] = useState<Template[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -13,6 +78,31 @@ export function useTemplates() {
   
   // Track the user ID to prevent refetches on auth token refreshes
   const userIdRef = useRef<string | null>(null);
+  const hasCreatedDefaults = useRef(false);
+
+  const createDefaultTemplates = useCallback(async () => {
+    if (!user || hasCreatedDefaults.current) return;
+    
+    hasCreatedDefaults.current = true;
+    
+    const templatesWithUserId = DEFAULT_TEMPLATES.map((t) => ({
+      ...t,
+      user_id: user.id,
+      is_default: true,
+    }));
+
+    const { error } = await supabase
+      .from('templates')
+      .insert(templatesWithUserId);
+
+    if (error) {
+      console.error('Error creating default templates:', error);
+      hasCreatedDefaults.current = false;
+      return false;
+    }
+
+    return true;
+  }, [user]);
 
   const fetchTemplates = useCallback(async () => {
     if (!user) return;
@@ -23,9 +113,8 @@ export function useTemplates() {
       .select('*')
       .order('created_at', { ascending: true });
 
-    setIsLoading(false);
-
     if (error) {
+      setIsLoading(false);
       console.error('Error fetching templates:', error);
       toast({
         title: 'Error loading templates',
@@ -35,16 +124,38 @@ export function useTemplates() {
       return;
     }
 
-    // Cast to Template type
-    const typedData = (data || []).map(t => ({
-      ...t,
-      template_type: t.template_type as TemplateType,
-      category: t.category as TemplateCategory,
-    })) as Template[];
+    // If no templates exist, create defaults
+    if (!data || data.length === 0) {
+      const created = await createDefaultTemplates();
+      if (created) {
+        // Refetch after creating defaults
+        const { data: newData } = await supabase
+          .from('templates')
+          .select('*')
+          .order('created_at', { ascending: true });
+        
+        const typedData = (newData || []).map(t => ({
+          ...t,
+          template_type: t.template_type as TemplateType,
+          category: t.category as TemplateCategory,
+        })) as Template[];
 
-    setTemplates(typedData);
+        setTemplates(typedData);
+      }
+    } else {
+      // Cast to Template type
+      const typedData = data.map(t => ({
+        ...t,
+        template_type: t.template_type as TemplateType,
+        category: t.category as TemplateCategory,
+      })) as Template[];
+
+      setTemplates(typedData);
+    }
+    
+    setIsLoading(false);
     setHasFetched(true);
-  }, [user, toast]);
+  }, [user, toast, createDefaultTemplates]);
 
   // Only fetch when user ID actually changes, not on every auth state change
   useEffect(() => {
@@ -53,6 +164,7 @@ export function useTemplates() {
     // Only refetch if user ID changed (login/logout), not on token refresh
     if (currentUserId !== userIdRef.current) {
       userIdRef.current = currentUserId;
+      hasCreatedDefaults.current = false;
       if (currentUserId && !hasFetched) {
         fetchTemplates();
       } else if (!currentUserId) {
