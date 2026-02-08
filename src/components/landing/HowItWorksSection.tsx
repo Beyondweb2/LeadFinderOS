@@ -165,7 +165,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
         {isMobile ? (
           <div className="max-w-sm mx-auto">
             <Carousel
-              opts={{ loop: true }}
+              opts={{ loop: true, startIndex: 0 }}
               plugins={[
                 Autoplay({
                   delay: 4000,
@@ -175,9 +175,13 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
               ]}
               className="w-full"
               setApi={(api) => {
-                api?.on('select', () => {
+                if (api) {
+                  // Set initial index
                   setActiveIndex(api.selectedScrollSnap());
-                });
+                  api.on('select', () => {
+                    setActiveIndex(api.selectedScrollSnap());
+                  });
+                }
               }}
             >
               <CarouselContent>
@@ -192,9 +196,9 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                 ))}
               </CarouselContent>
               
-              {/* Custom navigation arrows */}
-              <CarouselPrevious className="left-0 bg-background/80 border-primary/30 hover:bg-primary/20" />
-              <CarouselNext className="right-0 bg-background/80 border-primary/30 hover:bg-primary/20" />
+              {/* Custom navigation arrows - more visible */}
+              <CarouselPrevious className="-left-1 h-10 w-10 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
+              <CarouselNext className="-right-1 h-10 w-10 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
             </Carousel>
             
             {/* Dot indicators */}
