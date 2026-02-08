@@ -36,6 +36,7 @@ import {
   MessageSquare,
   Upload,
   Eye,
+  PhoneOff,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
@@ -924,14 +925,29 @@ export function OutreachTable({
                               <ExternalLink className="h-4 w-4" />
                             </a>
                           )}
-                          {lead.phone && (
-                            <button
-                              onClick={() => setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name })}
-                              className="p-1.5 rounded-md hover:bg-muted text-green-500 hover:text-green-400 transition-colors"
-                              title="Send WhatsApp message"
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                            </button>
+                          {lead.phone && lead.status !== 'no_whatsapp' && (
+                            <>
+                              <button
+                                onClick={() => setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name })}
+                                className="p-1.5 rounded-md hover:bg-muted text-green-500 hover:text-green-400 transition-colors"
+                                title="Send WhatsApp message"
+                              >
+                                <MessageSquare className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => onStatusChange(lead.id, 'no_whatsapp')}
+                                className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
+                                title="Mark as No WhatsApp"
+                              >
+                                <PhoneOff className="h-4 w-4" />
+                              </button>
+                            </>
+                          )}
+                          {lead.phone && lead.status === 'no_whatsapp' && (
+                            <span className="text-xs text-muted-foreground flex items-center gap-1">
+                              <PhoneOff className="h-3.5 w-3.5" />
+                              No WA
+                            </span>
                           )}
                         </div>
                       </TableCell>
