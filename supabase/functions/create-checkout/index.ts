@@ -88,15 +88,16 @@ const logStep = (step: string, details?: unknown) => {
        }
      }
 
-      // Get affiliate code from user_trials if present
+      // Get affiliate code and ref_source from user_trials if present
       const { data: trialData } = await supabaseClient
         .from('user_trials')
-        .select('affiliate_code')
+        .select('affiliate_code, ref_source')
         .eq('user_id', user.id)
         .single();
       
       const affiliateCode = trialData?.affiliate_code || null;
-      logStep("Affiliate code check", { affiliateCode });
+      const refSource = trialData?.ref_source || null;
+      logStep("Tracking data check", { affiliateCode, refSource });
 
       // Create checkout session
       // Only offer trial if user has never had a subscription before
@@ -127,16 +128,20 @@ const logStep = (step: string, details?: unknown) => {
         cancel_url: `${req.headers.get("origin")}/billing/cancel`,
       };
       
-      // Add affiliate code to metadata if present
-      if (affiliateCode) {
-        sessionConfig.metadata = { affiliate_code: affiliateCode };
+      // Add tracking metadata if present (affiliate_code and/or ref_source)
+      const trackingMetadata: Record<string, string> = {};
+      if (affiliateCode) trackingMetadata.affiliate_code = affiliateCode;
+      if (refSource) trackingMetadata.ref_source = refSource;
+      
+      if (Object.keys(trackingMetadata).length > 0) {
+        sessionConfig.metadata = trackingMetadata;
       }
       
       // Only add trial for new customers who haven't had a subscription
       if (!hasHadSubscription) {
         sessionConfig.subscription_data = { 
           trial_period_days: 7,
-          metadata: affiliateCode ? { affiliate_code: affiliateCode } : undefined
+          metadata: Object.keys(trackingMetadata).length > 0 ? trackingMetadata : undefined
         };
         logStep("Adding 7-day trial to checkout");
       } else {

@@ -6,6 +6,9 @@ import { supabase } from '@/integrations/supabase/client';
 const AFFILIATE_STORAGE_KEY = 'leadfinder_affiliate_code';
 const AFFILIATE_EXPIRY_KEY = 'leadfinder_affiliate_expiry';
 
+// Acquisition tracking storage key (for ads, whatsapp, etc.)
+const REF_SOURCE_STORAGE_KEY = 'leadfinder_ref_source';
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
@@ -36,6 +39,21 @@ function getStoredAffiliateCode(): string | null {
   return code;
 }
 
+/**
+ * Get and clear the stored ref_source for acquisition tracking
+ */
+function getAndClearRefSource(): string | null {
+  try {
+    const refSource = localStorage.getItem(REF_SOURCE_STORAGE_KEY);
+    if (refSource) {
+      localStorage.removeItem(REF_SOURCE_STORAGE_KEY);
+    }
+    return refSource;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -60,19 +78,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         
         setIsLoading(false);
         
-        // On new signup, attach affiliate code if present
+        // On new signup, attach affiliate code and ref_source if present
         if (event === 'SIGNED_IN' && newSession?.user) {
           const affiliateCode = getStoredAffiliateCode();
+          const refSource = getAndClearRefSource();
+          
+          // Build update object with only non-null values
+          const updateData: Record<string, string> = {};
           if (affiliateCode) {
-            // Update user_trials with affiliate code (only if not already set)
+            updateData.affiliate_code = affiliateCode;
+            updateData.affiliate_attributed_at = new Date().toISOString();
+          }
+          if (refSource) {
+            updateData.ref_source = refSource;
+          }
+          
+          // Only update if we have something to set
+          if (Object.keys(updateData).length > 0) {
             await supabase
               .from('user_trials')
-              .update({ 
-                affiliate_code: affiliateCode,
-                affiliate_attributed_at: new Date().toISOString()
-              })
+              .update(updateData)
               .eq('user_id', newSession.user.id)
-              .is('affiliate_code', null);
+              .is('affiliate_code', null); // Only if not already attributed
           }
         }
       }
