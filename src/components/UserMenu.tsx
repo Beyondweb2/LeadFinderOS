@@ -14,7 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
-  const { subscribed, subscriptionEnd, openCustomerPortal } = useSubscription();
+  const { subscribed, subscriptionEnd, openCustomerPortal, isAdmin } = useSubscription();
   const { toast } = useToast();
 
   const handleSignOut = async () => {
@@ -73,7 +73,7 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        {subscribed && (
+        {subscribed && !isAdmin && (
           <DropdownMenuItem onClick={handleManageSubscription} className="cursor-pointer">
             <CreditCard className="mr-2 h-4 w-4" />
             Manage Subscription
