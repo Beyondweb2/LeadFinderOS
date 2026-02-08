@@ -740,6 +740,86 @@ export function useOutreach() {
        return { updated: 0, total: 0 };
      }
    }, [user, leads, archivedLeads, fetchLeads, toast]);
+
+  // Bulk import leads from CSV
+  const bulkImportLeads = useCallback(async (
+    leadsToImport: Array<Partial<OutreachLead>>,
+    country: Country = 'UK'
+  ) => {
+    if (!user) {
+      toast({
+        title: 'Not authenticated',
+        description: 'Please log in to import leads.',
+        variant: 'destructive',
+      });
+      return { imported: 0, skipped: 0 };
+    }
+
+    let imported = 0;
+    let skipped = 0;
+
+    for (const lead of leadsToImport) {
+      if (!lead.business_name) {
+        skipped++;
+        continue;
+      }
+
+      // Check for existing lead
+      const { data: existing } = await supabase
+        .from('outreach_leads')
+        .select('id')
+        .eq('business_name', lead.business_name)
+        .limit(1)
+        .maybeSingle();
+
+      if (existing) {
+        skipped++;
+        continue;
+      }
+
+      const { error } = await supabase
+        .from('outreach_leads')
+        .insert({
+          user_id: user.id,
+          business_name: lead.business_name,
+          phone: lead.phone || null,
+          email: lead.email || null,
+          google_maps_url: lead.google_maps_url || null,
+          address: lead.address || null,
+          category: lead.category || null,
+          notes: lead.notes || null,
+          status: 'not_contacted' as LeadStatus,
+          next_action: 'none' as NextActionType,
+          next_action_date: null,
+          country: lead.country || country,
+          list_type: 'imported',
+        });
+
+      if (!error) {
+        imported++;
+        
+        // Also add to history
+        await supabase.from('outreach_history').insert({
+          user_id: user.id,
+          business_name: lead.business_name,
+          google_maps_url: lead.google_maps_url || null,
+          phone: lead.phone || null,
+          country: lead.country || country,
+        });
+      } else {
+        skipped++;
+      }
+    }
+
+    await fetchLeads();
+    
+    toast({
+      title: 'Import complete',
+      description: `Imported ${imported} leads. ${skipped > 0 ? `${skipped} skipped.` : ''}`,
+    });
+
+    return { imported, skipped };
+  }, [user, fetchLeads, toast]);
  
   return {
     leads,
@@ -765,6 +845,7 @@ export function useOutreach() {
     logActivity,
     isInOutreach,
     bulkLookupPhones,
+    bulkImportLeads,
     fetchLeads,
     refetch: fetchLeads,
   };

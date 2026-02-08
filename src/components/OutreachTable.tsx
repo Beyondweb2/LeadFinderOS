@@ -33,12 +33,16 @@ import {
   Star,
   RefreshCw,
   Loader2,
+  MessageSquare,
+  Upload,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
 import { supabase } from '@/integrations/supabase/client';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
+import { BulkWhatsAppDialog } from './BulkWhatsAppDialog';
+import { CSVImportDialog } from './CSVImportDialog';
 import type { OutreachLead, LeadStatus, NextActionType, Country } from '@/types/outreach';
 import { STATUS_OPTIONS } from '@/types/outreach';
 
@@ -55,6 +59,7 @@ interface OutreachTableProps {
   onBulkStatusChange?: (leadIds: string[], status: LeadStatus) => void;
   onMarkAsInterested?: (leadIds: string[]) => void;
   onRefreshLeads?: () => void;
+  onImportLeads?: (leads: Array<Partial<OutreachLead>>) => Promise<void>;
   showArchiveButton?: boolean;
   isArchiveView?: boolean;
   /** When true, hides status and next action editing (for simplified Outreach CRM view) */
@@ -79,6 +84,7 @@ export function OutreachTable({
   onBulkStatusChange,
   onMarkAsInterested,
   onRefreshLeads,
+  onImportLeads,
   showArchiveButton = true,
   isArchiveView = false,
   readOnly = false,
@@ -94,6 +100,8 @@ export function OutreachTable({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isRecoveringPhones, setIsRecoveringPhones] = useState(false);
   const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
+  const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
+  const [showImportDialog, setShowImportDialog] = useState(false);
 
   // Count leads missing phone numbers
   const leadsWithMissingPhones = useMemo(() => {
@@ -537,6 +545,18 @@ export function OutreachTable({
                 )}
               </>
             )}
+            {/* WhatsApp button for selected leads */}
+            {selectedIds.size > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowWhatsAppDialog(true)}
+                className="bg-background text-xs h-8"
+              >
+                <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                WhatsApp ({selectedIds.size})
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
@@ -546,6 +566,18 @@ export function OutreachTable({
               <Download className="h-3.5 w-3.5 mr-1.5" />
               <span className="hidden sm:inline">Export </span>CSV
             </Button>
+            {/* Import button */}
+            {!readOnly && onImportLeads && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowImportDialog(true)}
+                className="bg-background text-xs h-8"
+              >
+                <Upload className="h-3.5 w-3.5 mr-1.5" />
+                <span className="hidden sm:inline">Import</span>
+              </Button>
+            )}
             {/* Recover Missing Phones button - only show if there are leads missing phones */}
             {!readOnly && leadsWithMissingPhones.length > 0 && (
               <Button
@@ -802,6 +834,25 @@ export function OutreachTable({
           </div>
         )}
       </CardContent>
+
+      {/* WhatsApp Dialog */}
+      <BulkWhatsAppDialog
+        open={showWhatsAppDialog}
+        onOpenChange={setShowWhatsAppDialog}
+        leads={filteredAndSortedLeads
+          .filter(l => selectedIds.has(l.id))
+          .map(l => ({ phone: l.phone || '', business_name: l.business_name }))}
+      />
+
+      {/* CSV Import Dialog */}
+      {onImportLeads && (
+        <CSVImportDialog
+          open={showImportDialog}
+          onOpenChange={setShowImportDialog}
+          onImport={onImportLeads}
+          existingLeads={leads}
+        />
+      )}
     </Card>
   );
 }
