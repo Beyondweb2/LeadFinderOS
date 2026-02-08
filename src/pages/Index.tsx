@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { ContactDialog } from '@/components/ContactDialog';
@@ -10,7 +10,6 @@ import { useOutreach } from '@/hooks/useOutreach';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useFirstTimeUser } from '@/hooks/useFirstTimeUser';
 import { Flame, Target, Zap, Search } from 'lucide-react';
 import type { Lead, Country } from '@/types/lead';
 
@@ -25,31 +24,9 @@ const Index = () => {
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing } = useTrial();
   const { subscribed } = useSubscription();
-  const { isFirstTime, hasChecked: hasCheckedFirstTime, markFirstLoginComplete } = useFirstTimeUser();
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
-  const hasRunAutoSearch = useRef(false);
-
-  // Auto-search for first-time users (doesn't count toward trial limit)
-  useEffect(() => {
-    if (hasCheckedFirstTime && isFirstTime && !hasRunAutoSearch.current && !isLoading) {
-      hasRunAutoSearch.current = true;
-      
-      // Run automatic search with defaults - skip trial count since this is a demo
-      search({
-        keyword: 'Electrician',
-        location: 'London, UK',
-        radius: 10000, // 10km in meters
-        requirePhone: true,
-        country: 'UK' as Country,
-        deepSearch: false,
-      }, true); // skipTrialCount = true for auto-search
-      
-      // Mark first login as complete
-      markFirstLoginComplete();
-    }
-  }, [hasCheckedFirstTime, isFirstTime, isLoading, search, markFirstLoginComplete]);
 
   // Check if we should show upgrade prompt after searches (only for free trial users, not Stripe trialing)
   useEffect(() => {

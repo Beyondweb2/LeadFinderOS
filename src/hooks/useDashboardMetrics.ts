@@ -8,30 +8,30 @@
  const COMPLETION_REVENUE = 450;
  const TOTAL_CLIENT_VALUE = DRAFT_REVENUE + COMPLETION_REVENUE; // £499
  
- interface DashboardMetrics {
-   // Conversion metrics
-   interestRate: number;
-   responseToInterestRate: number;
-   interestedCount: number;
-   contactedCount: number;
-   
-   // Revenue metrics
-   totalRevenue: number;
-   draftRevenue: number;
-   completionRevenue: number;
-   fullyPaidClients: number;
-   paidForDraftCount: number;
-   
-   // Pipeline metrics
-   totalBusinessesAdded: number;
-   totalArchived: number;
-   totalActive: number;
-   
-   // Activity metrics
-   recordDay: { date: string; count: number } | null;
-   avgPerDayAllTime: number;
-   avgPerDayLast7Days: number;
- }
+interface DashboardMetrics {
+  // Conversion metrics
+  interestRate: number;
+  responseToInterestRate: number;
+  interestedCount: number;
+  contactedCount: number;
+  
+  // Revenue metrics
+  totalRevenue: number;
+  draftRevenue: number;
+  completionRevenue: number;
+  fullyPaidClients: number;
+  paidForDraftCount: number;
+  
+  // Pipeline metrics
+  totalBusinessesAdded: number;
+  addedToday: number;
+  addedYesterday: number;
+  
+  // Activity metrics
+  recordDay: { date: string; count: number } | null;
+  avgPerDayAllTime: number;
+  avgPerDayLast7Days: number;
+}
  
  interface DailyAddCount {
    date: string;
@@ -68,12 +68,22 @@
      fetchAllLeads();
    }, [fetchAllLeads]);
  
-   const metrics = useMemo<DashboardMetrics>(() => {
-     const totalBusinessesAdded = allLeads.length;
-     const totalArchived = allLeads.filter(l => l.is_archived).length;
-     const totalActive = allLeads.filter(l => !l.is_archived).length;
-     
-     // Conversion metrics
+    const metrics = useMemo<DashboardMetrics>(() => {
+      const totalBusinessesAdded = allLeads.length;
+      
+      // Calculate today and yesterday counts
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const todayStr = today.toISOString().split('T')[0];
+      
+      const yesterday = new Date(today);
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      
+      const addedToday = allLeads.filter(l => l.created_at.split('T')[0] === todayStr).length;
+      const addedYesterday = allLeads.filter(l => l.created_at.split('T')[0] === yesterdayStr).length;
+      
+      // Conversion metrics
      // "Interested" includes: interested, wants_draft, reviewing_draft, paid_for_draft, completed
      const interestedStatuses = ['interested', 'wants_draft', 'waiting', 'reviewing_draft', 'paid_for_draft', 'completed'];
      const interestedCount = allLeads.filter(l => interestedStatuses.includes(l.status)).length;
@@ -153,15 +163,15 @@
        draftRevenue,
        completionRevenue,
        fullyPaidClients: completedCount,
-       paidForDraftCount,
-       totalBusinessesAdded,
-       totalArchived,
-       totalActive,
-       recordDay,
-       avgPerDayAllTime,
-       avgPerDayLast7Days,
-     };
-   }, [allLeads]);
+        paidForDraftCount,
+        totalBusinessesAdded,
+        addedToday,
+        addedYesterday,
+        recordDay,
+        avgPerDayAllTime,
+        avgPerDayLast7Days,
+      };
+    }, [allLeads]);
  
    return {
      metrics,
