@@ -12,8 +12,8 @@ import {
 } from 'lucide-react';
 import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
-import step3Outreach from '@/assets/howto-step3-outreach.png';
-import step4Interested from '@/assets/howto-step7-potential.png';
+import step3Crm from '@/assets/howto-step3-crm.png';
+import step4TrackLeads from '@/assets/howto-step7-potential.png';
 
 const STEPS = [
   {
@@ -36,16 +36,16 @@ const STEPS = [
     number: 3,
     icon: MessageSquare,
     title: 'Reach Out & Track Progress',
-    description: 'In the Outreach CRM, copy phone numbers to text leads or call them directly. Update their status as you go - mark as "Contacted" after reaching out, then click "Interested" when someone responds positively.',
-    image: step3Outreach,
+    description: 'In the Outreach CRM, copy phone numbers to text leads or call them directly. Update their status as you go - mark as "Contacted" after reaching out, then click "Track" when someone responds positively.',
+    image: step3Crm,
     tip: 'A direct phone call often gets the best response. Prepare a short pitch and keep it friendly.',
   },
   {
     number: 4,
     icon: CheckCircle,
     title: 'Manage Your Pipeline',
-    description: 'The Interested page shows all leads who responded positively. Track their status, add notes, schedule follow-ups, and move them through your pipeline until they become paid clients.',
-    image: step4Interested,
+    description: 'The Track Leads page shows all leads who responded positively. Track their status, add notes, schedule follow-ups, and move them through your pipeline until they become paid clients.',
+    image: step4TrackLeads,
     tip: 'Set next actions and dates to stay organized. Use notes to remember conversation details.',
   },
 ];
