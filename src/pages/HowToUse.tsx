@@ -13,7 +13,7 @@ import {
 import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
 import step3Crm from '@/assets/howto-step3-crm.png';
-import step4TrackLeads from '@/assets/howto-step7-potential.png';
+import step4TrackLeads from '@/assets/howto-step4-trackleads.png';
 
 const STEPS = [
   {
@@ -43,7 +43,7 @@ const STEPS = [
   {
     number: 4,
     icon: CheckCircle,
-    title: 'Manage Your Pipeline',
+    title: 'Track Leads',
     description: 'The Track Leads page shows all leads who responded positively. Track their status, add notes, schedule follow-ups, and move them through your pipeline until they become paid clients.',
     image: step4TrackLeads,
     tip: 'Set next actions and dates to stay organized. Use notes to remember conversation details.',
