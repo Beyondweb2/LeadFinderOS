@@ -103,8 +103,7 @@ const FEATURES = [
     title: 'Contact Tracking',
     description: 'Manage potential clients from first contact to closed deal with status updates and notes.',
     image: featureContactTracking,
-    imageScale: 'scale-150',
-    imagePosition: 'object-[center_40%]',
+    imageScale: 'scale-100',
   },
   {
     icon: FileText,
@@ -654,7 +653,7 @@ const Landing = () => {
                             <img 
                               src={feature.image} 
                               alt={feature.title}
-                              className={`w-full h-full object-cover ${feature.imageScale || 'scale-100'} ${feature.imagePosition || 'object-top'}`}
+                              className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-100'}`}
                             />
                           </div>
                         </div>
@@ -708,7 +707,7 @@ const Landing = () => {
                       <img 
                         src={feature.image} 
                         alt={feature.title}
-                        className={`w-full h-40 sm:h-48 object-cover transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'} ${feature.imagePosition || 'object-top'}`}
+                        className={`w-full h-40 sm:h-48 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
                       />
                     </div>
                     
