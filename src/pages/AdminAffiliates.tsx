@@ -76,7 +76,7 @@ interface Conversion {
   created_at: string;
 }
 
-const SITE_URL = 'https://leadfinderapp.lovable.app';
+const SITE_URL = 'https://leadfinder.io';
 
 export default function AdminAffiliates() {
   const { user } = useAuth();
