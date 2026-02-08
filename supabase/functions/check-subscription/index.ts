@@ -100,22 +100,28 @@
      let subscriptionEnd: string | null = null;
       let subscriptionStatus: string | null = null;
  
-     if (hasActiveSub) {
-        subscriptionEnd = new Date(validSubscription.current_period_end * 1000).toISOString();
+      if (hasActiveSub && validSubscription) {
+        // Safely handle the timestamp conversion
+        const periodEnd = validSubscription.current_period_end;
+        if (periodEnd && typeof periodEnd === 'number') {
+          subscriptionEnd = new Date(periodEnd * 1000).toISOString();
+        }
         subscriptionStatus = validSubscription.status;
        
-        const priceProduct = validSubscription.items.data[0].price.product;
-       productId = typeof priceProduct === 'string' ? priceProduct : priceProduct.id;
+        const priceProduct = validSubscription.items.data[0]?.price?.product;
+        if (priceProduct) {
+          productId = typeof priceProduct === 'string' ? priceProduct : priceProduct.id;
+        }
        
-       logStep("Active subscription found", { 
+        logStep("Active subscription found", { 
           subscriptionId: validSubscription.id, 
-         endDate: subscriptionEnd,
+          endDate: subscriptionEnd,
           productId,
           status: subscriptionStatus
-       });
-     } else {
-       logStep("No active subscription found");
-     }
+        });
+      } else {
+        logStep("No active subscription found");
+      }
  
      return new Response(JSON.stringify({
        subscribed: hasActiveSub,
