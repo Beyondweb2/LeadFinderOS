@@ -54,77 +54,94 @@
        { auth: { persistSession: false } }
      );
 
-      // Handle checkout.session.completed for affiliate tracking
-      if (event.type === "checkout.session.completed") {
-        const session = event.data.object as Stripe.Checkout.Session;
-        logStep("Processing checkout.session.completed", { 
-          sessionId: session.id,
-          clientReferenceId: session.client_reference_id,
-          metadata: session.metadata
-        });
-
-        // Check if this is a paid checkout (not a trial-only)
-        if (session.payment_status === 'paid' && session.amount_total && session.amount_total > 0) {
-          const userId = session.client_reference_id;
-          const affiliateCode = session.metadata?.affiliate_code;
+      // Handle invoice.paid for affiliate tracking (first payment after trial)
+      if (event.type === "invoice.paid") {
+        const invoice = event.data.object as Stripe.Invoice;
+        
+        // Only process if this is a subscription invoice with actual payment
+        if (invoice.subscription && invoice.amount_paid && invoice.amount_paid > 0) {
+          const customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id;
           
-          if (userId && affiliateCode) {
-            logStep("First payment with affiliate code", { userId, affiliateCode });
-            
-            // Check if this user already has an affiliate conversion
-            const { data: existingConversion } = await supabaseAdmin
-              .from('affiliate_conversions')
-              .select('id')
-              .eq('user_id', userId)
-              .limit(1);
-            
-            if (!existingConversion || existingConversion.length === 0) {
-              // Find the affiliate by code
-              const { data: affiliate } = await supabaseAdmin
-                .from('affiliates')
-                .select('id, commission_rate')
-                .eq('code', affiliateCode)
-                .eq('is_active', true)
-                .single();
+          if (customerId) {
+            // Get customer email to find user
+            const customer = await stripe.customers.retrieve(customerId);
+            if (!customer.deleted && customer.email) {
+              // Find user by email
+              const { data: users } = await supabaseAdmin.auth.admin.listUsers();
+              const user = users?.users.find(u => u.email === customer.email);
               
-              if (affiliate) {
-                const commissionAmount = Math.floor(session.amount_total * Number(affiliate.commission_rate));
+              if (user) {
+                logStep("Processing invoice.paid for affiliate", { userId: user.id, amount: invoice.amount_paid });
                 
-                // Create affiliate conversion
-                const { error: conversionError } = await supabaseAdmin
+                // Check if this user already has an affiliate conversion
+                const { data: existingConversion } = await supabaseAdmin
                   .from('affiliate_conversions')
-                  .insert({
-                    affiliate_id: affiliate.id,
-                    user_id: userId,
-                    first_payment_amount: session.amount_total,
-                    commission_amount: commissionAmount,
-                    currency: session.currency || 'usd',
-                    status: 'pending',
-                    stripe_payment_intent_id: typeof session.payment_intent === 'string' 
-                      ? session.payment_intent 
-                      : session.payment_intent?.id,
-                  });
+                  .select('id')
+                  .eq('user_id', user.id)
+                  .limit(1);
                 
-                if (conversionError) {
-                  logStep("Failed to create affiliate conversion", { error: conversionError.message });
+                if (!existingConversion || existingConversion.length === 0) {
+                  // Get affiliate code from user_trials
+                  const { data: trialData } = await supabaseAdmin
+                    .from('user_trials')
+                    .select('affiliate_code')
+                    .eq('user_id', user.id)
+                    .single();
+                  
+                  const affiliateCode = trialData?.affiliate_code;
+                  
+                  if (affiliateCode) {
+                    // Find the affiliate by code
+                    const { data: affiliate } = await supabaseAdmin
+                      .from('affiliates')
+                      .select('id, commission_rate')
+                      .eq('code', affiliateCode)
+                      .eq('is_active', true)
+                      .single();
+                    
+                    if (affiliate) {
+                      const commissionAmount = Math.floor(invoice.amount_paid * Number(affiliate.commission_rate));
+                      
+                      // Create affiliate conversion
+                      const { error: conversionError } = await supabaseAdmin
+                        .from('affiliate_conversions')
+                        .insert({
+                          affiliate_id: affiliate.id,
+                          user_id: user.id,
+                          first_payment_amount: invoice.amount_paid,
+                          commission_amount: commissionAmount,
+                          currency: invoice.currency || 'gbp',
+                          status: 'pending',
+                          stripe_payment_intent_id: typeof invoice.payment_intent === 'string' 
+                            ? invoice.payment_intent 
+                            : invoice.payment_intent?.id,
+                        });
+                      
+                      if (conversionError) {
+                        logStep("Failed to create affiliate conversion", { error: conversionError.message });
+                      } else {
+                        logStep("Affiliate conversion created", { 
+                          affiliateId: affiliate.id, 
+                          amount: invoice.amount_paid,
+                          commission: commissionAmount
+                        });
+                      }
+                      
+                      // Update user_trials.paid_at
+                      await supabaseAdmin
+                        .from('user_trials')
+                        .update({ paid_at: new Date().toISOString() })
+                        .eq('user_id', user.id);
+                    } else {
+                      logStep("Affiliate not found or inactive", { affiliateCode });
+                    }
+                  } else {
+                    logStep("No affiliate code for user", { userId: user.id });
+                  }
                 } else {
-                  logStep("Affiliate conversion created", { 
-                    affiliateId: affiliate.id, 
-                    amount: session.amount_total,
-                    commission: commissionAmount
-                  });
+                  logStep("User already has affiliate conversion, skipping", { userId: user.id });
                 }
-                
-                // Update user_trials.paid_at
-                await supabaseAdmin
-                  .from('user_trials')
-                  .update({ paid_at: new Date().toISOString() })
-                  .eq('user_id', userId);
-              } else {
-                logStep("Affiliate not found or inactive", { affiliateCode });
               }
-            } else {
-              logStep("User already has affiliate conversion, skipping", { userId });
             }
           }
         }
