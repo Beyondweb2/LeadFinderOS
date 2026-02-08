@@ -1,10 +1,15 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { checkRateLimit, rateLimitHeaders } from "../_shared/rate-limiter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Rate limit: 20 requests per minute for admin operations
+const RATE_LIMIT = 20;
+const RATE_WINDOW_MS = 60000;
 
 const logStep = (step: string, details?: unknown) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
@@ -52,6 +57,23 @@ serve(async (req) => {
     }
 
     logStep("Admin access confirmed");
+
+    // Apply rate limiting for admin operations
+    const rateLimitResult = checkRateLimit(`admin:${userId}`, RATE_LIMIT, RATE_WINDOW_MS);
+    if (!rateLimitResult.allowed) {
+      logStep("Rate limit exceeded", { userId });
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please slow down." }),
+        {
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            ...rateLimitHeaders(rateLimitResult, RATE_LIMIT)
+          },
+          status: 429,
+        }
+      );
+    }
 
     const { action, ...params } = await req.json();
 
@@ -207,9 +229,11 @@ serve(async (req) => {
         throw new Error(`Unknown action: ${action}`);
     }
   } catch (error) {
+    // Log detailed error server-side only
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    return new Response(JSON.stringify({ error: errorMessage }), {
+    // Return generic error to client - don't expose internal details
+    return new Response(JSON.stringify({ error: "Unable to process request. Please try again." }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
     });

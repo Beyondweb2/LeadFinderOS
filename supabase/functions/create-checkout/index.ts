@@ -1,16 +1,21 @@
- import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
- import Stripe from "https://esm.sh/stripe@18.5.0";
- import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
- 
- const corsHeaders = {
-   "Access-Control-Allow-Origin": "*",
-   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
- };
- 
- const logStep = (step: string, details?: unknown) => {
-   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
-   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
- };
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@18.5.0";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { checkRateLimit, rateLimitHeaders } from "../_shared/rate-limiter.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+};
+
+// Rate limit: 5 requests per minute (prevents checkout spam)
+const RATE_LIMIT = 5;
+const RATE_WINDOW_MS = 60000;
+
+const logStep = (step: string, details?: unknown) => {
+  const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
+  console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
+};
  
  serve(async (req) => {
    if (req.method === "OPTIONS") {
@@ -37,10 +42,27 @@
      const token = authHeader.replace("Bearer ", "");
      const { data } = await supabaseClient.auth.getUser(token);
      const user = data.user;
-     if (!user?.email) throw new Error("User not authenticated or email not available");
-     logStep("User authenticated", { userId: user.id, email: user.email });
- 
-     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+      if (!user?.email) throw new Error("User not authenticated or email not available");
+      logStep("User authenticated", { userId: user.id, email: user.email });
+
+      // Apply rate limiting (5 requests/minute per user)
+      const rateLimitResult = checkRateLimit(`checkout:${user.id}`, RATE_LIMIT, RATE_WINDOW_MS);
+      if (!rateLimitResult.allowed) {
+        logStep("Rate limit exceeded", { userId: user.id });
+        return new Response(
+          JSON.stringify({ error: "Too many checkout attempts. Please wait a moment and try again." }),
+          {
+            headers: { 
+              ...corsHeaders, 
+              "Content-Type": "application/json",
+              ...rateLimitHeaders(rateLimitResult, RATE_LIMIT)
+            },
+            status: 429,
+          }
+        );
+      }
+
+      const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
      
      // Check for existing customer
      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
