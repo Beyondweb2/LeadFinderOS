@@ -38,26 +38,27 @@ export function OutreachMobileCard({
 }: OutreachMobileCardProps) {
   return (
     <div 
-      className={`p-3 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''}`}
+      className={`py-2 px-2.5 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''}`}
       onClick={onLeadClick}
     >
       {/* Row 1: Checkbox + Business Name */}
-      <div className="flex items-center gap-2 mb-2">
+      <div className="flex items-center gap-1.5 mb-1.5">
         <div onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={isSelected}
             onCheckedChange={onSelect}
             aria-label={`Select ${lead.business_name}`}
+            className="h-4 w-4"
           />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             {lead.country === 'Australia' && (
-              <span className="text-xs" title="Australia">🇦🇺</span>
+              <span className="text-[10px]" title="Australia">🇦🇺</span>
             )}
-            <span className="font-medium text-sm truncate">{lead.business_name}</span>
+            <span className="font-medium text-xs truncate">{lead.business_name}</span>
             {lead.is_potential_work && (
-              <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+              <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
             )}
           </div>
         </div>
@@ -65,13 +66,13 @@ export function OutreachMobileCard({
 
       {/* Row 2: Status + Next Action */}
       {!readOnly && (
-        <div className="flex items-center gap-2 mb-3" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 mb-2" onClick={(e) => e.stopPropagation()}>
           <Select
             value={lead.status}
             onValueChange={onStatusChange}
           >
             <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
-              <OutreachStatusBadge status={lead.status} />
+              <OutreachStatusBadge status={lead.status} compact />
             </SelectTrigger>
             <SelectContent>
               {STATUS_OPTIONS.map((opt) => (
@@ -85,20 +86,21 @@ export function OutreachMobileCard({
           {lead.next_action && (
             <NextActionBadge 
               action={lead.next_action} 
-              date={lead.next_action_date} 
+              date={lead.next_action_date}
+              compact
             />
           )}
         </div>
       )}
 
-      {/* Row 3: Action Buttons */}
-      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      {/* Row 3: Action Buttons - Compact */}
+      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
         {/* Google Maps */}
         {lead.google_maps_url && (
           <Button
             variant="outline"
             size="sm"
-            className="h-8 px-3 flex-1"
+            className="h-7 px-2 text-xs flex-1"
             asChild
           >
             <a
@@ -106,7 +108,7 @@ export function OutreachMobileCard({
               target="_blank"
               rel="noopener noreferrer"
             >
-              <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+              <ExternalLink className="h-3 w-3 mr-1" />
               Maps
             </a>
           </Button>
@@ -117,10 +119,10 @@ export function OutreachMobileCard({
           <Button
             variant="outline"
             size="sm"
-            className="h-8 px-3 flex-1 text-green-500 border-green-500/30 hover:bg-green-500/10 hover:text-green-400"
+            className="h-7 px-2 text-xs flex-1 text-green-500 border-green-500/30 hover:bg-green-500/10 hover:text-green-400"
             onClick={onWhatsAppClick}
           >
-            <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+            <MessageSquare className="h-3 w-3 mr-1" />
             WhatsApp
           </Button>
         )}
@@ -131,20 +133,20 @@ export function OutreachMobileCard({
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 px-3 text-yellow-500 cursor-default"
+              className="h-7 px-2 text-xs text-yellow-500 cursor-default"
               disabled
             >
-              <Star className="h-3.5 w-3.5 mr-1 fill-yellow-500" />
+              <Star className="h-3 w-3 mr-0.5 fill-yellow-500" />
               Tracked
             </Button>
           ) : (
             <Button
               variant="outline"
               size="sm"
-              className="h-8 px-3 flex-1 text-yellow-500 border-yellow-500/30 hover:bg-yellow-500/10 hover:text-yellow-400"
+              className="h-7 px-2 text-xs flex-1 text-yellow-500 border-yellow-500/30 hover:bg-yellow-500/10 hover:text-yellow-400"
               onClick={onTrack}
             >
-              <Star className="h-3.5 w-3.5 mr-1.5" />
+              <Star className="h-3 w-3 mr-1" />
               Track
             </Button>
           )

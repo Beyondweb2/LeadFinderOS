@@ -52,16 +52,16 @@ const Outreach = () => {
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      {/* Page Header */}
+    <div className="space-y-3 sm:space-y-6">
+      {/* Page Header - Compact on mobile */}
       <div className="text-center sm:text-left">
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
-        <p className="text-sm sm:text-base text-muted-foreground max-w-lg">
+        <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
+        <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
           Cold call businesses or copy phone numbers for texting. Mark leads as "Contacted" once you've reached out, then track promising ones in your pipeline.
         </p>
-        {/* Workflow Tip */}
-        <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border/50 max-w-lg">
-          <p className="text-xs text-muted-foreground">
+        {/* Workflow Tip - More compact on mobile */}
+        <div className="mt-2 sm:mt-3 p-2 sm:p-3 rounded-lg bg-muted/50 border border-border/50 max-w-lg">
+          <p className="text-[10px] sm:text-xs text-muted-foreground">
             <span className="font-medium text-foreground">💡 Workflow:</span> Select leads → Copy numbers or call directly → Mark as Contacted → Move promising leads to{' '}
             <Link to="/potential-work" className="text-primary hover:underline">Track Leads</Link>
           </p>
