@@ -53,11 +53,12 @@ const Dashboard = () => {
              contactedCount={metrics.contactedCount}
              totalBusinessesAdded={metrics.totalBusinessesAdded}
            />
-           <PipelineCard
-             totalBusinessesAdded={metrics.totalBusinessesAdded}
-             totalArchived={metrics.totalArchived}
-             totalActive={metrics.totalActive}
-           />
+          <PipelineCard
+            totalBusinessesAdded={metrics.totalBusinessesAdded}
+            addedToday={metrics.addedToday}
+            addedYesterday={metrics.addedYesterday}
+            avgPerDay={metrics.avgPerDayAllTime}
+          />
            <ActivityCard
              recordDay={metrics.recordDay}
              avgPerDayAllTime={metrics.avgPerDayAllTime}
