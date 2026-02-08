@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
@@ -111,6 +111,9 @@ export function OutreachTable({
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [lastWhatsAppLeadId, setLastWhatsAppLeadId] = useState<string | null>(null);
 
+  // When a new lead arrives, always bring the user back to page 1 so it's visible immediately.
+  const prevNewestLeadIdRef = useRef<string | null>(null);
+
   const tableStateKey = user?.id
     ? `leadfinder_outreach_table_state:${user.id}`
     : 'leadfinder_outreach_table_state';
@@ -118,6 +121,10 @@ export function OutreachTable({
   const lastWhatsAppKey = user?.id
     ? `leadfinder_last_whatsapp:${user.id}`
     : 'leadfinder_last_whatsapp';
+
+  const forcePage1Key = user?.id
+    ? `leadfinder_outreach_force_page1:${user.id}`
+    : 'leadfinder_outreach_force_page1';
 
   // Helper to read from sessionStorage with localStorage fallback
   const readStoredState = () => {
@@ -151,13 +158,28 @@ export function OutreachTable({
     const parsed = readStoredState();
     if (!parsed) return;
 
+    // If a lead was just added (from Find Leads), always reset to page 1 so it shows immediately.
+    let shouldForcePage1 = false;
+    try {
+      shouldForcePage1 = !!(sessionStorage.getItem(forcePage1Key) || localStorage.getItem(forcePage1Key));
+      if (shouldForcePage1) {
+        sessionStorage.removeItem(forcePage1Key);
+        localStorage.removeItem(forcePage1Key);
+      }
+    } catch {
+      // ignore
+    }
+
     if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery);
     if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
     if (parsed.countryFilter) setCountryFilter(parsed.countryFilter);
     if (parsed.sortField) setSortField(parsed.sortField);
     if (parsed.sortDirection) setSortDirection(parsed.sortDirection);
-    if (typeof parsed.currentPage === 'number' && parsed.currentPage > 0) setCurrentPage(parsed.currentPage);
-
+    if (shouldForcePage1) {
+      setCurrentPage(1);
+    } else if (typeof parsed.currentPage === 'number' && parsed.currentPage > 0) {
+      setCurrentPage(parsed.currentPage);
+    }
     // Restore last WhatsApp lead highlight
     try {
       const lastWA = sessionStorage.getItem(lastWhatsAppKey) || localStorage.getItem(lastWhatsAppKey);
@@ -526,6 +548,30 @@ export function OutreachTable({
 
     return result;
   }, [leads, searchQuery, statusFilter, countryFilter, sortField, sortDirection]);
+
+  const newestLeadId = useMemo(() => {
+    if (leads.length === 0) return null;
+    let newest = leads[0];
+    for (let i = 1; i < leads.length; i++) {
+      const candidate = leads[i];
+      if (new Date(candidate.created_at).getTime() > new Date(newest.created_at).getTime()) {
+        newest = candidate;
+      }
+    }
+    return newest.id;
+  }, [leads]);
+
+  useEffect(() => {
+    if (!newestLeadId) return;
+    const prev = prevNewestLeadIdRef.current;
+
+    // Only jump when the newest lead actually changed (i.e. a new lead was inserted).
+    if (prev && prev !== newestLeadId) {
+      setCurrentPage(1);
+    }
+
+    prevNewestLeadIdRef.current = newestLeadId;
+  }, [newestLeadId]);
 
   const totalPages = Math.ceil(filteredAndSortedLeads.length / ITEMS_PER_PAGE);
 

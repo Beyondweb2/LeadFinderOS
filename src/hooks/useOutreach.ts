@@ -201,6 +201,15 @@ export function useOutreach() {
     const newLead = data as OutreachLead;
     setLeads((prev) => [newLead, ...prev]);
 
+    // If the user navigates straight to Outreach after adding, ensure they land on page 1.
+    try {
+      const key = user?.id ? `leadfinder_outreach_force_page1:${user.id}` : 'leadfinder_outreach_force_page1';
+      sessionStorage.setItem(key, '1');
+      localStorage.setItem(key, '1');
+    } catch {
+      // ignore
+    }
+
     // Track in history (so we remember even if deleted later)
     await supabase.from('outreach_history').insert({
       user_id: user.id,
