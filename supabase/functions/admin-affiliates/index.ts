@@ -184,6 +184,25 @@ serve(async (req) => {
         });
       }
 
+      case 'delete': {
+        const { id } = params;
+        if (!id) throw new Error("id is required");
+
+        // Only delete the affiliate, keep conversions for record-keeping
+        const { error } = await supabaseAdmin
+          .from('affiliates')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+        logStep("Affiliate deleted", { id });
+
+        return new Response(JSON.stringify({ success: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }
