@@ -286,6 +286,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
 const PotentialWorkPage = () => {
   const {
     leads,
+    archivedLeads,
     isLoading,
     updateStatus,
     updateNextAction,
@@ -299,12 +300,16 @@ const PotentialWorkPage = () => {
 
   // Filter to only show interested leads (potential work) - uses is_potential_work flag OR interested statuses
   // This ensures leads marked as interested from the CRM appear here
+  // Must check BOTH active leads and archived leads (since archived leads can also be potential work)
   const potentialWorkLeads = useMemo(() => {
     const interestedStatuses: LeadStatus[] = ['interested', 'wants_draft', 'on_hold', 'reviewing_draft', 'paid_for_draft'];
     
+    // Combine active and archived leads for filtering
+    const allLeads = [...leads, ...archivedLeads];
+    
     // Include leads that have is_potential_work=true OR have an interested status
     // Exclude completed status as those go to Paid Clients page
-    let result = leads.filter((lead) => 
+    let result = allLeads.filter((lead) => 
       (lead.is_potential_work || interestedStatuses.includes(lead.status)) && 
       lead.status !== 'completed'
     );
@@ -319,7 +324,7 @@ const PotentialWorkPage = () => {
     }
     
     return result;
-  }, [leads, searchQuery]);
+  }, [leads, archivedLeads, searchQuery]);
 
   if (isLoading) {
     return (
