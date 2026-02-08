@@ -174,7 +174,7 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
     <div ref={ref} className="text-center">
-      <div className="text-xl sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">
+      <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">
         {count.toLocaleString()}{suffix}
       </div>
       <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">{label}</div>
@@ -469,16 +469,16 @@ const Landing = () => {
             </Button>
           </div>
           
-          {/* Stats bar - more compact on mobile */}
-          <div className="mt-8 sm:mt-16 md:mt-20 flex flex-wrap justify-center gap-6 sm:gap-12 md:gap-24">
-            <CountUpStat target={100000} suffix="+" label="Businesses Found" />
+          {/* Stats bar - all 3 on one line on mobile */}
+          <div className="mt-8 sm:mt-16 md:mt-20 flex justify-center items-center gap-4 sm:gap-12 md:gap-24">
+            <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
-              <div className="text-xl sm:text-3xl md:text-5xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-lg sm:text-3xl md:text-5xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-xl sm:text-3xl md:text-5xl font-bold text-gradient-primary tracking-tight">∞</div>
-              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Unlimited Searches</div>
+              <div className="text-lg sm:text-3xl md:text-5xl font-bold text-gradient-primary tracking-tight">∞</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Unlimited</div>
             </div>
           </div>
         </div>
