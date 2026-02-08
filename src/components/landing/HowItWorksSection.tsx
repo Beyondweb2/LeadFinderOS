@@ -76,26 +76,26 @@ const MobileStepCard = ({
   onImageClick: (src: string, title: string) => void;
 }) => (
   <div className="flex flex-col items-center text-center px-1">
-    {/* Step number badge - lighter style */}
-    <div 
-      className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-semibold text-sm mb-3"
-      style={{ 
-        background: 'hsl(210 100% 50% / 0.15)',
-        color: 'hsl(210 100% 60%)',
-        border: '1px solid hsl(210 100% 50% / 0.3)'
-      }}
-    >
-      {index + 1}
+    {/* Step number and title inline, centered */}
+    <div className="flex items-center justify-center gap-2 mb-2">
+      <div 
+        className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-semibold text-sm shrink-0"
+        style={{ 
+          background: 'hsl(210 100% 50% / 0.15)',
+          color: 'hsl(210 100% 60%)',
+          border: '1px solid hsl(210 100% 50% / 0.3)'
+        }}
+      >
+        {index + 1}
+      </div>
+      <h3 className="text-xl font-bold tracking-tight">{step.title}</h3>
     </div>
-    
-    {/* Title only - no icon on mobile */}
-    <h3 className="text-xl font-bold tracking-tight mb-2">{step.title}</h3>
     
     <p className="text-muted-foreground text-sm leading-relaxed mb-4 max-w-xs">
       {step.description}
     </p>
     
-    {/* Bigger Image - no badge on mobile */}
+    {/* Image */}
     <div 
       className="relative group cursor-pointer w-full"
       onClick={() => onImageClick(step.image, step.title)}
