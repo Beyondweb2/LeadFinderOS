@@ -1,38 +1,68 @@
+import { useMemo, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
+import { useAuth } from '@/hooks/useAuth';
+import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
+import { usePersistedScroll } from '@/hooks/usePersistedScroll';
 
 interface AppLayoutProps {
   children: React.ReactNode;
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  const { user } = useAuth();
+  const location = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
+
+  const pathKey = useMemo(
+    () => `${location.pathname}${location.search}${location.hash}`,
+    [location.pathname, location.search, location.hash]
+  );
+
+  // Persist last visited in-app route (so we can resume after idle refresh)
+  usePersistLastRoute({
+    userId: user?.id,
+    path: pathKey,
+    enabled: !!user,
+  });
+
+  // Persist scroll position of the main content container per route
+  usePersistedScroll({
+    containerRef: mainRef,
+    userId: user?.id,
+    routeKey: pathKey,
+    enabled: !!user,
+  });
+
   return (
     <SidebarProvider defaultOpen={true}>
       <div className="min-h-screen flex w-full bg-background">
         {/* Background glow effect */}
-        <div 
+        <div
           className="fixed inset-0 pointer-events-none opacity-30"
           style={{ background: 'var(--gradient-glow)' }}
         />
-        
+
         {/* Desktop sidebar - hidden on mobile */}
         <div className="hidden md:block">
           <AppSidebar />
         </div>
-        
+
         {/* Main content area */}
         <div className="flex-1 flex flex-col min-w-0 relative z-10">
-          <main className="flex-1 overflow-auto pb-20 md:pb-0">
+          <main ref={mainRef} className="flex-1 overflow-auto pb-20 md:pb-0">
             <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
               {children}
             </div>
           </main>
         </div>
-        
+
         {/* Mobile bottom navigation */}
         <MobileBottomNav />
       </div>
     </SidebarProvider>
   );
 }
+
