@@ -536,9 +536,9 @@ const Landing = () => {
             {/* New Way */}
             <ScrollReveal delay={200} direction="right">
               <div className="relative group">
-                {/* Glow effect - fixed brand blue */}
+                {/* Glow effect - subtle */}
                 <div 
-                  className="absolute -inset-2 rounded-3xl blur-xl opacity-60 group-hover:opacity-80 transition-opacity duration-500"
+                  className="absolute -inset-2 rounded-3xl blur-xl opacity-40 group-hover:opacity-50 transition-opacity duration-300"
                   style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.25), hsl(210 100% 50% / 0.1), hsl(220 80% 45% / 0.1))' }}
                 />
                 <div 
@@ -689,13 +689,13 @@ const Landing = () => {
               {FEATURES.map((feature, index) => (
                 <ScrollReveal key={feature.title} delay={index * 100}>
                   <Card
-                    className="group relative glass-panel-strong border-white/[0.06] transition-all duration-500 overflow-hidden h-full hover:border-[hsl(210_100%_50%_/_0.3)] cursor-pointer"
+                    className="group relative glass-panel-strong border-white/[0.06] transition-all duration-300 overflow-hidden h-full hover:border-[hsl(210_100%_50%_/_0.2)] cursor-pointer"
                     onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
                   >
-                    {/* Hover glow - fixed brand blue */}
+                    {/* Hover glow - subtle */}
                     <div 
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-                      style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.05), transparent)' }}
+                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                      style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.03), transparent)' }}
                     />
                     
                     {/* Screenshot image */}
@@ -708,7 +708,7 @@ const Landing = () => {
                       <img 
                         src={feature.image} 
                         alt={feature.title}
-                        className={`w-full h-40 sm:h-48 object-cover transition-transform duration-500 group-hover:scale-105 ${feature.imageScale || 'scale-100'} ${feature.imagePosition || 'object-top'}`}
+                        className={`w-full h-40 sm:h-48 object-cover transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'} ${feature.imagePosition || 'object-top'}`}
                       />
                     </div>
                     
