@@ -29,7 +29,8 @@ import {
   ClipboardList,
   MessageSquare,
   Clock,
-  Send
+  Send,
+  PhoneOff
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -258,13 +259,29 @@ export function OutreachLeadDialog({
                         <Phone className="h-3 w-3" />
                         {lead.phone}
                       </a>
-                      <button
-                        onClick={() => setShowWhatsAppDialog(true)}
-                        className="text-green-500 hover:text-green-400 p-1 rounded hover:bg-muted"
-                        title="Send WhatsApp message"
-                      >
-                        <MessageSquare className="h-4 w-4" />
-                      </button>
+                      {lead.status !== 'no_whatsapp' ? (
+                        <>
+                          <button
+                            onClick={() => setShowWhatsAppDialog(true)}
+                            className="text-green-500 hover:text-green-400 p-1 rounded hover:bg-muted"
+                            title="Send WhatsApp message"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </button>
+                          <button
+                            onClick={() => onUpdateStatus(lead.id, 'no_whatsapp')}
+                            className="text-muted-foreground hover:text-destructive p-1 rounded hover:bg-muted"
+                            title="Mark as No WhatsApp"
+                          >
+                            <PhoneOff className="h-4 w-4" />
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                          <PhoneOff className="h-3.5 w-3.5" />
+                          No WhatsApp
+                        </span>
+                      )}
                     </div>
                   ) : (
                     <span className="text-muted-foreground">—</span>

@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ExternalLink, MessageSquare, Star } from 'lucide-react';
+import { ExternalLink, MessageSquare, Star, PhoneOff } from 'lucide-react';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
@@ -115,16 +115,33 @@ export function OutreachMobileCard({
         )}
 
         {/* WhatsApp */}
-        {lead.phone && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 px-2 text-xs flex-1 text-green-500 border-green-500/30 hover:bg-green-500/10 hover:text-green-400"
-            onClick={onWhatsAppClick}
-          >
-            <MessageSquare className="h-3 w-3 mr-1" />
-            WhatsApp
-          </Button>
+        {lead.phone && lead.status !== 'no_whatsapp' && (
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs flex-1 text-green-500 border-green-500/30 hover:bg-green-500/10 hover:text-green-400"
+              onClick={onWhatsAppClick}
+            >
+              <MessageSquare className="h-3 w-3 mr-1" />
+              WhatsApp
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs text-muted-foreground border-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
+              onClick={() => onStatusChange('no_whatsapp')}
+              title="Mark as No WhatsApp"
+            >
+              <PhoneOff className="h-3 w-3" />
+            </Button>
+          </>
+        )}
+        {lead.phone && lead.status === 'no_whatsapp' && (
+          <span className="h-7 px-2 text-xs flex items-center gap-1 text-muted-foreground">
+            <PhoneOff className="h-3 w-3" />
+            No WA
+          </span>
         )}
 
         {/* Track Button */}
