@@ -65,54 +65,39 @@ const Dashboard = () => {
 
       {/* Quick Links */}
       <section>
-         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Quick Actions</h2>
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
+         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3 text-center sm:text-left">Quick Actions</h2>
+        <div className="grid gap-2 sm:gap-4 grid-cols-3 max-w-md sm:max-w-none mx-auto">
           <Card className="bg-card/50 border-border/50 hover:bg-card/70 transition-colors cursor-pointer">
-            <Link to="/">
-               <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
-                 <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 w-fit mb-1.5 sm:mb-2">
-                   <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-                 </div>
-                <CardTitle className="text-sm sm:text-base">Find Leads</CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  <span className="hidden sm:inline">Find businesses without websites in your area.</span>
-                  <span className="sm:hidden">Search for businesses</span>
-                </p>
-              </CardContent>
+            <Link to="/" className="block p-2 sm:p-4 md:p-6">
+              <div className="flex flex-col items-center sm:items-start text-center sm:text-left gap-1 sm:gap-2">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10">
+                  <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                </div>
+                <span className="text-xs sm:text-base font-medium">Find</span>
+                <span className="hidden sm:block text-xs text-muted-foreground">Search for businesses</span>
+              </div>
             </Link>
           </Card>
           <Card className="bg-card/50 border-border/50 hover:bg-card/70 transition-colors cursor-pointer">
-            <Link to="/templates">
-               <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
-                 <div className="p-1.5 sm:p-2 rounded-lg bg-amber-500/10 w-fit mb-1.5 sm:mb-2">
-                   <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500" />
-                 </div>
-                <CardTitle className="text-sm sm:text-base">Templates</CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  <span className="hidden sm:inline">Customize your outreach scripts.</span>
-                  <span className="sm:hidden">Edit scripts</span>
-                </p>
-              </CardContent>
+            <Link to="/templates" className="block p-2 sm:p-4 md:p-6">
+              <div className="flex flex-col items-center sm:items-start text-center sm:text-left gap-1 sm:gap-2">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-amber-500/10">
+                  <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500" />
+                </div>
+                <span className="text-xs sm:text-base font-medium">Templates</span>
+                <span className="hidden sm:block text-xs text-muted-foreground">Edit scripts</span>
+              </div>
             </Link>
           </Card>
           <Card className="bg-card/50 border-border/50 hover:bg-card/70 transition-colors cursor-pointer">
-            <Link to="/outreach">
-               <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
-                 <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/10 w-fit mb-1.5 sm:mb-2">
-                   <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
-                 </div>
-                <CardTitle className="text-sm sm:text-base">Outreach</CardTitle>
-              </CardHeader>
-              <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
-                <p className="text-xs sm:text-sm text-muted-foreground">
-                  <span className="hidden sm:inline">Manage leads and track progress.</span>
-                  <span className="sm:hidden">Manage leads</span>
-                </p>
-              </CardContent>
+            <Link to="/outreach" className="block p-2 sm:p-4 md:p-6">
+              <div className="flex flex-col items-center sm:items-start text-center sm:text-left gap-1 sm:gap-2">
+                <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/10">
+                  <Users className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
+                </div>
+                <span className="text-xs sm:text-base font-medium">Outreach</span>
+                <span className="hidden sm:block text-xs text-muted-foreground">Manage leads</span>
+              </div>
             </Link>
           </Card>
         </div>

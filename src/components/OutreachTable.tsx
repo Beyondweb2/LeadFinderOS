@@ -39,11 +39,13 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
 import { SingleWhatsAppDialog } from './SingleWhatsAppDialog';
 import { CSVImportDialog } from './CSVImportDialog';
+import { OutreachMobileCard } from './OutreachMobileCard';
 import type { OutreachLead, LeadStatus, NextActionType, Country } from '@/types/outreach';
 import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS } from '@/types/outreach';
 
@@ -92,6 +94,7 @@ export function OutreachTable({
 }: OutreachTableProps) {
   const { toast } = useToast();
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
+  const isMobile = useIsMobile();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
   const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
@@ -702,173 +705,204 @@ export function OutreachTable({
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border/50 hover:bg-transparent">
-                <TableHead className="w-[40px] sm:w-[50px]">
-                  <Checkbox
-                    checked={selectedIds.size === filteredAndSortedLeads.length && filteredAndSortedLeads.length > 0}
-                    onCheckedChange={handleSelectAll}
-                    aria-label="Select all"
-                  />
-                </TableHead>
-                <TableHead className="min-w-[150px] sm:w-[250px]">
-                  <SortButton field="business_name">Business</SortButton>
-                </TableHead>
-                <TableHead className="min-w-[120px] sm:w-[150px]">Phone</TableHead>
-                {!readOnly && (
-                  <>
-                    <TableHead className="min-w-[100px] sm:w-[140px]">
-                      <SortButton field="status">Status</SortButton>
-                    </TableHead>
-                    <TableHead className="min-w-[140px] sm:w-[180px]">
-                      <SortButton field="next_action_date">Next Action</SortButton>
-                    </TableHead>
-                  </>
-                )}
-                <TableHead className="w-[100px] text-center">Links</TableHead>
-                {!readOnly && onMarkAsInterested && (
-                  <TableHead className="w-[80px] text-center">Track</TableHead>
-                )}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {paginatedLeads.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={readOnly ? 4 : (onMarkAsInterested ? 7 : 6)} className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
-                    {leads.length === 0
-                      ? isArchiveView 
-                        ? 'No archived leads yet.'
-                        : 'No leads yet. Add from search.'
-                      : 'No leads match filters.'}
-                  </TableCell>
+        {/* Mobile Card View */}
+        {isMobile ? (
+          <div>
+            {paginatedLeads.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground text-sm">
+                {leads.length === 0
+                  ? isArchiveView 
+                    ? 'No archived leads yet.'
+                    : 'No leads yet. Add from search.'
+                  : 'No leads match filters.'}
+              </div>
+            ) : (
+              paginatedLeads.map((lead) => (
+                <OutreachMobileCard
+                  key={lead.id}
+                  lead={lead}
+                  isSelected={selectedIds.has(lead.id)}
+                  onSelect={(checked) => handleSelectOne(lead.id, checked as boolean)}
+                  onLeadClick={() => onLeadClick(lead)}
+                  onStatusChange={(status) => onStatusChange(lead.id, status)}
+                  onWhatsAppClick={() => setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name })}
+                  onTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
+                  readOnly={readOnly}
+                  showTrackButton={!!onMarkAsInterested}
+                />
+              ))
+            )}
+          </div>
+        ) : (
+          /* Desktop Table View */
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border/50 hover:bg-transparent">
+                  <TableHead className="w-[40px] sm:w-[50px]">
+                    <Checkbox
+                      checked={selectedIds.size === filteredAndSortedLeads.length && filteredAndSortedLeads.length > 0}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
+                  <TableHead className="min-w-[150px] sm:w-[250px]">
+                    <SortButton field="business_name">Business</SortButton>
+                  </TableHead>
+                  <TableHead className="min-w-[120px] sm:w-[150px]">Phone</TableHead>
+                  {!readOnly && (
+                    <>
+                      <TableHead className="min-w-[100px] sm:w-[140px]">
+                        <SortButton field="status">Status</SortButton>
+                      </TableHead>
+                      <TableHead className="min-w-[140px] sm:w-[180px]">
+                        <SortButton field="next_action_date">Next Action</SortButton>
+                      </TableHead>
+                    </>
+                  )}
+                  <TableHead className="w-[100px] text-center">Links</TableHead>
+                  {!readOnly && onMarkAsInterested && (
+                    <TableHead className="w-[80px] text-center">Track</TableHead>
+                  )}
                 </TableRow>
-              ) : (
-                paginatedLeads.map((lead) => (
-                  <TableRow
-                    key={lead.id}
-                    className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
-                      lead.is_potential_work ? 'bg-primary/5' : ''
-                    }`}
-                    onClick={() => onLeadClick(lead)}
-                  >
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <Checkbox
-                        checked={selectedIds.has(lead.id)}
-                        onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
-                        aria-label={`Select ${lead.business_name}`}
-                      />
+              </TableHeader>
+              <TableBody>
+                {paginatedLeads.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={readOnly ? 4 : (onMarkAsInterested ? 7 : 6)} className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
+                      {leads.length === 0
+                        ? isArchiveView 
+                          ? 'No archived leads yet.'
+                          : 'No leads yet. Add from search.'
+                        : 'No leads match filters.'}
                     </TableCell>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-2">
-                        {lead.country === 'Australia' && (
-                          <span className="text-xs" title="Australia">🇦🇺</span>
-                        )}
-                        <span className="truncate max-w-[200px]">{lead.business_name}</span>
-                        {lead.is_potential_work && (
-                          <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {lead.phone ? (
-                        <div className="flex items-center gap-1.5">
-                          <a
-                            href={`tel:${lead.phone}`}
-                            className="text-primary hover:underline flex items-center gap-1.5 text-sm"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Phone className="h-3.5 w-3.5 flex-shrink-0" />
-                            <span className="font-mono">{lead.phone}</span>
-                          </a>
-                          {isPhoneCopied(lead.id) && (
-                            <span title="Copied">
-                              <CheckCheck className="h-3.5 w-3.5 text-primary" />
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
-                    {!readOnly && (
-                      <>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Select
-                            value={lead.status}
-                            onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
-                          >
-                            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
-                              <OutreachStatusBadge status={lead.status} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {STATUS_OPTIONS.map((opt) => (
-                                <SelectItem key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <NextActionEditor
-                            action={lead.next_action}
-                            date={lead.next_action_date}
-                            onUpdate={(action, date) => onNextActionChange(lead.id, action, date)}
-                          />
-                        </TableCell>
-                      </>
-                    )}
-                    <TableCell onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-center gap-2">
-                        {lead.google_maps_url && (
-                          <a
-                            href={lead.google_maps_url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="p-1.5 rounded-md hover:bg-muted text-primary hover:text-primary/80 transition-colors"
-                            title="View on Google Maps"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                          </a>
-                        )}
-                        {lead.phone && (
-                          <button
-                            onClick={() => setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name })}
-                            className="p-1.5 rounded-md hover:bg-muted text-green-500 hover:text-green-400 transition-colors"
-                            title="Send WhatsApp message"
-                          >
-                            <MessageSquare className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </TableCell>
-                    {!readOnly && onMarkAsInterested && (
+                  </TableRow>
+                ) : (
+                  paginatedLeads.map((lead) => (
+                    <TableRow
+                      key={lead.id}
+                      className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
+                        lead.is_potential_work ? 'bg-primary/5' : ''
+                      }`}
+                      onClick={() => onLeadClick(lead)}
+                    >
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex justify-center">
-                          {lead.is_potential_work ? (
-                            <span className="text-xs text-yellow-500 font-medium">Tracked</span>
-                          ) : (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary"
-                              onClick={() => onMarkAsInterested([lead.id])}
-                            >
-                              <Star className="h-3.5 w-3.5 mr-1" />
-                              Track
-                            </Button>
+                        <Checkbox
+                          checked={selectedIds.has(lead.id)}
+                          onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
+                          aria-label={`Select ${lead.business_name}`}
+                        />
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-2">
+                          {lead.country === 'Australia' && (
+                            <span className="text-xs" title="Australia">🇦🇺</span>
+                          )}
+                          <span className="truncate max-w-[200px]">{lead.business_name}</span>
+                          {lead.is_potential_work && (
+                            <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
                           )}
                         </div>
                       </TableCell>
-                    )}
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
+                      <TableCell>
+                        {lead.phone ? (
+                          <div className="flex items-center gap-1.5">
+                            <a
+                              href={`tel:${lead.phone}`}
+                              className="text-primary hover:underline flex items-center gap-1.5 text-sm"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+                              <span className="font-mono">{lead.phone}</span>
+                            </a>
+                            {isPhoneCopied(lead.id) && (
+                              <span title="Copied">
+                                <CheckCheck className="h-3.5 w-3.5 text-primary" />
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      {!readOnly && (
+                        <>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <Select
+                              value={lead.status}
+                              onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
+                            >
+                              <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+                                <OutreachStatusBadge status={lead.status} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {STATUS_OPTIONS.map((opt) => (
+                                  <SelectItem key={opt.value} value={opt.value}>
+                                    {opt.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            <NextActionEditor
+                              action={lead.next_action}
+                              date={lead.next_action_date}
+                              onUpdate={(action, date) => onNextActionChange(lead.id, action, date)}
+                            />
+                          </TableCell>
+                        </>
+                      )}
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-center gap-2">
+                          {lead.google_maps_url && (
+                            <a
+                              href={lead.google_maps_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="p-1.5 rounded-md hover:bg-muted text-primary hover:text-primary/80 transition-colors"
+                              title="View on Google Maps"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                            </a>
+                          )}
+                          {lead.phone && (
+                            <button
+                              onClick={() => setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name })}
+                              className="p-1.5 rounded-md hover:bg-muted text-green-500 hover:text-green-400 transition-colors"
+                              title="Send WhatsApp message"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </TableCell>
+                      {!readOnly && onMarkAsInterested && (
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <div className="flex justify-center">
+                            {lead.is_potential_work ? (
+                              <span className="text-xs text-yellow-500 font-medium">Tracked</span>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary"
+                                onClick={() => onMarkAsInterested([lead.id])}
+                              >
+                                <Star className="h-3.5 w-3.5 mr-1" />
+                                Track
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        )}
 
         {/* Pagination */}
         {totalPages > 1 && (
