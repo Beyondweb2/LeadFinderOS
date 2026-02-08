@@ -1,4 +1,4 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { useState, useEffect, useRef, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -40,39 +40,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Track user ID to prevent unnecessary re-renders on token refresh
+  const currentUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+      async (event, newSession) => {
+        const newUserId = newSession?.user?.id ?? null;
+        const userChanged = currentUserIdRef.current !== newUserId;
+        
+        // Only update state if user actually changed (not just token refresh)
+        if (userChanged || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+          currentUserIdRef.current = newUserId;
+          setSession(newSession);
+          setUser(newSession?.user ?? null);
+        }
+        
         setIsLoading(false);
         
         // On new signup, attach affiliate code if present
-        if (event === 'SIGNED_IN' && session?.user) {
+        if (event === 'SIGNED_IN' && newSession?.user) {
           const affiliateCode = getStoredAffiliateCode();
           if (affiliateCode) {
             // Update user_trials with affiliate code (only if not already set)
-            const { error } = await supabase
+            await supabase
               .from('user_trials')
               .update({ 
                 affiliate_code: affiliateCode,
                 affiliate_attributed_at: new Date().toISOString()
               })
-              .eq('user_id', session.user.id)
+              .eq('user_id', newSession.user.id)
               .is('affiliate_code', null);
-            
-            // Successfully attached affiliate code (logging removed for production)
           }
         }
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
+      const userId = initialSession?.user?.id ?? null;
+      currentUserIdRef.current = userId;
+      setSession(initialSession);
+      setUser(initialSession?.user ?? null);
       setIsLoading(false);
     });
 
