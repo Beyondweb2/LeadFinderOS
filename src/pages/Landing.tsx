@@ -469,15 +469,18 @@ const Landing = () => {
             </Button>
           </div>
           
-          {/* Stats bar - all 3 on one line on mobile */}
-          <div className="mt-8 sm:mt-16 md:mt-20 flex justify-center items-center gap-4 sm:gap-12 md:gap-24">
-            <CountUpStat target={100000} suffix="+" label="Businesses" />
+          {/* Stats bar - all 3 on one line, equal width */}
+          <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-xl mx-auto">
             <div className="text-center">
-              <div className="text-lg sm:text-3xl md:text-5xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">100K+</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Businesses</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-lg sm:text-3xl md:text-5xl font-bold text-gradient-primary tracking-tight">∞</div>
+              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">∞</div>
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Unlimited</div>
             </div>
           </div>
