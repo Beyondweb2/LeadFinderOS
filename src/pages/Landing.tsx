@@ -34,7 +34,7 @@ import appLogo from '@/assets/logo.png';
 import videoPoster from '@/assets/video-poster.jpg';
 import featureCustomization from '@/assets/feature-customization-new.png';
 import featureContactTracking from '@/assets/howto-step4-trackleads.png';
-import featureDashboard from '@/assets/feature-dashboard.png';
+import featureDashboard from '@/assets/howto-step4-dashboard.png';
 import featureExport from '@/assets/feature-export.png';
 import featureClassification from '@/assets/feature-classification.png';
 import featureTemplates from '@/assets/feature-templates.png';
