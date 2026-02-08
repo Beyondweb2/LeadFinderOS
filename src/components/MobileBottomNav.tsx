@@ -26,7 +26,7 @@ const mainNavItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Search', url: '/find-leads', icon: Search },
   { title: 'CRM', url: '/outreach', icon: ClipboardList },
-  { title: 'Interested', url: '/potential-work', icon: Briefcase },
+  { title: 'Track', url: '/potential-work', icon: Briefcase },
 ];
 
 const moreNavItems = [
