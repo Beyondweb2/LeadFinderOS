@@ -35,6 +35,7 @@ import {
   Loader2,
   MessageSquare,
   Upload,
+  Eye,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
@@ -715,24 +716,27 @@ export function OutreachTable({
                 <TableHead className="min-w-[150px] sm:w-[250px]">
                   <SortButton field="business_name">Business</SortButton>
                 </TableHead>
-                <TableHead className="min-w-[100px] sm:w-[140px]">Phone</TableHead>
+                <TableHead className="min-w-[120px] sm:w-[150px]">Phone</TableHead>
                 {!readOnly && (
                   <>
-                    <TableHead className="min-w-[100px] sm:w-[150px]">
+                    <TableHead className="min-w-[100px] sm:w-[140px]">
                       <SortButton field="status">Status</SortButton>
                     </TableHead>
-                    <TableHead className="min-w-[140px] sm:w-[200px]">
+                    <TableHead className="min-w-[140px] sm:w-[180px]">
                       <SortButton field="next_action_date">Next Action</SortButton>
                     </TableHead>
                   </>
                 )}
-                <TableHead className="w-[60px] sm:w-[80px]">Links</TableHead>
+                <TableHead className="w-[100px] text-center">Links</TableHead>
+                {!readOnly && onMarkAsInterested && (
+                  <TableHead className="w-[80px] text-center">Track</TableHead>
+                )}
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={readOnly ? 4 : 6} className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
+                  <TableCell colSpan={readOnly ? 4 : (onMarkAsInterested ? 7 : 6)} className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
                     {leads.length === 0
                       ? isArchiveView 
                         ? 'No archived leads yet.'
@@ -744,7 +748,9 @@ export function OutreachTable({
                 paginatedLeads.map((lead) => (
                   <TableRow
                     key={lead.id}
-                    className="border-border/50 cursor-pointer hover:bg-muted/30"
+                    className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
+                      lead.is_potential_work ? 'bg-primary/5' : ''
+                    }`}
                     onClick={() => onLeadClick(lead)}
                   >
                     <TableCell onClick={(e) => e.stopPropagation()}>
@@ -759,23 +765,26 @@ export function OutreachTable({
                         {lead.country === 'Australia' && (
                           <span className="text-xs" title="Australia">🇦🇺</span>
                         )}
-                        {lead.business_name}
+                        <span className="truncate max-w-[200px]">{lead.business_name}</span>
+                        {lead.is_potential_work && (
+                          <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
                       {lead.phone ? (
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5">
                           <a
                             href={`tel:${lead.phone}`}
-                            className="text-primary hover:underline flex items-center gap-1"
+                            className="text-primary hover:underline flex items-center gap-1.5 text-sm"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            <Phone className="h-3 w-3" />
-                            {lead.phone}
+                            <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+                            <span className="font-mono">{lead.phone}</span>
                           </a>
                           {isPhoneCopied(lead.id) && (
                             <span title="Copied">
-                              <CheckCheck className="h-3.5 w-3.5 text-primary ml-1" />
+                              <CheckCheck className="h-3.5 w-3.5 text-primary" />
                             </span>
                           )}
                         </div>
@@ -802,7 +811,7 @@ export function OutreachTable({
                             </SelectContent>
                           </Select>
                         </TableCell>
-                        <TableCell colSpan={2} onClick={(e) => e.stopPropagation()}>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <NextActionEditor
                             action={lead.next_action}
                             date={lead.next_action_date}
@@ -812,13 +821,14 @@ export function OutreachTable({
                       </>
                     )}
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center justify-center gap-2">
                         {lead.google_maps_url && (
                           <a
                             href={lead.google_maps_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="text-primary hover:text-primary/80"
+                            className="p-1.5 rounded-md hover:bg-muted text-primary hover:text-primary/80 transition-colors"
+                            title="View on Google Maps"
                           >
                             <ExternalLink className="h-4 w-4" />
                           </a>
@@ -826,7 +836,7 @@ export function OutreachTable({
                         {lead.phone && (
                           <button
                             onClick={() => setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name })}
-                            className="text-green-500 hover:text-green-400"
+                            className="p-1.5 rounded-md hover:bg-muted text-green-500 hover:text-green-400 transition-colors"
                             title="Send WhatsApp message"
                           >
                             <MessageSquare className="h-4 w-4" />
@@ -834,6 +844,25 @@ export function OutreachTable({
                         )}
                       </div>
                     </TableCell>
+                    {!readOnly && onMarkAsInterested && (
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <div className="flex justify-center">
+                          {lead.is_potential_work ? (
+                            <span className="text-xs text-yellow-500 font-medium">Tracked</span>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary"
+                              onClick={() => onMarkAsInterested([lead.id])}
+                            >
+                              <Star className="h-3.5 w-3.5 mr-1" />
+                              Track
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    )}
                   </TableRow>
                 ))
               )}
