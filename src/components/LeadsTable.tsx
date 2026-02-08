@@ -147,73 +147,118 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
   );
 
   return (
-    <Card className="glass-panel border-border/50">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-        <div className="space-y-1">
-          <CardTitle className="text-xl font-semibold">
-            Search Results
-          </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Found {leads.length} businesses • 
-            <span className="text-status-hot font-semibold ml-1">
-              {noWebsiteCount} hot leads without websites
-            </span>
-          </p>
+    <Card className="border-border/50 bg-card shadow-sm">
+      <CardHeader className="pb-3 md:pb-4">
+        {/* Mobile Header - Stacked Layout */}
+        <div className="md:hidden space-y-3">
+          <div>
+            <CardTitle className="text-lg font-semibold">Search Results</CardTitle>
+            <p className="text-xs text-muted-foreground mt-1">
+              {leads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs border-border">
+                  <Filter className="h-3.5 w-3.5 mr-1.5" />
+                  Filter
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="bg-popover border-border">
+                {(['NO_WEBSITE', 'DIRECTORY_ONLY', 'HAS_OWN_WEBSITE', 'UNCERTAIN'] as WebsiteStatus[]).map((status) => (
+                  <DropdownMenuCheckboxItem
+                    key={status}
+                    checked={statusFilters.includes(status)}
+                    onCheckedChange={(checked) => {
+                      setStatusFilters(
+                        checked
+                          ? [...statusFilters, status]
+                          : statusFilters.filter((s) => s !== status)
+                      );
+                    }}
+                  >
+                    <StatusBadge status={status} />
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button 
+              onClick={onExport} 
+              size="sm"
+              className="h-8 px-2.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              <Download className="h-3.5 w-3.5 mr-1.5" />
+              Export
+            </Button>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="border-border">
-                <Filter className="mr-2 h-4 w-4" />
-                Filter Status
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-popover border-border">
-              {(['NO_WEBSITE', 'DIRECTORY_ONLY', 'HAS_OWN_WEBSITE', 'UNCERTAIN'] as WebsiteStatus[]).map((status) => (
-                <DropdownMenuCheckboxItem
-                  key={status}
-                  checked={statusFilters.includes(status)}
-                  onCheckedChange={(checked) => {
-                    setStatusFilters(
-                      checked
-                        ? [...statusFilters, status]
-                        : statusFilters.filter((s) => s !== status)
-                    );
-                  }}
-                >
-                  <StatusBadge status={status} />
-                </DropdownMenuCheckboxItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          
-          <Button 
-            onClick={onExport} 
-            className="bg-primary hover:bg-primary/90 text-primary-foreground"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Export CSV
-          </Button>
+
+        {/* Desktop Header - Side by Side */}
+        <div className="hidden md:flex md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
+            <CardTitle className="text-xl font-semibold">Search Results</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Found {leads.length} businesses • 
+              <span className="text-status-hot font-semibold ml-1">
+                {noWebsiteCount} hot leads without websites
+              </span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="border-border">
+                  <Filter className="mr-2 h-4 w-4" />
+                  Filter Status
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="bg-popover border-border">
+                {(['NO_WEBSITE', 'DIRECTORY_ONLY', 'HAS_OWN_WEBSITE', 'UNCERTAIN'] as WebsiteStatus[]).map((status) => (
+                  <DropdownMenuCheckboxItem
+                    key={status}
+                    checked={statusFilters.includes(status)}
+                    onCheckedChange={(checked) => {
+                      setStatusFilters(
+                        checked
+                          ? [...statusFilters, status]
+                          : statusFilters.filter((s) => s !== status)
+                      );
+                    }}
+                  >
+                    <StatusBadge status={status} />
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button 
+              onClick={onExport} 
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-3 md:p-6">
         {/* Mobile View */}
-        <div className="md:hidden space-y-2">
+        <div className="md:hidden space-y-1.5">
           {paginatedLeads.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
+            <div className="text-center py-6 text-muted-foreground text-sm">
               No leads match your current filters.
             </div>
           ) : (
             paginatedLeads.map((lead, index) => (
               <div
                 key={lead.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-border bg-card/50 animate-fade-in"
-                style={{ animationDelay: `${index * 20}ms` }}
+                className="flex items-center justify-between py-2.5 px-3 rounded-md border border-border bg-background/80 animate-fade-in"
+                style={{ animationDelay: `${index * 15}ms` }}
               >
-                <div className="flex-1 min-w-0 mr-3">
-                  <p className="font-medium text-sm truncate">{lead.name}</p>
+                <div className="flex-1 min-w-0 mr-2">
+                  <p className="font-medium text-sm truncate leading-tight">{lead.name}</p>
                   <div className="mt-1">
-                    <StatusBadge status={lead.websiteStatus} />
+                    <StatusBadge status={lead.websiteStatus} compact />
                   </div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
@@ -221,7 +266,7 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-9 w-9 text-muted-foreground/50 bg-muted/30 cursor-default"
+                      className="h-8 w-8 text-muted-foreground/50 bg-muted/30"
                       asChild
                     >
                       <a
@@ -230,14 +275,14 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                         rel="noopener noreferrer"
                         onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
                       >
-                        <Eye className="h-4 w-4" />
+                        <Eye className="h-3.5 w-3.5" />
                       </a>
                     </Button>
                   ) : (
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-9 w-9 hover:bg-muted"
+                      className="h-8 w-8 hover:bg-muted"
                       asChild
                     >
                       <a
@@ -246,7 +291,7 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                         rel="noopener noreferrer"
                         onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
                       >
-                        <MapPin className="h-4 w-4 text-primary" />
+                        <MapPin className="h-3.5 w-3.5 text-primary" />
                       </a>
                     </Button>
                   )}
@@ -255,21 +300,19 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-9 w-9 text-muted-foreground/50 bg-muted/30 cursor-default"
+                        className="h-8 w-8 text-muted-foreground/50 bg-muted/30"
                         disabled
-                        title="Already in CRM"
                       >
-                        <Check className="h-4 w-4" />
+                        <Check className="h-3.5 w-3.5" />
                       </Button>
                     ) : (
                       <Button
                         variant="default"
                         size="icon"
-                        className="h-9 w-9 bg-primary hover:bg-primary/90"
+                        className="h-8 w-8 bg-primary hover:bg-primary/90"
                         onClick={() => onAddToOutreach(lead)}
-                        title="Add to CRM"
                       >
-                        <ClipboardList className="h-4 w-4" />
+                        <ClipboardList className="h-3.5 w-3.5" />
                       </Button>
                     )
                   )}
