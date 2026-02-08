@@ -1,10 +1,15 @@
- import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
- import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
- 
- const corsHeaders = {
-   'Access-Control-Allow-Origin': '*',
-   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
- };
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit, rateLimitHeaders } from "../_shared/rate-limiter.ts";
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+};
+
+// Rate limit: 30 requests per minute (protects Google Maps API quota)
+const RATE_LIMIT = 30;
+const RATE_WINDOW_MS = 60000;
  
  // Extract place ID from Google Maps URL
  function extractPlaceId(googleMapsUrl: string): { type: 'cid' | 'ftid' | null; value: string | null } {
@@ -102,6 +107,23 @@
 
       const userId = user.id;
       console.log(`Authenticated request from user: ${userId}`);
+
+      // Apply rate limiting (30 requests/minute per user)
+      const rateLimitResult = checkRateLimit(`lookup:${userId}`, RATE_LIMIT, RATE_WINDOW_MS);
+      if (!rateLimitResult.allowed) {
+        console.log(`Rate limit exceeded for user: ${userId}`);
+        return new Response(
+          JSON.stringify({ error: 'Too many requests. Please slow down.' }),
+          { 
+            status: 429, 
+            headers: { 
+              ...corsHeaders, 
+              'Content-Type': 'application/json',
+              ...rateLimitHeaders(rateLimitResult, RATE_LIMIT)
+            } 
+          }
+        );
+      }
 
       // Check if user has admin role (bypass subscription check)
       const { data: roleData } = await supabase
