@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
@@ -40,6 +40,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
@@ -95,6 +96,7 @@ export function OutreachTable({
   const { toast } = useToast();
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
   const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
@@ -106,6 +108,55 @@ export function OutreachTable({
   const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
   const [whatsAppLead, setWhatsAppLead] = useState<{ phone: string; business_name: string } | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
+
+  const tableStateKey = user?.id
+    ? `leadfinder_outreach_table_state:${user.id}`
+    : 'leadfinder_outreach_table_state';
+
+  // Restore table state after any reload (e.g. returning from WhatsApp)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(tableStateKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<{
+        searchQuery: string;
+        statusFilter: LeadStatus | 'all';
+        countryFilter: Country | 'all';
+        sortField: SortField;
+        sortDirection: SortDirection;
+        currentPage: number;
+      }>;
+
+      if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery);
+      if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
+      if (parsed.countryFilter) setCountryFilter(parsed.countryFilter);
+      if (parsed.sortField) setSortField(parsed.sortField);
+      if (parsed.sortDirection) setSortDirection(parsed.sortDirection);
+      if (typeof parsed.currentPage === 'number' && parsed.currentPage > 0) setCurrentPage(parsed.currentPage);
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableStateKey]);
+
+  // Persist table state
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        tableStateKey,
+        JSON.stringify({
+          searchQuery,
+          statusFilter,
+          countryFilter,
+          sortField,
+          sortDirection,
+          currentPage,
+        })
+      );
+    } catch {
+      // ignore
+    }
+  }, [tableStateKey, searchQuery, statusFilter, countryFilter, sortField, sortDirection, currentPage]);
 
   // Count leads missing phone numbers
   const leadsWithMissingPhones = useMemo(() => {
@@ -443,6 +494,13 @@ export function OutreachTable({
   }, [leads, searchQuery, statusFilter, countryFilter, sortField, sortDirection]);
 
   const totalPages = Math.ceil(filteredAndSortedLeads.length / ITEMS_PER_PAGE);
+
+  // If restoring state lands on a page that no longer exists (after filters/search), clamp it.
+  useEffect(() => {
+    const safeTotal = totalPages || 1;
+    if (currentPage > safeTotal) setCurrentPage(safeTotal);
+  }, [currentPage, totalPages]);
+
   const paginatedLeads = filteredAndSortedLeads.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
     currentPage * ITEMS_PER_PAGE

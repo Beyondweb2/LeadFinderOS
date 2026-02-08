@@ -20,13 +20,7 @@ interface SingleWhatsAppDialogProps {
   lead: { phone: string; business_name: string } | null;
 }
 
-const DEFAULT_TEMPLATE = `Hi {{business_name}},
-
-I noticed your business doesn't have a website yet. I help local businesses get online with professional, affordable websites.
-
-Would you be interested in a quick chat about how a website could help grow your business?
-
-Best regards`;
+const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
 
 export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAppDialogProps) {
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
