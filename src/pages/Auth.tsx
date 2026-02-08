@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
+import { readLastRoute } from '@/hooks/usePersistLastRoute';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -64,11 +65,29 @@ const Auth = () => {
     }
   };
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated (resume where user left off)
   useEffect(() => {
-    if (user && !isLoading) {
-      navigate('/', { replace: true });
+    if (!user || isLoading) return;
+
+    let redirectTo: string | null = null;
+    try {
+      redirectTo =
+        sessionStorage.getItem('leadfinder_post_login_redirect') ||
+        localStorage.getItem('leadfinder_post_login_redirect');
+      if (redirectTo) {
+        sessionStorage.removeItem('leadfinder_post_login_redirect');
+        localStorage.removeItem('leadfinder_post_login_redirect');
+      }
+    } catch {
+      // ignore
     }
+
+    // Fallback to last remembered in-app route
+    if (!redirectTo) {
+      redirectTo = readLastRoute(user.id) || '/';
+    }
+
+    navigate(redirectTo, { replace: true });
   }, [user, isLoading, navigate]);
 
   const validateForm = () => {
