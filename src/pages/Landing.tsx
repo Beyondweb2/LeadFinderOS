@@ -637,7 +637,7 @@ const Landing = () => {
                             style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
                           />
                           <div 
-                            className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9]"
+                            className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[4/3]"
                             style={{ 
                               border: '1px solid hsl(210 100% 50% / 0.2)',
                               boxShadow: '0 0 20px hsl(210 100% 50% / 0.1)'
@@ -655,9 +655,9 @@ const Landing = () => {
                   ))}
                 </CarouselContent>
                 
-                {/* Custom navigation arrows - matching How It Works section */}
-                <CarouselPrevious className="-left-1 h-10 w-10 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
-                <CarouselNext className="-right-1 h-10 w-10 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
+                {/* Custom navigation arrows - smaller */}
+                <CarouselPrevious className="-left-1 h-8 w-8 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
+                <CarouselNext className="-right-1 h-8 w-8 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
               </Carousel>
               
               {/* Dot indicators */}
