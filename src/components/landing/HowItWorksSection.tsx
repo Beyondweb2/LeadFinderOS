@@ -163,7 +163,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
         
         {/* Mobile Carousel */}
         {isMobile ? (
-          <div className="max-w-sm mx-auto">
+          <div className="w-full max-w-[90vw] mx-auto">
             <Carousel
               opts={{ loop: true, startIndex: 0 }}
               plugins={[
