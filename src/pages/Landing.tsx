@@ -40,6 +40,7 @@ import featureClassification from '@/assets/feature-classification.png';
 import featureTemplates from '@/assets/feature-templates.png';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useLandingTheme } from '@/hooks/useLandingTheme';
 import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
 
@@ -328,6 +329,10 @@ const Landing = () => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
   const [featureIndex, setFeatureIndex] = useState(0);
   const isMobile = useIsMobile();
+  
+  // Lock landing page to dark brand theme
+  useLandingTheme();
+  
   return (
     <div className="min-h-screen bg-background overflow-hidden">
       {/* Capture affiliate codes from URL */}
