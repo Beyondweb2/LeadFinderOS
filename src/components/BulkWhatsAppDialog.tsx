@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,7 +10,13 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { MessageSquare, Send, ChevronRight } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
+import { MessageSquare, Send, ChevronRight, AlertTriangle, ChevronDown, Clock } from 'lucide-react';
 import { generateWhatsAppUrl } from '@/lib/leadUtils';
 
 interface BulkWhatsAppDialogProps {
@@ -30,8 +36,17 @@ Best regards`;
 export function BulkWhatsAppDialog({ open, onOpenChange, leads }: BulkWhatsAppDialogProps) {
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [tipsOpen, setTipsOpen] = useState(false);
 
   const leadsWithPhone = leads.filter(l => l.phone);
+  const currentLead = leadsWithPhone[currentIndex];
+  const isComplete = currentIndex >= leadsWithPhone.length;
+
+  // Live preview with business name replaced
+  const previewMessage = useMemo(() => {
+    if (!currentLead) return template;
+    return template.replace(/\{\{business_name\}\}/g, currentLead.business_name);
+  }, [template, currentLead]);
 
   const handleSendCurrent = () => {
     if (currentIndex >= leadsWithPhone.length) return;
@@ -56,12 +71,9 @@ export function BulkWhatsAppDialog({ open, onOpenChange, leads }: BulkWhatsAppDi
     onOpenChange(false);
   };
 
-  const currentLead = leadsWithPhone[currentIndex];
-  const isComplete = currentIndex >= leadsWithPhone.length;
-
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-green-500" />
@@ -69,11 +81,32 @@ export function BulkWhatsAppDialog({ open, onOpenChange, leads }: BulkWhatsAppDi
           </DialogTitle>
           <DialogDescription>
             Send WhatsApp messages to {leadsWithPhone.length} leads with phone numbers.
-            Click "Send" to open WhatsApp for each lead.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 py-4">
+        {/* Warning Alert */}
+        <Alert className="border-amber-500/50 bg-amber-500/10">
+          <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <AlertDescription className="text-sm">
+            <span className="font-medium">Important:</span> Bulk messaging may risk WhatsApp account restrictions.
+            <Collapsible open={tipsOpen} onOpenChange={setTipsOpen}>
+              <CollapsibleTrigger className="flex items-center gap-1 text-amber-600 hover:text-amber-700 mt-1 text-xs font-medium">
+                Tips to stay safe
+                <ChevronDown className={`h-3 w-3 transition-transform ${tipsOpen ? 'rotate-180' : ''}`} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2 space-y-1 text-xs text-muted-foreground">
+                <p>• Space out messages (wait 2-5 minutes between sends)</p>
+                <p>• Personalize each message with business names</p>
+                <p>• Limit to 10-20 messages per day</p>
+                <p>• Avoid sending identical messages repeatedly</p>
+                <p>• Don't send to contacts who haven't opted in</p>
+              </CollapsibleContent>
+            </Collapsible>
+          </AlertDescription>
+        </Alert>
+
+        <div className="space-y-4">
+          {/* Template Editor */}
           <div>
             <Label htmlFor="template">Message Template</Label>
             <p className="text-xs text-muted-foreground mb-2">
@@ -83,14 +116,28 @@ export function BulkWhatsAppDialog({ open, onOpenChange, leads }: BulkWhatsAppDi
               id="template"
               value={template}
               onChange={(e) => setTemplate(e.target.value)}
-              rows={6}
+              rows={5}
               className="font-mono text-sm"
             />
           </div>
 
+          {/* Live Preview */}
+          {currentLead && !isComplete && (
+            <div>
+              <Label className="flex items-center gap-1.5 mb-2">
+                <span>📝</span>
+                Preview for: <span className="font-semibold text-primary">{currentLead.business_name}</span>
+              </Label>
+              <div className="p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-sm whitespace-pre-wrap">
+                {previewMessage}
+              </div>
+            </div>
+          )}
+
+          {/* Progress Section */}
           {leadsWithPhone.length > 0 && (
-            <div className="p-3 bg-muted/50 rounded-lg">
-              <div className="flex items-center justify-between mb-2">
+            <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+              <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Progress</span>
                 <span className="text-sm text-muted-foreground">
                   {currentIndex} / {leadsWithPhone.length} sent
@@ -98,11 +145,21 @@ export function BulkWhatsAppDialog({ open, onOpenChange, leads }: BulkWhatsAppDi
               </div>
               
               {!isComplete && currentLead && (
-                <div className="flex items-center gap-2 text-sm">
-                  <ChevronRight className="h-4 w-4 text-primary" />
-                  <span className="font-medium">{currentLead.business_name}</span>
-                  <span className="text-muted-foreground">({currentLead.phone})</span>
-                </div>
+                <>
+                  <div className="flex items-center gap-2 text-sm">
+                    <ChevronRight className="h-4 w-4 text-primary" />
+                    <span className="font-medium">{currentLead.business_name}</span>
+                    <span className="text-muted-foreground">({currentLead.phone})</span>
+                  </div>
+                  
+                  {/* Delay Recommendation */}
+                  {currentIndex > 0 && (
+                    <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-500/10 px-2 py-1 rounded">
+                      <Clock className="h-3 w-3" />
+                      Wait 2-5 minutes before sending the next message
+                    </div>
+                  )}
+                </>
               )}
               
               {isComplete && (
@@ -136,6 +193,12 @@ export function BulkWhatsAppDialog({ open, onOpenChange, leads }: BulkWhatsAppDi
             </Button>
           )}
         </DialogFooter>
+
+        {/* Disclaimer */}
+        <p className="text-[10px] text-muted-foreground text-center mt-2">
+          LeadFinder Pro is not responsible for any WhatsApp account restrictions. 
+          Users are solely responsible for their outreach methods.
+        </p>
       </DialogContent>
     </Dialog>
   );
