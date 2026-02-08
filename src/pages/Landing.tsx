@@ -182,7 +182,70 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
   );
 };
 
-// Video section component with sound toggle
+// Mobile hero video component - compact version for hero section
+const MobileHeroVideo = () => {
+  const [isMuted, setIsMuted] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      const newMuted = !isMuted;
+      videoRef.current.muted = newMuted;
+      setIsMuted(newMuted);
+    }
+  };
+
+  return (
+    <div className="relative">
+      {/* Glow effect behind video */}
+      <div 
+        className="absolute -inset-2 rounded-2xl blur-xl opacity-40"
+        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+      />
+      <div 
+        className="absolute -inset-px rounded-xl"
+        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.15), transparent)' }}
+      />
+      
+      <div 
+        className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm"
+        style={{ 
+          border: '1px solid hsl(210 100% 50% / 0.2)',
+          boxShadow: '0 0 20px hsl(210 100% 50% / 0.15)'
+        }}
+      >
+        <video 
+          ref={videoRef}
+          className="w-full h-auto"
+          autoPlay 
+          loop 
+          muted
+          playsInline
+          preload="auto"
+          poster={videoPoster}
+        >
+          <source src={demoVideo} type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+        
+        {/* Sound toggle button */}
+        <button
+          onClick={toggleMute}
+          className="absolute bottom-2 right-2 p-1.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
+          aria-label={isMuted ? "Unmute video" : "Mute video"}
+        >
+          {isMuted ? (
+            <VolumeX className="h-3.5 w-3.5" />
+          ) : (
+            <Volume2 className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// Video section component with sound toggle (desktop)
 // Starts muted (required for autoplay) - user can unmute
 const VideoSection = () => {
   const [isMuted, setIsMuted] = useState(true);
@@ -199,7 +262,7 @@ const VideoSection = () => {
   return (
     <ScrollReveal className="relative z-10 pb-10 sm:pb-14 md:pb-20 px-2 sm:px-4">
       <div className="container mx-auto">
-        {/* Full-width on mobile, constrained on larger screens */}
+        {/* Constrained on larger screens */}
         <div className="relative max-w-5xl mx-auto">
           {/* Glow effect behind video - fixed brand blue */}
           <div 
@@ -232,7 +295,7 @@ const VideoSection = () => {
               Your browser does not support the video tag.
             </video>
             
-      {/* Sound toggle button */}
+            {/* Sound toggle button */}
             <button
               onClick={toggleMute}
               className="absolute bottom-3 right-3 md:bottom-4 md:right-4 p-2 md:p-2.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
@@ -361,14 +424,14 @@ const Landing = () => {
       {/* Hero Section */}
       <section className="relative z-10 pt-6 pb-8 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
         <div className="container mx-auto text-center">
-          {/* Mobile logo */}
-          <div className="flex justify-center mb-4 sm:hidden">
-            <img src={appLogo} alt="LeadFinder Pro" className="h-14 w-14" />
+          {/* Mobile: Video at top instead of logo */}
+          <div className="sm:hidden mb-6">
+            <MobileHeroVideo />
           </div>
           
-          {/* Tagline badge - hidden on very small screens */}
+          {/* Tagline badge - hidden on mobile */}
           <div 
-            className="hidden xs:inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
+            className="hidden sm:inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
             style={{ 
               border: '1px solid hsl(210 100% 50% / 0.3)', 
               background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.1), hsl(210 100% 50% / 0.05))',
@@ -421,8 +484,10 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Video Demo Section */}
-      <VideoSection />
+      {/* Video Demo Section - hidden on mobile since it's in hero */}
+      <div className="hidden sm:block">
+        <VideoSection />
+      </div>
 
       {/* Before/After Comparison Section */}
       <section className="relative z-10 py-12 sm:py-16 md:py-20 lg:py-28 px-4">
