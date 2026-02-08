@@ -59,11 +59,7 @@ const Dashboard = () => {
             addedYesterday={metrics.addedYesterday}
             avgPerDay={metrics.avgPerDayAllTime}
           />
-           <ActivityCard
-             recordDay={metrics.recordDay}
-             avgPerDayAllTime={metrics.avgPerDayAllTime}
-             avgPerDayLast7Days={metrics.avgPerDayLast7Days}
-           />
+          <ActivityCard activity={metrics.activity} />
          </div>
       </section>
 
