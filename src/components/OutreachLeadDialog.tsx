@@ -28,7 +28,8 @@ import {
   Pencil,
   ClipboardList,
   MessageSquare,
-  Clock
+  Clock,
+  Send
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
@@ -36,6 +37,7 @@ import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from '@/types/outreach';
 import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS } from '@/types/outreach';
+import { SingleWhatsAppDialog } from './SingleWhatsAppDialog';
 
 interface OutreachLeadDialogProps {
   lead: OutreachLead | null;
@@ -67,6 +69,7 @@ export function OutreachLeadDialog({
   const [selectedAction, setSelectedAction] = useState<NextActionType>('call');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [isSavingNotes, setIsSavingNotes] = useState(false);
+  const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
 
   useEffect(() => {
     if (lead) {
@@ -247,13 +250,22 @@ export function OutreachLeadDialog({
                 <div className="flex items-center gap-2">
                   <span className="text-muted-foreground w-24">Phone:</span>
                   {lead.phone ? (
-                    <a
-                      href={`tel:${lead.phone}`}
-                      className="text-primary hover:underline flex items-center gap-1"
-                    >
-                      <Phone className="h-3 w-3" />
-                      {lead.phone}
-                    </a>
+                    <div className="flex items-center gap-2">
+                      <a
+                        href={`tel:${lead.phone}`}
+                        className="text-primary hover:underline flex items-center gap-1"
+                      >
+                        <Phone className="h-3 w-3" />
+                        {lead.phone}
+                      </a>
+                      <button
+                        onClick={() => setShowWhatsAppDialog(true)}
+                        className="text-green-500 hover:text-green-400 p-1 rounded hover:bg-muted"
+                        title="Send WhatsApp message"
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                      </button>
+                    </div>
                   ) : (
                     <span className="text-muted-foreground">—</span>
                   )}
@@ -336,6 +348,13 @@ export function OutreachLeadDialog({
             </div>
           </div>
         </ScrollArea>
+
+        {/* WhatsApp Dialog */}
+        <SingleWhatsAppDialog
+          open={showWhatsAppDialog}
+          onOpenChange={setShowWhatsAppDialog}
+          lead={lead ? { phone: lead.phone || '', business_name: lead.business_name } : null}
+        />
       </DialogContent>
     </Dialog>
   );

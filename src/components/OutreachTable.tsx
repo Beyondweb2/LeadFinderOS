@@ -41,7 +41,7 @@ import { useCopiedPhones } from '@/hooks/useCopiedPhones';
 import { supabase } from '@/integrations/supabase/client';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
-import { BulkWhatsAppDialog } from './BulkWhatsAppDialog';
+import { SingleWhatsAppDialog } from './SingleWhatsAppDialog';
 import { CSVImportDialog } from './CSVImportDialog';
 import type { OutreachLead, LeadStatus, NextActionType, Country } from '@/types/outreach';
 import { STATUS_OPTIONS } from '@/types/outreach';
@@ -100,7 +100,7 @@ export function OutreachTable({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isRecoveringPhones, setIsRecoveringPhones] = useState(false);
   const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
-  const [showWhatsAppDialog, setShowWhatsAppDialog] = useState(false);
+  const [whatsAppLead, setWhatsAppLead] = useState<{ phone: string; business_name: string } | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
 
   // Count leads missing phone numbers
@@ -545,16 +545,21 @@ export function OutreachTable({
                 )}
               </>
             )}
-            {/* WhatsApp button for selected leads */}
-            {selectedIds.size > 0 && (
+            {/* WhatsApp button - only show for single selection */}
+            {selectedIds.size === 1 && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setShowWhatsAppDialog(true)}
+                onClick={() => {
+                  const selectedLead = filteredAndSortedLeads.find(l => selectedIds.has(l.id));
+                  if (selectedLead) {
+                    setWhatsAppLead({ phone: selectedLead.phone || '', business_name: selectedLead.business_name });
+                  }
+                }}
                 className="bg-background text-xs h-8"
               >
-                <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-                WhatsApp ({selectedIds.size})
+                <MessageSquare className="h-3.5 w-3.5 mr-1.5 text-green-500" />
+                WhatsApp
               </Button>
             )}
             <Button
@@ -768,16 +773,27 @@ export function OutreachTable({
                       </>
                     )}
                     <TableCell onClick={(e) => e.stopPropagation()}>
-                      {lead.google_maps_url && (
-                        <a
-                          href={lead.google_maps_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:text-primary/80"
-                        >
-                          <ExternalLink className="h-4 w-4" />
-                        </a>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {lead.google_maps_url && (
+                          <a
+                            href={lead.google_maps_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-primary hover:text-primary/80"
+                          >
+                            <ExternalLink className="h-4 w-4" />
+                          </a>
+                        )}
+                        {lead.phone && (
+                          <button
+                            onClick={() => setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name })}
+                            className="text-green-500 hover:text-green-400"
+                            title="Send WhatsApp message"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -836,12 +852,10 @@ export function OutreachTable({
       </CardContent>
 
       {/* WhatsApp Dialog */}
-      <BulkWhatsAppDialog
-        open={showWhatsAppDialog}
-        onOpenChange={setShowWhatsAppDialog}
-        leads={filteredAndSortedLeads
-          .filter(l => selectedIds.has(l.id))
-          .map(l => ({ phone: l.phone || '', business_name: l.business_name }))}
+      <SingleWhatsAppDialog
+        open={!!whatsAppLead}
+        onOpenChange={(open) => !open && setWhatsAppLead(null)}
+        lead={whatsAppLead}
       />
 
       {/* CSV Import Dialog */}
