@@ -109,55 +109,88 @@ export function OutreachTable({
   const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
   const [whatsAppLead, setWhatsAppLead] = useState<{ phone: string; business_name: string } | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
+  const [lastWhatsAppLeadId, setLastWhatsAppLeadId] = useState<string | null>(null);
 
   const tableStateKey = user?.id
     ? `leadfinder_outreach_table_state:${user.id}`
     : 'leadfinder_outreach_table_state';
+  
+  const lastWhatsAppKey = user?.id
+    ? `leadfinder_last_whatsapp:${user.id}`
+    : 'leadfinder_last_whatsapp';
+
+  // Helper to read from sessionStorage with localStorage fallback
+  const readStoredState = () => {
+    try {
+      // Try sessionStorage first
+      let raw = sessionStorage.getItem(tableStateKey);
+      // If sessionStorage is empty, try localStorage as fallback
+      if (!raw) {
+        raw = localStorage.getItem(tableStateKey);
+      }
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  };
+
+  // Helper to write to both storages for redundancy
+  const writeStoredState = (state: object) => {
+    try {
+      const json = JSON.stringify(state);
+      sessionStorage.setItem(tableStateKey, json);
+      localStorage.setItem(tableStateKey, json);
+    } catch {
+      // ignore quota errors
+    }
+  };
 
   // Restore table state after any reload (e.g. returning from WhatsApp)
   useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem(tableStateKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw) as Partial<{
-        searchQuery: string;
-        statusFilter: LeadStatus | 'all';
-        countryFilter: Country | 'all';
-        sortField: SortField;
-        sortDirection: SortDirection;
-        currentPage: number;
-      }>;
+    const parsed = readStoredState();
+    if (!parsed) return;
 
-      if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery);
-      if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
-      if (parsed.countryFilter) setCountryFilter(parsed.countryFilter);
-      if (parsed.sortField) setSortField(parsed.sortField);
-      if (parsed.sortDirection) setSortDirection(parsed.sortDirection);
-      if (typeof parsed.currentPage === 'number' && parsed.currentPage > 0) setCurrentPage(parsed.currentPage);
+    if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery);
+    if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
+    if (parsed.countryFilter) setCountryFilter(parsed.countryFilter);
+    if (parsed.sortField) setSortField(parsed.sortField);
+    if (parsed.sortDirection) setSortDirection(parsed.sortDirection);
+    if (typeof parsed.currentPage === 'number' && parsed.currentPage > 0) setCurrentPage(parsed.currentPage);
+
+    // Restore last WhatsApp lead highlight
+    try {
+      const lastWA = sessionStorage.getItem(lastWhatsAppKey) || localStorage.getItem(lastWhatsAppKey);
+      if (lastWA) setLastWhatsAppLeadId(lastWA);
     } catch {
       // ignore
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableStateKey]);
 
-  // Persist table state
+  // Persist table state to both storages
   useEffect(() => {
+    writeStoredState({
+      searchQuery,
+      statusFilter,
+      countryFilter,
+      sortField,
+      sortDirection,
+      currentPage,
+    });
+  }, [tableStateKey, searchQuery, statusFilter, countryFilter, sortField, sortDirection, currentPage]);
+
+  // Handle WhatsApp button click - store lead ID for highlighting
+  const handleWhatsAppClick = (lead: OutreachLead) => {
+    setLastWhatsAppLeadId(lead.id);
     try {
-      sessionStorage.setItem(
-        tableStateKey,
-        JSON.stringify({
-          searchQuery,
-          statusFilter,
-          countryFilter,
-          sortField,
-          sortDirection,
-          currentPage,
-        })
-      );
+      sessionStorage.setItem(lastWhatsAppKey, lead.id);
+      localStorage.setItem(lastWhatsAppKey, lead.id);
     } catch {
       // ignore
     }
-  }, [tableStateKey, searchQuery, statusFilter, countryFilter, sortField, sortDirection, currentPage]);
+    setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name });
+  };
 
   // Count leads missing phone numbers
   const leadsWithMissingPhones = useMemo(() => {
@@ -784,10 +817,11 @@ export function OutreachTable({
                   onSelect={(checked) => handleSelectOne(lead.id, checked as boolean)}
                   onLeadClick={() => onLeadClick(lead)}
                   onStatusChange={(status) => onStatusChange(lead.id, status)}
-                  onWhatsAppClick={() => setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name })}
+                  onWhatsAppClick={() => handleWhatsAppClick(lead)}
                   onTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
                   readOnly={readOnly}
                   showTrackButton={!!onMarkAsInterested}
+                  isHighlighted={lastWhatsAppLeadId === lead.id}
                 />
               ))
             )}
@@ -842,7 +876,7 @@ export function OutreachTable({
                       key={lead.id}
                       className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
                         lead.is_potential_work ? 'bg-primary/5' : ''
-                      }`}
+                      } ${lastWhatsAppLeadId === lead.id ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
                       onClick={() => onLeadClick(lead)}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -928,7 +962,7 @@ export function OutreachTable({
                           {lead.phone && lead.status !== 'no_whatsapp' && (
                             <>
                               <button
-                                onClick={() => setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name })}
+                                onClick={() => handleWhatsAppClick(lead)}
                                 className="p-1.5 rounded-md hover:bg-muted text-green-500 hover:text-green-400 transition-colors"
                                 title="Send WhatsApp message"
                               >

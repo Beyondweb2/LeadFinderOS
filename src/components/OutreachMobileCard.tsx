@@ -23,6 +23,7 @@ interface OutreachMobileCardProps {
   onTrack?: () => void;
   readOnly?: boolean;
   showTrackButton?: boolean;
+  isHighlighted?: boolean;
 }
 
 export function OutreachMobileCard({
@@ -35,10 +36,11 @@ export function OutreachMobileCard({
   onTrack,
   readOnly = false,
   showTrackButton = true,
+  isHighlighted = false,
 }: OutreachMobileCardProps) {
   return (
     <div 
-      className={`py-2 px-2.5 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''}`}
+      className={`py-2 px-2.5 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
       onClick={onLeadClick}
     >
       {/* Row 1: Checkbox + Business Name */}
