@@ -44,7 +44,7 @@ import { NextActionEditor } from './NextActionEditor';
 import { SingleWhatsAppDialog } from './SingleWhatsAppDialog';
 import { CSVImportDialog } from './CSVImportDialog';
 import type { OutreachLead, LeadStatus, NextActionType, Country } from '@/types/outreach';
-import { STATUS_OPTIONS } from '@/types/outreach';
+import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS } from '@/types/outreach';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -510,15 +510,54 @@ export function OutreachTable({
                 </Button>
                 {!readOnly && (
                   <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleMarkAsContacted}
-                      className="bg-background text-xs h-8"
+                    {/* Bulk Status Dropdown */}
+                    <Select
+                      onValueChange={(v) => {
+                        const ids = Array.from(selectedIds);
+                        ids.forEach(id => onStatusChange(id, v as LeadStatus));
+                        setSelectedIds(new Set());
+                        toast({
+                          title: 'Status updated',
+                          description: `${ids.length} lead${ids.length > 1 ? 's' : ''} updated.`,
+                        });
+                      }}
                     >
-                      <CheckCheck className="h-3.5 w-3.5 mr-1.5" />
-                      Mark Contacted
-                    </Button>
+                      <SelectTrigger className="w-[130px] h-8 text-xs bg-background">
+                        <SelectValue placeholder="Set Status..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {STATUS_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {/* Bulk Next Action Dropdown */}
+                    <Select
+                      onValueChange={(v) => {
+                        const ids = Array.from(selectedIds);
+                        ids.forEach(id => onNextActionChange(id, v as NextActionType));
+                        setSelectedIds(new Set());
+                        toast({
+                          title: 'Next action updated',
+                          description: `${ids.length} lead${ids.length > 1 ? 's' : ''} updated.`,
+                        });
+                      }}
+                    >
+                      <SelectTrigger className="w-[140px] h-8 text-xs bg-background">
+                        <SelectValue placeholder="Set Action..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {NEXT_ACTION_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
                     {onMarkAsInterested && (
                       <Button
                         variant="default"
