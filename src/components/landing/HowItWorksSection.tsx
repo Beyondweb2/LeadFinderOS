@@ -24,7 +24,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 // Import how-to images
 import step1Image from '@/assets/howto-step1-search.png';
 import step2Image from '@/assets/howto-step2-results.png';
-import step3Image from '@/assets/howto-step3-outreach.png';
+import step3Image from '@/assets/howto-step3-crm.png';
 import step4Image from '@/assets/howto-step4-dashboard.png';
 
 const STEPS = [
