@@ -58,11 +58,11 @@ const HowToUse = () => {
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 max-w-5xl">
       {/* Header */}
-      <div className="mb-8 md:mb-12">
+      <div className="mb-8 md:mb-12 text-center sm:text-left">
         <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
           How to Use <span className="text-primary">LeadFinder Pro</span>
         </h1>
-        <p className="text-muted-foreground text-sm md:text-base max-w-2xl">
+        <p className="text-muted-foreground text-sm md:text-base max-w-2xl mx-auto sm:mx-0">
           Follow this step-by-step guide to find businesses without websites, 
           reach out via cold calls or texts, and convert interested leads into paying clients.
         </p>
@@ -74,14 +74,14 @@ const HowToUse = () => {
           <div key={step.number}>
             <Card className="overflow-hidden border-border/50 bg-card/50 backdrop-blur-sm">
               <CardHeader className="pb-4">
-                <div className="flex items-start gap-4">
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-3 sm:gap-4 text-center sm:text-left">
                   {/* Step number */}
                   <div className="flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center">
                     <span className="text-lg md:text-xl font-bold text-primary">{step.number}</span>
                   </div>
                   
                   <div className="flex-1 min-w-0">
-                    <CardTitle className="text-lg md:text-xl flex items-center gap-2 mb-2">
+                    <CardTitle className="text-lg md:text-xl flex items-center justify-center sm:justify-start gap-2 mb-2">
                       <step.icon className="h-5 w-5 text-primary flex-shrink-0" />
                       {step.title}
                     </CardTitle>
@@ -103,8 +103,8 @@ const HowToUse = () => {
                 </div>
                 
                 {/* Tip */}
-                <div className="flex items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/10">
-                  <span className="text-primary text-xs font-semibold uppercase tracking-wide flex-shrink-0 mt-0.5">
+                <div className="flex flex-col sm:flex-row items-center sm:items-start gap-2 p-3 rounded-lg bg-primary/5 border border-primary/10 text-center sm:text-left">
+                  <span className="text-primary text-xs font-semibold uppercase tracking-wide flex-shrink-0">
                     💡 Tip:
                   </span>
                   <p className="text-sm text-muted-foreground">
@@ -126,24 +126,24 @@ const HowToUse = () => {
 
       {/* Summary */}
       <Card className="mt-8 md:mt-12 border-primary/20 bg-primary/5">
-        <CardContent className="py-6 md:py-8">
+        <CardContent className="py-6 md:py-8 text-center sm:text-left">
           <h2 className="text-lg md:text-xl font-semibold mb-3">
             🎉 That's the Complete Workflow!
           </h2>
-          <p className="text-muted-foreground text-sm md:text-base mb-4 max-w-2xl">
+          <p className="text-muted-foreground text-sm md:text-base mb-4 max-w-2xl mx-auto sm:mx-0">
             You've learned how to find leads, reach out via calls or texts, 
             and manage interested prospects through your sales pipeline. Now start finding your next client!
           </p>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center sm:justify-start">
             {isPublicGuide ? (
               <>
-                <Button asChild>
+                <Button asChild className="w-full sm:w-auto">
                   <Link to="/auth">
                     Start Free Trial
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
-                <Button variant="outline" asChild>
+                <Button variant="outline" asChild className="w-full sm:w-auto">
                   <Link to="/landing">
                     <ArrowLeft className="mr-2 h-4 w-4" />
                     Back to Home
@@ -152,13 +152,13 @@ const HowToUse = () => {
               </>
             ) : (
               <>
-                <Button asChild>
+                <Button asChild className="w-full sm:w-auto">
                   <Link to="/">
                     Start Finding Leads
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
-                <Button variant="outline" asChild>
+                <Button variant="outline" asChild className="w-full sm:w-auto">
                   <Link to="/templates">
                     View Message Templates
                   </Link>
