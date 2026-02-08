@@ -206,8 +206,8 @@ export function useSubscription() {
           table: 'subscriptions',
           filter: `user_id=eq.${userId}`,
         },
-        (payload) => {
-          console.log('Subscription changed via realtime:', payload);
+        () => {
+          // Subscription changed - recheck status
           checkSubscription();
         }
       )

@@ -129,12 +129,14 @@
        headers: { ...corsHeaders, "Content-Type": "application/json" },
        status: 200,
      });
-   } catch (error) {
-     const errorMessage = error instanceof Error ? error.message : String(error);
-     logStep("ERROR", { message: errorMessage });
-     return new Response(JSON.stringify({ error: errorMessage }), {
-       headers: { ...corsHeaders, "Content-Type": "application/json" },
-       status: 500,
-     });
-   }
+    } catch (error) {
+      // Log detailed error server-side only
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logStep("ERROR", { message: errorMessage });
+      // Return generic error to client - don't expose internal details
+      return new Response(JSON.stringify({ error: "Unable to create checkout session. Please try again." }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500,
+      });
+    }
  });

@@ -252,11 +252,12 @@
        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
      );
  
-   } catch (error) {
-     console.error('Phone lookup error:', error);
-     return new Response(
-       JSON.stringify({ error: 'An error occurred during phone lookup' }),
-       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-     );
-   }
+    } catch (error) {
+      // Log detailed error server-side only - don't expose to client
+      console.error('Phone lookup error:', error);
+      return new Response(
+        JSON.stringify({ error: 'Unable to lookup phone numbers. Please try again.' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
  });
