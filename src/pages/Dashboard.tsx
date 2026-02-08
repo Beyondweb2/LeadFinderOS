@@ -124,11 +124,11 @@ const Dashboard = () => {
        
        {/* CTA to outreach */}
        <div className="flex justify-center pt-4">
-         <Button variant="outline" asChild>
-           <Link to="/outreach" className="flex items-center gap-2">
-             Go to CRM Pipeline
-             <ArrowRight className="h-4 w-4" />
-           </Link>
+          <Button variant="outline" asChild>
+            <Link to="/outreach" className="flex items-center gap-2">
+              Go to Outreach
+              <ArrowRight className="h-4 w-4" />
+            </Link>
          </Button>
        </div>
     </div>
