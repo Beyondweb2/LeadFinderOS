@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -34,6 +34,42 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const { user } = useAuth();
 
   const clearTrialLimitError = useCallback(() => setTrialLimitError(null), []);
+
+  const storageKeys = useMemo(() => {
+    if (!user?.id) return null;
+    return {
+      leads: `leadfinder_cached_leads:${user.id}`,
+      filters: `leadfinder_cached_filters:${user.id}`,
+    };
+  }, [user?.id]);
+
+  // Restore cached state after reloads so users don't lose progress
+  useEffect(() => {
+    if (!storageKeys) {
+      setLeads([]);
+      return;
+    }
+
+    try {
+      const cachedLeadsRaw = sessionStorage.getItem(storageKeys.leads);
+      if (cachedLeadsRaw) {
+        const cached = JSON.parse(cachedLeadsRaw) as { leads?: Lead[] };
+        if (Array.isArray(cached?.leads)) setLeads(cached.leads);
+      }
+    } catch {
+      // ignore cache parse errors
+    }
+  }, [storageKeys]);
+
+  // Persist leads whenever they change
+  useEffect(() => {
+    if (!storageKeys) return;
+    try {
+      sessionStorage.setItem(storageKeys.leads, JSON.stringify({ leads }));
+    } catch {
+      // ignore quota/unavailable errors
+    }
+  }, [leads, storageKeys]);
 
   // Fetch all businesses to exclude (checked + outreach history + current leads)
   const fetchExcludedBusinesses = useCallback(async () => {
@@ -139,13 +175,23 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
         // Filter out excluded businesses
         const filteredLeads = data.leads.filter(lead => !isExcluded(lead));
         const excludedCount = data.leads.length - filteredLeads.length;
-        
+
         setLeads(filteredLeads);
+
+        // Cache last used filters too (for optional UI restore later)
+        if (storageKeys) {
+          try {
+            sessionStorage.setItem(storageKeys.filters, JSON.stringify({ filters }));
+          } catch {
+            // ignore
+          }
+        }
+
         await saveSearch(filters, filteredLeads.length);
-        
+
         const noWebsiteCount = filteredLeads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
         const excludedMsg = excludedCount > 0 ? ` (${excludedCount} previously seen filtered out)` : '';
-        
+
         toast({
           title: 'Search complete',
           description: `Found ${filteredLeads.length} new businesses. ${noWebsiteCount} without websites.${excludedMsg}`,
@@ -161,7 +207,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     } finally {
       setIsLoading(false);
     }
-  }, [toast, fetchExcludedBusinesses, isExcluded]);
+  }, [toast, fetchExcludedBusinesses, isExcluded, storageKeys]);
 
   const exportToCsv = useCallback(() => {
     if (leads.length === 0) {
