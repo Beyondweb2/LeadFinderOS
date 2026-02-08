@@ -297,11 +297,17 @@ const PotentialWorkPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
 
-  // Filter to only show interested leads (potential work) - excludes completed/paid_for_draft which go to Paid Clients
+  // Filter to only show interested leads (potential work) - uses is_potential_work flag OR interested statuses
+  // This ensures leads marked as interested from the CRM appear here
   const potentialWorkLeads = useMemo(() => {
     const interestedStatuses: LeadStatus[] = ['interested', 'wants_draft', 'on_hold', 'reviewing_draft', 'paid_for_draft'];
     
-    let result = leads.filter((lead) => interestedStatuses.includes(lead.status));
+    // Include leads that have is_potential_work=true OR have an interested status
+    // Exclude completed status as those go to Paid Clients page
+    let result = leads.filter((lead) => 
+      (lead.is_potential_work || interestedStatuses.includes(lead.status)) && 
+      lead.status !== 'completed'
+    );
     
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
