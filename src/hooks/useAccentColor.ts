@@ -1,28 +1,225 @@
 import { useState, useEffect, useCallback } from 'react';
 
-// Locked foundational colors - these NEVER change
-export const LOCKED_COLORS = {
-  // Backgrounds
-  background: '222 47% 4%',      // #05070B equivalent
-  card: '220 40% 6%',            // #0A0F1A equivalent  
-  popover: '220 40% 8%',         // #0F1626 equivalent
-  secondary: '220 40% 10%',
-  muted: '220 40% 8%',
-  
-  // Text
-  foreground: '210 40% 98%',     // #FFFFFF equivalent
-  mutedForeground: '215 20% 50%', // #7F8BA6 equivalent
-  secondaryForeground: '210 40% 95%', // #C9D1E4 equivalent
-  
-  // Borders
-  border: '220 30% 12%',         // #1C2742 equivalent
-  input: '220 30% 10%',
-  
-  // Sidebar (locked)
-  sidebarBackground: '220 40% 6%',
-  sidebarForeground: '210 40% 95%',
-  sidebarBorder: '220 30% 12%',
-} as const;
+// Theme mode types
+export type ThemeMode = 'dark' | 'light';
+
+// Theme presets with background/surface colors
+export interface ThemePreset {
+  id: string;
+  name: string;
+  mode: ThemeMode;
+  background: string;
+  card: string;
+  popover: string;
+  secondary: string;
+  muted: string;
+  foreground: string;
+  mutedForeground: string;
+  secondaryForeground: string;
+  border: string;
+  input: string;
+  preview: string; // hex for preview swatch
+}
+
+// 6 Dark themes
+export const DARK_THEMES: ThemePreset[] = [
+  {
+    id: 'midnight',
+    name: 'Midnight',
+    mode: 'dark',
+    background: '222 47% 4%',
+    card: '220 40% 6%',
+    popover: '220 40% 8%',
+    secondary: '220 40% 10%',
+    muted: '220 40% 8%',
+    foreground: '210 40% 98%',
+    mutedForeground: '215 20% 50%',
+    secondaryForeground: '210 40% 95%',
+    border: '220 30% 12%',
+    input: '220 30% 10%',
+    preview: '#05070B',
+  },
+  {
+    id: 'charcoal',
+    name: 'Charcoal',
+    mode: 'dark',
+    background: '0 0% 7%',
+    card: '0 0% 10%',
+    popover: '0 0% 12%',
+    secondary: '0 0% 14%',
+    muted: '0 0% 12%',
+    foreground: '0 0% 98%',
+    mutedForeground: '0 0% 55%',
+    secondaryForeground: '0 0% 90%',
+    border: '0 0% 18%',
+    input: '0 0% 14%',
+    preview: '#121212',
+  },
+  {
+    id: 'slate',
+    name: 'Slate',
+    mode: 'dark',
+    background: '215 25% 8%',
+    card: '215 25% 11%',
+    popover: '215 25% 13%',
+    secondary: '215 20% 16%',
+    muted: '215 25% 13%',
+    foreground: '210 30% 98%',
+    mutedForeground: '215 15% 55%',
+    secondaryForeground: '210 20% 90%',
+    border: '215 20% 20%',
+    input: '215 25% 14%',
+    preview: '#111827',
+  },
+  {
+    id: 'navy',
+    name: 'Navy',
+    mode: 'dark',
+    background: '230 35% 6%',
+    card: '230 35% 9%',
+    popover: '230 35% 11%',
+    secondary: '230 30% 14%',
+    muted: '230 35% 11%',
+    foreground: '220 30% 98%',
+    mutedForeground: '230 15% 55%',
+    secondaryForeground: '220 25% 90%',
+    border: '230 25% 18%',
+    input: '230 35% 12%',
+    preview: '#0A0F1F',
+  },
+  {
+    id: 'forest',
+    name: 'Forest',
+    mode: 'dark',
+    background: '160 25% 5%',
+    card: '160 25% 8%',
+    popover: '160 25% 10%',
+    secondary: '160 20% 13%',
+    muted: '160 25% 10%',
+    foreground: '150 20% 98%',
+    mutedForeground: '160 15% 50%',
+    secondaryForeground: '150 15% 90%',
+    border: '160 20% 16%',
+    input: '160 25% 11%',
+    preview: '#0A1410',
+  },
+  {
+    id: 'plum',
+    name: 'Plum',
+    mode: 'dark',
+    background: '280 25% 6%',
+    card: '280 25% 9%',
+    popover: '280 25% 11%',
+    secondary: '280 20% 14%',
+    muted: '280 25% 11%',
+    foreground: '270 20% 98%',
+    mutedForeground: '280 15% 50%',
+    secondaryForeground: '270 15% 90%',
+    border: '280 20% 18%',
+    input: '280 25% 12%',
+    preview: '#120A18',
+  },
+];
+
+// 6 Light themes
+export const LIGHT_THEMES: ThemePreset[] = [
+  {
+    id: 'snow',
+    name: 'Snow',
+    mode: 'light',
+    background: '0 0% 100%',
+    card: '0 0% 98%',
+    popover: '0 0% 100%',
+    secondary: '0 0% 96%',
+    muted: '0 0% 96%',
+    foreground: '0 0% 9%',
+    mutedForeground: '0 0% 45%',
+    secondaryForeground: '0 0% 20%',
+    border: '0 0% 90%',
+    input: '0 0% 92%',
+    preview: '#FFFFFF',
+  },
+  {
+    id: 'pearl',
+    name: 'Pearl',
+    mode: 'light',
+    background: '210 20% 98%',
+    card: '210 20% 96%',
+    popover: '210 20% 98%',
+    secondary: '210 15% 93%',
+    muted: '210 15% 93%',
+    foreground: '220 30% 10%',
+    mutedForeground: '215 15% 45%',
+    secondaryForeground: '220 25% 25%',
+    border: '210 15% 88%',
+    input: '210 20% 90%',
+    preview: '#F5F7FA',
+  },
+  {
+    id: 'cream',
+    name: 'Cream',
+    mode: 'light',
+    background: '40 30% 97%',
+    card: '40 25% 95%',
+    popover: '40 30% 97%',
+    secondary: '40 20% 92%',
+    muted: '40 20% 92%',
+    foreground: '30 20% 12%',
+    mutedForeground: '35 15% 45%',
+    secondaryForeground: '30 15% 25%',
+    border: '40 15% 86%',
+    input: '40 25% 90%',
+    preview: '#FAF8F5',
+  },
+  {
+    id: 'mint',
+    name: 'Mint',
+    mode: 'light',
+    background: '150 25% 97%',
+    card: '150 20% 95%',
+    popover: '150 25% 97%',
+    secondary: '150 15% 92%',
+    muted: '150 15% 92%',
+    foreground: '160 25% 10%',
+    mutedForeground: '155 15% 42%',
+    secondaryForeground: '160 20% 22%',
+    border: '150 15% 86%',
+    input: '150 20% 90%',
+    preview: '#F5FAF8',
+  },
+  {
+    id: 'lavender',
+    name: 'Lavender',
+    mode: 'light',
+    background: '270 25% 98%',
+    card: '270 20% 96%',
+    popover: '270 25% 98%',
+    secondary: '270 15% 93%',
+    muted: '270 15% 93%',
+    foreground: '280 25% 12%',
+    mutedForeground: '275 15% 45%',
+    secondaryForeground: '280 20% 25%',
+    border: '270 15% 88%',
+    input: '270 20% 91%',
+    preview: '#FAF8FC',
+  },
+  {
+    id: 'sky',
+    name: 'Sky',
+    mode: 'light',
+    background: '200 30% 98%',
+    card: '200 25% 96%',
+    popover: '200 30% 98%',
+    secondary: '200 20% 93%',
+    muted: '200 20% 93%',
+    foreground: '210 30% 10%',
+    mutedForeground: '205 15% 45%',
+    secondaryForeground: '210 25% 22%',
+    border: '200 15% 87%',
+    input: '200 25% 90%',
+    preview: '#F5FAFC',
+  },
+];
 
 // Curated cool-spectrum accent presets
 export const ACCENT_PRESETS = [
@@ -65,7 +262,8 @@ export const ACCENT_PRESETS = [
 ] as const;
 
 const DEFAULT_ACCENT = ACCENT_PRESETS[0].hsl;
-const STORAGE_KEY = 'leadfinder-accent';
+const DEFAULT_THEME_ID = 'midnight';
+const STORAGE_KEY = 'leadfinder-theme';
 
 // Color validation and correction utilities
 function parseHSL(hsl: string): { h: number; s: number; l: number } {
@@ -81,85 +279,102 @@ function hslToString(h: number, s: number, l: number): string {
   return `${Math.round(h)} ${Math.round(s)}% ${Math.round(l)}%`;
 }
 
-// Check if color is in cool spectrum (blue, cyan, teal, violet)
-// Reject warm hues: red (0-30), orange (30-60), yellow (60-90)
 function isCoolColor(hue: number): boolean {
-  // Cool colors: 150-300 (cyan, blue, violet) + some teal (140-180)
   return (hue >= 140 && hue <= 300);
 }
 
-// Correct a color to be within acceptable range
 function correctColor(h: number, s: number, l: number): { h: number; s: number; l: number } {
   let correctedH = h;
-  let correctedS = s;
-  let correctedL = l;
-  
-  // If not a cool color, shift to nearest cool hue
   if (!isCoolColor(h)) {
-    // Map warm colors to cool alternatives
-    if (h < 140) {
-      // Warm (red, orange, yellow) -> shift to cyan/teal
-      correctedH = 180;
-    } else if (h > 300) {
-      // Pink/magenta -> shift to violet
-      correctedH = 270;
-    }
+    if (h < 140) correctedH = 180;
+    else if (h > 300) correctedH = 270;
   }
-  
-  // Clamp saturation (40-100%) for vibrancy without being garish
-  correctedS = Math.max(40, Math.min(100, s));
-  
-  // Clamp lightness (35-65%) for visibility on dark backgrounds
-  correctedL = Math.max(35, Math.min(65, l));
-  
-  return { h: correctedH, s: correctedS, l: correctedL };
-}
-
-// Generate derived shades from accent
-function generateAccentShades(hsl: string) {
-  const { h, s, l } = parseHSL(hsl);
-  
-  return {
-    base: hslToString(h, s, l),
-    hover: hslToString(h, Math.min(s + 10, 100), Math.min(l + 8, 70)),
-    glow: hslToString(h, s, l), // Used with opacity
-    foreground: l > 50 ? '220 40% 4%' : '210 40% 98%',
+  return { 
+    h: correctedH, 
+    s: Math.max(40, Math.min(100, s)), 
+    l: Math.max(35, Math.min(65, l)) 
   };
 }
 
-// Apply accent color to CSS variables
-function applyAccentToDocument(accentHSL: string) {
+function generateAccentShades(hsl: string, isLight: boolean) {
+  const { h, s, l } = parseHSL(hsl);
+  return {
+    base: hslToString(h, s, l),
+    foreground: isLight ? '0 0% 100%' : (l > 50 ? '220 40% 4%' : '210 40% 98%'),
+  };
+}
+
+// Apply theme + accent to CSS variables
+function applyThemeToDocument(theme: ThemePreset, accentHSL: string) {
   const root = document.documentElement;
-  const shades = generateAccentShades(accentHSL);
+  const isLight = theme.mode === 'light';
+  const shades = generateAccentShades(accentHSL, isLight);
+  const { h, s, l } = parseHSL(accentHSL);
   
-  // Apply accent colors only - foundational colors stay locked
+  // Apply theme foundation colors
+  root.style.setProperty('--background', theme.background);
+  root.style.setProperty('--foreground', theme.foreground);
+  root.style.setProperty('--card', theme.card);
+  root.style.setProperty('--card-foreground', theme.foreground);
+  root.style.setProperty('--popover', theme.popover);
+  root.style.setProperty('--popover-foreground', theme.foreground);
+  root.style.setProperty('--secondary', theme.secondary);
+  root.style.setProperty('--secondary-foreground', theme.secondaryForeground);
+  root.style.setProperty('--muted', theme.muted);
+  root.style.setProperty('--muted-foreground', theme.mutedForeground);
+  root.style.setProperty('--border', theme.border);
+  root.style.setProperty('--input', theme.input);
+  
+  // Apply accent colors
   root.style.setProperty('--primary', shades.base);
   root.style.setProperty('--primary-foreground', shades.foreground);
   root.style.setProperty('--ring', shades.base);
   root.style.setProperty('--accent', shades.base);
-  root.style.setProperty('--accent-foreground', '210 40% 98%');
+  root.style.setProperty('--accent-foreground', isLight ? '0 0% 100%' : '210 40% 98%');
   
-  // Sidebar accent
+  // Sidebar
+  root.style.setProperty('--sidebar-background', theme.card);
+  root.style.setProperty('--sidebar-foreground', theme.foreground);
   root.style.setProperty('--sidebar-primary', shades.base);
   root.style.setProperty('--sidebar-primary-foreground', shades.foreground);
+  root.style.setProperty('--sidebar-accent', theme.secondary);
+  root.style.setProperty('--sidebar-accent-foreground', theme.foreground);
+  root.style.setProperty('--sidebar-border', theme.border);
   root.style.setProperty('--sidebar-ring', shades.base);
   
-  // Update CSS custom properties for gradients and glows
-  const { h, s, l } = parseHSL(accentHSL);
+  // Gradients and glows (adjusted for light/dark)
+  const glowOpacity = isLight ? 0.12 : 0.25;
+  const glowOpacity2 = isLight ? 0.06 : 0.1;
   root.style.setProperty('--gradient-primary', `linear-gradient(135deg, hsl(${accentHSL}), hsl(210 100% 50%))`);
-  root.style.setProperty('--gradient-glow', `radial-gradient(ellipse at center, hsl(${h} ${s}% ${l}% / 0.15), transparent 70%)`);
-  root.style.setProperty('--shadow-glow', `0 0 20px hsl(${h} ${s}% ${l}% / 0.25), 0 0 40px hsl(${h} ${s}% ${l}% / 0.1)`);
-  root.style.setProperty('--shadow-glow-lg', `0 0 60px hsl(${h} ${s}% ${l}% / 0.2), 0 0 120px hsl(210 100% 50% / 0.1)`);
+  root.style.setProperty('--gradient-glow', `radial-gradient(ellipse at center, hsl(${h} ${s}% ${l}% / ${isLight ? 0.08 : 0.15}), transparent 70%)`);
+  root.style.setProperty('--shadow-glow', `0 0 20px hsl(${h} ${s}% ${l}% / ${glowOpacity}), 0 0 40px hsl(${h} ${s}% ${l}% / ${glowOpacity2})`);
+  root.style.setProperty('--shadow-glow-lg', `0 0 60px hsl(${h} ${s}% ${l}% / ${isLight ? 0.1 : 0.2}), 0 0 120px hsl(210 100% 50% / ${isLight ? 0.05 : 0.1})`);
+  
+  // Shadows (lighter for light theme)
+  if (isLight) {
+    root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.05)');
+    root.style.setProperty('--shadow-md', '0 4px 12px hsl(0 0% 0% / 0.08)');
+    root.style.setProperty('--shadow-lg', '0 10px 40px hsl(0 0% 0% / 0.12)');
+  } else {
+    root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.4)');
+    root.style.setProperty('--shadow-md', '0 4px 12px hsl(0 0% 0% / 0.5)');
+    root.style.setProperty('--shadow-lg', '0 10px 40px hsl(0 0% 0% / 0.6)');
+  }
+  
+  // Toggle dark class on html element
+  if (isLight) {
+    root.classList.remove('dark');
+  } else {
+    root.classList.add('dark');
+  }
 }
 
-// Validate and correct user-selected color
 export function validateAndCorrectColor(hsl: string): string {
   const { h, s, l } = parseHSL(hsl);
   const corrected = correctColor(h, s, l);
   return hslToString(corrected.h, corrected.s, corrected.l);
 }
 
-// Convert hex to HSL
 export function hexToHSL(hex: string): string {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
   if (!result) return DEFAULT_ACCENT;
@@ -187,7 +402,6 @@ export function hexToHSL(hex: string): string {
   return hslToString(h * 360, s * 100, l * 100);
 }
 
-// Convert HSL to hex
 export function hslToHex(hsl: string): string {
   const { h, s, l } = parseHSL(hsl);
   const sNorm = s / 100;
@@ -210,58 +424,83 @@ export function hslToHex(hsl: string): string {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
+function getThemeById(id: string): ThemePreset {
+  return [...DARK_THEMES, ...LIGHT_THEMES].find(t => t.id === id) || DARK_THEMES[0];
+}
+
 export function useAccentColor() {
   const [accent, setAccent] = useState<string>(DEFAULT_ACCENT);
+  const [themeId, setThemeId] = useState<string>(DEFAULT_THEME_ID);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Load saved accent on mount
+  // Load saved theme + accent on mount
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        const validated = validateAndCorrectColor(parsed.accent || DEFAULT_ACCENT);
-        setAccent(validated);
-        applyAccentToDocument(validated);
+        const validatedAccent = validateAndCorrectColor(parsed.accent || DEFAULT_ACCENT);
+        const savedThemeId = parsed.themeId || DEFAULT_THEME_ID;
+        const theme = getThemeById(savedThemeId);
+        
+        setAccent(validatedAccent);
+        setThemeId(savedThemeId);
+        applyThemeToDocument(theme, validatedAccent);
       } catch {
-        applyAccentToDocument(DEFAULT_ACCENT);
+        const theme = getThemeById(DEFAULT_THEME_ID);
+        applyThemeToDocument(theme, DEFAULT_ACCENT);
       }
     } else {
-      applyAccentToDocument(DEFAULT_ACCENT);
+      const theme = getThemeById(DEFAULT_THEME_ID);
+      applyThemeToDocument(theme, DEFAULT_ACCENT);
     }
     setIsLoaded(true);
+  }, []);
+
+  const saveAndApply = useCallback((newAccent: string, newThemeId: string) => {
+    const theme = getThemeById(newThemeId);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ accent: newAccent, themeId: newThemeId }));
+    applyThemeToDocument(theme, newAccent);
   }, []);
 
   const updateAccent = useCallback((newAccent: string) => {
     const validated = validateAndCorrectColor(newAccent);
     setAccent(validated);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ accent: validated }));
-    applyAccentToDocument(validated);
-  }, []);
+    saveAndApply(validated, themeId);
+  }, [themeId, saveAndApply]);
 
-  const setPreset = useCallback((presetIndex: number) => {
+  const setAccentPreset = useCallback((presetIndex: number) => {
     const preset = ACCENT_PRESETS[presetIndex];
     if (preset) {
       setAccent(preset.hsl);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ accent: preset.hsl }));
-      applyAccentToDocument(preset.hsl);
+      saveAndApply(preset.hsl, themeId);
     }
-  }, []);
+  }, [themeId, saveAndApply]);
+
+  const setTheme = useCallback((newThemeId: string) => {
+    setThemeId(newThemeId);
+    saveAndApply(accent, newThemeId);
+  }, [accent, saveAndApply]);
 
   const resetToDefault = useCallback(() => {
     setAccent(DEFAULT_ACCENT);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ accent: DEFAULT_ACCENT }));
-    applyAccentToDocument(DEFAULT_ACCENT);
-  }, []);
+    setThemeId(DEFAULT_THEME_ID);
+    saveAndApply(DEFAULT_ACCENT, DEFAULT_THEME_ID);
+  }, [saveAndApply]);
+
+  const currentTheme = getThemeById(themeId);
 
   return {
     accent,
-    presets: ACCENT_PRESETS,
+    themeId,
+    currentTheme,
+    accentPresets: ACCENT_PRESETS,
+    darkThemes: DARK_THEMES,
+    lightThemes: LIGHT_THEMES,
     isLoaded,
     updateAccent,
-    setPreset,
+    setAccentPreset,
+    setTheme,
     resetToDefault,
-    hexToHSL,
-    hslToHex,
   };
 }
