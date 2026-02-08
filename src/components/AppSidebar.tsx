@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/sidebar';
 import { UserMenu } from '@/components/UserMenu';
 import { AccentColorPicker } from '@/components/AccentColorPicker';
+import { useSubscription } from '@/hooks/useSubscription';
 import { 
   LayoutDashboard, 
   Search, 
@@ -22,7 +23,8 @@ import {
   ChevronRight,
   Briefcase,
   DollarSign,
-  HelpCircle
+  HelpCircle,
+  Users
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -73,9 +75,19 @@ const navItems = [
   },
 ];
 
+const adminItems = [
+  { 
+    title: 'Affiliates', 
+    url: '/admin/affiliates', 
+    icon: Users,
+    description: 'Manage affiliate partners'
+  },
+];
+
 export function AppSidebar() {
   const location = useLocation();
   const { state, toggleSidebar } = useSidebar();
+  const { isAdmin } = useSubscription();
   const isCollapsed = state === 'collapsed';
 
   return (
@@ -141,6 +153,56 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Admin Section - Only visible to admins */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              {!isCollapsed && (
+                <div className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
+                  Admin
+                </div>
+              )}
+              <SidebarMenu>
+                {adminItems.map((item) => {
+                  const isActive = location.pathname === item.url;
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={isActive}
+                        tooltip={isCollapsed ? item.title : undefined}
+                      >
+                        <Link 
+                          to={item.url}
+                          className={cn(
+                            'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+                            isActive 
+                              ? 'bg-sidebar-accent text-sidebar-primary font-medium' 
+                              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                          )}
+                        >
+                          <item.icon className={cn(
+                            'h-5 w-5 shrink-0',
+                            isActive ? 'text-sidebar-primary' : ''
+                          )} />
+                          {!isCollapsed && (
+                            <div className="flex flex-col overflow-hidden">
+                              <span className="truncate">{item.title}</span>
+                              <span className="text-xs text-sidebar-foreground/50 truncate">
+                                {item.description}
+                              </span>
+                            </div>
+                          )}
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3">
