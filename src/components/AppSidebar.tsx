@@ -26,7 +26,8 @@ import {
   Briefcase,
   DollarSign,
   HelpCircle,
-  Users
+  Users,
+  MessageSquare
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -74,6 +75,12 @@ const navItems = [
     url: '/how-to-use', 
     icon: HelpCircle,
     description: 'Step-by-step guide'
+  },
+  { 
+    title: 'Feedback', 
+    url: '/feedback', 
+    icon: MessageSquare,
+    description: 'Share your thoughts'
   },
 ];
 

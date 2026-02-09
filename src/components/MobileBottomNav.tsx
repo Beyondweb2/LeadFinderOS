@@ -10,7 +10,8 @@ import {
   MoreHorizontal,
   Palette,
   LogOut,
-  HelpCircle
+  HelpCircle,
+  MessageSquare
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -48,6 +49,7 @@ const moreNavItems = [
   { title: 'Templates', url: '/templates', icon: FileText },
   { title: 'Paid Clients', url: '/paid-clients', icon: DollarSign },
   { title: 'How to Use', url: '/how-to-use', icon: HelpCircle },
+  { title: 'Feedback', url: '/feedback', icon: MessageSquare },
 ];
 
 function MobileThemeGrid({ 
