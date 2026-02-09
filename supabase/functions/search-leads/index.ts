@@ -849,7 +849,10 @@ serve(async (req) => {
         if (details.business_status === 'CLOSED_PERMANENTLY') continue;
 
         const websiteUrl = details.website;
-        const category = details.types?.[0]?.replace(/_/g, ' ') || undefined;
+        // Get most specific business type - skip generic types like "establishment", "point_of_interest"
+        const genericTypes = new Set(['establishment', 'point_of_interest', 'store', 'food', 'locality', 'political', 'premise', 'subpremise']);
+        const specificType = details.types?.find((t: string) => !genericTypes.has(t));
+        const category = specificType?.replace(/_/g, ' ') || details.types?.[0]?.replace(/_/g, ' ') || undefined;
         
         let websiteStatus: Lead['websiteStatus'];
         let confidence: number;
