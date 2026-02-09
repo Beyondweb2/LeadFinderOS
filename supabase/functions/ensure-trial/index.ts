@@ -60,7 +60,7 @@ serve(async (req) => {
     }
 
     // Create trial record for user
-    const trialDays = 7;
+    const trialDays = 3;
     const now = new Date();
     const trialEndDate = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
 

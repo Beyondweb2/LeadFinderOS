@@ -777,7 +777,7 @@ const Landing = () => {
                 />
                 
                 <CardHeader className="text-center pb-2 pt-6 sm:pt-8 px-4 sm:px-6">
-                  {/* 7-Day Free Trial Badge */}
+                  {/* 3-Day Free Trial Badge */}
                   <div 
                     className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wide mx-auto mb-3 sm:mb-4"
                     style={{ 
@@ -787,14 +787,14 @@ const Landing = () => {
                     }}
                   >
                     <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                    7-Day Free Trial
+                    3-Day Free Trial
                   </div>
                   <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
                   <div className="mt-4 sm:mt-6">
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">after 7-day free trial</p>
+                  <p className="text-xs text-muted-foreground mt-2">after 3-day free trial</p>
                 </CardHeader>
                 
                 <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
@@ -866,7 +866,7 @@ const Landing = () => {
                 </Button>
               </div>
               <p className="relative text-[10px] sm:text-xs text-muted-foreground mt-4">
-                7-day free trial • Cancel anytime
+                3-day free trial • Cancel anytime
               </p>
             </div>
           </ScrollReveal>
