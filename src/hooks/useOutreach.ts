@@ -626,8 +626,8 @@ export function useOutreach() {
     setArchivedLeads((prev) => prev.map(updateLeadFn));
     
     toast({
-      title: 'Added to Interested',
-      description: `${lead.business_name} added to your Interested pipeline.`,
+      title: 'Added to Track Leads',
+      description: `${lead.business_name} added to Track Leads.`,
     });
 
     // Log activity
@@ -636,7 +636,7 @@ export function useOutreach() {
         lead_id: leadId,
         user_id: user.id,
         activity_type: 'interested',
-        description: 'Marked as interested and added to pipeline',
+        description: 'Marked as interested and added to Track Leads',
       });
     }
 
@@ -672,8 +672,8 @@ export function useOutreach() {
     setArchivedLeads((prev) => prev.map(updateLeadFn));
     
     toast({
-      title: 'Added to Interested',
-      description: `${leadIds.length} leads added to your Interested pipeline.`,
+      title: 'Added to Track Leads',
+      description: `${leadIds.length} leads added to Track Leads.`,
     });
 
     return true;

@@ -343,7 +343,7 @@ const PotentialWorkPage = () => {
           Track Leads
         </h1>
         <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
-          Track leads who've responded positively to your outreach. Manage their status through your sales pipeline from interested to completed.
+          Track leads who've responded positively to your outreach. Manage their status from first response to completed deal.
         </p>
       </div>
 
@@ -367,7 +367,7 @@ const PotentialWorkPage = () => {
       {potentialWorkLeads.length === 0 ? (
         <Card className="bg-card/50 border-border/50">
           <CardContent className="py-10 sm:py-16 text-center text-muted-foreground text-sm">
-            No interested leads yet. Mark leads as "Interested" in the Outreach CRM to see them here.
+            No tracked leads yet. Click "Track" in the Outreach CRM to see them here.
           </CardContent>
         </Card>
       ) : (

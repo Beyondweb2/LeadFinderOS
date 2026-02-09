@@ -36,7 +36,7 @@ const STEPS = [
     number: 3,
     icon: MessageSquare,
     title: 'Reach Out & Track Progress',
-    description: 'In the Outreach CRM, copy phone numbers to text leads or call them directly. Update their status as you go - mark as "Contacted" after reaching out, then click "Track" when someone responds positively.',
+    description: 'In the Outreach CRM, tap the WhatsApp button to message a lead. If they don\'t have WhatsApp, an SMS button appears instead. Mark leads as "Contacted" after reaching out, then click "Track" when someone shows interest.',
     image: step3Crm,
     tip: 'A direct phone call often gets the best response. Prepare a short pitch and keep it friendly.',
   },
@@ -44,7 +44,7 @@ const STEPS = [
     number: 4,
     icon: CheckCircle,
     title: 'Track Leads',
-    description: 'The Track Leads page shows all leads who responded positively. Track their status, add notes, schedule follow-ups, and move them through your pipeline until they become paid clients.',
+    description: 'The Track Leads page shows all leads who responded positively. Track their status, add notes, schedule follow-ups, and manage them through to completion.',
     image: step4TrackLeads,
     tip: 'Set next actions and dates to stay organized. Use notes to remember conversation details.',
   },
@@ -132,7 +132,7 @@ const HowToUse = () => {
           </h2>
           <p className="text-muted-foreground text-sm md:text-base mb-4 max-w-2xl mx-auto sm:mx-0">
             You've learned how to find leads, reach out via calls or texts, 
-            and manage interested prospects through your sales pipeline. Now start finding your next client!
+            and manage prospects from first contact to paid client. Now start finding your next client!
           </p>
           <div className="flex flex-col sm:flex-row flex-wrap gap-3 justify-center sm:justify-start">
             {isPublicGuide ? (

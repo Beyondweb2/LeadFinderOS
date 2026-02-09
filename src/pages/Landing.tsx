@@ -87,7 +87,7 @@ const FEATURES = [
   {
     icon: Search,
     title: 'Smart Classification',
-    description: 'Automatically classify leads as hot, directory-only, or has website with confidence scores.',
+    description: 'See which businesses have no website, a directory listing, or an existing site — so you focus on the best leads.',
     image: featureClassification,
     imageScale: 'scale-100',
   },
@@ -101,7 +101,7 @@ const FEATURES = [
   {
     icon: Phone,
     title: 'Contact Tracking',
-    description: 'Manage potential clients from first contact to closed deal with status updates and notes.',
+    description: 'Log contact attempts, update lead status, and add notes as you reach out.',
     image: featureContactTracking,
     imageScale: 'scale-100',
   },
@@ -115,7 +115,7 @@ const FEATURES = [
   {
     icon: FileText,
     title: 'Export Tools',
-    description: 'Full contact management with activity logs, notes, and action scheduling.',
+    description: 'Export your leads as CSV files to use in other tools or keep as backup.',
     image: featureExport,
     imageScale: 'scale-100',
   },
@@ -313,7 +313,7 @@ const VideoSection = () => {
         <div className="text-center mt-6 sm:mt-10 md:mt-12">
           <Button size="lg" className="btn-premium font-semibold px-5 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
             <Link to="/auth">
-              Start Finding Leads
+              Start Free Trial
               <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
             </Link>
           </Button>
@@ -416,8 +416,8 @@ const Landing = () => {
             </Button>
             <Button asChild className="btn-premium font-medium text-sm px-3 sm:px-4">
               <Link to="/auth">
-                <span className="hidden sm:inline">Get Started</span>
-                <span className="sm:hidden">Start</span>
+                <span className="hidden sm:inline">Start Free Trial</span>
+                <span className="sm:hidden">Free Trial</span>
               </Link>
             </Button>
           </div>
@@ -451,8 +451,8 @@ const Landing = () => {
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-xl mx-auto mb-6 sm:mb-12 leading-relaxed px-2">
-            Discover local businesses that need your web design services.
-            <span className="hidden sm:inline"> Stop scrolling Google Maps—start closing deals.</span>
+            Find local businesses without websites and reach out directly.
+            <span className="hidden sm:inline"> Stop scrolling Google Maps — start contacting prospects.</span>
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
@@ -485,6 +485,26 @@ const Landing = () => {
             <div className="text-center">
               <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">∞</div>
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Unlimited</div>
+            </div>
+            {/* Mobile reassurance microcopy */}
+            <p className="sm:hidden text-[11px] text-muted-foreground mt-2">
+              Set up in under 60 seconds. No credit card needed.
+            </p>
+          </div>
+          
+          {/* Stats bar - all 3 on one line, equal width */}
+          <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-xl mx-auto">
+            <div className="text-center">
+              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">100K+</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Businesses</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">∞</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
           </div>
         </div>
@@ -576,7 +596,7 @@ const Landing = () => {
           <ScrollReveal delay={300} className="text-center mt-10 sm:mt-14">
             <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
               <Link to="/auth">
-                Try It Free
+                Start Free Trial
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
@@ -623,7 +643,7 @@ const Landing = () => {
                 }}
               >
                 <CarouselContent>
-                  {FEATURES.map((feature) => (
+                  {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature) => (
                     <CarouselItem key={feature.title}>
                       <div 
                         className="flex flex-col items-center text-center px-1 cursor-pointer"
@@ -668,7 +688,7 @@ const Landing = () => {
               
               {/* Dot indicators */}
               <div className="flex justify-center gap-2 mt-6">
-                {FEATURES.map((_, index) => (
+                {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((_, index) => (
                   <button
                     key={index}
                     className={`w-2 h-2 rounded-full transition-all duration-300 ${
@@ -737,7 +757,7 @@ const Landing = () => {
           <ScrollReveal delay={600} className="text-center mt-10 sm:mt-14">
             <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
               <Link to="/auth">
-                Get Started Now
+                Start Free Trial
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
@@ -855,7 +875,7 @@ const Landing = () => {
                 Ready to Find Your Next Client?
               </h2>
               <p className="relative text-sm sm:text-base md:text-lg text-muted-foreground mb-6 sm:mb-8 max-w-lg mx-auto">
-                Join hundreds of web professionals using LeadFinder Pro to grow their business.
+                Start finding businesses that need your services.
               </p>
               <div className="relative flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
                 <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base w-full sm:w-auto" asChild>
@@ -888,7 +908,7 @@ const Landing = () => {
                 Sign In
               </Link>
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
-                Get Started
+                Start Free Trial
               </Link>
               <Link to="/feedback" className="hover:text-foreground transition-colors duration-200">
                 Feedback

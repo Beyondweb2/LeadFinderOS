@@ -57,7 +57,7 @@ const Outreach = () => {
       <div className="text-center sm:text-left">
         <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
         <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
-          Cold call businesses or copy phone numbers for texting. Mark leads as "Contacted" once you've reached out, then track promising ones in your pipeline.
+          Cold call businesses or copy phone numbers for texting. Mark leads as "Contacted" once you've reached out, then track promising ones in Track Leads.
         </p>
         {/* Workflow Tip - More compact on mobile */}
         <div className="mt-2 sm:mt-3 p-2 sm:p-3 rounded-lg bg-muted/50 border border-border/50 max-w-lg">
