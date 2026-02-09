@@ -91,6 +91,19 @@ export function generateWhatsAppUrl(phone: string, message: string): string {
 }
 
 /**
+ * Generate SMS URL with pre-filled message
+ * Uses sms: protocol which opens the default SMS app
+ */
+export function generateSMSUrl(phone: string, message: string): string {
+  const formattedPhone = formatPhoneForWhatsApp(phone); // Same phone formatting
+  const encodedMessage = encodeURIComponent(message);
+  // Different devices use different separators: 
+  // iOS uses &body=, Android uses ?body=
+  // Using & works on most modern devices
+  return `sms:+${formattedPhone}?body=${encodedMessage}`;
+}
+
+/**
  * Open WhatsApp for multiple leads (opens first, queues rest)
  */
 export function openBulkWhatsApp(

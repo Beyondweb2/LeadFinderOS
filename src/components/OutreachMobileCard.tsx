@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ExternalLink, MessageSquare, Star, PhoneOff } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, PhoneOff } from 'lucide-react';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
@@ -20,6 +20,7 @@ interface OutreachMobileCardProps {
   onLeadClick: () => void;
   onStatusChange: (status: LeadStatus) => void;
   onWhatsAppClick: () => void;
+  onSMSClick?: () => void;
   onTrack?: () => void;
   readOnly?: boolean;
   showTrackButton?: boolean;
@@ -33,6 +34,7 @@ export function OutreachMobileCard({
   onLeadClick,
   onStatusChange,
   onWhatsAppClick,
+  onSMSClick,
   onTrack,
   readOnly = false,
   showTrackButton = true,
@@ -140,10 +142,20 @@ export function OutreachMobileCard({
           </>
         )}
         {lead.phone && lead.status === 'no_whatsapp' && (
-          <span className="h-7 px-2 text-xs flex items-center gap-1 text-muted-foreground">
-            <PhoneOff className="h-3 w-3" />
-            No WA
-          </span>
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 px-2 text-xs flex-1 text-blue-500 border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-400"
+              onClick={onSMSClick}
+            >
+              <MessageCircle className="h-3 w-3 mr-1" />
+              SMS
+            </Button>
+            <span className="h-7 px-2 text-xs flex items-center gap-1 text-muted-foreground" title="No WhatsApp">
+              <PhoneOff className="h-3 w-3" />
+            </span>
+          </>
         )}
 
         {/* Track Button */}

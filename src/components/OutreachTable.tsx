@@ -34,6 +34,7 @@ import {
   RefreshCw,
   Loader2,
   MessageSquare,
+  MessageCircle,
   Upload,
   Eye,
   PhoneOff,
@@ -46,6 +47,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
 import { SingleWhatsAppDialog } from './SingleWhatsAppDialog';
+import { SingleSMSDialog } from './SingleSMSDialog';
 import { CSVImportDialog } from './CSVImportDialog';
 import { OutreachMobileCard } from './OutreachMobileCard';
 import type { OutreachLead, LeadStatus, NextActionType, Country } from '@/types/outreach';
@@ -108,6 +110,7 @@ export function OutreachTable({
   const [isRecoveringPhones, setIsRecoveringPhones] = useState(false);
   const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
   const [whatsAppLead, setWhatsAppLead] = useState<{ phone: string; business_name: string } | null>(null);
+  const [smsLead, setSmsLead] = useState<{ phone: string; business_name: string } | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [lastWhatsAppLeadId, setLastWhatsAppLeadId] = useState<string | null>(null);
 
@@ -212,6 +215,11 @@ export function OutreachTable({
       // ignore
     }
     setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name });
+  };
+
+  // Handle SMS button click for no_whatsapp leads
+  const handleSMSClick = (lead: OutreachLead) => {
+    setSmsLead({ phone: lead.phone || '', business_name: lead.business_name });
   };
 
   // Count leads missing phone numbers
@@ -864,6 +872,7 @@ export function OutreachTable({
                   onLeadClick={() => onLeadClick(lead)}
                   onStatusChange={(status) => onStatusChange(lead.id, status)}
                   onWhatsAppClick={() => handleWhatsAppClick(lead)}
+                  onSMSClick={() => handleSMSClick(lead)}
                   onTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
                   readOnly={readOnly}
                   showTrackButton={!!onMarkAsInterested}
@@ -1024,10 +1033,18 @@ export function OutreachTable({
                             </>
                           )}
                           {lead.phone && lead.status === 'no_whatsapp' && (
-                            <span className="text-xs text-muted-foreground flex items-center gap-1">
-                              <PhoneOff className="h-3.5 w-3.5" />
-                              No WA
-                            </span>
+                            <>
+                              <button
+                                onClick={() => handleSMSClick(lead)}
+                                className="p-1.5 rounded-md hover:bg-muted text-blue-500 hover:text-blue-400 transition-colors"
+                                title="Send SMS message"
+                              >
+                                <MessageCircle className="h-4 w-4" />
+                              </button>
+                              <span className="text-xs text-muted-foreground flex items-center gap-1" title="No WhatsApp">
+                                <PhoneOff className="h-3.5 w-3.5" />
+                              </span>
+                            </>
                           )}
                         </div>
                       </TableCell>
@@ -1112,6 +1129,13 @@ export function OutreachTable({
         open={!!whatsAppLead}
         onOpenChange={(open) => !open && setWhatsAppLead(null)}
         lead={whatsAppLead}
+      />
+
+      {/* SMS Dialog */}
+      <SingleSMSDialog
+        open={!!smsLead}
+        onOpenChange={(open) => !open && setSmsLead(null)}
+        lead={smsLead}
       />
 
       {/* CSV Import Dialog */}
