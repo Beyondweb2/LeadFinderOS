@@ -7,15 +7,15 @@ import { Search, Users, Target, Sparkles } from 'lucide-react';
 interface TrialProgressCardProps {
   searchesUsedToday: number;
   dailyLimit: number;
-  totalLeadsFound: number;
-  interestedLeads: number;
+  noWebsiteBusinesses: number;
+  addedToCRM: number;
 }
 
 export function TrialProgressCard({
   searchesUsedToday,
   dailyLimit,
-  totalLeadsFound,
-  interestedLeads,
+  noWebsiteBusinesses,
+  addedToCRM,
 }: TrialProgressCardProps) {
   const searchProgress = (searchesUsedToday / dailyLimit) * 100;
   const searchesRemaining = Math.max(0, dailyLimit - searchesUsedToday);
@@ -52,21 +52,21 @@ export function TrialProgressCard({
         <div className="grid grid-cols-2 gap-3 pt-2">
           <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border/50">
             <div className="p-2 rounded-lg bg-blue-500/10">
-              <Users className="h-4 w-4 text-blue-500" />
+              <Target className="h-4 w-4 text-blue-500" />
             </div>
             <div>
-              <p className="text-lg font-semibold">{totalLeadsFound}</p>
-              <p className="text-xs text-muted-foreground">Leads found</p>
+              <p className="text-lg font-semibold">{noWebsiteBusinesses}</p>
+              <p className="text-xs text-muted-foreground">No website</p>
             </div>
           </div>
           
           <div className="flex items-center gap-3 p-3 rounded-lg bg-card border border-border/50">
             <div className="p-2 rounded-lg bg-emerald-500/10">
-              <Target className="h-4 w-4 text-emerald-500" />
+              <Users className="h-4 w-4 text-emerald-500" />
             </div>
             <div>
-              <p className="text-lg font-semibold">{interestedLeads}</p>
-              <p className="text-xs text-muted-foreground">Interested</p>
+              <p className="text-lg font-semibold">{addedToCRM}</p>
+              <p className="text-xs text-muted-foreground">Added to CRM</p>
             </div>
           </div>
         </div>

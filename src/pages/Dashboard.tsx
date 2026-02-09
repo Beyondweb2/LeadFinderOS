@@ -53,8 +53,8 @@ const Dashboard = () => {
           <TrialProgressCard
             searchesUsedToday={searchesToday}
             dailyLimit={dailyLimit}
-            totalLeadsFound={metrics.totalBusinessesAdded}
-            interestedLeads={metrics.interestedCount}
+            noWebsiteBusinesses={metrics.noWebsiteBusinesses}
+            addedToCRM={metrics.totalBusinessesAdded}
           />
         </section>
       )}
