@@ -199,7 +199,7 @@ const Auth = () => {
                 <Sparkles className="h-5 w-5 text-primary" />
               </h3>
               <p className="text-muted-foreground text-sm">
-                Setting up your 7-day free trial...
+                Setting up your 3-day free trial...
               </p>
             </div>
             
@@ -215,7 +215,7 @@ const Auth = () => {
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Check className="h-4 w-4 text-primary" />
-                <span>No charge for 7 days</span>
+                <span>No charge for 3 days</span>
               </div>
             </div>
           </div>
@@ -239,7 +239,7 @@ const Auth = () => {
           <CardDescription>
             {isLogin 
               ? 'Sign in to find businesses without websites' 
-              : 'Start your 7-day free trial — no charge today'}
+              : 'Start your 3-day free trial — no charge today'}
           </CardDescription>
           {!isLogin && (
             <div className="flex items-center justify-center gap-2 mt-2 text-xs text-muted-foreground">

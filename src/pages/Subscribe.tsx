@@ -85,14 +85,14 @@ import appLogo from '@/assets/logo.png';
             <CardContent className="space-y-6">
               <div className="text-center">
                 <div className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
-                  7-Day Free Trial
+                  3-Day Free Trial
                 </div>
                 <div>
                   <span className="text-4xl font-bold">£19.99</span>
                   <span className="text-muted-foreground">/month</span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Try free for 7 days, then £19.99/month
+                  Try free for 3 days, then £19.99/month
                 </p>
               </div>
  
