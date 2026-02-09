@@ -64,7 +64,7 @@ const HowToUse = () => {
         </h1>
         <p className="text-muted-foreground text-sm md:text-base max-w-2xl mx-auto sm:mx-0">
           Follow this step-by-step guide to find businesses without websites, 
-          reach out via cold calls or texts, and convert interested leads into paying clients.
+          reach out via cold calls or texts, and convert leads into paying clients.
         </p>
       </div>
 
