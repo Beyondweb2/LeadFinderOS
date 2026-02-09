@@ -44,7 +44,7 @@ interface DashboardMetrics {
   fullyPaidClients: number;
   paidForDraftCount: number;
   
-  // Pipeline metrics
+  // Outreach metrics
   totalBusinessesAdded: number;
   noWebsiteBusinesses: number;
   addedToday: number;

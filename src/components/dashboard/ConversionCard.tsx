@@ -38,7 +38,7 @@
              {interestRate.toFixed(1)}%
            </div>
            <p className="text-[10px] sm:text-xs text-muted-foreground">
-             Interest rate
+             Conversion rate
            </p>
          </div>
          
@@ -47,7 +47,7 @@
            <div className="space-y-1">
              <div className="flex items-center gap-1.5">
                <ThumbsUp className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-green-500" />
-               <span className="text-[10px] sm:text-xs text-muted-foreground">Interested</span>
+               <span className="text-[10px] sm:text-xs text-muted-foreground">Tracked</span>
              </div>
              <div className="text-sm sm:text-lg font-semibold">{interestedCount}</div>
            </div>
@@ -64,7 +64,7 @@
          {/* Response to Interest Rate */}
          <div className="pt-2 border-t border-border/50">
            <div className="flex items-center justify-between">
-             <span className="text-xs sm:text-sm text-muted-foreground">Resp→Int</span>
+             <span className="text-xs sm:text-sm text-muted-foreground">Response rate</span>
              <span className={`text-base sm:text-xl font-bold ${getRateColor(responseToInterestRate)}`}>
                {responseToInterestRate.toFixed(1)}%
              </span>

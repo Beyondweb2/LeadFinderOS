@@ -234,7 +234,7 @@ const ArchivePage = () => {
             </span>
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-lg">
-            Businesses you've bulk texted. When someone responds, search by their phone number here and mark as "Interested" to move them to Potential Work.
+            Businesses you've bulk texted. When someone responds, search by their phone number here and click "Track" to move them to Track Leads.
           </p>
         </div>
 
