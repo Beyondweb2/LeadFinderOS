@@ -694,13 +694,15 @@ serve(async (req) => {
         .eq('user_id', userId)
         .maybeSingle();
 
-      const validStatuses = ['active', 'trialing', 'past_due'];
-      hasActiveSubscription = subscription && validStatuses.includes(subscription.status);
+      // Only 'active' and 'past_due' get unlimited searches
+      // 'trialing' users still have 2/day limit until first payment
+      const paidStatuses = ['active', 'past_due'];
+      hasActiveSubscription = subscription && paidStatuses.includes(subscription.status);
       
-      // If user has Stripe subscription (including trialing), allow unlimited searches
+      // If user has PAID Stripe subscription (active or past_due), allow unlimited searches
       if (hasActiveSubscription) {
-        console.log(`User ${userId} has valid Stripe subscription (${subscription.status}) - unlimited searches`);
-        // Continue to search - no limits for Stripe subscribers/trialing users
+        console.log(`User ${userId} has paid Stripe subscription (${subscription.status}) - unlimited searches`);
+        // Continue to search - no limits for paid subscribers
       } else {
         // No Stripe subscription - check if user is on free app trial (1 search/day limit)
         const { data: trial } = await serviceClient

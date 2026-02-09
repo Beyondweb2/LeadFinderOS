@@ -26,7 +26,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export function UserMenu() {
   const { user, signOut } = useAuth();
-  const { subscribed, subscriptionEnd, openCustomerPortal, isAdmin } = useSubscription();
+  const { subscribed, subscriptionEnd, openCustomerPortal, isAdmin, isPaidSubscriber, isStripeTrialing } = useSubscription();
   const { toast } = useToast();
   
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
@@ -115,7 +115,7 @@ export function UserMenu() {
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon" className="rounded-full relative">
             <User className="h-4 w-4" />
-            {subscribed && (
+            {isPaidSubscriber && (
               <Crown className="h-3 w-3 text-primary absolute -top-1 -right-1" />
             )}
           </Button>
@@ -127,9 +127,14 @@ export function UserMenu() {
               <p className="text-xs leading-none text-muted-foreground truncate">
                 {user.email}
               </p>
-              {subscribed && subscriptionEnd && (
+              {isPaidSubscriber && subscriptionEnd && (
                 <p className="text-xs text-primary font-medium">
                   Pro • Renews {formatDate(subscriptionEnd)}
+                </p>
+              )}
+              {isStripeTrialing && subscriptionEnd && (
+                <p className="text-xs text-amber-500 font-medium">
+                  Pro Trial • Ends {formatDate(subscriptionEnd)}
                 </p>
               )}
             </div>

@@ -10,6 +10,8 @@ interface SubscriptionState {
   error: string | null;
   status: string | null;
   isAdmin: boolean;
+  isPaidSubscriber: boolean;  // true only for 'active' or 'past_due' (not trialing)
+  isStripeTrialing: boolean;  // true when status is 'trialing'
 }
 
 export function useSubscription() {
@@ -22,6 +24,8 @@ export function useSubscription() {
     error: null,
     status: null,
     isAdmin: false,
+    isPaidSubscriber: false,
+    isStripeTrialing: false,
   });
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   
@@ -46,7 +50,7 @@ export function useSubscription() {
     const accessToken = accessTokenRef.current;
     
     if (!accessToken || !userId) {
-      setState(prev => ({ ...prev, isLoading: false, subscribed: false, status: null }));
+      setState(prev => ({ ...prev, isLoading: false, subscribed: false, status: null, isPaidSubscriber: false, isStripeTrialing: false }));
       return;
     }
 
@@ -64,6 +68,8 @@ export function useSubscription() {
           error: null,
           status: 'admin',
           isAdmin: true,
+          isPaidSubscriber: true,
+          isStripeTrialing: false,
         });
         return;
       }
@@ -79,6 +85,8 @@ export function useSubscription() {
         if (!localError && localSub) {
           const validStatuses = ['active', 'trialing', 'past_due'];
           const isValid = validStatuses.includes(localSub.status);
+          const isPaid = ['active', 'past_due'].includes(localSub.status);
+          const isTrialing = localSub.status === 'trialing';
           
           setState({
             subscribed: isValid,
@@ -88,6 +96,8 @@ export function useSubscription() {
             error: null,
             status: localSub.status,
             isAdmin: false,
+            isPaidSubscriber: isPaid,
+            isStripeTrialing: isTrialing,
           });
           
           if (!isValid) return;
@@ -100,16 +110,18 @@ export function useSubscription() {
       
       if (!freshToken) {
         // Session expired - user needs to re-authenticate
-        setState({
-          subscribed: false,
-          productId: null,
-          subscriptionEnd: null,
-          isLoading: false,
-          error: null,
-          status: null,
-          isAdmin: false,
-        });
-        return;
+          setState({
+            subscribed: false,
+            productId: null,
+            subscriptionEnd: null,
+            isLoading: false,
+            error: null,
+            status: null,
+            isAdmin: false,
+            isPaidSubscriber: false,
+            isStripeTrialing: false,
+          });
+          return;
       }
       
       // Update the ref with fresh token
@@ -133,20 +145,28 @@ export function useSubscription() {
             error: null,
             status: null,
             isAdmin: false,
+            isPaidSubscriber: false,
+            isStripeTrialing: false,
           });
           return;
         }
         throw error;
       }
 
+      const subStatus = data.subscription_status ?? null;
+      const isPaid = ['active', 'past_due'].includes(subStatus);
+      const isTrialing = subStatus === 'trialing';
+      
       setState({
         subscribed: data.subscribed ?? false,
         productId: data.product_id ?? null,
         subscriptionEnd: data.subscription_end ?? null,
         isLoading: false,
         error: null,
-        status: data.subscription_status ?? null,
+        status: subStatus,
         isAdmin: false,
+        isPaidSubscriber: isPaid,
+        isStripeTrialing: isTrialing,
       });
     } catch (err) {
       console.error('Subscription check failed:', err);
@@ -179,6 +199,8 @@ export function useSubscription() {
           error: null,
           status: null,
           isAdmin: false,
+          isPaidSubscriber: false,
+          isStripeTrialing: false,
         });
       }
     } else if (newAccessToken !== accessTokenRef.current) {
