@@ -197,16 +197,16 @@ export function SearchForm({
             {/* Trial searches remaining indicator */}
             {isOnTrial && !subscribed && (
               <div className="flex items-center gap-2 text-xs sm:text-sm">
-                <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full ${
+                <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
                   searchesRemaining === 0 
-                    ? 'bg-destructive/10 text-destructive' 
+                    ? 'bg-destructive/10 text-destructive border-destructive/20' 
                     : searchesRemaining === 1 
-                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-                      : 'bg-primary/10 text-primary'
+                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                      : 'bg-primary/10 text-primary border-primary/20'
                 }`}>
                   <Search className="h-3 w-3" />
                   <span className="font-medium">
-                    {searchesRemaining} search{searchesRemaining !== 1 ? 'es' : ''} left today
+                    Free trial: {searchesRemaining} search{searchesRemaining !== 1 ? 'es' : ''} left today
                   </span>
                 </div>
               </div>
