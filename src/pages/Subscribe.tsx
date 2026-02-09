@@ -21,7 +21,7 @@ import appLogo from '@/assets/logo.png';
  
 const Subscribe = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const { createCheckout, subscribed, isLoading: subLoading, status } = useSubscription();
+  const { createCheckout, subscribed, isLoading: subLoading, status, isPaidSubscriber } = useSubscription();
   const { isOnTrial, isStripeTrialing } = useTrial();
   const { signOut } = useAuth();
   const { toast } = useToast();
@@ -50,11 +50,11 @@ const Subscribe = () => {
      }
    };
  
-   // If already subscribed, redirect to home
-   if (subscribed && !subLoading) {
-     navigate('/', { replace: true });
-     return null;
-   }
+    // Only redirect if user is a PAID subscriber (not trialing)
+    if (isPaidSubscriber && !subLoading) {
+      navigate('/', { replace: true });
+      return null;
+    }
  
    return (
      <div className="min-h-screen bg-background flex items-center justify-center p-4">

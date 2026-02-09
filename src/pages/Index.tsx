@@ -78,10 +78,10 @@ const Index = () => {
             search(filters);
           }} 
           isLoading={isLoading}
-          isOnTrial={!isAccessLoading && isOnTrial && !isStripeTrialing}
+          isOnTrial={!isAccessLoading && (isOnTrial || isStripeTrialing)}
           searchesRemaining={searchesRemaining}
           dailyLimit={dailyLimit}
-          subscribed={subscribed || isStripeTrialing}
+          isPaidSubscriber={subscribed && !isStripeTrialing}
         />
       </section>
 
