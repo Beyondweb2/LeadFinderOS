@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ArrowLeft, Star, Send, MessageSquare, Lightbulb, HelpCircle, Loader2 } from "lucide-react";
+import { ArrowLeft, Star, Send, MessageSquare, Lightbulb, HelpCircle, Loader2, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -416,6 +416,27 @@ const Feedback = () => {
               </Tabs>
             </CardHeader>
           </Card>
+
+          {/* WhatsApp Quick Contact */}
+          <div className="mt-6 p-4 rounded-lg border bg-card/50 text-center">
+            <p className="text-sm text-muted-foreground mb-3">
+              Prefer a quick chat? Message us directly on WhatsApp
+            </p>
+            <Button
+              variant="outline"
+              className="bg-[#25D366]/10 border-[#25D366]/30 hover:bg-[#25D366]/20 text-[#25D366]"
+              asChild
+            >
+              <a
+                href="https://wa.me/447477932564?text=Hi%2C%20I%20have%20feedback%20about%20LeadFinder%20Pro"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <MessageCircle className="mr-2 h-4 w-4" />
+                Chat on WhatsApp
+              </a>
+            </Button>
+          </div>
 
           <p className="text-center text-sm text-muted-foreground mt-6">
             Your feedback helps us improve. We read every submission!
