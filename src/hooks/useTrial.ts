@@ -23,10 +23,12 @@ const DAILY_TRIAL_LIMIT = 2;
 
 export function useTrial() {
   const { user } = useAuth();
-  const { status: stripeStatus, isLoading: isSubscriptionLoading } = useSubscription();
+  const { status: stripeStatus, isLoading: isSubscriptionLoading, subscribed } = useSubscription();
   
   // Stripe trialing users get unlimited access
   const isStripeTrialing = stripeStatus === 'trialing';
+  // Paid subscribers also get unlimited access
+  const hasPaidAccess = subscribed || isStripeTrialing;
   
   const [state, setState] = useState<TrialState>({
     planStatus: null,
@@ -203,16 +205,29 @@ export function useTrial() {
     await checkTrial();
   }, [user?.id, checkTrial]);
 
-  // If user has Stripe trialing status, override to unlimited searches
-  if (isStripeTrialing) {
+  // If user has paid access (subscribed or Stripe trialing), override to unlimited searches
+  if (hasPaidAccess) {
     return {
       ...state,
-      isOnTrial: true,
-      isStripeTrialing: true,
+      isOnTrial: false, // Not on free trial anymore
+      isStripeTrialing: isStripeTrialing,
       searchesRemaining: Infinity,
       dailyLimit: Infinity,
+      isLoading: isSubscriptionLoading, // Sync loading state with subscription
       checkTrial,
-      shouldShowUpgradePrompt: () => false, // Never show for Stripe trialing users
+      shouldShowUpgradePrompt: () => false, // Never show for paid users
+      incrementSearchCount,
+      SEARCHES_BEFORE_PROMPT,
+    };
+  }
+
+  // Still loading subscription status - don't show trial UI yet
+  if (isSubscriptionLoading) {
+    return {
+      ...state,
+      isLoading: true,
+      checkTrial,
+      shouldShowUpgradePrompt: () => false,
       incrementSearchCount,
       SEARCHES_BEFORE_PROMPT,
     };

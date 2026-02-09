@@ -22,11 +22,14 @@ const Index = () => {
   } = useContactTracking();
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
-  const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing } = useTrial();
-  const { subscribed } = useSubscription();
+  const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading } = useTrial();
+  const { subscribed, isLoading: isSubscriptionLoading } = useSubscription();
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  
+  // Determine if still loading access status
+  const isAccessLoading = isTrialLoading || isSubscriptionLoading;
 
   // Check if we should show upgrade prompt after searches (only for free trial users, not Stripe trialing)
   useEffect(() => {
@@ -75,10 +78,10 @@ const Index = () => {
             search(filters);
           }} 
           isLoading={isLoading}
-          isOnTrial={isOnTrial}
+          isOnTrial={!isAccessLoading && isOnTrial && !isStripeTrialing}
           searchesRemaining={searchesRemaining}
           dailyLimit={dailyLimit}
-          subscribed={subscribed}
+          subscribed={subscribed || isStripeTrialing}
         />
       </section>
 

@@ -89,12 +89,13 @@ const adminItems = [
 export function AppSidebar() {
   const location = useLocation();
   const { state, toggleSidebar } = useSidebar();
-  const { isAdmin, subscribed } = useSubscription();
-  const { isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing } = useTrial();
+  const { isAdmin, subscribed, isLoading: isSubscriptionLoading } = useSubscription();
+  const { isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading } = useTrial();
   const isCollapsed = state === 'collapsed';
   
   // Show trial badge for free trial users only (not Stripe trialing or subscribed)
-  const showTrialBadge = isOnTrial && !subscribed && !isStripeTrialing;
+  // Also wait for loading to complete to prevent flickering
+  const showTrialBadge = !isSubscriptionLoading && !isTrialLoading && isOnTrial && !subscribed && !isStripeTrialing;
 
   return (
     <Sidebar 
