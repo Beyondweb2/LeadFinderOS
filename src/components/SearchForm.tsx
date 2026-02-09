@@ -18,16 +18,16 @@ interface SearchFormProps {
   isOnTrial?: boolean;
   searchesRemaining?: number;
   dailyLimit?: number;
-  subscribed?: boolean;
+  isPaidSubscriber?: boolean;
 }
 
 export function SearchForm({ 
   onSearch, 
   isLoading, 
   isOnTrial = false, 
-  searchesRemaining = 3, 
-  dailyLimit = 3,
-  subscribed = false 
+  searchesRemaining = 2, 
+  dailyLimit = 2,
+  isPaidSubscriber = false 
 }: SearchFormProps) {
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
@@ -116,7 +116,7 @@ export function SearchForm({
           </div>
 
           {/* Advanced Filters - Hidden by default for trial users */}
-          {subscribed && (
+          {isPaidSubscriber && (
             <Collapsible open={showFilters} onOpenChange={setShowFilters}>
               <CollapsibleTrigger asChild>
                 <Button variant="ghost" type="button" className="text-muted-foreground hover:text-foreground text-xs h-8 px-2">
@@ -194,8 +194,8 @@ export function SearchForm({
 
           {/* Submit Button with Trial Indicator */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-            {/* Trial searches remaining indicator */}
-            {isOnTrial && !subscribed && (
+            {/* Trial searches remaining indicator - show for all non-paid users */}
+            {!isPaidSubscriber && (
               <div className="flex items-center gap-2 text-xs sm:text-sm">
                 <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
                   searchesRemaining === 0 
@@ -206,13 +206,13 @@ export function SearchForm({
                 }`}>
                   <Search className="h-3 w-3" />
                   <span className="font-medium">
-                    Free trial: {searchesRemaining} search{searchesRemaining !== 1 ? 'es' : ''} left today
+                    Free trial: {searchesRemaining}/{dailyLimit} searches left today
                   </span>
                 </div>
               </div>
             )}
             
-            <div className={`flex justify-center sm:justify-end ${isOnTrial && !subscribed ? '' : 'w-full'}`}>
+            <div className={`flex justify-center sm:justify-end ${!isPaidSubscriber ? '' : 'w-full'}`}>
               <Button 
                 type="submit" 
                 disabled={isLoading || !keyword.trim() || !location.trim()}
