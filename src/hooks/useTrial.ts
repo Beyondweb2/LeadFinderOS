@@ -23,12 +23,12 @@ const DAILY_TRIAL_LIMIT = 2;
 
 export function useTrial() {
   const { user } = useAuth();
-  const { status: stripeStatus, isLoading: isSubscriptionLoading, subscribed } = useSubscription();
+  const { status: stripeStatus, isLoading: isSubscriptionLoading, subscribed, isPaidSubscriber } = useSubscription();
   
-  // Stripe trialing users get unlimited access
+  // Stripe trialing users are still limited - only paid subscribers get unlimited
   const isStripeTrialing = stripeStatus === 'trialing';
-  // Paid subscribers also get unlimited access
-  const hasPaidAccess = subscribed || isStripeTrialing;
+  // Only truly paid subscribers (active/past_due) get unlimited access
+  const hasPaidAccess = isPaidSubscriber;
   
   const [state, setState] = useState<TrialState>({
     planStatus: null,
@@ -205,12 +205,13 @@ export function useTrial() {
     await checkTrial();
   }, [user?.id, checkTrial]);
 
-  // If user has paid access (subscribed or Stripe trialing), override to unlimited searches
+  // Only truly paid users (active/past_due) get unlimited searches
+  // Stripe trialing users still have 2/day limit
   if (hasPaidAccess) {
     return {
       ...state,
-      isOnTrial: false, // Not on free trial anymore
-      isStripeTrialing: isStripeTrialing,
+      isOnTrial: false, // Not on trial anymore - fully paid
+      isStripeTrialing: false,
       searchesRemaining: Infinity,
       dailyLimit: Infinity,
       isLoading: isSubscriptionLoading, // Sync loading state with subscription

@@ -19,11 +19,12 @@ import {
 
 const Dashboard = () => {
   const { metrics, isLoading } = useDashboardMetrics();
-  const { subscribed, isLoading: isSubscriptionLoading } = useSubscription();
-  const { isOnTrial, searchesToday, dailyLimit, isStripeTrialing, isLoading: isTrialLoading } = useTrial();
+  const { subscribed, isLoading: isSubscriptionLoading, isPaidSubscriber, isStripeTrialing } = useSubscription();
+  const { isOnTrial, searchesToday, dailyLimit, isLoading: isTrialLoading } = useTrial();
   
-  // Show trial progress for free trial users only (and only after loading is complete)
-  const showTrialProgress = !isSubscriptionLoading && !isTrialLoading && isOnTrial && !subscribed && !isStripeTrialing;
+  // Show trial progress for ALL trial users (free trial AND Stripe trialing)
+  // Only hide for truly paid subscribers
+  const showTrialProgress = !isSubscriptionLoading && !isTrialLoading && !isPaidSubscriber && (isOnTrial || isStripeTrialing);
 
   // Wait for all data to load before rendering
   if (isLoading || isSubscriptionLoading || isTrialLoading) {
@@ -41,7 +42,7 @@ const Dashboard = () => {
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm sm:text-base text-muted-foreground">
           {showTrialProgress 
-            ? 'Track your trial progress and activity' 
+            ? (isStripeTrialing ? 'Your Pro trial is active with 2 searches/day' : 'Track your trial progress and activity')
             : 'Track your performance and revenue'
           }
         </p>
