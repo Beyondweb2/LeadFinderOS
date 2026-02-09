@@ -46,6 +46,7 @@ interface DashboardMetrics {
   
   // Pipeline metrics
   totalBusinessesAdded: number;
+  noWebsiteBusinesses: number;
   addedToday: number;
   addedYesterday: number;
   
@@ -209,6 +210,11 @@ export function useDashboardMetrics() {
   const metrics = useMemo<DashboardMetrics>(() => {
     const totalBusinessesAdded = allLeads.length;
     
+    // Count businesses with no website (list_type is 'no_website')
+    const noWebsiteBusinesses = allLeads.filter(
+      l => l.list_type === 'no_website'
+    ).length;
+    
     // Calculate today and yesterday counts
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -283,6 +289,7 @@ export function useDashboardMetrics() {
       fullyPaidClients: completedCount,
       paidForDraftCount,
       totalBusinessesAdded,
+      noWebsiteBusinesses,
       addedToday,
       addedYesterday,
       recordDay,
