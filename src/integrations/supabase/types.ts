@@ -302,6 +302,7 @@ export type Database = {
           id: string
           keyword: string
           location: string
+          no_website_count: number
           radius: number
           results_count: number
           searched_at: string
@@ -311,6 +312,7 @@ export type Database = {
           id?: string
           keyword: string
           location: string
+          no_website_count?: number
           radius: number
           results_count?: number
           searched_at?: string
@@ -320,6 +322,7 @@ export type Database = {
           id?: string
           keyword?: string
           location?: string
+          no_website_count?: number
           radius?: number
           results_count?: number
           searched_at?: string

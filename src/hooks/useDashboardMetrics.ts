@@ -95,6 +95,7 @@ const getDateRanges = () => {
 
 export function useDashboardMetrics() {
   const [allLeads, setAllLeads] = useState<OutreachLead[]>([]);
+  const [totalNoWebsiteFound, setTotalNoWebsiteFound] = useState(0);
   const [activityData, setActivityData] = useState<ActivityMetrics>({
     phonesCopiedToday: 0,
     phonesCopiedYesterday: 0,
@@ -121,7 +122,7 @@ export function useDashboardMetrics() {
     const dates = getDateRanges();
     
     // Fetch all data in parallel
-    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult] = await Promise.all([
+    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult] = await Promise.all([
       // All leads
       supabase
         .from('outreach_leads')
@@ -145,6 +146,12 @@ export function useDashboardMetrics() {
         .from('lead_contacts')
         .select('contacted_at')
         .eq('user_id', user.id),
+      
+      // Search history for no_website_count
+      supabase
+        .from('search_history')
+        .select('no_website_count')
+        .eq('user_id', user.id),
     ]);
 
     setIsLoading(false);
@@ -155,6 +162,11 @@ export function useDashboardMetrics() {
     }
 
     setAllLeads((leadsResult.data || []) as OutreachLead[]);
+    
+    // Sum no_website_count from all searches
+    const searchHistory = searchHistoryResult.data || [];
+    const totalFound = searchHistory.reduce((sum, s) => sum + (s.no_website_count || 0), 0);
+    setTotalNoWebsiteFound(totalFound);
     
     // Process copied phones
     const copiedPhones = copiedPhonesResult.data || [];
@@ -210,10 +222,8 @@ export function useDashboardMetrics() {
   const metrics = useMemo<DashboardMetrics>(() => {
     const totalBusinessesAdded = allLeads.length;
     
-    // Count businesses with no website (list_type is 'no_website')
-    const noWebsiteBusinesses = allLeads.filter(
-      l => l.list_type === 'no_website'
-    ).length;
+    // Count businesses with no website - from all searches (not just CRM)
+    const noWebsiteBusinesses = totalNoWebsiteFound;
     
     // Calculate today and yesterday counts
     const today = new Date();
@@ -297,7 +307,7 @@ export function useDashboardMetrics() {
       avgPerDayLast7Days,
       activity: activityData,
     };
-  }, [allLeads, activityData]);
+  }, [allLeads, activityData, totalNoWebsiteFound]);
 
   return {
     metrics,
