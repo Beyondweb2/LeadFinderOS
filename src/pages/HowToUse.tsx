@@ -1,6 +1,11 @@
+import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
 import {
   Search,
   ClipboardList,
@@ -9,6 +14,7 @@ import {
   ArrowRight,
   ArrowDown,
   ArrowLeft,
+  ZoomIn,
 } from 'lucide-react';
 import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
@@ -52,15 +58,29 @@ const STEPS = [
 
 const HowToUse = () => {
   const location = useLocation();
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
   // If accessed via /guide (public route), show sign-up CTA
   const isPublicGuide = location.pathname === '/guide';
   
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 max-w-5xl">
+      {/* Expanded image dialog */}
+      <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
+        <DialogContent className="max-w-[95vw] max-h-[95vh] p-2 bg-background/95 backdrop-blur-sm">
+          {expandedImage && (
+            <img 
+              src={expandedImage} 
+              alt="Expanded view"
+              className="w-full h-auto max-h-[90vh] object-contain rounded-lg"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
       <div className="mb-8 md:mb-12 text-center sm:text-left">
         <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
-          How to Use <span className="text-primary">LeadFinder Pro</span>
+          How to Use Lead<span className="text-primary">Finder</span> Pro
         </h1>
         <p className="text-muted-foreground text-sm md:text-base max-w-2xl mx-auto sm:mx-0">
           Follow this step-by-step guide to find businesses without websites, 
@@ -93,13 +113,21 @@ const HowToUse = () => {
               </CardHeader>
               
               <CardContent className="pt-0">
-                {/* Screenshot */}
-                <div className="rounded-lg overflow-hidden border border-border/30 mb-4">
+                {/* Screenshot - clickable to expand */}
+                <div 
+                  className="rounded-lg overflow-hidden border border-border/30 mb-4 cursor-pointer group relative"
+                  onClick={() => setExpandedImage(step.image)}
+                >
                   <img 
                     src={step.image} 
                     alt={step.title}
-                    className="w-full h-auto"
+                    className="w-full h-auto transition-opacity group-hover:opacity-90"
                   />
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                    <div className="p-2 rounded-full bg-background/80 backdrop-blur-sm">
+                      <ZoomIn className="h-5 w-5 text-foreground" />
+                    </div>
+                  </div>
                 </div>
                 
                 {/* Tip */}
