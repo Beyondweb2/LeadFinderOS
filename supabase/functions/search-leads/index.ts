@@ -729,13 +729,13 @@ serve(async (req) => {
               // Ignore parsing errors
             }
             
-            // Check daily limit for FREE trial users (1 search per day) - unless skipping for demo
-            const DAILY_TRIAL_LIMIT = 1;
+            // Check daily limit for FREE trial users (2 searches per day) - unless skipping for demo
+            const DAILY_TRIAL_LIMIT = 2;
             if (!skipTrialCount && currentSearchesToday >= DAILY_TRIAL_LIMIT) {
               console.log(`Free trial user ${userId} has reached daily limit (${currentSearchesToday}/${DAILY_TRIAL_LIMIT})`);
               return new Response(
                 JSON.stringify({ 
-                  error: 'Trial limit reached – upgrade to continue unlimited searches.',
+                  error: 'Daily trial limit reached (2 searches/day). Upgrade to continue.',
                   code: 'TRIAL_LIMIT_REACHED',
                   searches_today: currentSearchesToday,
                   limit: DAILY_TRIAL_LIMIT

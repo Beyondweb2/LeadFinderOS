@@ -19,7 +19,7 @@ interface TrialState {
 }
 
 const SEARCHES_BEFORE_PROMPT = 5;
-const DAILY_TRIAL_LIMIT = 1;
+const DAILY_TRIAL_LIMIT = 2;
 
 export function useTrial() {
   const { user } = useAuth();
