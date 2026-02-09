@@ -6,6 +6,7 @@ interface SubscriptionState {
   subscribed: boolean;
   productId: string | null;
   subscriptionEnd: string | null;
+  trialEnd: string | null;
   isLoading: boolean;
   error: string | null;
   status: string | null;
@@ -20,6 +21,7 @@ export function useSubscription() {
     subscribed: false,
     productId: null,
     subscriptionEnd: null,
+    trialEnd: null,
     isLoading: true,
     error: null,
     status: null,
@@ -50,7 +52,7 @@ export function useSubscription() {
     const accessToken = accessTokenRef.current;
     
     if (!accessToken || !userId) {
-      setState(prev => ({ ...prev, isLoading: false, subscribed: false, status: null, isPaidSubscriber: false, isStripeTrialing: false }));
+      setState(prev => ({ ...prev, isLoading: false, subscribed: false, status: null, trialEnd: null, isPaidSubscriber: false, isStripeTrialing: false }));
       return;
     }
 
@@ -64,6 +66,7 @@ export function useSubscription() {
           subscribed: true,
           productId: null,
           subscriptionEnd: null,
+          trialEnd: null,
           isLoading: false,
           error: null,
           status: 'admin',
@@ -92,6 +95,7 @@ export function useSubscription() {
             subscribed: isValid,
             productId: null,
             subscriptionEnd: localSub.current_period_end,
+            trialEnd: null, // Will be populated from Stripe check
             isLoading: false,
             error: null,
             status: localSub.status,
@@ -114,6 +118,7 @@ export function useSubscription() {
             subscribed: false,
             productId: null,
             subscriptionEnd: null,
+            trialEnd: null,
             isLoading: false,
             error: null,
             status: null,
@@ -137,17 +142,18 @@ export function useSubscription() {
       if (error) {
         // If auth error, treat as not subscribed rather than showing error
         if (error.message?.includes('Auth') || error.message?.includes('authentication')) {
-          setState({
-            subscribed: false,
-            productId: null,
-            subscriptionEnd: null,
-            isLoading: false,
-            error: null,
-            status: null,
-            isAdmin: false,
-            isPaidSubscriber: false,
-            isStripeTrialing: false,
-          });
+        setState({
+          subscribed: false,
+          productId: null,
+          subscriptionEnd: null,
+          trialEnd: null,
+          isLoading: false,
+          error: null,
+          status: null,
+          isAdmin: false,
+          isPaidSubscriber: false,
+          isStripeTrialing: false,
+        });
           return;
         }
         throw error;
@@ -161,6 +167,7 @@ export function useSubscription() {
         subscribed: data.subscribed ?? false,
         productId: data.product_id ?? null,
         subscriptionEnd: data.subscription_end ?? null,
+        trialEnd: data.trial_end ?? null,
         isLoading: false,
         error: null,
         status: subStatus,
@@ -195,6 +202,7 @@ export function useSubscription() {
           subscribed: false,
           productId: null,
           subscriptionEnd: null,
+          trialEnd: null,
           isLoading: false,
           error: null,
           status: null,

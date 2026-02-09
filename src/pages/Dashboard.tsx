@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useTrial } from '@/hooks/useTrial';
 import { RevenueCard } from '@/components/dashboard/RevenueCard';
 import { ConversionCard } from '@/components/dashboard/ConversionCard';
 import { OutreachCard } from '@/components/dashboard/OutreachCard';
@@ -19,15 +18,13 @@ import {
 
 const Dashboard = () => {
   const { metrics, isLoading } = useDashboardMetrics();
-  const { subscribed, isLoading: isSubscriptionLoading, isPaidSubscriber, isStripeTrialing } = useSubscription();
-  const { isOnTrial, searchesToday, dailyLimit, isLoading: isTrialLoading } = useTrial();
+  const { subscribed, isLoading: isSubscriptionLoading, isPaidSubscriber, isStripeTrialing, trialEnd } = useSubscription();
   
-  // Show trial progress for ALL trial users (free trial AND Stripe trialing)
-  // Only hide for truly paid subscribers
-  const showTrialProgress = !isSubscriptionLoading && !isTrialLoading && !isPaidSubscriber && (isOnTrial || isStripeTrialing);
+  // Show trial progress only for Stripe trialing users (not paid subscribers)
+  const showTrialProgress = !isSubscriptionLoading && isStripeTrialing && !isPaidSubscriber;
 
   // Wait for all data to load before rendering
-  if (isLoading || isSubscriptionLoading || isTrialLoading) {
+  if (isLoading || isSubscriptionLoading) {
     return (
       <div className="flex items-center justify-center h-full py-16">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -42,18 +39,17 @@ const Dashboard = () => {
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm sm:text-base text-muted-foreground">
           {showTrialProgress 
-            ? (isStripeTrialing ? 'Your Pro trial is active with 2 searches/day' : 'Track your trial progress and activity')
+            ? 'Your free trial is active — full access included'
             : 'Track your performance and revenue'
           }
         </p>
       </div>
 
-      {/* Trial Progress Card - Only for trial users */}
+      {/* Trial Progress Card - Only for Stripe trialing users */}
       {showTrialProgress && (
         <section>
           <TrialProgressCard
-            searchesUsedToday={searchesToday}
-            dailyLimit={dailyLimit}
+            trialEnd={trialEnd}
             noWebsiteBusinesses={metrics.noWebsiteBusinesses}
             addedToCRM={metrics.totalBusinessesAdded}
           />
