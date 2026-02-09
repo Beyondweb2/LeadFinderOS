@@ -46,9 +46,10 @@ export function UserMenu() {
     try {
       await openCustomerPortal();
     } catch (error) {
+      console.error('Customer portal error:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to open subscription management',
+        title: 'Unable to open billing',
+        description: 'Please try again or contact support if the issue persists.',
         variant: 'destructive',
       });
     }

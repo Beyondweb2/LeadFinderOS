@@ -19,13 +19,14 @@ import {
 
 const Dashboard = () => {
   const { metrics, isLoading } = useDashboardMetrics();
-  const { subscribed } = useSubscription();
-  const { isOnTrial, searchesToday, dailyLimit, isStripeTrialing } = useTrial();
+  const { subscribed, isLoading: isSubscriptionLoading } = useSubscription();
+  const { isOnTrial, searchesToday, dailyLimit, isStripeTrialing, isLoading: isTrialLoading } = useTrial();
   
-  // Show trial progress for free trial users only
-  const showTrialProgress = isOnTrial && !subscribed && !isStripeTrialing;
+  // Show trial progress for free trial users only (and only after loading is complete)
+  const showTrialProgress = !isSubscriptionLoading && !isTrialLoading && isOnTrial && !subscribed && !isStripeTrialing;
 
-  if (isLoading) {
+  // Wait for all data to load before rendering
+  if (isLoading || isSubscriptionLoading || isTrialLoading) {
     return (
       <div className="flex items-center justify-center h-full py-16">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
