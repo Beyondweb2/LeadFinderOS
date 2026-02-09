@@ -42,11 +42,11 @@ export function OutreachMobileCard({
 }: OutreachMobileCardProps) {
   return (
     <div 
-      className={`py-2 px-2.5 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
+      className={`py-2.5 px-3 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
       onClick={onLeadClick}
     >
-      {/* Row 1: Checkbox + Business Name */}
-      <div className="flex items-center gap-1.5 mb-1.5">
+      {/* Row 1: Checkbox + Business Name + Action Buttons */}
+      <div className="flex items-center gap-2">
         <div onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={isSelected}
@@ -56,21 +56,84 @@ export function OutreachMobileCard({
           />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             {lead.country === 'Australia' && (
-              <span className="text-[10px]" title="Australia">🇦🇺</span>
+              <span className="text-xs" title="Australia">🇦🇺</span>
             )}
-            <span className="font-medium text-xs truncate">{lead.business_name}</span>
+            <span className="font-semibold text-sm truncate">{lead.business_name}</span>
             {lead.is_potential_work && (
-              <Star className="h-2.5 w-2.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+              <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />
             )}
           </div>
+        </div>
+
+        {/* Inline icon buttons */}
+        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          {lead.google_maps_url && (
+            <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
+              <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </Button>
+          )}
+
+          {lead.phone && lead.status !== 'no_whatsapp' && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                onClick={onWhatsAppClick}
+              >
+                <MessageSquare className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                onClick={() => onStatusChange('no_whatsapp')}
+                title="Mark as No WhatsApp"
+              >
+                <PhoneOff className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          )}
+          {lead.phone && lead.status === 'no_whatsapp' && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10"
+                onClick={onSMSClick}
+              >
+                <MessageCircle className="h-3.5 w-3.5" />
+              </Button>
+              <span className="h-7 w-7 flex items-center justify-center text-muted-foreground" title="No WhatsApp">
+                <PhoneOff className="h-3.5 w-3.5" />
+              </span>
+            </>
+          )}
+
+          {!readOnly && showTrackButton && onTrack && (
+            lead.is_potential_work ? (
+              <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 mx-1" />
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
+                onClick={onTrack}
+              >
+                <Star className="h-3.5 w-3.5" />
+              </Button>
+            )
+          )}
         </div>
       </div>
 
       {/* Row 2: Status + Next Action */}
       {!readOnly && (
-        <div className="flex items-center gap-1.5 mb-2" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 mt-1.5 ml-6" onClick={(e) => e.stopPropagation()}>
           <Select
             value={lead.status}
             onValueChange={onStatusChange}
@@ -96,93 +159,6 @@ export function OutreachMobileCard({
           )}
         </div>
       )}
-
-      {/* Row 3: Action Buttons - Compact */}
-      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-        {/* Google Maps */}
-        {lead.google_maps_url && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 px-2 text-xs flex-1"
-            asChild
-          >
-            <a
-              href={lead.google_maps_url}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <ExternalLink className="h-3 w-3 mr-1" />
-              Maps
-            </a>
-          </Button>
-        )}
-
-        {/* WhatsApp */}
-        {lead.phone && lead.status !== 'no_whatsapp' && (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-xs flex-1 text-green-500 border-green-500/30 hover:bg-green-500/10 hover:text-green-400"
-              onClick={onWhatsAppClick}
-            >
-              <MessageSquare className="h-3 w-3 mr-1" />
-              WhatsApp
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-xs text-muted-foreground border-border hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
-              onClick={() => onStatusChange('no_whatsapp')}
-              title="Mark as No WhatsApp"
-            >
-              <PhoneOff className="h-3 w-3" />
-            </Button>
-          </>
-        )}
-        {lead.phone && lead.status === 'no_whatsapp' && (
-          <>
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-xs flex-1 text-blue-500 border-blue-500/30 hover:bg-blue-500/10 hover:text-blue-400"
-              onClick={onSMSClick}
-            >
-              <MessageCircle className="h-3 w-3 mr-1" />
-              SMS
-            </Button>
-            <span className="h-7 px-2 text-xs flex items-center gap-1 text-muted-foreground" title="No WhatsApp">
-              <PhoneOff className="h-3 w-3" />
-            </span>
-          </>
-        )}
-
-        {/* Track Button */}
-        {!readOnly && showTrackButton && onTrack && (
-          lead.is_potential_work ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 px-2 text-xs text-yellow-500 cursor-default"
-              disabled
-            >
-              <Star className="h-3 w-3 mr-0.5 fill-yellow-500" />
-              Tracked
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 px-2 text-xs flex-1 text-yellow-500 border-yellow-500/30 hover:bg-yellow-500/10 hover:text-yellow-400"
-              onClick={onTrack}
-            >
-              <Star className="h-3 w-3 mr-1" />
-              Track
-            </Button>
-          )
-        )}
-      </div>
     </div>
   );
 }
