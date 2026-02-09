@@ -1,59 +1,28 @@
 
-# Display Specific Business Categories (e.g., "Web designer")
 
-## Problem
-The current implementation shows generic categories like "establishment" instead of specific ones like "Web designer" because the legacy Google Places API only returns generic types.
+# Use LeadFinder Branded Image for WhatsApp Link Preview
 
-## Solution
-Update the backend to use the **new Google Places API v1** for fetching place details, which provides `primaryTypeDisplayName` - the specific, human-readable business category shown in Google Maps.
+## What We'll Do
+Replace the current social media preview image with your LeadFinder branded image (dark blue background with "LeadFinder" text) so it shows when you share your app link on WhatsApp and other platforms.
 
-## Technical Changes
+## Steps
 
-### File: `supabase/functions/search-leads/index.ts`
+### 1. Copy your image to the project
+Copy the uploaded LeadFinder image to `public/og-image.png`, replacing the current one.
 
-**1. Update `getPlaceDetails` function to use the new Places API v1:**
+### 2. Update meta tags with cache-busting
+Add a version parameter (`?v=3`) to force WhatsApp to fetch the new image instead of using its cached version:
 
-```text
-Old endpoint: https://maps.googleapis.com/maps/api/place/details/json
-New endpoint: https://places.googleapis.com/v1/places/{PLACE_ID}
+```html
+<meta property="og:image" content="https://leadfinderapp.lovable.app/og-image.png?v=3">
+<meta name="twitter:image" content="https://leadfinderapp.lovable.app/og-image.png?v=3">
 ```
 
-**2. Request the `primaryTypeDisplayName` field:**
+## After Publishing
+- Wait a few minutes after publishing for changes to take effect
+- Test by sharing in a **new** WhatsApp conversation (existing chats may show cached version)
+- If still showing old image, WhatsApp may take up to 24-48 hours to fully refresh its cache
 
-Add `primaryTypeDisplayName` to the FieldMask header:
-```text
-X-Goog-FieldMask: displayName,formattedAddress,internationalPhoneNumber,...,primaryTypeDisplayName,primaryType
-```
+## Technical Note
+WhatsApp caches link previews aggressively. The `?v=3` parameter makes it treat this as a "new" URL and fetch the fresh image.
 
-**3. Map the new API response fields:**
-
-| Old Field | New Field |
-|-----------|-----------|
-| `name` | `displayName.text` |
-| `formatted_address` | `formattedAddress` |
-| `international_phone_number` | `internationalPhoneNumber` |
-| `formatted_phone_number` | `nationalPhoneNumber` |
-| `rating` | `rating` |
-| `user_ratings_total` | `userRatingCount` |
-| `website` | `websiteUri` |
-| `url` | `googleMapsUri` |
-| `business_status` | `businessStatus` |
-| `types` | `types` |
-| *(new)* | `primaryTypeDisplayName.text` |
-
-**4. Update category extraction logic:**
-
-```typescript
-// Use primaryTypeDisplayName for specific category, fall back to types
-const category = details.primaryTypeDisplayName?.text 
-  || details.primaryType?.replace(/_/g, ' ')
-  || details.types?.find((t: string) => !genericTypes.has(t))?.replace(/_/g, ' ');
-```
-
-## Result
-After this change, leads will display specific categories like:
-- "Web designer" instead of "establishment"
-- "Restaurant" instead of "food"
-- "Hair salon" instead of "store"
-
-This matches exactly what users see in Google Maps.
