@@ -718,14 +718,14 @@ serve(async (req) => {
         .eq('user_id', userId)
         .maybeSingle();
 
-      // Only 'active' and 'past_due' get unlimited searches
-      // 'trialing' users still have 2/day limit until first payment
-      const paidStatuses = ['active', 'past_due'];
-      hasActiveSubscription = subscription && paidStatuses.includes(subscription.status);
+      // Grant unlimited searches to active, past_due, AND trialing users
+      // Stripe trialing = card on file = full access during trial period
+      const fullAccessStatuses = ['active', 'past_due', 'trialing'];
+      hasActiveSubscription = subscription && fullAccessStatuses.includes(subscription.status);
       
-      // If user has PAID Stripe subscription (active or past_due), allow unlimited searches
+      // If user has Stripe subscription (active, past_due, or trialing), allow unlimited searches
       if (hasActiveSubscription) {
-        console.log(`User ${userId} has paid Stripe subscription (${subscription.status}) - unlimited searches`);
+        console.log(`User ${userId} has Stripe subscription (${subscription.status}) - unlimited searches`);
         // Continue to search - no limits for paid subscribers
       } else {
         // No Stripe subscription - check if user is on free app trial (1 search/day limit)
