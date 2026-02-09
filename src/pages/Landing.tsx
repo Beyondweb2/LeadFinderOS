@@ -4,14 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselPrevious,
-  CarouselNext,
-} from '@/components/ui/carousel';
-import Autoplay from 'embla-carousel-autoplay';
-import {
   Search,
   ClipboardList,
   Phone,
@@ -325,7 +317,6 @@ const VideoSection = () => {
 
 const Landing = () => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
-  const [featureIndex, setFeatureIndex] = useState(0);
   const [hasScrolled, setHasScrolled] = useState(false);
   const isMobile = useIsMobile();
   
@@ -508,7 +499,7 @@ const Landing = () => {
           </div>
           {/* Mobile reassurance microcopy */}
           <p className="sm:hidden text-[11px] text-muted-foreground text-center mt-3">
-            Set up in under 60 seconds. No credit card needed.
+            Set up in under 60 seconds. Full access included.
           </p>
         </div>
       </section>
@@ -519,7 +510,7 @@ const Landing = () => {
       </div>
 
       {/* Before/After Comparison Section */}
-      <section className="relative z-10 py-12 sm:py-16 md:py-20 lg:py-28 px-4">
+      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
@@ -617,7 +608,7 @@ const Landing = () => {
       <HowItWorksSection ScrollReveal={ScrollReveal} />
 
       {/* Features Section */}
-      <section className="relative z-10 py-12 sm:py-16 md:py-20 lg:py-28 px-4">
+      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
@@ -629,85 +620,39 @@ const Landing = () => {
             </p>
           </ScrollReveal>
           
-          {/* Mobile Carousel */}
+          {/* Mobile: Stacked inline images */}
           {isMobile ? (
-            <div className="w-full mx-auto">
-              <Carousel
-                opts={{ loop: true, startIndex: 0 }}
-                plugins={[
-                  Autoplay({
-                    delay: 4000,
-                    stopOnInteraction: true,
-                    stopOnMouseEnter: true,
-                  }),
-                ]}
-                className="w-full"
-                setApi={(api) => {
-                  if (api) {
-                    setFeatureIndex(api.selectedScrollSnap());
-                    api.on('select', () => {
-                      setFeatureIndex(api.selectedScrollSnap());
-                    });
-                  }
-                }}
-              >
-                <CarouselContent>
-                  {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature) => (
-                    <CarouselItem key={feature.title}>
-                      <div 
-                        className="flex flex-col items-center text-center px-1 cursor-pointer"
-                        onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
-                      >
-                        {/* Feature Title */}
-                        <h3 className="text-lg font-bold tracking-tight mb-2">{feature.title}</h3>
-                        
-                        <p className="text-muted-foreground text-sm leading-relaxed mb-4 max-w-xs">
-                          {feature.description}
-                        </p>
-                        
-                        {/* Full-width image */}
-                        <div className="relative w-full">
-                          <div 
-                            className="relative rounded-lg overflow-hidden bg-card/80 aspect-[16/10]"
-                            style={{ 
-                              border: '1px solid hsl(210 100% 50% / 0.15)',
-                              boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
-                            }}
-                          >
-                            <img 
-                              src={feature.image} 
-                              alt={feature.title}
-                              className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-100'}`}
-                            />
-                            <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
-                              <Expand className="h-3.5 w-3.5 text-muted-foreground" />
-                            </div>
-                          </div>
-                        </div>
+            <div className="space-y-8">
+              {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature) => (
+                <div 
+                  key={feature.title}
+                  className="flex flex-col items-center text-center cursor-pointer"
+                  onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
+                >
+                  <h3 className="text-lg font-bold tracking-tight mb-1.5">{feature.title}</h3>
+                  <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
+                    {feature.description}
+                  </p>
+                  <div className="relative w-full">
+                    <div 
+                      className="relative rounded-lg overflow-hidden bg-card/80 aspect-[16/10]"
+                      style={{ 
+                        border: '1px solid hsl(210 100% 50% / 0.15)',
+                        boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
+                      }}
+                    >
+                      <img 
+                        src={feature.image} 
+                        alt={feature.title}
+                        className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-100'}`}
+                      />
+                      <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
+                        <Expand className="h-3.5 w-3.5 text-muted-foreground" />
                       </div>
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-                
-                {/* Custom navigation arrows - smaller */}
-                <CarouselPrevious className="-left-1 h-8 w-8 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
-                <CarouselNext className="-right-1 h-8 w-8 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
-              </Carousel>
-              
-              {/* Dot indicators */}
-              <div className="flex justify-center gap-2 mt-6">
-                {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((_, index) => (
-                  <button
-                    key={index}
-                    className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                      featureIndex === index 
-                        ? 'w-6 bg-primary' 
-                        : 'bg-muted-foreground/30'
-                    }`}
-                    aria-label={`Go to feature ${index + 1}`}
-                  />
-                ))}
-              </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             /* Desktop Grid */
@@ -774,7 +719,7 @@ const Landing = () => {
       </section>
 
       {/* Pricing Section */}
-      <section className="relative z-10 py-12 sm:py-16 md:py-20 lg:py-28 px-4">
+      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
@@ -863,7 +808,7 @@ const Landing = () => {
 
 
       {/* Final CTA Section */}
-      <section className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
+      <section className="relative z-10 py-8 sm:py-16 md:py-20 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center">
             <div 
@@ -959,7 +904,7 @@ const Landing = () => {
             </Link>
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            1-day free trial (24 hours) · No credit card needed
+            1-day free trial (24 hours) · Cancel anytime
           </p>
         </div>
       )}
