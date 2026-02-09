@@ -1,0 +1,1 @@
+ALTER TABLE public.search_history ADD COLUMN no_website_count integer NOT NULL DEFAULT 0;

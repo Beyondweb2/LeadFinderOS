@@ -111,7 +111,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     );
   }, [excludedBusinesses]);
 
-  const saveSearch = async (filters: SearchFilters, resultsCount: number) => {
+  const saveSearch = async (filters: SearchFilters, resultsCount: number, noWebsiteCount: number = 0) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -121,6 +121,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       location: filters.location.toLowerCase().trim(),
       radius: filters.radius,
       results_count: resultsCount,
+      no_website_count: noWebsiteCount,
     });
   };
 
@@ -187,9 +188,9 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           }
         }
 
-        await saveSearch(filters, filteredLeads.length);
-
-        const noWebsiteCount = filteredLeads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
+        const noWebsiteCount = filteredLeads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
+        
+        await saveSearch(filters, filteredLeads.length, noWebsiteCount);
         const excludedMsg = excludedCount > 0 ? ` (${excludedCount} previously seen filtered out)` : '';
 
         toast({
