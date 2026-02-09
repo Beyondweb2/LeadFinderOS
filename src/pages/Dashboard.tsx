@@ -59,51 +59,33 @@ const Dashboard = () => {
         </section>
       )}
 
-      {/* Primary Metrics - Revenue & Conversion (for paid users) */}
-      {!showTrialProgress && (
-        <section>
-          <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Performance</h2>
-          <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
-            <RevenueCard
-              totalRevenue={metrics.totalRevenue}
-              draftRevenue={metrics.draftRevenue}
-              completionRevenue={metrics.completionRevenue}
-              fullyPaidClients={metrics.fullyPaidClients}
-              paidForDraftCount={metrics.paidForDraftCount}
-            />
-            <ConversionCard
-              interestRate={metrics.interestRate}
-              responseToInterestRate={metrics.responseToInterestRate}
-              interestedCount={metrics.interestedCount}
-              contactedCount={metrics.contactedCount}
-              totalBusinessesAdded={metrics.totalBusinessesAdded}
-            />
-            <OutreachCard
-              totalBusinessesAdded={metrics.totalBusinessesAdded}
-              addedToday={metrics.addedToday}
-              addedYesterday={metrics.addedYesterday}
-              avgPerDay={metrics.avgPerDayAllTime}
-            />
-            <ActivityCard activity={metrics.activity} />
-          </div>
-        </section>
-      )}
-
-      {/* Simplified metrics for trial users */}
-      {showTrialProgress && (
-        <section>
-          <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Activity</h2>
-          <div className="grid gap-3 sm:gap-4 grid-cols-2">
-            <OutreachCard
-              totalBusinessesAdded={metrics.totalBusinessesAdded}
-              addedToday={metrics.addedToday}
-              addedYesterday={metrics.addedYesterday}
-              avgPerDay={metrics.avgPerDayAllTime}
-            />
-            <ActivityCard activity={metrics.activity} />
-          </div>
-        </section>
-      )}
+      {/* Primary Metrics - Revenue & Conversion */}
+      <section>
+        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Performance</h2>
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
+          <RevenueCard
+            totalRevenue={metrics.totalRevenue}
+            draftRevenue={metrics.draftRevenue}
+            completionRevenue={metrics.completionRevenue}
+            fullyPaidClients={metrics.fullyPaidClients}
+            paidForDraftCount={metrics.paidForDraftCount}
+          />
+          <ConversionCard
+            interestRate={metrics.interestRate}
+            responseToInterestRate={metrics.responseToInterestRate}
+            interestedCount={metrics.interestedCount}
+            contactedCount={metrics.contactedCount}
+            totalBusinessesAdded={metrics.totalBusinessesAdded}
+          />
+          <OutreachCard
+            totalBusinessesAdded={metrics.totalBusinessesAdded}
+            addedToday={metrics.addedToday}
+            addedYesterday={metrics.addedYesterday}
+            avgPerDay={metrics.avgPerDayAllTime}
+          />
+          <ActivityCard activity={metrics.activity} />
+        </div>
+      </section>
 
       {/* Quick Links */}
       <section>
