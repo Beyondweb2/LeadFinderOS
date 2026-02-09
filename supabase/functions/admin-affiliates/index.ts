@@ -87,14 +87,21 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        // Get conversion stats for each affiliate
+        // Get conversion stats and trial signups for each affiliate
         const affiliateStats = await Promise.all(
           (affiliates || []).map(async (affiliate) => {
-            const { data: conversions } = await supabaseAdmin
-              .from('affiliate_conversions')
-              .select('commission_amount, status')
-              .eq('affiliate_id', affiliate.id);
+            const [conversionsResult, trialsResult] = await Promise.all([
+              supabaseAdmin
+                .from('affiliate_conversions')
+                .select('commission_amount, status')
+                .eq('affiliate_id', affiliate.id),
+              supabaseAdmin
+                .from('user_trials')
+                .select('id')
+                .eq('affiliate_code', affiliate.code),
+            ]);
 
+            const conversions = conversionsResult.data;
             const totalConversions = conversions?.length || 0;
             const pendingCommission = conversions
               ?.filter(c => c.status === 'pending')
@@ -103,11 +110,14 @@ serve(async (req) => {
               ?.filter(c => c.status === 'paid')
               .reduce((sum, c) => sum + c.commission_amount, 0) || 0;
 
+            const trialSignups = trialsResult.data?.length || 0;
+
             return {
               ...affiliate,
               total_conversions: totalConversions,
               pending_commission: pendingCommission,
               paid_commission: paidCommission,
+              trial_signups: trialSignups,
             };
           })
         );

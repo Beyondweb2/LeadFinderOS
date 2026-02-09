@@ -62,6 +62,7 @@ interface Affiliate {
   total_conversions: number;
   pending_commission: number;
   paid_commission: number;
+  trial_signups: number;
 }
 
 interface Conversion {
@@ -322,6 +323,7 @@ export default function AdminAffiliates() {
   const totalPending = affiliates.reduce((sum, a) => sum + a.pending_commission, 0);
   const totalPaid = affiliates.reduce((sum, a) => sum + a.paid_commission, 0);
   const totalConversions = affiliates.reduce((sum, a) => sum + a.total_conversions, 0);
+  const totalTrialSignups = affiliates.reduce((sum, a) => sum + a.trial_signups, 0);
   const totalRevenue = affiliates.reduce((sum, a) => sum + a.pending_commission + a.paid_commission, 0);
 
   return (
@@ -345,7 +347,7 @@ export default function AdminAffiliates() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -363,7 +365,21 @@ export default function AdminAffiliates() {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Conversions
+                Trial Signups
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-blue-500" />
+                <span className="text-2xl font-bold">{totalTrialSignups}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Paid Conversions
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -402,7 +418,7 @@ export default function AdminAffiliates() {
             </CardContent>
           </Card>
 
-          <Card className="col-span-2 md:col-span-1">
+          <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
                 Total Commission
@@ -410,7 +426,7 @@ export default function AdminAffiliates() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-primary" />
+                <Percent className="h-5 w-5 text-primary" />
                 <span className="text-2xl font-bold">{formatCurrency(totalRevenue)}</span>
               </div>
             </CardContent>
@@ -496,10 +512,11 @@ export default function AdminAffiliates() {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
+                     <TableRow>
                       <TableHead>Affiliate</TableHead>
                       <TableHead>Link</TableHead>
                       <TableHead>Rate</TableHead>
+                      <TableHead>Signups</TableHead>
                       <TableHead>Conversions</TableHead>
                       <TableHead>Pending</TableHead>
                       <TableHead>Paid</TableHead>
@@ -539,6 +556,9 @@ export default function AdminAffiliates() {
                           <Badge variant="secondary">
                             {(affiliate.commission_rate * 100).toFixed(0)}%
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-muted-foreground">{affiliate.trial_signups}</span>
                         </TableCell>
                         <TableCell>
                           <span className="font-medium">{affiliate.total_conversions}</span>
