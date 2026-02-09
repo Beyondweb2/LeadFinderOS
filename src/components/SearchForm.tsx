@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone, Zap } from 'lucide-react';
+import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -37,7 +37,7 @@ export function SearchForm({
   const [requirePhone, setRequirePhone] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country>('UK' as Country);
-  const [deepSearch, setDeepSearch] = useState(false);
+  // Deep search removed - was causing edge function timeouts at large radius
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +51,6 @@ export function SearchForm({
       minReviews: minReviews > 0 ? minReviews : undefined,
       requirePhone,
       country: selectedCountry,
-      deepSearch,
     });
   };
 
@@ -171,22 +170,6 @@ export function SearchForm({
                     </div>
                   </div>
 
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <Label className="text-xs font-medium text-foreground/80 flex items-center gap-1.5">
-                      <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                      Deep Search
-                    </Label>
-                    <div className="flex items-center gap-1.5 pt-0.5">
-                      <Switch
-                        checked={deepSearch}
-                        onCheckedChange={setDeepSearch}
-                        className="scale-90"
-                      />
-                      <span className="text-[10px] text-muted-foreground">
-                        {deepSearch ? '200+' : 'Up to 60'}
-                      </span>
-                    </div>
-                  </div>
                 </div>
               </CollapsibleContent>
             </Collapsible>
