@@ -96,9 +96,10 @@
       const validSubscription = subscriptions.data.find((sub: { status: string }) => validStatuses.includes(sub.status));
       
       const hasActiveSub = !!validSubscription;
-     let productId: string | null = null;
-     let subscriptionEnd: string | null = null;
+    let productId: string | null = null;
+    let subscriptionEnd: string | null = null;
       let subscriptionStatus: string | null = null;
+      let trialEnd: string | null = null;
  
       if (hasActiveSub && validSubscription) {
         // Safely handle the timestamp conversion
@@ -107,6 +108,12 @@
           subscriptionEnd = new Date(periodEnd * 1000).toISOString();
         }
         subscriptionStatus = validSubscription.status;
+
+        // Extract trial_end from Stripe (source of truth)
+        const stripeTrialEnd = validSubscription.trial_end;
+        if (stripeTrialEnd && typeof stripeTrialEnd === 'number') {
+          trialEnd = new Date(stripeTrialEnd * 1000).toISOString();
+        }
        
         const priceProduct = validSubscription.items.data[0]?.price?.product;
         if (priceProduct) {
@@ -116,6 +123,7 @@
         logStep("Active subscription found", { 
           subscriptionId: validSubscription.id, 
           endDate: subscriptionEnd,
+          trialEnd,
           productId,
           status: subscriptionStatus
         });
@@ -123,11 +131,12 @@
         logStep("No active subscription found");
       }
  
-     return new Response(JSON.stringify({
+    return new Response(JSON.stringify({
        subscribed: hasActiveSub,
        product_id: productId,
         subscription_end: subscriptionEnd,
-        subscription_status: subscriptionStatus
+        subscription_status: subscriptionStatus,
+        trial_end: trialEnd
      }), {
        headers: { ...corsHeaders, "Content-Type": "application/json" },
        status: 200,

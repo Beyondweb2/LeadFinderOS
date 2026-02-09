@@ -140,10 +140,10 @@ const logStep = (step: string, details?: unknown) => {
       // Only add trial for new customers who haven't had a subscription
       if (!hasHadSubscription) {
         sessionConfig.subscription_data = { 
-          trial_period_days: 3,
+          trial_period_days: 1,
           metadata: Object.keys(trackingMetadata).length > 0 ? trackingMetadata : undefined
         };
-        logStep("Adding 3-day trial to checkout");
+        logStep("Adding 1-day trial to checkout");
       } else {
         logStep("Skipping trial - customer has previous subscription");
       }
