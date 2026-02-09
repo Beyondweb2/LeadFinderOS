@@ -91,7 +91,7 @@ const Subscribe = () => {
               <div className="text-center">
                 {!alreadyTrialing && (
                   <div className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
-                    3-Day Free Trial
+                    1-Day Free Trial
                   </div>
                 )}
                 <div>
@@ -101,7 +101,7 @@ const Subscribe = () => {
                 <p className="text-sm text-muted-foreground mt-2">
                   {alreadyTrialing 
                     ? 'Unlock unlimited access today'
-                    : 'Try free for 3 days, then £19.99/month'
+                    : 'Try free for 24 hours, then £19.99/month'
                   }
                 </p>
               </div>

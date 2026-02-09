@@ -472,27 +472,7 @@ const Landing = () => {
             </Button>
           </div>
           
-          {/* Stats bar - all 3 on one line, equal width */}
-          <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-xl mx-auto">
-            <div className="text-center">
-              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">100K+</div>
-              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Businesses</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">∞</div>
-              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Unlimited</div>
-            </div>
-            {/* Mobile reassurance microcopy */}
-            <p className="sm:hidden text-[11px] text-muted-foreground mt-2">
-              Set up in under 60 seconds. No credit card needed.
-            </p>
-          </div>
-          
-          {/* Stats bar - all 3 on one line, equal width */}
+          {/* Stats bar */}
           <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-xl mx-auto">
             <div className="text-center">
               <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">100K+</div>
@@ -507,6 +487,10 @@ const Landing = () => {
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
           </div>
+          {/* Mobile reassurance microcopy */}
+          <p className="sm:hidden text-[11px] text-muted-foreground text-center mt-3">
+            Set up in under 60 seconds. No credit card needed.
+          </p>
         </div>
       </section>
 
@@ -537,7 +521,10 @@ const Landing = () => {
                     <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                     The Old Way
                   </div>
-                  <div className="rounded-xl overflow-hidden">
+                  <div 
+                    className="rounded-xl overflow-hidden cursor-pointer"
+                    onClick={() => setExpandedImage({ src: oldWayImage, title: 'The Old Way — Manual Google Maps Searching' })}
+                  >
                     <img
                       src={oldWayImage}
                       alt="Manually searching Google Maps for businesses"
@@ -577,7 +564,10 @@ const Landing = () => {
                     <CheckCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                     With LeadFinder
                   </div>
-                  <div className="rounded-xl overflow-hidden">
+                  <div 
+                    className="rounded-xl overflow-hidden cursor-pointer"
+                    onClick={() => setExpandedImage({ src: newWayImage, title: 'With LeadFinder — Filtered Results Ready to Contact' })}
+                  >
                     <img
                       src={newWayImage}
                       alt="LeadFinder showing filtered list of businesses without websites"
@@ -797,7 +787,7 @@ const Landing = () => {
                 />
                 
                 <CardHeader className="text-center pb-2 pt-6 sm:pt-8 px-4 sm:px-6">
-                  {/* 3-Day Free Trial Badge */}
+                  {/* 1-Day Free Trial Badge */}
                   <div 
                     className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wide mx-auto mb-3 sm:mb-4"
                     style={{ 
@@ -807,14 +797,14 @@ const Landing = () => {
                     }}
                   >
                     <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                    3-Day Free Trial
+                    1-Day Free Trial
                   </div>
                   <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
                   <div className="mt-4 sm:mt-6">
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">after 3-day free trial</p>
+                  <p className="text-xs text-muted-foreground mt-2">after 1-day free trial (24 hours)</p>
                 </CardHeader>
                 
                 <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
@@ -886,7 +876,7 @@ const Landing = () => {
                 </Button>
               </div>
               <p className="relative text-[10px] sm:text-xs text-muted-foreground mt-4">
-                3-day free trial • Cancel anytime
+                1-day free trial (24 hours) • Cancel anytime
               </p>
             </div>
           </ScrollReveal>
@@ -935,6 +925,27 @@ const Landing = () => {
           </div>
         </div>
       </footer>
+
+      {/* Mobile sticky bottom CTA */}
+      {isMobile && (
+        <div 
+          className="fixed bottom-0 left-0 right-0 z-50 p-3 backdrop-blur-xl border-t border-white/10"
+          style={{ background: 'hsl(220 40% 4% / 0.95)' }}
+        >
+          <Button size="lg" className="w-full btn-premium font-semibold py-3 h-auto text-sm" asChild>
+            <Link to="/auth">
+              Start Free Trial
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Link>
+          </Button>
+          <p className="text-[10px] text-muted-foreground text-center mt-1.5">
+            1-day free trial (24 hours) · No credit card needed
+          </p>
+        </div>
+      )}
+
+      {/* Spacer for sticky CTA on mobile */}
+      {isMobile && <div className="h-24" />}
     </div>
   );
 };
