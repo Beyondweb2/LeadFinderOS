@@ -78,7 +78,7 @@ export function DashboardStats({ leads }: DashboardStatsProps) {
       description: 'No reply in 3+ days',
     },
     {
-      title: 'Interested',
+      title: 'Tracked',
       value: stats.interested,
       icon: CheckCircle,
       color: 'text-green-500',

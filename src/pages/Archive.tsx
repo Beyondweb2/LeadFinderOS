@@ -442,7 +442,7 @@ const ArchivePage = () => {
                                   className="bg-primary hover:bg-primary/90"
                                 >
                                   <Star className="h-3.5 w-3.5 mr-1" />
-                                  Interested
+                                  Track
                                 </Button>
                               ) : (
                                 <span className="text-xs text-muted-foreground">View only</span>
