@@ -27,6 +27,7 @@ import AdminAffiliates from "./pages/AdminAffiliates";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 import Landing from "./pages/Landing";
 import Terms from "./pages/Terms";
+import Feedback from "./pages/Feedback";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -83,6 +84,7 @@ const App = () => (
               } 
              />
              <Route path="/terms" element={<Terms />} />
+             <Route path="/feedback" element={<Feedback />} />
              <Route path="/guide" element={<HowToUse />} />
             <Route 
               path="/" 
