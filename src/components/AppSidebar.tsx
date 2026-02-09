@@ -13,7 +13,9 @@ import {
 } from '@/components/ui/sidebar';
 import { UserMenu } from '@/components/UserMenu';
 import { AccentColorPicker } from '@/components/AccentColorPicker';
+import { TrialStatusBadge } from '@/components/TrialStatusBadge';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useTrial } from '@/hooks/useTrial';
 import { 
   LayoutDashboard, 
   Search, 
@@ -87,8 +89,12 @@ const adminItems = [
 export function AppSidebar() {
   const location = useLocation();
   const { state, toggleSidebar } = useSidebar();
-  const { isAdmin } = useSubscription();
+  const { isAdmin, subscribed } = useSubscription();
+  const { isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing } = useTrial();
   const isCollapsed = state === 'collapsed';
+  
+  // Show trial badge for free trial users only (not Stripe trialing or subscribed)
+  const showTrialBadge = isOnTrial && !subscribed && !isStripeTrialing;
 
   return (
     <Sidebar 
@@ -109,6 +115,17 @@ export function AppSidebar() {
             </div>
           )}
         </div>
+        
+        {/* Trial Status Badge */}
+        {showTrialBadge && (
+          <div className="mt-3">
+            <TrialStatusBadge 
+              searchesRemaining={searchesRemaining} 
+              dailyLimit={dailyLimit}
+              isCollapsed={isCollapsed}
+            />
+          </div>
+        )}
       </SidebarHeader>
 
       <SidebarContent className="p-2">
