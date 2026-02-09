@@ -561,30 +561,54 @@ async function searchPlaces(
 }
 
 async function getPlaceDetails(placeId: string, apiKey: string): Promise<any> {
-  const fields = [
-    'name',
-    'formatted_address',
-    'geometry',
-    'formatted_phone_number',
-    'international_phone_number',
+  // Use the new Google Places API v1 for better data including primaryTypeDisplayName
+  const fieldMask = [
+    'displayName',
+    'formattedAddress',
+    'location',
+    'nationalPhoneNumber',
+    'internationalPhoneNumber',
     'rating',
-    'user_ratings_total',
-    'website',
-    'url',
-    'business_status',
+    'userRatingCount',
+    'websiteUri',
+    'googleMapsUri',
+    'businessStatus',
     'types',
+    'primaryType',
+    'primaryTypeDisplayName',
   ].join(',');
   
-  const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${fields}&key=${apiKey}`;
-  const res = await fetch(url);
-  const data = await res.json();
+  const url = `https://places.googleapis.com/v1/places/${placeId}`;
+  const res = await fetch(url, {
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': apiKey,
+      'X-Goog-FieldMask': fieldMask,
+    },
+  });
   
-  if (data.status !== 'OK') {
-    console.warn('Place details failed for', placeId, ':', data.status);
+  if (!res.ok) {
+    console.warn('Place details failed for', placeId, ':', res.status);
     return null;
   }
   
-  return data.result;
+  const data = await res.json();
+  
+  // Map new API response to legacy field names for compatibility
+  return {
+    name: data.displayName?.text,
+    formatted_address: data.formattedAddress,
+    formatted_phone_number: data.nationalPhoneNumber,
+    international_phone_number: data.internationalPhoneNumber,
+    rating: data.rating,
+    user_ratings_total: data.userRatingCount,
+    website: data.websiteUri,
+    url: data.googleMapsUri,
+    business_status: data.businessStatus,
+    types: data.types,
+    primaryType: data.primaryType,
+    primaryTypeDisplayName: data.primaryTypeDisplayName?.text,
+  };
 }
 
 // Error sanitization - return safe messages to clients
@@ -849,10 +873,11 @@ serve(async (req) => {
         if (details.business_status === 'CLOSED_PERMANENTLY') continue;
 
         const websiteUrl = details.website;
-        // Get most specific business type - skip generic types like "establishment", "point_of_interest"
+        // Get specific business category - prioritize primaryTypeDisplayName from new API
         const genericTypes = new Set(['establishment', 'point_of_interest', 'store', 'food', 'locality', 'political', 'premise', 'subpremise']);
-        const specificType = details.types?.find((t: string) => !genericTypes.has(t));
-        const category = specificType?.replace(/_/g, ' ') || details.types?.[0]?.replace(/_/g, ' ') || undefined;
+        const category = details.primaryTypeDisplayName
+          || details.primaryType?.replace(/_/g, ' ')
+          || details.types?.find((t: string) => !genericTypes.has(t))?.replace(/_/g, ' ');
         
         let websiteStatus: Lead['websiteStatus'];
         let confidence: number;
