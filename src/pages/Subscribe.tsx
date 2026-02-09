@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useTrial } from '@/hooks/useTrial';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,12 +19,16 @@ import appLogo from '@/assets/logo.png';
    'Priority support',
  ];
  
- const Subscribe = () => {
-   const [isLoading, setIsLoading] = useState(false);
-   const { createCheckout, subscribed, isLoading: subLoading } = useSubscription();
-   const { signOut } = useAuth();
-   const { toast } = useToast();
-   const navigate = useNavigate();
+const Subscribe = () => {
+  const [isLoading, setIsLoading] = useState(false);
+  const { createCheckout, subscribed, isLoading: subLoading, status } = useSubscription();
+  const { isOnTrial, isStripeTrialing } = useTrial();
+  const { signOut } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  
+  // User is already on a trial (either free trial or Stripe trialing)
+  const alreadyTrialing = isOnTrial || isStripeTrialing || status === 'trialing';
  
    const handleBackToLogin = useCallback(async () => {
      await signOut();
@@ -84,15 +89,20 @@ import appLogo from '@/assets/logo.png';
            
             <CardContent className="space-y-6">
               <div className="text-center">
-                <div className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
-                  3-Day Free Trial
-                </div>
+                {!alreadyTrialing && (
+                  <div className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
+                    3-Day Free Trial
+                  </div>
+                )}
                 <div>
                   <span className="text-4xl font-bold">£19.99</span>
                   <span className="text-muted-foreground">/month</span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-2">
-                  Try free for 3 days, then £19.99/month
+                  {alreadyTrialing 
+                    ? 'Unlock unlimited access today'
+                    : 'Try free for 3 days, then £19.99/month'
+                  }
                 </p>
               </div>
  
@@ -116,17 +126,20 @@ import appLogo from '@/assets/logo.png';
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Starting checkout...
+                    {alreadyTrialing ? 'Starting checkout...' : 'Starting trial...'}
                   </>
                 ) : (
                   <>
                     <CreditCard className="mr-2 h-4 w-4" />
-                    Start Free Trial
+                    {alreadyTrialing ? 'Subscribe Now' : 'Start Free Trial'}
                   </>
                 )}
               </Button>
               <p className="text-xs text-muted-foreground text-center">
-                Card required. Cancel anytime. Secure payment via Stripe.
+                {alreadyTrialing 
+                  ? 'Secure payment via Stripe. Cancel anytime.'
+                  : 'Card required. Cancel anytime. Secure payment via Stripe.'
+                }
               </p>
             </CardFooter>
          </Card>
