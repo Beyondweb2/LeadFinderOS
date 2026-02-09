@@ -326,10 +326,21 @@ const VideoSection = () => {
 const Landing = () => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
   const [featureIndex, setFeatureIndex] = useState(0);
+  const [hasScrolled, setHasScrolled] = useState(false);
   const isMobile = useIsMobile();
   
   // Lock landing page to dark brand theme
   useLandingTheme();
+
+  // Track scroll to show/hide sticky CTA and adjust header button
+  useEffect(() => {
+    const onScroll = () => {
+      const threshold = window.innerHeight * 0.35;
+      setHasScrolled(window.scrollY > threshold);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
   
   return (
     <div className="min-h-screen bg-background overflow-hidden">
@@ -414,7 +425,15 @@ const Landing = () => {
             <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm px-2 sm:px-4" asChild>
               <Link to="/auth">Sign In</Link>
             </Button>
-            <Button asChild className="btn-premium font-medium text-sm px-3 sm:px-4">
+            <Button 
+              asChild 
+              className={`font-medium text-sm px-3 sm:px-4 transition-all duration-300 ${
+                isMobile && !hasScrolled 
+                  ? 'border border-white/20 bg-transparent hover:bg-white/[0.06] text-foreground' 
+                  : 'btn-premium'
+              }`}
+              variant={isMobile && !hasScrolled ? 'outline' : 'default'}
+            >
               <Link to="/auth">
                 <span className="hidden sm:inline">Start Free Trial</span>
                 <span className="sm:hidden">Free Trial</span>
@@ -514,15 +533,15 @@ const Landing = () => {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 max-w-6xl mx-auto">
             {/* Old Way */}
             <ScrollReveal delay={100} direction="left">
-              <div className="relative group">
+                <div className="relative group">
                 <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-destructive/30 via-destructive/10 to-transparent opacity-60" />
-                <div className="relative rounded-2xl overflow-hidden border border-destructive/20 bg-card/80 backdrop-blur-sm p-3 sm:p-4">
-                  <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 bg-destructive/90 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg">
+                <div className="relative rounded-2xl overflow-hidden border border-destructive/20 bg-card/80 backdrop-blur-sm p-1.5 sm:p-4">
+                  <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 bg-destructive/90 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg">
                     <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                     The Old Way
                   </div>
                   <div 
-                    className="rounded-xl overflow-hidden cursor-pointer"
+                    className="rounded-lg sm:rounded-xl overflow-hidden cursor-pointer"
                     onClick={() => setExpandedImage({ src: oldWayImage, title: 'The Old Way — Manual Google Maps Searching' })}
                   >
                     <img
@@ -531,7 +550,7 @@ const Landing = () => {
                       className="w-full h-auto"
                     />
                   </div>
-                  <p className="text-muted-foreground text-xs sm:text-sm text-center mt-3 sm:mt-4 px-1 sm:px-2">
+                  <p className="text-muted-foreground text-xs sm:text-sm text-center mt-2 sm:mt-4 px-1 sm:px-2">
                     Scrolling through Google Maps, clicking each pin, checking for websites one by one...
                   </p>
                 </div>
@@ -551,7 +570,7 @@ const Landing = () => {
                   style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.4), hsl(210 100% 50% / 0.2), transparent)' }}
                 />
                 <div 
-                  className="relative rounded-2xl overflow-hidden bg-card/90 backdrop-blur-sm p-3 sm:p-4"
+                  className="relative rounded-2xl overflow-hidden bg-card/90 backdrop-blur-sm p-1.5 sm:p-4"
                   style={{ 
                     border: '1px solid hsl(210 100% 50% / 0.3)',
                     boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)'
@@ -582,8 +601,8 @@ const Landing = () => {
             </ScrollReveal>
           </div>
           
-          {/* CTA after comparison */}
-          <ScrollReveal delay={300} className="text-center mt-10 sm:mt-14">
+          {/* CTA after comparison - hidden on mobile to reduce density */}
+          <ScrollReveal delay={300} className="hidden sm:block text-center mt-10 sm:mt-14">
             <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
               <Link to="/auth">
                 Start Free Trial
@@ -612,7 +631,7 @@ const Landing = () => {
           
           {/* Mobile Carousel */}
           {isMobile ? (
-            <div className="w-full max-w-[90vw] mx-auto">
+            <div className="w-full mx-auto">
               <Carousel
                 opts={{ loop: true, startIndex: 0 }}
                 plugins={[
@@ -646,17 +665,13 @@ const Landing = () => {
                           {feature.description}
                         </p>
                         
-                        {/* Larger Image */}
+                        {/* Full-width image */}
                         <div className="relative w-full">
                           <div 
-                            className="absolute -inset-2 rounded-2xl blur-xl opacity-40"
-                            style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
-                          />
-                          <div 
-                            className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[4/3]"
+                            className="relative rounded-lg overflow-hidden bg-card/80 aspect-[16/10]"
                             style={{ 
-                              border: '1px solid hsl(210 100% 50% / 0.2)',
-                              boxShadow: '0 0 20px hsl(210 100% 50% / 0.1)'
+                              border: '1px solid hsl(210 100% 50% / 0.15)',
+                              boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
                             }}
                           >
                             <img 
@@ -664,6 +679,9 @@ const Landing = () => {
                               alt={feature.title}
                               className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-100'}`}
                             />
+                            <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
+                              <Expand className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -744,7 +762,7 @@ const Landing = () => {
           )}
           
           {/* CTA after features */}
-          <ScrollReveal delay={600} className="text-center mt-10 sm:mt-14">
+          <ScrollReveal delay={600} className="hidden sm:block text-center mt-10 sm:mt-14">
             <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
               <Link to="/auth">
                 Start Free Trial
@@ -926,10 +944,12 @@ const Landing = () => {
         </div>
       </footer>
 
-      {/* Mobile sticky bottom CTA */}
+      {/* Mobile sticky bottom CTA - only after scrolling past hero */}
       {isMobile && (
         <div 
-          className="fixed bottom-0 left-0 right-0 z-50 p-3 backdrop-blur-xl border-t border-white/10"
+          className={`fixed bottom-0 left-0 right-0 z-50 p-3 backdrop-blur-xl border-t border-white/10 transition-all duration-300 ${
+            hasScrolled ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
+          }`}
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
           <Button size="lg" className="w-full btn-premium font-semibold py-3 h-auto text-sm" asChild>
@@ -945,7 +965,7 @@ const Landing = () => {
       )}
 
       {/* Spacer for sticky CTA on mobile */}
-      {isMobile && <div className="h-24" />}
+      {isMobile && hasScrolled && <div className="h-24" />}
     </div>
   );
 };

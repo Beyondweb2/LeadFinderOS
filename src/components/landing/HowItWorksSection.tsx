@@ -163,58 +163,53 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
         
         {/* Mobile Carousel */}
         {isMobile ? (
-          <div className="w-full max-w-[90vw] mx-auto">
-            <Carousel
-              opts={{ loop: true, startIndex: 0 }}
-              plugins={[
-                Autoplay({
-                  delay: 4000,
-                  stopOnInteraction: true,
-                  stopOnMouseEnter: true,
-                }),
-              ]}
-              className="w-full"
-              setApi={(api) => {
-                if (api) {
-                  // Set initial index
-                  setActiveIndex(api.selectedScrollSnap());
-                  api.on('select', () => {
-                    setActiveIndex(api.selectedScrollSnap());
-                  });
-                }
-              }}
-            >
-              <CarouselContent>
-                {STEPS.map((step, index) => (
-                  <CarouselItem key={step.title}>
-                    <MobileStepCard 
-                      step={step} 
-                      index={index}
-                      onImageClick={(src, title) => setExpandedImage({ src, title })}
+          <div className="space-y-10 px-1">
+            {STEPS.map((step, index) => (
+              <div key={step.title} className="flex flex-col items-center text-center">
+                {/* Step number and title */}
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <div 
+                    className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-semibold text-sm shrink-0"
+                    style={{ 
+                      background: 'hsl(210 100% 50% / 0.15)',
+                      color: 'hsl(210 100% 60%)',
+                      border: '1px solid hsl(210 100% 50% / 0.3)'
+                    }}
+                  >
+                    {index + 1}
+                  </div>
+                  <h3 className="text-xl font-bold tracking-tight">{step.title}</h3>
+                </div>
+                
+                <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
+                  {step.description}
+                </p>
+                
+                {/* Full-width tappable image */}
+                <div 
+                  className="relative w-full cursor-pointer"
+                  onClick={() => setExpandedImage({ src: step.image, title: step.title })}
+                >
+                  <div 
+                    className="relative rounded-lg overflow-hidden bg-card/80 aspect-[16/10]"
+                    style={{ 
+                      border: '1px solid hsl(210 100% 50% / 0.15)',
+                      boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
+                    }}
+                  >
+                    <img 
+                      src={step.image} 
+                      alt={step.title}
+                      className="w-full h-full object-cover"
                     />
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              
-              {/* Custom navigation arrows - smaller */}
-              <CarouselPrevious className="-left-1 h-8 w-8 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
-              <CarouselNext className="-right-1 h-8 w-8 bg-primary/90 border-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground shadow-lg" />
-            </Carousel>
-            
-            {/* Dot indicators */}
-            <div className="flex justify-center gap-2 mt-6">
-              {STEPS.map((_, index) => (
-                <button
-                  key={index}
-                  className={`w-2 h-2 rounded-full transition-all duration-300 ${
-                    activeIndex === index 
-                      ? 'w-6 bg-primary' 
-                      : 'bg-muted-foreground/30'
-                  }`}
-                  aria-label={`Go to step ${index + 1}`}
-                />
-              ))}
-            </div>
+                    {/* Tap hint */}
+                    <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
+                      <Expand className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           /* Desktop Layout - Original */
