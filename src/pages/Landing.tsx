@@ -25,7 +25,7 @@ import demoVideo from '@/assets/leadfinder-demo.mp4';
 import appLogo from '@/assets/logo.png';
 
 import featureCustomization from '@/assets/feature-customization-new.png';
-import featureContactTracking from '@/assets/howto-step4-trackleads.png';
+import featureContactTracking from '@/assets/feature-contact-tracking.png';
 import featureDashboard from '@/assets/howto-step4-dashboard.png';
 import featureExport from '@/assets/feature-export.png';
 import featureClassification from '@/assets/feature-classification.png';
