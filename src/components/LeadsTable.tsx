@@ -257,6 +257,11 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
               >
                 <div className="flex-1 min-w-0 mr-2">
                   <p className="font-medium text-sm truncate leading-tight">{lead.name}</p>
+                  {lead.category && (
+                    <p className="text-xs text-muted-foreground truncate leading-tight capitalize">
+                      {lead.category}
+                    </p>
+                  )}
                   <div className="mt-1">
                     <StatusBadge status={lead.websiteStatus} compact />
                   </div>
