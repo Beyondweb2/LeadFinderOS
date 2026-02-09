@@ -1,101 +1,146 @@
 
-# Contact & Feedback Page Implementation Plan
+# Fix: Restrict ALL Trial Users to 2 Searches/Day
 
-## Overview
-Build a dedicated feedback page where users can submit reviews, feature requests, and general feedback. The form will send submissions via email using Resend to your verified domain (`lead-finder-app.com`).
+## Problem Summary
 
----
+All users (including those who entered card details for the 3-day Stripe trial) are getting full access with unlimited searches. The crown icon is also showing for trial users, suggesting they're paid subscribers.
 
-## What We'll Build
+**Your requirement:** Everyone on trial (whether app trial or Stripe trial) should be limited to 2 searches/day for 3 days. Only after their first payment should they get unlimited access.
 
-### 1. Feedback Page (`/feedback`)
-A clean, accessible page with a tabbed form for different feedback types:
-- **Reviews** - User testimonials (name, rating, review text)
-- **Feature Requests** - Suggestions for new features
-- **General Feedback** - Bug reports, questions, other feedback
+## Root Cause Analysis
 
-### 2. Backend Edge Function
-A new `send-feedback` edge function that:
-- Validates all input with Zod
-- Rate limits submissions (5/minute per user)
-- Sends formatted emails via Resend
-- Returns success/error responses
+The system currently treats Stripe `trialing` status as equivalent to `active` (paid):
 
----
+1. **Backend (`search-leads`)**: Checks `subscriptions` table; if status is `trialing`, grants unlimited searches
+2. **Frontend (`useSubscription`)**: Sets `subscribed: true` for `trialing` status
+3. **Frontend (`useTrial`)**: When `subscribed: true`, overrides to `searchesRemaining: Infinity`
+4. **UI (`UserMenu`)**: Shows crown for `subscribed: true`
+5. **Dashboard**: Hides trial progress card when `subscribed` or `isStripeTrialing`
 
-## Implementation Steps
+## Solution Overview
 
-### Step 1: Securely Add Resend API Key
-Request your Resend API key using Lovable's secret management system, which stores it securely in your backend environment.
+Change the logic so that `trialing` status ONLY grants feature access (CRM, outreach) but does NOT grant unlimited searches. Unlimited searches only come with `active` or `past_due` status.
 
-### Step 2: Create Edge Function
-Build `supabase/functions/send-feedback/index.ts` with:
-- CORS handling for web requests
-- Input validation (name, email, feedback type, message)
-- Rate limiting (5 requests/minute)
-- Resend email delivery
-- Error handling that doesn't expose internal details
+## Technical Changes
 
-### Step 3: Create Feedback Page
-Build `src/pages/Feedback.tsx` with:
-- Tabbed interface (Reviews / Feature Requests / General)
-- Form fields with validation
-- Star rating component for reviews
-- Loading states and success/error toasts
-- Mobile-responsive design matching existing app style
+### 1. Backend: `supabase/functions/search-leads/index.ts`
 
-### Step 4: Add Route & Navigation
-- Add `/feedback` route in App.tsx
-- Add link in landing page footer
-- Optionally add link in app sidebar for logged-in users
-
----
-
-## Technical Details
-
-### Edge Function Structure
+**Current logic (lines 697-703):**
 ```text
-supabase/functions/send-feedback/index.ts
-├── CORS headers (matching existing pattern)
-├── Rate limiting (5 req/min using shared rate-limiter)
-├── Zod validation schema
-├── Resend email sending
-└── Error handling (generic client messages)
+const validStatuses = ['active', 'trialing', 'past_due'];
+hasActiveSubscription = subscription && validStatuses.includes(subscription.status);
+
+if (hasActiveSubscription) {
+  // Unlimited searches
+}
 ```
 
-### Email Format
-Sends to your specified email with:
-- Clear subject line (e.g., "[LeadFinder] New Review from John D.")
-- Formatted HTML body with all submission details
-- From address: `noreply@lead-finder-app.com`
+**New logic:**
+- Remove `trialing` from the list of statuses that grant unlimited searches
+- Users with `trialing` status will fall through to the app trial check and be limited to 2/day
+- Only `active` and `past_due` (grace period) get unlimited searches
 
-### Form Validation
-- Name: Required, 2-100 characters
-- Email: Valid email format
-- Rating: 1-5 stars (reviews only)
-- Message: Required, 10-2000 characters
+### 2. Frontend: `src/hooks/useSubscription.ts`
 
----
+Add new flags to differentiate between:
+- `subscribed`: true for any valid status (`active`, `trialing`, `past_due`) - grants feature access
+- `isPaidSubscriber`: true ONLY for `active` or `past_due` - used for crown icon
+- `isStripeTrialing`: true when status is `trialing` - used for messaging
 
-## Security Measures
-- Server-side input validation
-- Rate limiting to prevent spam
-- No sensitive data logging
-- Generic error messages to clients
+**Changes:**
+```text
+Line 80: Keep validStatuses including 'trialing' for feature access
+Add new returned values:
+- isPaidSubscriber: status === 'active' || status === 'past_due'
+- isStripeTrialing: status === 'trialing'
+```
 
----
+### 3. Frontend: `src/hooks/useTrial.ts`
 
-## What I Need From You
-1. **Your Resend API key** (I'll request it securely)
-2. **Your email address** where feedback should be sent
+**Current logic (lines 208-222):**
+```text
+if (hasPaidAccess) {
+  return {
+    searchesRemaining: Infinity,
+    dailyLimit: Infinity,
+    ...
+  };
+}
+```
 
----
+**New logic:**
+- Only grant unlimited searches if user has `active` or `past_due` status
+- Stripe `trialing` users should still be subject to 2/day limit
+- Change condition to check for `isPaidSubscriber` instead of `subscribed`
 
-## Files to Create/Modify
-| File | Action |
+### 4. Frontend: `src/components/UserMenu.tsx`
+
+**Current (line 118):**
+```text
+{subscribed && (
+  <Crown className="h-3 w-3 text-primary absolute -top-1 -right-1" />
+)}
+```
+
+**New logic:**
+- Only show crown for `isPaidSubscriber` (not admins, not trialing)
+- For `isStripeTrialing` users, show "Trial • X days left" instead of "Pro • Renews..."
+
+### 5. Frontend: `src/pages/Dashboard.tsx`
+
+**Current logic (line 30):**
+```text
+const showTrialProgress = !isSubscriptionLoading && !isTrialLoading && isOnTrial && !subscribed && !isStripeTrialing;
+```
+
+**New logic:**
+- Show trial progress card for ALL trial users (including Stripe trialing)
+- Only hide it for truly paid subscribers (`isPaidSubscriber`)
+- For Stripe trialing users, show a modified message like "Pro trial - 3 days left (2 searches/day)"
+
+### 6. Frontend: `src/components/SubscriptionGate.tsx`
+
+**Current (line 50):**
+```text
+if (subscribed || isOnTrial) {
+  return <>{children}</>;
+}
+```
+
+This is correct - Stripe trial users should have feature access. No change needed here.
+
+## Data Implications
+
+Currently there are 6 users with `trialing` status in the database. After this fix:
+- They will keep CRM/outreach access (no disruption)
+- Their searches will be limited to 2/day until their trial converts to `active`
+- The crown icon will disappear
+- They'll see the trial progress card on the dashboard
+
+This is the correct behavior per your requirements.
+
+## Files to Modify
+
+| File | Change |
 |------|--------|
-| `supabase/functions/send-feedback/index.ts` | Create |
-| `supabase/config.toml` | Add function config |
-| `src/pages/Feedback.tsx` | Create |
-| `src/App.tsx` | Add route |
-| `src/pages/Landing.tsx` | Add footer link |
+| `supabase/functions/search-leads/index.ts` | Remove `trialing` from unlimited search statuses |
+| `src/hooks/useSubscription.ts` | Add `isPaidSubscriber` and `isStripeTrialing` flags |
+| `src/hooks/useTrial.ts` | Only grant unlimited to `isPaidSubscriber` |
+| `src/components/UserMenu.tsx` | Crown only for `isPaidSubscriber`; show "Trial" for trialing |
+| `src/pages/Dashboard.tsx` | Show trial progress for all trial users |
+
+## Testing Plan
+
+1. Create a new account (should see trial progress, 2/day limit)
+2. Complete Stripe checkout for trial (should still see trial progress, 2/day limit, no crown)
+3. Simulate `active` status (should see crown, unlimited searches, no trial card)
+4. Verify existing users with `trialing` status now see trial card and 2/day limit
+
+## Summary
+
+This fix ensures:
+- No one gets unlimited searches until their first payment
+- Crown icon only appears for paying customers
+- Trial progress is visible to all trial users (app trial and Stripe trial)
+- Stripe trial users can still use CRM/outreach features (just with 2 searches/day)
+- Smooth transition when trial converts to active subscription
