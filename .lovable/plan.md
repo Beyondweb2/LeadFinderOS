@@ -1,70 +1,101 @@
 
-# WhatsApp Number Verification Feature
+# Contact & Feedback Page Implementation Plan
 
-## Summary
-Add the ability to check whether a phone number is registered on WhatsApp **before** clicking the WhatsApp button, so you know in advance if contacting via WhatsApp will work.
-
-## The Challenge
-Unfortunately, WhatsApp doesn't provide a free, official public API to check if a number is registered. The options that exist require:
-
-1. **Third-party WhatsApp API services** (like 2Chat, Wassenger, Maytapi, Green-API) - These cost money (typically $15-50/month) and require connecting your own WhatsApp number to their service
-2. **WhatsApp Business API (official)** - Requires Meta Business verification and approval process
-3. **Trial-and-error tracking** - Mark numbers as "No WhatsApp" after you discover they don't work
-
-## Recommended Approach: Quick "No WhatsApp" Marking
-
-Since third-party APIs add cost and complexity, I recommend a streamlined workflow that lets you quickly mark numbers when you discover they don't have WhatsApp:
-
-### What You'll Get
-
-1. **Quick "Mark No WhatsApp" button** - Right next to the WhatsApp button, a single click marks the lead as "No WhatsApp" status when you return and find the number wasn't on WhatsApp
-
-2. **Visual indicator on leads already marked** - Leads with "No WhatsApp" status will show a clear indicator so you don't waste time clicking them again
-
-3. **Hide WhatsApp button for "No WhatsApp" leads** - Once marked, the WhatsApp button disappears for that lead to prevent accidental clicks
-
-4. **Filter out "No WhatsApp" leads** - Easy filter to hide leads you've already determined don't have WhatsApp
+## Overview
+Build a dedicated feedback page where users can submit reviews, feature requests, and general feedback. The form will send submissions via email using Resend to your verified domain (`lead-finder-app.com`).
 
 ---
 
-## Optional: Third-Party API Integration
+## What We'll Build
 
-If you'd like automatic verification before clicking, I can integrate with one of these services. This would:
-- Check each phone number when you add leads to your Outreach CRM
-- Show a WhatsApp icon (green checkmark = verified, gray X = no WhatsApp)
-- Requires subscribing to one of these services and providing an API key
+### 1. Feedback Page (`/feedback`)
+A clean, accessible page with a tabbed form for different feedback types:
+- **Reviews** - User testimonials (name, rating, review text)
+- **Feature Requests** - Suggestions for new features
+- **General Feedback** - Bug reports, questions, other feedback
 
-Let me know if you want to explore this option further.
+### 2. Backend Edge Function
+A new `send-feedback` edge function that:
+- Validates all input with Zod
+- Rate limits submissions (5/minute per user)
+- Sends formatted emails via Resend
+- Returns success/error responses
+
+---
+
+## Implementation Steps
+
+### Step 1: Securely Add Resend API Key
+Request your Resend API key using Lovable's secret management system, which stores it securely in your backend environment.
+
+### Step 2: Create Edge Function
+Build `supabase/functions/send-feedback/index.ts` with:
+- CORS handling for web requests
+- Input validation (name, email, feedback type, message)
+- Rate limiting (5 requests/minute)
+- Resend email delivery
+- Error handling that doesn't expose internal details
+
+### Step 3: Create Feedback Page
+Build `src/pages/Feedback.tsx` with:
+- Tabbed interface (Reviews / Feature Requests / General)
+- Form fields with validation
+- Star rating component for reviews
+- Loading states and success/error toasts
+- Mobile-responsive design matching existing app style
+
+### Step 4: Add Route & Navigation
+- Add `/feedback` route in App.tsx
+- Add link in landing page footer
+- Optionally add link in app sidebar for logged-in users
 
 ---
 
 ## Technical Details
 
-### Files to Create/Modify
+### Edge Function Structure
+```text
+supabase/functions/send-feedback/index.ts
+├── CORS headers (matching existing pattern)
+├── Rate limiting (5 req/min using shared rate-limiter)
+├── Zod validation schema
+├── Resend email sending
+└── Error handling (generic client messages)
+```
 
-| File | Change |
+### Email Format
+Sends to your specified email with:
+- Clear subject line (e.g., "[LeadFinder] New Review from John D.")
+- Formatted HTML body with all submission details
+- From address: `noreply@lead-finder-app.com`
+
+### Form Validation
+- Name: Required, 2-100 characters
+- Email: Valid email format
+- Rating: 1-5 stars (reviews only)
+- Message: Required, 10-2000 characters
+
+---
+
+## Security Measures
+- Server-side input validation
+- Rate limiting to prevent spam
+- No sensitive data logging
+- Generic error messages to clients
+
+---
+
+## What I Need From You
+1. **Your Resend API key** (I'll request it securely)
+2. **Your email address** where feedback should be sent
+
+---
+
+## Files to Create/Modify
+| File | Action |
 |------|--------|
-| `src/components/OutreachTable.tsx` | Add "Mark No WA" quick action button next to WhatsApp button; hide WhatsApp button if status is `no_whatsapp` |
-| `src/components/OutreachMobileCard.tsx` | Same changes for mobile view |
-| `src/components/OutreachLeadDialog.tsx` | Add quick mark button in the lead details dialog |
-
-### UI Changes
-
-**Desktop table row:**
-```text
-[Maps] [WhatsApp] [❌ No WA]  →  (after marking) →  [Maps] [No WhatsApp badge]
-```
-
-**Mobile card:**
-```text
-[Maps] [WhatsApp] [❌]  →  (after marking) →  [Maps] [No WA label]
-```
-
-### Logic Flow
-1. User clicks WhatsApp button → opens WhatsApp
-2. User returns, sees "number not on WhatsApp" message
-3. User clicks "Mark No WA" button (single click)
-4. Lead status changes to `no_whatsapp`
-5. WhatsApp button is replaced with a "No WA" indicator
-6. Lead can be filtered out of the active workflow
-
+| `supabase/functions/send-feedback/index.ts` | Create |
+| `supabase/config.toml` | Add function config |
+| `src/pages/Feedback.tsx` | Create |
+| `src/App.tsx` | Add route |
+| `src/pages/Landing.tsx` | Add footer link |
