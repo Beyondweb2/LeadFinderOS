@@ -595,6 +595,9 @@ const Landing = () => {
         <VideoSection />
       </div>
 
+      {/* How It Works Section */}
+      <HowItWorksSection ScrollReveal={ScrollReveal} />
+
       {/* Before/After Comparison Section */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
@@ -689,9 +692,6 @@ const Landing = () => {
           </ScrollReveal>
         </div>
       </section>
-
-      {/* How It Works Section */}
-      <HowItWorksSection ScrollReveal={ScrollReveal} />
 
       {/* Benefits / Emotional Hooks Section */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
