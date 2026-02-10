@@ -46,7 +46,7 @@ const REVIEWS: Review[] = [
 ];
 
 const StarRating = ({ count }: { count: number }) => (
-  <div className="flex gap-0.5">
+  <div className="flex gap-0.5 justify-center">
     {[...Array(5)].map((_, i) => (
       <Star 
         key={i} 
@@ -154,8 +154,8 @@ export const ReviewsSection = () => {
     <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
       <div className="container mx-auto">
         <div className="text-center mb-10 sm:mb-12 md:mb-16">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-            Real Results from <span className="text-gradient-primary">Real Users</span>
+          <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
+            What Our <span className="text-gradient-primary">Users</span> Say
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
             See how freelancers and agencies are landing more clients with LeadFinder Pro
