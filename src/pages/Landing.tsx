@@ -466,20 +466,31 @@ const Landing = () => {
         <div className="absolute inset-0 bg-noise" />
       </div>
 
-      {/* Floating orbs - subtle and slow */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div 
-          className="absolute top-[10%] left-[15%] w-[600px] h-[600px] rounded-full blur-[180px] animate-float opacity-40"
-          style={{ background: 'hsl(210 100% 50% / 0.08)' }}
-        />
-        <div 
-          className="absolute top-[40%] right-[10%] w-[500px] h-[500px] rounded-full blur-[160px] animate-float opacity-30"
-          style={{ background: 'hsl(210 100% 50% / 0.06)', animationDelay: '-4s' }}
-        />
-        <div 
-          className="absolute bottom-[10%] left-[30%] w-[400px] h-[400px] rounded-full blur-[140px] animate-float opacity-25"
-          style={{ background: 'hsl(210 100% 45% / 0.05)', animationDelay: '-2s' }}
-        />
+      {/* Floating logo icons down the page - desktop only, alternating sides */}
+      <div className="hidden md:block fixed inset-0 pointer-events-none z-[1] overflow-hidden">
+        {[
+          { top: '8%', right: '6%', size: 'w-20 h-20 lg:w-28 lg:h-28', opacity: 0.06, duration: 10, delay: 0 },
+          { top: '22%', left: '5%', size: 'w-16 h-16 lg:w-24 lg:h-24', opacity: 0.045, duration: 13, delay: -3 },
+          { top: '38%', right: '7%', size: 'w-14 h-14 lg:w-20 lg:h-20', opacity: 0.04, duration: 11, delay: -6 },
+          { top: '52%', left: '6%', size: 'w-18 h-18 lg:w-26 lg:h-26', opacity: 0.05, duration: 14, delay: -2 },
+          { top: '66%', right: '5%', size: 'w-16 h-16 lg:w-22 lg:h-22', opacity: 0.04, duration: 12, delay: -8 },
+          { top: '80%', left: '7%', size: 'w-14 h-14 lg:w-20 lg:h-20', opacity: 0.035, duration: 15, delay: -4 },
+        ].map((pos, i) => (
+          <img
+            key={i}
+            src={appLogo}
+            alt=""
+            className={`absolute ${pos.size} select-none`}
+            style={{
+              top: pos.top,
+              ...(pos.left ? { left: pos.left } : {}),
+              ...(pos.right ? { right: pos.right } : {}),
+              opacity: pos.opacity,
+              animation: `float ${pos.duration}s ease-in-out infinite`,
+              animationDelay: `${pos.delay}s`,
+            }}
+          />
+        ))}
       </div>
 
       {/* Header - blends into hero */}
@@ -510,19 +521,6 @@ const Landing = () => {
 
       {/* Hero Section */}
       <section className="relative z-10 pt-6 pb-8 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
-        {/* Floating logo icons - desktop only */}
-        <img 
-          src={appLogo} 
-          alt="" 
-          className="hidden md:block absolute top-12 right-[10%] w-20 h-20 lg:w-28 lg:h-28 opacity-[0.07] pointer-events-none select-none"
-          style={{ animation: 'float 10s ease-in-out infinite' }}
-        />
-        <img 
-          src={appLogo} 
-          alt="" 
-          className="hidden md:block absolute bottom-16 left-[8%] w-16 h-16 lg:w-24 lg:h-24 opacity-[0.05] pointer-events-none select-none"
-          style={{ animation: 'float 12s ease-in-out infinite', animationDelay: '-5s' }}
-        />
         <div className="container mx-auto text-center">
           {/* Mobile: Video at top instead of logo */}
           <div className="sm:hidden mb-6">
@@ -542,7 +540,7 @@ const Landing = () => {
             <span>Your all-in-one outreach tool</span>
           </div>
           
-          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
+          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight">
             <span className="block text-gradient-primary">Find Businesses</span>
             <span className="block text-foreground mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
