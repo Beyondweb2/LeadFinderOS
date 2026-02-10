@@ -418,8 +418,7 @@ const Landing = () => {
             </Button>
             <Button 
               asChild 
-              variant="ghost"
-              className="font-medium text-sm px-3 sm:px-4 sm:btn-premium text-muted-foreground hover:text-foreground sm:text-foreground"
+              className="font-medium text-sm px-3 sm:px-4 btn-premium"
             >
               <Link to="/auth">
                 <span className="hidden sm:inline">Start Free Trial</span>
@@ -461,7 +460,7 @@ const Landing = () => {
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-12 leading-relaxed px-2">
-            Find real businesses without websites, reach out directly, and keep track of every conversation in one place.
+            Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
           </p>
           
           {/* Mobile only: keywords under subtitle */}
@@ -496,7 +495,7 @@ const Landing = () => {
           </div>
           {/* Reassurance microcopy */}
           <p className="text-[11px] sm:text-xs text-muted-foreground text-center mt-3">
-            Set up in under 60 seconds. Full access included.
+            Full access for 24 hours. Cancel anytime.
           </p>
         </div>
       </section>
