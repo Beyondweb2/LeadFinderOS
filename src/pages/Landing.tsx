@@ -463,10 +463,7 @@ const Landing = () => {
             Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
           </p>
           
-          {/* Keywords above buttons - desktop only */}
-          <p className="hidden sm:block text-sm tracking-[0.3em] uppercase text-muted-foreground/60 mb-5 font-medium">
-            Search · Contact · Track · Close
-          </p>
+          {/* Keywords removed */}
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
@@ -497,6 +494,15 @@ const Landing = () => {
           <p className="text-[11px] sm:text-xs text-muted-foreground text-center mt-3">
             Full access for 24 hours. Cancel anytime.
           </p>
+
+          {/* Scroll down indicator */}
+          <div className="mt-6 sm:mt-10 flex flex-col items-center gap-1 animate-bounce opacity-40">
+            <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">Scroll</span>
+            <svg width="16" height="24" viewBox="0 0 16 24" fill="none" className="text-muted-foreground">
+              <rect x="1" y="1" width="14" height="22" rx="7" stroke="currentColor" strokeWidth="1.5" />
+              <circle cx="8" cy="8" r="2" fill="currentColor" className="animate-[scroll-dot_2s_ease-in-out_infinite]" />
+            </svg>
+          </div>
         </div>
       </section>
 
