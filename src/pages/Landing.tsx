@@ -455,8 +455,8 @@ const Landing = () => {
           </p>
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
-            <span className="block text-foreground">Find Businesses</span>
-            <span className="block text-gradient-primary mt-0.5 sm:mt-2">Without Websites</span>
+            <span className="block text-gradient-primary">Find Businesses</span>
+            <span className="block text-foreground mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-6 sm:mb-12 leading-relaxed px-2">
