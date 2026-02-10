@@ -437,9 +437,9 @@ const Landing = () => {
             <MobileHeroVideo />
           </div>
           
-          {/* Tagline badge - hidden on mobile */}
+          {/* Tagline badge */}
           <div 
-            className="hidden sm:inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
+            className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
             style={{ 
               border: '1px solid hsl(210 100% 50% / 0.3)', 
               background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.1), hsl(210 100% 50% / 0.05))',
@@ -447,17 +447,17 @@ const Landing = () => {
             }}
           >
             <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-            <span>Lead generation for web professionals</span>
+            <span>Your all-in-one outreach tool</span>
           </div>
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
-            <span className="block text-foreground">Find Businesses</span>
-            <span className="block text-gradient-primary mt-0.5 sm:mt-2">Without Websites</span>
+            <span className="block text-foreground">Find Leads.</span>
+            <span className="block text-foreground">Reach Out.</span>
+            <span className="block text-gradient-primary mt-0.5 sm:mt-2">Track Everything.</span>
           </h1>
           
-          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-xl mx-auto mb-6 sm:mb-12 leading-relaxed px-2">
-            Find local businesses without websites and reach out directly.
-            <span className="hidden sm:inline"> Stop scrolling Google Maps — start contacting prospects.</span>
+          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-6 sm:mb-12 leading-relaxed px-2">
+            Find local businesses without websites, reach out directly, and keep track of every conversation in one place.
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
@@ -473,16 +473,16 @@ const Landing = () => {
               className="text-sm sm:text-base px-6 sm:px-8 py-3 sm:py-4 h-auto border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-foreground backdrop-blur-sm w-full sm:w-auto" 
               asChild
             >
-              <Link to="/auth">Sign In</Link>
+              <Link to="/guide">
+                See How It Works
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
             </Button>
           </div>
           
           {/* Stats bar */}
           <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-xl mx-auto">
-            <div className="text-center">
-              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">100K+</div>
-              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Businesses</div>
-            </div>
+            <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
               <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
