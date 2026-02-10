@@ -438,17 +438,13 @@ const Landing = () => {
           </div>
           
           {/* Tagline badge */}
-          <p className="text-[9px] sm:text-[11px] tracking-[0.25em] uppercase text-muted-foreground/40 mb-3 sm:mb-5 font-medium">
-            Search · Contact · Track · Close
-          </p>
-          
-          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
-            <span className="block text-foreground">Find Businesses</span>
-            <span className="block text-gradient-primary mt-0.5 sm:mt-2">Without Websites</span>
+          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-2 sm:mb-4 tracking-tight">
+            <span className="block text-gradient-primary">Find Businesses</span>
+            <span className="block text-foreground/80 mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
           
-          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-6 sm:mb-12 leading-relaxed px-2">
-            Find real businesses without websites, reach out directly, and keep track of every conversation in one place.
+          <p className="text-[9px] sm:text-[11px] tracking-[0.25em] uppercase text-muted-foreground/40 mb-6 sm:mb-12 font-medium">
+            Search · Contact · Track · Close
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
