@@ -172,23 +172,20 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
         
         {/* Mobile Carousel */}
         {isMobile ? (
-          <div className="relative px-1">
-            {/* Vertical connecting line */}
-            <div 
-              className="absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2"
-              style={{ background: 'linear-gradient(to bottom, transparent, hsl(210 100% 50% / 0.3) 5%, hsl(210 100% 50% / 0.3) 95%, transparent)' }}
-            />
-            
+          <div className="px-1 space-y-10">
             {STEPS.map((step, index) => (
-              <div key={step.title} className="relative flex flex-col items-center text-center pb-10 last:pb-0">
-                {/* Dot on the line */}
+              <div key={step.title} className="flex flex-col items-center text-center">
+                {/* Step number */}
                 <div 
-                  className="relative z-10 w-3 h-3 rounded-full mb-4"
+                  className="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm mb-3"
                   style={{ 
-                    background: 'hsl(210 100% 60%)',
-                    boxShadow: '0 0 8px hsl(210 100% 50% / 0.5)'
+                    background: 'hsl(210 100% 50% / 0.15)',
+                    color: 'hsl(210 100% 60%)',
+                    border: '1px solid hsl(210 100% 50% / 0.3)'
                   }}
-                />
+                >
+                  {index + 1}
+                </div>
                 
                 <h3 className="text-xl font-bold tracking-tight mb-2">{step.title}</h3>
                 
