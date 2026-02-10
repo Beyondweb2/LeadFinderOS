@@ -55,10 +55,15 @@ export function useTrial() {
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session?.access_token) return false;
 
+      // Retrieve affiliate code and ref source from localStorage
+      const affiliateCode = localStorage.getItem('leadfinder_affiliate_code') || undefined;
+      const refSource = localStorage.getItem('leadfinder_ref_source') || undefined;
+
       const response = await supabase.functions.invoke('ensure-trial', {
         headers: {
           Authorization: `Bearer ${session.session.access_token}`,
         },
+        body: { affiliate_code: affiliateCode, ref_source: refSource },
       });
 
       if (response.error) {
