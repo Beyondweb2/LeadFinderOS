@@ -418,12 +418,7 @@ const Landing = () => {
             </Button>
             <Button 
               asChild 
-              className={`font-medium text-sm px-3 sm:px-4 transition-all duration-300 ${
-                !hasScrolled 
-                  ? 'border border-white/20 bg-transparent hover:bg-white/[0.06] text-foreground' 
-                  : 'btn-premium'
-              }`}
-              variant={!hasScrolled ? 'outline' : 'default'}
+              className="font-medium text-sm px-3 sm:px-4 btn-premium"
             >
               <Link to="/auth">
                 <span className="hidden sm:inline">Start Free Trial</span>
