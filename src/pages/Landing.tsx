@@ -34,7 +34,10 @@ import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
 import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
+import { ReviewsSection } from '@/components/landing/ReviewsSection';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
+import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
+import Autoplay from 'embla-carousel-autoplay';
 
 // Scroll reveal wrapper component
 const ScrollReveal = ({ 
@@ -600,6 +603,76 @@ const Landing = () => {
       {/* How It Works Section */}
       <HowItWorksSection ScrollReveal={ScrollReveal} />
 
+      {/* Benefits / Emotional Hooks Section */}
+      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
+        <div className="container mx-auto">
+          <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
+              What If You Could<span className="text-gradient-primary">...</span>
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
+              Stop leaving money on the table. Here's what changes when you use LeadFinder Pro.
+            </p>
+          </ScrollReveal>
+
+          <ScrollReveal delay={100}>
+            <div 
+              className="relative max-w-4xl mx-auto rounded-2xl p-6 sm:p-8 md:p-10 overflow-hidden"
+              style={{
+                background: 'linear-gradient(180deg, hsl(220 40% 10% / 0.95), hsl(220 40% 6% / 0.98))',
+                border: '1px solid hsl(210 100% 50% / 0.12)',
+                boxShadow: '0 0 40px hsl(210 100% 50% / 0.06)',
+              }}
+            >
+              {/* Subtle glow */}
+              <div 
+                className="absolute -inset-4 rounded-3xl blur-2xl opacity-30 pointer-events-none"
+                style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.12), transparent 70%)' }}
+              />
+
+              <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                {[
+                  { bold: 'Find 10x more leads', detail: 'in a fraction of the time you spend now' },
+                  { bold: 'Reach businesses first', detail: 'before your competitors even know they exist' },
+                  { bold: 'Replace hours of searching', detail: 'with a single click — results in seconds' },
+                  { bold: 'Turn cold outreach into warm conversations', detail: 'with ready-made templates and scripts' },
+                  { bold: 'Close your first deal within days', detail: 'not weeks, not months — days' },
+                  { bold: 'Never run out of businesses to contact', detail: 'unlimited searches across the globe' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div 
+                      className="flex-shrink-0 mt-0.5 p-1 rounded-full"
+                      style={{ 
+                        background: 'hsl(210 100% 50% / 0.12)',
+                        border: '1px solid hsl(210 100% 50% / 0.2)',
+                      }}
+                    >
+                      <CheckCircle className="h-4 w-4" style={{ color: 'hsl(210 100% 55%)' }} strokeWidth={2} />
+                    </div>
+                    <div>
+                      <p className="text-sm sm:text-base font-semibold text-foreground">{item.bold}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{item.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="relative text-center mt-8">
+                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
+                  <Link to="/auth">
+                    Start Free Trial
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
+      {/* Reviews / Social Proof */}
+      <ReviewsSection />
+
       {/* Features Section */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
@@ -648,59 +721,65 @@ const Landing = () => {
               ))}
             </div>
           ) : (
-            /* Desktop Grid */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {FEATURES.map((feature, index) => (
-                <ScrollReveal key={feature.title} delay={index * 100}>
-                  <Card
-                    className="group relative glass-panel-strong border-white/[0.06] transition-all duration-300 overflow-hidden h-full hover:border-[hsl(210_100%_50%_/_0.2)] cursor-pointer"
-                    onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
-                  >
-                    {/* Hover glow - subtle */}
-                    <div 
-                      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                      style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.03), transparent)' }}
-                    />
-                    
-                    {/* Screenshot image */}
-                    <div className="relative overflow-hidden rounded-t-lg">
-                      <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent z-10 pointer-events-none" />
-                      {/* Expand icon overlay */}
-                      <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <Expand className="h-4 w-4 text-foreground" />
-                      </div>
-                      <img 
-                        src={feature.image} 
-                        alt={feature.title}
-                        className={`w-full h-40 sm:h-48 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
-                      />
-                    </div>
-                    
-                    <CardHeader className="relative pb-1 sm:pb-2 p-4 sm:p-5">
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="p-2 rounded-xl transition-colors duration-500 flex-shrink-0"
-                          style={{ 
-                            background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
-                            border: '1px solid hsl(210 100% 50% / 0.1)'
-                          }}
+            /* Desktop: Auto-playing Carousel */
+            <ScrollReveal>
+              <div className="max-w-4xl mx-auto px-14">
+                <Carousel
+                  opts={{ loop: true, align: 'center' }}
+                  plugins={[Autoplay({ delay: 4000, stopOnInteraction: true })]}
+                >
+                  <CarouselContent>
+                    {FEATURES.map((feature) => (
+                      <CarouselItem key={feature.title}>
+                        <Card
+                          className="group relative glass-panel-strong border-white/[0.06] transition-all duration-300 overflow-hidden hover:border-[hsl(210_100%_50%_/_0.2)] cursor-pointer"
+                          onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
                         >
-                          <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
-                        </div>
-                        <CardTitle className="text-base sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</CardTitle>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="relative pt-0 p-4 sm:p-5 sm:pt-0">
-                      <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
-                    </CardContent>
-                  </Card>
-                </ScrollReveal>
-              ))}
-            </div>
+                          <div 
+                            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                            style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.03), transparent)' }}
+                          />
+                          <div className="relative overflow-hidden rounded-t-lg">
+                            <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent z-10 pointer-events-none" />
+                            <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                              <Expand className="h-4 w-4 text-foreground" />
+                            </div>
+                            <img 
+                              src={feature.image} 
+                              alt={feature.title}
+                              className={`w-full h-64 sm:h-80 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                            />
+                          </div>
+                          <CardHeader className="relative pb-1 sm:pb-2 p-4 sm:p-5">
+                            <div className="flex items-center gap-3">
+                              <div 
+                                className="p-2 rounded-xl flex-shrink-0"
+                                style={{ 
+                                  background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
+                                  border: '1px solid hsl(210 100% 50% / 0.1)'
+                                }}
+                              >
+                                <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                              </div>
+                              <CardTitle className="text-base sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</CardTitle>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="relative pt-0 p-4 sm:p-5 sm:pt-0">
+                            <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+                          </CardContent>
+                        </Card>
+                      </CarouselItem>
+                    ))}
+                  </CarouselContent>
+                  <CarouselPrevious className="border-white/10 bg-card/80 hover:bg-card" />
+                  <CarouselNext className="border-white/10 bg-card/80 hover:bg-card" />
+                </Carousel>
+              </div>
+            </ScrollReveal>
           )}
           
           {/* CTA after features */}
-          <ScrollReveal delay={600} className="hidden sm:block text-center mt-10 sm:mt-14">
+          <ScrollReveal delay={300} className="hidden sm:block text-center mt-10 sm:mt-14">
             <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
               <Link to="/auth">
                 Start Free Trial
