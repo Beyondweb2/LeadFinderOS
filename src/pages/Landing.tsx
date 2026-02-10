@@ -622,39 +622,47 @@ const Landing = () => {
             </p>
           </ScrollReveal>
           
-          {/* Mobile: Stacked inline images */}
+          {/* Mobile: Carousel */}
           {isMobile ? (
-            <div className="space-y-8">
-              {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature) => (
-                <div 
-                  key={feature.title}
-                  className="flex flex-col items-center text-center cursor-pointer"
-                  onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
-                >
-                  <h3 className="text-lg font-bold tracking-tight mb-1.5">{feature.title}</h3>
-                  <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
-                    {feature.description}
-                  </p>
-                  <div className="relative w-full">
-                    <div 
-                      className="relative rounded-lg overflow-hidden bg-card/80 aspect-[16/10]"
-                      style={{ 
-                        border: '1px solid hsl(210 100% 50% / 0.15)',
-                        boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
-                      }}
-                    >
-                      <img 
-                        src={feature.image} 
-                        alt={feature.title}
-                        className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-100'}`}
-                      />
-                      <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
-                        <Expand className="h-3.5 w-3.5 text-muted-foreground" />
+            <div className="px-2">
+              <Carousel
+                opts={{ loop: true, align: 'start' }}
+                plugins={[Autoplay({ delay: 4000, stopOnInteraction: true })]}
+              >
+                <CarouselContent>
+                  {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature) => (
+                    <CarouselItem key={feature.title}>
+                      <div 
+                        className="flex flex-col items-center text-center cursor-pointer"
+                        onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
+                      >
+                        <h3 className="text-lg font-bold tracking-tight mb-1.5">{feature.title}</h3>
+                        <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
+                          {feature.description}
+                        </p>
+                        <div className="relative w-full">
+                          <div 
+                            className="relative rounded-lg overflow-hidden bg-card/80 aspect-[16/10]"
+                            style={{ 
+                              border: '1px solid hsl(210 100% 50% / 0.15)',
+                              boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
+                            }}
+                          >
+                            <img 
+                              src={feature.image} 
+                              alt={feature.title}
+                              className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-100'}`}
+                            />
+                            <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
+                              <Expand className="h-3.5 w-3.5 text-muted-foreground" />
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+              </Carousel>
             </div>
           ) : (
             /* Desktop: Auto-playing Carousel */
