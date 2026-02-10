@@ -460,8 +460,8 @@ const Landing = () => {
             Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
           </p>
           
-          {/* Keywords above buttons - both mobile and desktop */}
-          <p className="text-[10px] sm:text-sm tracking-[0.25em] sm:tracking-[0.3em] uppercase text-muted-foreground/50 sm:text-muted-foreground/60 mb-4 sm:mb-5 font-medium">
+          {/* Keywords above buttons - desktop only */}
+          <p className="hidden sm:block text-sm tracking-[0.3em] uppercase text-muted-foreground/60 mb-5 font-medium">
             Search · Contact · Track · Close
           </p>
           
