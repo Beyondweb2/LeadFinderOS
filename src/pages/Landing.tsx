@@ -434,9 +434,9 @@ const Landing = () => {
       <section className="relative z-10 pt-6 pb-8 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
         <div className="container mx-auto text-center">
           
-          {/* Tagline badge */}
+          {/* Tagline badge - desktop only */}
           <div 
-            className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
+            className="hidden sm:inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
             style={{ 
               border: '1px solid hsl(210 100% 50% / 0.3)', 
               background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.1), hsl(210 100% 50% / 0.05))',
@@ -447,16 +447,21 @@ const Landing = () => {
             <span>Your all-in-one outreach tool</span>
           </div>
           
-          <p className="text-[10px] sm:text-sm tracking-[0.3em] uppercase text-muted-foreground/60 mb-3 sm:mb-5 font-medium">
+          {/* Process words - desktop: above headline, mobile: below CTA */}
+          <p className="hidden sm:block text-sm tracking-[0.3em] uppercase text-muted-foreground/60 mb-5 font-medium">
             Search · Contact · Track · Close
           </p>
           
-          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
+          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-2 sm:mb-6 tracking-tight">
             <span className="block text-gradient-primary">Find Businesses</span>
             <span className="block text-foreground mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
           
-          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-6 sm:mb-12 leading-relaxed px-2">
+          {/* Subheadline - short on mobile, full on desktop */}
+          <p className="text-sm text-muted-foreground mb-5 sm:hidden">
+            Prospecting with built-in tracking
+          </p>
+          <p className="hidden sm:block text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-12 leading-relaxed px-2">
             Find real businesses without websites, reach out directly, and keep track of every conversation in one place.
           </p>
           
@@ -467,11 +472,16 @@ const Landing = () => {
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-            <Link to="/guide" className="text-sm sm:text-base text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5">
+            <Link to="/guide" className="text-xs sm:text-base text-muted-foreground/70 hover:text-foreground transition-colors inline-flex items-center gap-1.5">
               See How It Works
-              <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <ArrowRight className="h-3 w-3 sm:h-4 sm:w-4" />
             </Link>
           </div>
+          
+          {/* Process words - mobile only, below CTA */}
+          <p className="sm:hidden text-[10px] tracking-[0.3em] uppercase text-muted-foreground/50 mt-5 font-medium">
+            Search · Contact · Track · Close
+          </p>
           
           {/* Stats bar */}
           <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-xl mx-auto">
