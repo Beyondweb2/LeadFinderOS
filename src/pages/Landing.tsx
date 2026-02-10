@@ -82,44 +82,44 @@ const FEATURES = [
   {
     icon: Search,
     title: 'Smart Classification',
-    description: 'See which businesses have no website, a directory listing, or an existing site — so you focus on the best leads.',
+    description: 'Instantly see which businesses have no website — hot leads are highlighted so you never waste time on the wrong ones.',
     image: featureClassification,
     imageScale: 'scale-100',
   },
   {
     icon: ClipboardList,
     title: 'Smart Dashboard',
-    description: 'Track performance, revenue, conversions, and productivity all in one place.',
+    description: 'Your entire pipeline at a glance — track searches, outreach progress, conversions, and revenue in real time.',
     image: featureDashboard,
     imageScale: 'scale-100',
   },
   {
     icon: Phone,
     title: 'Contact Tracking',
-    description: 'Log contact attempts, update lead status, and add notes as you reach out.',
+    description: 'Log every call, text, and follow-up. Update statuses and add notes so you never lose track of a lead.',
     image: featureContactTracking,
     imageScale: 'scale-100',
   },
   {
     icon: FileText,
     title: 'Templates',
-    description: 'Pre-built text and voice scripts to speed up your outreach workflow.',
+    description: 'Ready-to-send WhatsApp, SMS, and call scripts — just pick a template, personalise, and hit send.',
     image: featureTemplates,
     imageScale: 'scale-100',
   },
   {
     icon: FileText,
     title: 'Export Tools',
-    description: 'Export your leads as CSV files to use in other tools or keep as backup.',
+    description: 'Download your leads as CSV in one click — perfect for importing into other CRMs or keeping offline backups.',
     image: featureExport,
     imageScale: 'scale-100',
   },
   {
     icon: Zap,
     title: 'Customization',
-    description: 'Personalize your workspace with custom themes and accent colors.',
+    description: 'Make it yours — choose from 12 themes, pick an accent colour, and set up your workspace exactly how you like it.',
     image: featureCustomization,
-    imageScale: 'scale-100',
+    imageScale: 'scale-[0.85]',
   },
 ];
 
@@ -469,12 +469,12 @@ const Landing = () => {
       {/* Floating logo icons down the page - desktop only, alternating sides */}
       <div className="hidden md:block fixed inset-0 pointer-events-none z-[1] overflow-hidden">
         {[
-          { top: '8%', right: '2%', size: 'w-12 h-12 lg:w-16 lg:h-16', opacity: 0.06, duration: 10, delay: 0 },
-          { top: '22%', left: '2%', size: 'w-10 h-10 lg:w-14 lg:h-14', opacity: 0.045, duration: 13, delay: -3 },
-          { top: '38%', right: '3%', size: 'w-10 h-10 lg:w-12 lg:h-12', opacity: 0.04, duration: 11, delay: -6 },
-          { top: '52%', left: '2%', size: 'w-12 h-12 lg:w-16 lg:h-16', opacity: 0.05, duration: 14, delay: -2 },
-          { top: '66%', right: '2%', size: 'w-10 h-10 lg:w-14 lg:h-14', opacity: 0.04, duration: 12, delay: -8 },
-          { top: '80%', left: '3%', size: 'w-10 h-10 lg:w-12 lg:h-12', opacity: 0.035, duration: 15, delay: -4 },
+          { top: '8%', right: '4%', size: 'w-12 h-12 lg:w-16 lg:h-16', opacity: 0.06, duration: 10, delay: 0 },
+          { top: '22%', left: '1%', size: 'w-10 h-10 lg:w-14 lg:h-14', opacity: 0.045, duration: 13, delay: -3 },
+          { top: '40%', right: '1%', size: 'w-10 h-10 lg:w-12 lg:h-12', opacity: 0.04, duration: 11, delay: -6 },
+          { top: '55%', left: '4%', size: 'w-12 h-12 lg:w-16 lg:h-16', opacity: 0.05, duration: 14, delay: -2 },
+          { top: '70%', right: '3%', size: 'w-10 h-10 lg:w-14 lg:h-14', opacity: 0.04, duration: 12, delay: -8 },
+          { top: '82%', left: '1.5%', size: 'w-10 h-10 lg:w-12 lg:h-12', opacity: 0.035, duration: 15, delay: -4 },
         ].map((pos, i) => (
           <img
             key={i}
@@ -776,7 +776,7 @@ const Landing = () => {
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-              What If You Could<span className="text-gradient-primary">...</span>
+              What If <span className="text-gradient-primary">You</span> Could<span className="text-foreground">...</span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
               Stop leaving money on the table. Here's what changes when you use LeadFinder Pro.
@@ -801,7 +801,7 @@ const Landing = () => {
               <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                 {[
                   { bold: 'Find 10x more leads', detail: 'in a fraction of the time you spend now' },
-                  { bold: 'Reach businesses first', detail: 'before your competitors even know they exist' },
+                  { bold: 'Track everything in one place', detail: 'leads, outreach, follow-ups — all in a single dashboard' },
                   { bold: 'Replace hours of searching', detail: 'with a single click — results in seconds' },
                   { bold: 'Turn cold outreach into warm conversations', detail: 'with ready-made templates and scripts' },
                   { bold: 'Close your first deal within days', detail: 'not weeks, not months — days' },
