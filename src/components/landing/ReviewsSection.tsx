@@ -1,10 +1,6 @@
-import { Star, MessageSquare, Quote, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Star, MessageSquare, Quote } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
-import Autoplay from 'embla-carousel-autoplay';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { useState, useEffect, useRef } from 'react';
 
 interface Review {
   name: string;
@@ -100,77 +96,25 @@ const ReviewCard = ({ review }: { review: Review }) => (
   </div>
 );
 
-const MobileReviewsCarousel = () => {
-  const [api, setApi] = useState<CarouselApi>();
-  const [current, setCurrent] = useState(0);
-  const autoplayPlugin = useRef(Autoplay({ delay: 5000, stopOnInteraction: true }));
-
-  useEffect(() => {
-    if (!api) return;
-    setCurrent(api.selectedScrollSnap());
-    api.on('select', () => setCurrent(api.selectedScrollSnap()));
-  }, [api]);
-
-  return (
-    <div className="max-w-md mx-auto">
-      <Carousel
-        setApi={setApi}
-        opts={{ loop: true, align: 'center' }}
-        plugins={[autoplayPlugin.current]}
-        className="w-full"
-      >
-        <CarouselContent className="-ml-3">
-          {REVIEWS.map((review, index) => (
-            <CarouselItem key={index} className="pl-3">
-              <ReviewCard review={review} />
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-      </Carousel>
-
-      {/* Dot indicators */}
-      <div className="flex items-center justify-center gap-1.5 mt-5">
-        {REVIEWS.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => api?.scrollTo(index)}
-            className={`rounded-full transition-all duration-300 ${
-              index === current
-                ? 'w-6 h-2 bg-[hsl(210_100%_50%)]'
-                : 'w-2 h-2 bg-muted-foreground/25'
-            }`}
-          />
-        ))}
-      </div>
-      <p className="text-center text-muted-foreground/50 text-xs mt-2">Swipe to read more</p>
-    </div>
-  );
-};
-
 export const ReviewsSection = () => {
-  const isMobile = useIsMobile();
-
   return (
-    <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
+    <section className="relative z-10 py-12 sm:py-20 md:py-24 lg:py-32 px-4">
       <div className="container mx-auto">
         <div className="text-center mb-10 sm:mb-12 md:mb-16">
           <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-            Trusted by <span className="text-gradient-primary">Web Professionals</span>
+            Early users are seeing <span className="text-gradient-primary">faster outreach</span>
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-            Join designers and developers already growing their client base
+            Short, practical feedback from people using LeadFinder Pro.
           </p>
         </div>
 
-        {isMobile ? (
-          <MobileReviewsCarousel />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 max-w-5xl mx-auto">
-            {REVIEWS.map((review, index) => (
-              <ReviewCard key={index} review={review} />
-            ))}
-          </div>
-        )}
+        {/* Always stacked cards - no carousel on mobile */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 max-w-5xl mx-auto">
+          {REVIEWS.map((review, index) => (
+            <ReviewCard key={index} review={review} />
+          ))}
+        </div>
 
         <div className="text-center mt-8 sm:mt-10">
           <Button variant="outline" className="border-white/10 hover:border-white/20 text-sm rounded-full px-6" asChild>
