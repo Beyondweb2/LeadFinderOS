@@ -698,10 +698,10 @@ const Landing = () => {
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-16">
             <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-              What If <span className="text-gradient-primary">You</span> Could<span className="text-foreground">...</span>
+              What If Finding Leads <span className="text-gradient-primary">Didn't</span> Take Hours
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              Stop leaving money on the table. Here's what changes when you use LeadFinder Pro.
+              Search once and instantly see which businesses don't have websites — sorted and ready to contact.
             </p>
           </ScrollReveal>
 
