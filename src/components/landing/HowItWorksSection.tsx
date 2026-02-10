@@ -14,6 +14,7 @@ import {
   Search,
   ClipboardList,
   MessageSquare,
+  Settings,
   Users,
   ArrowRight,
   X,
@@ -25,7 +26,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import step1Image from '@/assets/howto-step1-search.png';
 import step2Image from '@/assets/howto-step2-results.png';
 import step3Image from '@/assets/howto-step3-crm.png';
-import step4Image from '@/assets/howto-step4-dashboard.png';
+import step4Image from '@/assets/feature-contact-tracking.png';
+import step5Image from '@/assets/howto-step4-dashboard.png';
 
 const STEPS = [
   {
@@ -50,10 +52,17 @@ const STEPS = [
     badge: 'Direct Outreach',
   },
   {
+    icon: Settings,
+    title: 'Track & Manage',
+    description: 'Set next actions for each lead — schedule follow-ups, mark call-backs, and track every status change. Manage your entire outreach pipeline from one place.',
+    image: step4Image,
+    badge: 'Full Pipeline',
+  },
+  {
     icon: Users,
     title: 'Track Results',
     description: 'Track your outreach performance on the dashboard. See conversion rates, lead progress, and activity metrics to optimise your workflow.',
-    image: step4Image,
+    image: step5Image,
     badge: 'Full Analytics',
   },
 ];
@@ -157,7 +166,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             How It <span className="text-gradient-primary">Works</span>
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-            From search to sale in four simple steps
+            From search to sale in five simple steps
           </p>
         </ScrollReveal>
         

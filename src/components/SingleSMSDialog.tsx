@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MessageCircle, Send, AlertTriangle, RotateCcw } from 'lucide-react';
 import { generateSMSUrl } from '@/lib/leadUtils';
+import { TemplatePicker } from '@/components/TemplatePicker';
 
 interface SingleSMSDialogProps {
   open: boolean;
@@ -113,6 +114,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
               <p className="text-xs text-muted-foreground mb-2">
                 Use <code className="bg-muted px-1 rounded">{`{{business_name}}`}</code> to personalize
               </p>
+              <TemplatePicker onSelectTemplate={handleTemplateChange} templateType="text" />
               <Textarea
                 id="template"
                 value={template}
