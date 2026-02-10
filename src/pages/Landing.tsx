@@ -439,13 +439,13 @@ const Landing = () => {
           
           {/* Headline */}
           <h1 className="text-[2rem] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold tracking-tight leading-[1.1] sm:leading-tight">
-            <span className="block text-foreground">Find Businesses Without Websites</span>
-            <span className="block mt-1 sm:mt-2" style={{ background: 'linear-gradient(135deg, hsl(210 100% 60%) 0%, hsl(220 100% 55%) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>And Manage Your Outreach</span>
+            <span className="text-foreground">Find Businesses</span>{' '}
+            <span style={{ background: 'linear-gradient(135deg, hsl(210 100% 60%) 0%, hsl(220 100% 55%) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Without Websites</span>
           </h1>
 
           {/* Subheadline */}
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground/70 mt-3 sm:mt-4 mb-8 sm:mb-10 max-w-xs sm:max-w-2xl mx-auto">
-            Find local businesses without websites, reach out directly, and keep track of every conversation — all in one place.
+            Find local businesses without websites, reach out directly, and keep track of every conversation in one place.
           </p>
 
           {/* CTAs */}
