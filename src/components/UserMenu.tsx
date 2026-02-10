@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { LogOut, User, CreditCard, Crown, Key, Loader2 } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { LogOut, User, CreditCard, Crown, Key, Loader2, Camera } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useAvatar } from '@/hooks/useAvatar';
 import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,12 +28,30 @@ import { supabase } from '@/integrations/supabase/client';
 export function UserMenu() {
   const { user, signOut } = useAuth();
   const { subscribed, subscriptionEnd, openCustomerPortal, isAdmin, isPaidSubscriber, isStripeTrialing } = useSubscription();
+  const { uploadAvatar, isUploading } = useAvatar();
   const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: 'File too large', description: 'Max 2MB', variant: 'destructive' });
+      return;
+    }
+    try {
+      await uploadAvatar(file);
+      toast({ title: 'Profile picture updated' });
+    } catch {
+      toast({ title: 'Upload failed', variant: 'destructive' });
+    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -111,6 +130,13 @@ export function UserMenu() {
 
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleAvatarUpload}
+      />
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon" className="rounded-full relative">
@@ -140,6 +166,10 @@ export function UserMenu() {
             </div>
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="cursor-pointer" disabled={isUploading}>
+            <Camera className="mr-2 h-4 w-4" />
+            {isUploading ? 'Uploading...' : 'Change Profile Picture'}
+          </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setShowPasswordDialog(true)} className="cursor-pointer">
             <Key className="mr-2 h-4 w-4" />
             Change Password

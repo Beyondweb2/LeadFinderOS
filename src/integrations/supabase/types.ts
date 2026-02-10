@@ -424,6 +424,7 @@ export type Database = {
         Row: {
           affiliate_attributed_at: string | null
           affiliate_code: string | null
+          avatar_url: string | null
           created_at: string
           id: string
           last_search_date: string | null
@@ -440,6 +441,7 @@ export type Database = {
         Insert: {
           affiliate_attributed_at?: string | null
           affiliate_code?: string | null
+          avatar_url?: string | null
           created_at?: string
           id?: string
           last_search_date?: string | null
@@ -456,6 +458,7 @@ export type Database = {
         Update: {
           affiliate_attributed_at?: string | null
           affiliate_code?: string | null
+          avatar_url?: string | null
           created_at?: string
           id?: string
           last_search_date?: string | null

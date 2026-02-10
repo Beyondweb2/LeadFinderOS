@@ -223,10 +223,15 @@ export function useTrial() {
   }
 
   // Still loading subscription status - don't show trial UI yet
-  if (isSubscriptionLoading) {
+  // Also hide trial UI for Stripe trialing users (they have full access)
+  if (isSubscriptionLoading || isStripeTrialing) {
     return {
       ...state,
-      isLoading: true,
+      isOnTrial: false,
+      isLoading: isSubscriptionLoading,
+      searchesRemaining: isStripeTrialing ? Infinity : state.searchesRemaining,
+      dailyLimit: isStripeTrialing ? Infinity : state.dailyLimit,
+      isStripeTrialing,
       checkTrial,
       shouldShowUpgradePrompt: () => false,
       incrementSearchCount,

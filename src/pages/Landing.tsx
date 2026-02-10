@@ -419,11 +419,11 @@ const Landing = () => {
             <Button 
               asChild 
               className={`font-medium text-sm px-3 sm:px-4 transition-all duration-300 ${
-                isMobile && !hasScrolled 
+                !hasScrolled 
                   ? 'border border-white/20 bg-transparent hover:bg-white/[0.06] text-foreground' 
                   : 'btn-premium'
               }`}
-              variant={isMobile && !hasScrolled ? 'outline' : 'default'}
+              variant={!hasScrolled ? 'outline' : 'default'}
             >
               <Link to="/auth">
                 <span className="hidden sm:inline">Start Free Trial</span>
@@ -497,8 +497,8 @@ const Landing = () => {
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
           </div>
-          {/* Mobile reassurance microcopy */}
-          <p className="sm:hidden text-[11px] text-muted-foreground text-center mt-3">
+          {/* Reassurance microcopy */}
+          <p className="text-[11px] sm:text-xs text-muted-foreground text-center mt-3">
             Set up in under 60 seconds. Full access included.
           </p>
         </div>

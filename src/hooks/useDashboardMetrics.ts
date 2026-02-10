@@ -241,7 +241,15 @@ export function useDashboardMetrics() {
     const interestedStatuses = ['interested', 'wants_draft', 'waiting', 'reviewing_draft', 'paid_for_draft', 'completed'];
     const interestedCount = allLeads.filter(l => interestedStatuses.includes(l.status)).length;
     
-    const contactedCount = allLeads.filter(l => l.status !== 'not_contacted').length;
+    // Count as contacted if status indicates any form of contact was made
+    const contactedStatuses = [
+      'contacted', 'call_back', 'not_answered', 'on_hold', 
+      'wants_draft', 'interested', 'not_interested', 
+      'sent_initial_text', 'replied', 'sent_voice_note',
+      'awaiting_decision', 'waiting', 'reviewing_draft', 
+      'paid_for_draft', 'completed', 'no_whatsapp'
+    ];
+    const contactedCount = allLeads.filter(l => contactedStatuses.includes(l.status)).length;
     
     const interestRate = totalBusinessesAdded > 0 
       ? (interestedCount / totalBusinessesAdded) * 100 
