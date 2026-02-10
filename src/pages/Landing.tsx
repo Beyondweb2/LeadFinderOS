@@ -486,7 +486,7 @@ const Landing = () => {
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">∞</div>
+              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
           </div>
