@@ -433,9 +433,9 @@ const Landing = () => {
       {/* Hero Section */}
       <section className="relative z-10 pt-6 pb-8 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
         <div className="container mx-auto text-center">
-          {/* Mobile: Video at top instead of logo */}
+          {/* Mobile: Logo icon at top */}
           <div className="sm:hidden mb-6">
-            <MobileHeroVideo />
+            <img src={appLogo} alt="LeadFinder Pro" className="h-12 w-12 mx-auto" />
           </div>
           
           {/* Tagline badge */}
