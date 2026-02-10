@@ -80,10 +80,10 @@ export function useSubscription() {
       // First check local database for cached subscription (faster)
       if (!skipLocalCheck) {
         const { data: localSub, error: localError } = await supabase
-          .from('subscriptions')
-          .select('*')
+          .from('user_subscription_status' as any)
+          .select('id, user_id, status, current_period_end, created_at, updated_at')
           .eq('user_id', userId)
-          .maybeSingle();
+          .maybeSingle() as { data: { id: string; user_id: string; status: string; current_period_end: string | null; created_at: string; updated_at: string } | null; error: any };
 
       if (!localError && localSub) {
           const validStatuses = ['active', 'trialing', 'past_due'];
