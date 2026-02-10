@@ -439,14 +439,14 @@ const Landing = () => {
           
           {/* Tagline badge - hidden on mobile */}
           <div 
-            className="hidden sm:inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
+            className="hidden sm:inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-6 backdrop-blur-sm"
             style={{ 
-              border: '1px solid hsl(210 100% 50% / 0.3)', 
-              background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.1), hsl(210 100% 50% / 0.05))',
-              color: 'hsl(210 100% 60%)'
+              border: '1px solid hsl(210 100% 50% / 0.2)', 
+              background: 'hsl(210 100% 50% / 0.08)',
+              color: 'hsl(210 100% 65%)'
             }}
           >
-            <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+            <Zap className="h-3.5 w-3.5" />
             <span>Your all-in-one outreach tool</span>
           </div>
           
@@ -479,14 +479,14 @@ const Landing = () => {
           </div>
           
           {/* Stats bar */}
-          <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-xl mx-auto">
+          <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-2xl mx-auto">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
               <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="text-base sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
           </div>
