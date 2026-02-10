@@ -14,8 +14,11 @@ import {
 import { UserMenu } from '@/components/UserMenu';
 import { AccentColorPicker } from '@/components/AccentColorPicker';
 import { TrialStatusBadge } from '@/components/TrialStatusBadge';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTrial } from '@/hooks/useTrial';
+import { useAvatar } from '@/hooks/useAvatar';
+import { useAuth } from '@/hooks/useAuth';
 import { 
   LayoutDashboard, 
   Search, 
@@ -98,6 +101,8 @@ export function AppSidebar() {
   const { state, toggleSidebar } = useSidebar();
   const { isAdmin, subscribed, isLoading: isSubscriptionLoading } = useSubscription();
   const { isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading } = useTrial();
+  const { avatarUrl } = useAvatar();
+  const { user } = useAuth();
   const isCollapsed = state === 'collapsed';
   
   // Show trial badge for free trial users only (not Stripe trialing or subscribed)
@@ -235,7 +240,19 @@ export function AppSidebar() {
           'flex items-center',
           isCollapsed ? 'justify-center' : 'justify-between'
         )}>
-          {!isCollapsed && <UserMenu />}
+          <div className="flex items-center gap-2">
+            {!isCollapsed && (
+              <Avatar className="h-8 w-8">
+                {avatarUrl ? (
+                  <AvatarImage src={avatarUrl} alt="Profile" />
+                ) : null}
+                <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                  {user?.email?.charAt(0).toUpperCase() || 'U'}
+                </AvatarFallback>
+              </Avatar>
+            )}
+            {!isCollapsed && <UserMenu />}
+          </div>
           <div className="flex items-center gap-1">
             <AccentColorPicker />
             <Button
