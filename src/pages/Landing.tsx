@@ -418,7 +418,8 @@ const Landing = () => {
             </Button>
             <Button 
               asChild 
-              className="font-medium text-sm px-3 sm:px-4 btn-premium"
+              variant="ghost"
+              className="font-medium text-sm px-3 sm:px-4 sm:btn-premium text-muted-foreground hover:text-foreground sm:text-foreground"
             >
               <Link to="/auth">
                 <span className="hidden sm:inline">Start Free Trial</span>
