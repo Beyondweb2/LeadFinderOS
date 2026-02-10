@@ -510,6 +510,19 @@ const Landing = () => {
 
       {/* Hero Section */}
       <section className="relative z-10 pt-6 pb-8 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
+        {/* Floating logo icons - desktop only */}
+        <img 
+          src={appLogo} 
+          alt="" 
+          className="hidden md:block absolute top-12 right-[10%] w-20 h-20 lg:w-28 lg:h-28 opacity-[0.07] pointer-events-none select-none"
+          style={{ animation: 'float 10s ease-in-out infinite' }}
+        />
+        <img 
+          src={appLogo} 
+          alt="" 
+          className="hidden md:block absolute bottom-16 left-[8%] w-16 h-16 lg:w-24 lg:h-24 opacity-[0.05] pointer-events-none select-none"
+          style={{ animation: 'float 12s ease-in-out infinite', animationDelay: '-5s' }}
+        />
         <div className="container mx-auto text-center">
           {/* Mobile: Video at top instead of logo */}
           <div className="sm:hidden mb-6">
