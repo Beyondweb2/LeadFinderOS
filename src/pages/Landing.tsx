@@ -450,21 +450,18 @@ const Landing = () => {
             <span>Your all-in-one outreach tool</span>
           </div>
           
-          <p className="hidden sm:block text-sm tracking-[0.3em] uppercase text-muted-foreground/60 mb-5 font-medium">
-            Search · Contact · Track · Close
-          </p>
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
             <span className="block text-gradient-primary">Find Businesses</span>
             <span className="block text-foreground mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
           
-          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-12 leading-relaxed px-2">
+          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
             Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
           </p>
           
-          {/* Mobile only: keywords under subtitle */}
-          <p className="sm:hidden text-[10px] tracking-[0.25em] uppercase text-muted-foreground/50 mb-4 font-medium">
+          {/* Keywords above buttons - both mobile and desktop */}
+          <p className="text-[10px] sm:text-sm tracking-[0.25em] sm:tracking-[0.3em] uppercase text-muted-foreground/50 sm:text-muted-foreground/60 mb-4 sm:mb-5 font-medium">
             Search · Contact · Track · Close
           </p>
           
