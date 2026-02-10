@@ -162,7 +162,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
 
       <div className="container mx-auto">
         <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-20">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
+          <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
             How It <span className="text-gradient-primary">Works</span>
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
@@ -172,23 +172,25 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
         
         {/* Mobile Carousel */}
         {isMobile ? (
-          <div className="space-y-10 px-1">
+          <div className="relative px-1">
+            {/* Vertical connecting line */}
+            <div 
+              className="absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2"
+              style={{ background: 'linear-gradient(to bottom, transparent, hsl(210 100% 50% / 0.3) 5%, hsl(210 100% 50% / 0.3) 95%, transparent)' }}
+            />
+            
             {STEPS.map((step, index) => (
-              <div key={step.title} className="flex flex-col items-center text-center">
-                {/* Step number and title */}
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <div 
-                    className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-semibold text-sm shrink-0"
-                    style={{ 
-                      background: 'hsl(210 100% 50% / 0.15)',
-                      color: 'hsl(210 100% 60%)',
-                      border: '1px solid hsl(210 100% 50% / 0.3)'
-                    }}
-                  >
-                    {index + 1}
-                  </div>
-                  <h3 className="text-xl font-bold tracking-tight">{step.title}</h3>
-                </div>
+              <div key={step.title} className="relative flex flex-col items-center text-center pb-10 last:pb-0">
+                {/* Dot on the line */}
+                <div 
+                  className="relative z-10 w-3 h-3 rounded-full mb-4"
+                  style={{ 
+                    background: 'hsl(210 100% 60%)',
+                    boxShadow: '0 0 8px hsl(210 100% 50% / 0.5)'
+                  }}
+                />
+                
+                <h3 className="text-xl font-bold tracking-tight mb-2">{step.title}</h3>
                 
                 <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
                   {step.description}
@@ -211,7 +213,6 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                       alt={step.title}
                       className="w-full h-full object-cover"
                     />
-                    {/* Tap hint */}
                     <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
                       <Expand className="h-3.5 w-3.5 text-muted-foreground" />
                     </div>
