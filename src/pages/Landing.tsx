@@ -811,11 +811,11 @@ const Landing = () => {
                     <div 
                       className="flex-shrink-0 mt-0.5 p-1 rounded-full"
                       style={{ 
-                        background: 'hsl(210 100% 50% / 0.12)',
-                        border: '1px solid hsl(210 100% 50% / 0.2)',
+                        background: 'hsl(142 76% 45% / 0.12)',
+                        border: '1px solid hsl(142 76% 45% / 0.2)',
                       }}
                     >
-                      <CheckCircle className="h-4 w-4" style={{ color: 'hsl(210 100% 55%)' }} strokeWidth={2} />
+                      <CheckCircle className="h-4 w-4" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2} />
                     </div>
                     <div>
                       <p className="text-sm sm:text-base font-semibold text-foreground">{item.bold}</p>
