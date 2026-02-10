@@ -439,7 +439,7 @@ const Landing = () => {
           
           {/* Eyebrow text */}
           <div 
-            className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-6 backdrop-blur-sm"
+            className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-2 sm:mb-3 backdrop-blur-sm"
             style={{ 
               border: '1px solid hsl(210 100% 50% / 0.3)', 
               background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.1), hsl(210 100% 50% / 0.05))',
@@ -454,23 +454,23 @@ const Landing = () => {
           {/* Desktop headline */}
           <h1 className="hidden sm:block text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-6 tracking-tight">
             <span className="block text-foreground">Find Leads. Reach Out.</span>
-            <span className="block text-gradient-primary mt-2">Track Everything.</span>
+            <span className="block mt-2" style={{ background: 'linear-gradient(135deg, hsl(210 100% 60%) 0%, hsl(220 100% 55%) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Track Your Outreach.</span>
           </h1>
 
           {/* Mobile headline */}
           <h1 className="sm:hidden text-[2rem] leading-[1.1] font-bold mb-3 tracking-tight">
             <span className="block text-foreground">Find Leads. Reach Out.</span>
-            <span className="block text-gradient-primary mt-0.5">Track Everything.</span>
+            <span className="block mt-0.5" style={{ background: 'linear-gradient(135deg, hsl(210 100% 60%) 0%, hsl(220 100% 55%) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Track Your Outreach.</span>
           </h1>
           
           {/* Desktop subheadline */}
-          <p className="hidden sm:block text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
-            Discover businesses without websites, contact them directly, and track every conversation, follow-up, and opportunity — without spreadsheets or extra CRMs.
+          <p className="hidden sm:block text-lg md:text-xl text-muted-foreground/80 max-w-2xl mx-auto mb-10 leading-relaxed">
+            Discover businesses without websites, contact them directly, and track every conversation and follow-up — all from one dashboard.
           </p>
 
           {/* Mobile subheadline */}
-          <p className="sm:hidden text-sm text-muted-foreground max-w-xs mx-auto mb-5 leading-relaxed px-2">
-            Find leads, contact them, and track outreach in one simple dashboard.
+          <p className="sm:hidden text-sm text-muted-foreground/80 max-w-xs mx-auto mb-5 leading-relaxed px-2">
+            Find leads, contact them, and track outreach — all from one dashboard.
           </p>
           
           {/* CTAs */}
@@ -481,17 +481,12 @@ const Landing = () => {
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-            <Button 
-              size="lg" 
-              variant="outline" 
-              className="hidden sm:inline-flex text-base px-8 py-4 h-auto border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-foreground backdrop-blur-sm" 
-              asChild
+            <a 
+              href="#how-it-works"
+              className="hidden sm:inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
-              <a href="#how-it-works">
-                See How It Works
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </a>
-            </Button>
+              See How It Works
+            </a>
           </div>
 
           {/* Mobile reassurance */}
@@ -500,17 +495,17 @@ const Landing = () => {
           </p>
           
           {/* Process strip — desktop */}
-          <div className="hidden sm:flex items-center justify-center gap-3 mt-10 md:mt-14">
+          <div className="hidden sm:flex items-center justify-center gap-4 mt-12 md:mt-16">
             {['Search', 'Contact', 'Track', 'Close'].map((step, i) => (
-              <div key={step} className="flex items-center gap-3">
+              <div key={step} className="flex items-center gap-4">
                 <span 
-                  className="text-sm md:text-base font-semibold tracking-wide"
+                  className="text-sm md:text-base font-bold tracking-widest uppercase"
                   style={{ color: 'hsl(210 100% 65%)' }}
                 >
                   {step}
                 </span>
                 {i < 3 && (
-                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                  <span className="text-muted-foreground/30 text-lg">·</span>
                 )}
               </div>
             ))}
