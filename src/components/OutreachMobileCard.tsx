@@ -42,7 +42,7 @@ export function OutreachMobileCard({
 }: OutreachMobileCardProps) {
   return (
     <div 
-      className={`py-2.5 px-3 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
+      className={`py-1.5 px-3 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
       onClick={onLeadClick}
     >
       {/* Row 1: Checkbox + Business Name + Action Buttons */}
@@ -133,7 +133,7 @@ export function OutreachMobileCard({
 
       {/* Row 2: Status + Next Action */}
       {!readOnly && (
-        <div className="flex items-center gap-1.5 mt-1.5 ml-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-1.5 mt-1 ml-6" onClick={(e) => e.stopPropagation()}>
           <Select
             value={lead.status}
             onValueChange={onStatusChange}
