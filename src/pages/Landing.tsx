@@ -451,9 +451,8 @@ const Landing = () => {
           </div>
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
-            <span className="block text-foreground">Find Leads.</span>
-            <span className="block text-foreground">Reach Out.</span>
-            <span className="block text-gradient-primary mt-0.5 sm:mt-2">Track Everything.</span>
+            <span className="block text-foreground">Find Businesses</span>
+            <span className="block text-gradient-primary mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-6 sm:mb-12 leading-relaxed px-2">
@@ -467,17 +466,10 @@ const Landing = () => {
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-            <Button 
-              size="lg" 
-              variant="outline" 
-              className="text-sm sm:text-base px-6 sm:px-8 py-3 sm:py-4 h-auto border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-foreground backdrop-blur-sm w-full sm:w-auto" 
-              asChild
-            >
-              <Link to="/guide">
-                See How It Works
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
+            <Link to="/guide" className="text-sm sm:text-base text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5">
+              See How It Works
+              <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            </Link>
           </div>
           
           {/* Stats bar */}
