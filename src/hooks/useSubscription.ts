@@ -85,18 +85,22 @@ export function useSubscription() {
           .eq('user_id', userId)
           .maybeSingle();
 
-        if (!localError && localSub) {
+      if (!localError && localSub) {
           const validStatuses = ['active', 'trialing', 'past_due'];
           const isValid = validStatuses.includes(localSub.status);
           const isPaid = ['active', 'past_due'].includes(localSub.status);
           const isTrialing = localSub.status === 'trialing';
           
+          // For trialing users, use current_period_end as trialEnd fallback
+          // so the trial card shows immediately without waiting for Stripe API
+          const localTrialEnd = isTrialing ? localSub.current_period_end : null;
+          
           setState({
             subscribed: isValid,
             productId: null,
             subscriptionEnd: localSub.current_period_end,
-            trialEnd: null, // Will be populated from Stripe check
-            isLoading: false,
+            trialEnd: localTrialEnd,
+            isLoading: isValid, // Keep loading if valid - Stripe check will finalize
             error: null,
             status: localSub.status,
             isAdmin: false,
@@ -177,10 +181,10 @@ export function useSubscription() {
       });
     } catch (err) {
       console.error('Subscription check failed:', err);
+      // Preserve existing state (e.g. local DB trial data) — just stop loading
       setState(prev => ({
         ...prev,
         isLoading: false,
-        error: err instanceof Error ? err.message : 'Failed to check subscription',
       }));
     }
   }, [checkAdminRole]);
