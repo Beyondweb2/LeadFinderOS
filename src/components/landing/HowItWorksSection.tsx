@@ -6,7 +6,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import step1Image from '@/assets/howto-step1-search.png';
 import step2Image from '@/assets/howto-step2-results.png';
 import step3Image from '@/assets/howto-step3-crm.png';
-import step4Image from '@/assets/howto-step4-whatsapp.png';
+import step4Image from '@/assets/howto-step3-outreach.png';
 import step5Image from '@/assets/howto-step4-trackleads.png';
 
 const STEPS = [
@@ -173,8 +173,8 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                   </ScrollReveal>
                     
                   <ScrollReveal className={`flex-1 w-full ${isEven ? 'lg:pl-4' : 'lg:pr-4'}`} delay={(index + 1) * 80 + 50} direction={textDirection}>
-                    <div className="text-center lg:text-left">
-                      <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
+                    <div className="text-center">
+                      <div className="flex items-center gap-3 justify-center mb-3 sm:mb-4">
                         <span 
                           className="inline-flex items-center justify-center w-9 h-9 rounded-lg font-bold text-base"
                           style={{ 
@@ -188,7 +188,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         <h3 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">{step.title}</h3>
                       </div>
                       
-                      <p className="text-muted-foreground text-sm sm:text-base md:text-lg leading-relaxed max-w-md mx-auto lg:mx-0">
+                      <p className="text-muted-foreground text-sm sm:text-base md:text-lg leading-relaxed max-w-md mx-auto">
                         {step.description}
                       </p>
                     </div>

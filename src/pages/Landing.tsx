@@ -347,7 +347,7 @@ const Landing = () => {
             <div className="text-center">
               <h1 className="text-[1.65rem] leading-[1.15] font-bold mb-3 tracking-tight">
                 <span className="block">Find businesses without websites</span>
-                <span className="block text-gradient-primary mt-1">and contact them fast</span>
+                <span className="block text-gradient-primary mt-1">contact them fast</span>
               </h1>
               
               <p className="text-sm text-muted-foreground mb-3 leading-relaxed px-1">
@@ -395,7 +395,7 @@ const Landing = () => {
             <div className="flex-1 text-left">
               <h1 className="text-3xl md:text-4xl lg:text-5xl xl:text-[3.4rem] font-bold mb-4 tracking-tight leading-[1.12]">
                 <span className="block">Find businesses without websites</span>
-                <span className="block text-gradient-primary mt-1.5">and contact them fast</span>
+                <span className="block text-gradient-primary mt-1.5">contact them fast</span>
               </h1>
               
               <p className="text-base md:text-lg text-muted-foreground mb-4 leading-relaxed max-w-lg">
@@ -677,7 +677,7 @@ const Landing = () => {
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">1 day full access (24 hours), then auto-renews monthly unless cancelled</p>
+                  <p className="text-xs text-muted-foreground mt-2">1 day full access (24 hours), then £19.99 per month. Cancel anytime.</p>
                 </CardHeader>
                 
                 <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
@@ -746,8 +746,8 @@ const Landing = () => {
                   </Link>
                 </Button>
               </div>
-              <p className="relative text-[10px] sm:text-xs text-muted-foreground mt-4">
-                1 day full access (24 hours). Cancel anytime before renewal.
+               <p className="relative text-[10px] sm:text-xs text-muted-foreground mt-4">
+                1 day full access (24 hours), then £19.99 per month. Cancel anytime.
               </p>
             </div>
           </ScrollReveal>
