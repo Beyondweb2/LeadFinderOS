@@ -6,22 +6,34 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import step1Image from '@/assets/howto-step1-search.png';
 import step2Image from '@/assets/howto-step2-results.png';
 import step3Image from '@/assets/howto-step3-crm.png';
+import step4Image from '@/assets/howto-step4-whatsapp.png';
+import step5Image from '@/assets/howto-step4-trackleads.png';
 
 const STEPS = [
   {
-    title: 'Search by trade and location',
-    description: 'Choose a business type and area, LeadFinder returns leads fast.',
+    title: 'Find leads',
+    description: 'Search by trade and location, LeadFinder returns leads fast.',
     image: step1Image,
   },
   {
-    title: 'Save the good ones',
-    description: 'Add promising leads to your outreach list with key details ready.',
+    title: 'Spot who has no website',
+    description: 'Instantly highlight businesses missing a website, no manual checking.',
     image: step2Image,
   },
   {
-    title: 'Contact and track',
-    description: 'Tap WhatsApp to message them. If WhatsApp is not available, use SMS. Mark status, set follow ups, and track outcomes.',
+    title: 'Save to your outreach list',
+    description: 'Add the good ones to your list with key details ready.',
     image: step3Image,
+  },
+  {
+    title: 'Contact instantly',
+    description: 'Tap WhatsApp to message, if WhatsApp is not available use SMS.',
+    image: step4Image,
+  },
+  {
+    title: 'Track and follow up',
+    description: 'Mark statuses, set follow ups, and track outcomes in one place.',
+    image: step5Image,
   },
 ];
 
@@ -68,7 +80,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             How It <span className="text-gradient-primary">Works</span>
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-            Three steps from search to outreach
+            From search to outreach in five simple steps
           </p>
         </ScrollReveal>
         
@@ -76,26 +88,9 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
           <div className="space-y-8 px-1">
             {STEPS.map((step, index) => (
               <div key={step.title} className="flex flex-col items-center text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <div 
-                    className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-semibold text-sm shrink-0"
-                    style={{ 
-                      background: 'hsl(210 100% 50% / 0.15)',
-                      color: 'hsl(210 100% 60%)',
-                      border: '1px solid hsl(210 100% 50% / 0.3)'
-                    }}
-                  >
-                    {index + 1}
-                  </div>
-                  <h3 className="text-lg font-bold tracking-tight">{step.title}</h3>
-                </div>
-                
-                <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
-                  {step.description}
-                </p>
-                
+                {/* Screenshot first on mobile */}
                 <div 
-                  className="relative w-full cursor-pointer"
+                  className="relative w-full cursor-pointer mb-3"
                   onClick={() => setExpandedImage({ src: step.image, title: step.title })}
                 >
                   <div 
@@ -115,11 +110,29 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                     </div>
                   </div>
                 </div>
+
+                <div className="flex items-center justify-center gap-2 mb-1.5">
+                  <div 
+                    className="inline-flex items-center justify-center w-7 h-7 rounded-lg font-bold text-sm shrink-0"
+                    style={{ 
+                      background: 'hsl(210 100% 50% / 0.15)',
+                      color: 'hsl(210 100% 60%)',
+                      border: '1px solid hsl(210 100% 50% / 0.3)'
+                    }}
+                  >
+                    {index + 1}
+                  </div>
+                  <h3 className="text-base font-bold tracking-tight">{step.title}</h3>
+                </div>
+                
+                <p className="text-muted-foreground text-sm leading-relaxed max-w-xs">
+                  {step.description}
+                </p>
               </div>
             ))}
           </div>
         ) : (
-          <div className="max-w-6xl mx-auto space-y-10 md:space-y-16">
+          <div className="max-w-6xl mx-auto space-y-10 md:space-y-14">
             {STEPS.map((step, index) => {
               const isEven = index % 2 === 0;
               const imageDirection = isEven ? 'left' : 'right';
@@ -127,7 +140,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
               
               return (
                 <div key={step.title} className={`flex flex-col-reverse ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-6 lg:gap-12`}>
-                  <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={(index + 1) * 100} direction={imageDirection}>
+                  <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={(index + 1) * 80} direction={imageDirection}>
                     <div 
                       className="relative group cursor-pointer"
                       onClick={() => setExpandedImage({ src: step.image, title: step.title })}
@@ -159,11 +172,11 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                     </div>
                   </ScrollReveal>
                     
-                  <ScrollReveal className={`flex-1 w-full ${isEven ? 'lg:pl-4' : 'lg:pr-4'}`} delay={(index + 1) * 100 + 50} direction={textDirection}>
+                  <ScrollReveal className={`flex-1 w-full ${isEven ? 'lg:pl-4' : 'lg:pr-4'}`} delay={(index + 1) * 80 + 50} direction={textDirection}>
                     <div className="text-center lg:text-left">
-                      <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4 md:mb-5">
+                      <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
                         <span 
-                          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
+                          className="inline-flex items-center justify-center w-9 h-9 rounded-lg font-bold text-base"
                           style={{ 
                             background: 'hsl(210 100% 50% / 0.15)',
                             color: 'hsl(210 100% 60%)',
@@ -172,7 +185,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         >
                           {index + 1}
                         </span>
-                        <h3 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{step.title}</h3>
+                        <h3 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">{step.title}</h3>
                       </div>
                       
                       <p className="text-muted-foreground text-sm sm:text-base md:text-lg leading-relaxed max-w-md mx-auto lg:mx-0">

@@ -168,7 +168,7 @@ const MobileHeroVideo = () => {
 };
 
 // Desktop video section
-const VideoSection = () => {
+const VideoSection = ({ inline = false }: { inline?: boolean }) => {
   const [isMuted, setIsMuted] = useState(true);
   const videoRef = useRef<HTMLVideoElement>(null);
 
@@ -180,10 +180,43 @@ const VideoSection = () => {
     }
   };
 
+  const videoContent = (
+    <div 
+      className={`relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm ${inline ? '' : 'max-w-5xl mx-auto'}`}
+      style={{ 
+        border: '1px solid hsl(210 100% 50% / 0.2)',
+        boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)'
+      }}
+    >
+      <video 
+        ref={videoRef}
+        className="w-full h-auto"
+        autoPlay 
+        loop 
+        muted
+        playsInline
+        preload="auto"
+      >
+        <source src={demoVideo} type="video/mp4" />
+        Your browser does not support the video tag.
+      </video>
+      
+      <button
+        onClick={toggleMute}
+        className="absolute bottom-3 right-3 md:bottom-4 md:right-4 p-2 md:p-2.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
+        aria-label={isMuted ? "Unmute video" : "Mute video"}
+      >
+        {isMuted ? <VolumeX className="h-4 w-4 md:h-5 md:w-5" /> : <Volume2 className="h-4 w-4 md:h-5 md:w-5" />}
+      </button>
+    </div>
+  );
+
+  if (inline) return videoContent;
+
   return (
     <ScrollReveal className="relative z-10 pb-10 sm:pb-14 md:pb-20 px-2 sm:px-4">
       <div className="container mx-auto">
-        <div className="relative max-w-5xl mx-auto">
+        <div className="relative">
           <div 
             className="absolute -inset-4 rounded-3xl blur-2xl opacity-40"
             style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
@@ -192,35 +225,7 @@ const VideoSection = () => {
             className="absolute -inset-px rounded-2xl"
             style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.15), transparent)' }}
           />
-          
-          <div 
-            className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm"
-            style={{ 
-              border: '1px solid hsl(210 100% 50% / 0.2)',
-              boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)'
-            }}
-          >
-            <video 
-              ref={videoRef}
-              className="w-full h-auto"
-              autoPlay 
-              loop 
-              muted
-              playsInline
-              preload="auto"
-            >
-              <source src={demoVideo} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-            
-            <button
-              onClick={toggleMute}
-              className="absolute bottom-3 right-3 md:bottom-4 md:right-4 p-2 md:p-2.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
-              aria-label={isMuted ? "Unmute video" : "Mute video"}
-            >
-              {isMuted ? <VolumeX className="h-4 w-4 md:h-5 md:w-5" /> : <Volume2 className="h-4 w-4 md:h-5 md:w-5" />}
-            </button>
-          </div>
+          {videoContent}
         </div>
       </div>
     </ScrollReveal>
@@ -331,64 +336,118 @@ const Landing = () => {
       </header>
 
       {/* ===== HERO SECTION ===== */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-12 sm:pb-12 md:pt-20 md:pb-20 lg:pt-28 lg:pb-28 px-4">
-        <div className="container mx-auto text-center">
-          {/* Mobile: Video at top */}
-          <div className="sm:hidden mb-5">
-            <MobileHeroVideo />
-          </div>
-          
-          <h1 className="text-[1.75rem] leading-[1.15] sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-5 tracking-tight">
-            <span className="block">Find businesses without websites,</span>
-            <span className="block text-gradient-primary mt-1 sm:mt-2">then contact them fast</span>
-          </h1>
-          
-          <p className="text-sm sm:text-base md:text-lg text-muted-foreground max-w-2xl mx-auto mb-4 sm:mb-6 leading-relaxed px-2">
-            LeadFinder Pro scans areas by business type, shows who has no website, lets you message by WhatsApp or SMS, and keeps every lead organised in one simple pipeline.
-          </p>
+      <section className="relative z-10 pt-6 pb-4 sm:pt-10 sm:pb-8 md:pt-16 md:pb-12 lg:pt-20 lg:pb-16 px-4">
+        <div className="container mx-auto">
+          {/* Mobile layout: media first, then copy */}
+          <div className="sm:hidden">
+            <div className="mb-5">
+              <MobileHeroVideo />
+            </div>
+            
+            <div className="text-center">
+              <h1 className="text-[1.65rem] leading-[1.15] font-bold mb-3 tracking-tight">
+                <span className="block">Find businesses without websites</span>
+                <span className="block text-gradient-primary mt-1">and contact them fast</span>
+              </h1>
+              
+              <p className="text-sm text-muted-foreground mb-3 leading-relaxed px-1">
+                Search by trade and location, instantly see who has no website, message by WhatsApp or SMS, and keep every lead organised in one simple pipeline.
+              </p>
 
-          {/* Qualifier */}
-          <p className="text-xs sm:text-sm text-muted-foreground/70 mb-4 sm:mb-6">
-            Built for freelance web designers, developers, and small agencies.
-          </p>
-          
-          {/* 3 value bullets */}
-          <div className="flex flex-col items-center gap-2 sm:gap-2.5 mb-5 sm:mb-8 max-w-md mx-auto text-left">
-            {[
-              'Spot non-website leads in seconds',
-              'Message them instantly, WhatsApp first, SMS if needed',
-              'Track replies, follow ups, and outcomes in one place',
-            ].map((bullet) => (
-              <div key={bullet} className="flex items-center gap-2.5 w-full">
-                <div 
-                  className="flex-shrink-0 p-0.5 rounded-full"
-                  style={{ 
-                    background: 'hsl(210 100% 50% / 0.12)',
-                    border: '1px solid hsl(210 100% 50% / 0.2)',
-                  }}
-                >
-                  <CheckCircle className="h-3.5 w-3.5" style={{ color: 'hsl(210 100% 55%)' }} strokeWidth={2} />
-                </div>
-                <span className="text-foreground/90 text-sm sm:text-base">{bullet}</span>
+              <p className="text-xs text-muted-foreground/60 mb-3">
+                Built for freelance web designers, developers, and small agencies.
+              </p>
+              
+              <div className="flex flex-col items-start gap-1.5 mb-5 max-w-xs mx-auto">
+                {[
+                  'Spot no-website leads in seconds',
+                  'Message them fast, WhatsApp first, SMS if needed',
+                  'Track replies, follow ups, and outcomes in one place',
+                ].map((bullet) => (
+                  <div key={bullet} className="flex items-center gap-2 w-full">
+                    <CheckCircle className="h-3 w-3 flex-shrink-0" style={{ color: 'hsl(210 100% 55%)' }} strokeWidth={2} />
+                    <span className="text-foreground/85 text-[13px]">{bullet}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+              
+              <div className="flex flex-col items-center gap-2">
+                <Button size="lg" className="btn-premium text-sm font-semibold px-6 py-3 h-auto w-full shadow-lg shadow-primary/20" asChild>
+                  <Link to="/auth">
+                    Start Free Trial
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+                <p className="text-[11px] text-muted-foreground">
+                  1 day full access, then £19.99 per month. Cancel anytime before renewal.
+                </p>
+                <Link to="/guide" className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5 mt-0.5">
+                  Watch how it works
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </div>
           </div>
-          
-          {/* CTA */}
-          <div className="flex flex-col items-center gap-2.5">
-            <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
-              <Link to="/auth">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-              </Link>
-            </Button>
-            <p className="text-[11px] sm:text-xs text-muted-foreground">
-              1 day full access, then £19.99 per month. Cancel anytime before renewal.
-            </p>
-            <Link to="/guide" className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5 mt-1">
-              Watch how it works
-              <ArrowRight className="h-3.5 w-3.5" />
-            </Link>
+
+          {/* Desktop layout: side-by-side, media dominant */}
+          <div className="hidden sm:flex items-center gap-8 lg:gap-14 max-w-6xl mx-auto">
+            {/* Left: copy */}
+            <div className="flex-1 text-left">
+              <h1 className="text-3xl md:text-4xl lg:text-5xl xl:text-[3.4rem] font-bold mb-4 tracking-tight leading-[1.12]">
+                <span className="block">Find businesses without websites</span>
+                <span className="block text-gradient-primary mt-1.5">and contact them fast</span>
+              </h1>
+              
+              <p className="text-base md:text-lg text-muted-foreground mb-4 leading-relaxed max-w-lg">
+                Search by trade and location, instantly see who has no website, message by WhatsApp or SMS, and keep every lead organised in one simple pipeline.
+              </p>
+
+              <p className="text-xs md:text-sm text-muted-foreground/60 mb-4">
+                Built for freelance web designers, developers, and small agencies.
+              </p>
+              
+              <div className="flex flex-col gap-2 mb-6 max-w-md">
+                {[
+                  'Spot no-website leads in seconds',
+                  'Message them fast, WhatsApp first, SMS if needed',
+                  'Track replies, follow ups, and outcomes in one place',
+                ].map((bullet) => (
+                  <div key={bullet} className="flex items-center gap-2.5">
+                    <CheckCircle className="h-3.5 w-3.5 flex-shrink-0" style={{ color: 'hsl(210 100% 55%)' }} strokeWidth={2} />
+                    <span className="text-foreground/85 text-sm md:text-base">{bullet}</span>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="flex flex-col items-start gap-2.5">
+                <Button size="lg" className="btn-premium text-sm md:text-base font-semibold px-7 py-3.5 h-auto shadow-lg shadow-primary/20" asChild>
+                  <Link to="/auth">
+                    Start Free Trial
+                    <ArrowRight className="ml-2 h-4 w-4 md:h-5 md:w-5" />
+                  </Link>
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  1 day full access, then £19.99 per month. Cancel anytime before renewal.
+                </p>
+                <Link to="/guide" className="text-sm text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5">
+                  Watch how it works
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+            </div>
+
+            {/* Right: video media */}
+            <div className="flex-[1.3] relative">
+              <div 
+                className="absolute -inset-4 rounded-3xl blur-2xl opacity-40"
+                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
+              />
+              <div 
+                className="absolute -inset-px rounded-2xl"
+                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.15), transparent)' }}
+              />
+              <VideoSection inline />
+            </div>
           </div>
         </div>
       </section>
@@ -404,25 +463,20 @@ const Landing = () => {
             ].map((chip) => (
               <div
                 key={chip}
-                className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium"
+                className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full text-[11px] sm:text-xs font-medium"
                 style={{
-                  border: '1px solid hsl(210 100% 50% / 0.15)',
-                  background: 'hsl(210 100% 50% / 0.06)',
-                  color: 'hsl(210 30% 70%)',
+                  border: '1px solid hsl(210 100% 50% / 0.12)',
+                  background: 'hsl(210 100% 50% / 0.04)',
+                  color: 'hsl(210 20% 60%)',
                 }}
               >
-                <CheckCircle className="h-3 w-3 flex-shrink-0" style={{ color: 'hsl(210 100% 55%)' }} strokeWidth={2} />
+                <CheckCircle className="h-3 w-3 flex-shrink-0" style={{ color: 'hsl(210 100% 50% / 0.5)' }} strokeWidth={2} />
                 {chip}
               </div>
             ))}
           </div>
         </div>
       </section>
-
-      {/* Video Demo Section - desktop only */}
-      <div className="hidden sm:block">
-        <VideoSection />
-      </div>
 
       {/* ===== BEFORE/AFTER SECTION ===== */}
       <section className="relative z-10 py-10 sm:py-16 md:py-20 lg:py-28 px-4">
@@ -529,10 +583,10 @@ const Landing = () => {
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-              Everything you need to <span className="text-gradient-primary">find and close leads</span>
+              Everything you need to <span className="text-gradient-primary">find and manage leads</span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              Four tools that replace hours of manual prospecting work.
+              Four tools that replace hours of manual prospecting.
             </p>
           </ScrollReveal>
           
