@@ -318,6 +318,82 @@ const VideoSection = () => {
   );
 };
 
+// Mobile feature carousel with dots and swipe hint
+const MobileFeatureCarousel = ({ features, onExpand }: { features: typeof FEATURES; onExpand: (src: string, title: string) => void }) => {
+  const [api, setApi] = useState<any>(null);
+  const [current, setCurrent] = useState(0);
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    if (!api) return;
+    setCount(api.scrollSnapList().length);
+    setCurrent(api.selectedScrollSnap());
+    api.on('select', () => setCurrent(api.selectedScrollSnap()));
+  }, [api]);
+
+  return (
+    <div className="px-2">
+      <Carousel
+        opts={{ loop: true, align: 'start' }}
+        plugins={[Autoplay({ delay: 4000, stopOnInteraction: true })]}
+        setApi={setApi}
+      >
+        <CarouselContent>
+          {features.map((feature) => (
+            <CarouselItem key={feature.title}>
+              <div 
+                className="flex flex-col items-center text-center cursor-pointer"
+                onClick={() => onExpand(feature.image, feature.title)}
+              >
+                <h3 className="text-lg font-bold tracking-tight mb-1.5">{feature.title}</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
+                  {feature.description}
+                </p>
+                <div className="relative w-full">
+                  <div 
+                    className="relative rounded-lg overflow-hidden bg-card/80 aspect-[16/10]"
+                    style={{ 
+                      border: '1px solid hsl(210 100% 50% / 0.15)',
+                      boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
+                    }}
+                  >
+                    <img 
+                      src={feature.image} 
+                      alt={feature.title}
+                      className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-100'}`}
+                    />
+                    <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
+                      <Expand className="h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+      </Carousel>
+      {/* Dot indicators */}
+      <div className="flex items-center justify-center gap-1.5 mt-4">
+        {Array.from({ length: count }).map((_, i) => (
+          <button
+            key={i}
+            className={`rounded-full transition-all duration-300 ${
+              i === current 
+                ? 'w-6 h-2' 
+                : 'w-2 h-2 opacity-30'
+            }`}
+            style={{ background: i === current ? 'hsl(210 100% 50%)' : 'hsl(210 20% 50%)' }}
+            onClick={() => api?.scrollTo(i)}
+          />
+        ))}
+      </div>
+      <p className="text-[10px] text-muted-foreground/50 text-center mt-2 tracking-wide">
+        Swipe to explore
+      </p>
+    </div>
+  );
+};
+
 const Landing = () => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
   const [hasScrolled, setHasScrolled] = useState(false);
@@ -452,7 +528,6 @@ const Landing = () => {
             <Zap className="h-3.5 w-3.5" />
             <span>Your all-in-one outreach tool</span>
           </div>
-          
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
             <span className="block text-gradient-primary">Find Businesses</span>
@@ -624,46 +699,7 @@ const Landing = () => {
           
           {/* Mobile: Carousel */}
           {isMobile ? (
-            <div className="px-2">
-              <Carousel
-                opts={{ loop: true, align: 'start' }}
-                plugins={[Autoplay({ delay: 4000, stopOnInteraction: true })]}
-              >
-                <CarouselContent>
-                  {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature) => (
-                    <CarouselItem key={feature.title}>
-                      <div 
-                        className="flex flex-col items-center text-center cursor-pointer"
-                        onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
-                      >
-                        <h3 className="text-lg font-bold tracking-tight mb-1.5">{feature.title}</h3>
-                        <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
-                          {feature.description}
-                        </p>
-                        <div className="relative w-full">
-                          <div 
-                            className="relative rounded-lg overflow-hidden bg-card/80 aspect-[16/10]"
-                            style={{ 
-                              border: '1px solid hsl(210 100% 50% / 0.15)',
-                              boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
-                            }}
-                          >
-                            <img 
-                              src={feature.image} 
-                              alt={feature.title}
-                              className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-100'}`}
-                            />
-                            <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
-                              <Expand className="h-3.5 w-3.5 text-muted-foreground" />
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-              </Carousel>
-            </div>
+            <MobileFeatureCarousel features={FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title))} onExpand={(src, title) => setExpandedImage({ src, title })} />
           ) : (
             /* Desktop: Auto-playing Carousel */
             <ScrollReveal>
