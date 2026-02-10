@@ -11,7 +11,8 @@ import {
   Palette,
   LogOut,
   HelpCircle,
-  MessageSquare
+  MessageSquare,
+  Users
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -36,6 +37,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAccentColor, hexToHSL, hslToHex, ThemePreset } from '@/hooks/useAccentColor';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Check, Sparkles, Sun, Moon, RotateCcw } from 'lucide-react';
 
 const mainNavItems = [
@@ -103,8 +105,12 @@ function MobileThemeGrid({
 export function MobileBottomNav() {
   const location = useLocation();
   const { signOut } = useAuth();
+  const { isAdmin } = useSubscription();
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
-  const isMoreActive = moreNavItems.some(item => location.pathname === item.url);
+  const allMoreItems = isAdmin 
+    ? [...moreNavItems, { title: 'Affiliates', url: '/admin/affiliates', icon: Users }]
+    : moreNavItems;
+  const isMoreActive = allMoreItems.some(item => location.pathname === item.url);
 
   const { 
     accent, 
@@ -191,7 +197,7 @@ export function MobileBottomNav() {
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48 mb-2">
-              {moreNavItems.map((item) => {
+              {allMoreItems.map((item) => {
                 const isActive = location.pathname === item.url;
                 return (
                   <DropdownMenuItem key={item.url} asChild>

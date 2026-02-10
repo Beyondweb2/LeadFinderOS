@@ -36,6 +36,18 @@ serve(async (req) => {
     if (!user?.id) throw new Error("User not authenticated");
     logStep("User authenticated", { userId: user.id });
 
+    // Parse optional body for affiliate code and ref source
+    let affiliateCode: string | null = null;
+    let refSource: string | null = null;
+    try {
+      const body = await req.json();
+      affiliateCode = body?.affiliate_code || null;
+      refSource = body?.ref_source || null;
+    } catch {
+      // No body or invalid JSON - that's fine
+    }
+    logStep("Tracking params", { affiliateCode, refSource });
+
     // Check if trial record exists
     const { data: existingTrial, error: checkError } = await supabaseClient
       .from('user_trials')
@@ -64,18 +76,27 @@ serve(async (req) => {
     const now = new Date();
     const trialEndDate = new Date(now.getTime() + trialDays * 24 * 60 * 60 * 1000);
 
+    const insertPayload: Record<string, unknown> = {
+      user_id: user.id,
+      trial_started_at: now.toISOString(),
+      trial_days: trialDays,
+      searches_used: 0,
+      plan_status: 'trial',
+      trial_end_date: trialEndDate.toISOString(),
+      searches_today: 0,
+      last_search_date: now.toISOString().split('T')[0],
+    };
+
+    if (affiliateCode) {
+      insertPayload.affiliate_code = affiliateCode;
+    }
+    if (refSource) {
+      insertPayload.ref_source = refSource;
+    }
+
     const { data: newTrial, error: insertError } = await supabaseClient
       .from('user_trials')
-      .insert({
-        user_id: user.id,
-        trial_started_at: now.toISOString(),
-        trial_days: trialDays,
-        searches_used: 0,
-        plan_status: 'trial',
-        trial_end_date: trialEndDate.toISOString(),
-        searches_today: 0,
-        last_search_date: now.toISOString().split('T')[0],
-      })
+      .insert(insertPayload)
       .select()
       .single();
 
