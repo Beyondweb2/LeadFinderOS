@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MessageSquare, Send, AlertTriangle, RotateCcw } from 'lucide-react';
 import { generateWhatsAppUrl } from '@/lib/leadUtils';
+import { TemplatePicker } from '@/components/TemplatePicker';
 
 interface SingleWhatsAppDialogProps {
   open: boolean;
@@ -113,6 +114,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
               <p className="text-xs text-muted-foreground mb-2">
                 Use <code className="bg-muted px-1 rounded">{`{{business_name}}`}</code> to personalize
               </p>
+              <TemplatePicker onSelectTemplate={handleTemplateChange} templateType="text" />
               <Textarea
                 id="template"
                 value={template}

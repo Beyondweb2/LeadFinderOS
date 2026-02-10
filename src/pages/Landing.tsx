@@ -438,9 +438,9 @@ const Landing = () => {
             <MobileHeroVideo />
           </div>
           
-          {/* Tagline badge */}
+          {/* Tagline badge - hidden on mobile */}
           <div 
-            className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
+            className="hidden sm:inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
             style={{ 
               border: '1px solid hsl(210 100% 50% / 0.3)', 
               background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.1), hsl(210 100% 50% / 0.05))',
@@ -451,7 +451,7 @@ const Landing = () => {
             <span>Your all-in-one outreach tool</span>
           </div>
           
-          <p className="text-[10px] sm:text-sm tracking-[0.3em] uppercase text-muted-foreground/60 mb-3 sm:mb-5 font-medium">
+          <p className="hidden sm:block text-sm tracking-[0.3em] uppercase text-muted-foreground/60 mb-5 font-medium">
             Search · Contact · Track · Close
           </p>
           
@@ -460,8 +460,13 @@ const Landing = () => {
             <span className="block text-foreground mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
           
-          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-6 sm:mb-12 leading-relaxed px-2">
+          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-12 leading-relaxed px-2">
             Find real businesses without websites, reach out directly, and keep track of every conversation in one place.
+          </p>
+          
+          {/* Mobile only: keywords under subtitle */}
+          <p className="sm:hidden text-[10px] tracking-[0.25em] uppercase text-muted-foreground/50 mb-4 font-medium">
+            Search · Contact · Track · Close
           </p>
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">

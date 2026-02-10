@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useAuth } from '@/hooks/useAuth';
 import { RevenueCard } from '@/components/dashboard/RevenueCard';
 import { ConversionCard } from '@/components/dashboard/ConversionCard';
 import { OutreachCard } from '@/components/dashboard/OutreachCard';
@@ -8,17 +10,34 @@ import { ActivityCard } from '@/components/dashboard/ActivityCard';
 import { TrialProgressCard } from '@/components/dashboard/TrialProgressCard';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { 
   Loader2, 
   ArrowRight,
   Search,
   FileText,
-  Users
+  Users,
+  RotateCcw,
 } from 'lucide-react';
 
 const Dashboard = () => {
-  const { metrics, isLoading } = useDashboardMetrics();
+  const { metrics, isLoading, refetch } = useDashboardMetrics();
   const { subscribed, isLoading: isSubscriptionLoading, isPaidSubscriber, isStripeTrialing, trialEnd } = useSubscription();
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [isResetting, setIsResetting] = useState(false);
   
   // Show trial progress only for Stripe trialing users (not paid subscribers)
   const showTrialProgress = !isSubscriptionLoading && isStripeTrialing && !isPaidSubscriber;
@@ -31,6 +50,29 @@ const Dashboard = () => {
       </div>
     );
   }
+
+  const handleResetCounters = async () => {
+    if (!user) return;
+    setIsResetting(true);
+    
+    try {
+      // Delete all activity-related data for this user
+      await Promise.all([
+        supabase.from('copied_phones').delete().eq('user_id', user.id),
+        supabase.from('outreach_activities').delete().eq('user_id', user.id),
+        supabase.from('lead_contacts').delete().eq('user_id', user.id),
+        supabase.from('search_history').delete().eq('user_id', user.id),
+        supabase.from('checked_businesses').delete().eq('user_id', user.id),
+      ]);
+      
+      toast({ title: 'Counters reset', description: 'All activity counters have been cleared.' });
+      refetch();
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to reset counters.', variant: 'destructive' });
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -124,14 +166,42 @@ const Dashboard = () => {
         </div>
       </section>
        
-      {/* CTA to outreach */}
-      <div className="flex justify-center pt-4">
+      {/* Reset Counters & CTA */}
+      <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
         <Button variant="outline" asChild>
           <Link to="/outreach" className="flex items-center gap-2">
             Go to Outreach
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
+        
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive gap-1.5">
+              <RotateCcw className="h-3.5 w-3.5" />
+              Reset Counters
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Reset all counters?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will clear all activity counters including copied phones, contact logs, search history, and checked businesses. Your CRM leads and templates will not be affected. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleResetCounters}
+                disabled={isResetting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isResetting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Reset Everything
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );
