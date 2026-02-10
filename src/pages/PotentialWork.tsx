@@ -33,6 +33,9 @@ import {
   ChevronUp,
   StickyNote,
   Save,
+  Pencil,
+  Check,
+  X,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
@@ -59,10 +62,11 @@ interface LeadCardProps {
   onStatusChange: (leadId: string, status: LeadStatus) => Promise<OutreachLead | null>;
   onNextActionChange: (leadId: string, action: NextActionType, date?: string) => Promise<OutreachLead | null>;
   onNotesChange: (leadId: string, notes: string) => Promise<OutreachLead | null>;
+  onBusinessNameChange: (leadId: string, name: string) => Promise<OutreachLead | null>;
   onDelete: (leadId: string, silent?: boolean) => Promise<boolean>;
 }
 
-const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onDelete }: LeadCardProps) => {
+const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onDelete }: LeadCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const [nextAction, setNextAction] = useState<NextActionType>(lead.next_action || 'none');
@@ -70,6 +74,8 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
     lead.next_action_date ? new Date(lead.next_action_date) : undefined
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [editedName, setEditedName] = useState(lead.business_name);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -83,6 +89,19 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handleSaveName = async () => {
+    const trimmed = editedName.trim();
+    if (trimmed && trimmed !== lead.business_name) {
+      await onBusinessNameChange(lead.id, trimmed);
+    }
+    setIsEditingName(false);
+  };
+
+  const handleCancelNameEdit = () => {
+    setEditedName(lead.business_name);
+    setIsEditingName(false);
   };
 
   const handleDelete = async () => {
@@ -113,28 +132,60 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
 
   return (
     <Card className={`bg-card/80 border-border/50 border-l-4 ${getStatusColor(lead.status)} transition-all hover:shadow-lg`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <h3 className="text-lg font-semibold truncate">{lead.business_name}</h3>
-            {lead.category && (
-              <p className="text-sm text-muted-foreground truncate">{lead.category}</p>
-            )}
-          </div>
-          <OutreachStatusBadge status={lead.status} />
+      <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
+        {/* Business Name - full width, no truncation on mobile */}
+        <div className="space-y-1">
+          {isEditingName ? (
+            <div className="flex items-center gap-2">
+              <Input
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                className="h-8 text-base font-semibold"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveName();
+                  if (e.key === 'Escape') handleCancelNameEdit();
+                }}
+              />
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleSaveName}>
+                <Check className="h-4 w-4 text-primary" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={handleCancelNameEdit}>
+                <X className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2">
+              <button
+                onClick={() => setIsEditingName(true)}
+                className="text-left group flex items-start gap-1.5 min-w-0 flex-1"
+              >
+                <h3 className="text-base sm:text-lg font-semibold break-words leading-tight">
+                  {lead.business_name}
+                </h3>
+                <Pencil className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 sm:group-hover:opacity-100 transition-opacity shrink-0 mt-0.5" />
+              </button>
+              <div className="shrink-0">
+                <OutreachStatusBadge status={lead.status} />
+              </div>
+            </div>
+          )}
+          {lead.category && (
+            <p className="text-xs text-muted-foreground">{lead.category}</p>
+          )}
         </div>
       </CardHeader>
       
-      <CardContent className="space-y-4">
-        {/* Contact Info Row */}
-        <div className="flex flex-wrap items-center gap-4 text-sm">
+      <CardContent className="space-y-3 px-3 sm:px-6 pb-3 sm:pb-6">
+        {/* Contact Info */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 text-sm">
           {lead.phone && (
             <a 
               href={`tel:${lead.phone}`}
               className="flex items-center gap-1.5 text-foreground hover:text-primary transition-colors"
             >
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              <span className="font-mono">{lead.phone}</span>
+              <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="font-mono text-sm">{lead.phone}</span>
             </a>
           )}
           {lead.google_maps_url && (
@@ -144,20 +195,20 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors"
             >
-              <MapPin className="h-4 w-4" />
-              <span>View on Maps</span>
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              <span className="text-sm">View on Maps</span>
               <ExternalLink className="h-3 w-3" />
             </a>
           )}
         </div>
 
-        {/* Status & Next Action Row */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Status Select + Next Action */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
           <Select
             value={lead.status}
             onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
           >
-            <SelectTrigger className="h-9 w-[160px]">
+            <SelectTrigger className="h-9 w-full sm:w-[160px]">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -192,37 +243,37 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
         {/* Expandable Notes Section */}
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
           <CollapsibleTrigger asChild>
-            <Button variant="ghost" size="sm" className="w-full justify-between">
-              <span className="flex items-center gap-2">
-                <StickyNote className="h-4 w-4" />
+            <Button variant="ghost" size="sm" className="w-full justify-between h-8">
+              <span className="flex items-center gap-2 text-sm">
+                <StickyNote className="h-3.5 w-3.5" />
                 {isExpanded ? 'Hide Details' : 'Show Details & Notes'}
               </span>
               {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
           </CollapsibleTrigger>
           
-          <CollapsibleContent className="space-y-4 pt-4">
+          <CollapsibleContent className="space-y-3 pt-3">
             {/* Notes */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Notes</label>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Notes</label>
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add notes about this lead..."
-                rows={4}
-                className="resize-none"
+                rows={3}
+                className="resize-none text-sm"
               />
             </div>
 
             {/* Next Action */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Next Action</label>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Next Action</label>
                 <Select
                   value={nextAction}
                   onValueChange={(v) => setNextAction(v as NextActionType)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -235,12 +286,12 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
                 </Select>
               </div>
               
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Action Date</label>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Action Date</label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
+                    <Button variant="outline" className="w-full justify-start text-left font-normal h-9 text-sm">
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
                       {nextActionDate ? format(nextActionDate, 'MMM d') : 'Pick date'}
                     </Button>
                   </PopoverTrigger>
@@ -257,22 +308,23 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onD
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-between pt-2">
+            <div className="flex items-center justify-between pt-1">
               <Button
                 variant="ghost"
                 size="sm"
-                className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 text-xs"
                 onClick={handleDelete}
               >
-                <Trash2 className="h-4 w-4 mr-1.5" />
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
                 Remove
               </Button>
               <Button
                 size="sm"
                 onClick={handleSave}
                 disabled={isSaving}
+                className="h-8 text-xs"
               >
-                <Save className="h-4 w-4 mr-1.5" />
+                <Save className="h-3.5 w-3.5 mr-1" />
                 {isSaving ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
@@ -291,6 +343,7 @@ const PotentialWorkPage = () => {
     updateStatus,
     updateNextAction,
     updateNotes,
+    updateBusinessName,
     deleteLead,
     fetchActivities,
   } = useOutreach();
@@ -379,6 +432,7 @@ const PotentialWorkPage = () => {
               onStatusChange={updateStatus}
               onNextActionChange={updateNextAction}
               onNotesChange={updateNotes}
+              onBusinessNameChange={updateBusinessName}
               onDelete={deleteLead}
             />
           ))}
