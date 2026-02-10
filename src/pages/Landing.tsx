@@ -609,86 +609,16 @@ const Landing = () => {
       {/* How It Works Section */}
       <HowItWorksSection ScrollReveal={ScrollReveal} />
 
-      {/* Benefits / Emotional Hooks Section */}
-      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-              What If You Could<span className="text-gradient-primary">...</span>
-            </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              Stop leaving money on the table. Here's what changes when you use LeadFinder Pro.
-            </p>
-          </ScrollReveal>
-
-          <ScrollReveal delay={100}>
-            <div 
-              className="relative max-w-4xl mx-auto rounded-2xl p-6 sm:p-8 md:p-10 overflow-hidden"
-              style={{
-                background: 'linear-gradient(180deg, hsl(220 40% 10% / 0.95), hsl(220 40% 6% / 0.98))',
-                border: '1px solid hsl(210 100% 50% / 0.12)',
-                boxShadow: '0 0 40px hsl(210 100% 50% / 0.06)',
-              }}
-            >
-              {/* Subtle glow */}
-              <div 
-                className="absolute -inset-4 rounded-3xl blur-2xl opacity-30 pointer-events-none"
-                style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.12), transparent 70%)' }}
-              />
-
-              <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-                {[
-                  { bold: 'Find 10x more leads', detail: 'in a fraction of the time you spend now' },
-                  { bold: 'Reach businesses first', detail: 'before your competitors even know they exist' },
-                  { bold: 'Replace hours of searching', detail: 'with a single click — results in seconds' },
-                  { bold: 'Turn cold outreach into warm conversations', detail: 'with ready-made templates and scripts' },
-                  { bold: 'Close your first deal within days', detail: 'not weeks, not months — days' },
-                  { bold: 'Never run out of businesses to contact', detail: 'unlimited searches across the globe' },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div 
-                      className="flex-shrink-0 mt-0.5 p-1 rounded-full"
-                      style={{ 
-                        background: 'hsl(210 100% 50% / 0.12)',
-                        border: '1px solid hsl(210 100% 50% / 0.2)',
-                      }}
-                    >
-                      <CheckCircle className="h-4 w-4" style={{ color: 'hsl(210 100% 55%)' }} strokeWidth={2} />
-                    </div>
-                    <div>
-                      <p className="text-sm sm:text-base font-semibold text-foreground">{item.bold}</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{item.detail}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="relative text-center mt-8">
-                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
-                  <Link to="/auth">
-                    Start Free Trial
-                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          </ScrollReveal>
-        </div>
-      </section>
-
-      {/* Reviews / Social Proof */}
-      <ReviewsSection />
-
-      {/* Features Section */}
+      {/* Features Section — right after "how it works" */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-              Everything You Need to
-              <span className="text-gradient-primary"> Close More Deals</span>
+              Your Complete
+              <span className="text-gradient-primary"> Lead Toolkit</span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              A complete toolkit for finding, tracking, and converting leads into paying clients.
+              Everything you need to find, track, and convert leads into paying clients.
             </p>
           </ScrollReveal>
           
@@ -783,18 +713,78 @@ const Landing = () => {
               </div>
             </ScrollReveal>
           )}
-          
-          {/* CTA after features */}
-          <ScrollReveal delay={300} className="hidden sm:block text-center mt-10 sm:mt-14">
-            <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
-              <Link to="/auth">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-              </Link>
-            </Button>
+        </div>
+      </section>
+
+      {/* Benefits / Emotional Hooks Section */}
+      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
+        <div className="container mx-auto">
+          <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
+              What If You Could<span className="text-gradient-primary">...</span>
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
+              Stop leaving money on the table. Here's what changes when you use LeadFinder Pro.
+            </p>
+          </ScrollReveal>
+
+          <ScrollReveal delay={100}>
+            <div 
+              className="relative max-w-4xl mx-auto rounded-2xl p-6 sm:p-8 md:p-10 overflow-hidden"
+              style={{
+                background: 'linear-gradient(180deg, hsl(220 40% 10% / 0.95), hsl(220 40% 6% / 0.98))',
+                border: '1px solid hsl(210 100% 50% / 0.12)',
+                boxShadow: '0 0 40px hsl(210 100% 50% / 0.06)',
+              }}
+            >
+              {/* Subtle glow */}
+              <div 
+                className="absolute -inset-4 rounded-3xl blur-2xl opacity-30 pointer-events-none"
+                style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.12), transparent 70%)' }}
+              />
+
+              <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                {[
+                  { bold: 'Find 10x more leads', detail: 'in a fraction of the time you spend now' },
+                  { bold: 'Reach businesses first', detail: 'before your competitors even know they exist' },
+                  { bold: 'Replace hours of searching', detail: 'with a single click — results in seconds' },
+                  { bold: 'Turn cold outreach into warm conversations', detail: 'with ready-made templates and scripts' },
+                  { bold: 'Close your first deal within days', detail: 'not weeks, not months — days' },
+                  { bold: 'Never run out of businesses to contact', detail: 'unlimited searches across the globe' },
+                ].map((item, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div 
+                      className="flex-shrink-0 mt-0.5 p-1 rounded-full"
+                      style={{ 
+                        background: 'hsl(210 100% 50% / 0.12)',
+                        border: '1px solid hsl(210 100% 50% / 0.2)',
+                      }}
+                    >
+                      <CheckCircle className="h-4 w-4" style={{ color: 'hsl(210 100% 55%)' }} strokeWidth={2} />
+                    </div>
+                    <div>
+                      <p className="text-sm sm:text-base font-semibold text-foreground">{item.bold}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{item.detail}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="relative text-center mt-8">
+                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
+                  <Link to="/auth">
+                    Start Free Trial
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
           </ScrollReveal>
         </div>
       </section>
+
+      {/* Reviews / Social Proof */}
+      <ReviewsSection />
 
       {/* Pricing Section */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">

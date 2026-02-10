@@ -1,8 +1,6 @@
-import { Star } from 'lucide-react';
+import { Star, MessageSquare, Quote } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { MessageSquare } from 'lucide-react';
 
 interface Review {
   name: string;
@@ -48,7 +46,7 @@ const StarRating = ({ count }: { count: number }) => (
     {[...Array(5)].map((_, i) => (
       <Star 
         key={i} 
-        className={`h-4 w-4 ${i < count ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/30'}`} 
+        className={`h-3.5 w-3.5 ${i < count ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/20'}`} 
       />
     ))}
   </div>
@@ -60,55 +58,63 @@ export const ReviewsSection = () => {
       <div className="container mx-auto">
         <div className="text-center mb-10 sm:mb-12 md:mb-16">
           <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-            What <span className="text-gradient-primary">Real Users</span> Are Saying
+            Trusted by <span className="text-gradient-primary">Web Professionals</span>
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-            Hear from web designers and developers already using LeadFinder Pro
+            Join designers and developers already growing their client base
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 max-w-5xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 max-w-5xl mx-auto">
           {REVIEWS.map((review, index) => (
-            <Card 
+            <div 
               key={index}
-              className="relative glass-panel-strong border-white/[0.06] overflow-hidden transition-all duration-300 hover:border-[hsl(210_100%_50%_/_0.2)]"
+              className="relative group rounded-2xl p-[1px] transition-all duration-300"
+              style={{
+                background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.15), hsl(220 40% 15% / 0.3), hsl(210 100% 50% / 0.08))',
+              }}
             >
-              {/* Subtle glow on hover */}
               <div 
-                className="absolute inset-0 opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.03), transparent)' }}
-              />
-              
-              <CardContent className="p-5 sm:p-6">
+                className="relative rounded-2xl p-5 sm:p-6 h-full transition-all duration-300"
+                style={{
+                  background: 'linear-gradient(180deg, hsl(220 40% 9% / 0.98), hsl(220 40% 6% / 0.99))',
+                }}
+              >
+                {/* Quote icon */}
+                <Quote 
+                  className="absolute top-4 right-4 h-8 w-8 opacity-[0.06]" 
+                  style={{ color: 'hsl(210 100% 50%)' }}
+                />
+                
                 <StarRating count={review.stars} />
                 
-                <p className="mt-4 mb-5 text-foreground/90 text-sm sm:text-base leading-relaxed">
+                <p className="mt-4 mb-5 text-foreground/85 text-sm sm:text-base leading-relaxed">
                   "{review.content}"
                 </p>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 pt-2" style={{ borderTop: '1px solid hsl(220 30% 15% / 0.6)' }}>
                   <div 
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-semibold"
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold tracking-wide"
                     style={{ 
-                      background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.2), hsl(210 100% 50% / 0.1))',
-                      border: '1px solid hsl(210 100% 50% / 0.2)',
+                      background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.2), hsl(210 100% 50% / 0.08))',
+                      border: '1px solid hsl(210 100% 50% / 0.15)',
                       color: 'hsl(210 100% 60%)'
                     }}
                   >
                     {review.avatar}
                   </div>
                   <div>
-                    <p className="font-semibold text-sm">{review.name}</p>
+                    <p className="font-semibold text-sm text-foreground/90">{review.name}</p>
                     <p className="text-muted-foreground text-xs">{review.role}</p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
 
         <div className="text-center mt-8 sm:mt-10">
-          <Button variant="outline" className="border-white/10 hover:border-white/20 text-sm" asChild>
+          <Button variant="outline" className="border-white/10 hover:border-white/20 text-sm rounded-full px-6" asChild>
             <Link to="/feedback">
               <MessageSquare className="mr-2 h-4 w-4" />
               Leave a Review
