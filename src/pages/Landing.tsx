@@ -432,14 +432,14 @@ const Landing = () => {
       {/* Hero Section */}
       <section className="relative z-10 pt-6 pb-8 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
         <div className="container mx-auto text-center">
-          {/* Mobile: Video at top instead of logo */}
+          {/* Mobile: Video at top */}
           <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
           
-          {/* Tagline badge - hidden on mobile */}
+          {/* Eyebrow text */}
           <div 
-            className="hidden sm:inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
+            className="inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-6 backdrop-blur-sm"
             style={{ 
               border: '1px solid hsl(210 100% 50% / 0.3)', 
               background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.1), hsl(210 100% 50% / 0.05))',
@@ -447,19 +447,33 @@ const Landing = () => {
             }}
           >
             <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-            <span>Lead generation for web professionals</span>
+            <span className="hidden sm:inline">All-in-one outbound tool for web professionals</span>
+            <span className="sm:hidden">Your All-In-One Outreach Tool</span>
           </div>
           
-          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
-            <span className="block text-foreground">Find Businesses</span>
-            <span className="block text-gradient-primary mt-0.5 sm:mt-2">Without Websites</span>
+          {/* Desktop headline */}
+          <h1 className="hidden sm:block text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-6 tracking-tight">
+            <span className="block text-foreground">Find Leads. Reach Out.</span>
+            <span className="block text-gradient-primary mt-2">Track Everything.</span>
+          </h1>
+
+          {/* Mobile headline */}
+          <h1 className="sm:hidden text-[2rem] leading-[1.1] font-bold mb-3 tracking-tight">
+            <span className="block text-foreground">Find Leads. Reach Out.</span>
+            <span className="block text-gradient-primary mt-0.5">Track Everything.</span>
           </h1>
           
-          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-xl mx-auto mb-6 sm:mb-12 leading-relaxed px-2">
-            Find local businesses without websites and reach out directly.
-            <span className="hidden sm:inline"> Stop scrolling Google Maps — start contacting prospects.</span>
+          {/* Desktop subheadline */}
+          <p className="hidden sm:block text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed">
+            Discover businesses without websites, contact them directly, and track every conversation, follow-up, and opportunity — without spreadsheets or extra CRMs.
+          </p>
+
+          {/* Mobile subheadline */}
+          <p className="sm:hidden text-sm text-muted-foreground max-w-xs mx-auto mb-5 leading-relaxed px-2">
+            Find leads, contact them, and track outreach in one simple dashboard.
           </p>
           
+          {/* CTAs */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/auth">
@@ -470,15 +484,55 @@ const Landing = () => {
             <Button 
               size="lg" 
               variant="outline" 
-              className="text-sm sm:text-base px-6 sm:px-8 py-3 sm:py-4 h-auto border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-foreground backdrop-blur-sm w-full sm:w-auto" 
+              className="hidden sm:inline-flex text-base px-8 py-4 h-auto border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-foreground backdrop-blur-sm" 
               asChild
             >
-              <Link to="/auth">Sign In</Link>
+              <a href="#how-it-works">
+                See How It Works
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </a>
             </Button>
           </div>
+
+          {/* Mobile reassurance */}
+          <p className="sm:hidden text-[11px] text-muted-foreground mt-3">
+            Full access included · Cancel anytime
+          </p>
+          
+          {/* Process strip — desktop */}
+          <div className="hidden sm:flex items-center justify-center gap-3 mt-10 md:mt-14">
+            {['Search', 'Contact', 'Track', 'Close'].map((step, i) => (
+              <div key={step} className="flex items-center gap-3">
+                <span 
+                  className="text-sm md:text-base font-semibold tracking-wide"
+                  style={{ color: 'hsl(210 100% 65%)' }}
+                >
+                  {step}
+                </span>
+                {i < 3 && (
+                  <ArrowRight className="h-3.5 w-3.5 text-muted-foreground/50" />
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Mobile value props */}
+          <div className="sm:hidden mt-6 flex flex-col items-center gap-2">
+            {['Find leads', 'Contact them', 'Track outreach'].map((item) => (
+              <div key={item} className="flex items-center gap-2 text-sm text-muted-foreground">
+                <CheckCircle className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(210 100% 60%)' }} />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Qualifier — desktop */}
+          <p className="hidden sm:block text-xs text-muted-foreground/70 mt-6">
+            Built for people already doing outbound.
+          </p>
           
           {/* Stats bar */}
-          <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-xl mx-auto">
+          <div className="mt-8 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-xl mx-auto">
             <div className="text-center">
               <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">100K+</div>
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Businesses</div>
@@ -492,8 +546,8 @@ const Landing = () => {
               <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
           </div>
-          {/* Reassurance microcopy */}
-          <p className="text-[11px] sm:text-xs text-muted-foreground text-center mt-3">
+          {/* Reassurance microcopy — desktop */}
+          <p className="hidden sm:block text-xs text-muted-foreground text-center mt-3">
             Set up in under 60 seconds. Full access included.
           </p>
         </div>
