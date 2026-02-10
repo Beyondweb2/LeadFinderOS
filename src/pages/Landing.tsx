@@ -496,8 +496,10 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Video Demo Section - on mobile show just above "Stop Searching Manually" */}
-      <VideoSection />
+      {/* Video Demo Section - hidden on mobile since it's in hero */}
+      <div className="hidden sm:block">
+        <VideoSection />
+      </div>
 
       {/* Before/After Comparison Section */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
