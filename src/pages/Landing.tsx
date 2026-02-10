@@ -469,12 +469,12 @@ const Landing = () => {
       {/* Floating logo icons down the page - desktop only, alternating sides */}
       <div className="hidden md:block fixed inset-0 pointer-events-none z-[1] overflow-hidden">
         {[
-          { top: '8%', right: '6%', size: 'w-20 h-20 lg:w-28 lg:h-28', opacity: 0.06, duration: 10, delay: 0 },
-          { top: '22%', left: '5%', size: 'w-16 h-16 lg:w-24 lg:h-24', opacity: 0.045, duration: 13, delay: -3 },
-          { top: '38%', right: '7%', size: 'w-14 h-14 lg:w-20 lg:h-20', opacity: 0.04, duration: 11, delay: -6 },
-          { top: '52%', left: '6%', size: 'w-18 h-18 lg:w-26 lg:h-26', opacity: 0.05, duration: 14, delay: -2 },
-          { top: '66%', right: '5%', size: 'w-16 h-16 lg:w-22 lg:h-22', opacity: 0.04, duration: 12, delay: -8 },
-          { top: '80%', left: '7%', size: 'w-14 h-14 lg:w-20 lg:h-20', opacity: 0.035, duration: 15, delay: -4 },
+          { top: '8%', right: '2%', size: 'w-12 h-12 lg:w-16 lg:h-16', opacity: 0.06, duration: 10, delay: 0 },
+          { top: '22%', left: '2%', size: 'w-10 h-10 lg:w-14 lg:h-14', opacity: 0.045, duration: 13, delay: -3 },
+          { top: '38%', right: '3%', size: 'w-10 h-10 lg:w-12 lg:h-12', opacity: 0.04, duration: 11, delay: -6 },
+          { top: '52%', left: '2%', size: 'w-12 h-12 lg:w-16 lg:h-16', opacity: 0.05, duration: 14, delay: -2 },
+          { top: '66%', right: '2%', size: 'w-10 h-10 lg:w-14 lg:h-14', opacity: 0.04, duration: 12, delay: -8 },
+          { top: '80%', left: '3%', size: 'w-10 h-10 lg:w-12 lg:h-12', opacity: 0.035, duration: 15, delay: -4 },
         ].map((pos, i) => (
           <img
             key={i}
