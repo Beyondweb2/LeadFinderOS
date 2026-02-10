@@ -438,17 +438,9 @@ const Landing = () => {
           </div>
           
           {/* Tagline badge */}
-          {/* Tagline pill */}
-          <div 
-            className="inline-flex items-center px-3 sm:px-4 py-1 rounded-full text-[10px] sm:text-xs font-medium mb-4 sm:mb-8 backdrop-blur-sm"
-            style={{ 
-              border: '1px solid hsl(210 100% 50% / 0.15)', 
-              background: 'hsl(210 100% 50% / 0.05)',
-              color: 'hsl(210 100% 60% / 0.7)'
-            }}
-          >
-            For Web Professionals
-          </div>
+          <p className="text-[9px] sm:text-[11px] tracking-[0.25em] uppercase text-muted-foreground/40 mb-3 sm:mb-5 font-medium">
+            Search · Contact · Track · Close
+          </p>
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
             <span className="block text-foreground">Find Businesses</span>
@@ -471,10 +463,6 @@ const Landing = () => {
               <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Link>
           </div>
-          
-          <p className="text-[9px] sm:text-[11px] tracking-[0.25em] uppercase text-muted-foreground/40 mt-5 sm:mt-6 font-medium">
-            Search · Contact · Track · Close
-          </p>
           
           {/* Stats bar */}
           <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-xl mx-auto">
