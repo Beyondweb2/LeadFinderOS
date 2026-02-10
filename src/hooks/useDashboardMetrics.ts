@@ -57,6 +57,9 @@ interface DashboardMetrics {
   
   // New activity metrics
   activity: ActivityMetrics;
+  
+  // Tracked leads
+  trackedLeads: OutreachLead[];
 }
 
 interface DailyAddCount {
@@ -296,6 +299,9 @@ export function useDashboardMetrics() {
     
     const avgPerDayLast7Days = last7DaysLeads.length / 7;
     
+    // Tracked leads (potential work)
+    const trackedLeads = allLeads.filter(l => l.is_potential_work && !l.is_archived);
+
     return {
       interestRate,
       responseToInterestRate,
@@ -314,6 +320,7 @@ export function useDashboardMetrics() {
       avgPerDayAllTime,
       avgPerDayLast7Days,
       activity: activityData,
+      trackedLeads,
     };
   }, [allLeads, activityData, totalNoWebsiteFound]);
 

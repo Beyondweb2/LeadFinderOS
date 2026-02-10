@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { RevenueCard } from '@/components/dashboard/RevenueCard';
 import { ConversionCard } from '@/components/dashboard/ConversionCard';
 import { OutreachCard } from '@/components/dashboard/OutreachCard';
-import { ActivityCard } from '@/components/dashboard/ActivityCard';
+import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
 import { TrialProgressCard } from '@/components/dashboard/TrialProgressCard';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -122,7 +122,7 @@ const Dashboard = () => {
             addedYesterday={metrics.addedYesterday}
             avgPerDay={metrics.avgPerDayAllTime}
           />
-          <ActivityCard activity={metrics.activity} />
+          <NextActionsCard trackedLeads={metrics.trackedLeads} />
         </div>
       </section>
 
