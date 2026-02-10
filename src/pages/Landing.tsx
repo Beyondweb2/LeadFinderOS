@@ -432,23 +432,34 @@ const Landing = () => {
       {/* Hero Section */}
       <section className="relative z-10 pt-6 pb-8 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
         <div className="container mx-auto text-center">
-          {/* Mobile: Video at top */}
+          {/* Mobile: Video at top instead of logo */}
           <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
           
-          {/* Headline */}
-          <h1 className="text-[2rem] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold tracking-tight leading-[1.1] sm:leading-tight">
-            <span className="text-foreground">Find Businesses</span>{' '}
-            <span style={{ background: 'linear-gradient(135deg, hsl(210 100% 60%) 0%, hsl(220 100% 55%) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Without Websites</span>
+          {/* Tagline badge - hidden on mobile */}
+          <div 
+            className="hidden sm:inline-flex items-center gap-2 px-3 sm:px-4 py-1.5 rounded-full text-xs sm:text-sm font-medium mb-4 sm:mb-8 backdrop-blur-sm"
+            style={{ 
+              border: '1px solid hsl(210 100% 50% / 0.3)', 
+              background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.1), hsl(210 100% 50% / 0.05))',
+              color: 'hsl(210 100% 60%)'
+            }}
+          >
+            <Zap className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+            <span>Lead generation for web professionals</span>
+          </div>
+          
+          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl xl:text-8xl font-bold mb-3 sm:mb-6 tracking-tight">
+            <span className="block text-foreground">Find Businesses</span>
+            <span className="block text-gradient-primary mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
-
-          {/* Subheadline */}
-          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground/70 mt-3 sm:mt-4 mb-8 sm:mb-10 max-w-xs sm:max-w-2xl mx-auto">
-            Find local businesses without websites, reach out directly, and keep track of every conversation in one place.
+          
+          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-xl mx-auto mb-6 sm:mb-12 leading-relaxed px-2">
+            Find local businesses without websites and reach out directly.
+            <span className="hidden sm:inline"> Stop scrolling Google Maps — start contacting prospects.</span>
           </p>
-
-          {/* CTAs */}
+          
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/auth">
@@ -456,32 +467,35 @@ const Landing = () => {
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-            <a 
-              href="#how-it-works"
-              className="hidden sm:inline-flex items-center text-sm text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+            <Button 
+              size="lg" 
+              variant="outline" 
+              className="text-sm sm:text-base px-6 sm:px-8 py-3 sm:py-4 h-auto border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-foreground backdrop-blur-sm w-full sm:w-auto" 
+              asChild
             >
-              See how it works
-            </a>
+              <Link to="/auth">Sign In</Link>
+            </Button>
           </div>
-
-          {/* Reassurance */}
-          <p className="text-[11px] sm:text-xs text-muted-foreground/50 mt-3">
-            No credit card required · Cancel anytime
+          
+          {/* Stats bar */}
+          <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-xl mx-auto">
+            <div className="text-center">
+              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">100K+</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Businesses</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">∞</div>
+              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Searches</div>
+            </div>
+          </div>
+          {/* Reassurance microcopy */}
+          <p className="text-[11px] sm:text-xs text-muted-foreground text-center mt-3">
+            Set up in under 60 seconds. Full access included.
           </p>
-
-          {/* Process hint — desktop only */}
-          <div className="hidden sm:flex items-center justify-center gap-5 mt-14">
-            {['Search', 'Contact', 'Track', 'Close'].map((step, i) => (
-              <div key={step} className="flex items-center gap-5">
-                <span className="text-xs font-semibold tracking-[0.2em] uppercase text-muted-foreground/40">
-                  {step}
-                </span>
-                {i < 3 && (
-                  <span className="text-muted-foreground/20 text-sm select-none">·</span>
-                )}
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 
