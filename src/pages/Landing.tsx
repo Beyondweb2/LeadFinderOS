@@ -634,16 +634,14 @@ const Landing = () => {
         ];
 
         const ReviewCard = ({ r }: { r: typeof earlyReviews[0] }) => (
-          <div className="h-full py-5 sm:py-6">
-            <div className="flex gap-1 mb-3 justify-center">
+          <div className="h-full py-4 sm:py-5 text-center">
+            <div className="flex gap-0.5 mb-2 justify-center">
               {[...Array(r.stars)].map((_, si) => (
-                <Star key={si} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+                <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
               ))}
             </div>
-            <p className="text-foreground/80 text-base sm:text-lg md:text-xl leading-relaxed text-center mb-4 italic font-normal">"{r.quote}"</p>
-            <div className="flex items-center justify-center">
-              <p className="text-muted-foreground/70 text-sm sm:text-base">{r.name} · {r.role}</p>
-            </div>
+            <p className="text-foreground/80 text-sm sm:text-base md:text-lg leading-relaxed mb-3 italic font-normal">"{r.quote}"</p>
+            <p className="text-muted-foreground/70 text-xs sm:text-sm text-center">{r.name} · {r.role}</p>
           </div>
         );
 
