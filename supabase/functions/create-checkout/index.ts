@@ -63,30 +63,62 @@ const logStep = (step: string, details?: unknown) => {
       }
 
       const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+
+      // ─── SUBSCRIPTION GUARD: check DB for existing active subscription ───
+      const { data: existingSub } = await supabaseClient
+        .from('subscriptions')
+        .select('id, status, stripe_customer_id, stripe_subscription_id')
+        .eq('user_id', user.id)
+        .in('status', ['trialing', 'active', 'past_due', 'unpaid'])
+        .limit(1)
+        .maybeSingle();
+
+      if (existingSub) {
+        logStep("GUARD: User already has active subscription, redirecting to portal", {
+          userId: user.id,
+          existingStatus: existingSub.status,
+          subscriptionId: existingSub.stripe_subscription_id,
+        });
+
+        // Redirect to billing portal instead of creating a new checkout
+        const origin = req.headers.get("origin") || "https://leadfinderapp.lovable.app";
+        const portalSession = await stripe.billingPortal.sessions.create({
+          customer: existingSub.stripe_customer_id,
+          return_url: `${origin}/`,
+        });
+
+        return new Response(JSON.stringify({ url: portalSession.url, redirectedToPortal: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      logStep("GUARD: No active subscription found, proceeding with checkout");
+      // ─── END GUARD ───
      
-     // Check for existing customer
-     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-     let customerId: string | undefined;
-     let hasHadSubscription = false;
-     
-     if (customers.data.length > 0) {
-       customerId = customers.data[0].id;
-       logStep("Found existing Stripe customer", { customerId });
-       
-       // Check if this customer has ever had a subscription (trial abuse prevention)
-       const allSubscriptions = await stripe.subscriptions.list({
-         customer: customerId,
-         limit: 10,
-       });
-       
-       if (allSubscriptions.data.length > 0) {
-         hasHadSubscription = true;
-         logStep("Customer has subscription history", { 
-           count: allSubscriptions.data.length,
-           statuses: allSubscriptions.data.map((s: { status: string }) => s.status)
-         });
-       }
-     }
+      // Check for existing customer
+      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+      let customerId: string | undefined;
+      let hasHadSubscription = false;
+      
+      if (customers.data.length > 0) {
+        customerId = customers.data[0].id;
+        logStep("Found existing Stripe customer", { customerId });
+        
+        // Check if this customer has ever had a subscription (trial abuse prevention)
+        const allSubscriptions = await stripe.subscriptions.list({
+          customer: customerId,
+          limit: 10,
+        });
+        
+        if (allSubscriptions.data.length > 0) {
+          hasHadSubscription = true;
+          logStep("Customer has subscription history", { 
+            count: allSubscriptions.data.length,
+            statuses: allSubscriptions.data.map((s: { status: string }) => s.status)
+          });
+        }
+      }
 
       // Get affiliate code and ref_source from user_trials if present
       const { data: trialData } = await supabaseClient

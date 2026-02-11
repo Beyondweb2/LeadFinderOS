@@ -237,7 +237,65 @@
            status = "canceled";
          }
 
-         // Upsert subscription record
+         // ─── DUPLICATE GUARD: check for existing active sub before upserting ───
+         const { data: existingSubs } = await supabaseAdmin
+           .from("subscriptions")
+           .select("id, stripe_subscription_id, status, created_at")
+           .eq("user_id", user.id)
+           .in("status", ["active", "trialing"]);
+
+         const isNewSub = event.type === "customer.subscription.created";
+         const hasExistingActive = existingSubs && existingSubs.length > 0;
+
+         if (isNewSub && hasExistingActive) {
+           // Another active/trialing sub already exists for this user
+           const existingIds = existingSubs.map(s => s.stripe_subscription_id);
+           const isAlreadyTracked = existingIds.includes(subscription.id);
+
+           if (!isAlreadyTracked) {
+             logStep("DUPLICATE DETECTED: user already has active subscription", {
+               userId: user.id,
+               existingSubscriptions: existingSubs.map(s => ({
+                 id: s.stripe_subscription_id,
+                 status: s.status,
+                 created_at: s.created_at,
+               })),
+               incomingSubscription: { id: subscription.id, status },
+             });
+             // Insert the duplicate record but flag it so it can be reviewed
+             const { error: dupInsertError } = await supabaseAdmin
+               .from("subscriptions")
+               .upsert({
+                 user_id: user.id,
+                 stripe_customer_id: customerId,
+                 stripe_subscription_id: subscription.id,
+                 status: `duplicate_${status}`,
+                 current_period_end: subscription.current_period_end
+                   ? new Date(subscription.current_period_end * 1000).toISOString()
+                   : (subscription.trial_end
+                     ? new Date(subscription.trial_end * 1000).toISOString()
+                     : null),
+                 updated_at: new Date().toISOString(),
+               }, {
+                 onConflict: "stripe_subscription_id",
+               });
+
+             if (dupInsertError) {
+               logStep("Failed to insert duplicate subscription record", { error: dupInsertError.message });
+             } else {
+               logStep("Duplicate subscription saved with 'duplicate_' prefix for manual review");
+             }
+
+             // Skip further processing — don't overwrite the primary sub's plan_status
+             return new Response(JSON.stringify({ received: true, duplicate: true }), {
+               headers: { ...corsHeaders, "Content-Type": "application/json" },
+               status: 200,
+             });
+           }
+         }
+         // ─── END DUPLICATE GUARD ───
+
+         // Upsert subscription record (normal path)
          const { error: upsertError } = await supabaseAdmin
            .from("subscriptions")
            .upsert({
