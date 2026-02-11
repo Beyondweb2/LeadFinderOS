@@ -20,6 +20,7 @@ export type LeadStatus =
 export type NextActionType = 
   | 'call'
   | 'follow_up'
+  | '2nd_follow_up'
   | 'send_draft'
   | 'remove_if_no_reply'
   | 'none'
@@ -128,6 +129,7 @@ export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'send_initial_text', label: 'Send Initial Text' },
   { value: 'send_voice_note', label: 'Send Voice Note' },
   { value: 'send_follow_up', label: 'Send Follow-up' },
+  { value: '2nd_follow_up', label: '2nd Follow-up' },
   { value: 'check_3_day_removal', label: 'Check 3-Day Removal' },
   { value: 'call', label: 'Call' },
   { value: 'follow_up', label: 'Follow-up' },

@@ -637,6 +637,7 @@ export type Database = {
         | "send_voice_note"
         | "send_follow_up"
         | "check_3_day_removal"
+        | "2nd_follow_up"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -802,6 +803,7 @@ export const Constants = {
         "send_voice_note",
         "send_follow_up",
         "check_3_day_removal",
+        "2nd_follow_up",
       ],
     },
   },
