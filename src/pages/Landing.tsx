@@ -5,6 +5,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   Search,
+  Settings,
   ClipboardList,
   Phone,
   FileText,
@@ -106,6 +107,20 @@ const FEATURES = [
     title: 'Templates',
     description: 'Ready-to-send WhatsApp, SMS, and call scripts — just pick a template, personalise, and hit send.',
     image: featureTemplates,
+    imageScale: 'scale-100',
+  },
+  {
+    icon: FileText,
+    title: 'Export Tools',
+    description: 'Export your leads and outreach data to CSV — perfect for backups, reporting, or importing into other tools.',
+    image: featureExport,
+    imageScale: 'scale-100',
+  },
+  {
+    icon: Settings,
+    title: 'Customization',
+    description: 'Set your accent colour, manage templates, and tailor the dashboard to match how you work.',
+    image: featureCustomization,
     imageScale: 'scale-100',
   },
 ];
@@ -628,8 +643,8 @@ const Landing = () => {
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
-      {/* Early Social Proof — 4 compact reviews (after video on desktop) */}
-      {(() => {
+      {/* Mobile: Early reviews carousel */}
+      {isMobile && (() => {
         const earlyReviews = [
           { name: 'James T.', role: 'Freelance Web Developer', quote: 'i used to spend an hour on google maps just finding businesses to contact. now i get 15-20 relevant ones in about 10 minutes and everything is tracked.', avatar: 'JT', stars: 5 },
           { name: 'Marcus L.', role: 'Web Designer', quote: "the one click whatsapp outreach changed everything for me. i actually follow up now instead of forgetting who i messaged last week.", avatar: 'ML', stars: 5 },
@@ -638,36 +653,86 @@ const Landing = () => {
         ];
 
         const ReviewCard = ({ r }: { r: typeof earlyReviews[0] }) => (
-          <div className="h-full py-4 sm:py-5 text-center">
+          <div className="h-full py-4 text-center">
             <div className="flex gap-0.5 mb-2 justify-center">
               {[...Array(r.stars)].map((_, si) => (
                 <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
               ))}
             </div>
-            <p className="text-foreground/80 text-sm sm:text-base md:text-lg leading-relaxed mb-3 italic font-normal">"{r.quote}"</p>
-            <p className="text-muted-foreground/70 text-xs sm:text-sm text-center">{r.name} · {r.role}</p>
+            <p className="text-foreground/80 text-sm leading-relaxed mb-3 italic font-normal">"{r.quote}"</p>
+            <p className="text-muted-foreground/70 text-xs text-center">{r.name} · {r.role}</p>
           </div>
         );
 
         return (
-          <ScrollReveal className="relative z-10 py-8 sm:py-14 px-4">
+          <ScrollReveal className="relative z-10 py-8 px-4">
             <div className="container mx-auto max-w-5xl">
-              <h3 className="text-center text-lg sm:text-xl font-semibold text-foreground/80 mb-6 sm:mb-8 tracking-tight">
+              <h3 className="text-center text-lg font-semibold text-foreground/80 mb-6 tracking-tight">
                 Trusted by freelancers and agencies <span className="text-gradient-primary">worldwide</span>
               </h3>
-              {isMobile ? (
-                <EarlyReviewsCarousel reviews={earlyReviews} ReviewCard={ReviewCard} />
-              ) : (
-              <div className="grid grid-cols-4 gap-8 lg:gap-10">
-                  {earlyReviews.map((r, i) => (
-                    <ReviewCard key={i} r={r} />
-                  ))}
-                </div>
-              )}
+              <EarlyReviewsCarousel reviews={earlyReviews} ReviewCard={ReviewCard} />
             </div>
           </ScrollReveal>
         );
       })()}
+
+      {/* Desktop: Old Way vs New Way comparison */}
+      {!isMobile && (
+        <ScrollReveal className="relative z-10 py-14 sm:py-20 px-4">
+          <div className="container mx-auto max-w-5xl">
+            <h3 className="text-center text-xl sm:text-2xl font-bold text-foreground mb-3 tracking-tight">
+              Stop Scrolling Through <span className="text-gradient-primary">Google Maps</span>
+            </h3>
+            <p className="text-center text-muted-foreground text-base mb-10 max-w-xl mx-auto">
+              There's a faster way to find businesses without websites.
+            </p>
+            <div className="grid grid-cols-2 gap-8 lg:gap-12 max-w-4xl mx-auto">
+              {/* Old Way */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 justify-center">
+                  <X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} />
+                  <h4 className="text-lg font-semibold text-foreground/80">The Old Way</h4>
+                </div>
+                <div 
+                  className="rounded-xl overflow-hidden"
+                  style={{ 
+                    border: '1px solid hsl(0 60% 40% / 0.2)',
+                    boxShadow: '0 0 20px hsl(0 60% 40% / 0.08)'
+                  }}
+                >
+                  <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-auto" />
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} /><span>Hours spent scrolling Google Maps</span></li>
+                  <li className="flex items-start gap-2"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} /><span>No way to track who you've contacted</span></li>
+                  <li className="flex items-start gap-2"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} /><span>Leads lost in notes and spreadsheets</span></li>
+                </ul>
+              </div>
+              {/* New Way */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 justify-center">
+                  <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} />
+                  <h4 className="text-lg font-semibold text-foreground/80">The LeadFinder Way</h4>
+                </div>
+                <div 
+                  className="rounded-xl overflow-hidden"
+                  style={{ 
+                    border: '1px solid hsl(142 60% 40% / 0.2)',
+                    boxShadow: '0 0 20px hsl(142 60% 40% / 0.08)'
+                  }}
+                >
+                  <img src={newWayImage} alt="LeadFinder Pro dashboard" className="w-full h-auto" />
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} /><span>Find 20+ leads in minutes</span></li>
+                  <li className="flex items-start gap-2"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} /><span>Track every message and follow-up</span></li>
+                  <li className="flex items-start gap-2"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} /><span>One click WhatsApp and SMS outreach</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </ScrollReveal>
+      )}
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
@@ -773,61 +838,47 @@ const Landing = () => {
             </p>
           </ScrollReveal>
           
-          {/* Mobile: Carousel */}
+          {/* Mobile: Carousel (4 core features) */}
           {isMobile ? (
             <MobileFeatureCarousel features={FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title))} onExpand={(src, title) => setExpandedImage({ src, title })} />
           ) : (
-            /* Desktop: Auto-playing Carousel */
+            /* Desktop: 6-card grid */
             <ScrollReveal>
-              <div className="max-w-4xl mx-auto px-14">
-                <Carousel
-                  opts={{ loop: true, align: 'center' }}
-                  plugins={[Autoplay({ delay: 4000, stopOnInteraction: true })]}
-                >
-                  <CarouselContent>
-                    {FEATURES.map((feature) => (
-                        <CarouselItem key={feature.title}>
-                        <div className="space-y-4">
-                          {/* Title & description above the image */}
-                          <div className="flex items-center gap-3">
-                            <div 
-                              className="p-2 rounded-xl flex-shrink-0"
-                              style={{ 
-                                background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
-                                border: '1px solid hsl(210 100% 50% / 0.1)'
-                              }}
-                            >
-                              <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
-                            </div>
-                            <h3 className="text-base sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</h3>
-                          </div>
-                          <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
-                          
-                          {/* Image card */}
-                          <div
-                            className="group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:ring-1 hover:ring-[hsl(210_100%_50%_/_0.2)]"
-                            style={{ 
-                              border: '1px solid hsl(0 0% 100% / 0.06)',
-                              boxShadow: '0 0 20px hsl(210 100% 50% / 0.05)'
-                            }}
-                            onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
-                          >
-                            <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                              <Search className="h-4 w-4 text-foreground" />
-                            </div>
-                            <img 
-                              src={feature.image} 
-                              alt={feature.title}
-                              className={`w-full h-64 sm:h-80 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
-                            />
-                          </div>
-                        </div>
-                      </CarouselItem>
-                    ))}
-                  </CarouselContent>
-                  <CarouselPrevious className="border-white/10 bg-card/80 hover:bg-card" />
-                  <CarouselNext className="border-white/10 bg-card/80 hover:bg-card" />
-                </Carousel>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 max-w-6xl mx-auto">
+                {FEATURES.map((feature) => (
+                  <div key={feature.title} className="space-y-3">
+                    <div className="flex items-center gap-2.5">
+                      <div 
+                        className="p-2 rounded-xl flex-shrink-0"
+                        style={{ 
+                          background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
+                          border: '1px solid hsl(210 100% 50% / 0.1)'
+                        }}
+                      >
+                        <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                      </div>
+                      <h3 className="text-base font-semibold tracking-tight leading-tight">{feature.title}</h3>
+                    </div>
+                    <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2">{feature.description}</p>
+                    <div
+                      className="group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:ring-1 hover:ring-[hsl(210_100%_50%_/_0.2)]"
+                      style={{ 
+                        border: '1px solid hsl(0 0% 100% / 0.06)',
+                        boxShadow: '0 0 20px hsl(210 100% 50% / 0.05)'
+                      }}
+                      onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
+                    >
+                      <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <Search className="h-4 w-4 text-foreground" />
+                      </div>
+                      <img 
+                        src={feature.image} 
+                        alt={feature.title}
+                        className={`w-full h-48 lg:h-56 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                      />
+                    </div>
+                  </div>
+                ))}
               </div>
             </ScrollReveal>
           )}
