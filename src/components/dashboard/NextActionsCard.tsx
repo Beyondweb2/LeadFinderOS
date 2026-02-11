@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarClock, Users, AlertTriangle, Clock, CheckCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { CalendarClock, AlertTriangle, Clock, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { OutreachLead } from '@/types/outreach';
 
@@ -20,6 +22,8 @@ const ACTION_LABELS: Record<string, string> = {
 };
 
 export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -52,14 +56,13 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
     return d >= tomorrow && d < nextWeek;
   });
 
-  // Upcoming sorted list (overdue + today + this week, max 4)
+  // All upcoming sorted
   const upcoming = [...overdue, ...dueToday, ...dueThisWeek]
     .sort((a, b) => {
       const dateA = a.next_action_date ? new Date(a.next_action_date).getTime() : Infinity;
       const dateB = b.next_action_date ? new Date(b.next_action_date).getTime() : Infinity;
       return dateA - dateB;
-    })
-    .slice(0, 3);
+    });
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -70,6 +73,13 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
     if (diff === 1) return 'Tomorrow';
     return `In ${diff}d`;
   };
+
+  // Clamp index
+  const safeIndex = upcoming.length > 0 ? Math.min(currentIndex, upcoming.length - 1) : 0;
+  const currentLead = upcoming[safeIndex];
+
+  const goNext = () => setCurrentIndex(i => Math.min(i + 1, upcoming.length - 1));
+  const goPrev = () => setCurrentIndex(i => Math.max(i - 1, 0));
 
   return (
     <Card className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border-amber-500/20">
@@ -102,36 +112,42 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
           </div>
         </div>
 
-        {/* Upcoming actions list */}
-        {upcoming.length > 0 ? (
-          <div className="space-y-1.5 pt-2 border-t border-border/50">
-            {upcoming.map(lead => {
-              const isOverdue = lead.next_action_date && new Date(lead.next_action_date) < today;
-              return (
-                <Link
-                  key={lead.id}
-                  to="/potential-work"
-                  className="flex items-center justify-between gap-2 p-1.5 rounded-md hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    {isOverdue ? (
-                      <AlertTriangle className="h-3 w-3 text-red-500 shrink-0" />
-                    ) : (
-                      <Clock className="h-3 w-3 text-amber-500 shrink-0" />
-                    )}
-                    <span className="text-xs truncate font-medium">{lead.business_name}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] text-muted-foreground">
-                      {ACTION_LABELS[lead.next_action || 'none']}
-                    </span>
-                    <span className={`text-[10px] font-medium ${isOverdue ? 'text-red-500' : 'text-amber-500'}`}>
-                      {lead.next_action_date ? formatDate(lead.next_action_date) : '—'}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
+        {/* Single lead carousel */}
+        {upcoming.length > 0 && currentLead ? (
+          <div className="pt-2 border-t border-border/50">
+            <Link
+              to="/potential-work"
+              className="block p-2 rounded-md hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-1.5 mb-1">
+                {currentLead.next_action_date && new Date(currentLead.next_action_date) < today ? (
+                  <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                ) : (
+                  <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                )}
+                <span className="text-sm font-medium break-words leading-tight">{currentLead.business_name}</span>
+              </div>
+              <div className="flex items-center justify-between ml-5">
+                <span className="text-xs text-muted-foreground">
+                  {ACTION_LABELS[currentLead.next_action || 'none']}
+                </span>
+                <span className={`text-xs font-medium ${currentLead.next_action_date && new Date(currentLead.next_action_date) < today ? 'text-red-500' : 'text-amber-500'}`}>
+                  {currentLead.next_action_date ? formatDate(currentLead.next_action_date) : '—'}
+                </span>
+              </div>
+            </Link>
+            {/* Cycling controls */}
+            {upcoming.length > 1 && (
+              <div className="flex items-center justify-between mt-1.5">
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={goPrev} disabled={safeIndex === 0}>
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </Button>
+                <span className="text-[10px] text-muted-foreground">{safeIndex + 1} / {upcoming.length}</span>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={goNext} disabled={safeIndex === upcoming.length - 1}>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="pt-2 border-t border-border/50 text-center">
