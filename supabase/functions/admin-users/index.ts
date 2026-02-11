@@ -33,27 +33,40 @@ serve(async (req) => {
   }
 
   try {
-    // --- Auth ---
+    // --- Step 1: Read Authorization header ---
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return jsonResponse({ error: 'Not authenticated' }, 401, corsHeaders);
+      console.error('[ADMIN-USERS] Missing Authorization header');
+      return jsonResponse({ error: 'Missing Authorization header' }, 401, corsHeaders);
     }
 
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      { global: { headers: { Authorization: authHeader } } }
-    );
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser();
-    if (userError || !userData?.user) {
-      console.error('[ADMIN-USERS] Auth failed:', userError?.message);
-      return jsonResponse({ error: 'Invalid token' }, 401, corsHeaders);
+    // --- Step 2: Create user client with ANON key + auth header ---
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } }
+    });
+
+    // --- Step 3: Verify token using getClaims ---
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+
+    if (claimsError || !claimsData?.claims) {
+      console.error('[ADMIN-USERS] Token verification failed:', claimsError?.message || 'no claims');
+      // Fallback: try getUser() if getClaims not available
+      const { data: userData, error: userError } = await userClient.auth.getUser();
+      if (userError || !userData?.user) {
+        console.error('[ADMIN-USERS] getUser fallback also failed:', userError?.message);
+        return jsonResponse({ error: 'Invalid token', details: userError?.message || claimsError?.message }, 401, corsHeaders);
+      }
+      // Use getUser result
+      var adminUserId = userData.user.id;
+      console.log('[ADMIN-USERS] Auth via getUser fallback, userId:', adminUserId);
+    } else {
+      var adminUserId = claimsData.claims.sub as string;
+      console.log('[ADMIN-USERS] Auth via getClaims, userId:', adminUserId);
     }
-
-    const adminUserId = userData.user.id;
-
-    console.log('[ADMIN-USERS] Authenticated user:', adminUserId);
 
     // --- Rate limit (10 req/min per admin) ---
     const rl = checkRateLimit(`admin-users:${adminUserId}`, 10, 60000);
@@ -62,10 +75,7 @@ serve(async (req) => {
       return jsonResponse({ error: 'Rate limit exceeded' }, 429, corsHeaders, rlHeaders);
     }
 
-    // --- Service client ---
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-    console.log('[ADMIN-USERS] SUPABASE_URL:', supabaseUrl);
-
+    // --- Step 4: Service role client (ONLY after token verified) ---
     const serviceClient = createClient(
       supabaseUrl,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -83,13 +93,13 @@ serve(async (req) => {
     console.log('[ADMIN-USERS] Admin role check:', roleData ? 'PASSED' : 'FAILED', roleError?.message || '');
 
     if (!roleData) {
-      return jsonResponse({ error: 'Not authorized' }, 403, corsHeaders, rlHeaders);
+      return jsonResponse({ error: 'Not authorized - no admin role' }, 403, corsHeaders, rlHeaders);
     }
 
+    // --- Parse body ---
     const body = await req.json().catch(() => ({}));
     const action = body.action || 'list_users';
 
-    // --- Structured logging (no user data) ---
     console.log(JSON.stringify({
       level: 'info',
       admin_user_id: adminUserId,
@@ -105,7 +115,6 @@ serve(async (req) => {
       const statusFilterRaw: string | undefined = typeof body.status === 'string' ? body.status : undefined;
       const activeDays: number | undefined = typeof body.active_days === 'number' ? body.active_days : undefined;
 
-      // Fetch auth users (paginated via Supabase admin API)
       const { data: authData, error: authError } = await serviceClient.auth.admin.listUsers({
         page,
         perPage,
@@ -113,20 +122,18 @@ serve(async (req) => {
 
       if (authError) {
         console.error('[ADMIN-USERS] listUsers error:', authError.message);
-        return jsonResponse({ error: 'Failed to fetch users' }, 500, corsHeaders, rlHeaders);
+        return jsonResponse({ error: 'Failed to fetch users', details: authError.message }, 500, corsHeaders, rlHeaders);
       }
 
       let authUsers = authData?.users || [];
       console.log('[ADMIN-USERS] Auth users fetched:', authUsers.length);
 
-      // Server-side email filter
       if (emailFilter) {
         authUsers = authUsers.filter(u => (u.email || '').toLowerCase().includes(emailFilter));
       }
 
       const userIds = authUsers.map(u => u.id);
 
-      // Fetch only relevant metrics/subs/trials for these user IDs
       const [metricsRes, subsRes, trialsRes] = await Promise.all([
         userIds.length > 0
           ? serviceClient.from('user_metrics').select('user_id, search_count, businesses_added_count, messages_sent_count, replies_count, last_active_at, last_search_at').in('user_id', userIds)
@@ -142,7 +149,7 @@ serve(async (req) => {
       const metricsData = (metricsRes as any).data || [];
       const subsData = (subsRes as any).data || [];
       const trialsData = (trialsRes as any).data || [];
-      console.log('[ADMIN-USERS] Joined data counts - metrics:', metricsData.length, 'subs:', subsData.length, 'trials:', trialsData.length);
+      console.log('[ADMIN-USERS] Joined data - metrics:', metricsData.length, 'subs:', subsData.length, 'trials:', trialsData.length);
 
       const metricsMap = new Map(metricsData.map((m: any) => [m.user_id, m]));
       const subsMap = new Map(subsData.map((s: any) => [s.user_id, s]));
@@ -175,7 +182,6 @@ serve(async (req) => {
         };
       });
 
-      // Server-side status filter
       if (statusFilterRaw && statusFilterRaw !== 'all') {
         users = users.filter(u => {
           if (statusFilterRaw === 'trialing') return u.subscription_status === 'trial' || u.subscription_status === 'trialing';
@@ -185,7 +191,6 @@ serve(async (req) => {
         });
       }
 
-      // Server-side activity filter
       if (activeDays && activeDays > 0) {
         const cutoff = Date.now() - activeDays * 24 * 60 * 60 * 1000;
         users = users.filter(u => u.last_active_at && new Date(u.last_active_at).getTime() >= cutoff);
@@ -220,9 +225,40 @@ serve(async (req) => {
       return jsonResponse({ events: events || [] }, 200, corsHeaders, rlHeaders);
     }
 
+    // ===================== DELETE USER =====================
+    if (action === 'delete_user') {
+      const targetUserId = body.user_id;
+      if (!targetUserId || typeof targetUserId !== 'string') {
+        return jsonResponse({ error: 'user_id required' }, 400, corsHeaders, rlHeaders);
+      }
+
+      // Prevent self-deletion
+      if (targetUserId === adminUserId) {
+        return jsonResponse({ error: 'Cannot delete your own account' }, 400, corsHeaders, rlHeaders);
+      }
+
+      console.log(JSON.stringify({
+        level: 'warn',
+        admin_user_id: adminUserId,
+        action: 'delete_user',
+        target_user_id: targetUserId,
+        timestamp: new Date().toISOString(),
+      }));
+
+      // Delete from auth (cascades to related tables via FK)
+      const { error: deleteError } = await serviceClient.auth.admin.deleteUser(targetUserId);
+
+      if (deleteError) {
+        console.error('[ADMIN-USERS] Delete user error:', deleteError.message);
+        return jsonResponse({ error: 'Failed to delete user', details: deleteError.message }, 500, corsHeaders, rlHeaders);
+      }
+
+      return jsonResponse({ success: true }, 200, corsHeaders, rlHeaders);
+    }
+
     return jsonResponse({ error: 'Unknown action' }, 400, corsHeaders, rlHeaders);
   } catch (error) {
-    console.error('Admin users error:', (error as Error).message);
+    console.error('[ADMIN-USERS] Unhandled error:', (error as Error).message);
     return jsonResponse({ error: 'Internal server error' }, 500, getCorsHeaders(req));
   }
 });

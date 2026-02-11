@@ -32,6 +32,17 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import {
   ArrowLeft,
   Loader2,
   Users,
@@ -40,6 +51,7 @@ import {
   MessageSquare,
   Building2,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 
 interface AdminUser {
@@ -104,7 +116,7 @@ function timeAgo(dateStr: string | null): string {
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const { session } = useAuth();
+  const { user, session } = useAuth();
   const { isAdmin, isLoading: isSubLoading } = useSubscription();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -114,10 +126,25 @@ export default function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [userEvents, setUserEvents] = useState<UsageEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
+  const getAccessToken = useCallback(async (): Promise<string | null> => {
+    // Always get a fresh session
+    const { data: { session: freshSession } } = await supabase.auth.getSession();
+    if (!freshSession?.access_token) {
+      toast.error('No session token found. Please log in again.');
+      return null;
+    }
+    return freshSession.access_token;
+  }, []);
 
   const fetchUsers = useCallback(async () => {
-    if (!session?.access_token) return;
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
     setIsLoading(true);
+    setFetchError(null);
 
     const filterBody: Record<string, unknown> = { action: 'list_users', per_page: 200 };
     if (searchQuery) filterBody.email = searchQuery;
@@ -125,33 +152,50 @@ export default function AdminDashboard() {
     if (activityFilter === '7d') filterBody.active_days = 7;
     else if (activityFilter === '30d') filterBody.active_days = 30;
 
-    const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: filterBody,
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-users', {
+        body: filterBody,
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
 
-    console.log('[AdminDashboard] Response:', { data, error });
+      console.log('[AdminDashboard] Response:', { data, error });
 
-    if (error) {
-      console.error('[AdminDashboard] Failed to fetch admin users:', error);
-      toast.error(`Admin fetch failed: ${error.message || 'Unknown error'}`);
-    } else if (data?.error) {
-      console.error('[AdminDashboard] Server error:', data.error);
-      toast.error(`Server error: ${data.error}`);
-    } else {
-      console.log('[AdminDashboard] Users received:', data?.users?.length, 'total:', data?.total);
-      setUsers(data?.users || []);
+      if (error) {
+        const errMsg = error.message || 'Unknown error';
+        console.error('[AdminDashboard] Invoke error:', errMsg);
+        setFetchError(errMsg);
+        toast.error(`Admin fetch failed: ${errMsg}`);
+      } else if (data?.error) {
+        console.error('[AdminDashboard] Server error:', data.error, data.details);
+        setFetchError(`${data.error}${data.details ? ': ' + data.details : ''}`);
+        toast.error(`Server error: ${data.error}`);
+      } else {
+        const userList = data?.users || [];
+        console.log('[AdminDashboard] Users received:', userList.length, 'total:', data?.total);
+        setUsers(userList);
+        if (userList.length === 0 && !searchQuery && statusFilter === 'all') {
+          toast.info('No users returned. Check edge function logs for details.');
+        }
+      }
+    } catch (err) {
+      const errMsg = (err as Error).message;
+      console.error('[AdminDashboard] Exception:', errMsg);
+      setFetchError(errMsg);
+      toast.error(`Unexpected error: ${errMsg}`);
     }
+
     setIsLoading(false);
-  }, [session?.access_token, searchQuery, statusFilter, activityFilter]);
+  }, [getAccessToken, searchQuery, statusFilter, activityFilter]);
 
   const fetchUserEvents = useCallback(async (userId: string) => {
-    if (!session?.access_token) return;
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
     setIsLoadingEvents(true);
 
     const { data, error } = await supabase.functions.invoke('admin-users', {
       body: { action: 'user_events', user_id: userId },
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
 
     if (error) {
@@ -160,7 +204,31 @@ export default function AdminDashboard() {
       setUserEvents(data?.events || []);
     }
     setIsLoadingEvents(false);
-  }, [session?.access_token]);
+  }, [getAccessToken]);
+
+  const deleteUser = useCallback(async (userId: string, email: string) => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
+    setIsDeletingUser(true);
+
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: { action: 'delete_user', user_id: userId },
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (error) {
+      toast.error(`Failed to delete: ${error.message}`);
+    } else if (data?.error) {
+      toast.error(`Delete failed: ${data.error}`);
+    } else {
+      toast.success(`Deleted ${email}`);
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      if (selectedUser?.id === userId) setSelectedUser(null);
+    }
+
+    setIsDeletingUser(false);
+  }, [getAccessToken, selectedUser]);
 
   useEffect(() => {
     if (!isSubLoading && !isAdmin) {
@@ -177,10 +245,8 @@ export default function AdminDashboard() {
     fetchUserEvents(user.id);
   };
 
-  // Server-side filtering — just use users directly
   const filtered = users;
 
-  // Summary stats
   const totalActive = users.filter(u => u.subscription_status === 'active').length;
   const totalTrialing = users.filter(u => u.subscription_status === 'trial' || u.subscription_status === 'trialing').length;
   const totalSearches = users.reduce((s, u) => s + u.search_count, 0);
@@ -218,6 +284,14 @@ export default function AdminDashboard() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+        {/* Error Banner */}
+        {fetchError && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+            <p className="text-sm text-red-400 font-medium">Error loading users</p>
+            <p className="text-xs text-red-400/80 mt-1">{fetchError}</p>
+          </div>
+        )}
+
         {/* Summary Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <Card>
@@ -315,12 +389,13 @@ export default function AdminDashboard() {
                       <TableHead className="text-right">Messages</TableHead>
                       <TableHead>Last Active</TableHead>
                       <TableHead>Joined</TableHead>
+                      <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                           No users found
                         </TableCell>
                       </TableRow>
@@ -347,6 +422,41 @@ export default function AdminDashboard() {
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {formatDate(u.created_at)}
+                          </TableCell>
+                          <TableCell>
+                            {u.id !== user?.id && (
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Delete user?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This will permanently delete <strong>{u.email}</strong> and all their data. This action cannot be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      className="bg-red-600 hover:bg-red-700"
+                                      onClick={() => deleteUser(u.id, u.email)}
+                                      disabled={isDeletingUser}
+                                    >
+                                      {isDeletingUser ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))
@@ -399,6 +509,37 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 </div>
+
+                {/* Delete User */}
+                {selectedUser.id !== user?.id && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="destructive" size="sm" className="w-full">
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete this user
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete user?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This will permanently delete <strong>{selectedUser.email}</strong> and all their data. This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-red-600 hover:bg-red-700"
+                          onClick={() => deleteUser(selectedUser.id, selectedUser.email)}
+                          disabled={isDeletingUser}
+                        >
+                          {isDeletingUser ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
 
                 {/* Metrics Summary */}
                 <div className="space-y-3">
