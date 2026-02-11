@@ -698,231 +698,76 @@ const Landing = () => {
         );
       })()}
 
-      {/* What you can do in your first 24 hours — standalone section */}
-      <section className="relative z-10 py-10 sm:py-14 md:py-20 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal>
-            <div
-              className="relative max-w-2xl mx-auto rounded-2xl p-6 sm:p-10 overflow-hidden text-center"
-              style={{
-                background: 'linear-gradient(180deg, hsl(220 40% 10% / 0.95), hsl(220 40% 6% / 0.98))',
-                border: '1px solid hsl(210 100% 50% / 0.15)',
-                boxShadow: '0 0 40px hsl(210 100% 50% / 0.06)',
-              }}
-            >
-              {/* Subtle glow */}
-              <div 
-                className="absolute -inset-4 rounded-3xl blur-2xl opacity-30 pointer-events-none"
-                style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.1), transparent 70%)' }}
-              />
-              <h3 className="relative text-xl sm:text-2xl md:text-3xl font-bold text-foreground mb-2 tracking-tight">
-                What You Can Do in Your First 24 Hours
-              </h3>
-              <p className="relative text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8">Everything below is included — no limits, no restrictions.</p>
-              <ul className="relative space-y-4 sm:space-y-5 max-w-lg mx-auto">
-                {[
-                  'Instantly see businesses without websites near you',
-                  'Add businesses to your outreach list and start straight away',
-                  'Send WhatsApp or SMS messages with one click — opens instantly, already written for you',
-                  'Track every business from the moment you add them through to paid client',
-                  'Decide if it fits your workflow — before you\'re ever charged',
-                ].map((item, i) => (
-                  <li key={i} className="flex items-start gap-3.5 text-sm sm:text-base md:text-lg text-foreground/90 text-left">
-                    <span 
-                      className="mt-0.5 flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center"
-                      style={{ 
-                        background: 'hsl(142 76% 55% / 0.2)', 
-                        border: '1.5px solid hsl(142 76% 55% / 0.45)',
-                        boxShadow: '0 0 12px hsl(142 76% 55% / 0.2)',
-                      }}
-                    >
-                      <Check className="h-4 w-4 sm:h-4.5 sm:w-4.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
-                    </span>
-                    {item}
-                  </li>
-                ))}
-              </ul>
-              <div className="relative mt-8">
-                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
-                  <Link to="/auth">
-                    Start Free Trial
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-                <p className="text-[10px] sm:text-xs text-muted-foreground mt-3">
-                  24-hour free trial · £0 charged today · Cancel instantly if it's not for you
-                </p>
-              </div>
-            </div>
-          </ScrollReveal>
-        </div>
-      </section>
-
-      {/* How It Works Section */}
-      <HowItWorksSection ScrollReveal={ScrollReveal} />
-
-      {/* Before/After Comparison Section */}
-      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
-             <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-              Stop Searching <span className="text-gradient-primary">Manually</span>
+      {/* Value Proposition — Open layout, outcome-driven */}
+      <section className="relative z-10 py-14 sm:py-20 md:py-28 lg:py-32 px-4">
+        <div className="container mx-auto max-w-4xl">
+          {/* Section heading — hero-matching hierarchy */}
+          <ScrollReveal className="mb-12 sm:mb-16 md:mb-20">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 sm:mb-5">
+              Everything You Need to{' '}
+              <span className="text-gradient-primary">Get Results</span>
             </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              Finding businesses without websites used to mean hours of manual searching. Not anymore.
+            <p className="text-muted-foreground text-base sm:text-lg md:text-xl max-w-2xl leading-relaxed">
+              No setup, no learning curve. Search, reach out, and close — all from day one.
             </p>
           </ScrollReveal>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 sm:gap-8 lg:gap-12 max-w-6xl mx-auto">
-            {/* Old Way */}
-            <ScrollReveal delay={100} direction="left">
-                <div className="relative group">
-                <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-destructive/30 via-destructive/10 to-transparent opacity-60" />
-                <div className="relative rounded-2xl overflow-hidden border border-destructive/20 bg-card/80 backdrop-blur-sm p-1.5 sm:p-4">
-                  <div className="absolute top-2 left-2 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 bg-destructive/90 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg">
-                    <X className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                    The Old Way
-                  </div>
-                  <div 
-                    className="rounded-lg sm:rounded-xl overflow-hidden cursor-pointer"
-                    onClick={() => setExpandedImage({ src: oldWayImage, title: 'The Old Way — Manual Google Maps Searching' })}
-                  >
-                    <img
-                      src={oldWayImage}
-                      alt="Manually searching Google Maps for businesses"
-                      className="w-full h-auto"
-                    />
-                  </div>
-                  <p className="text-muted-foreground text-xs sm:text-sm text-center mt-2 sm:mt-4 px-1 sm:px-2">
-                    Scrolling through Google Maps, clicking each pin, checking for websites one by one...
-                  </p>
-                </div>
-              </div>
-            </ScrollReveal>
 
-            {/* New Way */}
-            <ScrollReveal delay={200} direction="right">
-              <div className="relative group">
-                {/* Glow effect - subtle */}
-                <div 
-                  className="absolute -inset-2 rounded-3xl blur-xl opacity-40 group-hover:opacity-50 transition-opacity duration-300"
-                  style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.25), hsl(210 100% 50% / 0.1), hsl(220 80% 45% / 0.1))' }}
-                />
-                <div 
-                  className="absolute -inset-px rounded-2xl"
-                  style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.4), hsl(210 100% 50% / 0.2), transparent)' }}
-                />
-                <div 
-                  className="relative rounded-2xl overflow-hidden bg-card/90 backdrop-blur-sm p-1.5 sm:p-4"
-                  style={{ 
-                    border: '1px solid hsl(210 100% 50% / 0.3)',
-                    boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)'
-                  }}
-                >
-                  <div 
-                    className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10 flex items-center gap-1.5 sm:gap-2 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-semibold text-[10px] sm:text-xs uppercase tracking-wide shadow-lg"
-                    style={{ background: 'hsl(210 100% 50%)', color: 'hsl(220 40% 4%)' }}
+          {/* Outcome bullets — open layout, no container */}
+          <div className="space-y-10 sm:space-y-12 md:space-y-14 mb-14 sm:mb-16 md:mb-20">
+            {[
+              {
+                title: 'Find businesses that actually need you',
+                detail: 'Search any area and instantly see which businesses have no website. No more scrolling maps and guessing.',
+              },
+              {
+                title: 'Reach out in seconds, not hours',
+                detail: 'Tap a lead and message them directly on WhatsApp or SMS. The message opens ready to send — already written for you.',
+              },
+              {
+                title: 'Track every lead from first message to paid client',
+                detail: 'Every status change, follow-up, and note is logged automatically. Nothing falls through the cracks.',
+              },
+              {
+                title: 'Run your entire pipeline from one place',
+                detail: 'Leads, outreach, follow-ups, and conversions — all in a single dashboard built for freelancers.',
+              },
+              {
+                title: 'Unlimited searches, unlimited leads',
+                detail: 'No daily caps. No credit limits. Search as many areas and industries as you want, from day one.',
+              },
+            ].map((item, i) => (
+              <ScrollReveal key={i} delay={i * 80}>
+                <div className="flex items-start gap-4 sm:gap-5">
+                  <span 
+                    className="flex-shrink-0 mt-1 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center"
+                    style={{ 
+                      background: 'hsl(142 76% 55% / 0.15)', 
+                      border: '1.5px solid hsl(142 76% 55% / 0.4)',
+                      boxShadow: '0 0 16px hsl(142 76% 55% / 0.25)',
+                    }}
                   >
-                    <CheckCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                    With LeadFinder
+                    <Check className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
+                  </span>
+                  <div>
+                    <p className="text-base sm:text-lg md:text-xl font-semibold text-foreground tracking-tight leading-snug">{item.title}</p>
+                    <p className="text-sm sm:text-base text-muted-foreground mt-1 leading-relaxed max-w-xl">{item.detail}</p>
                   </div>
-                  <div 
-                    className="rounded-xl overflow-hidden cursor-pointer"
-                    onClick={() => setExpandedImage({ src: newWayImage, title: 'With LeadFinder — Filtered Results Ready to Contact' })}
-                  >
-                    <img
-                      src={newWayImage}
-                      alt="LeadFinder showing filtered list of businesses without websites"
-                      className="w-full h-auto"
-                    />
-                  </div>
-                  <p className="text-muted-foreground text-xs sm:text-sm text-center mt-3 sm:mt-4 px-1 sm:px-2">
-                    Instantly see which businesses don't have websites, sorted and ready to contact.
-                  </p>
                 </div>
-              </div>
-            </ScrollReveal>
+              </ScrollReveal>
+            ))}
           </div>
-          
-          {/* CTA after comparison - hidden on mobile to reduce density */}
-          <ScrollReveal delay={300} className="hidden sm:block text-center mt-10 sm:mt-14">
-            <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
+
+          {/* Single CTA */}
+          <ScrollReveal delay={400} className="text-center">
+            <Button size="lg" className="btn-premium font-semibold px-8 sm:px-10 py-3.5 sm:py-4 h-auto text-sm sm:text-base" asChild>
               <Link to="/auth">
                 Start Free Trial
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-          </ScrollReveal>
-        </div>
-      </section>
-
-      {/* Benefits / Emotional Hooks Section */}
-      <section className="relative z-10 py-10 sm:py-16 md:py-20 lg:py-28 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal className="text-left sm:text-left mb-8 sm:mb-12 md:mb-16 max-w-3xl mx-auto">
-            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-3 tracking-tight px-2">
-              Everything You Need to <span className="text-gradient-primary">Get Results Today</span>
-            </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              No limits during your 24 hour trial
+            <p className="text-xs sm:text-sm text-muted-foreground mt-4">
+              24-hour free trial · £0 charged today · Cancel anytime
             </p>
-          </ScrollReveal>
-
-          <ScrollReveal delay={100}>
-            <div 
-              className="relative max-w-3xl mx-auto rounded-2xl p-6 sm:p-10 md:p-12 overflow-hidden"
-              style={{
-                background: 'linear-gradient(180deg, hsl(220 40% 10% / 0.95), hsl(220 40% 6% / 0.98))',
-                border: '1px solid hsl(210 100% 50% / 0.15)',
-                boxShadow: '0 0 40px hsl(210 100% 50% / 0.06)',
-              }}
-            >
-              {/* Subtle glow */}
-              <div 
-                className="absolute -inset-4 rounded-3xl blur-2xl opacity-30 pointer-events-none"
-                style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.12), transparent 70%)' }}
-              />
-
-              <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
-                {[
-                  { bold: 'Find more leads in a fraction of the time', detail: 'Search once and get a full list of businesses to contact' },
-                  { bold: 'Instantly identify businesses without websites', detail: 'No more scrolling maps and checking one by one' },
-                  { bold: 'One click WhatsApp and SMS outreach', detail: 'Opens instantly, already written for you' },
-                  { bold: 'Track every business from the moment you add them through to paid client', detail: 'Every status, note, and follow-up in one place' },
-                  { bold: 'Keep all outreach in one dashboard', detail: 'Leads, messages, and follow-ups — nothing gets lost' },
-                  { bold: 'Never run out of businesses to contact', detail: 'Unlimited searches across the globe' },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-start gap-3.5 text-left">
-                    <span 
-                      className="flex-shrink-0 mt-0.5 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center"
-                      style={{ 
-                        background: 'hsl(142 76% 55% / 0.2)',
-                        border: '1.5px solid hsl(142 76% 55% / 0.45)',
-                        boxShadow: '0 0 12px hsl(142 76% 55% / 0.2)',
-                      }}
-                    >
-                      <Check className="h-4 w-4 sm:h-4.5 sm:w-4.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
-                    </span>
-                    <div>
-                      <p className="text-sm sm:text-base md:text-lg font-semibold text-foreground">{item.bold}</p>
-                      <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-0.5">{item.detail}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="relative text-center mt-8 sm:mt-10">
-                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
-                  <Link to="/auth">
-                    Start Free Trial
-                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-                  </Link>
-                </Button>
-                <p className="text-[10px] sm:text-xs text-muted-foreground mt-3">
-                  Full access for 24 hours · Cancel anytime
-                </p>
-              </div>
-            </div>
           </ScrollReveal>
         </div>
       </section>
