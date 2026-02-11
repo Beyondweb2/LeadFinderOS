@@ -109,7 +109,7 @@ export const ReviewsSection = () => {
   const isMobile = useIsMobile();
 
   return (
-    <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
+    <section className="relative z-10 py-10 sm:py-20 md:py-24 lg:py-32 px-4">
       <div className="container mx-auto">
         <div className="text-center mb-10 sm:mb-12 md:mb-16">
           <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
