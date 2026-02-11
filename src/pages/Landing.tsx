@@ -678,14 +678,14 @@ const Landing = () => {
                 name: 'Marcus L.',
                 role: 'Web Designer',
                 region: 'UK',
-                quote: "the follow-up tracking is what changed things for me. i'd always forget to chase people up and lose deals. now nothing slips through and my close rate is way better.",
+                quote: "being able to message leads straight from the app on whatsapp or sms is a game changer. i used to copy numbers into my phone one by one — now i just tap and send. way more outreach in way less time.",
                 stars: 5,
               },
               {
                 name: 'David R.',
                 role: 'WordPress Developer',
                 region: 'UK',
-                quote: "picked up my first client in about three weeks. just sent enough messages consistently and the built-in crm kept everything organised. dead simple, works if you show up.",
+                quote: "i used to track everything in spreadsheets and sticky notes — half my leads got lost. now it's all in one dashboard. i can see who i've messaged, who replied, and what's next. wish i had this sooner.",
                 stars: 5,
               },
             ];
