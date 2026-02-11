@@ -1,9 +1,8 @@
-import { Star, MessageSquare, Quote, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Star, MessageSquare } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
 import Autoplay from 'embla-carousel-autoplay';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { useState, useEffect, useRef } from 'react';
 
 interface Review {
@@ -57,22 +56,20 @@ const StarRating = ({ count }: { count: number }) => (
 );
 
 const ReviewCard = ({ review }: { review: Review }) => (
-  <div className="h-full py-4 sm:py-5">
-    <div className="flex gap-0.5 mb-2.5 justify-center sm:justify-start">
+  <div className="h-full py-6 sm:py-8 text-center max-w-2xl mx-auto">
+    <div className="flex gap-1 mb-4 justify-center">
       {[...Array(review.stars)].map((_, i) => (
-        <Star key={i} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+        <Star key={i} className="h-6 w-6 fill-yellow-400 text-yellow-400" />
       ))}
     </div>
-    <p className="text-foreground/80 text-sm sm:text-[15px] leading-relaxed text-center sm:text-left mb-3 italic">
+    <p className="text-foreground/90 text-lg sm:text-xl md:text-2xl leading-relaxed mb-5 italic font-medium">
       "{review.content}"
     </p>
-    <div className="flex items-center justify-center sm:justify-start">
-      <p className="text-muted-foreground/70 text-xs">{review.name} · {review.role}</p>
-    </div>
+    <p className="text-muted-foreground/70 text-sm sm:text-base">{review.name} · {review.role}</p>
   </div>
 );
 
-const MobileReviewsCarousel = () => {
+const ReviewsCarousel = () => {
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
   const autoplayPlugin = useRef(Autoplay({ delay: 5000, stopOnInteraction: true }));
@@ -84,16 +81,16 @@ const MobileReviewsCarousel = () => {
   }, [api]);
 
   return (
-    <div className="max-w-md mx-auto">
+    <div className="max-w-3xl mx-auto">
       <Carousel
         setApi={setApi}
         opts={{ loop: true, align: 'center' }}
         plugins={[autoplayPlugin.current]}
         className="w-full"
       >
-        <CarouselContent className="-ml-3">
+        <CarouselContent className="-ml-4">
           {REVIEWS.map((review, index) => (
-            <CarouselItem key={index} className="pl-3">
+            <CarouselItem key={index} className="pl-4">
               <ReviewCard review={review} />
             </CarouselItem>
           ))}
@@ -101,7 +98,7 @@ const MobileReviewsCarousel = () => {
       </Carousel>
 
       {/* Dot indicators */}
-      <div className="flex items-center justify-center gap-1.5 mt-5">
+      <div className="flex items-center justify-center gap-1.5 mt-4">
         {REVIEWS.map((_, index) => (
           <button
             key={index}
@@ -114,14 +111,11 @@ const MobileReviewsCarousel = () => {
           />
         ))}
       </div>
-      <p className="text-center text-muted-foreground/50 text-xs mt-2">Swipe to read more</p>
     </div>
   );
 };
 
 export const ReviewsSection = () => {
-  const isMobile = useIsMobile();
-
   return (
     <section className="relative z-10 py-16 sm:py-20 md:py-24 lg:py-32 px-4">
       <div className="container mx-auto">
@@ -134,15 +128,7 @@ export const ReviewsSection = () => {
           </p>
         </div>
 
-        {isMobile ? (
-          <MobileReviewsCarousel />
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6 max-w-5xl mx-auto">
-            {REVIEWS.map((review, index) => (
-              <ReviewCard key={index} review={review} />
-            ))}
-          </div>
-        )}
+        <ReviewsCarousel />
 
         <div className="text-center mt-8 sm:mt-10">
           <Button variant="outline" className="border-white/10 hover:border-white/20 text-sm rounded-full px-6" asChild>
