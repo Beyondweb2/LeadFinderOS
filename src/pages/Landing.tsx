@@ -688,56 +688,56 @@ const Landing = () => {
                 There's a faster way to find businesses without websites.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-10 lg:gap-14 max-w-5xl mx-auto">
+            <div className="grid grid-cols-2 gap-10 lg:gap-14 max-w-5xl mx-auto items-start">
               {/* Old Way */}
-              <div className="space-y-5">
-                <div className="flex items-center gap-2.5 justify-center">
+              <div>
+                <div className="flex items-center gap-2.5 justify-center mb-5">
                   <X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
                   <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3>
                 </div>
-                <div className="relative group">
+                <div className="relative group mb-6">
                   <div 
                     className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
                     style={{ background: 'linear-gradient(to bottom right, hsl(0 60% 40% / 0.3), hsl(0 60% 40% / 0.1))' }}
                   />
                   <div 
-                    className="relative rounded-xl overflow-hidden"
+                    className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
                     style={{ 
                       border: '1px solid hsl(0 60% 40% / 0.25)',
                       boxShadow: '0 0 30px hsl(0 60% 40% / 0.1)'
                     }}
                   >
-                    <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-auto" />
+                    <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" />
                   </div>
                 </div>
-                <ul className="space-y-3 text-sm md:text-base text-muted-foreground pt-1">
+                <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
                   <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
                   <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
                   <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
                 </ul>
               </div>
               {/* New Way */}
-              <div className="space-y-5">
-                <div className="flex items-center gap-2.5 justify-center">
+              <div>
+                <div className="flex items-center gap-2.5 justify-center mb-5">
                   <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />
                   <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
                 </div>
-                <div className="relative group">
+                <div className="relative group mb-6">
                   <div 
                     className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
                     style={{ background: 'linear-gradient(to bottom right, hsl(142 60% 40% / 0.3), hsl(142 60% 40% / 0.1))' }}
                   />
                   <div 
-                    className="relative rounded-xl overflow-hidden"
+                    className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
                     style={{ 
                       border: '1px solid hsl(142 60% 40% / 0.25)',
                       boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
                     }}
                   >
-                    <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto" />
+                    <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-full object-cover object-top" />
                   </div>
                 </div>
-                <ul className="space-y-3 text-sm md:text-base text-muted-foreground pt-1">
+                <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
                   <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
                   <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
                   <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
