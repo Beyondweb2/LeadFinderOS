@@ -57,17 +57,24 @@ const Dashboard = () => {
     
     try {
       // Delete all activity-related data for this user
-      await Promise.all([
+      const results = await Promise.all([
         supabase.from('copied_phones').delete().eq('user_id', user.id),
         supabase.from('outreach_activities').delete().eq('user_id', user.id),
         supabase.from('lead_contacts').delete().eq('user_id', user.id),
         supabase.from('search_history').delete().eq('user_id', user.id),
         supabase.from('checked_businesses').delete().eq('user_id', user.id),
+        supabase.rpc('reset_my_metrics'),
       ]);
       
-      toast({ title: 'Counters reset', description: 'All activity counters have been cleared.' });
+      const errors = results.filter(r => r.error);
+      if (errors.length > 0) {
+        console.error('Reset errors:', errors.map(e => e.error));
+      }
+      
+      toast({ title: 'Counters reset', description: 'All activity counters have been cleared. Your CRM leads are untouched.' });
       refetch();
     } catch (err) {
+      console.error('Reset failed:', err);
       toast({ title: 'Error', description: 'Failed to reset counters.', variant: 'destructive' });
     } finally {
       setIsResetting(false);
