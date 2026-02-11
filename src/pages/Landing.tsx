@@ -533,7 +533,7 @@ const Landing = () => {
             }}
           >
             <Zap className="h-3.5 w-3.5" />
-            <span>Your all-in-one outreach tool</span>
+            <span>The fastest way to land web design clients</span>
           </div>
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight">
@@ -542,7 +542,7 @@ const Landing = () => {
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
-            Turn Google Maps into a pipeline of paying web design clients — find, message, and close, all from one dashboard.
+            Search any area, find businesses without websites, and message them directly — before your competitors even know they exist.
           </p>
           
           {/* Keywords removed */}
@@ -550,7 +550,7 @@ const Landing = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/auth">
-                Start Free Trial
+                Try It Free for 24 Hours
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
@@ -562,7 +562,7 @@ const Landing = () => {
 
           {/* Reassurance microcopy - desktop: after buttons, mobile: after badges */}
           <p className="hidden sm:block text-xs text-muted-foreground text-center mt-5">
-            Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
+            Full access for 24 hours. £0 charged today. Cancel before the trial ends and you pay nothing.
           </p>
           
           {/* Stats bar */}
@@ -582,7 +582,7 @@ const Landing = () => {
           </div>
           {/* Reassurance microcopy - mobile only, after badges */}
           <p className="sm:hidden text-[11px] text-muted-foreground text-center mt-4">
-            Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
+            Full access for 24 hours. £0 charged today. Cancel anytime.
           </p>
           {/* Scroll down indicator */}
           <div className="mt-5 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
@@ -623,21 +623,21 @@ const Landing = () => {
                 name: 'James T.',
                 role: 'Freelance Web Developer',
                 region: 'UK',
-                quote: 'i used to spend ages on google maps just finding people to contact. now i get 15-25 businesses in about 10-15 minutes and everything is tracked automatically.',
+                quote: "i was spending my entire morning on google maps just finding people to pitch. now i pull 20+ leads in about 10 minutes and actually spend my time doing outreach instead.",
                 stars: 5,
               },
               {
                 name: 'Marcus L.',
                 role: 'Web Designer',
                 region: 'UK',
-                quote: "the one click whatsapp outreach changed everything for me. i actually follow up now instead of forgetting who i messaged last week. saves me probably 45 minutes a day.",
+                quote: "biggest difference is the follow-ups. before this i'd message someone and completely forget about them a week later. now everything is tracked and i actually close more because i stay on top of it.",
                 stars: 5,
               },
               {
                 name: 'David R.',
                 role: 'WordPress Developer',
                 region: 'UK',
-                quote: "landed my first client within 3 weeks. nothing fancy, just messaged enough people and the crm kept me organised so nobody slipped through.",
+                quote: "signed my first client within three weeks. just messaged enough people consistently and the crm made sure nobody slipped through. simple system, works if you use it.",
                 stars: 5,
               },
             ].map((r, i) => (
@@ -759,7 +759,7 @@ const Landing = () => {
           <ScrollReveal className="text-center mb-10 sm:mb-14 md:mb-16">
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 sm:mb-5">
               Everything You Need to{' '}
-              <span className="text-gradient-primary">Get Results</span>
+              <span className="text-gradient-primary">Close More Deals</span>
             </h2>
           </ScrollReveal>
 
@@ -767,24 +767,24 @@ const Landing = () => {
           <div className="space-y-5 sm:space-y-8 md:space-y-10 mb-10 sm:mb-14 md:mb-16">
             {[
               {
-                title: 'Stop wasting hours on Google Maps',
-                detail: 'Search any area and instantly see which businesses have no website — no more clicking one by one.',
+                title: 'Find warm leads without the grind',
+                detail: 'Every hour on Google Maps is an hour you\'re not closing. Search any area and see businesses without websites instantly.',
               },
               {
-                title: 'Reach out in seconds, not hours',
-                detail: 'One tap to message on WhatsApp or SMS. No copying numbers, no switching apps.',
+                title: 'Message leads the moment you find them',
+                detail: 'One tap to open WhatsApp or SMS with a pre-written message. No copying numbers, no app-switching, no excuses.',
               },
               {
-                title: 'Never lose track of a lead again',
-                detail: 'Every call, message, and follow-up is logged. No more forgotten leads or messy spreadsheets.',
+                title: 'Never let a lead go cold again',
+                detail: 'Forgotten follow-ups kill deals. Every call, message, and next step is tracked so nothing falls through the cracks.',
               },
               {
-                title: 'See exactly where your money is coming from',
-                detail: 'Track who you contacted, who replied, and who paid — all in one dashboard.',
+                title: 'Know exactly what\'s working',
+                detail: 'See who you contacted, who replied, and who paid — so you double down on what brings in revenue.',
               },
               {
-                title: 'Search as much as you want, forever',
-                detail: 'No daily limits. No credit caps. Unlimited searches across any niche, any city.',
+                title: 'No limits on your pipeline',
+                detail: 'No daily caps. No credit system. Search as many niches and locations as you want, whenever you want.',
               },
             ].map((item, i) => (
               <ScrollReveal key={i} delay={i * 80}>
@@ -815,7 +815,12 @@ const Landing = () => {
             ))}
           </div>
 
-          {/* Removed mid-page CTA to reduce repetition — kept in hero, pricing, and sticky bottom */}
+          {/* "Who is this for" micro-section */}
+          <ScrollReveal delay={400} className="text-center mt-8 sm:mt-12">
+            <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-md mx-auto leading-relaxed">
+              Built for freelance web designers, WordPress developers, small agencies, and anyone who needs a consistent way to find businesses that need a website.
+            </p>
+          </ScrollReveal>
         </div>
       </section>
 
@@ -936,7 +941,7 @@ const Landing = () => {
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">after 1-day free trial (24 hours)</p>
+                  <p className="text-xs text-muted-foreground mt-2">After your 24-hour trial · Cancel before it ends and pay nothing</p>
                 </CardHeader>
                 
                 <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
@@ -961,12 +966,12 @@ const Landing = () => {
                 <CardFooter className="pt-4 sm:pt-6 pb-6 sm:pb-8 flex-col gap-3 sm:gap-4 px-4 sm:px-6">
                   <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
                     <Link to="/auth">
-                      Start Free Trial
+                      Start My Free Trial
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
                    <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
-                    £0 today · You're only charged after 24 hours · Cancel anytime, no questions asked
+                    £0 today · Full access for 24 hours · Cancel anytime, no questions asked
                    </p>
                    <div className="flex items-center justify-center gap-1.5 mt-2">
                      <div className="flex gap-0.5">
@@ -1075,7 +1080,7 @@ const Landing = () => {
             </Link>
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            1-day free trial (24 hours) · Cancel anytime
+            24-hour free trial · Cancel anytime
           </p>
         </div>
       )}
