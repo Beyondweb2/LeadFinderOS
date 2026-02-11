@@ -641,10 +641,10 @@ const Landing = () => {
       {/* Early Social Proof — 4 compact reviews (after video on desktop) */}
       {(() => {
         const earlyReviews = [
-          { name: 'James T.', role: 'Freelance Web Developer', quote: 'had 30+ leads in minutes. landed 3 clients in my first month, paid for itself straight away.', avatar: 'JT', stars: 5 },
-          { name: 'Marcus L.', role: 'Web Designer', quote: "we're reaching 5x more businesses and actually getting replies. saves us hours every week.", avatar: 'ML', stars: 5 },
-          { name: 'David R.', role: 'WordPress Developer', quote: "stopped wasting time on maps. i know instantly who to contact and everything stays organised.", avatar: 'DR', stars: 5 },
-          { name: 'Ryan K.', role: 'Freelance Web Designer', quote: "the one click whatsapp outreach is what sold me. fast and ridiculously simple.", avatar: 'RK', stars: 5 },
+          { name: 'James T.', role: 'Freelance Web Developer', quote: 'i used to spend an hour on google maps just finding businesses to contact. now i get 15-20 relevant ones in about 10 minutes and everything is tracked.', avatar: 'JT', stars: 5 },
+          { name: 'Marcus L.', role: 'Web Designer', quote: "the one click whatsapp outreach changed everything for me. i actually follow up now instead of forgetting who i messaged last week.", avatar: 'ML', stars: 5 },
+          { name: 'David R.', role: 'WordPress Developer', quote: "landed my first client within 3 weeks. nothing fancy, just messaged enough people and the crm kept me organised so nobody slipped through.", avatar: 'DR', stars: 5 },
+          { name: 'Ryan K.', role: 'Freelance Web Designer', quote: "saves me probably 45 minutes a day on admin. searching, tracking, following up — it's all in one place now.", avatar: 'RK', stars: 5 },
         ];
 
         const ReviewCard = ({ r }: { r: typeof earlyReviews[0] }) => (
