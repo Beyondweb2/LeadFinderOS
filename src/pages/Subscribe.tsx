@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTrial } from '@/hooks/useTrial';
@@ -6,9 +6,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Check, Loader2, CreditCard, ArrowLeft } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
- 
  const FEATURES = [
    'Unlimited lead searches',
    'Find businesses without websites',
@@ -22,20 +22,33 @@ import appLogo from '@/assets/logo.png';
 const Subscribe = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { createCheckout, subscribed, isLoading: subLoading, status, isPaidSubscriber } = useSubscription();
-  const { isOnTrial, isStripeTrialing, trialUsed } = useTrial();
-  const { signOut } = useAuth();
+  const { isOnTrial, isStripeTrialing, trialUsed, isLoading: trialLoading } = useTrial();
+  const { user, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   
+  // Eligibility is only resolved once trial data has loaded
+  const eligibilityLoading = trialLoading || subLoading;
   // User should NOT see trial messaging if they've already used a trial
   const alreadyTrialing = isOnTrial || isStripeTrialing || status === 'trialing';
-  const hideTrialOffer = trialUsed || alreadyTrialing;
- 
+  const hideTrialOffer = eligibilityLoading || trialUsed || alreadyTrialing;
+
+  // Debug log for verification
+  useEffect(() => {
+    if (!eligibilityLoading && user?.id) {
+      console.log('[Subscribe] eligibility resolved', {
+        userId: user.id,
+        trialUsed,
+        branch: hideTrialOffer ? 'no_trial' : 'trial',
+      });
+    }
+  }, [eligibilityLoading, user?.id, trialUsed, hideTrialOffer]);
+
    const handleBackToLogin = useCallback(async () => {
      await signOut();
      navigate('/auth');
    }, [signOut, navigate]);
- 
+
    const handleSubscribe = async () => {
      setIsLoading(true);
      try {
@@ -50,7 +63,7 @@ const Subscribe = () => {
        setIsLoading(false);
      }
    };
- 
+
     // Only redirect if user is a PAID subscriber (not trialing)
     if (isPaidSubscriber && !subLoading) {
       navigate('/', { replace: true });
@@ -90,21 +103,27 @@ const Subscribe = () => {
            
             <CardContent className="space-y-6">
               <div className="text-center">
-              {!hideTrialOffer && (
+              {eligibilityLoading ? (
+                  <Skeleton className="h-5 w-32 mx-auto mb-3" />
+                ) : !hideTrialOffer ? (
                   <div className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
                     1-Day Free Trial
                   </div>
-                )}
+                ) : null}
                 <div>
                   <span className="text-4xl font-bold">£19.99</span>
                   <span className="text-muted-foreground">/month</span>
                 </div>
-                <p className="text-sm text-muted-foreground mt-2">
-                  {hideTrialOffer 
-                    ? 'Unlock unlimited access today'
-                    : 'Try free for 24 hours, then £19.99/month'
-                  }
-                </p>
+                {eligibilityLoading ? (
+                  <Skeleton className="h-4 w-48 mx-auto mt-2" />
+                ) : (
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {hideTrialOffer 
+                      ? '£19.99/month. Cancel anytime.'
+                      : 'Try free for 24 hours, then £19.99/month'
+                    }
+                  </p>
+                )}
               </div>
  
              <ul className="space-y-3">
@@ -122,12 +141,17 @@ const Subscribe = () => {
                 onClick={handleSubscribe} 
                 className="w-full" 
                 size="lg"
-                disabled={isLoading || subLoading}
+                disabled={isLoading || eligibilityLoading}
               >
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {hideTrialOffer ? 'Starting checkout...' : 'Starting trial...'}
+                  </>
+                ) : eligibilityLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading…
                   </>
                 ) : (
                   <>
