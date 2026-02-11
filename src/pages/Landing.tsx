@@ -108,20 +108,6 @@ const FEATURES = [
     image: featureTemplates,
     imageScale: 'scale-100',
   },
-  {
-    icon: FileText,
-    title: 'Export Tools',
-    description: 'Download your leads as CSV in one click — perfect for importing into other CRMs or keeping offline backups.',
-    image: featureExport,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: Zap,
-    title: 'Customization',
-    description: 'Make it yours — choose from 12 themes, pick an accent colour, and set up your workspace exactly how you like it.',
-    image: featureCustomization,
-    imageScale: 'scale-[0.85]',
-  },
 ];
 
 const PRICING_FEATURES = [
