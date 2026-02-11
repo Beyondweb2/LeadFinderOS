@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useOutreach } from '@/hooks/useOutreach';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
+import { AddCustomLeadDialog } from '@/components/AddCustomLeadDialog';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -416,6 +417,7 @@ const PotentialWorkPage = () => {
     updateBusinessName,
     deleteLead,
     fetchActivities,
+    refetch,
   } = useOutreach();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -470,7 +472,7 @@ const PotentialWorkPage = () => {
         </p>
       </div>
 
-      {/* Search & Stats - Compact on mobile */}
+      {/* Search, Add Lead & Stats */}
       <div className="flex items-center justify-between gap-2 sm:gap-4">
         <div className="relative max-w-md flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
@@ -481,6 +483,7 @@ const PotentialWorkPage = () => {
             className="pl-8 sm:pl-9 h-8 sm:h-10 text-sm"
           />
         </div>
+        <AddCustomLeadDialog onLeadAdded={refetch} />
         <div className="text-xs sm:text-sm text-muted-foreground whitespace-nowrap">
           {potentialWorkLeads.length} leads
         </div>
