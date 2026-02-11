@@ -641,7 +641,7 @@ const Landing = () => {
           { name: 'James T.', role: 'Freelance Web Developer', quote: 'Had 30+ qualified leads in minutes. Landed 3 clients in my first month and it paid for itself straight away.', avatar: 'JT', stars: 5 },
           { name: 'Marcus L.', role: 'Web Designer', quote: "We're reaching 5x more businesses and actually getting replies. Saves hours every week.", avatar: 'ML', stars: 5 },
           { name: 'David R.', role: 'WordPress Developer', quote: "Stopped wasting time on Maps. I know instantly who to contact and everything stays organised.", avatar: 'DR', stars: 5 },
-          { name: 'Ryan K.', role: 'Freelance Web Designer', quote: "The one-click WhatsApp outreach is what sold me. Fast and ridiculously simple.", avatar: 'RK', stars: 5 },
+          { name: 'Ryan K.', role: 'Freelance Web Designer', quote: "The one click WhatsApp outreach is what sold me. Fast and ridiculously simple.", avatar: 'RK', stars: 5 },
         ];
 
         const ReviewCard = ({ r }: { r: typeof earlyReviews[0] }) => (
@@ -717,8 +717,8 @@ const Landing = () => {
                 {[
                   'Run a search and instantly see businesses without websites near you',
                   'Add businesses to your outreach list and start contacting immediately',
-                  'Send WhatsApp or SMS messages with one click — auto-opens and pre-fills',
-                  'Track every business from first contact to paid client',
+                  'Send WhatsApp or SMS messages with one click — opens instantly, already written for you',
+                  'Track every business from the moment you add them through to paid client',
                   'Decide if it fits your workflow — before you\'re ever charged',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 text-sm sm:text-base text-foreground/90">
@@ -847,17 +847,17 @@ const Landing = () => {
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-              What If Finding Leads <span className="text-gradient-primary">Didn't</span> Take Hours
+            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-3 tracking-tight px-2">
+              Everything You Need to <span className="text-gradient-primary">Start Outreach Today</span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              Search once and instantly see which businesses don't have websites — sorted and ready to contact.
+              No limits during your 24 hour trial
             </p>
           </ScrollReveal>
 
           <ScrollReveal delay={100}>
             <div 
-              className="relative max-w-4xl mx-auto rounded-2xl p-6 sm:p-8 md:p-10 overflow-hidden"
+              className="relative max-w-3xl mx-auto rounded-2xl p-6 sm:p-8 md:p-10 overflow-hidden"
               style={{
                 background: 'linear-gradient(180deg, hsl(220 40% 10% / 0.95), hsl(220 40% 6% / 0.98))',
                 border: '1px solid hsl(210 100% 50% / 0.12)',
@@ -870,25 +870,25 @@ const Landing = () => {
                 style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.12), transparent 70%)' }}
               />
 
-              <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+              <div className="relative grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
                 {[
-                  { bold: 'Find more leads in a fraction of the time', detail: 'search once and get a full list of businesses to contact' },
-                  { bold: 'Instantly identify businesses without websites', detail: 'no more scrolling Maps and checking one by one' },
-                  { bold: 'One-click WhatsApp & SMS outreach', detail: 'auto-opens and pre-fills — no copying or pasting' },
-                  { bold: 'Track leads from first contact to paying client', detail: 'every status, note, and follow-up in one place' },
-                  { bold: 'Keep all outreach in one dashboard', detail: 'leads, messages, and follow-ups — nothing gets lost' },
-                  { bold: 'Never run out of businesses to contact', detail: 'unlimited searches across the globe' },
+                  { bold: 'Find more leads in a fraction of the time', detail: 'Search once and get a full list of businesses to contact' },
+                  { bold: 'Instantly identify businesses without websites', detail: 'No more scrolling Maps and checking one by one' },
+                  { bold: 'One click WhatsApp and SMS outreach', detail: 'Opens instantly, already written for you' },
+                  { bold: 'Track every business from the moment you add them through to paid client', detail: 'Every status, note, and follow-up in one place' },
+                  { bold: 'Keep all outreach in one dashboard', detail: 'Leads, messages, and follow-ups — nothing gets lost' },
+                  { bold: 'Never run out of businesses to contact', detail: 'Unlimited searches across the globe' },
                 ].map((item, i) => (
                   <div key={i} className="flex items-start gap-3">
-                    <div 
-                      className="flex-shrink-0 mt-0.5 p-1 rounded-full"
+                    <span 
+                      className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center"
                       style={{ 
-                        background: 'hsl(142 76% 45% / 0.12)',
-                        border: '1px solid hsl(142 76% 45% / 0.2)',
+                        background: 'hsl(142 71% 45% / 0.15)',
+                        border: '1px solid hsl(142 71% 45% / 0.25)',
                       }}
                     >
-                      <CheckCircle className="h-4 w-4" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2} />
-                    </div>
+                      <Check className="h-3 w-3" style={{ color: 'hsl(142 71% 45%)' }} strokeWidth={2.5} />
+                    </span>
                     <div>
                       <p className="text-sm sm:text-base font-semibold text-foreground">{item.bold}</p>
                       <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{item.detail}</p>
@@ -905,7 +905,7 @@ const Landing = () => {
                   </Link>
                 </Button>
                 <p className="text-[10px] sm:text-xs text-muted-foreground mt-3">
-                  1-day free trial (24 hours) · You won't be charged until the trial ends · Cancel anytime
+                  Full access for 24 hours · Cancel anytime
                 </p>
               </div>
             </div>

@@ -39,7 +39,7 @@ const REVIEWS: Review[] = [
   {
     name: 'Ryan K.',
     role: 'Freelance Web Designer',
-    content: "the one-click whatsapp outreach is what sold me. no messing around — just find leads, message them, and track everything in one place. tried the trial and kept it.",
+    content: "the one click whatsapp outreach is what sold me. no messing around — just find leads, message them, and track everything in one place. tried the trial and kept it.",
     avatar: 'RK',
     stars: 5,
   },
