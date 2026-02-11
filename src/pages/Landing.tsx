@@ -36,7 +36,7 @@ import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
 import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
-import { ReviewsSection } from '@/components/landing/ReviewsSection';
+
 import { AffiliateCapture } from '@/components/AffiliateCapture';
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
 import Autoplay from 'embla-carousel-autoplay';
@@ -391,49 +391,6 @@ const MobileFeatureCarousel = ({ features, onExpand }: { features: typeof FEATUR
   );
 };
 
-// Mobile carousel for early reviews
-const EarlyReviewsCarousel = ({ reviews, ReviewCard }: { reviews: any[]; ReviewCard: React.FC<{ r: any }> }) => {
-  const [api, setApi] = useState<any>(null);
-  const [current, setCurrent] = useState(0);
-
-  useEffect(() => {
-    if (!api) return;
-    setCurrent(api.selectedScrollSnap());
-    api.on('select', () => setCurrent(api.selectedScrollSnap()));
-  }, [api]);
-
-  return (
-    <div className="max-w-md mx-auto">
-      <Carousel
-        setApi={setApi}
-        opts={{ loop: true, align: 'center' }}
-        plugins={[Autoplay({ delay: 4500, stopOnInteraction: true })]}
-        className="w-full"
-      >
-        <CarouselContent className="-ml-3">
-          {reviews.map((r, i) => (
-            <CarouselItem key={i} className="pl-3">
-              <ReviewCard r={r} />
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-      </Carousel>
-      <div className="flex items-center justify-center gap-1.5 mt-4">
-        {reviews.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => api?.scrollTo(i)}
-            className={`rounded-full transition-all duration-300 ${
-              i === current ? 'w-6 h-2' : 'w-2 h-2 opacity-30'
-            }`}
-            style={{ background: i === current ? 'hsl(210 100% 50%)' : 'hsl(210 20% 50%)' }}
-          />
-        ))}
-      </div>
-      <p className="text-[10px] text-muted-foreground/50 text-center mt-1.5 tracking-wide">Swipe to read more</p>
-    </div>
-  );
-};
 
 const Landing = () => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
@@ -643,38 +600,72 @@ const Landing = () => {
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
-      {/* Mobile: Early reviews carousel */}
-      {isMobile && (() => {
-        const earlyReviews = [
-          { name: 'James T.', role: 'Freelance Web Developer', quote: 'i used to spend an hour on google maps just finding businesses to contact. now i get 15-20 relevant ones in about 10 minutes and everything is tracked.', avatar: 'JT', stars: 5 },
-          { name: 'Marcus L.', role: 'Web Designer', quote: "the one click whatsapp outreach changed everything for me. i actually follow up now instead of forgetting who i messaged last week.", avatar: 'ML', stars: 5 },
-          { name: 'David R.', role: 'WordPress Developer', quote: "landed my first client within 3 weeks. nothing fancy, just messaged enough people and the crm kept me organised so nobody slipped through.", avatar: 'DR', stars: 5 },
-          { name: 'Ryan K.', role: 'Freelance Web Designer', quote: "saves me probably 45 minutes a day on admin. searching, tracking, following up, it's all in one place now.", avatar: 'RK', stars: 5 },
-        ];
-
-        const ReviewCard = ({ r }: { r: typeof earlyReviews[0] }) => (
-          <div className="h-full py-4 text-center">
-            <div className="flex gap-0.5 mb-2 justify-center">
-              {[...Array(r.stars)].map((_, si) => (
-                <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+      {/* Unified Testimonials — 3 cards */}
+      <ScrollReveal className="relative z-10 py-10 sm:py-16 md:py-20 px-4">
+        <div className="container mx-auto max-w-5xl">
+          {/* Trust line */}
+          <div className="flex items-center justify-center gap-2 mb-6 sm:mb-8">
+            <div className="flex gap-0.5">
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
               ))}
             </div>
-            <p className="text-foreground/80 text-sm leading-relaxed mb-3 italic font-normal">"{r.quote}"</p>
-            <p className="text-muted-foreground/70 text-xs text-center">{r.name} · {r.role}</p>
+            <p className="text-sm text-muted-foreground font-medium">Rated 4.9/5 by freelancers and agencies</p>
           </div>
-        );
 
-        return (
-          <ScrollReveal className="relative z-10 py-8 px-4">
-            <div className="container mx-auto max-w-5xl">
-              <h3 className="text-center text-lg font-semibold text-foreground/80 mb-6 tracking-tight">
-                Trusted by freelancers and agencies <span className="text-gradient-primary">worldwide</span>
-              </h3>
-              <EarlyReviewsCarousel reviews={earlyReviews} ReviewCard={ReviewCard} />
-            </div>
-          </ScrollReveal>
-        );
-      })()}
+          {/* Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+            {[
+              {
+                name: 'James T.',
+                role: 'Freelance Web Developer',
+                region: 'UK',
+                quote: 'i used to spend ages on google maps just finding people to contact. now i get 15-25 businesses in about 10-15 minutes and everything is tracked automatically.',
+                stars: 5,
+              },
+              {
+                name: 'Marcus L.',
+                role: 'Web Designer',
+                region: 'UK',
+                quote: "the one click whatsapp outreach changed everything for me. i actually follow up now instead of forgetting who i messaged last week. saves me probably 45 minutes a day.",
+                stars: 5,
+              },
+              {
+                name: 'David R.',
+                role: 'WordPress Developer',
+                region: 'UK',
+                quote: "landed my first client within 3 weeks. nothing fancy, just messaged enough people and the crm kept me organised so nobody slipped through.",
+                stars: 5,
+              },
+            ].map((r, i) => (
+              <ScrollReveal key={i} delay={i * 100}>
+                <div 
+                  className="h-full flex flex-col justify-between text-center px-5 py-6 sm:px-6 sm:py-7 rounded-xl"
+                  style={{
+                    background: 'hsl(220 30% 8% / 0.6)',
+                    border: '1px solid hsl(0 0% 100% / 0.06)',
+                    boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
+                  }}
+                >
+                  <div>
+                    <div className="flex gap-0.5 mb-3 justify-center">
+                      {[...Array(r.stars)].map((_, si) => (
+                        <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                      ))}
+                    </div>
+                    <p className="text-foreground/80 text-sm leading-relaxed italic font-normal">
+                      "{r.quote}"
+                    </p>
+                  </div>
+                  <p className="text-muted-foreground/70 text-xs mt-4 text-center">
+                    {r.name} · {r.role} – {r.region}
+                  </p>
+                </div>
+              </ScrollReveal>
+            ))}
+          </div>
+        </div>
+      </ScrollReveal>
 
       {/* Desktop: Old Way vs New Way comparison */}
       {!isMobile && (
@@ -900,13 +891,6 @@ const Landing = () => {
           )}
         </div>
       </section>
-
-      {/* Mobile section divider */}
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
-
-      {/* Reviews / Social Proof */}
-      <ReviewsSection />
-
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
