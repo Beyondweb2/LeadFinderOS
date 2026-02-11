@@ -173,14 +173,18 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
         {isMobile ? (
           <div className="px-1 space-y-10">
             {STEPS.map((step, index) => (
-              <div key={step.title} className="flex flex-col items-center text-center">
+          <div key={step.title} className="flex flex-col items-center text-center">
                 {/* Step number */}
-                <span 
-                  className="font-bold text-lg mb-2"
-                  style={{ color: 'hsl(210 100% 60%)' }}
+                <div 
+                  className="flex items-center justify-center w-8 h-8 rounded-lg font-semibold text-sm mb-2"
+                  style={{ 
+                    background: 'hsl(210 100% 50% / 0.15)',
+                    color: 'hsl(210 100% 60%)',
+                    border: '1px solid hsl(210 100% 50% / 0.3)'
+                  }}
                 >
                   {index + 1}
-                </span>
+                </div>
                 
                 <h3 className="text-xl font-bold tracking-tight mb-2">{step.title}</h3>
                 
