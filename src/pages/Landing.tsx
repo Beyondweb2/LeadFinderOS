@@ -308,7 +308,7 @@ const VideoSection = () => {
         
         {/* Micro-bridge after video */}
         <p className="text-center text-xs sm:text-sm text-muted-foreground/60 mt-6 sm:mt-10">
-          Don't just take our word for it.
+          See the difference for yourself.
         </p>
       </div>
     </ScrollReveal>
@@ -856,42 +856,44 @@ const Landing = () => {
           {isMobile ? (
             <MobileFeatureCarousel features={FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title))} onExpand={(src, title) => setExpandedImage({ src, title })} />
           ) : (
-            /* Desktop: 6-card grid */
+            /* Desktop: 6-card grid matching old layout */
             <ScrollReveal>
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8 max-w-6xl mx-auto">
-                {FEATURES.map((feature) => (
-                  <div key={feature.title} className="space-y-3">
-                    <div className="flex items-center gap-2.5">
-                      <div 
-                        className="p-2 rounded-xl flex-shrink-0"
+              <div className="grid grid-cols-3 gap-x-8 gap-y-12 max-w-6xl mx-auto">
+                {FEATURES.map((feature, i) => (
+                  <ScrollReveal key={feature.title} delay={i * 80}>
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <div 
+                          className="p-2.5 rounded-xl flex-shrink-0"
+                          style={{ 
+                            background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
+                            border: '1px solid hsl(210 100% 50% / 0.15)'
+                          }}
+                        >
+                          <feature.icon className="h-5 w-5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                        </div>
+                        <h3 className="text-lg font-semibold tracking-tight">{feature.title}</h3>
+                      </div>
+                      <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+                      <div
+                        className="group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:ring-1 hover:ring-[hsl(210_100%_50%_/_0.2)]"
                         style={{ 
-                          background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
-                          border: '1px solid hsl(210 100% 50% / 0.1)'
+                          border: '1px solid hsl(0 0% 100% / 0.06)',
+                          boxShadow: '0 0 20px hsl(210 100% 50% / 0.05)'
                         }}
+                        onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
                       >
-                        <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                        <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <Search className="h-4 w-4 text-foreground" />
+                        </div>
+                        <img 
+                          src={feature.image} 
+                          alt={feature.title}
+                          className={`w-full h-56 xl:h-64 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                        />
                       </div>
-                      <h3 className="text-base font-semibold tracking-tight leading-tight">{feature.title}</h3>
                     </div>
-                    <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2">{feature.description}</p>
-                    <div
-                      className="group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:ring-1 hover:ring-[hsl(210_100%_50%_/_0.2)]"
-                      style={{ 
-                        border: '1px solid hsl(0 0% 100% / 0.06)',
-                        boxShadow: '0 0 20px hsl(210 100% 50% / 0.05)'
-                      }}
-                      onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
-                    >
-                      <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <Search className="h-4 w-4 text-foreground" />
-                      </div>
-                      <img 
-                        src={feature.image} 
-                        alt={feature.title}
-                        className={`w-full h-48 lg:h-56 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
-                      />
-                    </div>
-                  </div>
+                  </ScrollReveal>
                 ))}
               </div>
             </ScrollReveal>
