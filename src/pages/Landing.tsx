@@ -635,7 +635,12 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Early Social Proof — 4 compact reviews */}
+      {/* Video Demo Section - desktop only (mobile has it in hero) */}
+      <div className="hidden sm:block">
+        <VideoSection />
+      </div>
+
+      {/* Early Social Proof — 4 compact reviews (after video on desktop) */}
       {(() => {
         const earlyReviews = [
           { name: 'James T.', role: 'Freelance Web Developer', quote: 'Had 30+ qualified leads in minutes. Landed 3 clients in my first month and it paid for itself straight away.', avatar: 'JT', stars: 5 },
@@ -676,7 +681,7 @@ const Landing = () => {
         );
 
         return (
-          <ScrollReveal className="relative z-10 pb-6 sm:pb-10 px-4">
+          <ScrollReveal className="relative z-10 py-6 sm:py-10 px-4">
             <div className="container mx-auto max-w-5xl">
               <p className="text-center text-xs text-muted-foreground/60 mb-3 sm:mb-4 uppercase tracking-widest font-medium">Real feedback from freelancers & agencies</p>
               {isMobile ? (
@@ -693,27 +698,28 @@ const Landing = () => {
         );
       })()}
 
-      {/* Video Demo Section - hidden on mobile since it's in hero */}
-      <div className="hidden sm:block">
-        <VideoSection />
-      </div>
-
       {/* What you can do in your first 24 hours — standalone section */}
-      <section className="relative z-10 py-8 sm:py-12 md:py-16 px-4">
+      <section className="relative z-10 py-10 sm:py-14 md:py-20 px-4">
         <div className="container mx-auto">
           <ScrollReveal>
             <div
-              className="relative max-w-2xl mx-auto rounded-2xl p-6 sm:p-8 overflow-hidden"
+              className="relative max-w-2xl mx-auto rounded-2xl p-6 sm:p-10 overflow-hidden text-center"
               style={{
                 background: 'linear-gradient(180deg, hsl(220 40% 10% / 0.95), hsl(220 40% 6% / 0.98))',
-                border: '1px solid hsl(210 100% 50% / 0.10)',
+                border: '1px solid hsl(210 100% 50% / 0.15)',
+                boxShadow: '0 0 40px hsl(210 100% 50% / 0.06)',
               }}
             >
-              <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-1.5 tracking-tight">
-                What you can do in your first 24 hours
+              {/* Subtle glow */}
+              <div 
+                className="absolute -inset-4 rounded-3xl blur-2xl opacity-30 pointer-events-none"
+                style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.1), transparent 70%)' }}
+              />
+              <h3 className="relative text-xl sm:text-2xl md:text-3xl font-bold text-foreground mb-2 tracking-tight">
+                What You Can Do in Your First 24 Hours
               </h3>
-              <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-5">Everything below is included — no limits, no restrictions.</p>
-              <ul className="space-y-3.5">
+              <p className="relative text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8">Everything below is included — no limits, no restrictions.</p>
+              <ul className="relative space-y-4 sm:space-y-5 max-w-lg mx-auto">
                 {[
                   'Run a search and instantly see businesses without websites near you',
                   'Add businesses to your outreach list and start contacting immediately',
@@ -721,16 +727,23 @@ const Landing = () => {
                   'Track every business from the moment you add them through to paid client',
                   'Decide if it fits your workflow — before you\'re ever charged',
                 ].map((item, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm sm:text-base text-foreground/90">
-                    <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: 'hsl(142 71% 45% / 0.15)', border: '1px solid hsl(142 71% 45% / 0.25)' }}>
-                      <Check className="h-3 w-3" style={{ color: 'hsl(142 71% 45%)' }} />
+                  <li key={i} className="flex items-start gap-3.5 text-sm sm:text-base md:text-lg text-foreground/90 text-left">
+                    <span 
+                      className="mt-0.5 flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center"
+                      style={{ 
+                        background: 'hsl(142 71% 45% / 0.2)', 
+                        border: '1.5px solid hsl(142 71% 45% / 0.4)',
+                        boxShadow: '0 0 10px hsl(142 71% 45% / 0.15)',
+                      }}
+                    >
+                      <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: 'hsl(142 71% 45%)' }} strokeWidth={3} />
                     </span>
                     {item}
                   </li>
                 ))}
               </ul>
-              <div className="text-center mt-6">
-                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 h-auto text-sm sm:text-base" asChild>
+              <div className="relative mt-8">
+                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
                   <Link to="/auth">
                     Start Free Trial
                     <ArrowRight className="ml-2 h-4 w-4" />
@@ -844,7 +857,7 @@ const Landing = () => {
       </section>
 
       {/* Benefits / Emotional Hooks Section */}
-      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
+      <section className="relative z-10 py-10 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-16">
             <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-3 tracking-tight px-2">
@@ -857,10 +870,10 @@ const Landing = () => {
 
           <ScrollReveal delay={100}>
             <div 
-              className="relative max-w-3xl mx-auto rounded-2xl p-6 sm:p-8 md:p-10 overflow-hidden"
+              className="relative max-w-3xl mx-auto rounded-2xl p-6 sm:p-10 md:p-12 overflow-hidden"
               style={{
                 background: 'linear-gradient(180deg, hsl(220 40% 10% / 0.95), hsl(220 40% 6% / 0.98))',
-                border: '1px solid hsl(210 100% 50% / 0.12)',
+                border: '1px solid hsl(210 100% 50% / 0.15)',
                 boxShadow: '0 0 40px hsl(210 100% 50% / 0.06)',
               }}
             >
@@ -870,7 +883,7 @@ const Landing = () => {
                 style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.12), transparent 70%)' }}
               />
 
-              <div className="relative grid grid-cols-1 md:grid-cols-2 gap-5 sm:gap-6">
+              <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
                 {[
                   { bold: 'Find more leads in a fraction of the time', detail: 'Search once and get a full list of businesses to contact' },
                   { bold: 'Instantly identify businesses without websites', detail: 'No more scrolling Maps and checking one by one' },
@@ -879,25 +892,26 @@ const Landing = () => {
                   { bold: 'Keep all outreach in one dashboard', detail: 'Leads, messages, and follow-ups — nothing gets lost' },
                   { bold: 'Never run out of businesses to contact', detail: 'Unlimited searches across the globe' },
                 ].map((item, i) => (
-                  <div key={i} className="flex items-start gap-3">
+                  <div key={i} className="flex items-start gap-3.5 text-center sm:text-left">
                     <span 
-                      className="flex-shrink-0 mt-0.5 w-5 h-5 rounded-full flex items-center justify-center"
+                      className="flex-shrink-0 mt-0.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center"
                       style={{ 
-                        background: 'hsl(142 71% 45% / 0.15)',
-                        border: '1px solid hsl(142 71% 45% / 0.25)',
+                        background: 'hsl(142 71% 45% / 0.2)',
+                        border: '1.5px solid hsl(142 71% 45% / 0.4)',
+                        boxShadow: '0 0 10px hsl(142 71% 45% / 0.15)',
                       }}
                     >
-                      <Check className="h-3 w-3" style={{ color: 'hsl(142 71% 45%)' }} strokeWidth={2.5} />
+                      <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: 'hsl(142 71% 45%)' }} strokeWidth={3} />
                     </span>
                     <div>
-                      <p className="text-sm sm:text-base font-semibold text-foreground">{item.bold}</p>
-                      <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">{item.detail}</p>
+                      <p className="text-sm sm:text-base md:text-lg font-semibold text-foreground">{item.bold}</p>
+                      <p className="text-xs sm:text-sm md:text-base text-muted-foreground mt-0.5">{item.detail}</p>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <div className="relative text-center mt-8">
+              <div className="relative text-center mt-8 sm:mt-10">
                 <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
                   <Link to="/auth">
                     Start Free Trial
