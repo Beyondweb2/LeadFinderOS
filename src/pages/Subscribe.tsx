@@ -23,12 +23,19 @@ const Subscribe = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { createCheckout, subscribed, isLoading: subLoading, status, isPaidSubscriber } = useSubscription();
   const { isOnTrial, isStripeTrialing, trialUsed, isLoading: trialLoading } = useTrial();
-  const { user, signOut } = useAuth();
+  const { user, isLoading: authLoading, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Redirect unauthenticated users to login
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth', { replace: true });
+    }
+  }, [authLoading, user, navigate]);
   
   // Eligibility is only resolved once trial data has loaded
-  const eligibilityLoading = trialLoading || subLoading;
+  const eligibilityLoading = authLoading || trialLoading || subLoading;
   // User should NOT see trial messaging if they've already used a trial
   const alreadyTrialing = isOnTrial || isStripeTrialing || status === 'trialing';
   const hideTrialOffer = eligibilityLoading || trialUsed || alreadyTrialing;
@@ -68,6 +75,15 @@ const Subscribe = () => {
     if (isPaidSubscriber && !subLoading) {
       navigate('/', { replace: true });
       return null;
+    }
+
+    // Don't render anything while auth is resolving or user is not logged in
+    if (authLoading || !user) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      );
     }
  
    return (
