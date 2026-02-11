@@ -542,7 +542,7 @@ const Landing = () => {
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
-            Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
+            Turn Google Maps into a pipeline of paying web design clients — find, message, and close, all from one dashboard.
           </p>
           
           {/* Keywords removed */}
@@ -567,7 +567,10 @@ const Landing = () => {
           
           {/* Stats bar */}
           <div className="mt-6 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
-            <CountUpStat target={100000} suffix="+" label="Businesses" />
+            <div className="text-center">
+              <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Any Niche</div>
+              <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Any City</div>
+            </div>
             <div className="text-center">
               <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Coverage</div>
@@ -764,24 +767,24 @@ const Landing = () => {
           <div className="space-y-5 sm:space-y-8 md:space-y-10 mb-10 sm:mb-14 md:mb-16">
             {[
               {
-                title: 'Find businesses that actually need you',
-                detail: 'Search any area and instantly see which businesses have no website.',
+                title: 'Stop wasting hours on Google Maps',
+                detail: 'Search any area and instantly see which businesses have no website — no more clicking one by one.',
               },
               {
                 title: 'Reach out in seconds, not hours',
-                detail: 'Message leads directly on WhatsApp or SMS with ready-to-send templates.',
+                detail: 'One tap to message on WhatsApp or SMS. No copying numbers, no switching apps.',
               },
               {
-                title: 'Track every lead from first message to paid client',
-                detail: 'Every status change, follow-up, and note is logged automatically.',
+                title: 'Never lose track of a lead again',
+                detail: 'Every call, message, and follow-up is logged. No more forgotten leads or messy spreadsheets.',
               },
               {
-                title: 'Run your entire pipeline from one place',
-                detail: 'Leads, outreach, follow-ups, and conversions in a single dashboard.',
+                title: 'See exactly where your money is coming from',
+                detail: 'Track who you contacted, who replied, and who paid — all in one dashboard.',
               },
               {
-                title: 'Unlimited searches, unlimited leads',
-                detail: 'No daily caps. No credit limits. Search as many areas as you want.',
+                title: 'Search as much as you want, forever',
+                detail: 'No daily limits. No credit caps. Unlimited searches across any niche, any city.',
               },
             ].map((item, i) => (
               <ScrollReveal key={i} delay={i * 80}>
@@ -812,18 +815,7 @@ const Landing = () => {
             ))}
           </div>
 
-          {/* Single CTA */}
-          <ScrollReveal delay={400} className="text-center">
-            <Button size="lg" className="btn-premium font-semibold px-8 sm:px-10 py-3.5 sm:py-4 h-auto text-sm sm:text-base" asChild>
-              <Link to="/auth">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-              </Link>
-            </Button>
-            <p className="text-xs sm:text-sm text-muted-foreground mt-4">
-              24-hour free trial · £0 charged today · Cancel anytime
-            </p>
-          </ScrollReveal>
+          {/* Removed mid-page CTA to reduce repetition — kept in hero, pricing, and sticky bottom */}
         </div>
       </section>
 
@@ -975,7 +967,15 @@ const Landing = () => {
                   </Button>
                    <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
                     £0 today · You're only charged after 24 hours · Cancel anytime, no questions asked
-                  </p>
+                   </p>
+                   <div className="flex items-center justify-center gap-1.5 mt-2">
+                     <div className="flex gap-0.5">
+                       {[...Array(5)].map((_, i) => (
+                         <Star key={i} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                       ))}
+                     </div>
+                     <p className="text-[10px] sm:text-xs text-muted-foreground/60">Rated 4.9/5 by freelancers and agencies</p>
+                   </div>
                 </CardFooter>
               </Card>
             </div>
