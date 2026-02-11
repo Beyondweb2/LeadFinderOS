@@ -815,7 +815,7 @@ const Landing = () => {
           <ScrollReveal className="text-center mb-10 sm:mb-14 md:mb-16">
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 sm:mb-5">
               Everything You Need to{' '}
-              <span className="text-gradient-primary">Close More Deals</span>
+              <span className="text-gradient-primary">Get Results</span>
             </h2>
           </ScrollReveal>
 
@@ -823,24 +823,24 @@ const Landing = () => {
           <div className="space-y-5 sm:space-y-8 md:space-y-10 mb-10 sm:mb-14 md:mb-16">
             {[
               {
-                title: 'Find warm leads without the grind',
-                detail: 'Every hour on Google Maps is an hour you\'re not closing. Search any area and see businesses without websites instantly.',
+                title: 'Find businesses that actually need you',
+                detail: 'Search any area and instantly see which businesses have no website.',
               },
               {
-                title: 'Message leads the moment you find them',
-                detail: 'One tap to open WhatsApp or SMS with a pre-written message. No copying numbers, no app-switching, no excuses.',
+                title: 'Reach out in seconds, not hours',
+                detail: 'Message leads directly on WhatsApp or SMS with ready-to-send templates.',
               },
               {
-                title: 'Never let a lead go cold again',
-                detail: 'Forgotten follow-ups kill deals. Every call, message, and next step is tracked so nothing falls through the cracks.',
+                title: 'Track every lead from first message to paid client',
+                detail: 'Every status change, follow-up, and note is logged automatically.',
               },
               {
-                title: 'Know exactly what\'s working',
-                detail: 'See who you contacted, who replied, and who paid — so you double down on what brings in revenue.',
+                title: 'Run your entire pipeline from one place',
+                detail: 'Leads, outreach, follow-ups, and conversions in a single dashboard.',
               },
               {
-                title: 'No limits on your pipeline',
-                detail: 'No daily caps. No credit system. Search as many niches and locations as you want, whenever you want.',
+                title: 'Unlimited searches, unlimited leads',
+                detail: 'No daily caps. No credit limits. Search as many areas as you want.',
               },
             ].map((item, i) => (
               <ScrollReveal key={i} delay={i * 80}>
