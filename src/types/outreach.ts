@@ -87,6 +87,12 @@ export interface OutreachLead {
   updated_at: string;
   is_archived?: boolean;
   is_potential_work?: boolean;
+  amount_paid?: number | null;
+  paid_for?: string | null;
+  payment_date?: string | null;
+  project_duration?: string | null;
+  next_checkin_date?: string | null;
+  checkin_notes?: string | null;
 }
 
 export interface OutreachActivity {

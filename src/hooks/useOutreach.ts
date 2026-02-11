@@ -239,7 +239,7 @@ export function useOutreach() {
 
   const updateLead = useCallback(async (
     leadId: string,
-    updates: Partial<Pick<OutreachLead, 'status' | 'next_action' | 'next_action_date' | 'notes' | 'email' | 'business_name'>>
+    updates: Partial<Pick<OutreachLead, 'status' | 'next_action' | 'next_action_date' | 'notes' | 'email' | 'business_name' | 'amount_paid' | 'paid_for' | 'payment_date' | 'project_duration' | 'next_checkin_date' | 'checkin_notes'>>
   ) => {
     const { data, error } = await supabase
       .from('outreach_leads')
@@ -834,6 +834,13 @@ export function useOutreach() {
     return { imported, skipped };
   }, [user, fetchLeads, toast]);
  
+  const updateClientDetails = useCallback(async (
+    leadId: string,
+    details: Partial<Pick<OutreachLead, 'amount_paid' | 'paid_for' | 'payment_date' | 'project_duration' | 'next_checkin_date' | 'checkin_notes'>>
+  ) => {
+    return updateLead(leadId, details);
+  }, [updateLead]);
+
   return {
     leads,
     archivedLeads,
@@ -845,6 +852,7 @@ export function useOutreach() {
     updateNextAction,
     updateNotes,
     updateBusinessName,
+    updateClientDetails,
     deleteLead,
     deleteMultiple,
     deleteAllLeads,
