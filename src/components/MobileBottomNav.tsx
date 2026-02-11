@@ -12,7 +12,8 @@ import {
   LogOut,
   HelpCircle,
   MessageSquare,
-  Users
+  Users,
+  ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -108,7 +109,7 @@ export function MobileBottomNav() {
   const { isAdmin } = useSubscription();
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
   const allMoreItems = isAdmin 
-    ? [...moreNavItems, { title: 'Affiliates', url: '/admin/affiliates', icon: Users }]
+    ? [...moreNavItems, { title: 'Admin', url: '/admin', icon: ShieldCheck }, { title: 'Affiliates', url: '/admin/affiliates', icon: Users }]
     : moreNavItems;
   const isMoreActive = allMoreItems.some(item => location.pathname === item.url);
 

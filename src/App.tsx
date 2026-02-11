@@ -24,6 +24,7 @@ import PotentialWorkPage from "./pages/PotentialWork";
 import PaidClientsPage from "./pages/PaidClients";
 import HowToUse from "./pages/HowToUse";
 import AdminAffiliates from "./pages/AdminAffiliates";
+import AdminDashboard from "./pages/AdminDashboard";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 import Landing from "./pages/Landing";
 import Terms from "./pages/Terms";
@@ -187,6 +188,14 @@ const App = () => (
               } 
             />
             {/* Admin routes */}
+            <Route 
+              path="/admin" 
+              element={
+                <ProtectedRoute>
+                  <AdminDashboard />
+                </ProtectedRoute>
+              } 
+            />
             <Route 
               path="/admin/affiliates" 
               element={
