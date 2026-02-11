@@ -57,47 +57,26 @@ const StarRating = ({ count }: { count: number }) => (
 );
 
 const ReviewCard = ({ review }: { review: Review }) => (
-  <div 
-    className="relative group rounded-2xl p-[1px] transition-all duration-300"
-    style={{
-      background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.15), hsl(220 40% 15% / 0.3), hsl(210 100% 50% / 0.08))',
-    }}
-  >
-    <div 
-      className="relative rounded-2xl p-5 sm:p-6 h-full transition-all duration-300"
-      style={{
-        background: 'linear-gradient(180deg, hsl(220 40% 9% / 0.98), hsl(220 40% 6% / 0.99))',
-      }}
-    >
-      <Quote 
-        className="absolute top-4 right-4 h-8 w-8 opacity-[0.06]" 
-        style={{ color: 'hsl(210 100% 50%)' }}
-      />
-      
-      <div className="text-center sm:text-left">
-        <StarRating count={review.stars} />
+  <div className="h-full py-4 sm:py-5">
+    <div className="flex gap-0.5 mb-2.5 justify-center sm:justify-start">
+      {[...Array(review.stars)].map((_, i) => (
+        <Star key={i} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+      ))}
+    </div>
+    <p className="text-foreground/80 text-sm sm:text-[15px] leading-relaxed text-center sm:text-left mb-3 italic">
+      "{review.content}"
+    </p>
+    <div className="flex items-center gap-2 justify-center sm:justify-start">
+      <div
+        className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
+        style={{
+          background: 'hsl(210 100% 50% / 0.12)',
+          color: 'hsl(210 100% 65%)',
+        }}
+      >
+        {review.avatar}
       </div>
-      
-      <p className="mt-4 mb-5 text-foreground/85 text-sm sm:text-base leading-relaxed text-center sm:text-left">
-        "{review.content}"
-      </p>
-      
-      <div className="flex flex-col sm:flex-row items-center gap-3 pt-2" style={{ borderTop: '1px solid hsl(220 30% 15% / 0.6)' }}>
-        <div 
-          className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold tracking-wide"
-          style={{ 
-            background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.2), hsl(210 100% 50% / 0.08))',
-            border: '1px solid hsl(210 100% 50% / 0.15)',
-            color: 'hsl(210 100% 60%)'
-          }}
-        >
-          {review.avatar}
-        </div>
-        <div className="text-center sm:text-left">
-          <p className="font-semibold text-sm text-foreground/90">{review.name}</p>
-          <p className="text-muted-foreground text-xs">{review.role}</p>
-        </div>
-      </div>
+      <p className="text-muted-foreground/70 text-xs">{review.name} · {review.role}</p>
     </div>
   </div>
 );

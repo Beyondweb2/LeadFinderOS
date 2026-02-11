@@ -670,7 +670,9 @@ const Landing = () => {
         return (
           <ScrollReveal className="relative z-10 py-6 sm:py-10 px-4">
             <div className="container mx-auto max-w-5xl">
-              <p className="text-center text-xs text-muted-foreground/60 mb-3 sm:mb-4 uppercase tracking-widest font-medium">Real feedback from freelancers & agencies</p>
+              <h3 className="text-center text-sm sm:text-base font-semibold text-foreground/80 mb-4 sm:mb-5 tracking-tight">
+                Trusted by freelancers and agencies <span className="text-gradient-primary">worldwide</span>
+              </h3>
               {isMobile ? (
                 <EarlyReviewsCarousel reviews={earlyReviews} ReviewCard={ReviewCard} />
               ) : (
