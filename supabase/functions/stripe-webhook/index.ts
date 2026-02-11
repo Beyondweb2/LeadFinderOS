@@ -245,7 +245,11 @@
              stripe_customer_id: customerId,
              stripe_subscription_id: subscription.id,
              status: status,
-             current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            current_period_end: subscription.current_period_end
+              ? new Date(subscription.current_period_end * 1000).toISOString()
+              : (subscription.trial_end
+                ? new Date(subscription.trial_end * 1000).toISOString()
+                : null),
              updated_at: new Date().toISOString(),
            }, {
              onConflict: "stripe_subscription_id",
