@@ -35,9 +35,9 @@
      const body = await req.text();
      let event: Stripe.Event;
  
-     try {
-       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-     } catch (err) {
+      try {
+        event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
+      } catch (err) {
        logStep("Signature verification failed", { error: err instanceof Error ? err.message : err });
        return new Response(JSON.stringify({ error: "Invalid signature" }), {
          headers: { ...corsHeaders, "Content-Type": "application/json" },
