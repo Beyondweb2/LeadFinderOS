@@ -740,59 +740,63 @@ const Landing = () => {
             </div>
             <div className="grid grid-cols-2 gap-10 lg:gap-14 max-w-5xl mx-auto items-start">
               {/* Old Way */}
-              <div>
-                <div className="flex items-center gap-2.5 justify-center mb-5">
-                  <X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
-                  <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3>
-                </div>
-                <div className="relative group mb-6">
-                  <div 
-                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
-                    style={{ background: 'linear-gradient(to bottom right, hsl(0 60% 40% / 0.3), hsl(0 60% 40% / 0.1))' }}
-                  />
-                  <div 
-                    className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
-                    style={{ 
-                      border: '1px solid hsl(0 60% 40% / 0.25)',
-                      boxShadow: '0 0 30px hsl(0 60% 40% / 0.1)'
-                    }}
-                  >
-                    <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" />
+              <ScrollReveal delay={100}>
+                <div>
+                  <div className="flex items-center gap-2.5 justify-center mb-5">
+                    <X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
+                    <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3>
                   </div>
+                  <div className="relative group mb-6">
+                    <div 
+                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
+                      style={{ background: 'linear-gradient(to bottom right, hsl(0 60% 40% / 0.3), hsl(0 60% 40% / 0.1))' }}
+                    />
+                    <div 
+                      className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
+                      style={{ 
+                        border: '1px solid hsl(0 60% 40% / 0.25)',
+                        boxShadow: '0 0 30px hsl(0 60% 40% / 0.1)'
+                      }}
+                    >
+                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" />
+                    </div>
+                  </div>
+                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
+                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
+                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
+                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
+                  </ul>
                 </div>
-                <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
-                  <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
-                  <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
-                  <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
-                </ul>
-              </div>
+              </ScrollReveal>
               {/* New Way */}
-              <div>
-                <div className="flex items-center gap-2.5 justify-center mb-5">
-                  <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />
-                  <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
-                </div>
-                <div className="relative group mb-6">
-                  <div 
-                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
-                    style={{ background: 'linear-gradient(to bottom right, hsl(142 60% 40% / 0.3), hsl(142 60% 40% / 0.1))' }}
-                  />
-                  <div 
-                    className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
-                    style={{ 
-                      border: '1px solid hsl(142 60% 40% / 0.25)',
-                      boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
-                    }}
-                  >
-                    <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-full object-cover object-top" />
+              <ScrollReveal delay={300}>
+                <div>
+                  <div className="flex items-center gap-2.5 justify-center mb-5">
+                    <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />
+                    <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
                   </div>
+                  <div className="relative group mb-6">
+                    <div 
+                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
+                      style={{ background: 'linear-gradient(to bottom right, hsl(142 60% 40% / 0.3), hsl(142 60% 40% / 0.1))' }}
+                    />
+                    <div 
+                      className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
+                      style={{ 
+                        border: '1px solid hsl(142 60% 40% / 0.25)',
+                        boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
+                      }}
+                    >
+                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-full object-cover object-top" />
+                    </div>
+                  </div>
+                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
+                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
+                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
+                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
+                  </ul>
                 </div>
-                <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
-                  <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
-                  <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
-                  <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
-                </ul>
-              </div>
+              </ScrollReveal>
             </div>
           </div>
         </ScrollReveal>
@@ -902,29 +906,36 @@ const Landing = () => {
           ) : (
             /* Desktop: 6-card grid matching old layout */
             <ScrollReveal>
-              <div className="grid grid-cols-3 gap-x-8 gap-y-12 max-w-6xl mx-auto">
+              <div className="grid grid-cols-3 gap-6 lg:gap-8 max-w-6xl mx-auto">
                 {FEATURES.map((feature, i) => (
                   <ScrollReveal key={feature.title} delay={i * 80}>
-                    <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        <div 
-                          className="p-2.5 rounded-xl flex-shrink-0"
-                          style={{ 
-                            background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
-                            border: '1px solid hsl(210 100% 50% / 0.15)'
-                          }}
-                        >
-                          <feature.icon className="h-5 w-5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                    <div 
+                      className="flex flex-col h-full rounded-2xl overflow-hidden transition-all duration-300 hover:translate-y-[-2px]"
+                      style={{
+                        background: 'linear-gradient(to bottom, hsl(0 0% 100% / 0.04), hsl(0 0% 100% / 0.02))',
+                        border: '1px solid hsl(0 0% 100% / 0.08)',
+                        boxShadow: '0 4px 24px hsl(0 0% 0% / 0.2)'
+                      }}
+                    >
+                      {/* Card content */}
+                      <div className="p-5 lg:p-6 flex flex-col gap-3">
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className="p-2.5 rounded-xl flex-shrink-0"
+                            style={{ 
+                              background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
+                              border: '1px solid hsl(210 100% 50% / 0.15)'
+                            }}
+                          >
+                            <feature.icon className="h-5 w-5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                          </div>
+                          <h3 className="text-lg font-semibold tracking-tight">{feature.title}</h3>
                         </div>
-                        <h3 className="text-lg font-semibold tracking-tight">{feature.title}</h3>
+                        <p className="text-muted-foreground text-sm leading-relaxed min-h-[3rem]">{feature.description}</p>
                       </div>
-                      <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+                      {/* Card image */}
                       <div
-                        className="group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:ring-1 hover:ring-[hsl(210_100%_50%_/_0.2)]"
-                        style={{ 
-                          border: '1px solid hsl(0 0% 100% / 0.06)',
-                          boxShadow: '0 0 20px hsl(210 100% 50% / 0.05)'
-                        }}
+                        className="group relative cursor-pointer mt-auto"
                         onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
                       >
                         <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -933,7 +944,7 @@ const Landing = () => {
                         <img 
                           src={feature.image} 
                           alt={feature.title}
-                          className={`w-full h-56 xl:h-64 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                          className={`w-full h-52 xl:h-60 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
                         />
                       </div>
                     </div>
