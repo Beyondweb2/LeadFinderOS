@@ -18,35 +18,35 @@ const REVIEWS: Review[] = [
   {
     name: 'Chris P.',
     role: 'Freelance Designer',
-    content: "I used to spend an hour every morning trawling Google Maps for prospects. Now I get 30+ leads in 10 minutes and go straight into outreach. It's completely changed how I start my day.",
+    content: "was spending like an hour every morning just scrolling google maps trying to find businesses to pitch. now i get 30+ in about 10 minutes and actually have time to do the outreach.",
     avatar: 'CP',
     stars: 5,
   },
   {
     name: 'Tom H.',
     role: 'Web Developer',
-    content: "What sold me was the tracking. I know exactly who I've messaged, who's replied, and who needs a follow-up. Before this, I was losing leads in random notes and spreadsheets.",
+    content: "honestly the main thing for me is the tracking. i always used to forget who i'd messaged and who needed a follow-up. now it's all in one place and i don't lose leads anymore.",
     avatar: 'TH',
     stars: 5,
   },
   {
     name: 'Alex M.',
     role: 'WordPress Freelancer',
-    content: "Landed my first client within three weeks of signing up. The outreach templates meant I wasn't agonising over what to say every single time — I just sent and moved on.",
+    content: "got my first paying client about three weeks in. the templates made it way less stressful — i just picked one, tweaked it a bit, and sent. no more staring at a blank message.",
     avatar: 'AM',
     stars: 5,
   },
   {
     name: 'Daniel S.',
     role: 'Agency Owner',
-    content: "Prospecting used to eat up half the week for my team. Now we all use LeadFinder and follow-ups actually happen on time. Our reply rate has noticeably improved.",
+    content: "we put the whole team on it and prospecting went from being this massive time sink to something that just gets done. follow-ups actually happen now which has been a game changer.",
     avatar: 'DS',
     stars: 5,
   },
 ];
 
-const ReviewCard = ({ review }: { review: Review }) => (
-  <div className="h-full flex flex-col justify-between rounded-xl border border-white/[0.08] bg-card/60 backdrop-blur-sm px-5 py-6 sm:px-6 sm:py-7">
+const ReviewCard = ({ review, minimal }: { review: Review; minimal?: boolean }) => (
+  <div className={`h-full flex flex-col justify-between ${minimal ? 'px-4 py-5' : 'rounded-xl border border-white/[0.08] bg-card/60 backdrop-blur-sm px-5 py-6 sm:px-6 sm:py-7'}`}>
     <div className="w-full">
       <div className="flex gap-0.5 mb-3">
         {[...Array(review.stars)].map((_, i) => (
@@ -80,10 +80,10 @@ const MobileReviewsCarousel = () => {
         plugins={[autoplayPlugin.current]}
         className="w-full"
       >
-        <CarouselContent className="-ml-3">
+        <CarouselContent className="-ml-2">
           {REVIEWS.map((review, index) => (
-            <CarouselItem key={index} className="pl-3">
-              <ReviewCard review={review} />
+            <CarouselItem key={index} className="pl-2">
+              <ReviewCard review={review} minimal />
             </CarouselItem>
           ))}
         </CarouselContent>
