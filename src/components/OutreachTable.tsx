@@ -774,30 +774,6 @@ export function OutreachTable({
                 <span className="hidden sm:inline">Import</span>
               </Button>
             )}
-            {/* Recover Missing Phones button - only show if there are leads missing phones */}
-            {!readOnly && leadsWithMissingPhones.length > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRecoverPhones}
-                disabled={isRecoveringPhones}
-                className="bg-background text-xs h-8"
-              >
-                {isRecoveringPhones ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    {recoveryProgress 
-                      ? `${recoveryProgress.current}/${recoveryProgress.total}` 
-                      : 'Recovering...'}
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                    Recover Phones ({leadsWithMissingPhones.length})
-                  </>
-                )}
-              </Button>
-            )}
           </div>
           
           {/* Filters row */}
