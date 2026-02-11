@@ -588,13 +588,13 @@ const Landing = () => {
             </Link>
           </div>
 
-          {/* Reassurance microcopy */}
-          <p className="text-[11px] sm:text-xs text-muted-foreground text-center mt-3 sm:mt-5">
+          {/* Reassurance microcopy - desktop: after buttons, mobile: after badges */}
+          <p className="hidden sm:block text-xs text-muted-foreground text-center mt-5">
             Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
           </p>
           
           {/* Stats bar */}
-          <div className="mt-8 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
+          <div className="mt-6 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
               <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
@@ -605,6 +605,10 @@ const Landing = () => {
               <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
           </div>
+          {/* Reassurance microcopy - mobile only, after badges */}
+          <p className="sm:hidden text-[11px] text-muted-foreground text-center mt-4">
+            Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
+          </p>
           {/* Scroll down indicator */}
           <div className="mt-6 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
             <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">Scroll</span>
