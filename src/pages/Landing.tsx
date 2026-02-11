@@ -635,6 +635,9 @@ const Landing = () => {
         <VideoSection />
       </div>
 
+      {/* Mobile section divider */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
+
       {/* Early Social Proof — 4 compact reviews (after video on desktop) */}
       {(() => {
         const earlyReviews = [
@@ -687,8 +690,15 @@ const Landing = () => {
         );
       })()}
 
+      {/* Mobile section divider */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
+
       {/* How It Works — 5 steps */}
       <HowItWorksSection ScrollReveal={ScrollReveal} />
+
+
+      {/* Mobile section divider */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Value Proposition — Open layout, outcome-driven */}
       <section className="relative z-10 py-14 sm:py-20 md:py-28 lg:py-32 px-4">
@@ -771,6 +781,8 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Mobile section divider */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Features Section — Lead Toolkit */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
@@ -847,9 +859,15 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Mobile section divider */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
+
       {/* Reviews / Social Proof */}
       <ReviewsSection />
 
+
+      {/* Mobile section divider */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Pricing Section */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
@@ -939,6 +957,9 @@ const Landing = () => {
         </div>
       </section>
 
+
+      {/* Mobile section divider */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Got Questions Section */}
       <section className="relative z-10 py-10 sm:py-14 md:py-16 px-4">
