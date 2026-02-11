@@ -118,8 +118,14 @@ export default function AdminDashboard() {
     if (!session?.access_token) return;
     setIsLoading(true);
 
+    const filterBody: Record<string, unknown> = { action: 'list_users', per_page: 200 };
+    if (searchQuery) filterBody.email = searchQuery;
+    if (statusFilter !== 'all') filterBody.status = statusFilter;
+    if (activityFilter === '7d') filterBody.active_days = 7;
+    else if (activityFilter === '30d') filterBody.active_days = 30;
+
     const { data, error } = await supabase.functions.invoke('admin-users', {
-      body: { action: 'list_users' },
+      body: filterBody,
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
 
@@ -129,7 +135,7 @@ export default function AdminDashboard() {
       setUsers(data?.users || []);
     }
     setIsLoading(false);
-  }, [session?.access_token]);
+  }, [session?.access_token, searchQuery, statusFilter, activityFilter]);
 
   const fetchUserEvents = useCallback(async (userId: string) => {
     if (!session?.access_token) return;
@@ -163,26 +169,8 @@ export default function AdminDashboard() {
     fetchUserEvents(user.id);
   };
 
-  // Filtering
-  const filtered = users.filter(u => {
-    if (searchQuery && !u.email.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-
-    if (statusFilter !== 'all') {
-      if (statusFilter === 'trialing' && u.subscription_status !== 'trial' && u.subscription_status !== 'trialing') return false;
-      if (statusFilter === 'active' && u.subscription_status !== 'active') return false;
-      if (statusFilter === 'canceled' && u.subscription_status !== 'canceled' && u.subscription_status !== 'expired') return false;
-    }
-
-    if (activityFilter !== 'all' && u.last_active_at) {
-      const daysAgo = (Date.now() - new Date(u.last_active_at).getTime()) / (1000 * 60 * 60 * 24);
-      if (activityFilter === '7d' && daysAgo > 7) return false;
-      if (activityFilter === '30d' && daysAgo > 30) return false;
-    } else if (activityFilter !== 'all' && !u.last_active_at) {
-      return false;
-    }
-
-    return true;
-  });
+  // Server-side filtering — just use users directly
+  const filtered = users;
 
   // Summary stats
   const totalActive = users.filter(u => u.subscription_status === 'active').length;

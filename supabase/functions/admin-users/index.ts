@@ -1,24 +1,42 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { checkRateLimit, rateLimitHeaders } from '../_shared/rate-limiter.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+const ALLOWED_ORIGINS = [
+  'https://leadfinderapp.lovable.app',
+  'https://id-preview--da9919bb-3412-438c-91f0-7b1c8b8e5d96.lovable.app',
+];
+
+function getCorsHeaders(req: Request): Record<string, string> {
+  const origin = req.headers.get('origin') || '';
+  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allowed,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  };
+}
+
+function jsonResponse(body: unknown, status: number, corsHeaders: Record<string, string>, extra?: Record<string, string>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json', ...(extra || {}) },
+  });
+}
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req);
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Authenticate caller
+    // --- Auth ---
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Not authenticated' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Not authenticated' }, 401, corsHeaders);
     }
 
     const supabaseClient = createClient(
@@ -30,83 +48,103 @@ serve(async (req) => {
     const token = authHeader.replace('Bearer ', '');
     const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
     if (claimsError || !claimsData?.claims) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), {
-        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Invalid token' }, 401, corsHeaders);
     }
 
-    const userId = claimsData.claims.sub as string;
+    const adminUserId = claimsData.claims.sub as string;
 
-    // Service role client for admin data
+    // --- Rate limit (10 req/min per admin) ---
+    const rl = checkRateLimit(`admin-users:${adminUserId}`, 10, 60000);
+    const rlHeaders = rateLimitHeaders(rl, 10);
+    if (!rl.allowed) {
+      return jsonResponse({ error: 'Rate limit exceeded' }, 429, corsHeaders, rlHeaders);
+    }
+
+    // --- Service client ---
     const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { persistSession: false } }
     );
 
-    // Verify admin role
+    // --- Verify admin role ---
     const { data: roleData } = await serviceClient
       .from('user_roles')
       .select('role')
-      .eq('user_id', userId)
+      .eq('user_id', adminUserId)
       .eq('role', 'admin')
       .maybeSingle();
 
     if (!roleData) {
-      return new Response(JSON.stringify({ error: 'Not authorized' }), {
-        status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ error: 'Not authorized' }, 403, corsHeaders, rlHeaders);
     }
 
     const body = await req.json().catch(() => ({}));
     const action = body.action || 'list_users';
 
+    // --- Structured logging (no user data) ---
+    console.log(JSON.stringify({
+      level: 'info',
+      admin_user_id: adminUserId,
+      action,
+      timestamp: new Date().toISOString(),
+    }));
+
+    // ===================== LIST USERS =====================
     if (action === 'list_users') {
-      // Fetch all auth users (paginated, up to 1000)
+      const page = Math.max(1, parseInt(body.page) || 1);
+      const perPage = Math.min(200, Math.max(1, parseInt(body.per_page) || 50));
+      const emailFilter: string | undefined = typeof body.email === 'string' ? body.email.trim().toLowerCase() : undefined;
+      const statusFilterRaw: string | undefined = typeof body.status === 'string' ? body.status : undefined;
+      const activeDays: number | undefined = typeof body.active_days === 'number' ? body.active_days : undefined;
+
+      // Fetch auth users (paginated via Supabase admin API)
       const { data: authData, error: authError } = await serviceClient.auth.admin.listUsers({
-        perPage: 1000,
+        page,
+        perPage,
       });
 
       if (authError) {
-        console.error('Failed to list users:', authError);
-        return new Response(JSON.stringify({ error: 'Failed to fetch users' }), {
-          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        console.error('Failed to list users:', authError.message);
+        return jsonResponse({ error: 'Failed to fetch users' }, 500, corsHeaders, rlHeaders);
       }
 
-      const authUsers = authData?.users || [];
+      let authUsers = authData?.users || [];
 
-      // Fetch all user_metrics
-      const { data: metricsData } = await serviceClient
-        .from('user_metrics')
-        .select('*');
+      // Server-side email filter
+      if (emailFilter) {
+        authUsers = authUsers.filter(u => (u.email || '').toLowerCase().includes(emailFilter));
+      }
 
-      // Fetch all subscriptions
-      const { data: subsData } = await serviceClient
-        .from('subscriptions')
-        .select('user_id, status, current_period_end');
+      const userIds = authUsers.map(u => u.id);
 
-      // Fetch all user_trials for plan_status
-      const { data: trialsData } = await serviceClient
-        .from('user_trials')
-        .select('user_id, plan_status, trial_end_date, searches_used, searches_today');
+      // Fetch only relevant metrics/subs/trials for these user IDs
+      const [metricsRes, subsRes, trialsRes] = await Promise.all([
+        userIds.length > 0
+          ? serviceClient.from('user_metrics').select('user_id, search_count, businesses_added_count, messages_sent_count, replies_count, last_active_at, last_search_at').in('user_id', userIds)
+          : Promise.resolve({ data: [] }),
+        userIds.length > 0
+          ? serviceClient.from('subscriptions').select('user_id, status, current_period_end').in('user_id', userIds)
+          : Promise.resolve({ data: [] }),
+        userIds.length > 0
+          ? serviceClient.from('user_trials').select('user_id, plan_status').in('user_id', userIds)
+          : Promise.resolve({ data: [] }),
+      ]);
 
-      // Build lookup maps
-      const metricsMap = new Map((metricsData || []).map(m => [m.user_id, m]));
-      const subsMap = new Map((subsData || []).map(s => [s.user_id, s]));
-      const trialsMap = new Map((trialsData || []).map(t => [t.user_id, t]));
+      const metricsMap = new Map(((metricsRes as any).data || []).map((m: any) => [m.user_id, m]));
+      const subsMap = new Map(((subsRes as any).data || []).map((s: any) => [s.user_id, s]));
+      const trialsMap = new Map(((trialsRes as any).data || []).map((t: any) => [t.user_id, t]));
 
-      const users = authUsers.map(u => {
-        const metrics = metricsMap.get(u.id);
-        const sub = subsMap.get(u.id);
-        const trial = trialsMap.get(u.id);
+      let users = authUsers.map(u => {
+        const metrics = metricsMap.get(u.id) as any;
+        const sub = subsMap.get(u.id) as any;
+        const trial = trialsMap.get(u.id) as any;
 
-        // Determine effective subscription status
         let subscription_status = 'none';
         if (sub) {
           subscription_status = sub.status;
         } else if (trial) {
-          subscription_status = trial.plan_status; // 'trial' or 'expired'
+          subscription_status = trial.plan_status;
         }
 
         return {
@@ -124,44 +162,54 @@ serve(async (req) => {
         };
       });
 
-      return new Response(JSON.stringify({ users }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      // Server-side status filter
+      if (statusFilterRaw && statusFilterRaw !== 'all') {
+        users = users.filter(u => {
+          if (statusFilterRaw === 'trialing') return u.subscription_status === 'trial' || u.subscription_status === 'trialing';
+          if (statusFilterRaw === 'active') return u.subscription_status === 'active';
+          if (statusFilterRaw === 'canceled') return u.subscription_status === 'canceled' || u.subscription_status === 'expired';
+          return true;
+        });
+      }
+
+      // Server-side activity filter
+      if (activeDays && activeDays > 0) {
+        const cutoff = Date.now() - activeDays * 24 * 60 * 60 * 1000;
+        users = users.filter(u => u.last_active_at && new Date(u.last_active_at).getTime() >= cutoff);
+      }
+
+      return jsonResponse({
+        users,
+        page,
+        per_page: perPage,
+        total: authData?.users?.length ?? 0,
+      }, 200, corsHeaders, rlHeaders);
     }
 
+    // ===================== USER EVENTS =====================
     if (action === 'user_events') {
       const targetUserId = body.user_id;
-      if (!targetUserId) {
-        return new Response(JSON.stringify({ error: 'user_id required' }), {
-          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+      if (!targetUserId || typeof targetUserId !== 'string') {
+        return jsonResponse({ error: 'user_id required' }, 400, corsHeaders, rlHeaders);
       }
 
       const { data: events, error: eventsError } = await serviceClient
         .from('usage_events')
-        .select('*')
+        .select('id, event_type, meta, created_at')
         .eq('user_id', targetUserId)
         .order('created_at', { ascending: false })
         .limit(50);
 
       if (eventsError) {
-        return new Response(JSON.stringify({ error: 'Failed to fetch events' }), {
-          status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
+        return jsonResponse({ error: 'Failed to fetch events' }, 500, corsHeaders, rlHeaders);
       }
 
-      return new Response(JSON.stringify({ events: events || [] }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return jsonResponse({ events: events || [] }, 200, corsHeaders, rlHeaders);
     }
 
-    return new Response(JSON.stringify({ error: 'Unknown action' }), {
-      status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return jsonResponse({ error: 'Unknown action' }, 400, corsHeaders, rlHeaders);
   } catch (error) {
-    console.error('Admin users error:', error);
-    return new Response(JSON.stringify({ error: 'Internal server error' }), {
-      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('Admin users error:', (error as Error).message);
+    return jsonResponse({ error: 'Internal server error' }, 500, getCorsHeaders(req));
   }
 });
