@@ -417,6 +417,63 @@ export type Database = {
         }
         Relationships: []
       }
+      usage_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          meta: Json | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          meta?: Json | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          meta?: Json | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_metrics: {
+        Row: {
+          businesses_added_count: number
+          last_active_at: string | null
+          last_search_at: string | null
+          messages_sent_count: number
+          replies_count: number
+          search_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          businesses_added_count?: number
+          last_active_at?: string | null
+          last_search_at?: string | null
+          messages_sent_count?: number
+          replies_count?: number
+          search_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          businesses_added_count?: number
+          last_active_at?: string | null
+          last_search_at?: string | null
+          messages_sent_count?: number
+          replies_count?: number
+          search_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -529,6 +586,10 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      log_usage_event: {
+        Args: { p_event_type: string; p_meta?: Json }
+        Returns: undefined
       }
       validate_affiliate_code: {
         Args: { code_to_check: string }
