@@ -594,6 +594,7 @@ export type Database = {
         Args: { p_event_type: string; p_meta?: Json }
         Returns: undefined
       }
+      reset_my_metrics: { Args: never; Returns: undefined }
       validate_affiliate_code: {
         Args: { code_to_check: string }
         Returns: boolean
