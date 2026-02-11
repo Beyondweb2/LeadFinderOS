@@ -26,10 +26,10 @@ export function useTrial() {
   const { user } = useAuth();
   const { status: stripeStatus, isLoading: isSubscriptionLoading, subscribed, isPaidSubscriber } = useSubscription();
   
-  // Stripe trialing users are still limited - only paid subscribers get unlimited
+  // Pro access includes trialing users — they get unlimited searches
   const isStripeTrialing = stripeStatus === 'trialing';
-  // Only truly paid subscribers (active/past_due) get unlimited access
-  const hasPaidAccess = isPaidSubscriber;
+  const hasProAccess = isPaidSubscriber || isStripeTrialing;
+  console.log('[useTrial] access', { stripeStatus, hasProAccess, isStripeTrialing, isPaidSubscriber });
   
   const [state, setState] = useState<TrialState>({
     planStatus: null,
@@ -215,33 +215,31 @@ export function useTrial() {
     await checkTrial();
   }, [user?.id, checkTrial]);
 
-  // Only truly paid users (active/past_due) get unlimited searches
-  // Stripe trialing users still have 2/day limit
-  if (hasPaidAccess) {
+  // Pro access users (active, past_due, OR trialing) get unlimited searches
+  if (hasProAccess) {
     return {
       ...state,
-      isOnTrial: false, // Not on trial anymore - fully paid
-      isStripeTrialing: false,
+      isOnTrial: false,
+      isStripeTrialing,
       searchesRemaining: Infinity,
       dailyLimit: Infinity,
-      isLoading: isSubscriptionLoading, // Sync loading state with subscription
+      isLoading: isSubscriptionLoading,
       checkTrial,
-      shouldShowUpgradePrompt: () => false, // Never show for paid users
+      shouldShowUpgradePrompt: () => false,
       incrementSearchCount,
       SEARCHES_BEFORE_PROMPT,
     };
   }
 
   // Still loading subscription status - don't show trial UI yet
-  // Also hide trial UI for Stripe trialing users (they have full access)
-  if (isSubscriptionLoading || isStripeTrialing) {
+  if (isSubscriptionLoading) {
     return {
       ...state,
       isOnTrial: false,
-      isLoading: isSubscriptionLoading,
-      searchesRemaining: isStripeTrialing ? Infinity : state.searchesRemaining,
-      dailyLimit: isStripeTrialing ? Infinity : state.dailyLimit,
-      isStripeTrialing,
+      isLoading: true,
+      searchesRemaining: state.searchesRemaining,
+      dailyLimit: state.dailyLimit,
+      isStripeTrialing: false,
       checkTrial,
       shouldShowUpgradePrompt: () => false,
       incrementSearchCount,
