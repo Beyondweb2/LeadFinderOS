@@ -567,10 +567,7 @@ const Landing = () => {
           
           {/* Stats bar */}
           <div className="mt-6 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
-            <div className="text-center">
-              <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Any Niche</div>
-              <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Any City</div>
-            </div>
+            <CountUpStat target={10000} suffix="+" label="Businesses Found" />
             <div className="text-center">
               <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Coverage</div>
@@ -623,7 +620,7 @@ const Landing = () => {
                 name: 'James T.',
                 role: 'Freelance Web Developer',
                 region: 'UK',
-                quote: "i was spending my entire morning on google maps just finding people to pitch. now i pull 20+ leads in about 10 minutes and actually spend my time doing outreach instead.",
+                quote: "i was spending my entire morning on google maps just finding people to pitch. now i pull 30+ leads in about 10 minutes and actually spend my time doing outreach instead.",
                 stars: 5,
               },
               {
