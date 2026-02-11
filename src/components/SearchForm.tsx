@@ -177,8 +177,8 @@ export function SearchForm({
 
           {/* Submit Button with Trial Indicator */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-            {/* Trial searches remaining indicator - show for all non-paid users */}
-            {!isPaidSubscriber && (
+            {/* Trial searches remaining indicator - only for free users with actual daily caps */}
+            {!isPaidSubscriber && isFinite(dailyLimit) && (
               <div className="flex items-center gap-2 text-xs sm:text-sm">
                 <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
                   searchesRemaining === 0 
@@ -189,7 +189,7 @@ export function SearchForm({
                 }`}>
                   <Search className="h-3 w-3" />
                   <span className="font-medium">
-                    Free trial: {searchesRemaining}/{dailyLimit} searches left today
+                    {searchesRemaining}/{dailyLimit} searches left today
                   </span>
                 </div>
               </div>
