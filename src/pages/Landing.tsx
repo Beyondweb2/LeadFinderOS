@@ -704,45 +704,54 @@ const Landing = () => {
             </p>
           </ScrollReveal>
 
-          {/* Outcome bullets — open layout, no container */}
-          <div className="space-y-6 sm:space-y-8 md:space-y-10 mb-12 sm:mb-14 md:mb-16">
+          {/* Outcome bullets — centered on mobile, left-aligned on desktop */}
+          <div className="space-y-5 sm:space-y-8 md:space-y-10 mb-12 sm:mb-14 md:mb-16">
             {[
               {
                 title: 'Find businesses that actually need you',
-                detail: 'Search any area and instantly see which businesses have no website. No more scrolling maps and guessing.',
+                detail: 'Search any area and instantly see which businesses have no website.',
               },
               {
                 title: 'Reach out in seconds, not hours',
-                detail: 'Tap a lead and message them directly on WhatsApp or SMS. The message opens ready to send — already written for you.',
+                detail: 'Message leads directly on WhatsApp or SMS with ready-to-send templates.',
               },
               {
                 title: 'Track every lead from first message to paid client',
-                detail: 'Every status change, follow-up, and note is logged automatically. Nothing falls through the cracks.',
+                detail: 'Every status change, follow-up, and note is logged automatically.',
               },
               {
                 title: 'Run your entire pipeline from one place',
-                detail: 'Leads, outreach, follow-ups, and conversions — all in a single dashboard built for freelancers.',
+                detail: 'Leads, outreach, follow-ups, and conversions in a single dashboard.',
               },
               {
                 title: 'Unlimited searches, unlimited leads',
-                detail: 'No daily caps. No credit limits. Search as many areas and industries as you want, from day one.',
+                detail: 'No daily caps. No credit limits. Search as many areas as you want.',
               },
             ].map((item, i) => (
               <ScrollReveal key={i} delay={i * 80}>
-                <div className="flex items-start gap-4 sm:gap-5">
+                {/* Mobile: centered, compact */}
+                <div className="sm:hidden text-center px-2">
+                  <div className="flex items-center justify-center gap-2 mb-1.5">
+                    <Check className="h-4 w-4 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
+                    <p className="text-[15px] font-semibold text-foreground tracking-tight leading-snug">{item.title}</p>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">{item.detail}</p>
+                </div>
+                {/* Desktop: left-aligned with circled tick */}
+                <div className="hidden sm:flex items-start gap-5">
                   <span 
-                    className="flex-shrink-0 mt-1 w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center"
+                    className="flex-shrink-0 mt-1 w-9 h-9 rounded-full flex items-center justify-center"
                     style={{ 
                       background: 'hsl(142 76% 55% / 0.15)', 
                       border: '1.5px solid hsl(142 76% 55% / 0.4)',
                       boxShadow: '0 0 16px hsl(142 76% 55% / 0.25)',
                     }}
                   >
-                    <Check className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
+                    <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
                   </span>
                   <div>
-                    <p className="text-base sm:text-lg md:text-xl font-semibold text-foreground tracking-tight leading-snug">{item.title}</p>
-                    <p className="text-sm sm:text-base text-muted-foreground mt-1 leading-relaxed max-w-xl">{item.detail}</p>
+                    <p className="text-lg md:text-xl font-semibold text-foreground tracking-tight leading-snug">{item.title}</p>
+                    <p className="text-base text-muted-foreground mt-1 leading-relaxed max-w-xl">{item.detail}</p>
                   </div>
                 </div>
               </ScrollReveal>
