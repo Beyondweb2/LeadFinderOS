@@ -789,7 +789,7 @@ const Landing = () => {
               Your Complete
               <span className="text-gradient-primary"> Lead Toolkit</span>
             </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
+            <p className="hidden sm:block text-muted-foreground max-w-xl mx-auto text-base md:text-lg px-2">
               Everything you need to find, track, and convert leads into paying clients.
             </p>
           </ScrollReveal>

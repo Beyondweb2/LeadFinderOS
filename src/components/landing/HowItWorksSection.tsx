@@ -164,7 +164,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
           <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
             How It <span className="text-gradient-primary">Works</span>
           </h2>
-          <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
+          <p className="hidden sm:block text-muted-foreground max-w-xl mx-auto text-base md:text-lg px-2">
             From search to sale in five simple steps
           </p>
         </ScrollReveal>
