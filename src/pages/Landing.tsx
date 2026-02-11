@@ -906,46 +906,50 @@ const Landing = () => {
           ) : (
             /* Desktop: 6-card grid matching old layout */
             <ScrollReveal>
-              <div className="grid grid-cols-3 gap-6 lg:gap-8 max-w-6xl mx-auto">
+              <div className="grid grid-cols-3 gap-x-10 gap-y-14 lg:gap-x-12 lg:gap-y-16 max-w-6xl mx-auto">
                 {FEATURES.map((feature, i) => (
                   <ScrollReveal key={feature.title} delay={i * 80}>
-                    <div 
-                      className="flex flex-col h-full rounded-2xl overflow-hidden transition-all duration-300 hover:translate-y-[-2px]"
-                      style={{
-                        background: 'linear-gradient(to bottom, hsl(0 0% 100% / 0.04), hsl(0 0% 100% / 0.02))',
-                        border: '1px solid hsl(0 0% 100% / 0.08)',
-                        boxShadow: '0 4px 24px hsl(0 0% 0% / 0.2)'
-                      }}
-                    >
-                      {/* Card content — compact */}
-                      <div className="px-4 pt-4 pb-2 lg:px-5 lg:pt-5 lg:pb-2.5 flex flex-col gap-1.5">
-                        <div className="flex items-center gap-2.5">
-                          <div 
-                            className="p-2 rounded-lg flex-shrink-0"
-                            style={{ 
-                              background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
-                              border: '1px solid hsl(210 100% 50% / 0.15)'
-                            }}
-                          >
-                            <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
-                          </div>
-                          <h3 className="text-base font-semibold tracking-tight">{feature.title}</h3>
+                    <div className="flex flex-col gap-4">
+                      {/* Title row */}
+                      <div className="flex items-center gap-2.5">
+                        <div 
+                          className="p-2 rounded-lg flex-shrink-0"
+                          style={{ 
+                            background: 'hsl(210 100% 50% / 0.12)',
+                            border: '1px solid hsl(210 100% 50% / 0.2)'
+                          }}
+                        >
+                          <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={1.5} />
                         </div>
-                        <p className="text-muted-foreground text-xs leading-relaxed">{feature.description}</p>
+                        <h3 className="text-base lg:text-lg font-semibold tracking-tight">{feature.title}</h3>
                       </div>
-                      {/* Card image — larger */}
+                      {/* Description */}
+                      <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+                      {/* Image with glow — matching How It Works style */}
                       <div
-                        className="group relative cursor-pointer mt-auto"
+                        className="group relative cursor-pointer"
                         onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
                       >
-                        <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          <Search className="h-4 w-4 text-foreground" />
-                        </div>
-                        <img 
-                          src={feature.image} 
-                          alt={feature.title}
-                          className={`w-full h-56 xl:h-64 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                        <div 
+                          className="absolute -inset-2 rounded-2xl blur-xl opacity-25 group-hover:opacity-40 transition-opacity duration-300"
+                          style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
                         />
+                        <div 
+                          className="relative rounded-xl overflow-hidden transition-transform duration-300 group-hover:scale-[1.01]"
+                          style={{ 
+                            border: '1px solid hsl(210 100% 50% / 0.15)',
+                            boxShadow: '0 0 20px hsl(210 100% 50% / 0.08)'
+                          }}
+                        >
+                          <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <Search className="h-4 w-4 text-foreground" />
+                          </div>
+                          <img 
+                            src={feature.image} 
+                            alt={feature.title}
+                            className={`w-full h-48 xl:h-56 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                          />
+                        </div>
                       </div>
                     </div>
                   </ScrollReveal>
