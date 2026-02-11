@@ -649,13 +649,13 @@ const Landing = () => {
 
         const ReviewCard = ({ r }: { r: typeof earlyReviews[0] }) => (
           <div className="h-full py-5 sm:py-6">
-            <div className="flex gap-1 mb-3 justify-center sm:justify-start">
+            <div className="flex gap-1 mb-3 justify-center">
               {[...Array(r.stars)].map((_, si) => (
                 <Star key={si} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
               ))}
             </div>
-            <p className="text-foreground/90 text-base sm:text-lg md:text-xl leading-relaxed text-center sm:text-left mb-4 italic font-medium">"{r.quote}"</p>
-            <div className="flex items-center justify-center sm:justify-start">
+            <p className="text-foreground/80 text-base sm:text-lg md:text-xl leading-relaxed text-center mb-4 italic font-normal">"{r.quote}"</p>
+            <div className="flex items-center justify-center">
               <p className="text-muted-foreground/70 text-sm sm:text-base">{r.name} · {r.role}</p>
             </div>
           </div>
