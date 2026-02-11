@@ -141,7 +141,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   };
 
   return (
-    <Card className={`bg-card/80 border-border/50 border-l-4 ${getStatusColor(lead.status)} transition-all hover:shadow-lg shadow-sm`}>
+    <Card className={`bg-card border border-border border-l-4 ${getStatusColor(lead.status)} transition-all hover:shadow-lg shadow-md`}>
       <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
         {/* Business Name - full width, no truncation on mobile */}
         <div className="space-y-1">
@@ -472,7 +472,7 @@ const PotentialWorkPage = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-4">
           {potentialWorkLeads.map((lead) => (
             <LeadCard
               key={lead.id}
