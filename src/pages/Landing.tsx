@@ -709,9 +709,6 @@ const Landing = () => {
               Everything You Need to{' '}
               <span className="text-gradient-primary">Get Results</span>
             </h2>
-            <p className="text-muted-foreground text-base sm:text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
-              No setup, no learning curve. Search, reach out, and close, all from day one.
-            </p>
           </ScrollReveal>
 
           {/* Outcome bullets — centered on mobile, left-aligned on desktop */}
@@ -741,7 +738,7 @@ const Landing = () => {
               <ScrollReveal key={i} delay={i * 80}>
                 {/* Mobile: centered, compact */}
                 <div className="sm:hidden text-center px-2">
-                  <Check className="h-5 w-5 mx-auto mb-1.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
+                  <Check className="h-7 w-7 mx-auto mb-1.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
                   <p className="text-[15px] font-semibold text-foreground tracking-tight leading-snug mb-1">{item.title}</p>
                   <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">{item.detail}</p>
                 </div>
