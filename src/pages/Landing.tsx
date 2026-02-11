@@ -720,6 +720,27 @@ const Landing = () => {
                 style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.12), transparent 70%)' }}
               />
 
+              {/* What you can do in your first 24 hours */}
+              <div className="relative mb-6 sm:mb-8 pb-6 sm:pb-8" style={{ borderBottom: '1px solid hsl(210 100% 50% / 0.08)' }}>
+                <h3 className="text-base sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">
+                  What you can do in your first 24 hours
+                </h3>
+                <ul className="space-y-2.5 sm:space-y-3">
+                  {[
+                    'Run your first search and get a list of businesses without websites in your area',
+                    'Copy their phone numbers and send your first outreach messages',
+                    'Add leads to your CRM and start tracking conversations',
+                    'Use ready-made templates to reach out via WhatsApp or SMS',
+                    'See if LeadFinder Pro fits your workflow — before you pay anything',
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-start gap-2.5 text-sm sm:text-base text-foreground/85">
+                      <span className="text-muted-foreground mt-0.5">→</span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
               <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                 {[
                   { bold: 'Find 10x more leads', detail: 'in a fraction of the time you spend now' },
@@ -754,6 +775,9 @@ const Landing = () => {
                     <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                   </Link>
                 </Button>
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-3">
+                  1-day free trial (24 hours) · You won't be charged until the trial ends · Cancel anytime
+                </p>
               </div>
             </div>
           </ScrollReveal>
@@ -918,7 +942,7 @@ const Landing = () => {
                     </Link>
                   </Button>
                   <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
-                    No commitment. Cancel anytime during trial.
+                    You won't be charged during the trial · Cancel instantly, no questions asked
                   </p>
                 </CardFooter>
               </Card>

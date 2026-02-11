@@ -46,7 +46,7 @@ const REVIEWS: Review[] = [
 ];
 
 const StarRating = ({ count }: { count: number }) => (
-  <div className="flex gap-0.5 justify-center">
+  <div className="flex gap-0.5 justify-center sm:justify-start">
     {[...Array(5)].map((_, i) => (
       <Star 
         key={i} 
@@ -74,13 +74,15 @@ const ReviewCard = ({ review }: { review: Review }) => (
         style={{ color: 'hsl(210 100% 50%)' }}
       />
       
-      <StarRating count={review.stars} />
+      <div className="text-center sm:text-left">
+        <StarRating count={review.stars} />
+      </div>
       
-      <p className="mt-4 mb-5 text-foreground/85 text-sm sm:text-base leading-relaxed">
+      <p className="mt-4 mb-5 text-foreground/85 text-sm sm:text-base leading-relaxed text-center sm:text-left">
         "{review.content}"
       </p>
       
-      <div className="flex items-center gap-3 pt-2" style={{ borderTop: '1px solid hsl(220 30% 15% / 0.6)' }}>
+      <div className="flex flex-col sm:flex-row items-center gap-3 pt-2" style={{ borderTop: '1px solid hsl(220 30% 15% / 0.6)' }}>
         <div 
           className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold tracking-wide"
           style={{ 
@@ -91,7 +93,7 @@ const ReviewCard = ({ review }: { review: Review }) => (
         >
           {review.avatar}
         </div>
-        <div>
+        <div className="text-center sm:text-left">
           <p className="font-semibold text-sm text-foreground/90">{review.name}</p>
           <p className="text-muted-foreground text-xs">{review.role}</p>
         </div>
