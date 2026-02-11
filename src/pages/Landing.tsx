@@ -807,33 +807,32 @@ const Landing = () => {
                 >
                   <CarouselContent>
                     {FEATURES.map((feature) => (
-                      <CarouselItem key={feature.title}>
-                        <Card
-                          className="group relative glass-panel-strong border-white/[0.06] transition-all duration-300 overflow-hidden hover:border-[hsl(210_100%_50%_/_0.2)] cursor-pointer"
-                          onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
-                        >
-                          <div 
-                            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                            style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.03), transparent)' }}
-                          />
-                          <CardHeader className="relative pb-1 sm:pb-2 p-4 sm:p-5">
-                            <div className="flex items-center gap-3">
-                              <div 
-                                className="p-2 rounded-xl flex-shrink-0"
-                                style={{ 
-                                  background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
-                                  border: '1px solid hsl(210 100% 50% / 0.1)'
-                                }}
-                              >
-                                <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
-                              </div>
-                              <CardTitle className="text-base sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</CardTitle>
+                        <CarouselItem key={feature.title}>
+                        <div className="space-y-4">
+                          {/* Title & description above the image */}
+                          <div className="flex items-center gap-3">
+                            <div 
+                              className="p-2 rounded-xl flex-shrink-0"
+                              style={{ 
+                                background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
+                                border: '1px solid hsl(210 100% 50% / 0.1)'
+                              }}
+                            >
+                              <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
                             </div>
-                          </CardHeader>
-                          <CardContent className="relative pt-0 p-4 sm:p-5 sm:pt-0">
-                            <p className="text-muted-foreground text-sm leading-relaxed mb-3">{feature.description}</p>
-                          </CardContent>
-                          <div className="relative overflow-hidden rounded-b-lg">
+                            <h3 className="text-base sm:text-lg font-semibold tracking-tight leading-tight">{feature.title}</h3>
+                          </div>
+                          <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+                          
+                          {/* Image card */}
+                          <div
+                            className="group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:ring-1 hover:ring-[hsl(210_100%_50%_/_0.2)]"
+                            style={{ 
+                              border: '1px solid hsl(0 0% 100% / 0.06)',
+                              boxShadow: '0 0 20px hsl(210 100% 50% / 0.05)'
+                            }}
+                            onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
+                          >
                             <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                               <Search className="h-4 w-4 text-foreground" />
                             </div>
@@ -843,7 +842,7 @@ const Landing = () => {
                               className={`w-full h-64 sm:h-80 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
                             />
                           </div>
-                        </Card>
+                        </div>
                       </CarouselItem>
                     ))}
                   </CarouselContent>
