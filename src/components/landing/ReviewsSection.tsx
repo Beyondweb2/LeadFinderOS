@@ -62,7 +62,7 @@ const ReviewCard = ({ review }: { review: Review }) => (
         <Star key={i} className="h-6 w-6 fill-yellow-400 text-yellow-400" />
       ))}
     </div>
-    <p className="text-foreground/90 text-lg sm:text-xl md:text-2xl leading-relaxed mb-5 italic font-medium">
+    <p className="text-foreground/80 text-lg sm:text-xl md:text-2xl leading-relaxed mb-5 italic font-normal">
       "{review.content}"
     </p>
     <p className="text-muted-foreground/70 text-sm sm:text-base">{review.name} · {review.role}</p>
