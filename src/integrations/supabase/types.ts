@@ -237,8 +237,10 @@ export type Database = {
       outreach_leads: {
         Row: {
           address: string | null
+          amount_paid: number | null
           business_name: string
           category: string | null
+          checkin_notes: string | null
           country: string | null
           created_at: string
           email: string | null
@@ -249,16 +251,22 @@ export type Database = {
           list_type: string
           next_action: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date: string | null
+          next_checkin_date: string | null
           notes: string | null
+          paid_for: string | null
+          payment_date: string | null
           phone: string | null
+          project_duration: string | null
           status: Database["public"]["Enums"]["lead_status"]
           updated_at: string
           user_id: string
         }
         Insert: {
           address?: string | null
+          amount_paid?: number | null
           business_name: string
           category?: string | null
+          checkin_notes?: string | null
           country?: string | null
           created_at?: string
           email?: string | null
@@ -269,16 +277,22 @@ export type Database = {
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null
+          next_checkin_date?: string | null
           notes?: string | null
+          paid_for?: string | null
+          payment_date?: string | null
           phone?: string | null
+          project_duration?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
           user_id: string
         }
         Update: {
           address?: string | null
+          amount_paid?: number | null
           business_name?: string
           category?: string | null
+          checkin_notes?: string | null
           country?: string | null
           created_at?: string
           email?: string | null
@@ -289,8 +303,12 @@ export type Database = {
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null
+          next_checkin_date?: string | null
           notes?: string | null
+          paid_for?: string | null
+          payment_date?: string | null
           phone?: string | null
+          project_duration?: string | null
           status?: Database["public"]["Enums"]["lead_status"]
           updated_at?: string
           user_id?: string
