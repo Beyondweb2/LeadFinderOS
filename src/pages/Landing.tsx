@@ -392,6 +392,58 @@ const MobileFeatureCarousel = ({ features, onExpand }: { features: typeof FEATUR
 };
 
 
+interface Testimonial {
+  name: string;
+  role: string;
+  region: string;
+  quote: string;
+  stars: number;
+}
+
+const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[] }) => {
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrent((prev) => (prev + 1) % testimonials.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [testimonials.length]);
+
+  const t = testimonials[current];
+
+  return (
+    <div className="text-center px-2">
+      <div key={current} className="animate-fade-in">
+        <div className="flex gap-0.5 mb-3 justify-center">
+          {[...Array(t.stars)].map((_, i) => (
+            <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+          ))}
+        </div>
+        <p className="text-foreground/80 text-sm leading-relaxed italic font-normal">
+          "{t.quote}"
+        </p>
+        <p className="text-muted-foreground/60 text-xs mt-4 font-medium">
+          {t.name} · {t.role} – {t.region}
+        </p>
+      </div>
+      <div className="flex items-center justify-center gap-1.5 mt-5">
+        {testimonials.map((_, index) => (
+          <button
+            key={index}
+            onClick={() => setCurrent(index)}
+            className={`rounded-full transition-all duration-300 ${
+              index === current
+                ? 'w-6 h-2 bg-[hsl(210_100%_50%)]'
+                : 'w-2 h-2 bg-muted-foreground/25'
+            }`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const Landing = () => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
   const [hasScrolled, setHasScrolled] = useState(false);
@@ -613,57 +665,64 @@ const Landing = () => {
             <p className="text-sm text-muted-foreground font-medium">Rated 4.9/5 by freelancers and agencies</p>
           </div>
 
-          {/* Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-            {[
+          {(() => {
+            const testimonials = [
               {
                 name: 'James T.',
                 role: 'Freelance Web Developer',
                 region: 'UK',
-                quote: "i was spending my entire morning on google maps just finding people to pitch. now i pull 30+ leads in about 10 minutes and actually spend my time doing outreach instead.",
+                quote: "used to waste my whole morning scrolling maps looking for leads. now i get 30+ in about 10 minutes and actually spend time reaching out instead of searching.",
                 stars: 5,
               },
               {
                 name: 'Marcus L.',
                 role: 'Web Designer',
                 region: 'UK',
-                quote: "biggest difference is the follow-ups. before this i'd message someone and completely forget about them a week later. now everything is tracked and i actually close more because i stay on top of it.",
+                quote: "the follow-up tracking is what changed things for me. i'd always forget to chase people up and lose deals. now nothing slips through and my close rate is way better.",
                 stars: 5,
               },
               {
                 name: 'David R.',
                 role: 'WordPress Developer',
                 region: 'UK',
-                quote: "signed my first client within three weeks. just messaged enough people consistently and the crm made sure nobody slipped through. simple system, works if you use it.",
+                quote: "picked up my first client in about three weeks. just sent enough messages consistently and the built-in crm kept everything organised. dead simple, works if you show up.",
                 stars: 5,
               },
-            ].map((r, i) => (
-              <ScrollReveal key={i} delay={i * 100}>
-                <div 
-                  className="h-full flex flex-col justify-between text-center px-5 py-6 sm:px-6 sm:py-7 rounded-xl"
-                  style={{
-                    background: 'hsl(220 30% 8% / 0.6)',
-                    border: '1px solid hsl(0 0% 100% / 0.06)',
-                    boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
-                  }}
-                >
-                  <div>
-                    <div className="flex gap-0.5 mb-3 justify-center">
-                      {[...Array(r.stars)].map((_, si) => (
-                        <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                      ))}
+            ];
+
+            return isMobile ? (
+              <MobileTestimonialSlider testimonials={testimonials} />
+            ) : (
+              <div className="grid grid-cols-3 gap-6">
+                {testimonials.map((r, i) => (
+                  <ScrollReveal key={i} delay={i * 100}>
+                    <div 
+                      className="h-full flex flex-col justify-between text-center px-5 py-6 sm:px-6 sm:py-7 rounded-xl"
+                      style={{
+                        background: 'hsl(220 30% 8% / 0.6)',
+                        border: '1px solid hsl(0 0% 100% / 0.06)',
+                        boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
+                      }}
+                    >
+                      <div>
+                        <div className="flex gap-0.5 mb-3 justify-center">
+                          {[...Array(r.stars)].map((_, si) => (
+                            <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          ))}
+                        </div>
+                        <p className="text-foreground/80 text-sm leading-relaxed italic font-normal">
+                          "{r.quote}"
+                        </p>
+                      </div>
+                      <p className="text-muted-foreground/70 text-xs mt-4 text-center">
+                        {r.name} · {r.role} – {r.region}
+                      </p>
                     </div>
-                    <p className="text-foreground/80 text-sm leading-relaxed italic font-normal">
-                      "{r.quote}"
-                    </p>
-                  </div>
-                  <p className="text-muted-foreground/70 text-xs mt-4 text-center">
-                    {r.name} · {r.role} – {r.region}
-                  </p>
-                </div>
-              </ScrollReveal>
-            ))}
-          </div>
+                  </ScrollReveal>
+                ))}
+              </div>
+            );
+          })()}
         </div>
       </ScrollReveal>
 
