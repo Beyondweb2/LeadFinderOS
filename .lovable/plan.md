@@ -1,185 +1,56 @@
 
+# Testing Results and Fixes Needed
 
-# Non-Invasive Usage Tracking System
+## What's Working Correctly
 
-## Overview
-Two new tables (`usage_events` and `user_metrics`) with strict RLS, plus a `SECURITY DEFINER` function `log_usage_event` that safely logs events and upserts metrics for the calling user only. Zero changes to existing tables.
+- **Subscribe page UI**: Properly hides trial badge when `trialUsed = true`, shows skeleton while loading, redirects unauthenticated users.
+- **create-checkout edge function**: Correctly checks `trial_used` flag and branches between trial/no-trial checkout sessions.
+- **search-leads edge function**: Correctly treats `trialing` status as Pro access (unlimited searches).
+- **Webhook code**: Has the right logic to set `trial_used = true` on lines 326-330.
+- **useTrial hook**: Correctly returns `Infinity` for search limits when user has Pro access.
+- **useSubscription hook**: Properly distinguishes `isPaidSubscriber` vs `isStripeTrialing`.
 
-## Database Migration
+## Issues Found
 
-A single migration will create:
+### 1. Backfill Missing: `trial_used` is `false` for ALL existing users
 
-### Tables
+Every user in the database currently has `trial_used = false`, including users with `active` and `trialing` subscriptions. This means if any of them cancel and come back, they'll incorrectly be offered a free trial again.
 
-**usage_events** -- append-only event log
-- `id uuid PK default gen_random_uuid()`
-- `user_id uuid NOT NULL references auth.users(id) on delete cascade`
-- `event_type text NOT NULL`
-- `meta jsonb NULL`
-- `created_at timestamptz NOT NULL default now()`
+**Fix**: Run a one-time SQL migration to backfill `trial_used = true` for any user who has ever had an `active` or `trialing` subscription.
 
-**user_metrics** -- per-user aggregate counters
-- `user_id uuid PK references auth.users(id) on delete cascade`
-- `search_count int NOT NULL default 0`
-- `businesses_added_count int NOT NULL default 0`
-- `messages_sent_count int NOT NULL default 0`
-- `replies_count int NOT NULL default 0`
-- `last_search_at timestamptz NULL`
-- `last_active_at timestamptz NULL`
-- `updated_at timestamptz NOT NULL default now()`
+```text
+UPDATE user_trials
+SET trial_used = true
+WHERE user_id IN (
+  SELECT DISTINCT user_id
+  FROM subscriptions
+  WHERE status IN ('active', 'trialing', 'canceled', 'past_due')
+);
+```
 
-### Indexes
-- `usage_events(user_id, created_at DESC)`
-- `usage_events(event_type, created_at DESC)`
+### 2. Deploy webhook with trial_used logic
 
-### RLS Policies
+The webhook logs show no evidence of the `trial_used` update running. The `stripe-webhook` edge function needs to be redeployed to ensure the latest code (which sets `trial_used = true`) is live.
 
-**usage_events:**
-- Users INSERT own rows only (`user_id = auth.uid()`)
-- Users SELECT own rows only (`user_id = auth.uid()`)
-- Admins SELECT all rows (`public.has_role(auth.uid(), 'admin'::app_role)`)
-- No UPDATE or DELETE for clients
+### 3. SearchForm "Free trial" text shows for Stripe trialing users (minor, already fixed)
 
-**user_metrics:**
-- Users SELECT own row only (`user_id = auth.uid()`)
-- Admins SELECT all rows (`public.has_role(auth.uid(), 'admin'::app_role)`)
-- No client INSERT/UPDATE/DELETE -- all writes go through `SECURITY DEFINER` function or edge functions with service role
+The `Index.tsx` passes `isPaidSubscriber={hasProAccess}` which includes `trialing`, so the "Free trial: X/Y searches left today" indicator should already be hidden for Stripe trialing users. This appears correct in the current code.
 
-### SECURITY DEFINER Function
+## Implementation Steps
 
-`public.log_usage_event(p_event_type text, p_meta jsonb DEFAULT NULL)`:
-1. Inserts a row into `usage_events` for `auth.uid()`
-2. Upserts `user_metrics` for `auth.uid()`, incrementing the appropriate counter based on `p_event_type`:
-   - `'search'` increments `search_count`, sets `last_search_at`
-   - `'business_added'` increments `businesses_added_count`
-   - `'message_sent'` increments `messages_sent_count`
-   - `'reply_received'` increments `replies_count`
-3. Always updates `last_active_at` and `updated_at`
-
-This function runs as the DB owner (bypassing RLS) but is hard-coded to use `auth.uid()`, so no user can write data for another user.
-
-## Safety Guarantees
-- Additive only -- no ALTER/DROP on any existing table
-- `user_trials`, `subscriptions`, `user_roles` are completely untouched
-- All new policies use `RESTRICTIVE` mode consistent with existing project conventions
-- Existing app flows are unaffected; nothing calls these tables yet
+1. **Create a database migration** to backfill `trial_used = true` for all users who have ever had a subscription record (regardless of current status).
+2. **Redeploy the `stripe-webhook` edge function** to ensure future webhook events correctly set `trial_used = true`.
+3. **Verify end-to-end** by checking that:
+   - A trialing user sees no search limits and no "2 free searches" text
+   - The Subscribe page shows "Subscribe Now" (not "Start Free Trial") for users with `trial_used = true`
+   - The create-checkout function skips trial for users with `trial_used = true`
 
 ## Technical Details
 
-### Full SQL Migration
-
-```sql
--- 1. usage_events table
-CREATE TABLE public.usage_events (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  event_type text NOT NULL,
-  meta jsonb,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_usage_events_user_created ON public.usage_events (user_id, created_at DESC);
-CREATE INDEX idx_usage_events_type_created ON public.usage_events (event_type, created_at DESC);
-
-ALTER TABLE public.usage_events ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can insert own events"
-  ON public.usage_events FOR INSERT TO authenticated
-  WITH CHECK (user_id = auth.uid());
-
-CREATE POLICY "Users can view own events"
-  ON public.usage_events FOR SELECT TO authenticated
-  USING (user_id = auth.uid());
-
-CREATE POLICY "Admins can view all events"
-  ON public.usage_events FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'::app_role));
-
--- 2. user_metrics table
-CREATE TABLE public.user_metrics (
-  user_id uuid PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  search_count int NOT NULL DEFAULT 0,
-  businesses_added_count int NOT NULL DEFAULT 0,
-  messages_sent_count int NOT NULL DEFAULT 0,
-  replies_count int NOT NULL DEFAULT 0,
-  last_search_at timestamptz,
-  last_active_at timestamptz,
-  updated_at timestamptz NOT NULL DEFAULT now()
-);
-
-ALTER TABLE public.user_metrics ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can view own metrics"
-  ON public.user_metrics FOR SELECT TO authenticated
-  USING (user_id = auth.uid());
-
-CREATE POLICY "Admins can view all metrics"
-  ON public.user_metrics FOR SELECT TO authenticated
-  USING (public.has_role(auth.uid(), 'admin'::app_role));
-
--- Deny all client writes on user_metrics
-CREATE POLICY "Deny client inserts on metrics"
-  ON public.user_metrics FOR INSERT TO authenticated
-  WITH CHECK (false);
-
-CREATE POLICY "Deny client updates on metrics"
-  ON public.user_metrics FOR UPDATE TO authenticated
-  USING (false);
-
-CREATE POLICY "Deny client deletes on metrics"
-  ON public.user_metrics FOR DELETE TO authenticated
-  USING (false);
-
--- 3. SECURITY DEFINER function
-CREATE OR REPLACE FUNCTION public.log_usage_event(
-  p_event_type text,
-  p_meta jsonb DEFAULT NULL
-)
-RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-DECLARE
-  v_uid uuid := auth.uid();
-BEGIN
-  IF v_uid IS NULL THEN
-    RAISE EXCEPTION 'Not authenticated';
-  END IF;
-
-  -- Log the event
-  INSERT INTO public.usage_events (user_id, event_type, meta)
-  VALUES (v_uid, p_event_type, p_meta);
-
-  -- Upsert metrics
-  INSERT INTO public.user_metrics (user_id, last_active_at, updated_at,
-    search_count, businesses_added_count, messages_sent_count, replies_count,
-    last_search_at)
-  VALUES (
-    v_uid, now(), now(),
-    CASE WHEN p_event_type = 'search' THEN 1 ELSE 0 END,
-    CASE WHEN p_event_type = 'business_added' THEN 1 ELSE 0 END,
-    CASE WHEN p_event_type = 'message_sent' THEN 1 ELSE 0 END,
-    CASE WHEN p_event_type = 'reply_received' THEN 1 ELSE 0 END,
-    CASE WHEN p_event_type = 'search' THEN now() ELSE NULL END
-  )
-  ON CONFLICT (user_id) DO UPDATE SET
-    search_count = user_metrics.search_count
-      + CASE WHEN p_event_type = 'search' THEN 1 ELSE 0 END,
-    businesses_added_count = user_metrics.businesses_added_count
-      + CASE WHEN p_event_type = 'business_added' THEN 1 ELSE 0 END,
-    messages_sent_count = user_metrics.messages_sent_count
-      + CASE WHEN p_event_type = 'message_sent' THEN 1 ELSE 0 END,
-    replies_count = user_metrics.replies_count
-      + CASE WHEN p_event_type = 'reply_received' THEN 1 ELSE 0 END,
-    last_search_at = CASE WHEN p_event_type = 'search'
-      THEN now() ELSE user_metrics.last_search_at END,
-    last_active_at = now(),
-    updated_at = now();
-END;
-$$;
-```
-
-### No Code Changes
-No frontend or edge function files are modified in this step. The tables and function are created and ready to be wired up in a subsequent step.
-
+| Scenario | Expected Behavior |
+|---|---|
+| New user, never subscribed | Subscribe page shows "1-Day Free Trial" badge, "Start Free Trial" button |
+| User with active/trialing sub | Redirected away from /subscribe to / |
+| User who canceled, `trial_used = true` | Subscribe page shows "Subscribe Now", no trial badge, checkout has no trial period |
+| Stripe trialing user on search page | No "Free trial: X/Y searches" indicator, unlimited searches |
+| Free app trial user (no Stripe sub) | Shows "Free trial: 2/2 searches left today", 2/day limit enforced |
