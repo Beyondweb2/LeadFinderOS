@@ -170,10 +170,10 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
     <div ref={ref} className="text-center">
-      <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">
-        {count.toLocaleString()}{suffix}
-      </div>
-      <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">{label}</div>
+    <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
+      {count.toLocaleString()}{suffix}
+    </div>
+    <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">{label}</div>
     </div>
   );
 };
@@ -490,9 +490,9 @@ const Landing = () => {
         />
         {/* Blue accent glow - top center */}
         <div 
-          className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[600px]"
+          className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[450px]"
           style={{ 
-            background: 'radial-gradient(ellipse 100% 70% at 50% 0%, hsl(210 100% 50% / 0.08), transparent 70%)',
+            background: 'radial-gradient(ellipse 100% 70% at 50% 0%, hsl(210 100% 50% / 0.06), transparent 70%)',
           }}
         />
         {/* Subtle blue glow - bottom right */}
@@ -603,24 +603,24 @@ const Landing = () => {
           </div>
           
           {/* Stats bar */}
-          <div className="mt-8 sm:mt-16 md:mt-20 grid grid-cols-3 gap-2 sm:gap-8 md:gap-16 max-w-xs sm:max-w-2xl mx-auto">
+          <div className="mt-8 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
-              <div className="text-lg sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Coverage</div>
+              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-base sm:text-3xl md:text-4xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-              <div className="text-[10px] sm:text-sm text-muted-foreground mt-1 font-medium">Searches</div>
+              <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
           </div>
           {/* Reassurance microcopy */}
-          <p className="text-[11px] sm:text-xs text-muted-foreground text-center mt-3">
+          <p className="text-[11px] sm:text-xs text-muted-foreground text-center mt-5 sm:mt-6">
             Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
           </p>
 
           {/* Scroll down indicator */}
-          <div className="mt-6 sm:mt-10 flex flex-col items-center gap-1 animate-bounce opacity-40">
+          <div className="mt-6 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
             <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">Scroll</span>
             <svg width="16" height="24" viewBox="0 0 16 24" fill="none" className="text-muted-foreground">
               <rect x="1" y="1" width="14" height="22" rx="7" stroke="currentColor" strokeWidth="1.5" />
@@ -654,7 +654,7 @@ const Landing = () => {
                 <Star key={si} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
               ))}
             </div>
-            <p className="text-foreground/80 text-sm sm:text-[15px] leading-relaxed text-center sm:text-left mb-3 italic">"{r.quote}"</p>
+            <p className="text-foreground/80 text-sm sm:text-[15px] md:text-base leading-relaxed text-center sm:text-left mb-3 italic">"{r.quote}"</p>
             <div className="flex items-center justify-center sm:justify-start">
               <p className="text-muted-foreground/70 text-xs">{r.name} · {r.role}</p>
             </div>
@@ -670,7 +670,7 @@ const Landing = () => {
               {isMobile ? (
                 <EarlyReviewsCarousel reviews={earlyReviews} ReviewCard={ReviewCard} />
               ) : (
-                <div className="grid grid-cols-4 gap-5">
+              <div className="grid grid-cols-4 gap-8 lg:gap-10">
                   {earlyReviews.map((r, i) => (
                     <ReviewCard key={i} r={r} />
                   ))}
