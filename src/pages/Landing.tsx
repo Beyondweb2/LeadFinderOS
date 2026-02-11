@@ -655,16 +655,7 @@ const Landing = () => {
               ))}
             </div>
             <p className="text-foreground/80 text-sm sm:text-[15px] leading-relaxed text-center sm:text-left mb-3 italic">"{r.quote}"</p>
-            <div className="flex items-center gap-2 justify-center sm:justify-start">
-              <div
-                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
-                style={{
-                  background: 'hsl(210 100% 50% / 0.12)',
-                  color: 'hsl(210 100% 65%)',
-                }}
-              >
-                {r.avatar}
-              </div>
+            <div className="flex items-center justify-center sm:justify-start">
               <p className="text-muted-foreground/70 text-xs">{r.name} · {r.role}</p>
             </div>
           </div>
