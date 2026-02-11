@@ -30,7 +30,8 @@ import {
   DollarSign,
   HelpCircle,
   Users,
-  MessageSquare
+  MessageSquare,
+  ShieldCheck
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -88,6 +89,12 @@ const navItems = [
 ];
 
 const adminItems = [
+  { 
+    title: 'Dashboard', 
+    url: '/admin', 
+    icon: ShieldCheck,
+    description: 'User metrics & analytics'
+  },
   { 
     title: 'Affiliates', 
     url: '/admin/affiliates', 
