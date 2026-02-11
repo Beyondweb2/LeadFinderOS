@@ -323,9 +323,15 @@
          const newPlanStatus = validStatuses.includes(status) ? 'active' : 
                               (status === 'canceled' ? 'cancelled' : 'expired');
          
+         // Build update payload — always set trial_used = true when trialing or active
+         const trialUpdate: Record<string, unknown> = { plan_status: newPlanStatus };
+         if (['active', 'trialing'].includes(status)) {
+           trialUpdate.trial_used = true;
+         }
+
          const { error: trialUpdateError } = await supabaseAdmin
            .from("user_trials")
-           .update({ plan_status: newPlanStatus })
+           .update(trialUpdate)
            .eq('user_id', user.id);
 
          if (trialUpdateError) {

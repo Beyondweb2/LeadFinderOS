@@ -96,28 +96,23 @@ const logStep = (step: string, details?: unknown) => {
       logStep("GUARD: No active subscription found, proceeding with checkout");
       // ─── END GUARD ───
      
+      // Check trial_used flag from user_trials (single source of truth)
+      const { data: trialRow } = await supabaseClient
+        .from('user_trials')
+        .select('trial_used')
+        .eq('user_id', user.id)
+        .single();
+      
+      const trialUsed = trialRow?.trial_used === true;
+      logStep("Trial used check", { userId: user.id, trialUsed });
+
       // Check for existing customer
       const customers = await stripe.customers.list({ email: user.email, limit: 1 });
       let customerId: string | undefined;
-      let hasHadSubscription = false;
       
       if (customers.data.length > 0) {
         customerId = customers.data[0].id;
         logStep("Found existing Stripe customer", { customerId });
-        
-        // Check if this customer has ever had a subscription (trial abuse prevention)
-        const allSubscriptions = await stripe.subscriptions.list({
-          customer: customerId,
-          limit: 10,
-        });
-        
-        if (allSubscriptions.data.length > 0) {
-          hasHadSubscription = true;
-          logStep("Customer has subscription history", { 
-            count: allSubscriptions.data.length,
-            statuses: allSubscriptions.data.map((s: { status: string }) => s.status)
-          });
-        }
       }
 
       // Get affiliate code and ref_source from user_trials if present
@@ -169,20 +164,21 @@ const logStep = (step: string, details?: unknown) => {
         sessionConfig.metadata = trackingMetadata;
       }
       
-      // Only add trial for new customers who haven't had a subscription
-      if (!hasHadSubscription) {
+      // Only add trial if trial_used is false
+      const branchTaken = trialUsed ? 'no_trial' : 'trial';
+      if (!trialUsed) {
         sessionConfig.subscription_data = { 
           trial_period_days: 1,
           metadata: Object.keys(trackingMetadata).length > 0 ? trackingMetadata : undefined
         };
-        logStep("Adding 1-day trial to checkout");
+        logStep("Adding 1-day trial to checkout", { branchTaken });
       } else {
-        logStep("Skipping trial - customer has previous subscription");
+        logStep("Skipping trial - trial_used is true", { branchTaken });
       }
       
       const session = await stripe.checkout.sessions.create(sessionConfig);
  
-     logStep("Checkout session created", { sessionId: session.id });
+     logStep("Checkout session created", { sessionId: session.id, userId: user.id, trialUsed, branchTaken });
  
      return new Response(JSON.stringify({ url: session.url }), {
        headers: { ...corsHeaders, "Content-Type": "application/json" },

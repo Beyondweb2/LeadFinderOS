@@ -511,6 +511,7 @@ export type Database = {
           trial_days: number
           trial_end_date: string
           trial_started_at: string
+          trial_used: boolean
           user_id: string
         }
         Insert: {
@@ -528,6 +529,7 @@ export type Database = {
           trial_days?: number
           trial_end_date: string
           trial_started_at?: string
+          trial_used?: boolean
           user_id: string
         }
         Update: {
@@ -545,6 +547,7 @@ export type Database = {
           trial_days?: number
           trial_end_date?: string
           trial_started_at?: string
+          trial_used?: boolean
           user_id?: string
         }
         Relationships: []

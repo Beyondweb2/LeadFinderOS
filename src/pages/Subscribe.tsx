@@ -22,13 +22,14 @@ import appLogo from '@/assets/logo.png';
 const Subscribe = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { createCheckout, subscribed, isLoading: subLoading, status, isPaidSubscriber } = useSubscription();
-  const { isOnTrial, isStripeTrialing } = useTrial();
+  const { isOnTrial, isStripeTrialing, trialUsed } = useTrial();
   const { signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // User is already on a trial (either free trial or Stripe trialing)
+  // User should NOT see trial messaging if they've already used a trial
   const alreadyTrialing = isOnTrial || isStripeTrialing || status === 'trialing';
+  const hideTrialOffer = trialUsed || alreadyTrialing;
  
    const handleBackToLogin = useCallback(async () => {
      await signOut();
@@ -89,7 +90,7 @@ const Subscribe = () => {
            
             <CardContent className="space-y-6">
               <div className="text-center">
-                {!alreadyTrialing && (
+              {!hideTrialOffer && (
                   <div className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
                     1-Day Free Trial
                   </div>
@@ -99,7 +100,7 @@ const Subscribe = () => {
                   <span className="text-muted-foreground">/month</span>
                 </div>
                 <p className="text-sm text-muted-foreground mt-2">
-                  {alreadyTrialing 
+                  {hideTrialOffer 
                     ? 'Unlock unlimited access today'
                     : 'Try free for 24 hours, then £19.99/month'
                   }
@@ -126,17 +127,17 @@ const Subscribe = () => {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {alreadyTrialing ? 'Starting checkout...' : 'Starting trial...'}
+                    {hideTrialOffer ? 'Starting checkout...' : 'Starting trial...'}
                   </>
                 ) : (
                   <>
                     <CreditCard className="mr-2 h-4 w-4" />
-                    {alreadyTrialing ? 'Subscribe Now' : 'Start Free Trial'}
+                    {hideTrialOffer ? 'Subscribe Now' : 'Start Free Trial'}
                   </>
                 )}
               </Button>
               <p className="text-xs text-muted-foreground text-center">
-                {alreadyTrialing 
+                {hideTrialOffer 
                   ? 'Secure payment via Stripe. Cancel anytime.'
                   : 'Card required. Cancel anytime. Secure payment via Stripe.'
                 }
