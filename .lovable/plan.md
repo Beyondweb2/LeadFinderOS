@@ -1,34 +1,34 @@
 
 
-# Reviews Section Layout Improvement
+# Fix Stripe Webhook 400 Errors
 
-## Overview
-Redesign the reviews section to feel more central and compact, using a carousel on mobile instead of stacking all cards vertically, and keeping a clean 2-column grid on desktop.
+## Problem
+All webhook deliveries are returning 400 because the `STRIPE_WEBHOOK_SECRET` stored in your backend doesn't match the signing secret for your live webhook endpoint in Stripe.
 
-## Changes
+## Root Cause
+The webhook code is correct -- it already verifies signatures and returns 200 on success. The only issue is a **secret mismatch**.
 
-### Mobile: Carousel Layout
-- Replace the vertical stack of 4 review cards with a swipeable carousel (using the existing Embla Carousel component)
-- Add dot indicators below to show progress
-- Add a "Swipe" hint text for discoverability
-- This dramatically reduces scroll length on mobile
+## Steps
 
-### Desktop: Keep 2-Column Grid (no changes needed)
-- The current 2x2 grid on desktop already looks good and centered
-- No changes required for desktop layout
+### 1. Get your live webhook signing secret from Stripe
+- Go to [Stripe Dashboard > Developers > Webhooks](https://dashboard.stripe.com/webhooks)
+- Click on your live endpoint (`https://hhbdvgsnjequwooynxpr.supabase.co/functions/v1/stripe-webhook`)
+- Under "Signing secret", click "Reveal" to copy the value (starts with `whsec_...`)
 
-### Card Styling Refinement
-- Make the cards slightly more compact with tighter padding on mobile
-- Ensure the "Leave a Review" button stays below the carousel
+### 2. Update the secret
+- I will use the secrets tool to prompt you to paste the correct live `STRIPE_WEBHOOK_SECRET` value
+
+### 3. Redeploy the edge function
+- Redeploy `stripe-webhook` to pick up the updated secret
+
+### 4. Verify
+- Trigger a test event from the Stripe webhook dashboard or wait for the next real event
+- Confirm it returns 200
 
 ## Technical Details
-
-### File Modified
-- **`src/components/landing/ReviewsSection.tsx`**:
-  - Import `Carousel`, `CarouselContent`, `CarouselItem` from carousel UI
-  - Import `Autoplay` from `embla-carousel-autoplay`
-  - Wrap the mobile view in a Carousel with autoplay (5-second delay)
-  - Use `useIsMobile` hook to conditionally render carousel (mobile) vs grid (desktop)
-  - Add dot indicators below the carousel for mobile
-  - Desktop grid remains unchanged (2-column layout)
+- No code changes are needed -- the existing `stripe-webhook/index.ts` already:
+  - Reads `STRIPE_WEBHOOK_SECRET` from environment
+  - Calls `stripe.webhooks.constructEvent(body, signature, webhookSecret)`
+  - Returns 400 on signature failure, 200 on success
+- The only action is updating the secret value and redeploying
 
