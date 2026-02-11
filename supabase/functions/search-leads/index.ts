@@ -929,6 +929,23 @@ serve(async (req) => {
 
     console.log(`Returning ${leads.length} leads`);
 
+    // Log usage event (additive tracking - never blocks search results)
+    try {
+      await supabaseClient.rpc('log_usage_event', {
+        p_event_type: 'search',
+        p_meta: {
+          query: keyword,
+          location,
+          radius,
+          results_count: leads.length,
+          deep_search: deepSearch,
+          source: 'search-leads',
+        },
+      });
+    } catch (trackingErr) {
+      console.error('Usage tracking failed (non-blocking):', trackingErr);
+    }
+
     return new Response(
       JSON.stringify({
         leads,
