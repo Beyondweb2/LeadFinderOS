@@ -723,6 +723,8 @@ serve(async (req) => {
       const fullAccessStatuses = ['active', 'past_due', 'trialing'];
       hasActiveSubscription = subscription && fullAccessStatuses.includes(subscription.status);
       
+      console.log(`[SEARCH-LEADS] access check - userId: ${userId}, subStatus: ${subscription?.status ?? 'none'}, hasProAccess: ${hasActiveSubscription}, branch: ${hasActiveSubscription ? 'pro' : 'free'}`);
+      
       // If user has Stripe subscription (active, past_due, or trialing), allow unlimited searches
       if (hasActiveSubscription) {
         console.log(`User ${userId} has Stripe subscription (${subscription.status}) - unlimited searches`);

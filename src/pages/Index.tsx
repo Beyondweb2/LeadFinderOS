@@ -23,7 +23,11 @@ const Index = () => {
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading } = useTrial();
-  const { subscribed, isLoading: isSubscriptionLoading } = useSubscription();
+  const { subscribed, isLoading: isSubscriptionLoading, status: subStatus } = useSubscription();
+  
+  // Pro access = active, trialing, or past_due
+  const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due';
+  console.log('[Index] access check', { userId: 'current', subStatus, hasProAccess, isStripeTrialing, subscribed });
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
@@ -33,10 +37,10 @@ const Index = () => {
 
   // Check if we should show upgrade prompt after searches (only for free trial users, not Stripe trialing)
   useEffect(() => {
-    if (!subscribed && !isStripeTrialing && shouldShowUpgradePrompt()) {
+    if (!hasProAccess && shouldShowUpgradePrompt()) {
       setShowUpgradePrompt(true);
     }
-  }, [searchesUsed, subscribed, isStripeTrialing, shouldShowUpgradePrompt]);
+  }, [searchesUsed, hasProAccess, shouldShowUpgradePrompt]);
 
   // Refetch trial data after search completes
   useEffect(() => {
@@ -81,7 +85,7 @@ const Index = () => {
           isOnTrial={!isAccessLoading && (isOnTrial || isStripeTrialing)}
           searchesRemaining={searchesRemaining}
           dailyLimit={dailyLimit}
-          isPaidSubscriber={subscribed && !isStripeTrialing}
+          isPaidSubscriber={hasProAccess}
         />
       </section>
 
