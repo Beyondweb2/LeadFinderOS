@@ -601,6 +601,11 @@ const Landing = () => {
               <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Link>
           </div>
+
+          {/* Reassurance microcopy */}
+          <p className="text-[11px] sm:text-xs text-muted-foreground text-center mt-3 sm:mt-5">
+            Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
+          </p>
           
           {/* Stats bar */}
           <div className="mt-8 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
@@ -614,11 +619,6 @@ const Landing = () => {
               <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
           </div>
-          {/* Reassurance microcopy */}
-          <p className="text-[11px] sm:text-xs text-muted-foreground text-center mt-5 sm:mt-6">
-            Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
-          </p>
-
           {/* Scroll down indicator */}
           <div className="mt-6 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
             <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">Scroll</span>
