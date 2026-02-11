@@ -36,7 +36,17 @@ import {
   Pencil,
   Check,
   X,
+  MessageSquare,
+  MessageCircle,
+  PhoneCall,
+  MoreHorizontal,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
 
@@ -177,28 +187,66 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
       </CardHeader>
       
       <CardContent className="space-y-3 px-3 sm:px-6 pb-3 sm:pb-6">
-        {/* Contact Info */}
+        {/* Contact Info + Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 text-sm">
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            {lead.phone && (
+              <a 
+                href={`tel:${lead.phone}`}
+                className="flex items-center gap-1.5 text-foreground hover:text-primary transition-colors"
+              >
+                <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="font-mono text-sm">{lead.phone}</span>
+              </a>
+            )}
+            {lead.google_maps_url && (
+              <a
+                href={lead.google_maps_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors"
+              >
+                <MapPin className="h-3.5 w-3.5 shrink-0" />
+                <span className="text-sm">View on Maps</span>
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
+          </div>
+          {/* Quick Actions dropdown */}
           {lead.phone && (
-            <a 
-              href={`tel:${lead.phone}`}
-              className="flex items-center gap-1.5 text-foreground hover:text-primary transition-colors"
-            >
-              <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-              <span className="font-mono text-sm">{lead.phone}</span>
-            </a>
-          )}
-          {lead.google_maps_url && (
-            <a
-              href={lead.google_maps_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-muted-foreground hover:text-primary transition-colors"
-            >
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
-              <span className="text-sm">View on Maps</span>
-              <ExternalLink className="h-3 w-3" />
-            </a>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  Actions
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem asChild>
+                  <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer">
+                    <PhoneCall className="h-4 w-4 text-primary" />
+                    Call
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={`sms:${lead.phone}`} className="flex items-center gap-2 cursor-pointer">
+                    <MessageCircle className="h-4 w-4 text-blue-500" />
+                    SMS
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a 
+                    href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <MessageSquare className="h-4 w-4 text-green-500" />
+                    WhatsApp
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
 

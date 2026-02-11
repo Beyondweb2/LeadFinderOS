@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ExternalLink, MessageSquare, MessageCircle, Star, PhoneOff } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, PhoneOff, Phone } from 'lucide-react';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
@@ -68,7 +68,7 @@ export function OutreachMobileCard({
         </div>
 
         {/* Inline icon buttons */}
-        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-0.5" onClick={(e) => e.stopPropagation()}>
           {lead.google_maps_url && (
             <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
               <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer">
@@ -77,29 +77,15 @@ export function OutreachMobileCard({
             </Button>
           )}
 
-          {lead.phone && lead.status !== 'no_whatsapp' && (
+          {lead.phone && (
             <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
-                onClick={onWhatsAppClick}
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
+              {/* Call */}
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-primary" asChild>
+                <a href={`tel:${lead.phone}`}>
+                  <Phone className="h-3.5 w-3.5" />
+                </a>
               </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                onClick={() => onStatusChange('no_whatsapp')}
-                title="Mark as No WhatsApp"
-              >
-                <PhoneOff className="h-3.5 w-3.5" />
-              </Button>
-            </>
-          )}
-          {lead.phone && lead.status === 'no_whatsapp' && (
-            <>
+              {/* SMS */}
               <Button
                 variant="ghost"
                 size="icon"
@@ -108,9 +94,32 @@ export function OutreachMobileCard({
               >
                 <MessageCircle className="h-3.5 w-3.5" />
               </Button>
-              <span className="h-7 w-7 flex items-center justify-center text-muted-foreground" title="No WhatsApp">
-                <PhoneOff className="h-3.5 w-3.5" />
-              </span>
+              {/* WhatsApp or No WhatsApp */}
+              {lead.status !== 'no_whatsapp' ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                    onClick={onWhatsAppClick}
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => onStatusChange('no_whatsapp')}
+                    title="Mark as No WhatsApp"
+                  >
+                    <PhoneOff className="h-3.5 w-3.5" />
+                  </Button>
+                </>
+              ) : (
+                <span className="h-7 w-7 flex items-center justify-center text-muted-foreground" title="No WhatsApp">
+                  <PhoneOff className="h-3.5 w-3.5" />
+                </span>
+              )}
             </>
           )}
 
