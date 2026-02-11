@@ -731,10 +731,8 @@ const Landing = () => {
               <ScrollReveal key={i} delay={i * 80}>
                 {/* Mobile: centered, compact */}
                 <div className="sm:hidden text-center px-2">
-                  <div className="flex items-center justify-center gap-2 mb-1.5">
-                    <Check className="h-4 w-4 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
-                    <p className="text-[15px] font-semibold text-foreground tracking-tight leading-snug">{item.title}</p>
-                  </div>
+                  <Check className="h-4 w-4 mx-auto mb-1.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
+                  <p className="text-[15px] font-semibold text-foreground tracking-tight leading-snug mb-1">{item.title}</p>
                   <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">{item.detail}</p>
                 </div>
                 {/* Desktop: left-aligned with circled tick */}
