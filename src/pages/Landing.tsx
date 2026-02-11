@@ -407,7 +407,7 @@ const EarlyReviewsCarousel = ({ reviews, ReviewCard }: { reviews: any[]; ReviewC
   }, [api]);
 
   return (
-    <div className="max-w-sm mx-auto">
+    <div className="max-w-md mx-auto">
       <Carousel
         setApi={setApi}
         opts={{ loop: true, align: 'center' }}
@@ -643,30 +643,30 @@ const Landing = () => {
       {/* Early Social Proof — 4 compact reviews (after video on desktop) */}
       {(() => {
         const earlyReviews = [
-          { name: 'James T.', role: 'Freelance Web Developer', quote: 'Had 30+ qualified leads in minutes. Landed 3 clients in my first month and it paid for itself straight away.', avatar: 'JT', stars: 5 },
-          { name: 'Marcus L.', role: 'Web Designer', quote: "We're reaching 5x more businesses and actually getting replies. Saves hours every week.", avatar: 'ML', stars: 5 },
-          { name: 'David R.', role: 'WordPress Developer', quote: "Stopped wasting time on Maps. I know instantly who to contact and everything stays organised.", avatar: 'DR', stars: 5 },
-          { name: 'Ryan K.', role: 'Freelance Web Designer', quote: "The one click WhatsApp outreach is what sold me. Fast and ridiculously simple.", avatar: 'RK', stars: 5 },
+          { name: 'James T.', role: 'Freelance Web Developer', quote: 'had 30+ leads in minutes. landed 3 clients in my first month — paid for itself straight away.', avatar: 'JT', stars: 5 },
+          { name: 'Marcus L.', role: 'Web Designer', quote: "we're reaching 5x more businesses and actually getting replies. saves us hours every week.", avatar: 'ML', stars: 5 },
+          { name: 'David R.', role: 'WordPress Developer', quote: "stopped wasting time on maps. i know instantly who to contact and everything stays organised.", avatar: 'DR', stars: 5 },
+          { name: 'Ryan K.', role: 'Freelance Web Designer', quote: "the one click whatsapp outreach is what sold me. fast and ridiculously simple.", avatar: 'RK', stars: 5 },
         ];
 
         const ReviewCard = ({ r }: { r: typeof earlyReviews[0] }) => (
           <div
-            className="rounded-xl px-4 py-4 sm:px-5 sm:py-4 h-full"
+            className="rounded-xl px-5 py-5 sm:px-6 sm:py-6 h-full"
             style={{
               background: 'linear-gradient(135deg, hsl(220 40% 10% / 0.95), hsl(220 40% 7% / 0.98))',
               border: '1px solid hsl(210 100% 50% / 0.12)',
               boxShadow: '0 4px 20px hsl(210 100% 50% / 0.06)',
             }}
           >
-            <div className="flex gap-0.5 mb-2.5 justify-center sm:justify-start">
+            <div className="flex gap-0.5 mb-3 justify-center sm:justify-start">
               {[...Array(r.stars)].map((_, si) => (
-                <Star key={si} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
               ))}
             </div>
-            <p className="text-foreground/90 text-sm leading-relaxed text-center sm:text-left mb-3">"{r.quote}"</p>
+            <p className="text-foreground/90 text-sm sm:text-base leading-relaxed text-center sm:text-left mb-4">"{r.quote}"</p>
             <div className="flex items-center gap-2.5 justify-center sm:justify-start">
               <div
-                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
+                className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold"
                 style={{
                   background: 'hsl(210 100% 50% / 0.15)',
                   border: '1px solid hsl(210 100% 50% / 0.2)',
@@ -675,7 +675,7 @@ const Landing = () => {
               >
                 {r.avatar}
               </div>
-              <p className="text-muted-foreground text-xs">{r.name} · {r.role}</p>
+              <p className="text-muted-foreground text-xs sm:text-sm">{r.name} · {r.role}</p>
             </div>
           </div>
         );
@@ -687,7 +687,7 @@ const Landing = () => {
               {isMobile ? (
                 <EarlyReviewsCarousel reviews={earlyReviews} ReviewCard={ReviewCard} />
               ) : (
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-4 gap-5">
                   {earlyReviews.map((r, i) => (
                     <ReviewCard key={i} r={r} />
                   ))}
@@ -721,22 +721,22 @@ const Landing = () => {
               <p className="relative text-sm sm:text-base text-muted-foreground mb-6 sm:mb-8">Everything below is included — no limits, no restrictions.</p>
               <ul className="relative space-y-4 sm:space-y-5 max-w-lg mx-auto">
                 {[
-                  'Run a search and instantly see businesses without websites near you',
-                  'Add businesses to your outreach list and start contacting immediately',
+                  'Instantly see businesses without websites near you',
+                  'Add businesses to your outreach list and start straight away',
                   'Send WhatsApp or SMS messages with one click — opens instantly, already written for you',
                   'Track every business from the moment you add them through to paid client',
                   'Decide if it fits your workflow — before you\'re ever charged',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3.5 text-sm sm:text-base md:text-lg text-foreground/90 text-left">
                     <span 
-                      className="mt-0.5 flex-shrink-0 w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center"
+                      className="mt-0.5 flex-shrink-0 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center"
                       style={{ 
-                        background: 'hsl(142 71% 45% / 0.2)', 
-                        border: '1.5px solid hsl(142 71% 45% / 0.4)',
-                        boxShadow: '0 0 10px hsl(142 71% 45% / 0.15)',
+                        background: 'hsl(142 76% 55% / 0.2)', 
+                        border: '1.5px solid hsl(142 76% 55% / 0.45)',
+                        boxShadow: '0 0 12px hsl(142 76% 55% / 0.2)',
                       }}
                     >
-                      <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: 'hsl(142 71% 45%)' }} strokeWidth={3} />
+                      <Check className="h-4 w-4 sm:h-4.5 sm:w-4.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
                     </span>
                     {item}
                   </li>
@@ -859,9 +859,9 @@ const Landing = () => {
       {/* Benefits / Emotional Hooks Section */}
       <section className="relative z-10 py-10 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
-          <ScrollReveal className="text-center mb-8 sm:mb-12 md:mb-16">
+          <ScrollReveal className="text-left sm:text-left mb-8 sm:mb-12 md:mb-16 max-w-3xl mx-auto">
             <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-3 tracking-tight px-2">
-              Everything You Need to <span className="text-gradient-primary">Start Outreach Today</span>
+              Everything You Need to <span className="text-gradient-primary">Get Results Today</span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
               No limits during your 24 hour trial
@@ -886,22 +886,22 @@ const Landing = () => {
               <div className="relative grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
                 {[
                   { bold: 'Find more leads in a fraction of the time', detail: 'Search once and get a full list of businesses to contact' },
-                  { bold: 'Instantly identify businesses without websites', detail: 'No more scrolling Maps and checking one by one' },
+                  { bold: 'Instantly identify businesses without websites', detail: 'No more scrolling maps and checking one by one' },
                   { bold: 'One click WhatsApp and SMS outreach', detail: 'Opens instantly, already written for you' },
                   { bold: 'Track every business from the moment you add them through to paid client', detail: 'Every status, note, and follow-up in one place' },
                   { bold: 'Keep all outreach in one dashboard', detail: 'Leads, messages, and follow-ups — nothing gets lost' },
                   { bold: 'Never run out of businesses to contact', detail: 'Unlimited searches across the globe' },
                 ].map((item, i) => (
-                  <div key={i} className="flex items-start gap-3.5 text-center sm:text-left">
+                  <div key={i} className="flex items-start gap-3.5 text-left">
                     <span 
-                      className="flex-shrink-0 mt-0.5 w-6 h-6 sm:w-7 sm:h-7 rounded-full flex items-center justify-center"
+                      className="flex-shrink-0 mt-0.5 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center"
                       style={{ 
-                        background: 'hsl(142 71% 45% / 0.2)',
-                        border: '1.5px solid hsl(142 71% 45% / 0.4)',
-                        boxShadow: '0 0 10px hsl(142 71% 45% / 0.15)',
+                        background: 'hsl(142 76% 55% / 0.2)',
+                        border: '1.5px solid hsl(142 76% 55% / 0.45)',
+                        boxShadow: '0 0 12px hsl(142 76% 55% / 0.2)',
                       }}
                     >
-                      <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" style={{ color: 'hsl(142 71% 45%)' }} strokeWidth={3} />
+                      <Check className="h-4 w-4 sm:h-4.5 sm:w-4.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
                     </span>
                     <div>
                       <p className="text-sm sm:text-base md:text-lg font-semibold text-foreground">{item.bold}</p>
