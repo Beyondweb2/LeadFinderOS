@@ -350,7 +350,7 @@ const MobileFeatureCarousel = ({ features, onExpand }: { features: typeof FEATUR
                 <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
                   {feature.description}
                 </p>
-                <div className="relative w-full">
+                <div className="relative w-full -mx-2">
                   <div 
                     className="relative rounded-lg overflow-hidden bg-card/80 aspect-[16/10]"
                     style={{ 
@@ -361,7 +361,7 @@ const MobileFeatureCarousel = ({ features, onExpand }: { features: typeof FEATUR
                     <img 
                       src={feature.image} 
                       alt={feature.title}
-                      className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-100'}`}
+                      className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-105'}`}
                     />
                     <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
                       <Expand className="h-3.5 w-3.5 text-muted-foreground" />
@@ -643,39 +643,31 @@ const Landing = () => {
       {/* Early Social Proof — 4 compact reviews (after video on desktop) */}
       {(() => {
         const earlyReviews = [
-          { name: 'James T.', role: 'Freelance Web Developer', quote: 'had 30+ leads in minutes. landed 3 clients in my first month — paid for itself straight away.', avatar: 'JT', stars: 5 },
+          { name: 'James T.', role: 'Freelance Web Developer', quote: 'had 30+ leads in minutes. landed 3 clients in my first month, paid for itself straight away.', avatar: 'JT', stars: 5 },
           { name: 'Marcus L.', role: 'Web Designer', quote: "we're reaching 5x more businesses and actually getting replies. saves us hours every week.", avatar: 'ML', stars: 5 },
           { name: 'David R.', role: 'WordPress Developer', quote: "stopped wasting time on maps. i know instantly who to contact and everything stays organised.", avatar: 'DR', stars: 5 },
           { name: 'Ryan K.', role: 'Freelance Web Designer', quote: "the one click whatsapp outreach is what sold me. fast and ridiculously simple.", avatar: 'RK', stars: 5 },
         ];
 
         const ReviewCard = ({ r }: { r: typeof earlyReviews[0] }) => (
-          <div
-            className="rounded-xl px-5 py-5 sm:px-6 sm:py-6 h-full"
-            style={{
-              background: 'linear-gradient(135deg, hsl(220 40% 10% / 0.95), hsl(220 40% 7% / 0.98))',
-              border: '1px solid hsl(210 100% 50% / 0.12)',
-              boxShadow: '0 4px 20px hsl(210 100% 50% / 0.06)',
-            }}
-          >
-            <div className="flex gap-0.5 mb-3 justify-center sm:justify-start">
+          <div className="h-full py-4 sm:py-5">
+            <div className="flex gap-0.5 mb-2.5 justify-center sm:justify-start">
               {[...Array(r.stars)].map((_, si) => (
-                <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                <Star key={si} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
               ))}
             </div>
-            <p className="text-foreground/90 text-sm sm:text-base leading-relaxed text-center sm:text-left mb-4">"{r.quote}"</p>
-            <div className="flex items-center gap-2.5 justify-center sm:justify-start">
+            <p className="text-foreground/80 text-sm sm:text-[15px] leading-relaxed text-center sm:text-left mb-3 italic">"{r.quote}"</p>
+            <div className="flex items-center gap-2 justify-center sm:justify-start">
               <div
-                className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold"
+                className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
                 style={{
-                  background: 'hsl(210 100% 50% / 0.15)',
-                  border: '1px solid hsl(210 100% 50% / 0.2)',
+                  background: 'hsl(210 100% 50% / 0.12)',
                   color: 'hsl(210 100% 65%)',
                 }}
               >
                 {r.avatar}
               </div>
-              <p className="text-muted-foreground text-xs sm:text-sm">{r.name} · {r.role}</p>
+              <p className="text-muted-foreground/70 text-xs">{r.name} · {r.role}</p>
             </div>
           </div>
         );
@@ -702,18 +694,18 @@ const Landing = () => {
       <section className="relative z-10 py-14 sm:py-20 md:py-28 lg:py-32 px-4">
         <div className="container mx-auto max-w-4xl">
           {/* Section heading — hero-matching hierarchy */}
-          <ScrollReveal className="mb-12 sm:mb-16 md:mb-20">
+          <ScrollReveal className="text-center mb-10 sm:mb-14 md:mb-16">
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 sm:mb-5">
               Everything You Need to{' '}
               <span className="text-gradient-primary">Get Results</span>
             </h2>
-            <p className="text-muted-foreground text-base sm:text-lg md:text-xl max-w-2xl leading-relaxed">
-              No setup, no learning curve. Search, reach out, and close — all from day one.
+            <p className="text-muted-foreground text-base sm:text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
+              No setup, no learning curve. Search, reach out, and close, all from day one.
             </p>
           </ScrollReveal>
 
           {/* Outcome bullets — open layout, no container */}
-          <div className="space-y-10 sm:space-y-12 md:space-y-14 mb-14 sm:mb-16 md:mb-20">
+          <div className="space-y-6 sm:space-y-8 md:space-y-10 mb-12 sm:mb-14 md:mb-16">
             {[
               {
                 title: 'Find businesses that actually need you',
