@@ -917,23 +917,23 @@ const Landing = () => {
                         boxShadow: '0 4px 24px hsl(0 0% 0% / 0.2)'
                       }}
                     >
-                      {/* Card content */}
-                      <div className="p-5 lg:p-6 flex flex-col gap-3">
-                        <div className="flex items-center gap-3">
+                      {/* Card content — compact */}
+                      <div className="px-4 pt-4 pb-2 lg:px-5 lg:pt-5 lg:pb-2.5 flex flex-col gap-1.5">
+                        <div className="flex items-center gap-2.5">
                           <div 
-                            className="p-2.5 rounded-xl flex-shrink-0"
+                            className="p-2 rounded-lg flex-shrink-0"
                             style={{ 
                               background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(210 100% 50% / 0.05))',
                               border: '1px solid hsl(210 100% 50% / 0.15)'
                             }}
                           >
-                            <feature.icon className="h-5 w-5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
+                            <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={1.5} />
                           </div>
-                          <h3 className="text-lg font-semibold tracking-tight">{feature.title}</h3>
+                          <h3 className="text-base font-semibold tracking-tight">{feature.title}</h3>
                         </div>
-                        <p className="text-muted-foreground text-sm leading-relaxed min-h-[3rem]">{feature.description}</p>
+                        <p className="text-muted-foreground text-xs leading-relaxed">{feature.description}</p>
                       </div>
-                      {/* Card image */}
+                      {/* Card image — larger */}
                       <div
                         className="group relative cursor-pointer mt-auto"
                         onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
@@ -944,7 +944,7 @@ const Landing = () => {
                         <img 
                           src={feature.image} 
                           alt={feature.title}
-                          className={`w-full h-52 xl:h-60 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                          className={`w-full h-56 xl:h-64 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
                         />
                       </div>
                     </div>
