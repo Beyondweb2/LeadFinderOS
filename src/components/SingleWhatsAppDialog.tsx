@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -67,6 +68,16 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
     const url = generateWhatsAppUrl(lead.phone, message);
     window.open(url, '_blank');
     onOpenChange(false);
+
+    // Usage tracking (non-blocking, fire-and-forget)
+    supabase.rpc('log_usage_event', {
+      p_event_type: 'message_sent',
+      p_meta: {
+        channel: 'whatsapp',
+        business_name: lead.business_name,
+        source: 'single-whatsapp-dialog',
+      },
+    }).then(({ error }) => { if (error) console.error('Usage tracking failed:', error); });
   };
 
   if (!lead) return null;

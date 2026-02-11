@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Dialog,
   DialogContent,
@@ -65,8 +66,18 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
     
     const message = template.replace(/\{\{business_name\}\}/g, lead.business_name);
     const url = generateSMSUrl(lead.phone, message);
-    window.open(url, '_self'); // SMS links often work better with _self
+    window.open(url, '_self');
     onOpenChange(false);
+
+    // Usage tracking (non-blocking, fire-and-forget)
+    supabase.rpc('log_usage_event', {
+      p_event_type: 'message_sent',
+      p_meta: {
+        channel: 'sms',
+        business_name: lead.business_name,
+        source: 'single-sms-dialog',
+      },
+    }).then(({ error }) => { if (error) console.error('Usage tracking failed:', error); });
   };
 
   if (!lead) return null;
