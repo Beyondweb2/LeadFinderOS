@@ -46,7 +46,7 @@ const REVIEWS: Review[] = [
 ];
 
 const ReviewCard = ({ review }: { review: Review }) => (
-  <div className="h-full flex flex-col justify-between text-center px-2 py-5">
+  <div className="h-full flex flex-col justify-between items-center text-center px-2 py-5">
     <div>
       <div className="flex gap-0.5 mb-3 justify-center">
         {[...Array(review.stars)].map((_, i) => (
@@ -57,7 +57,7 @@ const ReviewCard = ({ review }: { review: Review }) => (
         "{review.content}"
       </p>
     </div>
-    <p className="text-muted-foreground/70 text-xs mt-4">{review.name} · {review.role}</p>
+    <p className="text-muted-foreground/70 text-xs mt-4 text-center w-full">{review.name} · {review.role}</p>
   </div>
 );
 

@@ -644,7 +644,7 @@ const Landing = () => {
           { name: 'James T.', role: 'Freelance Web Developer', quote: 'i used to spend an hour on google maps just finding businesses to contact. now i get 15-20 relevant ones in about 10 minutes and everything is tracked.', avatar: 'JT', stars: 5 },
           { name: 'Marcus L.', role: 'Web Designer', quote: "the one click whatsapp outreach changed everything for me. i actually follow up now instead of forgetting who i messaged last week.", avatar: 'ML', stars: 5 },
           { name: 'David R.', role: 'WordPress Developer', quote: "landed my first client within 3 weeks. nothing fancy, just messaged enough people and the crm kept me organised so nobody slipped through.", avatar: 'DR', stars: 5 },
-          { name: 'Ryan K.', role: 'Freelance Web Designer', quote: "saves me probably 45 minutes a day on admin. searching, tracking, following up — it's all in one place now.", avatar: 'RK', stars: 5 },
+          { name: 'Ryan K.', role: 'Freelance Web Designer', quote: "saves me probably 45 minutes a day on admin. searching, tracking, following up, it's all in one place now.", avatar: 'RK', stars: 5 },
         ];
 
         const ReviewCard = ({ r }: { r: typeof earlyReviews[0] }) => (
