@@ -1024,14 +1024,12 @@ export function OutreachTable({
                                 <Phone className="h-4 w-4" />
                               </a>
                               <button
-                                onClick={() => handleSMSClick(lead)}
-                                className="p-1.5 rounded-md hover:bg-muted text-blue-500 hover:text-blue-400 transition-colors"
-                                title="Send SMS"
-                              >
-                                <MessageCircle className="h-4 w-4" />
-                              </button>
-                              {lead.status !== 'no_whatsapp' ? (
-                                <>
+                                    onClick={() => handleSMSClick(lead)}
+                                    className="p-1.5 rounded-md hover:bg-muted text-blue-500 hover:text-blue-400 transition-colors"
+                                    title="Send SMS"
+                                  >
+                                    <MessageCircle className="h-4 w-4" />
+                                  </button>
                                   <button
                                     onClick={() => handleWhatsAppClick(lead)}
                                     className="p-1.5 rounded-md hover:bg-muted text-green-500 hover:text-green-400 transition-colors"
@@ -1039,19 +1037,6 @@ export function OutreachTable({
                                   >
                                     <MessageSquare className="h-4 w-4" />
                                   </button>
-                                  <button
-                                    onClick={() => onStatusChange(lead.id, 'no_whatsapp')}
-                                    className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
-                                    title="Mark as No WhatsApp"
-                                  >
-                                    <PhoneOff className="h-4 w-4" />
-                                  </button>
-                                </>
-                              ) : (
-                                <span className="text-xs text-muted-foreground flex items-center gap-1" title="No WhatsApp">
-                                  <PhoneOff className="h-3.5 w-3.5" />
-                                </span>
-                              )}
                             </>
                           )}
                         </div>
