@@ -29,7 +29,6 @@ import {
   Search,
   FileText,
   Users,
-  RotateCcw,
   Trash2,
 } from 'lucide-react';
 
@@ -38,7 +37,6 @@ const Dashboard = () => {
   const { subscribed, isLoading: isSubscriptionLoading, isPaidSubscriber, isStripeTrialing, trialEnd } = useSubscription();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [isResetting, setIsResetting] = useState(false);
   const [isFullResetting, setIsFullResetting] = useState(false);
   
   // Show trial progress only for Stripe trialing users (not paid subscribers)
@@ -52,36 +50,6 @@ const Dashboard = () => {
       </div>
     );
   }
-
-  const handleResetCounters = async () => {
-    if (!user) return;
-    setIsResetting(true);
-    
-    try {
-      // Delete all activity-related data for this user
-      const results = await Promise.all([
-        supabase.from('copied_phones').delete().eq('user_id', user.id),
-        supabase.from('outreach_activities').delete().eq('user_id', user.id),
-        supabase.from('lead_contacts').delete().eq('user_id', user.id),
-        supabase.from('search_history').delete().eq('user_id', user.id),
-        supabase.from('checked_businesses').delete().eq('user_id', user.id),
-        supabase.rpc('reset_my_metrics'),
-      ]);
-      
-      const errors = results.filter(r => r.error);
-      if (errors.length > 0) {
-        console.error('Reset errors:', errors.map(e => e.error));
-      }
-      
-      toast({ title: 'Counters reset', description: 'All activity counters have been cleared. Your CRM leads are untouched.' });
-      refetch();
-    } catch (err) {
-      console.error('Reset failed:', err);
-      toast({ title: 'Error', description: 'Failed to reset counters.', variant: 'destructive' });
-    } finally {
-      setIsResetting(false);
-    }
-  };
 
   const handleFullReset = async () => {
     if (!user) return;
@@ -220,33 +188,7 @@ const Dashboard = () => {
           </Link>
         </Button>
         
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive gap-1.5">
-              <RotateCcw className="h-3.5 w-3.5" />
-              Reset Counters
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Reset all counters?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will clear all activity counters including copied phones, contact logs, search history, and checked businesses. Your CRM leads and templates will not be affected. This cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleResetCounters}
-                disabled={isResetting}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                {isResetting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                Reset Everything
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
