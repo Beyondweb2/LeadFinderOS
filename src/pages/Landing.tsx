@@ -406,7 +406,7 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrent((prev) => (prev + 1) % testimonials.length);
-    }, 5000);
+    }, 6000);
     return () => clearInterval(timer);
   }, [testimonials.length]);
 
