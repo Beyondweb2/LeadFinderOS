@@ -305,15 +305,10 @@ const VideoSection = () => {
           </div>
         </div>
         
-        {/* CTA after video */}
-        <div className="text-center mt-6 sm:mt-10 md:mt-12">
-          <Button size="lg" className="btn-premium font-semibold px-5 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base" asChild>
-            <Link to="/auth">
-              Start Free Trial
-              <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-            </Link>
-          </Button>
-        </div>
+        {/* Micro-bridge after video */}
+        <p className="text-center text-xs sm:text-sm text-muted-foreground/60 mt-6 sm:mt-10">
+          Don't just take our word for it.
+        </p>
       </div>
     </ScrollReveal>
   );
@@ -690,6 +685,9 @@ const Landing = () => {
         );
       })()}
 
+      {/* How It Works — 5 steps */}
+      <HowItWorksSection ScrollReveal={ScrollReveal} />
+
       {/* Value Proposition — Open layout, outcome-driven */}
       <section className="relative z-10 py-14 sm:py-20 md:py-28 lg:py-32 px-4">
         <div className="container mx-auto max-w-4xl">
@@ -763,6 +761,11 @@ const Landing = () => {
           </ScrollReveal>
         </div>
       </section>
+
+      {/* Micro-bridge */}
+      <p className="text-center text-xs sm:text-sm text-muted-foreground/50 -mt-6 sm:-mt-8 mb-4 sm:mb-6 relative z-10">
+        Here's what you'll be working with.
+      </p>
 
       {/* Features Section — Lead Toolkit */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
@@ -842,6 +845,11 @@ const Landing = () => {
 
       {/* Reviews / Social Proof */}
       <ReviewsSection />
+
+      {/* Micro-bridge to pricing */}
+      <p className="text-center text-xs sm:text-sm text-muted-foreground/50 relative z-10 -mb-4 sm:-mb-6">
+        One plan. Everything included.
+      </p>
 
       {/* Pricing Section */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
