@@ -1,0 +1,1 @@
+ALTER TYPE public.next_action_type ADD VALUE IF NOT EXISTS '2nd_follow_up';

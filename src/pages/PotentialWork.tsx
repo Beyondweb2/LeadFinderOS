@@ -66,7 +66,11 @@ const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'none', label: 'None' },
   { value: 'call', label: 'Call' },
   { value: 'follow_up', label: 'Follow Up' },
+  { value: '2nd_follow_up', label: '2nd Follow Up' },
   { value: 'send_draft', label: 'Send Draft' },
+  { value: 'send_initial_text', label: 'Send Initial Text' },
+  { value: 'send_voice_note', label: 'Send Voice Note' },
+  { value: 'send_follow_up', label: 'Send Follow-up' },
 ];
 
 interface LeadCardProps {
@@ -447,6 +451,13 @@ const PotentialWorkPage = () => {
           lead.phone?.toLowerCase().includes(query)
       );
     }
+    
+    // Sort by soonest next_action_date first, leads without dates go to the end
+    result.sort((a, b) => {
+      const dateA = a.next_action_date ? new Date(a.next_action_date).getTime() : Infinity;
+      const dateB = b.next_action_date ? new Date(b.next_action_date).getTime() : Infinity;
+      return dateA - dateB;
+    });
     
     return result;
   }, [leads, archivedLeads, searchQuery]);

@@ -28,6 +28,12 @@ const actionConfig: Record<NextActionType, { label: string; shortLabel: string; 
     icon: <RefreshCw className="h-3 w-3" />,
     className: 'text-amber-400',
   },
+  '2nd_follow_up': {
+    label: '2nd Follow-up',
+    shortLabel: '2nd F/U',
+    icon: <RefreshCw className="h-3 w-3" />,
+    className: 'text-amber-500',
+  },
   check_3_day_removal: {
     label: 'Check 3-Day Removal',
     shortLabel: '3-Day Check',
