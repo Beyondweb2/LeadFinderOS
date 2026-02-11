@@ -229,6 +229,21 @@ export function useOutreach() {
     // Log activity
     await logActivity(newLead.id, 'added', `Added ${lead.name} to outreach list`);
 
+    // Usage tracking (non-blocking)
+    try {
+      await supabase.rpc('log_usage_event', {
+        p_event_type: 'business_added',
+        p_meta: {
+          place_id: lead.id || null,
+          business_name: lead.name,
+          country,
+          source: 'add-business',
+        },
+      });
+    } catch (e) {
+      console.error('Usage tracking failed (non-blocking):', e);
+    }
+
     toast({
       title: 'Lead added',
       description: `${lead.name} added to your outreach list.`,
