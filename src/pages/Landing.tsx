@@ -544,7 +544,7 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-8 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
         <div className="container mx-auto text-center">
           {/* Mobile: Video at top instead of logo */}
           <div className="sm:hidden mb-6">
@@ -610,7 +610,7 @@ const Landing = () => {
             Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
           </p>
           {/* Scroll down indicator */}
-          <div className="mt-6 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
+          <div className="mt-5 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
             <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">Scroll</span>
             <svg width="16" height="24" viewBox="0 0 16 24" fill="none" className="text-muted-foreground">
               <rect x="1" y="1" width="14" height="22" rx="7" stroke="currentColor" strokeWidth="1.5" />
@@ -650,7 +650,7 @@ const Landing = () => {
         );
 
         return (
-          <ScrollReveal className="relative z-10 py-10 sm:py-14 px-4">
+          <ScrollReveal className="relative z-10 py-8 sm:py-14 px-4">
             <div className="container mx-auto max-w-5xl">
               <h3 className="text-center text-lg sm:text-xl font-semibold text-foreground/80 mb-6 sm:mb-8 tracking-tight">
                 Trusted by freelancers and agencies <span className="text-gradient-primary">worldwide</span>
@@ -680,7 +680,7 @@ const Landing = () => {
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Value Proposition — Open layout, outcome-driven */}
-      <section className="relative z-10 py-14 sm:py-20 md:py-28 lg:py-32 px-4">
+      <section className="relative z-10 py-10 sm:py-20 md:py-28 lg:py-32 px-4">
         <div className="container mx-auto max-w-4xl">
           {/* Section heading — hero-matching hierarchy */}
           <ScrollReveal className="text-center mb-10 sm:mb-14 md:mb-16">
@@ -691,7 +691,7 @@ const Landing = () => {
           </ScrollReveal>
 
           {/* Outcome bullets — centered on mobile, left-aligned on desktop */}
-          <div className="space-y-5 sm:space-y-8 md:space-y-10 mb-12 sm:mb-14 md:mb-16">
+          <div className="space-y-5 sm:space-y-8 md:space-y-10 mb-10 sm:mb-14 md:mb-16">
             {[
               {
                 title: 'Find businesses that actually need you',
@@ -970,7 +970,7 @@ const Landing = () => {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/[0.06] py-8 sm:py-10 md:py-12 mt-8 sm:mt-12 px-4">
+      <footer className="relative z-10 border-t border-white/[0.06] py-8 sm:py-10 md:py-12 mt-4 sm:mt-12 px-4">
         <div className="container mx-auto">
           <div className="flex flex-col items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
             <span className="font-semibold tracking-tight text-sm sm:text-base">
