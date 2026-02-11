@@ -45,13 +45,15 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: userData, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !userData?.user) {
+      console.error('[ADMIN-USERS] Auth failed:', userError?.message);
       return jsonResponse({ error: 'Invalid token' }, 401, corsHeaders);
     }
 
-    const adminUserId = claimsData.claims.sub as string;
+    const adminUserId = userData.user.id;
+
+    console.log('[ADMIN-USERS] Authenticated user:', adminUserId);
 
     // --- Rate limit (10 req/min per admin) ---
     const rl = checkRateLimit(`admin-users:${adminUserId}`, 10, 60000);
@@ -61,19 +63,24 @@ serve(async (req) => {
     }
 
     // --- Service client ---
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    console.log('[ADMIN-USERS] SUPABASE_URL:', supabaseUrl);
+
     const serviceClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
+      supabaseUrl,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { persistSession: false } }
     );
 
     // --- Verify admin role ---
-    const { data: roleData } = await serviceClient
+    const { data: roleData, error: roleError } = await serviceClient
       .from('user_roles')
       .select('role')
       .eq('user_id', adminUserId)
       .eq('role', 'admin')
       .maybeSingle();
+
+    console.log('[ADMIN-USERS] Admin role check:', roleData ? 'PASSED' : 'FAILED', roleError?.message || '');
 
     if (!roleData) {
       return jsonResponse({ error: 'Not authorized' }, 403, corsHeaders, rlHeaders);
@@ -105,11 +112,12 @@ serve(async (req) => {
       });
 
       if (authError) {
-        console.error('Failed to list users:', authError.message);
+        console.error('[ADMIN-USERS] listUsers error:', authError.message);
         return jsonResponse({ error: 'Failed to fetch users' }, 500, corsHeaders, rlHeaders);
       }
 
       let authUsers = authData?.users || [];
+      console.log('[ADMIN-USERS] Auth users fetched:', authUsers.length);
 
       // Server-side email filter
       if (emailFilter) {
@@ -131,9 +139,14 @@ serve(async (req) => {
           : Promise.resolve({ data: [] }),
       ]);
 
-      const metricsMap = new Map(((metricsRes as any).data || []).map((m: any) => [m.user_id, m]));
-      const subsMap = new Map(((subsRes as any).data || []).map((s: any) => [s.user_id, s]));
-      const trialsMap = new Map(((trialsRes as any).data || []).map((t: any) => [t.user_id, t]));
+      const metricsData = (metricsRes as any).data || [];
+      const subsData = (subsRes as any).data || [];
+      const trialsData = (trialsRes as any).data || [];
+      console.log('[ADMIN-USERS] Joined data counts - metrics:', metricsData.length, 'subs:', subsData.length, 'trials:', trialsData.length);
+
+      const metricsMap = new Map(metricsData.map((m: any) => [m.user_id, m]));
+      const subsMap = new Map(subsData.map((s: any) => [s.user_id, s]));
+      const trialsMap = new Map(trialsData.map((t: any) => [t.user_id, t]));
 
       let users = authUsers.map(u => {
         const metrics = metricsMap.get(u.id) as any;
