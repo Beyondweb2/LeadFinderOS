@@ -73,7 +73,8 @@ interface OutreachTableProps {
   readOnly?: boolean;
 }
 
-const ITEMS_PER_PAGE = 15;
+const ITEMS_PER_PAGE_DESKTOP = 15;
+const ITEMS_PER_PAGE_MOBILE = 10;
 
 type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at';
 type SortDirection = 'asc' | 'desc';
@@ -99,6 +100,7 @@ export function OutreachTable({
   const { toast } = useToast();
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
   const isMobile = useIsMobile();
+  const ITEMS_PER_PAGE = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
