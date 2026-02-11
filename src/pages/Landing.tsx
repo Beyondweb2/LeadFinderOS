@@ -18,6 +18,7 @@ import {
   Expand,
   MessageSquare,
   Gift,
+  Star,
 } from 'lucide-react';
 import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
@@ -595,30 +596,37 @@ const Landing = () => {
         <div className="container mx-auto max-w-3xl">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {[
-              { name: 'James T.', role: 'Freelance Web Developer', quote: 'Landed 3 clients in my first month — tool paid for itself straight away.', avatar: 'JT' },
-              { name: 'Marcus L.', role: 'Web Designer', quote: "We're reaching 5x more businesses than before and actually getting replies.", avatar: 'ML' },
+              { name: 'James T.', role: 'Freelance Web Developer', quote: 'Landed 3 clients in my first month — tool paid for itself straight away.', avatar: 'JT', stars: 5 },
+              { name: 'Marcus L.', role: 'Web Designer', quote: "We're reaching 5x more businesses than before and actually getting replies.", avatar: 'ML', stars: 5 },
             ].map((r, i) => (
               <div
                 key={i}
-                className="flex items-start gap-3 rounded-xl px-4 py-3"
+                className="rounded-xl px-4 py-4 sm:px-5 sm:py-4"
                 style={{
-                  background: 'hsl(220 40% 9% / 0.8)',
-                  border: '1px solid hsl(210 100% 50% / 0.08)',
+                  background: 'linear-gradient(135deg, hsl(220 40% 10% / 0.95), hsl(220 40% 7% / 0.98))',
+                  border: '1px solid hsl(210 100% 50% / 0.12)',
+                  boxShadow: '0 4px 20px hsl(210 100% 50% / 0.06)',
                 }}
               >
-                <div
-                  className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold"
-                  style={{
-                    background: 'hsl(210 100% 50% / 0.12)',
-                    border: '1px solid hsl(210 100% 50% / 0.15)',
-                    color: 'hsl(210 100% 60%)',
-                  }}
-                >
-                  {r.avatar}
+                {/* Stars */}
+                <div className="flex gap-0.5 mb-2.5 justify-center sm:justify-start">
+                  {[...Array(r.stars)].map((_, si) => (
+                    <Star key={si} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                  ))}
                 </div>
-                <div>
-                  <p className="text-foreground/85 text-sm leading-relaxed">"{r.quote}"</p>
-                  <p className="text-muted-foreground text-xs mt-1">{r.name} · {r.role}</p>
+                <p className="text-foreground/90 text-sm leading-relaxed text-center sm:text-left mb-3">"{r.quote}"</p>
+                <div className="flex items-center gap-2.5 justify-center sm:justify-start">
+                  <div
+                    className="flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
+                    style={{
+                      background: 'hsl(210 100% 50% / 0.15)',
+                      border: '1px solid hsl(210 100% 50% / 0.2)',
+                      color: 'hsl(210 100% 65%)',
+                    }}
+                  >
+                    {r.avatar}
+                  </div>
+                  <p className="text-muted-foreground text-xs">{r.name} · {r.role}</p>
                 </div>
               </div>
             ))}
@@ -645,7 +653,7 @@ const Landing = () => {
               <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-4 sm:mb-5 tracking-tight">
                 What you can do in your first 24 hours
               </h3>
-              <ul className="space-y-3">
+              <ul className="space-y-3.5">
                 {[
                   'Run your first search and see businesses without websites near you',
                   'Copy phone numbers and send your first outreach messages',
@@ -653,8 +661,10 @@ const Landing = () => {
                   'Use ready-made WhatsApp and SMS templates',
                   'Decide if it fits your workflow — before you\'re charged',
                 ].map((item, i) => (
-                  <li key={i} className="flex items-start gap-2.5 text-sm sm:text-base text-foreground/85">
-                    <span className="text-muted-foreground mt-0.5 flex-shrink-0">→</span>
+                  <li key={i} className="flex items-start gap-3 text-sm sm:text-base text-foreground/90">
+                    <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: 'hsl(142 71% 45% / 0.15)', border: '1px solid hsl(142 71% 45% / 0.25)' }}>
+                      <Check className="h-3 w-3" style={{ color: 'hsl(142 71% 45%)' }} />
+                    </span>
                     {item}
                   </li>
                 ))}
