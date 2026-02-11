@@ -16,6 +16,7 @@ interface TrialState {
   dailyLimit: number;
   searchesRemaining: number;
   isStripeTrialing: boolean;
+  trialUsed: boolean;
 }
 
 const SEARCHES_BEFORE_PROMPT = 5;
@@ -43,6 +44,7 @@ export function useTrial() {
     dailyLimit: DAILY_TRIAL_LIMIT,
     searchesRemaining: DAILY_TRIAL_LIMIT,
     isStripeTrialing: false,
+    trialUsed: false,
   });
   
   const hasAttemptedEnsure = useRef(false);
@@ -128,6 +130,7 @@ export function useTrial() {
               dailyLimit: DAILY_TRIAL_LIMIT,
               searchesRemaining: Math.max(0, DAILY_TRIAL_LIMIT - newData.searches_today),
               isStripeTrialing: false,
+              trialUsed: newData.trial_used === true,
             });
             return;
           }
@@ -147,6 +150,7 @@ export function useTrial() {
           dailyLimit: DAILY_TRIAL_LIMIT,
           searchesRemaining: 0,
           isStripeTrialing: false,
+          trialUsed: false,
         });
         return;
       }
@@ -172,6 +176,7 @@ export function useTrial() {
         dailyLimit: DAILY_TRIAL_LIMIT,
         searchesRemaining,
         isStripeTrialing: false,
+        trialUsed: data.trial_used === true,
       });
     } catch (err) {
       console.error('Trial check failed:', err);
