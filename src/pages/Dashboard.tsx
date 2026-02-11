@@ -30,6 +30,7 @@ import {
   FileText,
   Users,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 
 const Dashboard = () => {
@@ -38,6 +39,7 @@ const Dashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isResetting, setIsResetting] = useState(false);
+  const [isFullResetting, setIsFullResetting] = useState(false);
   
   // Show trial progress only for Stripe trialing users (not paid subscribers)
   const showTrialProgress = !isSubscriptionLoading && isStripeTrialing && !isPaidSubscriber;
@@ -78,6 +80,42 @@ const Dashboard = () => {
       toast({ title: 'Error', description: 'Failed to reset counters.', variant: 'destructive' });
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  const handleFullReset = async () => {
+    if (!user) return;
+    setIsFullResetting(true);
+    
+    try {
+      const results = await Promise.all([
+        // Activity data
+        supabase.from('copied_phones').delete().eq('user_id', user.id),
+        supabase.from('outreach_activities').delete().eq('user_id', user.id),
+        supabase.from('lead_contacts').delete().eq('user_id', user.id),
+        supabase.from('search_history').delete().eq('user_id', user.id),
+        supabase.from('checked_businesses').delete().eq('user_id', user.id),
+        // CRM data
+        supabase.from('outreach_leads').delete().eq('user_id', user.id),
+        supabase.from('outreach_history').delete().eq('user_id', user.id),
+        // Templates (non-default)
+        supabase.from('templates').delete().eq('user_id', user.id),
+        // Metrics
+        supabase.rpc('reset_my_metrics'),
+      ]);
+      
+      const errors = results.filter(r => r.error);
+      if (errors.length > 0) {
+        console.error('Full reset errors:', errors.map(e => e.error));
+      }
+      
+      toast({ title: 'Full reset complete', description: 'Everything has been wiped. Your subscription is unchanged.' });
+      refetch();
+    } catch (err) {
+      console.error('Full reset failed:', err);
+      toast({ title: 'Error', description: 'Failed to perform full reset.', variant: 'destructive' });
+    } finally {
+      setIsFullResetting(false);
     }
   };
 
@@ -205,6 +243,34 @@ const Dashboard = () => {
               >
                 {isResetting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
                 Reset Everything
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive gap-1.5">
+              <Trash2 className="h-3.5 w-3.5" />
+              Full Reset
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Full account reset?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This will delete <strong>everything</strong> — all CRM leads, outreach history, templates, contact logs, search history, and metrics. Only your subscription will remain. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleFullReset}
+                disabled={isFullResetting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isFullResetting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                Delete Everything
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
