@@ -30,8 +30,16 @@ import {
   MessageSquare,
   Clock,
   Send,
-  PhoneOff
+  PhoneOff,
+  PhoneCall,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
@@ -252,13 +260,33 @@ export function OutreachLeadDialog({
                   <span className="text-muted-foreground w-24">Phone:</span>
                   {lead.phone ? (
                     <div className="flex items-center gap-2">
-                      <a
-                        href={`tel:${lead.phone}`}
-                        className="text-primary hover:underline flex items-center gap-1"
-                      >
-                        <Phone className="h-3 w-3" />
-                        {lead.phone}
-                      </a>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="text-primary hover:underline flex items-center gap-1">
+                            <Phone className="h-3 w-3" />
+                            {lead.phone}
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="min-w-[160px]">
+                          <DropdownMenuItem asChild>
+                            <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer">
+                              <PhoneCall className="h-4 w-4" />
+                              Normal Call
+                            </a>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem asChild>
+                            <a
+                              href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 cursor-pointer"
+                            >
+                              <Phone className="h-4 w-4 text-green-500" />
+                              WhatsApp Call
+                            </a>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                       {lead.status !== 'no_whatsapp' ? (
                         <>
                           <button

@@ -48,6 +48,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
+import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
 
 // Potential work specific statuses (completed goes to Paid Clients page)
@@ -191,13 +192,28 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
         <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-4 text-sm">
           <div className="flex items-center gap-1.5 flex-1 min-w-0">
             {lead.phone && (
-              <a 
-                href={`tel:${lead.phone}`}
-                className="flex items-center gap-1.5 text-foreground hover:text-primary transition-colors"
-              >
-                <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <span className="font-mono text-sm">{lead.phone}</span>
-              </a>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-1.5 text-foreground hover:text-primary transition-colors">
+                    <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                    <span className="font-mono text-sm">{lead.phone}</span>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="min-w-[160px]">
+                  <DropdownMenuItem asChild>
+                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer">
+                      <PhoneCall className="h-4 w-4" />
+                      Normal Call
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer">
+                      <Phone className="h-4 w-4 text-green-500" />
+                      WhatsApp Call
+                    </a>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
             {lead.google_maps_url && (
               <a
@@ -225,7 +241,13 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 <DropdownMenuItem asChild>
                   <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer">
                     <PhoneCall className="h-4 w-4 text-primary" />
-                    Call
+                    Normal Call
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer">
+                    <Phone className="h-4 w-4 text-green-500" />
+                    WhatsApp Call
                   </a>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>

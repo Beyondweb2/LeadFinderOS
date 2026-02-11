@@ -7,7 +7,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall } from 'lucide-react';
+import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
@@ -80,11 +87,32 @@ export function OutreachMobileCard({
 
         {lead.phone && (
           <>
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-primary" asChild>
-              <a href={`tel:${lead.phone}`}>
-                <Phone className="h-3.5 w-3.5" />
-              </a>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-primary">
+                  <Phone className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[160px]">
+                <DropdownMenuItem asChild>
+                  <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer">
+                    <PhoneCall className="h-4 w-4" />
+                    Normal Call
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a
+                    href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 cursor-pointer"
+                  >
+                    <Phone className="h-4 w-4 text-green-500" />
+                    WhatsApp Call
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="ghost"
               size="icon"
