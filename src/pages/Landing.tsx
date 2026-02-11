@@ -678,55 +678,69 @@ const Landing = () => {
 
       {/* Desktop: Old Way vs New Way comparison */}
       {!isMobile && (
-        <ScrollReveal className="relative z-10 py-14 sm:py-20 px-4">
-          <div className="container mx-auto max-w-5xl">
-            <h3 className="text-center text-xl sm:text-2xl font-bold text-foreground mb-3 tracking-tight">
-              Stop Scrolling Through <span className="text-gradient-primary">Google Maps</span>
-            </h3>
-            <p className="text-center text-muted-foreground text-base mb-10 max-w-xl mx-auto">
-              There's a faster way to find businesses without websites.
-            </p>
-            <div className="grid grid-cols-2 gap-8 lg:gap-12 max-w-4xl mx-auto">
+        <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
+          <div className="container mx-auto max-w-6xl">
+            <div className="text-center mb-12 md:mb-16">
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-4">
+                Stop Scrolling Through <span className="text-gradient-primary">Google Maps</span>
+              </h2>
+              <p className="text-muted-foreground max-w-xl mx-auto text-base md:text-lg">
+                There's a faster way to find businesses without websites.
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-10 lg:gap-14 max-w-5xl mx-auto">
               {/* Old Way */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 justify-center">
-                  <X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} />
-                  <h4 className="text-lg font-semibold text-foreground/80">The Old Way</h4>
+              <div className="space-y-5">
+                <div className="flex items-center gap-2.5 justify-center">
+                  <X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
+                  <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3>
                 </div>
-                <div 
-                  className="rounded-xl overflow-hidden"
-                  style={{ 
-                    border: '1px solid hsl(0 60% 40% / 0.2)',
-                    boxShadow: '0 0 20px hsl(0 60% 40% / 0.08)'
-                  }}
-                >
-                  <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-auto" />
+                <div className="relative group">
+                  <div 
+                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
+                    style={{ background: 'linear-gradient(to bottom right, hsl(0 60% 40% / 0.3), hsl(0 60% 40% / 0.1))' }}
+                  />
+                  <div 
+                    className="relative rounded-xl overflow-hidden"
+                    style={{ 
+                      border: '1px solid hsl(0 60% 40% / 0.25)',
+                      boxShadow: '0 0 30px hsl(0 60% 40% / 0.1)'
+                    }}
+                  >
+                    <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-auto" />
+                  </div>
                 </div>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-start gap-2"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} /><span>Hours spent scrolling Google Maps</span></li>
-                  <li className="flex items-start gap-2"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} /><span>No way to track who you've contacted</span></li>
-                  <li className="flex items-start gap-2"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} /><span>Leads lost in notes and spreadsheets</span></li>
+                <ul className="space-y-3 text-sm md:text-base text-muted-foreground pt-1">
+                  <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
+                  <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
+                  <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
                 </ul>
               </div>
               {/* New Way */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-2 justify-center">
-                  <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} />
-                  <h4 className="text-lg font-semibold text-foreground/80">The LeadFinder Way</h4>
+              <div className="space-y-5">
+                <div className="flex items-center gap-2.5 justify-center">
+                  <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />
+                  <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
                 </div>
-                <div 
-                  className="rounded-xl overflow-hidden"
-                  style={{ 
-                    border: '1px solid hsl(142 60% 40% / 0.2)',
-                    boxShadow: '0 0 20px hsl(142 60% 40% / 0.08)'
-                  }}
-                >
-                  <img src={newWayImage} alt="LeadFinder Pro dashboard" className="w-full h-auto" />
+                <div className="relative group">
+                  <div 
+                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
+                    style={{ background: 'linear-gradient(to bottom right, hsl(142 60% 40% / 0.3), hsl(142 60% 40% / 0.1))' }}
+                  />
+                  <div 
+                    className="relative rounded-xl overflow-hidden"
+                    style={{ 
+                      border: '1px solid hsl(142 60% 40% / 0.25)',
+                      boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
+                    }}
+                  >
+                    <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto" />
+                  </div>
                 </div>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-start gap-2"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} /><span>Find 20+ leads in minutes</span></li>
-                  <li className="flex items-start gap-2"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} /><span>Track every message and follow-up</span></li>
-                  <li className="flex items-start gap-2"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} /><span>One click WhatsApp and SMS outreach</span></li>
+                <ul className="space-y-3 text-sm md:text-base text-muted-foreground pt-1">
+                  <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
+                  <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
+                  <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
                 </ul>
               </div>
             </div>
