@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -129,9 +130,16 @@ export default function AdminDashboard() {
       headers: { Authorization: `Bearer ${session.access_token}` },
     });
 
+    console.log('[AdminDashboard] Response:', { data, error });
+
     if (error) {
-      console.error('Failed to fetch admin users:', error);
+      console.error('[AdminDashboard] Failed to fetch admin users:', error);
+      toast.error(`Admin fetch failed: ${error.message || 'Unknown error'}`);
+    } else if (data?.error) {
+      console.error('[AdminDashboard] Server error:', data.error);
+      toast.error(`Server error: ${data.error}`);
     } else {
+      console.log('[AdminDashboard] Users received:', data?.users?.length, 'total:', data?.total);
       setUsers(data?.users || []);
     }
     setIsLoading(false);
