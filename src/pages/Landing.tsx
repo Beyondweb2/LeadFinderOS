@@ -590,10 +590,90 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Early Social Proof — 2 featured reviews for trust */}
+      <ScrollReveal className="relative z-10 pb-6 sm:pb-10 px-4">
+        <div className="container mx-auto max-w-3xl">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+            {[
+              { name: 'James T.', role: 'Freelance Web Developer', quote: 'Landed 3 clients in my first month — tool paid for itself straight away.', avatar: 'JT' },
+              { name: 'Marcus L.', role: 'Web Designer', quote: "We're reaching 5x more businesses than before and actually getting replies.", avatar: 'ML' },
+            ].map((r, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-3 rounded-xl px-4 py-3"
+                style={{
+                  background: 'hsl(220 40% 9% / 0.8)',
+                  border: '1px solid hsl(210 100% 50% / 0.08)',
+                }}
+              >
+                <div
+                  className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold"
+                  style={{
+                    background: 'hsl(210 100% 50% / 0.12)',
+                    border: '1px solid hsl(210 100% 50% / 0.15)',
+                    color: 'hsl(210 100% 60%)',
+                  }}
+                >
+                  {r.avatar}
+                </div>
+                <div>
+                  <p className="text-foreground/85 text-sm leading-relaxed">"{r.quote}"</p>
+                  <p className="text-muted-foreground text-xs mt-1">{r.name} · {r.role}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </ScrollReveal>
+
       {/* Video Demo Section - hidden on mobile since it's in hero */}
       <div className="hidden sm:block">
         <VideoSection />
       </div>
+
+      {/* What you can do in your first 24 hours — standalone section */}
+      <section className="relative z-10 py-8 sm:py-12 md:py-16 px-4">
+        <div className="container mx-auto">
+          <ScrollReveal>
+            <div
+              className="relative max-w-2xl mx-auto rounded-2xl p-6 sm:p-8 overflow-hidden"
+              style={{
+                background: 'linear-gradient(180deg, hsl(220 40% 10% / 0.95), hsl(220 40% 6% / 0.98))',
+                border: '1px solid hsl(210 100% 50% / 0.10)',
+              }}
+            >
+              <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-4 sm:mb-5 tracking-tight">
+                What you can do in your first 24 hours
+              </h3>
+              <ul className="space-y-3">
+                {[
+                  'Run your first search and see businesses without websites near you',
+                  'Copy phone numbers and send your first outreach messages',
+                  'Track who you\'ve contacted and what they said',
+                  'Use ready-made WhatsApp and SMS templates',
+                  'Decide if it fits your workflow — before you\'re charged',
+                ].map((item, i) => (
+                  <li key={i} className="flex items-start gap-2.5 text-sm sm:text-base text-foreground/85">
+                    <span className="text-muted-foreground mt-0.5 flex-shrink-0">→</span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+              <div className="text-center mt-6">
+                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 h-auto text-sm sm:text-base" asChild>
+                  <Link to="/auth">
+                    Start Free Trial
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Link>
+                </Button>
+                <p className="text-[10px] sm:text-xs text-muted-foreground mt-3">
+                  1-day free trial (24 hours) · You won't be charged until the trial ends · Cancel anytime
+                </p>
+              </div>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
 
       {/* How It Works Section */}
       <HowItWorksSection ScrollReveal={ScrollReveal} />
@@ -719,27 +799,6 @@ const Landing = () => {
                 className="absolute -inset-4 rounded-3xl blur-2xl opacity-30 pointer-events-none"
                 style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.12), transparent 70%)' }}
               />
-
-              {/* What you can do in your first 24 hours */}
-              <div className="relative mb-6 sm:mb-8 pb-6 sm:pb-8" style={{ borderBottom: '1px solid hsl(210 100% 50% / 0.08)' }}>
-                <h3 className="text-base sm:text-lg font-semibold text-foreground mb-3 sm:mb-4">
-                  What you can do in your first 24 hours
-                </h3>
-                <ul className="space-y-2.5 sm:space-y-3">
-                  {[
-                    'Run your first search and get a list of businesses without websites in your area',
-                    'Copy their phone numbers and send your first outreach messages',
-                    'Add leads to your CRM and start tracking conversations',
-                    'Use ready-made templates to reach out via WhatsApp or SMS',
-                    'See if LeadFinder Pro fits your workflow — before you pay anything',
-                  ].map((item, i) => (
-                    <li key={i} className="flex items-start gap-2.5 text-sm sm:text-base text-foreground/85">
-                      <span className="text-muted-foreground mt-0.5">→</span>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
 
               <div className="relative grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
                 {[
