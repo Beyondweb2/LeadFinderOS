@@ -771,10 +771,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Micro-bridge */}
-      <p className="text-center text-xs sm:text-sm text-muted-foreground/50 -mt-6 sm:-mt-8 mb-4 sm:mb-6 relative z-10">
-        Here's what you'll be working with.
-      </p>
 
       {/* Features Section — Lead Toolkit */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
@@ -811,17 +807,6 @@ const Landing = () => {
                             className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                             style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.03), transparent)' }}
                           />
-                          <div className="relative overflow-hidden rounded-t-lg">
-                            <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent z-10 pointer-events-none" />
-                            <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                              <Search className="h-4 w-4 text-foreground" />
-                            </div>
-                            <img 
-                              src={feature.image} 
-                              alt={feature.title}
-                              className={`w-full h-64 sm:h-80 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
-                            />
-                          </div>
                           <CardHeader className="relative pb-1 sm:pb-2 p-4 sm:p-5">
                             <div className="flex items-center gap-3">
                               <div 
@@ -837,8 +822,18 @@ const Landing = () => {
                             </div>
                           </CardHeader>
                           <CardContent className="relative pt-0 p-4 sm:p-5 sm:pt-0">
-                            <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+                            <p className="text-muted-foreground text-sm leading-relaxed mb-3">{feature.description}</p>
                           </CardContent>
+                          <div className="relative overflow-hidden rounded-b-lg">
+                            <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                              <Search className="h-4 w-4 text-foreground" />
+                            </div>
+                            <img 
+                              src={feature.image} 
+                              alt={feature.title}
+                              className={`w-full h-64 sm:h-80 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                            />
+                          </div>
                         </Card>
                       </CarouselItem>
                     ))}
@@ -855,10 +850,6 @@ const Landing = () => {
       {/* Reviews / Social Proof */}
       <ReviewsSection />
 
-      {/* Micro-bridge to pricing — desktop only */}
-      <p className="hidden sm:block text-center text-xs sm:text-sm text-muted-foreground/50 relative z-10 -mb-4 sm:-mb-6">
-        One plan. Everything included.
-      </p>
 
       {/* Pricing Section */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
@@ -949,44 +940,6 @@ const Landing = () => {
       </section>
 
 
-      {/* Final CTA Section — desktop only */}
-      <section className="relative z-10 hidden sm:block py-16 md:py-20 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal className="text-center">
-            <div 
-              className="relative max-w-2xl mx-auto rounded-3xl p-10 md:p-12 overflow-hidden"
-              style={{
-                background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.08), hsl(220 80% 45% / 0.04))',
-                border: '1px solid hsl(210 100% 50% / 0.15)',
-              }}
-            >
-              <div 
-                className="absolute -inset-4 rounded-3xl blur-2xl opacity-40 pointer-events-none"
-                style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.15), transparent 70%)' }}
-              />
-              
-              <h2 className="relative text-2xl md:text-3xl lg:text-4xl font-bold mb-4 tracking-tight">
-                Ready to Find Your Next Client?
-              </h2>
-              <p className="relative text-base md:text-lg text-muted-foreground mb-8 max-w-lg mx-auto">
-                Start finding businesses that need your services.
-              </p>
-              <div className="relative flex flex-row items-center justify-center gap-4">
-                <Button size="lg" className="btn-premium font-semibold px-8 py-4 h-auto text-base" asChild>
-                  <Link to="/auth">
-                    Start Your Free Trial
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Link>
-                </Button>
-              </div>
-               <p className="relative text-xs text-muted-foreground mt-4">
-                 £0 today · Full access for 24 hours · Cancel anytime
-               </p>
-            </div>
-          </ScrollReveal>
-        </div>
-      </section>
-
       {/* Got Questions Section */}
       <section className="relative z-10 py-10 sm:py-14 md:py-16 px-4">
         <div className="container mx-auto">
@@ -1005,10 +958,10 @@ const Landing = () => {
               href="https://wa.me/447000000000?text=Hi%2C%20I%20have%20a%20question%20about%20LeadFinder%20Pro"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-sm text-white transition-all duration-200 hover:brightness-110"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-sm text-black transition-all duration-200 hover:brightness-110"
               style={{
-                background: 'linear-gradient(135deg, hsl(142 70% 40%), hsl(142 70% 35%))',
-                boxShadow: '0 4px 14px hsl(142 70% 40% / 0.3)',
+                background: 'linear-gradient(135deg, hsl(142 80% 50%), hsl(142 80% 45%))',
+                boxShadow: '0 4px 14px hsl(142 80% 50% / 0.4), 0 0 20px hsl(142 80% 50% / 0.2)',
               }}
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
@@ -1024,12 +977,9 @@ const Landing = () => {
       <footer className="relative z-10 border-t border-white/[0.06] py-8 sm:py-10 md:py-12 mt-8 sm:mt-12 px-4">
         <div className="container mx-auto">
           <div className="flex flex-col items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
-            <div className="flex items-center gap-2">
-              <img src={appLogo} alt="LeadFinder Pro" className="h-7 w-7 sm:h-8 sm:w-8" />
-              <span className="font-semibold tracking-tight text-sm sm:text-base">
-                Lead<span className="text-gradient-primary">Finder</span> Pro
-              </span>
-            </div>
+            <span className="font-semibold tracking-tight text-sm sm:text-base">
+              Lead<span className="text-gradient-primary">Finder</span> Pro
+            </span>
             <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 md:gap-8 text-xs sm:text-sm text-muted-foreground">
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
                 Sign In
