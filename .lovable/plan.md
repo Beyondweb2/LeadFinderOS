@@ -1,34 +1,37 @@
 
-
-# Fix Stripe Webhook 400 Errors
+# Fix "Invalid time value" crash in Stripe webhook
 
 ## Problem
-All webhook deliveries are returning 400 because the `STRIPE_WEBHOOK_SECRET` stored in your backend doesn't match the signing secret for your live webhook endpoint in Stripe.
+When processing `customer.subscription.created` (and `invoice.payment_succeeded`), the webhook crashes with `"Invalid time value"` on line 248:
 
-## Root Cause
-The webhook code is correct -- it already verifies signatures and returns 200 on success. The only issue is a **secret mismatch**.
+```typescript
+current_period_end: new Date(subscription.current_period_end * 1000).toISOString()
+```
+
+For trialing subscriptions, `current_period_end` can be `null` or `0`, causing `new Date()` to produce an invalid date. The sync-subscription logs confirm this: `currentPeriodEnd: null` for this exact subscription.
+
+## Fix
+Add a null-safe check when converting `current_period_end` to an ISO string. If the value is null/falsy, fall back to `trial_end` or just store `null`.
+
+### File: `supabase/functions/stripe-webhook/index.ts` (line 248)
+
+**Before:**
+```typescript
+current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+```
+
+**After:**
+```typescript
+current_period_end: subscription.current_period_end
+  ? new Date(subscription.current_period_end * 1000).toISOString()
+  : (subscription.trial_end
+    ? new Date(subscription.trial_end * 1000).toISOString()
+    : null),
+```
+
+This matches the same logic already used in `sync-subscription/index.ts` which safely handles these nullable timestamps.
 
 ## Steps
-
-### 1. Get your live webhook signing secret from Stripe
-- Go to [Stripe Dashboard > Developers > Webhooks](https://dashboard.stripe.com/webhooks)
-- Click on your live endpoint (`https://hhbdvgsnjequwooynxpr.supabase.co/functions/v1/stripe-webhook`)
-- Under "Signing secret", click "Reveal" to copy the value (starts with `whsec_...`)
-
-### 2. Update the secret
-- I will use the secrets tool to prompt you to paste the correct live `STRIPE_WEBHOOK_SECRET` value
-
-### 3. Redeploy the edge function
-- Redeploy `stripe-webhook` to pick up the updated secret
-
-### 4. Verify
-- Trigger a test event from the Stripe webhook dashboard or wait for the next real event
-- Confirm it returns 200
-
-## Technical Details
-- No code changes are needed -- the existing `stripe-webhook/index.ts` already:
-  - Reads `STRIPE_WEBHOOK_SECRET` from environment
-  - Calls `stripe.webhooks.constructEvent(body, signature, webhookSecret)`
-  - Returns 400 on signature failure, 200 on success
-- The only action is updating the secret value and redeploying
-
+1. Update line 248 in `stripe-webhook/index.ts` with the null-safe date conversion
+2. Redeploy the `stripe-webhook` edge function
+3. Resend the failed `customer.subscription.created` event from Stripe to confirm 200
