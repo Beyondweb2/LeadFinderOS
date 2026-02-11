@@ -594,7 +594,7 @@ const Landing = () => {
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
-            Search any area, find businesses without websites, and message them directly — before your competitors even know they exist.
+            Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
           </p>
           
           {/* Keywords removed */}
@@ -602,7 +602,7 @@ const Landing = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/auth">
-                Try It Free for 24 Hours
+                Start Free Trial
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
@@ -619,7 +619,7 @@ const Landing = () => {
           
           {/* Stats bar */}
           <div className="mt-6 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
-            <CountUpStat target={10000} suffix="+" label="Businesses Found" />
+            <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
               <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Coverage</div>
@@ -631,7 +631,7 @@ const Landing = () => {
           </div>
           {/* Reassurance microcopy - mobile only, after badges */}
           <p className="sm:hidden text-[11px] text-muted-foreground text-center mt-4">
-            Full access for 24 hours. £0 charged today. Cancel anytime.
+            Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
           </p>
           {/* Scroll down indicator */}
           <div className="mt-5 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
