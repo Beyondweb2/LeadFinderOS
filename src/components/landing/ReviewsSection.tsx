@@ -18,28 +18,28 @@ const REVIEWS: Review[] = [
   {
     name: 'Chris P.',
     role: 'Freelance Designer',
-    content: "i was manually searching google maps for about an hour every morning. now i get 20-25 businesses in 15 minutes and can message them straight away. genuinely saves me so much time.",
+    content: "I used to spend an hour every morning trawling Google Maps for prospects. Now I get 30+ leads in 10 minutes and go straight into outreach. It's completely changed how I start my day.",
     avatar: 'CP',
     stars: 5,
   },
   {
     name: 'Tom H.',
     role: 'Web Developer',
-    content: "the tracking is what keeps me using it. i know exactly who i've messaged, who replied, and who to follow up with. before this i was losing leads in my notes app.",
+    content: "What sold me was the tracking. I know exactly who I've messaged, who's replied, and who needs a follow-up. Before this, I was losing leads in random notes and spreadsheets.",
     avatar: 'TH',
-    stars: 4,
+    stars: 5,
   },
   {
     name: 'Alex M.',
     role: 'WordPress Freelancer',
-    content: "got my first paying client about two and a half weeks in. the outreach templates helped me send messages without overthinking what to say every time.",
+    content: "Landed my first client within three weeks of signing up. The outreach templates meant I wasn't agonising over what to say every single time — I just sent and moved on.",
     avatar: 'AM',
     stars: 5,
   },
   {
     name: 'Daniel S.',
     role: 'Agency Owner',
-    content: "we were spending ages on prospecting admin. now the whole team uses it and we're getting consistent replies because follow ups actually happen on time.",
+    content: "Prospecting used to eat up half the week for my team. Now we all use LeadFinder and follow-ups actually happen on time. Our reply rate has noticeably improved.",
     avatar: 'DS',
     stars: 5,
   },
@@ -123,7 +123,7 @@ export const ReviewsSection = () => {
         {isMobile ? (
           <MobileReviewsCarousel />
         ) : (
-          <div className="grid grid-cols-4 gap-6 max-w-5xl mx-auto">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 max-w-5xl mx-auto">
             {REVIEWS.map((review, index) => (
               <ReviewCard key={index} review={review} />
             ))}
