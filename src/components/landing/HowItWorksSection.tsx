@@ -18,7 +18,6 @@ import {
   Users,
   ArrowRight,
   X,
-  Expand,
 } from 'lucide-react';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -176,16 +175,12 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             {STEPS.map((step, index) => (
               <div key={step.title} className="flex flex-col items-center text-center">
                 {/* Step number */}
-                <div 
-                  className="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-sm mb-3"
-                  style={{ 
-                    background: 'hsl(210 100% 50% / 0.15)',
-                    color: 'hsl(210 100% 60%)',
-                    border: '1px solid hsl(210 100% 50% / 0.3)'
-                  }}
+                <span 
+                  className="font-bold text-lg mb-2"
+                  style={{ color: 'hsl(210 100% 60%)' }}
                 >
                   {index + 1}
-                </div>
+                </span>
                 
                 <h3 className="text-xl font-bold tracking-tight mb-2">{step.title}</h3>
                 
@@ -211,7 +206,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
-                      <Expand className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Search className="h-3.5 w-3.5 text-muted-foreground" />
                     </div>
                   </div>
                 </div>
@@ -255,7 +250,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                           className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                         />
                         <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                          <Expand className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                          <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
                         </div>
                         <div 
                           className="absolute top-3 right-3 sm:top-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold backdrop-blur-md"

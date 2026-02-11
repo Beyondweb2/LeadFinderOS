@@ -15,7 +15,7 @@ import {
   CheckCircle,
   Volume2,
   VolumeX,
-  Expand,
+  
   MessageSquare,
   Gift,
   Star,
@@ -359,7 +359,7 @@ const MobileFeatureCarousel = ({ features, onExpand }: { features: typeof FEATUR
                       className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-105'}`}
                     />
                     <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
-                      <Expand className="h-3.5 w-3.5 text-muted-foreground" />
+                      <Search className="h-3.5 w-3.5 text-muted-foreground" />
                     </div>
                   </div>
                 </div>
@@ -731,7 +731,7 @@ const Landing = () => {
               <ScrollReveal key={i} delay={i * 80}>
                 {/* Mobile: centered, compact */}
                 <div className="sm:hidden text-center px-2">
-                  <Check className="h-4 w-4 mx-auto mb-1.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
+                  <Check className="h-5 w-5 mx-auto mb-1.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
                   <p className="text-[15px] font-semibold text-foreground tracking-tight leading-snug mb-1">{item.title}</p>
                   <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">{item.detail}</p>
                 </div>
@@ -814,7 +814,7 @@ const Landing = () => {
                           <div className="relative overflow-hidden rounded-t-lg">
                             <div className="absolute inset-0 bg-gradient-to-t from-card via-transparent to-transparent z-10 pointer-events-none" />
                             <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                              <Expand className="h-4 w-4 text-foreground" />
+                              <Search className="h-4 w-4 text-foreground" />
                             </div>
                             <img 
                               src={feature.image} 
@@ -949,38 +949,37 @@ const Landing = () => {
       </section>
 
 
-      {/* Final CTA Section */}
-      <section className="relative z-10 py-8 sm:py-16 md:py-20 px-4">
+      {/* Final CTA Section — desktop only */}
+      <section className="relative z-10 hidden sm:block py-16 md:py-20 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center">
             <div 
-              className="relative max-w-2xl mx-auto rounded-2xl sm:rounded-3xl p-6 sm:p-10 md:p-12 overflow-hidden"
+              className="relative max-w-2xl mx-auto rounded-3xl p-10 md:p-12 overflow-hidden"
               style={{
                 background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.08), hsl(220 80% 45% / 0.04))',
                 border: '1px solid hsl(210 100% 50% / 0.15)',
               }}
             >
-              {/* Glow effect */}
               <div 
                 className="absolute -inset-4 rounded-3xl blur-2xl opacity-40 pointer-events-none"
                 style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.15), transparent 70%)' }}
               />
               
-              <h2 className="relative text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4 tracking-tight">
+              <h2 className="relative text-2xl md:text-3xl lg:text-4xl font-bold mb-4 tracking-tight">
                 Ready to Find Your Next Client?
               </h2>
-              <p className="relative text-sm sm:text-base md:text-lg text-muted-foreground mb-6 sm:mb-8 max-w-lg mx-auto">
+              <p className="relative text-base md:text-lg text-muted-foreground mb-8 max-w-lg mx-auto">
                 Start finding businesses that need your services.
               </p>
-              <div className="relative flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
-                <Button size="lg" className="btn-premium font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto text-sm sm:text-base w-full sm:w-auto" asChild>
+              <div className="relative flex flex-row items-center justify-center gap-4">
+                <Button size="lg" className="btn-premium font-semibold px-8 py-4 h-auto text-base" asChild>
                   <Link to="/auth">
                     Start Your Free Trial
-                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                    <ArrowRight className="ml-2 h-5 w-5" />
                   </Link>
                 </Button>
               </div>
-               <p className="relative text-[10px] sm:text-xs text-muted-foreground mt-4">
+               <p className="relative text-xs text-muted-foreground mt-4">
                  £0 today · Full access for 24 hours · Cancel anytime
                </p>
             </div>
