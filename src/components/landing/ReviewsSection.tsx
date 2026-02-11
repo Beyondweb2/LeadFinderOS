@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from '@/components/ui/carousel';
 import Autoplay from 'embla-carousel-autoplay';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useState, useEffect, useRef } from 'react';
 
 interface Review {
@@ -44,35 +45,32 @@ const REVIEWS: Review[] = [
   },
 ];
 
-const StarRating = ({ count }: { count: number }) => (
-  <div className="flex gap-0.5 justify-center sm:justify-start">
-    {[...Array(5)].map((_, i) => (
-      <Star 
-        key={i} 
-        className={`h-3.5 w-3.5 ${i < count ? 'fill-yellow-400 text-yellow-400' : 'text-muted-foreground/20'}`} 
-      />
-    ))}
-  </div>
-);
+// Pair reviews into groups of 2
+const REVIEW_PAIRS: Review[][] = [];
+for (let i = 0; i < REVIEWS.length; i += 2) {
+  REVIEW_PAIRS.push(REVIEWS.slice(i, i + 2));
+}
 
 const ReviewCard = ({ review }: { review: Review }) => (
-  <div className="h-full py-6 sm:py-8 text-center max-w-2xl mx-auto">
-    <div className="flex gap-1 mb-4 justify-center">
+  <div className="h-full py-4 sm:py-6 text-center">
+    <div className="flex gap-1 mb-3 justify-center">
       {[...Array(review.stars)].map((_, i) => (
-        <Star key={i} className="h-6 w-6 fill-yellow-400 text-yellow-400" />
+        <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
       ))}
     </div>
-    <p className="text-foreground/80 text-lg sm:text-xl md:text-2xl leading-relaxed mb-5 italic font-normal">
+    <p className="text-foreground/80 text-base sm:text-lg leading-relaxed mb-4 italic font-normal">
       "{review.content}"
     </p>
-    <p className="text-muted-foreground/70 text-sm sm:text-base">{review.name} · {review.role}</p>
+    <p className="text-muted-foreground/70 text-sm">{review.name} · {review.role}</p>
   </div>
 );
 
 const ReviewsCarousel = () => {
+  const isMobile = useIsMobile();
   const [api, setApi] = useState<CarouselApi>();
   const [current, setCurrent] = useState(0);
   const autoplayPlugin = useRef(Autoplay({ delay: 5000, stopOnInteraction: true }));
+  const slides = isMobile ? REVIEWS : REVIEW_PAIRS;
 
   useEffect(() => {
     if (!api) return;
@@ -81,7 +79,7 @@ const ReviewsCarousel = () => {
   }, [api]);
 
   return (
-    <div className="max-w-3xl mx-auto">
+    <div className="max-w-5xl mx-auto">
       <Carousel
         setApi={setApi}
         opts={{ loop: true, align: 'center' }}
@@ -89,17 +87,27 @@ const ReviewsCarousel = () => {
         className="w-full"
       >
         <CarouselContent className="-ml-4">
-          {REVIEWS.map((review, index) => (
-            <CarouselItem key={index} className="pl-4">
-              <ReviewCard review={review} />
-            </CarouselItem>
-          ))}
+          {isMobile
+            ? REVIEWS.map((review, index) => (
+                <CarouselItem key={index} className="pl-4">
+                  <ReviewCard review={review} />
+                </CarouselItem>
+              ))
+            : REVIEW_PAIRS.map((pair, index) => (
+                <CarouselItem key={index} className="pl-4">
+                  <div className="grid grid-cols-2 gap-10 max-w-4xl mx-auto">
+                    {pair.map((review, ri) => (
+                      <ReviewCard key={ri} review={review} />
+                    ))}
+                  </div>
+                </CarouselItem>
+              ))}
         </CarouselContent>
       </Carousel>
 
       {/* Dot indicators */}
       <div className="flex items-center justify-center gap-1.5 mt-4">
-        {REVIEWS.map((_, index) => (
+        {slides.map((_, index) => (
           <button
             key={index}
             onClick={() => api?.scrollTo(index)}
