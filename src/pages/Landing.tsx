@@ -577,7 +577,7 @@ const Landing = () => {
           </div>
           {/* Reassurance microcopy */}
           <p className="text-[11px] sm:text-xs text-muted-foreground text-center mt-3">
-            Full access for 24 hours. Cancel anytime.
+            Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
           </p>
 
           {/* Scroll down indicator */}
@@ -596,8 +596,8 @@ const Landing = () => {
         <div className="container mx-auto max-w-3xl">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
             {[
-              { name: 'James T.', role: 'Freelance Web Developer', quote: 'Landed 3 clients in my first month — tool paid for itself straight away.', avatar: 'JT', stars: 5 },
-              { name: 'Marcus L.', role: 'Web Designer', quote: "We're reaching 5x more businesses than before and actually getting replies.", avatar: 'ML', stars: 5 },
+              { name: 'James T.', role: 'Freelance Web Developer', quote: 'Had a list of 30+ leads in minutes. Landed 3 clients in my first month — paid for itself straight away.', avatar: 'JT', stars: 5 },
+              { name: 'Marcus L.', role: 'Web Designer', quote: "We're reaching 5x more businesses than before and actually getting replies. Huge time saver.", avatar: 'ML', stars: 5 },
             ].map((r, i) => (
               <div
                 key={i}
@@ -650,16 +650,17 @@ const Landing = () => {
                 border: '1px solid hsl(210 100% 50% / 0.10)',
               }}
             >
-              <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-4 sm:mb-5 tracking-tight">
+              <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-1.5 tracking-tight">
                 What you can do in your first 24 hours
               </h3>
+              <p className="text-xs sm:text-sm text-muted-foreground mb-4 sm:mb-5">Everything below is included — no limits, no restrictions.</p>
               <ul className="space-y-3.5">
                 {[
-                  'Run your first search and see businesses without websites near you',
-                  'Copy phone numbers and send your first outreach messages',
-                  'Track who you\'ve contacted and what they said',
-                  'Use ready-made WhatsApp and SMS templates',
-                  'Decide if it fits your workflow — before you\'re charged',
+                  'Search any area and instantly see businesses without websites',
+                  'Copy numbers and send your first WhatsApp or SMS messages',
+                  'Track every lead from first message to reply',
+                  'Use ready-made outreach templates — no copywriting needed',
+                  'Decide if it works for you — before you\'re ever charged',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 text-sm sm:text-base text-foreground/90">
                     <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center" style={{ background: 'hsl(142 71% 45% / 0.15)', border: '1px solid hsl(142 71% 45% / 0.25)' }}>
@@ -677,7 +678,7 @@ const Landing = () => {
                   </Link>
                 </Button>
                 <p className="text-[10px] sm:text-xs text-muted-foreground mt-3">
-                  1-day free trial (24 hours) · You won't be charged until the trial ends · Cancel anytime
+                  24-hour free trial · £0 charged today · Cancel instantly if it's not for you
                 </p>
               </div>
             </div>
@@ -1010,8 +1011,8 @@ const Landing = () => {
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
-                    You won't be charged during the trial · Cancel instantly, no questions asked
+                   <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
+                    £0 today · You're only charged after 24 hours · Cancel anytime, no questions asked
                   </p>
                 </CardFooter>
               </Card>
@@ -1052,9 +1053,9 @@ const Landing = () => {
                   </Link>
                 </Button>
               </div>
-              <p className="relative text-[10px] sm:text-xs text-muted-foreground mt-4">
-                1-day free trial (24 hours) • Cancel anytime
-              </p>
+               <p className="relative text-[10px] sm:text-xs text-muted-foreground mt-4">
+                 £0 today · Full access for 24 hours · Cancel anytime
+               </p>
             </div>
           </ScrollReveal>
         </div>
