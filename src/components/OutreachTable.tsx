@@ -38,7 +38,15 @@ import {
   Upload,
   Eye,
   PhoneOff,
+  PhoneCall,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -994,13 +1002,35 @@ export function OutreachTable({
                           )}
                           {lead.phone && (
                             <>
-                              <a
-                                href={`tel:${lead.phone}`}
-                                className="p-1.5 rounded-md hover:bg-muted text-primary hover:text-primary/80 transition-colors"
-                                title="Call"
-                              >
-                                <Phone className="h-4 w-4" />
-                              </a>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    className="p-1.5 rounded-md hover:bg-muted text-primary hover:text-primary/80 transition-colors"
+                                    title="Call options"
+                                  >
+                                    <Phone className="h-4 w-4" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="center" className="min-w-[160px]">
+                                  <DropdownMenuItem asChild>
+                                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer">
+                                      <PhoneCall className="h-4 w-4" />
+                                      Normal Call
+                                    </a>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem asChild>
+                                    <a
+                                      href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 cursor-pointer"
+                                    >
+                                      <Phone className="h-4 w-4 text-green-500" />
+                                      WhatsApp Call
+                                    </a>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                               <button
                                     onClick={() => handleSMSClick(lead)}
                                     className="p-1.5 rounded-md hover:bg-muted text-blue-500 hover:text-blue-400 transition-colors"
