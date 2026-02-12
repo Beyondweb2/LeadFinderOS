@@ -112,34 +112,36 @@ const Subscribe = () => {
                <CardTitle className="text-2xl font-bold">
                  Lead<span className="text-gradient-primary">Finder</span> Pro
               </CardTitle>
-              <CardDescription className="text-lg">
-                Unlock full access to all features
-              </CardDescription>
-           </CardHeader>
-           
-            <CardContent className="space-y-6">
-              <div className="text-center">
-              {eligibilityLoading ? (
-                  <Skeleton className="h-5 w-32 mx-auto mb-3" />
-                ) : !hideTrialOffer ? (
-                  <div className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
-                    24-Hour Full Access
-                  </div>
-                ) : null}
-                <div>
-                  <span className="text-4xl font-bold">£19.99</span>
-                  <span className="text-muted-foreground">/month</span>
-                </div>
-                {eligibilityLoading ? (
-                  <Skeleton className="h-4 w-48 mx-auto mt-2" />
-                ) : (
-                   <p className="text-sm text-muted-foreground mt-2">
-                     {hideTrialOffer 
-                       ? '£19.99/month. Cancel anytime.'
-                       : '£0 today · Full access for 24 hours · Cancel anytime'
-                     }
-                   </p>
-                )}
+               <CardDescription className="text-lg">
+                 {eligibilityLoading ? 'Loading...' : hideTrialOffer 
+                   ? 'Unlock full access to all features'
+                   : 'Try everything free for 24 hours'}
+               </CardDescription>
+            </CardHeader>
+            
+             <CardContent className="space-y-6">
+               <div className="text-center">
+               {eligibilityLoading ? (
+                   <Skeleton className="h-5 w-32 mx-auto mb-3" />
+                 ) : !hideTrialOffer ? (
+                   <div className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
+                     Free 24-Hour Full Access
+                   </div>
+                 ) : null}
+                 <div>
+                   <span className="text-4xl font-bold">£19.99</span>
+                   <span className="text-muted-foreground">/month</span>
+                 </div>
+                 {eligibilityLoading ? (
+                   <Skeleton className="h-4 w-48 mx-auto mt-2" />
+                 ) : (
+                    <p className="text-sm text-muted-foreground mt-2">
+                      {hideTrialOffer 
+                        ? '£19.99/month. Cancel anytime.'
+                        : '£0 today · Full access for 24 hours · Then £19.99/month · Cancel anytime'
+                      }
+                    </p>
+                 )}
               </div>
  
              <ul className="space-y-3">
