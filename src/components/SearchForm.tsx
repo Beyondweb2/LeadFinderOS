@@ -191,7 +191,9 @@ export function SearchForm({
                 }`}>
                   <Search className="h-3 w-3" />
                   <span className="font-medium">
-                    {searchesRemaining}/{dailyLimit} searches left today
+                    {dailyLimit === 1 
+                      ? (searchesRemaining === 1 ? '1 free search' : 'Free search used')
+                      : `${searchesRemaining}/${dailyLimit} searches left today`}
                   </span>
                 </div>
               </div>
