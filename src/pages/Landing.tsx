@@ -853,12 +853,7 @@ const Landing = () => {
       {/* Testimonials — after toolkit */}
       <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
         <div className="container mx-auto max-w-5xl">
-          {/* Stars — tight above testimonials */}
-          <div className="flex gap-0.5 justify-center mb-3">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="h-4 w-4 sm:h-5 sm:w-5 fill-yellow-400 text-yellow-400" />
-            ))}
-          </div>
+          {/* Reviews heading */}
 
           {(() => {
             const testimonials = [
@@ -972,7 +967,15 @@ const Landing = () => {
                 
                 <CardContent className="pt-4 sm:pt-5 px-4 sm:px-6">
                   <ul className="space-y-2.5 sm:space-y-3">
-                    {['Unlimited lead searches', 'Find businesses without websites', 'Built-in CRM to stay organised', 'One-click WhatsApp & SMS outreach'].map((feature) => (
+                    {[
+                      'Unlimited lead searches',
+                      'Find businesses without websites',
+                      'Built-in CRM to stay organised',
+                      'One-click WhatsApp & SMS outreach',
+                      'Ready-made message templates',
+                      'Smart dashboard & analytics',
+                      'Export leads to CSV',
+                    ].map((feature) => (
                       <li key={feature} className="flex items-center gap-2.5 sm:gap-3">
                         <Check className="h-4 w-4 flex-shrink-0" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={2.5} />
                         <span className="text-foreground/90 text-xs sm:text-sm">{feature}</span>
