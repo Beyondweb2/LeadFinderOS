@@ -96,7 +96,7 @@ export function TrialProgressCard({
         {/* Upgrade CTA */}
         <div className="pt-2 flex items-center justify-between gap-4 border-t border-border/50">
           <p className="text-xs text-muted-foreground">
-            Subscribe to keep access after your trial ends
+            Your plan auto-renews after the trial — manage anytime
           </p>
           <Button size="sm" asChild>
             <Link to="/subscribe" className="flex items-center gap-1.5">
