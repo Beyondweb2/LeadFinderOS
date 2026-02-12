@@ -12,7 +12,7 @@ import { useOutreach } from '@/hooks/useOutreach';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
-import { Flame, Target, Zap, Search, CreditCard, AlertTriangle } from 'lucide-react';
+import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Lead, Country } from '@/types/lead';
 
@@ -39,8 +39,8 @@ const Index = () => {
   // Determine if still loading access status
   const isAccessLoading = isTrialLoading || isSubscriptionLoading;
 
-  // Demo user: not pro, demo search used → show upgrade panel instead of search
-  const showDemoUpgrade = !isAccessLoading && !hasProAccess && demoSearchUsed;
+  // Demo user who already used their search — show upgrade on next search attempt
+  const [showDemoUpgradePanel, setShowDemoUpgradePanel] = useState(false);
 
   // Check if we should show upgrade prompt after searches (only for free trial users, not Stripe trialing)
   useEffect(() => {
@@ -105,11 +105,16 @@ const Index = () => {
 
       {/* Search Section OR Upgrade Panel */}
       <section>
-        {showDemoUpgrade ? (
+        {showDemoUpgradePanel ? (
           <DemoUpgradePanel />
         ) : (
           <SearchForm 
             onSearch={(filters) => {
+              // Block second search for demo users
+              if (isDemoUser && demoSearchUsed) {
+                setShowDemoUpgradePanel(true);
+                return;
+              }
               setLastSearchCountry(filters.country || 'UK');
               search(filters, false, false);
             }} 
@@ -122,6 +127,19 @@ const Index = () => {
           />
         )}
       </section>
+
+      {/* Subtle upgrade banner after first demo search */}
+      {isDemoUser && demoSearchUsed && !showDemoUpgradePanel && leads.length > 0 && (
+        <div className="flex items-center justify-center gap-2 py-2.5 px-4 bg-primary/5 border border-primary/10 rounded-lg">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <span className="text-sm text-muted-foreground">
+            You've used your demo search. 
+            <Link to="/subscribe" className="text-primary font-medium ml-1 hover:underline">
+              Unlock unlimited searches →
+            </Link>
+          </span>
+        </div>
+      )}
 
       {/* Outcome-focused Results Header */}
       {leads.length > 0 && noWebsiteCount > 0 && (
@@ -150,7 +168,7 @@ const Index = () => {
       )}
 
       {/* Empty State */}
-      {leads.length === 0 && !isLoading && !showDemoUpgrade && (
+      {leads.length === 0 && !isLoading && !showDemoUpgradePanel && (
         <section className="text-center py-16">
           <div className="inline-flex p-4 rounded-full bg-muted/50 mb-6">
             <Search className="h-12 w-12 text-muted-foreground" />

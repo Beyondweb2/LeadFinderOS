@@ -40,7 +40,7 @@ export function DemoUpgradePanel() {
               Unlock Full Access
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto">
-              Unlimited searches and full outreach system for 24 hours.
+              You've used your demo search. Unlock unlimited searches and full outreach system for 24 hours.
             </p>
           </div>
 
