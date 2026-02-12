@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { ContactDialog } from '@/components/ContactDialog';
@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button';
 import type { Lead, Country } from '@/types/lead';
 
 const Index = () => {
+  const location = useLocation();
+  const isDemo = location.pathname === '/demo';
   const { leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted } = useLeadSearchContext();
   const { 
     markAsContacted, 
@@ -105,6 +107,7 @@ const Index = () => {
           dailyLimit={dailyLimit}
           isPaidSubscriber={hasProAccess}
           disabled={postAbandonExhausted && !hasProAccess}
+          isDemo={isDemo}
         />
       </section>
 
@@ -137,16 +140,29 @@ const Index = () => {
       {/* Empty State */}
       {leads.length === 0 && !isLoading && (
         <section className="text-center py-16">
-          <div className="inline-flex p-4 rounded-full bg-muted/50 mb-6">
-            <Search className="h-12 w-12 text-muted-foreground" />
-          </div>
-          <h2 className="text-xl font-semibold text-foreground/80 mb-2">
-            Ready to find leads
-          </h2>
-          <p className="text-muted-foreground max-w-md mx-auto">
-            Enter a business type and location above to discover businesses 
-            without websites — your ideal prospects for web development services.
-          </p>
+          {isDemo ? (
+            <>
+              <div className="inline-flex p-3 rounded-full bg-muted/50 mb-4">
+                <Search className="h-8 w-8 text-muted-foreground" />
+              </div>
+              <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                Run a demo search to see live businesses.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="inline-flex p-4 rounded-full bg-muted/50 mb-6">
+                <Search className="h-12 w-12 text-muted-foreground" />
+              </div>
+              <h2 className="text-xl font-semibold text-foreground/80 mb-2">
+                Ready to find leads
+              </h2>
+              <p className="text-muted-foreground max-w-md mx-auto">
+                Enter a business type and location above to discover businesses 
+                without websites — your ideal prospects for web development services.
+              </p>
+            </>
+          )}
         </section>
       )}
 

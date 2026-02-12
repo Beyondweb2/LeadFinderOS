@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone } from 'lucide-react';
+import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,6 +20,7 @@ interface SearchFormProps {
   dailyLimit?: number;
   isPaidSubscriber?: boolean;
   disabled?: boolean;
+  isDemo?: boolean;
 }
 
 export function SearchForm({ 
@@ -30,6 +31,7 @@ export function SearchForm({
   dailyLimit = 2,
   isPaidSubscriber = false,
   disabled = false,
+  isDemo = false,
 }: SearchFormProps) {
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
@@ -179,8 +181,33 @@ export function SearchForm({
 
           {/* Submit Button with Trial Indicator */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+            {/* Demo search indicator */}
+            {isDemo && (
+              <div className="flex items-center gap-2 text-xs sm:text-sm">
+                {searchesRemaining > 0 ? (
+                  <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-primary/10 text-primary border-primary/20">
+                    <Search className="h-3 w-3" />
+                    <span className="font-medium">1 demo search available</span>
+                  </div>
+                ) : (
+                  <div className="flex flex-col sm:flex-row items-center gap-2">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border bg-destructive/10 text-destructive border-destructive/20">
+                      <Search className="h-3 w-3" />
+                      <span className="font-medium">You've used your free demo search.</span>
+                    </div>
+                    <Button asChild size="sm" type="button" className="shrink-0">
+                      <a href="/auth">
+                        <Rocket className="mr-1.5 h-3.5 w-3.5" />
+                        Unlock Full Access
+                      </a>
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Trial searches remaining indicator - only for free users with actual daily caps */}
-            {!isPaidSubscriber && isFinite(dailyLimit) && (
+            {!isDemo && !isPaidSubscriber && isFinite(dailyLimit) && (
               <div className="flex items-center gap-2 text-xs sm:text-sm">
                 <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
                   searchesRemaining === 0 
