@@ -491,32 +491,18 @@ const Landing = () => {
       </Dialog>
       {/* Cinematic background */}
       <div className="fixed inset-0 pointer-events-none">
-        {/* Deep blue base wash */}
+        {/* Smooth dark navy-to-black gradient base */}
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'linear-gradient(180deg, hsl(215 60% 8%) 0%, hsl(220 50% 5%) 40%, hsl(218 55% 7%) 70%, hsl(215 50% 6%) 100%)',
+            background: 'radial-gradient(ellipse 80% 50% at 50% -20%, hsl(210 100% 50% / 0.20), transparent 60%)',
           }}
         />
-        {/* Radial blue glow - top */}
+        {/* Very subtle mid-page glow */}
         <div 
-          className="absolute inset-0"
+          className="absolute top-[40%] left-1/2 -translate-x-1/2 w-full h-[40%]"
           style={{ 
-            background: 'radial-gradient(ellipse 100% 60% at 50% -10%, hsl(210 100% 50% / 0.18), transparent 60%)',
-          }}
-        />
-        {/* Radial blue glow - mid left */}
-        <div 
-          className="absolute top-[30%] left-0 w-[70%] h-[50%]"
-          style={{ 
-            background: 'radial-gradient(ellipse 80% 60% at 20% 50%, hsl(210 100% 50% / 0.06), transparent 70%)',
-          }}
-        />
-        {/* Radial blue glow - bottom right */}
-        <div 
-          className="absolute bottom-0 right-0 w-[60%] h-[40%]"
-          style={{ 
-            background: 'radial-gradient(ellipse 80% 80% at 80% 90%, hsl(210 100% 50% / 0.08), transparent 60%)',
+            background: 'radial-gradient(ellipse 90% 50% at 50% 50%, hsl(210 80% 45% / 0.04), transparent 70%)',
           }}
         />
         {/* Subtle noise texture */}
@@ -619,37 +605,53 @@ const Landing = () => {
             </Link>
           </div>
 
-          {/* Reassurance microcopy - desktop: after buttons, mobile: after badges */}
-          <p className="hidden sm:block text-xs text-muted-foreground text-center mt-5">
-            Full access for 24 hours. £0 today. Cancel anytime.
+          {/* Reassurance microcopy */}
+          <p className="text-xs text-muted-foreground text-center mt-4 sm:mt-5">
+            Free for 24 hours. No card required. Cancel anytime.
           </p>
 
           {/* Power bullets under hero CTA */}
-          <div className="mt-6 sm:mt-10 max-w-xl mx-auto">
-            <div className="flex flex-col items-center gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-8 sm:gap-y-3">
+          <div className="mt-6 sm:mt-10">
+            {/* Mobile: centered block with fixed icon column */}
+            <div className="flex flex-col items-start gap-3 w-fit mx-auto sm:hidden">
+              {[
+                'Find 20+ real prospects in minutes',
+                'Send more messages in 10 mins than most do in a morning',
+                'Track every outreach in one place',
+                'Stop guessing who needs your help',
+              ].map((bullet, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Check 
+                    className="h-5 w-5 flex-shrink-0" 
+                    style={{ color: 'hsl(142 76% 55%)' }} 
+                    strokeWidth={3} 
+                  />
+                  <span className="text-[14px] font-medium text-foreground/85">{bullet}</span>
+                </div>
+              ))}
+            </div>
+            {/* Desktop: horizontal wrap */}
+            <div className="hidden sm:flex flex-wrap justify-center gap-x-8 gap-y-3">
               {[
                 'Find 20+ real prospects in minutes',
                 'Send more messages in 10 minutes than most do in a morning',
                 'Track every outreach in one place',
                 'Stop guessing who needs your help',
               ].map((bullet, i) => (
-                <div key={i} className="flex items-center gap-2.5 text-center sm:text-left">
+                <div key={i} className="flex items-center gap-2.5">
                   <Check 
-                    className="h-5 w-5 sm:h-[22px] sm:w-[22px] flex-shrink-0" 
-                    style={{ 
-                      color: 'hsl(142 76% 55%)',
-                      filter: 'drop-shadow(0 0 6px hsl(142 76% 55% / 0.4))',
-                    }} 
+                    className="h-[22px] w-[22px] flex-shrink-0" 
+                    style={{ color: 'hsl(142 76% 55%)' }} 
                     strokeWidth={3} 
                   />
-                  <span className="text-[15px] sm:text-base font-medium text-foreground/90">{bullet}</span>
+                  <span className="text-base font-medium text-foreground/85">{bullet}</span>
                 </div>
               ))}
             </div>
           </div>
           
           {/* Stats bar */}
-          <div className="mt-6 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
+          <div className="mt-8 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
               <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
@@ -660,12 +662,9 @@ const Landing = () => {
               <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
           </div>
-          {/* Reassurance microcopy - mobile only, after badges */}
-          <p className="sm:hidden text-[11px] text-muted-foreground text-center mt-4">
-            Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
-          </p>
+
           {/* Scroll down indicator */}
-          <div className="mt-5 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
+          <div className="mt-6 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
             <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">Scroll</span>
             <svg width="16" height="24" viewBox="0 0 16 24" fill="none" className="text-muted-foreground">
               <rect x="1" y="1" width="14" height="22" rx="7" stroke="currentColor" strokeWidth="1.5" />
@@ -867,8 +866,8 @@ const Landing = () => {
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
-      {/* Power Section — Built for aggressive outreach */}
-      <section className="relative z-10 py-10 sm:py-20 md:py-28 px-4">
+      {/* Power Section — Built for serious outreach */}
+      <section className="relative z-10 py-12 sm:py-20 md:py-24 px-4">
         <div className="container mx-auto max-w-3xl text-center">
           <ScrollReveal className="mb-10 sm:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4">
@@ -879,35 +878,33 @@ const Landing = () => {
             </p>
           </ScrollReveal>
 
-          <div className="space-y-5 sm:space-y-6 mb-10 sm:mb-14 max-w-sm mx-auto">
-            {[
-              '10x your outreach',
-              'Never miss a lead',
-              'No more manual searching',
-              'No more messy follow-ups',
-              'One system. Full control.',
-            ].map((item, i) => (
-              <ScrollReveal key={i} delay={i * 60}>
-                <div className="flex items-center gap-3 sm:gap-4">
-                  <Check 
-                    className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0" 
-                    style={{ 
-                      color: 'hsl(142 76% 55%)',
-                      filter: 'drop-shadow(0 0 8px hsl(142 76% 55% / 0.35))',
-                    }} 
-                    strokeWidth={3} 
-                  />
-                  <span className="text-base sm:text-lg font-semibold text-foreground tracking-tight">{item}</span>
-                </div>
-              </ScrollReveal>
-            ))}
+          <div className="mb-10 sm:mb-14">
+            <div className="flex flex-col items-start gap-4 sm:gap-5 w-fit mx-auto">
+              {[
+                '10x your outreach',
+                'Never miss a lead',
+                'No more manual searching',
+                'No more messy follow-ups',
+                'One system. Full control.',
+              ].map((item, i) => (
+                <ScrollReveal key={i} delay={i * 60}>
+                  <div className="flex items-center gap-3">
+                    <Check 
+                      className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0" 
+                      style={{ color: 'hsl(142 76% 55%)' }} 
+                      strokeWidth={3} 
+                    />
+                    <span className="text-base sm:text-lg font-semibold text-foreground/90 tracking-tight">{item}</span>
+                  </div>
+                </ScrollReveal>
+              ))}
+            </div>
           </div>
 
           <ScrollReveal delay={350} className="hidden sm:block">
             <Button 
               size="lg" 
-              className="btn-premium text-base font-semibold px-10 py-5 h-auto shadow-lg shadow-primary/25 w-full sm:w-auto"
-              style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.2), 0 4px 20px hsl(210 100% 50% / 0.15)' }}
+              className="btn-premium text-base font-semibold px-10 py-5 h-auto w-auto"
               asChild
             >
               <Link to="/auth">
@@ -916,7 +913,7 @@ const Landing = () => {
               </Link>
             </Button>
             <p className="text-xs text-muted-foreground/60 mt-4">
-              No credit card. 24 hours. Cancel anytime.
+              Free for 24 hours. No card required. Cancel anytime.
             </p>
           </ScrollReveal>
 
