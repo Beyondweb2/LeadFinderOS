@@ -592,7 +592,7 @@ const Landing = () => {
             <span className="block text-gradient-primary sm:hidden">Find Businesses</span>
             <span className="hidden sm:block text-gradient-primary">LeadFinder</span>
             <span className="block text-foreground mt-0.5 sm:mt-2 sm:hidden">Without Websites</span>
-            <span className="hidden sm:block text-foreground mt-0.5 sm:mt-2">Find Businesses Without Websites</span>
+            <span className="hidden sm:inline text-foreground mt-0.5 sm:mt-2">Find Businesses Without Websites</span>
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
@@ -623,10 +623,11 @@ const Landing = () => {
           <div className="mt-6 sm:mt-10 flex justify-center">
             <div className="inline-flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-8 sm:gap-y-3">
               {[
-                'Find 20+ real prospects in minutes',
-                'Send more messages in 10 minutes than most do in a morning',
-                'Track every outreach in one place',
-                'Stop guessing who needs your help',
+                '10x your outreach',
+                'Never miss a lead',
+                'No more manual searching',
+                'No more messy follow-ups',
+                'One system. Full control.',
               ].map((bullet, i) => (
                 <div key={i} className="flex items-start gap-1.5 sm:items-center sm:gap-2.5">
                   <Check 
@@ -870,7 +871,7 @@ const Landing = () => {
         <div className="container mx-auto max-w-3xl text-center">
           <ScrollReveal className="mb-10 sm:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4">
-              Built for <span className="text-gradient-primary">aggressive outreach.</span>
+              Built for <span className="text-gradient-primary">serious outreach.</span>
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
               Stop searching. Start sending.
@@ -880,11 +881,10 @@ const Landing = () => {
           <div className="mb-10 sm:mb-14 flex justify-center">
             <div className="inline-flex flex-col gap-5 sm:gap-6">
               {[
-                '10x your outreach',
-                'Never miss a lead',
-                'No more manual searching',
-                'No more messy follow-ups',
-                'One system. Full control.',
+                'Find 20+ real prospects in minutes',
+                'Send more messages in 10 minutes than most do in a morning',
+                'Track every outreach in one place',
+                'Stop guessing who needs your help',
               ].map((item, i) => (
                 <ScrollReveal key={i} delay={i * 60}>
                   <div className="flex items-center gap-3 sm:gap-4">
