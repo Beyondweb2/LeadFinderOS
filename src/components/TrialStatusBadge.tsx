@@ -23,9 +23,9 @@ export function TrialStatusBadge({
 }: TrialStatusBadgeProps) {
   const tooltipContent = (
     <div className="space-y-2 max-w-xs">
-      <p className="font-medium">Free Trial</p>
+      <p className="font-medium">Demo Mode</p>
       <p className="text-xs text-muted-foreground">
-        Your free trial includes {dailyLimit} searches per day with full access to CRM, templates, and lead tracking.
+        You have {searchesRemaining} demo search{searchesRemaining !== 1 ? 'es' : ''} remaining. Unlock 24-hour full access for unlimited searches and all features.
       </p>
       <div className="pt-1 border-t border-border">
         <Link 
@@ -33,7 +33,7 @@ export function TrialStatusBadge({
           className="text-xs text-primary hover:underline flex items-center gap-1"
         >
           <Sparkles className="h-3 w-3" />
-          Upgrade to remove search limits
+          Start 24-Hour Full Access
         </Link>
       </div>
     </div>
@@ -53,9 +53,9 @@ export function TrialStatusBadge({
           </TooltipTrigger>
           <TooltipContent side="right" className="max-w-xs">
             <div className="space-y-1">
-              <p className="font-medium text-xs">Free Trial Mode</p>
+              <p className="font-medium text-xs">Demo Mode</p>
               <p className="text-xs text-muted-foreground">
-                {searchesRemaining} of {dailyLimit} searches left today
+                {searchesRemaining} search{searchesRemaining !== 1 ? 'es' : ''} remaining
               </p>
             </div>
           </TooltipContent>
@@ -74,11 +74,11 @@ export function TrialStatusBadge({
           <div className="flex items-center gap-1.5">
             <Search className="h-3.5 w-3.5 text-primary shrink-0" />
             <span className="text-xs font-medium text-foreground truncate">
-              Free Trial
+              Demo Mode
             </span>
           </div>
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            {searchesRemaining}/{dailyLimit} searches today
+            {searchesRemaining} search{searchesRemaining !== 1 ? 'es' : ''} remaining
           </p>
         </div>
         

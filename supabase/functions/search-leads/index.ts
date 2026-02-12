@@ -852,18 +852,28 @@ serve(async (req) => {
           const now = new Date();
           const trialEnd = new Date(trial.trial_end_date);
           
-          if (now <= trialEnd && trial.plan_status === 'trial') {
-            // Check if we need to reset daily search count
+          // ─── NEW DEMO SEARCH LOGIC: 1 search per user lifetime ───
+          // Check demo_search_used flag first (new funnel)
+          if (!trial.demo_search_used) {
+            console.log(`User ${userId} using demo search (1 of 1)`);
+            // Mark demo search as used BEFORE executing
+            await serviceClient
+              .from('user_trials')
+              .update({ 
+                demo_search_used: true,
+                searches_used: trial.searches_used + 1,
+              })
+              .eq('user_id', userId);
+            isOnAppTrial = true; // Allow the search to proceed
+          } else if (now <= trialEnd && trial.plan_status === 'trial') {
+            // ─── LEGACY TRIAL LOGIC: daily limits for existing trial users ───
             const today = now.toISOString().split('T')[0];
             const lastSearchDate = trial.last_search_date;
             const shouldResetDaily = lastSearchDate !== today;
             const currentSearchesToday = shouldResetDaily ? 0 : trial.searches_today;
             
-            // Parse body to check for skipTrialCount flag (for auto-demo searches)
-            // Check skipTrialCount from already-parsed body
             const skipTrialCount = body?.skipTrialCount === true;
             
-            // Check daily limit for FREE trial users (2 searches per day) - unless skipping for demo
             const DAILY_TRIAL_LIMIT = 2;
             if (!skipTrialCount && currentSearchesToday >= DAILY_TRIAL_LIMIT) {
               console.log(`Free trial user ${userId} has reached daily limit (${currentSearchesToday}/${DAILY_TRIAL_LIMIT})`);
@@ -881,7 +891,6 @@ serve(async (req) => {
             isOnAppTrial = true;
             const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
             
-            // Only increment search counts if not skipping for demo
             if (!skipTrialCount) {
               console.log(`Free trial user ${userId} (${daysLeft} days remaining, ${currentSearchesToday + 1}/${DAILY_TRIAL_LIMIT} searches today)`);
               await serviceClient
@@ -896,14 +905,7 @@ serve(async (req) => {
               console.log(`Free trial user ${userId} - demo search (not counted toward limit)`);
             }
           } else {
-            console.log(`User ${userId} free trial has expired`);
-            // Update plan_status to expired if needed
-            if (trial.plan_status === 'trial') {
-              await serviceClient
-                .from('user_trials')
-                .update({ plan_status: 'expired' })
-                .eq('user_id', userId);
-            }
+            console.log(`User ${userId} demo search already used and no valid trial`);
           }
         }
         
@@ -917,28 +919,18 @@ serve(async (req) => {
 
           if (abandonTrial?.checkout_abandoned && !abandonTrial?.post_abandon_search_used) {
             console.log(`User ${userId} using post-abandon search (1 of 1)`);
-            // Mark it used BEFORE executing the search
             await serviceClient
               .from('user_trials')
               .update({ post_abandon_search_used: true })
               .eq('user_id', userId);
-            isOnAppTrial = true; // Allow the search to proceed
+            isOnAppTrial = true;
           } else {
-            console.log(`User ${userId} has no active subscription or valid trial`, {
-              checkout_abandoned: abandonTrial?.checkout_abandoned,
-              post_abandon_search_used: abandonTrial?.post_abandon_search_used,
-            });
-            
-            const errorCode = abandonTrial?.checkout_abandoned && abandonTrial?.post_abandon_search_used
-              ? 'POST_ABANDON_EXHAUSTED'
-              : 'TRIAL_EXPIRED';
+            console.log(`User ${userId} has no active subscription or valid trial`);
             
             return new Response(
               JSON.stringify({ 
-                error: errorCode === 'POST_ABANDON_EXHAUSTED'
-                  ? 'Complete checkout to unlock unlimited searches.'
-                  : 'Your trial has expired. Please subscribe to continue using LeadFinder.',
-                code: errorCode,
+                error: 'Your demo search has been used. Unlock 24-hour full access to continue.',
+                code: 'DEMO_SEARCH_EXHAUSTED',
               }),
               { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
