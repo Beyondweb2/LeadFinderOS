@@ -627,89 +627,6 @@ const Landing = () => {
         <VideoSection />
       </div>
 
-      {/* Mobile section divider */}
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
-
-      {/* Unified Testimonials — 3 cards */}
-      <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
-        <div className="container mx-auto max-w-5xl">
-          {/* Stars — tight above testimonials */}
-          <div className="flex gap-0.5 justify-center mb-3">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="h-4 w-4 sm:h-5 sm:w-5 fill-yellow-400 text-yellow-400" />
-            ))}
-          </div>
-
-          {(() => {
-            const testimonials = [
-              {
-                name: 'James T.',
-                role: 'Freelance Web Developer',
-                region: 'UK',
-                quote: "used to waste my whole morning scrolling maps looking for leads. now i get 30+ in about 10 minutes and actually spend time reaching out instead of searching.",
-                stars: 5,
-              },
-              {
-                name: 'Marcus L.',
-                role: 'Web Designer',
-                region: 'UK',
-                quote: "being able to message leads straight from the app on whatsapp or sms is a game changer. i used to copy numbers into my phone one by one — now i just tap and send. way more outreach in way less time.",
-                stars: 5,
-              },
-              {
-                name: 'David R.',
-                role: 'WordPress Developer',
-                region: 'UK',
-                quote: "i used to track everything in spreadsheets and sticky notes — half my leads got lost. now it's all in one dashboard. i can see who i've messaged, who replied, and what's next. wish i had this sooner.",
-                stars: 5,
-              },
-              {
-                name: 'Sophie K.',
-                role: 'Agency Owner',
-                region: 'UK',
-                quote: "we onboarded three new clients in our first week. the classification saves so much time — you instantly know who's worth reaching out to. it's replaced two tools we were paying for.",
-                stars: 5,
-              },
-            ];
-
-            return isMobile ? (
-              <MobileTestimonialSlider testimonials={testimonials} />
-            ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                {testimonials.map((r, i) => (
-                  <ScrollReveal key={i} delay={i * 100}>
-                    <div 
-                      className="h-full flex flex-col justify-between text-center px-5 py-6 sm:px-6 sm:py-7 rounded-xl"
-                      style={{
-                        background: 'hsl(220 30% 8% / 0.6)',
-                        border: '1px solid hsl(0 0% 100% / 0.06)',
-                        boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
-                      }}
-                    >
-                      <div>
-                        <div className="flex gap-0.5 mb-3 justify-center">
-                          {[...Array(r.stars)].map((_, si) => (
-                            <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          ))}
-                        </div>
-                        <p className="text-foreground/80 text-sm leading-relaxed italic font-normal">
-                          "{r.quote}"
-                        </p>
-                      </div>
-                      <p className="text-muted-foreground/70 text-xs mt-4 text-center">
-                        {r.name} · {r.role} – {r.region}
-                      </p>
-                    </div>
-                  </ScrollReveal>
-                ))}
-              </div>
-            );
-          })()}
-
-          {/* Rating line below testimonials */}
-          <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium text-center mt-6 sm:mt-8">Rated 4.9/5 by freelancers and agencies</p>
-        </div>
-      </ScrollReveal>
 
       {/* Desktop: Old Way vs New Way comparison */}
       {!isMobile && (
@@ -935,7 +852,88 @@ const Landing = () => {
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
-      {/* Pricing Section */}
+      {/* Testimonials — after toolkit */}
+      <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
+        <div className="container mx-auto max-w-5xl">
+          {/* Stars — tight above testimonials */}
+          <div className="flex gap-0.5 justify-center mb-3">
+            {[...Array(5)].map((_, i) => (
+              <Star key={i} className="h-4 w-4 sm:h-5 sm:w-5 fill-yellow-400 text-yellow-400" />
+            ))}
+          </div>
+
+          {(() => {
+            const testimonials = [
+              {
+                name: 'James T.',
+                role: 'Freelance Web Developer',
+                region: 'UK',
+                quote: "used to waste my whole morning scrolling maps looking for leads. now i get 30+ in about 10 minutes and actually spend time reaching out instead of searching.",
+                stars: 5,
+              },
+              {
+                name: 'Marcus L.',
+                role: 'Web Designer',
+                region: 'UK',
+                quote: "being able to message leads straight from the app on whatsapp or sms is a game changer. i used to copy numbers into my phone one by one — now i just tap and send. way more outreach in way less time.",
+                stars: 5,
+              },
+              {
+                name: 'David R.',
+                role: 'WordPress Developer',
+                region: 'UK',
+                quote: "i used to track everything in spreadsheets and sticky notes — half my leads got lost. now it's all in one dashboard. i can see who i've messaged, who replied, and what's next. wish i had this sooner.",
+                stars: 5,
+              },
+              {
+                name: 'Sophie K.',
+                role: 'Agency Owner',
+                region: 'UK',
+                quote: "we onboarded three new clients in our first week. the classification saves so much time — you instantly know who's worth reaching out to. it's replaced two tools we were paying for.",
+                stars: 5,
+              },
+            ];
+
+            return isMobile ? (
+              <MobileTestimonialSlider testimonials={testimonials} />
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                {testimonials.map((r, i) => (
+                  <ScrollReveal key={i} delay={i * 100}>
+                    <div 
+                      className="h-full flex flex-col justify-between text-center px-5 py-6 sm:px-6 sm:py-7 rounded-xl"
+                      style={{
+                        background: 'hsl(220 30% 8% / 0.6)',
+                        border: '1px solid hsl(0 0% 100% / 0.06)',
+                        boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
+                      }}
+                    >
+                      <div>
+                        <div className="flex gap-0.5 mb-3 justify-center">
+                          {[...Array(r.stars)].map((_, si) => (
+                            <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                          ))}
+                        </div>
+                        <p className="text-foreground/80 text-sm leading-relaxed italic font-normal">
+                          "{r.quote}"
+                        </p>
+                      </div>
+                      <p className="text-muted-foreground/70 text-xs mt-4 text-center">
+                        {r.name} · {r.role} – {r.region}
+                      </p>
+                    </div>
+                  </ScrollReveal>
+                ))}
+              </div>
+            );
+          })()}
+
+          <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium text-center mt-6 sm:mt-8">Rated 4.9/5 by freelancers and agencies</p>
+        </div>
+      </ScrollReveal>
+
+      {/* Mobile section divider */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
       <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
