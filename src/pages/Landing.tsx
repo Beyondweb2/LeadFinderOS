@@ -613,41 +613,41 @@ const Landing = () => {
 
           {/* Power bullets under hero CTA */}
           <div className="mt-7 sm:mt-8">
-            {/* Mobile: centered checklist group with fixed icon column */}
+            {/* Mobile: centered checklist — icon above text */}
             <div className="flex justify-center sm:hidden">
-              <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-5">
                 {[
                   'Stop wasting mornings manually searching Google Maps',
                   'Find real businesses without websites in minutes',
                   'Turn messy outreach into a clear system',
                   'Keep every lead and follow-up organised in one place',
                 ].map((bullet, i) => (
-                  <div key={i} className="flex items-center justify-center gap-2.5">
+                  <div key={i} className="flex flex-col items-center text-center gap-1.5">
                     <Check 
-                      className="h-[15px] w-[15px] flex-shrink-0" 
+                      className="h-[16px] w-[16px]" 
                       style={{ color: 'hsl(142 65% 50%)' }} 
                       strokeWidth={2.5} 
                     />
-                    <span className="text-[13px] font-semibold text-foreground/85 leading-[1.7]">{bullet}</span>
+                    <span className="text-[13px] font-semibold text-foreground/85 leading-[1.6]">{bullet}</span>
                   </div>
                 ))}
               </div>
             </div>
-            {/* Desktop: horizontal wrap */}
-            <div className="hidden sm:flex flex-wrap justify-center gap-x-8 gap-y-2.5">
+            {/* Desktop: horizontal wrap — icon above text */}
+            <div className="hidden sm:flex flex-wrap justify-center gap-x-10 gap-y-5">
               {[
                 'Stop wasting mornings manually searching Google Maps',
                 'Find real businesses without websites in minutes',
                 'Turn messy outreach into a clear system',
                 'Keep every lead and follow-up organised in one place',
               ].map((bullet, i) => (
-                <div key={i} className="flex items-center gap-3">
+                <div key={i} className="flex flex-col items-center text-center gap-1.5 max-w-[200px]">
                   <Check 
-                    className="h-[20px] w-[20px] flex-shrink-0" 
+                    className="h-[20px] w-[20px]" 
                     style={{ color: 'hsl(142 76% 55%)' }} 
                     strokeWidth={3} 
                   />
-                  <span className="text-base font-medium text-foreground/90">{bullet}</span>
+                  <span className="text-sm font-medium text-foreground/90">{bullet}</span>
                 </div>
               ))}
             </div>
@@ -676,13 +676,11 @@ const Landing = () => {
       {/* Unified Testimonials — 3 cards */}
       <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
         <div className="container mx-auto max-w-5xl">
-          {/* Stars → Quote → Rating line */}
-          <div className="text-center mb-8 sm:mb-8">
-            <div className="flex gap-0.5 justify-center mb-3.5">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className="h-4 w-4 sm:h-5 sm:w-5 fill-yellow-400 text-yellow-400" />
-              ))}
-            </div>
+          {/* Stars — tight above testimonials */}
+          <div className="flex gap-0.5 justify-center mb-3">
+            {[...Array(5)].map((_, i) => (
+              <Star key={i} className="h-4 w-4 sm:h-5 sm:w-5 fill-yellow-400 text-yellow-400" />
+            ))}
           </div>
 
           {(() => {
@@ -841,31 +839,29 @@ const Landing = () => {
         <div className="container mx-auto max-w-3xl text-center">
           <ScrollReveal className="mb-10 sm:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4 text-center">
-              Your Outreach, <span className="text-gradient-primary">Systemised.</span>
+              More Clients, <span className="text-gradient-primary">Less Guesswork.</span>
             </h2>
             <p className="text-sm sm:text-lg text-muted-foreground text-center max-w-md mx-auto">
-              A structured workflow for finding leads, sending messages, and tracking every follow-up in one place.
+              A structured way to consistently land web design clients — without relying on luck.
             </p>
           </ScrollReveal>
 
           <div className="mb-12 sm:mb-14">
             <div className="flex flex-col gap-4 sm:gap-3 items-center sm:items-start sm:pl-2 max-w-[340px] sm:max-w-none mx-auto sm:mx-0">
               {[
-                'Know who to contact and when',
-                'Keep every follow-up organised',
-                'See who replied and what\'s next',
-                'Manage outreach from first message to client',
+                'Reach businesses that actually need your help',
+                'Never lose a lead or forget a follow-up',
+                'Know exactly who to contact next',
+                'Go from first message to paying client — smoothly',
               ].map((item, i) => (
                 <ScrollReveal key={i} delay={i * 60}>
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-8 flex-shrink-0 flex justify-center">
-                      <Check 
-                        className="h-5 w-5 sm:h-7 sm:w-7" 
-                        style={{ color: 'hsl(142 76% 55%)' }} 
-                        strokeWidth={2.5} 
-                      />
-                    </div>
-                    <span className="text-sm sm:text-lg font-medium sm:font-semibold text-foreground/85 tracking-tight text-left">{item}</span>
+                  <div className="flex flex-col items-center text-center gap-1.5">
+                    <Check 
+                      className="h-5 w-5 sm:h-7 sm:w-7" 
+                      style={{ color: 'hsl(142 76% 55%)' }} 
+                      strokeWidth={2.5} 
+                    />
+                    <span className="text-sm sm:text-lg font-medium sm:font-semibold text-foreground/85 tracking-tight">{item}</span>
                   </div>
                 </ScrollReveal>
               ))}
@@ -890,7 +886,7 @@ const Landing = () => {
               </Link>
             </Button>
             <p className="text-xs text-muted-foreground/60 mt-4">
-              Free for 24 hours. No card required. Cancel anytime.
+              Free trial with full access. No card required.
             </p>
           </ScrollReveal>
         </div>
@@ -1016,14 +1012,14 @@ const Landing = () => {
                     }}
                   >
                     <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                    1-Day Free Trial
+                    Free Trial
                   </div>
                   <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
                   <div className="mt-4 sm:mt-5">
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs text-foreground/50 mt-2">Start with a 24-hour free trial. No charge today.</p>
+                  <p className="text-xs text-foreground/50 mt-2">Start with a free trial. No charge today.</p>
                 </CardHeader>
                 
                 <CardContent className="pt-5 sm:pt-6 px-4 sm:px-6">
@@ -1053,7 +1049,7 @@ const Landing = () => {
                     </Link>
                   </Button>
                   <p className="text-[10px] sm:text-xs text-muted-foreground/60 text-center">
-                    £0 today · Full access for 24 hours · Cancel anytime
+                    £0 today · Full access · Cancel anytime
                   </p>
                 </CardFooter>
               </Card>
@@ -1154,7 +1150,7 @@ const Landing = () => {
             </Link>
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            24-hour free trial · Cancel anytime
+            Free trial · Full access · Cancel anytime
           </p>
         </div>
       )}
