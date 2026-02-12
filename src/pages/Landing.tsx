@@ -620,24 +620,24 @@ const Landing = () => {
           </p>
 
           {/* Power bullets under hero CTA */}
-          <div className="mt-6 sm:mt-10 max-w-lg mx-auto sm:mx-0 sm:max-w-none">
-            <div className="flex flex-col items-center sm:items-start sm:flex-row sm:flex-wrap sm:justify-center gap-3 sm:gap-x-8 sm:gap-y-3">
+          <div className="mt-6 sm:mt-10">
+            <div className="flex flex-col gap-4 sm:gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-8 sm:gap-y-3 max-w-sm sm:max-w-none mx-auto">
               {[
                 'Find 20+ real prospects in minutes',
                 'Send more messages in 10 minutes than most do in a morning',
                 'Track every outreach in one place',
                 'Stop guessing who needs your help',
               ].map((bullet, i) => (
-                <div key={i} className="flex items-center gap-2.5">
+                <div key={i} className="flex items-center gap-3">
                   <Check 
-                    className="h-5 w-5 sm:h-[22px] sm:w-[22px] flex-shrink-0" 
+                    className="h-6 w-6 sm:h-[22px] sm:w-[22px] flex-shrink-0" 
                     style={{ 
                       color: 'hsl(142 76% 55%)',
                       filter: 'drop-shadow(0 0 6px hsl(142 76% 55% / 0.4))',
                     }} 
                     strokeWidth={3} 
                   />
-                  <span className="text-[15px] sm:text-base font-medium text-foreground/90">{bullet}</span>
+                  <span className="text-[15px] sm:text-base font-semibold text-foreground/90">{bullet}</span>
                 </div>
               ))}
             </div>
