@@ -1,11 +1,24 @@
 import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { XCircle, ArrowLeft } from 'lucide-react';
+import { XCircle, ArrowLeft, CreditCard, Loader2 } from 'lucide-react';
+import { useSubscription } from '@/hooks/useSubscription';
 import appLogo from '@/assets/logo.png';
 
 const BillingCancel = () => {
   const navigate = useNavigate();
+  const { createCheckout } = useSubscription();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleTryAgain = async () => {
+    setIsLoading(true);
+    try {
+      await createCheckout();
+    } catch {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -29,15 +42,25 @@ const BillingCancel = () => {
           <div className="text-center">
             <h2 className="text-xl font-semibold mb-2">Checkout Cancelled</h2>
             <p className="text-muted-foreground mb-6">
-              No worries! Your card was not charged. You can start your free trial whenever you're ready.
+              No worries! Your card was not charged. You can try again or go back to explore the app.
             </p>
             <div className="flex flex-col gap-2">
-              <Button onClick={() => navigate('/subscribe')}>
-                Try Again
+              <Button onClick={handleTryAgain} disabled={isLoading}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Redirecting...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    Try Again
+                  </>
+                )}
               </Button>
-              <Button variant="ghost" onClick={() => navigate('/landing')}>
+              <Button variant="ghost" onClick={() => navigate('/')}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Home
+                Back to App
               </Button>
             </div>
           </div>
