@@ -495,21 +495,21 @@ const Landing = () => {
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'radial-gradient(ellipse 120% 80% at 50% -30%, hsl(210 100% 15% / 0.5), transparent 60%)',
+            background: 'radial-gradient(ellipse 120% 80% at 50% -30%, hsl(210 100% 50% / 0.35), transparent 60%)',
           }}
         />
         {/* Blue accent glow - top center */}
         <div 
           className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[450px]"
           style={{ 
-            background: 'radial-gradient(ellipse 100% 70% at 50% 0%, hsl(210 100% 50% / 0.06), transparent 70%)',
+            background: 'radial-gradient(ellipse 100% 70% at 50% 0%, hsl(210 100% 50% / 0.15), transparent 70%)',
           }}
         />
         {/* Subtle blue glow - bottom right */}
         <div 
           className="absolute bottom-0 right-0 w-[800px] h-[600px]"
           style={{ 
-            background: 'radial-gradient(ellipse 80% 80% at 100% 100%, hsl(210 100% 40% / 0.06), transparent 60%)',
+            background: 'radial-gradient(ellipse 80% 80% at 100% 100%, hsl(210 100% 40% / 0.12), transparent 60%)',
           }}
         />
         {/* Subtle noise texture */}
