@@ -902,6 +902,12 @@ const Landing = () => {
             </div>
           </div>
 
+          <ScrollReveal delay={300}>
+            <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-md mx-auto leading-relaxed text-center mb-8 sm:mb-10">
+              Built for freelance web designers, WordPress developers, and small agencies who want a consistent way to find businesses that need a website.
+            </p>
+          </ScrollReveal>
+
           <ScrollReveal delay={350} className="hidden sm:block">
             <Button 
               size="lg" 
@@ -915,13 +921,6 @@ const Landing = () => {
             </Button>
             <p className="text-xs text-muted-foreground/60 mt-4">
               Free for 24 hours. No card required. Cancel anytime.
-            </p>
-          </ScrollReveal>
-
-          {/* "Who is this for" — desktop only */}
-          <ScrollReveal delay={400} className="hidden sm:block mt-10">
-            <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-md mx-auto leading-relaxed">
-              Built for freelance web designers, WordPress developers, small agencies, and anyone who needs a consistent way to find businesses that need a website.
             </p>
           </ScrollReveal>
         </div>
@@ -945,13 +944,7 @@ const Landing = () => {
           
           {/* Mobile: Carousel (4 core features) */}
           {isMobile ? (
-            <>
               <MobileFeatureCarousel features={FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title))} onExpand={(src, title) => setExpandedImage({ src, title })} />
-              {/* "Who is this for" — mobile only, moved from Value Proposition section */}
-              <p className="text-xs text-muted-foreground/70 max-w-xs mx-auto leading-relaxed text-center mt-6 px-4">
-                Built for freelance web designers, WordPress developers, small agencies, and anyone who needs a consistent way to find businesses that need a website.
-              </p>
-            </>
           ) : (
             /* Desktop: 4-card grid — core features only */
             <ScrollReveal>
