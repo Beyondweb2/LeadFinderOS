@@ -495,21 +495,28 @@ const Landing = () => {
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'radial-gradient(ellipse 120% 80% at 50% -30%, hsl(210 100% 50% / 0.35), transparent 60%)',
+            background: 'radial-gradient(ellipse 120% 80% at 50% -30%, hsl(210 100% 50% / 0.5), transparent 60%)',
           }}
         />
         {/* Blue accent glow - top center */}
         <div 
           className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[450px]"
           style={{ 
-            background: 'radial-gradient(ellipse 100% 70% at 50% 0%, hsl(210 100% 50% / 0.15), transparent 70%)',
+            background: 'radial-gradient(ellipse 100% 70% at 50% 0%, hsl(210 100% 50% / 0.2), transparent 70%)',
           }}
         />
         {/* Subtle blue glow - bottom right */}
         <div 
           className="absolute bottom-0 right-0 w-[800px] h-[600px]"
           style={{ 
-            background: 'radial-gradient(ellipse 80% 80% at 100% 100%, hsl(210 100% 40% / 0.12), transparent 60%)',
+            background: 'radial-gradient(ellipse 80% 80% at 100% 100%, hsl(210 100% 40% / 0.15), transparent 60%)',
+          }}
+        />
+        {/* Additional blue wash across page */}
+        <div 
+          className="absolute inset-0"
+          style={{ 
+            background: 'linear-gradient(180deg, hsl(210 100% 50% / 0.08) 0%, transparent 40%, hsl(210 100% 50% / 0.04) 100%)',
           }}
         />
         {/* Subtle noise texture */}
@@ -590,7 +597,7 @@ const Landing = () => {
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight">
             <span className="block text-gradient-primary">Find Businesses</span>
-            <span className="block text-foreground mt-0.5 sm:mt-2">Without Websites</span>
+            <span className="block text-gradient-subtle mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
@@ -618,15 +625,15 @@ const Landing = () => {
           </p>
 
           {/* Power bullets under hero CTA */}
-          <div className="mt-6 sm:mt-10 max-w-lg mx-auto sm:mx-0 sm:max-w-none">
-            <div className="flex flex-col items-center sm:items-start sm:flex-row sm:flex-wrap sm:justify-center gap-3 sm:gap-x-8 sm:gap-y-3">
+          <div className="mt-6 sm:mt-10 max-w-xl mx-auto">
+            <div className="flex flex-col items-center gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-8 sm:gap-y-3">
               {[
                 'Find 20+ real prospects in minutes',
                 'Send more messages in 10 minutes than most do in a morning',
                 'Track every outreach in one place',
                 'Stop guessing who needs your help',
               ].map((bullet, i) => (
-                <div key={i} className="flex items-center gap-2.5">
+                <div key={i} className="flex items-center gap-2.5 text-center sm:text-left">
                   <Check 
                     className="h-5 w-5 sm:h-[22px] sm:w-[22px] flex-shrink-0" 
                     style={{ 
@@ -850,44 +857,6 @@ const Landing = () => {
         </ScrollReveal>
       )}
 
-      {/* Mobile emotional section below comparison */}
-      {isMobile && (
-        <ScrollReveal className="relative z-10 py-14 px-6">
-          <div className="text-center max-w-sm mx-auto">
-            <h3 className="text-2xl font-bold tracking-tight mb-3">
-              This is what changes.
-            </h3>
-            <p className="text-sm text-muted-foreground mb-8">
-              The difference isn't effort. It's leverage.
-            </p>
-            <div className="space-y-5 mb-10">
-              <p className="text-[15px] text-foreground/80 leading-relaxed">
-                Finish outreach before most people find their first lead.
-              </p>
-              <p className="text-[15px] text-foreground/80 leading-relaxed">
-                Open your dashboard and know exactly who to message.
-              </p>
-              <p className="text-[15px] text-foreground/80 leading-relaxed">
-                Start your day with momentum, not scrolling.
-              </p>
-            </div>
-            <Button 
-              size="lg" 
-              className="btn-premium w-full text-base font-semibold py-4 h-auto shadow-lg shadow-primary/20"
-              asChild
-            >
-              <Link to="/auth">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
-            <p className="text-[11px] text-muted-foreground/50 mt-3">
-              No credit card. 24 hours. Cancel anytime.
-            </p>
-          </div>
-        </ScrollReveal>
-      )}
-
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
@@ -910,7 +879,7 @@ const Landing = () => {
             </p>
           </ScrollReveal>
 
-          <div className="space-y-5 sm:space-y-6 mb-10 sm:mb-14 max-w-md mx-auto">
+          <div className="space-y-5 sm:space-y-6 mb-10 sm:mb-14 max-w-sm mx-auto">
             {[
               '10x your outreach',
               'Never miss a lead',
@@ -919,7 +888,7 @@ const Landing = () => {
               'One system. Full control.',
             ].map((item, i) => (
               <ScrollReveal key={i} delay={i * 60}>
-                <div className="flex items-center gap-3 sm:gap-4 justify-center sm:justify-start">
+                <div className="flex items-center gap-3 sm:gap-4">
                   <Check 
                     className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0" 
                     style={{ 
