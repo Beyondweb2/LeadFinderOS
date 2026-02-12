@@ -31,8 +31,8 @@ const Subscribe = () => {
     }
   }, [authLoading, user, navigate]);
   
-  // Eligibility is only resolved once trial data has loaded
-  const eligibilityLoading = authLoading || subLoading;
+  // Only block rendering while auth is loading
+  const eligibilityLoading = authLoading;
   // Only hide trial offer if user is already on a Stripe trial
   const hideTrialOffer = isStripeTrialing || status === 'trialing';
 
