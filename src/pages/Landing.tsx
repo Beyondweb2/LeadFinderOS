@@ -556,7 +556,7 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:pt-32 lg:pb-40 px-4">
         <div className="container mx-auto text-center">
           {/* Mobile: Video at top instead of logo */}
           <div className="sm:hidden mb-6">
@@ -565,7 +565,7 @@ const Landing = () => {
           
           {/* Tagline badge - hidden on mobile */}
           <div 
-            className="hidden sm:inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-6 backdrop-blur-sm"
+            className="hidden sm:inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-8 backdrop-blur-sm"
             style={{ 
               border: '1px solid hsl(210 100% 50% / 0.2)', 
               background: 'hsl(210 100% 50% / 0.08)',
@@ -576,17 +576,16 @@ const Landing = () => {
             <span>The fastest way to land web design clients</span>
           </div>
           
-          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight">
+          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-3 sm:mb-5 tracking-tight">
             <span className="block text-gradient-primary">Find Businesses</span>
             <span className="block mt-0.5 sm:mt-2">Without Websites in Seconds</span>
           </h1>
           
-          <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
+          <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-3 sm:mb-10 leading-relaxed px-2">
             Find, contact, and track businesses that need a website — all in one place.
           </p>
           
-          {/* Keywords removed */}
-          
+          {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/auth?intent=demo">
@@ -594,23 +593,34 @@ const Landing = () => {
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
+            <Button 
+              size="lg" 
+              variant="outline" 
+              className="hidden sm:inline-flex text-base font-semibold px-8 py-4 h-auto border-border/50 hover:bg-muted/30 text-foreground/70 hover:text-foreground transition-colors"
+              onClick={() => {
+                document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
+              See How It Works
+            </Button>
           </div>
 
+          {/* Trust bullets - desktop only */}
+          <div className="hidden sm:flex flex-wrap items-center justify-center gap-5 mt-10 text-[15px] text-foreground/55">
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
+          </div>
 
-          {/* System label */}
-          <p className="text-[10px] sm:text-xs text-muted-foreground/30 mt-5 sm:mt-7 tracking-widest uppercase font-medium">
-            All-in-one lead discovery and outreach system
-          </p>
-
-          {/* Trust bullets */}
-          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-5 mt-4 sm:mt-5 text-[13px] sm:text-[15px] text-foreground/55">
+          {/* Mobile trust bullets */}
+          <div className="flex sm:hidden flex-wrap items-center justify-center gap-2.5 mt-4 text-[13px] text-foreground/55">
             <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
             <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
             <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
           </div>
 
           {/* Stats bar */}
-          <div className="mt-4 sm:mt-6 md:mt-8 py-4 sm:py-0 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
+          <div className="mt-4 sm:mt-10 md:mt-12 py-4 sm:py-6 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
               <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
@@ -623,18 +633,9 @@ const Landing = () => {
           </div>
 
           {/* Works on every device */}
-          <p className="text-[10px] sm:text-xs text-muted-foreground/40 mt-3 sm:mt-4 tracking-wide font-medium">
+          <p className="text-[10px] sm:text-xs text-muted-foreground/40 mt-3 sm:mt-2 tracking-wide font-medium">
             Works seamlessly on desktop & mobile
           </p>
-
-          {/* Scroll down indicator */}
-          <div className="flex mt-10 sm:mt-14 flex-col items-center gap-1 animate-bounce opacity-40">
-            <span className="text-xs text-muted-foreground tracking-wide">Scroll</span>
-            <svg width="16" height="24" viewBox="0 0 16 24" fill="none" className="text-muted-foreground">
-              <rect x="1" y="1" width="14" height="22" rx="7" stroke="currentColor" strokeWidth="1.5" />
-              <circle cx="8" cy="8" r="2" fill="currentColor" className="animate-[scroll-dot_2s_ease-in-out_infinite]" />
-            </svg>
-          </div>
         </div>
       </section>
 
@@ -765,7 +766,9 @@ const Landing = () => {
       </ScrollReveal>
 
       {/* How It Works — 4 steps */}
-      <HowItWorksSection ScrollReveal={ScrollReveal} />
+      <div id="how-it-works">
+        <HowItWorksSection ScrollReveal={ScrollReveal} />
+      </div>
 
 
       {/* Mobile section divider */}
