@@ -42,10 +42,9 @@ const Subscribe = () => {
     }
   }, [isPaidSubscriber, subLoading, navigate]);
 
-  const handleBackToLogin = useCallback(async () => {
-    await signOut();
-    navigate('/auth');
-  }, [signOut, navigate]);
+  const handleBack = useCallback(() => {
+    navigate('/');
+  }, [navigate]);
 
   const handleSubscribe = async () => {
     setIsLoading(true);
@@ -89,9 +88,9 @@ const Subscribe = () => {
       />
 
       <div className="relative z-10 w-full max-w-lg">
-        <Button variant="ghost" className="mb-6" onClick={handleBackToLogin}>
+        <Button variant="ghost" className="mb-6" onClick={handleBack}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to login
+          Back to app
         </Button>
 
         <Card className="bg-card/80 backdrop-blur-xl border-primary/20">
