@@ -70,9 +70,15 @@ const Auth = () => {
     }
   };
 
-  // Redirect if already authenticated (resume where user left off)
+  // Redirect if already authenticated
   useEffect(() => {
     if (!user || isLoading) return;
+
+    // If intent is upgrade, go straight to Stripe checkout
+    if (intent === 'upgrade') {
+      redirectToCheckout();
+      return;
+    }
 
     let redirectTo: string | null = null;
     try {
@@ -93,7 +99,7 @@ const Auth = () => {
     }
 
     navigate(redirectTo, { replace: true });
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading, navigate, intent]);
 
   const validateForm = () => {
     const result = authSchema.safeParse({ email, password });
@@ -162,7 +168,7 @@ const Auth = () => {
               title: 'Account created!',
               description: 'Redirecting to checkout...',
             });
-            navigate('/subscribe');
+            // Small delay to let auth state settle, then checkout will trigger via useEffect
           } else {
             toast({
               title: 'Account created!',
@@ -252,13 +258,13 @@ const Auth = () => {
             {isLogin 
               ? 'Sign in to find businesses without websites' 
               : intent === 'upgrade'
-                ? 'Create an account to start your 24-Hour Full Access'
+                ? 'Create your account to unlock full access'
                 : 'Create an account to try your first search free'}
           </CardDescription>
           {!isLogin && (
             <p className="text-xs text-muted-foreground mt-2">
               {intent === 'upgrade' 
-                ? 'Card required after sign up. Cancel anytime.'
+                ? '£0 today · Cancel anytime'
                 : 'No card required. See real results instantly.'}
             </p>
           )}
