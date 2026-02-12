@@ -25,11 +25,11 @@ const DAILY_TRIAL_LIMIT = 2;
 
 export function useTrial() {
   const { user } = useAuth();
-  const { status: stripeStatus, isLoading: isSubscriptionLoading, subscribed, isPaidSubscriber } = useSubscription();
+  const { status: stripeStatus, isLoading: isSubscriptionLoading, subscribed, isPaidSubscriber, isAdmin } = useSubscription();
   
-  // Pro access includes trialing users — they get unlimited searches
+  // Pro access includes trialing users and admins — they get unlimited searches
   const isStripeTrialing = stripeStatus === 'trialing';
-  const hasProAccess = isPaidSubscriber || isStripeTrialing;
+  const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
   console.log('[useTrial] access', { stripeStatus, hasProAccess, isStripeTrialing, isPaidSubscriber });
   
   const [state, setState] = useState<TrialState>({

@@ -29,8 +29,8 @@ const Index = () => {
   const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed } = useTrial();
   const { subscribed, isLoading: isSubscriptionLoading, status: subStatus } = useSubscription();
   
-  // Pro access = active, trialing, or past_due
-  const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due';
+  // Pro access = active, trialing, past_due, or admin
+  const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
   console.log('[Index] access check', { userId: 'current', subStatus, hasProAccess, isStripeTrialing, subscribed, demoSearchUsed });
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
