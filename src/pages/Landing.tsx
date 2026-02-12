@@ -600,6 +600,9 @@ const Landing = () => {
               </Link>
             </Button>
           </div>
+          <p className="text-[11px] sm:text-xs text-muted-foreground/40 mt-2 tracking-wide">
+            No card required · Sign up required
+          </p>
 
 
           {/* System label */}
@@ -662,7 +665,7 @@ const Landing = () => {
               {/* Old Way */}
               <div className="opacity-80">
                 <div className="text-center mb-3">
-                  <h3 className="text-lg font-bold text-foreground/90 tracking-tight">The Old Way</h3>
+                  <span className="inline-flex items-center gap-2"><X className="h-4 w-4" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-lg font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
                 </div>
                 <div 
                   className="relative rounded-lg overflow-hidden mb-4 aspect-[16/10]"
@@ -682,7 +685,7 @@ const Landing = () => {
               {/* New Way */}
               <div>
                 <div className="text-center mb-3">
-                  <h3 className="text-lg font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
+                  <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-lg font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
                 </div>
                 <div 
                   className="relative rounded-lg overflow-hidden mb-4"
@@ -707,7 +710,7 @@ const Landing = () => {
               <ScrollReveal delay={100}>
                 <div className="hover:opacity-90 transition-opacity duration-300">
                   <div className="text-center mb-5">
-                    <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3>
+                    <span className="inline-flex items-center gap-2.5"><X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
                   </div>
                   <div className="relative group mb-6">
                     <div 
@@ -735,7 +738,7 @@ const Landing = () => {
               <ScrollReveal delay={300}>
                 <div className="transition-all duration-300 hover:scale-[1.01]" style={{ filter: 'drop-shadow(0 0 24px hsl(142 60% 40% / 0.08))' }}>
                   <div className="text-center mb-5">
-                    <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
+                    <span className="inline-flex items-center gap-2.5"><Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
                   </div>
                   <div className="relative group mb-6">
                     <div 
