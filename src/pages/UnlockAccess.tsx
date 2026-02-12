@@ -11,9 +11,9 @@ import appLogo from '@/assets/logo.png';
 
 const BENEFITS = [
   'Unlimited searches',
-  'Full outreach tracking',
-  'WhatsApp & SMS messaging',
-  'CRM pipeline management',
+  'CRM & tracking',
+  'WhatsApp & SMS outreach',
+  'Templates & export',
 ];
 
 const UnlockAccess = () => {
@@ -98,49 +98,47 @@ const UnlockAccess = () => {
         </DialogContent>
       </Dialog>
 
-      <div className="relative z-10 w-full max-w-md">
+      <div className="relative z-10 w-full max-w-sm">
         <Card className="bg-card/80 backdrop-blur-xl border-primary/20">
-          <CardHeader className="text-center pb-3">
-            <div className="flex justify-center mb-4">
-              <img src={appLogo} alt="LeadFinder Pro" className="h-12 w-12" />
+          <CardHeader className="text-center pb-2 pt-5 px-6">
+            <div className="flex justify-center mb-3">
+              <img src={appLogo} alt="LeadFinder Pro" className="h-10 w-10" />
             </div>
-            <CardTitle className="text-2xl font-bold">
-              Unlock Full Access
+            <CardTitle className="text-xl font-bold">
+              Unlock full access for 24 hours
             </CardTitle>
-            <p className="text-sm text-muted-foreground mt-2">
-              You've seen the demo. Now unlock everything for 24 hours.
-            </p>
           </CardHeader>
 
-          <CardContent className="space-y-5">
-            <ul className="space-y-3">
+          <CardContent className="space-y-4 px-6 pt-2 pb-2">
+            {/* Pricing block */}
+            <div className="text-center space-y-0.5">
+              <p className="text-3xl font-extrabold text-foreground">£0 today</p>
+              <p className="text-sm text-muted-foreground">Then £19.99/month</p>
+              <p className="text-xs text-muted-foreground/70 pt-1">Cancel anytime before renewal</p>
+            </div>
+
+            {/* Benefits */}
+            <ul className="space-y-2 pt-1">
               {BENEFITS.map((benefit) => (
-                <li key={benefit} className="flex items-center gap-3">
-                  <div
-                    className="flex items-center justify-center h-5 w-5 rounded-full shrink-0"
-                    style={{
-                      background: 'hsl(var(--primary) / 0.15)',
-                    }}
-                  >
-                    <Check className="h-3 w-3 text-primary" strokeWidth={3} />
-                  </div>
+                <li key={benefit} className="flex items-center gap-2.5">
+                  <Check className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={3} />
                   <span className="text-sm text-foreground/90">{benefit}</span>
                 </li>
               ))}
             </ul>
           </CardContent>
 
-          <CardFooter className="flex-col gap-3 pt-2 pb-6">
+          <CardFooter className="flex-col gap-2 pt-3 pb-5 px-6">
             <Button
               size="lg"
               className="w-full btn-premium font-semibold py-3 h-auto text-sm sm:text-base"
               onClick={() => setShowConfirmModal(true)}
             >
-              Start 24-Hour Full Access
+              Start 24-hour access
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
             <p className="text-[10px] text-muted-foreground/50 text-center">
-              Card required · Cancel anytime · Secure payment via Stripe
+              Secure checkout via Stripe
             </p>
           </CardFooter>
         </Card>
