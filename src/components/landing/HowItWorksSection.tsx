@@ -50,7 +50,7 @@ const STEPS: StepData[] = [
     icon: BarChart3,
     title: 'Track & Close',
     description: 'See who replied, who needs follow-up, and exactly where your revenue is coming from — all in one dashboard.',
-    images: [step4bImage],
+    images: [step4aImage, step4bImage],
     badge: 'Full Pipeline',
   },
 ];
@@ -107,7 +107,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
   const isMobile = useIsMobile();
 
   return (
-    <section className="relative z-10 py-8 sm:py-18 md:py-24 lg:py-28 px-3 sm:px-4">
+    <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-3 sm:px-4">
       {/* Image Modal */}
       <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
         <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
@@ -132,8 +132,8 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
         </DialogContent>
       </Dialog>
 
-      <div className="container mx-auto max-w-[1200px]">
-        <ScrollReveal className="text-center mb-8 sm:mb-8 md:mb-12">
+      <div className="container mx-auto">
+        <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-16">
           <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
             How It <span className="text-gradient-primary">Works</span>
           </h2>
@@ -193,39 +193,32 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             ))}
           </div>
         ) : (
-          /* Desktop Layout — Alternating rows */
-          <div className="flex flex-col gap-20 lg:gap-24 max-w-[1100px] mx-auto">
+          /* Desktop Layout */
+          <div className="max-w-6xl mx-auto space-y-6 sm:space-y-10 md:space-y-14">
             {STEPS.map((step, index) => {
-              const isReversed = index % 2 === 1;
+              const isEven = index % 2 === 0;
+              const imageDirection = isEven ? 'left' : 'right';
+              const textDirection = isEven ? 'right' : 'left';
+              const hasMultipleImages = step.images.length > 1;
               
               return (
-                <ScrollReveal key={step.title} delay={index * 100}>
-                  <div className={`flex items-center gap-12 lg:gap-16 ${isReversed ? 'flex-row-reverse' : ''}`}>
-                    {/* Text side */}
-                    <div className="w-[42%] flex flex-col">
-                      <div className="flex items-center gap-3 mb-4">
-                        <span 
-                          className="inline-flex items-center justify-center w-11 h-11 rounded-xl font-bold text-lg"
-                          style={{ 
-                            background: 'hsl(210 100% 50% / 0.15)',
-                            color: 'hsl(210 100% 60%)',
-                            border: '1px solid hsl(210 100% 50% / 0.3)'
-                          }}
-                        >
-                          {index + 1}
-                        </span>
-                        <h3 className="text-xl lg:text-2xl font-bold tracking-tight">{step.title}</h3>
+                <div key={step.title} className={`flex flex-col-reverse ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-4 sm:gap-6 lg:gap-12`}>
+                  {/* Image Side */}
+                  <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={(index + 1) * 100} direction={imageDirection}>
+                    {hasMultipleImages ? (
+                      <div className="grid grid-cols-2 gap-4">
+                        {step.images.map((img, imgIdx) => (
+                          <StepImage
+                            key={imgIdx}
+                            src={img}
+                            alt={`${step.title} ${imgIdx + 1}`}
+                            onClick={() => setExpandedImage({ src: img, title: step.title })}
+                          />
+                        ))}
                       </div>
-                      
-                      <p className="text-muted-foreground/80 text-sm lg:text-base leading-relaxed max-w-sm">
-                        {step.description}
-                      </p>
-                    </div>
-                    
-                    {/* Image side */}
-                    <div className="w-[58%]">
+                    ) : (
                       <div 
-                        className="relative group cursor-pointer transition-all duration-300 hover:-translate-y-1"
+                        className="relative group cursor-pointer"
                         onClick={() => setExpandedImage({ src: step.images[0], title: step.title })}
                       >
                         <div 
@@ -237,7 +230,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                           style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.1), transparent)' }}
                         />
                         <div 
-                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.01]"
+                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
                           style={{ 
                             border: '1px solid hsl(210 100% 50% / 0.2)',
                             boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
@@ -248,11 +241,11 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                             alt={step.title}
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                           />
-                          <div className="absolute top-3 left-3 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <Search className="h-4 w-4 text-foreground" />
+                          <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
                           </div>
                           <div 
-                            className="absolute top-3 right-3 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md"
+                            className="absolute top-3 right-3 sm:top-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold backdrop-blur-md"
                             style={{ 
                               background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.9), hsl(220 80% 45% / 0.9))',
                               color: 'white',
@@ -263,9 +256,32 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                           </div>
                         </div>
                       </div>
+                    )}
+                  </ScrollReveal>
+                    
+                  {/* Content Side */}
+                  <ScrollReveal className={`flex-1 w-full ${isEven ? 'lg:pl-4' : 'lg:pr-4'}`} delay={(index + 1) * 100 + 50} direction={textDirection}>
+                    <div className="text-center lg:text-left">
+                      <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
+                        <span 
+                          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
+                          style={{ 
+                            background: 'hsl(210 100% 50% / 0.15)',
+                            color: 'hsl(210 100% 60%)',
+                            border: '1px solid hsl(210 100% 50% / 0.3)'
+                          }}
+                        >
+                          {index + 1}
+                        </span>
+                        <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{step.title}</h3>
+                      </div>
+                      
+                      <p className="text-muted-foreground text-sm sm:text-base md:text-lg leading-relaxed max-w-md mx-auto lg:mx-0">
+                        {step.description}
+                      </p>
                     </div>
-                  </div>
-                </ScrollReveal>
+                  </ScrollReveal>
+                </div>
               );
             })}
           </div>

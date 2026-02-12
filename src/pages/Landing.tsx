@@ -171,10 +171,10 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
     <div ref={ref} className="text-center">
-    <div className="text-base sm:text-2xl md:text-3xl font-extrabold text-gradient-primary tracking-tight">
+    <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
       {count.toLocaleString()}{suffix}
     </div>
-    <div className="text-[10px] sm:text-xs text-foreground/40 mt-1 font-medium">{label}</div>
+    <div className="text-[10px] sm:text-xs text-foreground/50 mt-1 font-medium">{label}</div>
     </div>
   );
 };
@@ -312,85 +312,6 @@ const VideoSection = () => {
         </p>
       </div>
     </ScrollReveal>
-  );
-};
-
-// Desktop hero video with sound toggle and enhanced glow
-const DesktopHeroVideo = () => {
-  const [isMuted, setIsMuted] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    // Start unmuted at low volume; browsers may block this and fall back to muted
-    if (videoRef.current) {
-      videoRef.current.volume = 0.15;
-      videoRef.current.muted = false;
-      const playPromise = videoRef.current.play();
-      if (playPromise) {
-        playPromise.catch(() => {
-          // Autoplay with sound blocked — fall back to muted
-          if (videoRef.current) {
-            videoRef.current.muted = true;
-            setIsMuted(true);
-            videoRef.current.play();
-          }
-        });
-      }
-    }
-  }, []);
-
-  const toggleMute = () => {
-    if (videoRef.current) {
-      const newMuted = !isMuted;
-      videoRef.current.muted = newMuted;
-      if (!newMuted) videoRef.current.volume = 0.15;
-      setIsMuted(newMuted);
-    }
-  };
-
-  return (
-    <div className="relative">
-      {/* Soft blue glow behind video */}
-      <div 
-        className="absolute -inset-8 rounded-3xl blur-3xl opacity-50"
-        style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.25), hsl(220 80% 45% / 0.1), transparent 70%)' }}
-      />
-      <div 
-        className="absolute -inset-px rounded-2xl"
-        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.15), transparent)' }}
-      />
-      <div 
-        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm"
-        style={{ 
-          border: '1px solid hsl(210 100% 50% / 0.2)',
-          boxShadow: '0 0 30px hsl(210 100% 50% / 0.15), 0 0 60px hsl(210 100% 50% / 0.08), 0 20px 40px hsl(0 0% 0% / 0.4)'
-        }}
-      >
-        <video 
-          ref={videoRef}
-          className="w-full h-auto"
-          autoPlay 
-          loop 
-          playsInline
-          preload="auto"
-        >
-          <source src={demoVideo} type="video/mp4" />
-        </video>
-        
-        {/* Sound toggle button */}
-        <button
-          onClick={toggleMute}
-          className="absolute bottom-3 right-3 p-2.5 rounded-full bg-background/70 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-all duration-200"
-          aria-label={isMuted ? "Unmute video" : "Mute video"}
-        >
-          {isMuted ? (
-            <VolumeX className="h-5 w-5" />
-          ) : (
-            <Volume2 className="h-5 w-5" />
-          )}
-        </button>
-      </div>
-    </div>
   );
 };
 
@@ -640,168 +561,128 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-28 lg:pt-28 lg:pb-32 px-4">
-        <div className="container mx-auto max-w-[1200px]">
-          {/* Mobile: original centered layout */}
-          <div className="sm:hidden text-center">
-            <div className="mb-6">
-              <MobileHeroVideo />
-            </div>
-            
-            <h1 className="text-[2rem] leading-[1.1] font-bold mb-3 tracking-tight">
-              <span className="block text-gradient-primary">Find Businesses</span>
-              <span className="block mt-0.5">Without Websites</span>
-            </h1>
-            
-            <p className="text-sm text-foreground/55 mx-auto mb-3 leading-relaxed px-2">
-              Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
-            </p>
-            
-            <div className="flex flex-col items-center justify-center gap-2.5">
-              <Button size="lg" className="btn-premium text-sm font-semibold px-6 py-3 h-auto w-full shadow-lg shadow-primary/20" asChild>
-                <Link to="/auth">
-                  Start Free Trial
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            </div>
+      <section className="relative z-10 pt-6 pb-6 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
+        <div className="container mx-auto text-center">
+          {/* Mobile: Video at top instead of logo */}
+          <div className="sm:hidden mb-6">
+            <MobileHeroVideo />
+          </div>
+          
+          {/* Tagline badge - hidden on mobile */}
+          <div 
+            className="hidden sm:inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-6 backdrop-blur-sm"
+            style={{ 
+              border: '1px solid hsl(210 100% 50% / 0.2)', 
+              background: 'hsl(210 100% 50% / 0.08)',
+              color: 'hsl(210 100% 65%)'
+            }}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span>The fastest way to land web design clients</span>
+          </div>
+          
+          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight">
+            <span className="block text-gradient-primary">Find Businesses</span>
+            <span className="block mt-0.5 sm:mt-2">Without Websites</span>
+          </h1>
+          
+          <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
+            Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
+          </p>
+          
+          {/* Keywords removed */}
+          
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
+            <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
+              <Link to="/auth">
+                Start Free Trial
+                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+              </Link>
+            </Button>
+          </div>
 
-            {/* Stats bar */}
-            <div className="mt-5 grid grid-cols-3 gap-2 max-w-xs mx-auto">
-              <CountUpStat target={100000} suffix="+" label="Businesses" />
-              <div className="text-center">
-                <div className="text-base font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-[10px] text-foreground/50 mt-1 font-medium">Coverage</div>
-              </div>
-              <div className="text-center">
-                <div className="text-sm font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-[10px] text-foreground/50 mt-1 font-medium">Searches</div>
-              </div>
-            </div>
+          {/* Reassurance microcopy removed from hero */}
 
-            {/* Power bullets */}
-            <div className="mt-5">
-              <div className="flex justify-center">
-                <div className="flex flex-col gap-2 pl-1">
-                  {[
-                    'Find 20+ real prospects in minutes',
-                    'Send more outreach in 10 minutes than most do in a morning',
-                    'Always know who to follow up and when',
-                    'Build a pipeline you can actually rely on',
-                  ].map((bullet, i) => (
-                    <div key={i} className="flex items-start gap-3">
-                      <div className="w-5 flex-shrink-0 flex justify-center pt-0.5">
-                        <Check 
-                          className="h-[18px] w-[18px]" 
-                          style={{ color: 'hsl(142 76% 55%)' }} 
-                          strokeWidth={3} 
-                        />
-                      </div>
-                      <span className="text-[14px] font-medium text-foreground/90 text-left">{bullet}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+          {/* Stats bar - moved above bullets */}
+          <div className="mt-5 sm:mt-10 md:mt-12 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
+            <CountUpStat target={100000} suffix="+" label="Businesses" />
+            <div className="text-center">
+              <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[10px] sm:text-xs text-foreground/50 mt-1 font-medium">Coverage</div>
             </div>
-
-            {/* Scroll indicator */}
-            <div className="mt-6 flex flex-col items-center gap-1 animate-bounce opacity-40">
-              <span className="text-[10px] text-muted-foreground tracking-wide">Scroll</span>
-              <svg width="16" height="24" viewBox="0 0 16 24" fill="none" className="text-muted-foreground">
-                <rect x="1" y="1" width="14" height="22" rx="7" stroke="currentColor" strokeWidth="1.5" />
-                <circle cx="8" cy="8" r="2" fill="currentColor" className="animate-[scroll-dot_2s_ease-in-out_infinite]" />
-              </svg>
+            <div className="text-center">
+              <div className="text-sm sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="text-[10px] sm:text-xs text-foreground/50 mt-1 font-medium">Searches</div>
             </div>
           </div>
 
-          {/* Desktop: 2-column hero layout */}
-          <div className="hidden sm:flex items-center gap-10 lg:gap-12">
-            {/* Left column — content (48%) */}
-            <div className="w-[48%] text-left max-w-[580px]">
-              <div 
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-6 backdrop-blur-sm"
-                style={{ 
-                  border: '1px solid hsl(210 100% 50% / 0.2)', 
-                  background: 'hsl(210 100% 50% / 0.08)',
-                  color: 'hsl(210 100% 65%)'
-                }}
-              >
-                <Zap className="h-3.5 w-3.5" />
-                <span>The fastest way to land web design clients</span>
-              </div>
-              
-              <h1 className="text-4xl md:text-5xl lg:text-[3.75rem] font-extrabold mb-5 tracking-tight leading-[1.05]">
-                <span className="block text-gradient-primary">Find Businesses</span>
-                <span className="block mt-1 text-[1.08em]">Without Websites</span>
-              </h1>
-              
-              <p className="text-base md:text-lg text-foreground/50 mb-8 leading-[1.7] max-w-[480px]">
-                Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
-              </p>
-              
-              <div className="flex items-center gap-4 mb-10">
-                <Button 
-                  size="lg" 
-                  className="btn-premium text-base font-semibold px-12 py-5 h-auto"
-                  style={{ boxShadow: '0 0 24px hsl(210 100% 50% / 0.25), 0 4px 16px hsl(210 100% 50% / 0.15)' }}
-                  asChild
-                >
-                  <Link to="/auth">
-                    Start Free Trial
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Link>
-                </Button>
-              </div>
-
-              {/* Stats row */}
-              <div className="flex items-center gap-12 md:gap-14 mb-8">
-                <CountUpStat target={100000} suffix="+" label="Businesses" />
-                <div className="text-center">
-                  <div className="text-2xl md:text-3xl font-extrabold text-gradient-primary tracking-tight">Global</div>
-                  <div className="text-xs text-foreground/35 mt-1 font-medium">Coverage</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl md:text-3xl font-extrabold text-gradient-primary tracking-tight">Unlimited</div>
-                  <div className="text-xs text-foreground/35 mt-1 font-medium">Searches</div>
-                </div>
-              </div>
-
-              {/* Benefit ticks — 2x2 grid */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+          {/* Power bullets under hero CTA */}
+          <div className="mt-5 sm:mt-8">
+            {/* Mobile: centered checklist group with fixed icon column */}
+            <div className="flex justify-center sm:hidden">
+              <div className="flex flex-col gap-2 pl-1">
                 {[
                   'Find 20+ real prospects in minutes',
+                  'Send more outreach in 10 minutes than most do in a morning',
                   'Always know who to follow up and when',
-                  'Send more outreach in 10 mins than most do in a morning',
                   'Build a pipeline you can actually rely on',
                 ].map((bullet, i) => (
-                  <div key={i} className="flex items-start gap-2.5">
-                    <Check 
-                      className="h-[20px] w-[20px] flex-shrink-0 mt-0.5" 
-                      style={{ color: 'hsl(142 76% 55%)' }} 
-                      strokeWidth={3} 
-                    />
-                    <span className="text-sm font-medium text-foreground/90">{bullet}</span>
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="w-5 flex-shrink-0 flex justify-center pt-0.5">
+                      <Check 
+                        className="h-[18px] w-[18px]" 
+                        style={{ color: 'hsl(142 76% 55%)' }} 
+                        strokeWidth={3} 
+                      />
+                    </div>
+                    <span className="text-[14px] font-medium text-foreground/90 text-left">{bullet}</span>
                   </div>
                 ))}
               </div>
             </div>
-
-            {/* Right column — product mockup (video) (52%) */}
-            <div className="w-[52%]">
-              <DesktopHeroVideo />
+            {/* Desktop: horizontal wrap */}
+            <div className="hidden sm:flex flex-wrap justify-center gap-x-8 gap-y-2.5">
+              {[
+                'Find 20+ real prospects in minutes',
+                'Send more outreach in 10 minutes than most do in a morning',
+                'Always know who to follow up and when',
+                'Build a pipeline you can actually rely on',
+              ].map((bullet, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Check 
+                    className="h-[20px] w-[20px] flex-shrink-0" 
+                    style={{ color: 'hsl(142 76% 55%)' }} 
+                    strokeWidth={3} 
+                  />
+                  <span className="text-base font-medium text-foreground/90">{bullet}</span>
+                </div>
+              ))}
             </div>
+          </div>
+          
+
+          {/* Scroll down indicator */}
+          <div className="mt-6 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
+            <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">Scroll</span>
+            <svg width="16" height="24" viewBox="0 0 16 24" fill="none" className="text-muted-foreground">
+              <rect x="1" y="1" width="14" height="22" rx="7" stroke="currentColor" strokeWidth="1.5" />
+              <circle cx="8" cy="8" r="2" fill="currentColor" className="animate-[scroll-dot_2s_ease-in-out_infinite]" />
+            </svg>
           </div>
         </div>
       </section>
 
-      {/* Video Demo Section removed — video is now in desktop hero */}
+      {/* Video Demo Section - desktop only (mobile has it in hero) */}
+      <div className="hidden sm:block">
+        <VideoSection />
+      </div>
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Unified Testimonials — 3 cards */}
       <ScrollReveal className="relative z-10 py-10 sm:py-16 md:py-20 px-4">
-        <div className="container mx-auto max-w-[1200px]">
+        <div className="container mx-auto max-w-5xl">
           {/* Trust line */}
           <div className="flex items-center justify-center gap-2 mb-6 sm:mb-8">
             <div className="flex gap-0.5">
@@ -840,28 +721,28 @@ const Landing = () => {
             return isMobile ? (
               <MobileTestimonialSlider testimonials={testimonials} />
             ) : (
-              <div className="grid grid-cols-3 gap-7 max-w-[1100px] mx-auto">
+              <div className="grid grid-cols-3 gap-6">
                 {testimonials.map((r, i) => (
                   <ScrollReveal key={i} delay={i * 100}>
                     <div 
-                      className="h-full flex flex-col justify-between text-center px-7 py-8 rounded-xl transition-all duration-300 hover:-translate-y-1"
+                      className="h-full flex flex-col justify-between text-center px-5 py-6 sm:px-6 sm:py-7 rounded-xl"
                       style={{
                         background: 'hsl(220 30% 8% / 0.6)',
-                        border: '1px solid hsl(210 100% 50% / 0.08)',
-                        boxShadow: '0 2px 16px hsl(220 40% 4% / 0.3), 0 0 20px hsl(210 100% 50% / 0.04)',
+                        border: '1px solid hsl(0 0% 100% / 0.06)',
+                        boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
                       }}
                     >
                       <div>
-                        <div className="flex gap-0.5 mb-4 justify-center">
+                        <div className="flex gap-0.5 mb-3 justify-center">
                           {[...Array(r.stars)].map((_, si) => (
-                            <Star key={si} className="h-[18px] w-[18px] fill-yellow-400 text-yellow-400" />
+                            <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                           ))}
                         </div>
-                        <p className="text-foreground/80 text-sm leading-relaxed font-normal max-w-[280px] mx-auto">
+                        <p className="text-foreground/80 text-sm leading-relaxed italic font-normal">
                           "{r.quote}"
                         </p>
                       </div>
-                      <p className="text-muted-foreground/70 text-xs mt-5 text-center font-semibold">
+                      <p className="text-muted-foreground/70 text-xs mt-4 text-center">
                         {r.name} · {r.role} – {r.region}
                       </p>
                     </div>
@@ -875,42 +756,40 @@ const Landing = () => {
 
       {/* Desktop: Old Way vs New Way comparison */}
       {!isMobile && (
-        <ScrollReveal className="relative z-10 py-14 sm:py-18 md:py-24 px-4">
-          <div className="container mx-auto max-w-[1200px]">
-            <div className="text-center mb-12 md:mb-14">
-              <h2 className="text-3xl md:text-4xl lg:text-[3.25rem] font-bold tracking-tight mb-4">
+        <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
+          <div className="container mx-auto max-w-6xl">
+            <div className="text-center mb-12 md:mb-16">
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-4">
                 Stop Wasting Mornings on <span className="text-gradient-primary">Google Maps</span>
               </h2>
               <p className="text-muted-foreground max-w-xl mx-auto text-base md:text-lg">
                 There's a faster way to find businesses without websites.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-14 lg:gap-20 max-w-[1100px] mx-auto items-start relative">
-              {/* Vertical divider */}
-              <div className="absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2" style={{ background: 'linear-gradient(to bottom, transparent, hsl(0 0% 100% / 0.08), transparent)' }} />
+            <div className="grid grid-cols-2 gap-10 lg:gap-14 max-w-5xl mx-auto items-start">
               {/* Old Way */}
-              <ScrollReveal delay={100} className="pr-4 lg:pr-8">
-                <div className="opacity-70 hover:opacity-85 transition-opacity duration-300">
+              <ScrollReveal delay={100}>
+                <div className="opacity-80 hover:opacity-90 transition-opacity duration-300">
                   <div className="flex items-center gap-2.5 justify-center mb-5">
-                    <X className="h-4.5 w-4.5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
+                    <X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
                     <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3>
                   </div>
-                  <div className="relative group mb-5">
+                  <div className="relative group mb-6">
                     <div 
                       className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
                       style={{ background: 'linear-gradient(to bottom right, hsl(0 60% 40% / 0.3), hsl(0 60% 40% / 0.1))' }}
                     />
                     <div 
-                      className="relative rounded-xl overflow-hidden"
+                      className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
                       style={{ 
                         border: '1px solid hsl(0 60% 40% / 0.25)',
                         boxShadow: '0 0 30px hsl(0 60% 40% / 0.1)'
                       }}
                     >
-                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-[280px] object-cover object-top" />
+                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" />
                     </div>
                   </div>
-                  <ul className="space-y-2.5 text-sm md:text-base text-muted-foreground">
+                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
                     <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
                     <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
                     <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
@@ -918,28 +797,28 @@ const Landing = () => {
                 </div>
               </ScrollReveal>
               {/* New Way */}
-              <ScrollReveal delay={300} className="pl-4 lg:pl-8">
-                <div className="transition-all duration-300 hover:scale-[1.01]" style={{ filter: 'drop-shadow(0 0 30px hsl(142 60% 40% / 0.1))' }}>
+              <ScrollReveal delay={300}>
+                <div className="transition-all duration-300 hover:scale-[1.01]" style={{ filter: 'drop-shadow(0 0 24px hsl(142 60% 40% / 0.08))' }}>
                   <div className="flex items-center gap-2.5 justify-center mb-5">
-                    <Check className="h-5.5 w-5.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />
+                    <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />
                     <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
                   </div>
-                  <div className="relative group mb-5">
+                  <div className="relative group mb-6">
                     <div 
                       className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition-opacity duration-300"
                       style={{ background: 'linear-gradient(to bottom right, hsl(142 60% 40% / 0.3), hsl(142 60% 40% / 0.1))' }}
                     />
                     <div 
-                      className="relative rounded-xl overflow-hidden"
+                      className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
                       style={{ 
                         border: '1px solid hsl(142 60% 40% / 0.25)',
                         boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
                       }}
                     >
-                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-[280px] object-cover object-top" />
+                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-full object-cover object-top" />
                     </div>
                   </div>
-                  <ul className="space-y-2.5 text-sm md:text-base text-muted-foreground">
+                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
                     <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
                     <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
                     <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
@@ -948,11 +827,17 @@ const Landing = () => {
               </ScrollReveal>
             </div>
 
-            {/* CTA */}
-            <ScrollReveal delay={400} className="text-center mt-14 md:mt-16">
+            {/* Authority statement */}
+            <ScrollReveal delay={400} className="text-center mt-14 md:mt-18 max-w-2xl mx-auto">
+              <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
+                The difference isn't effort. It's leverage.
+              </h3>
+              <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-10">
+                You can keep searching manually. Or you can systemise outreach.
+              </p>
               <Button 
                 size="lg" 
-                className="btn-premium text-base font-semibold px-10 py-5 h-auto"
+                className="btn-premium text-base font-semibold px-10 py-5 h-auto shadow-lg shadow-primary/25"
                 style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.2), 0 4px 20px hsl(210 100% 50% / 0.15)' }}
                 asChild
               >
@@ -961,6 +846,9 @@ const Landing = () => {
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
+              <p className="text-xs text-muted-foreground/60 mt-4">
+                No credit card. 24 hours. Cancel anytime.
+              </p>
             </ScrollReveal>
           </div>
         </ScrollReveal>
@@ -978,20 +866,19 @@ const Landing = () => {
 
       {/* Power Section — Built for serious outreach */}
       <section className="relative z-10 py-12 sm:py-20 md:py-24 px-4">
-        <div className="container mx-auto max-w-[1200px]">
-          {/* Desktop: 2-column layout */}
-          <div className="hidden sm:flex items-center gap-14 lg:gap-20">
-            <div className="flex-1 text-left">
-              <ScrollReveal>
-                <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-4">
-                  Your Outreach, <span className="text-gradient-primary">Systemised.</span>
-                </h2>
-                <p className="text-base sm:text-lg text-muted-foreground max-w-md leading-relaxed mb-8">
-                  A structured workflow for finding leads, sending messages, and tracking every follow-up in one place.
-                </p>
-              </ScrollReveal>
+        <div className="container mx-auto max-w-3xl text-center">
+          <ScrollReveal className="mb-10 sm:mb-14">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4">
+              Your Outreach, <span className="text-gradient-primary">Systemised.</span>
+            </h2>
+            <p className="text-base sm:text-lg text-muted-foreground">
+              A structured workflow for finding leads, sending messages, and tracking every follow-up in one place.
+            </p>
+          </ScrollReveal>
 
-              <div className="grid grid-cols-2 gap-x-10 gap-y-4 mb-10">
+          <div className="mb-10 sm:mb-14">
+            <div className="flex justify-center">
+              <div className="flex flex-col gap-2.5 sm:gap-3 pl-2 max-w-[340px] sm:max-w-none">
                 {[
                   'Know who to contact and when',
                   'Keep every follow-up organised',
@@ -1002,106 +889,40 @@ const Landing = () => {
                     <div className="flex items-center gap-3.5">
                       <div className="w-8 flex-shrink-0 flex justify-center">
                         <Check 
-                          className="h-7 w-7" 
+                          className="h-6 w-6 sm:h-7 sm:w-7" 
                           style={{ color: 'hsl(142 76% 55%)' }} 
                           strokeWidth={3} 
                         />
                       </div>
-                      <span className="text-base font-semibold text-foreground/85 tracking-tight text-left">{item}</span>
+                      <span className="text-base sm:text-lg font-semibold text-foreground/90 tracking-tight text-left">{item}</span>
                     </div>
                   </ScrollReveal>
                 ))}
               </div>
-
-              <ScrollReveal delay={300}>
-                <p className="text-sm text-muted-foreground/70 max-w-md leading-relaxed mb-8">
-                  Built for freelance web designers, WordPress developers, and small agencies who want a consistent way to find businesses that need a website.
-                </p>
-              </ScrollReveal>
-
-              <ScrollReveal delay={350}>
-                <Button 
-                  size="lg" 
-                  className="btn-premium text-base font-semibold px-10 py-5 h-auto w-auto"
-                  asChild
-                >
-                  <Link to="/auth">
-                    Start Free Trial
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Link>
-                </Button>
-                <p className="text-xs text-muted-foreground/60 mt-4">
-                  Free for 24 hours. No card required. Cancel anytime.
-                </p>
-              </ScrollReveal>
-            </div>
-            {/* Right: product screenshot */}
-            <div className="flex-1 flex items-center justify-center">
-              <div className="relative w-full max-w-[480px]">
-                <div 
-                  className="absolute -inset-6 rounded-3xl blur-3xl opacity-40"
-                  style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.2), transparent 70%)' }}
-                />
-                <div 
-                  className="absolute -inset-px rounded-2xl"
-                  style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.15), transparent)' }}
-                />
-                <div 
-                  className="relative rounded-2xl overflow-hidden"
-                  style={{ 
-                    border: '1px solid hsl(210 100% 50% / 0.2)',
-                    boxShadow: '0 0 30px hsl(210 100% 50% / 0.12), 0 0 60px hsl(210 100% 50% / 0.06), 0 20px 40px hsl(0 0% 0% / 0.3)'
-                  }}
-                >
-                  <img src={featureContactTracking} alt="Outreach tracking dashboard" className="w-full h-auto" />
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Mobile: original centered layout */}
-          <div className="sm:hidden text-center">
-            <ScrollReveal className="mb-8">
-              <h2 className="text-3xl font-bold tracking-tight mb-3">
-                Your Outreach, <span className="text-gradient-primary">Systemised.</span>
-              </h2>
-              <p className="text-base text-muted-foreground max-w-2xl mx-auto">
-                A structured workflow for finding leads, sending messages, and tracking every follow-up in one place.
-              </p>
-            </ScrollReveal>
+          <ScrollReveal delay={300}>
+            <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-md mx-auto leading-relaxed text-center mb-8 sm:mb-10">
+              Built for freelance web designers, WordPress developers, and small agencies who want a consistent way to find businesses that need a website.
+            </p>
+          </ScrollReveal>
 
-            <div className="mb-8">
-              <div className="flex justify-center">
-                <div className="flex flex-col gap-2.5 pl-2 max-w-[340px]">
-                  {[
-                    'Know who to contact and when',
-                    'Keep every follow-up organised',
-                    'See who replied and what\'s next',
-                    'Manage outreach from first message to client',
-                  ].map((item, i) => (
-                    <ScrollReveal key={i} delay={i * 60}>
-                      <div className="flex items-center gap-3.5">
-                        <div className="w-8 flex-shrink-0 flex justify-center">
-                          <Check 
-                            className="h-6 w-6" 
-                            style={{ color: 'hsl(142 76% 55%)' }} 
-                            strokeWidth={3} 
-                          />
-                        </div>
-                        <span className="text-base font-semibold text-foreground/90 tracking-tight text-left">{item}</span>
-                      </div>
-                    </ScrollReveal>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <ScrollReveal delay={300}>
-              <p className="text-xs text-muted-foreground/70 max-w-lg mx-auto leading-relaxed text-center mb-8">
-                Built for freelance web designers, WordPress developers, and small agencies who want a consistent way to find businesses that need a website.
-              </p>
-            </ScrollReveal>
-          </div>
+          <ScrollReveal delay={350} className="hidden sm:block">
+            <Button 
+              size="lg" 
+              className="btn-premium text-base font-semibold px-10 py-5 h-auto w-auto"
+              asChild
+            >
+              <Link to="/auth">
+                Start Free Trial
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+            <p className="text-xs text-muted-foreground/60 mt-4">
+              Free for 24 hours. No card required. Cancel anytime.
+            </p>
+          </ScrollReveal>
         </div>
       </section>
 
@@ -1109,8 +930,8 @@ const Landing = () => {
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Features Section — Lead Toolkit */}
-      <section className="relative z-10 py-8 sm:py-18 md:py-24 lg:py-28 px-4">
-        <div className="container mx-auto max-w-[1200px]">
+      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
+        <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
               Your Complete
@@ -1127,32 +948,25 @@ const Landing = () => {
           ) : (
             /* Desktop: 4-card grid — core features only */
             <ScrollReveal>
-              <div className="grid grid-cols-2 gap-8 lg:gap-10 max-w-[1100px] mx-auto">
+              <div className="grid grid-cols-2 gap-x-10 gap-y-14 lg:gap-x-14 lg:gap-y-16 max-w-5xl mx-auto">
                 {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature, i) => (
                   <ScrollReveal key={feature.title} delay={i * 80}>
-                    <div 
-                      className="flex flex-col gap-4 p-6 rounded-xl transition-all duration-300 hover:-translate-y-1"
-                      style={{
-                        background: 'hsl(220 30% 7% / 0.6)',
-                        border: '1px solid hsl(210 100% 50% / 0.08)',
-                        boxShadow: '0 2px 16px hsl(220 40% 4% / 0.3), 0 0 20px hsl(210 100% 50% / 0.03)',
-                      }}
-                    >
+                    <div className="flex flex-col gap-4">
                       {/* Title row */}
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2.5">
                         <div 
-                          className="p-2.5 rounded-lg flex-shrink-0"
+                          className="p-2 rounded-lg flex-shrink-0"
                           style={{ 
                             background: 'hsl(210 100% 50% / 0.12)',
                             border: '1px solid hsl(210 100% 50% / 0.2)'
                           }}
                         >
-                          <feature.icon className="h-5 w-5" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={1.5} />
+                          <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={1.5} />
                         </div>
-                        <h3 className="text-lg font-bold tracking-tight">{feature.title}</h3>
+                        <h3 className="text-base lg:text-lg font-semibold tracking-tight">{feature.title}</h3>
                       </div>
                       {/* Description */}
-                      <p className="text-muted-foreground/80 text-sm leading-relaxed max-w-[400px]">{feature.description}</p>
+                      <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
                       {/* Image with glow */}
                       <div
                         className="group relative cursor-pointer"
@@ -1175,7 +989,7 @@ const Landing = () => {
                           <img 
                             src={feature.image} 
                             alt={feature.title}
-                            className={`w-full h-52 xl:h-60 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                            className={`w-full h-48 xl:h-56 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
                           />
                         </div>
                       </div>
@@ -1192,8 +1006,8 @@ const Landing = () => {
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Pricing Section */}
-      <section className="relative z-10 py-8 sm:py-16 md:py-22 lg:py-24 px-4">
-        <div className="container mx-auto max-w-[1200px]">
+      <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-4">
+        <div className="container mx-auto">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
             <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
               Simple, Transparent <span className="text-gradient-primary">Pricing</span>
@@ -1204,11 +1018,11 @@ const Landing = () => {
           </ScrollReveal>
           
           <ScrollReveal delay={150}>
-            <div className="relative max-w-md sm:max-w-lg md:max-w-xl mx-auto">
+            <div className="relative max-w-md mx-auto">
               {/* Glow background */}
               <div 
-                className="absolute -inset-4 sm:-inset-10 rounded-3xl blur-2xl sm:blur-3xl opacity-50"
-                style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.08), transparent 70%)' }}
+                className="absolute -inset-4 sm:-inset-8 rounded-3xl blur-2xl sm:blur-3xl opacity-50"
+                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
               />
               <div 
                 className="absolute -inset-px rounded-2xl"
@@ -1222,7 +1036,7 @@ const Landing = () => {
                   style={{ background: 'linear-gradient(to right, transparent, hsl(210 100% 50%), transparent)' }}
                 />
                 
-                <CardHeader className="text-center pb-2 pt-6 sm:pt-10 px-4 sm:px-8">
+                <CardHeader className="text-center pb-2 pt-6 sm:pt-8 px-4 sm:px-6">
                   <div 
                     className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wide mx-auto mb-3 sm:mb-4"
                     style={{ 
@@ -1234,16 +1048,16 @@ const Landing = () => {
                     <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                     1-Day Free Trial
                   </div>
-                  <CardTitle className="text-xl sm:text-3xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
-                  <div className="mt-4 sm:mt-6">
-                    <span className="text-4xl sm:text-[4.25rem] font-extrabold tracking-tight">£19.99</span>
-                    <span className="text-muted-foreground ml-1 text-sm sm:text-lg">/month</span>
+                  <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
+                  <div className="mt-4 sm:mt-5">
+                    <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
+                    <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs sm:text-sm text-foreground/50 mt-2">Start with a 24-hour free trial. No charge today.</p>
+                  <p className="text-xs text-foreground/50 mt-2">Start with a 24-hour free trial. No charge today.</p>
                 </CardHeader>
                 
-                <CardContent className="pt-5 sm:pt-8 px-4 sm:px-8">
-                  <ul className="space-y-2.5 sm:space-y-4">
+                <CardContent className="pt-5 sm:pt-6 px-4 sm:px-6">
+                  <ul className="space-y-2.5 sm:space-y-3">
                     {PRICING_FEATURES.map((feature) => (
                       <li key={feature} className="flex items-center gap-2.5 sm:gap-3">
                         <div 
@@ -1261,8 +1075,8 @@ const Landing = () => {
                   </ul>
                 </CardContent>
                 
-                <CardFooter className="pt-4 sm:pt-6 pb-6 sm:pb-8 flex-col gap-3 px-4 sm:px-8">
-                  <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-6 h-auto" asChild>
+                <CardFooter className="pt-4 sm:pt-5 pb-6 sm:pb-7 flex-col gap-3 px-4 sm:px-6">
+                  <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
                     <Link to="/auth">
                       Start My Free Trial
                       <ArrowRight className="ml-2 h-4 w-4" />
