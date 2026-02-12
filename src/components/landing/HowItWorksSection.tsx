@@ -31,38 +31,24 @@ import step5Image from '@/assets/howto-step4-dashboard.png';
 const STEPS = [
   {
     icon: Search,
-    title: 'Find Leads',
-    description: 'Search by business type and location to find companies without websites',
+    title: 'Find Your Leads',
+    description: 'Search any location and instantly see businesses without websites — your ideal prospects, ready to contact.',
     image: step1Image,
     badge: '20+ Countries',
   },
   {
-    icon: ClipboardList,
-    title: 'Add to CRM',
-    description: 'See business details, ratings, reviews, and addresses. Filter by classification and add promising leads to your CRM.',
-    image: step2Image,
-    badge: '100,000+ Businesses',
-  },
-  {
     icon: MessageSquare,
-    title: 'Start Outreach',
-    description: 'Tap WhatsApp to message a lead directly. If they\'re not on WhatsApp, tap the SMS button instead. Mark leads as "Contacted" after reaching out, then click "Track" to follow up.',
+    title: 'Reach Out Directly',
+    description: 'Message leads via WhatsApp or SMS straight from the app. No copying numbers, no switching tabs — just tap and send.',
     image: step3Image,
-    badge: 'Direct Outreach',
-  },
-  {
-    icon: Settings,
-    title: 'Track & Manage',
-    description: 'Set next actions for each lead — schedule follow-ups, mark call-backs, and track every status change. Manage your entire outreach pipeline from one place.',
-    image: step4Image,
-    badge: 'Full Pipeline',
+    badge: 'Instant Outreach',
   },
   {
     icon: Users,
-    title: 'Track Results',
-    description: 'Track your outreach performance on the dashboard. See conversion rates, lead progress, and activity metrics to optimise your workflow.',
+    title: 'Track & Close',
+    description: 'Every lead, follow-up, and status change tracked in one place. See your pipeline, know who to chase, and close more deals.',
     image: step5Image,
-    badge: 'Full Analytics',
+    badge: 'Full Pipeline',
   },
 ];
 
@@ -165,7 +151,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             How It <span className="text-gradient-primary">Works</span>
           </h2>
           <p className="hidden sm:block text-muted-foreground max-w-xl mx-auto text-base md:text-lg px-2">
-            From search to sale in five simple steps
+            Three steps. That's all it takes.
           </p>
         </ScrollReveal>
         
