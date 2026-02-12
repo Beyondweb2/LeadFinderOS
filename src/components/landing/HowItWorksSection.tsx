@@ -107,7 +107,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
   const isMobile = useIsMobile();
 
   return (
-    <section className="relative z-10 py-8 sm:py-12 md:py-16 lg:py-20 px-3 sm:px-4">
+    <section className="relative z-10 py-8 sm:py-18 md:py-24 lg:py-28 px-3 sm:px-4">
       {/* Image Modal */}
       <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
         <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
@@ -132,7 +132,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
         </DialogContent>
       </Dialog>
 
-      <div className="container mx-auto max-w-[1280px]">
+      <div className="container mx-auto max-w-[1200px]">
         <ScrollReveal className="text-center mb-8 sm:mb-8 md:mb-12">
           <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
             How It <span className="text-gradient-primary">Works</span>
@@ -200,11 +200,11 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
               
               return (
                 <ScrollReveal key={step.title} delay={index * 100}>
-                  <div className="flex flex-col">
+                  <div className="flex flex-col transition-all duration-300 hover:-translate-y-1">
                     {/* Step header */}
                     <div className="flex items-center gap-3 mb-3">
                       <span 
-                        className="inline-flex items-center justify-center w-9 h-9 rounded-lg font-semibold text-base"
+                        className="inline-flex items-center justify-center w-10 h-10 rounded-lg font-semibold text-base"
                         style={{ 
                           background: 'hsl(210 100% 50% / 0.15)',
                           color: 'hsl(210 100% 60%)',
@@ -216,7 +216,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                       <h3 className="text-xl lg:text-2xl font-bold tracking-tight">{step.title}</h3>
                     </div>
                     
-                    <p className="text-muted-foreground text-sm lg:text-base leading-relaxed mb-4 max-w-md">
+                    <p className="text-muted-foreground/80 text-sm lg:text-base leading-relaxed mb-5 max-w-md">
                       {step.description}
                     </p>
                     
