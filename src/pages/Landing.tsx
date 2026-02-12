@@ -827,29 +827,6 @@ const Landing = () => {
               </ScrollReveal>
             </div>
 
-            {/* Authority statement */}
-            <ScrollReveal delay={400} className="text-center mt-14 md:mt-18 max-w-2xl mx-auto">
-              <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
-                The difference isn't effort. It's leverage.
-              </h3>
-              <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-10">
-                You can keep searching manually. Or you can systemise outreach.
-              </p>
-              <Button 
-                size="lg" 
-                className="btn-premium text-base font-semibold px-10 py-5 h-auto shadow-lg shadow-primary/25"
-                style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.2), 0 4px 20px hsl(210 100% 50% / 0.15)' }}
-                asChild
-              >
-                <Link to="/auth">
-                  Start Free Trial
-                  <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
-              <p className="text-xs text-muted-foreground/60 mt-4">
-                No credit card. 24 hours. Cancel anytime.
-              </p>
-            </ScrollReveal>
           </div>
         </ScrollReveal>
       )}
@@ -989,7 +966,7 @@ const Landing = () => {
                           <img 
                             src={feature.image} 
                             alt={feature.title}
-                            className={`w-full h-48 xl:h-56 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                            className={`w-full h-auto object-contain transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
                           />
                         </div>
                       </div>
