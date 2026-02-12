@@ -122,7 +122,7 @@ const Index = () => {
             isOnTrial={!isAccessLoading && (isOnTrial || isStripeTrialing)}
             searchesRemaining={demoSearchesRemaining}
             dailyLimit={demoDailyLimit}
-            isPaidSubscriber={hasProAccess}
+            isPaidSubscriber={isAccessLoading || hasProAccess}
             disabled={postAbandonExhausted && !hasProAccess}
           />
         )}
