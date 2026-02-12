@@ -577,12 +577,17 @@ const Landing = () => {
           </div>
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight">
-            <span className="block text-gradient-primary">Find Businesses</span>
-            <span className="block mt-0.5 sm:mt-2">Without Websites</span>
+            <span className="block">Find Businesses <span className="text-gradient-primary">Without Websites.</span></span>
+            <span className="block mt-0.5 sm:mt-2">Contact Them Today.</span>
           </h1>
           
-          <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
-            Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
+          <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-2 sm:mb-4 leading-relaxed px-2">
+            Search any location, instantly see which businesses don't have a website, message them via WhatsApp or SMS, and track everything in one place.
+          </p>
+
+          {/* Emotional framing line */}
+          <p className="text-[11px] sm:text-sm text-muted-foreground/50 mb-4 sm:mb-8 px-4 italic">
+            If client work feels inconsistent, it's not because you're bad — it's because you don't have a system.
           </p>
           
           {/* Keywords removed */}
@@ -596,7 +601,10 @@ const Landing = () => {
             </Button>
           </div>
 
-          {/* Reassurance microcopy removed from hero */}
+          {/* Reassurance microcopy */}
+          <p className="text-[10px] sm:text-xs text-muted-foreground/50 mt-2">
+            24-hour free trial · Cancel anytime
+          </p>
 
           {/* Stats bar - moved above bullets */}
           <div className="mt-6 sm:mt-10 md:mt-12 py-4 sm:py-0 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
@@ -677,7 +685,7 @@ const Landing = () => {
       <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
         <div className="container mx-auto max-w-5xl">
           {/* Stars — tight above testimonials */}
-          <div className="flex gap-0.5 justify-center mb-3">
+          <div className="flex gap-0.5 justify-center mb-3.5">
             {[...Array(5)].map((_, i) => (
               <Star key={i} className="h-4 w-4 sm:h-5 sm:w-5 fill-yellow-400 text-yellow-400" />
             ))}
@@ -834,63 +842,7 @@ const Landing = () => {
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
-      {/* Power Section — Built for serious outreach */}
-      <section className="relative z-10 py-14 sm:py-20 md:py-24 px-4">
-        <div className="container mx-auto max-w-3xl text-center">
-          <ScrollReveal className="mb-10 sm:mb-14">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4 text-center">
-              More Clients, <span className="text-gradient-primary">Less Guesswork.</span>
-            </h2>
-            <p className="text-sm sm:text-lg text-muted-foreground text-center max-w-md mx-auto">
-              A structured way to consistently land web design clients — without relying on luck.
-            </p>
-          </ScrollReveal>
-
-          <div className="mb-12 sm:mb-14">
-            <div className="flex flex-col gap-4 sm:gap-3 items-center sm:items-start sm:pl-2 max-w-[340px] sm:max-w-none mx-auto sm:mx-0">
-              {[
-                'Reach businesses that actually need your help',
-                'Never lose a lead or forget a follow-up',
-                'Know exactly who to contact next',
-                'Go from first message to paying client — smoothly',
-              ].map((item, i) => (
-                <ScrollReveal key={i} delay={i * 60}>
-                  <div className="flex flex-col items-center text-center gap-1.5">
-                    <Check 
-                      className="h-5 w-5 sm:h-7 sm:w-7" 
-                      style={{ color: 'hsl(142 76% 55%)' }} 
-                      strokeWidth={2.5} 
-                    />
-                    <span className="text-sm sm:text-lg font-medium sm:font-semibold text-foreground/85 tracking-tight">{item}</span>
-                  </div>
-                </ScrollReveal>
-              ))}
-            </div>
-          </div>
-
-          <ScrollReveal delay={300}>
-            <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-md mx-auto leading-relaxed text-center mb-10 sm:mb-10">
-              Built for freelance web designers, WordPress developers, and small agencies who want a consistent way to find businesses that need a website.
-            </p>
-          </ScrollReveal>
-
-          <ScrollReveal delay={350} className="hidden sm:block">
-            <Button 
-              size="lg" 
-              className="btn-premium text-base font-semibold px-10 py-5 h-auto w-auto"
-              asChild
-            >
-              <Link to="/auth">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
-            <p className="text-xs text-muted-foreground/60 mt-4">
-              Free trial with full access. No card required.
-            </p>
-          </ScrollReveal>
-        </div>
-      </section>
+      {/* Power Section — removed duplicate, keeping single benefit section in hero */}
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
