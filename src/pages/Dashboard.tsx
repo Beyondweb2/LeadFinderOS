@@ -94,7 +94,7 @@ const Dashboard = () => {
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm sm:text-base text-muted-foreground">
           {showTrialProgress 
-            ? 'Your free trial is active — full access included'
+            ? 'Full access is active — everything unlocked'
             : 'Track your performance and revenue'
           }
         </p>
@@ -107,6 +107,8 @@ const Dashboard = () => {
             trialEnd={trialEnd}
             noWebsiteBusinesses={metrics.noWebsiteBusinesses}
             addedToCRM={metrics.totalBusinessesAdded}
+            searchesToday={metrics.activity.activitiesToday}
+            totalLeadsAdded={metrics.totalBusinessesAdded}
           />
         </section>
       )}

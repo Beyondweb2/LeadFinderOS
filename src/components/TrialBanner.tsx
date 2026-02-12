@@ -42,10 +42,10 @@ export function TrialBanner() {
           <div className="flex items-center gap-2 text-sm min-w-0">
             <CreditCard className="h-4 w-4 text-primary shrink-0" />
             <span className="font-medium text-foreground/90 whitespace-nowrap">
-              Full access ends in {hoursUntilCharge} hour{hoursUntilCharge !== 1 ? 's' : ''}
+              Full access active · Ends in {hoursUntilCharge}h
             </span>
             <span className="text-muted-foreground hidden sm:inline truncate">
-              — Enjoying unlimited searches and full features
+              — Everything unlocked
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
