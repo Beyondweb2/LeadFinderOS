@@ -239,13 +239,12 @@ const Auth = () => {
           <CardDescription>
             {isLogin 
               ? 'Sign in to find businesses without websites' 
-              : 'Start your 24-hour full access trial — no charge today'}
+              : 'Create an account to try your first search free'}
           </CardDescription>
           {!isLogin && (
-            <div className="flex items-center justify-center gap-2 mt-2 text-xs text-muted-foreground">
-              <CreditCard className="h-3.5 w-3.5" />
-              <span>Card required to start trial</span>
-            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              No card required. See real results instantly.
+            </p>
           )}
         </CardHeader>
         
