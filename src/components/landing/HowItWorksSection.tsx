@@ -171,20 +171,22 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
         
         {/* Mobile Carousel */}
         {isMobile ? (
-          <div className="px-1 space-y-10">
+          <div className="px-1 space-y-12">
             {STEPS.map((step, index) => (
-          <div key={step.title} className="flex flex-col items-center text-center">
-                {/* Step number */}
-                <span 
-                  className="font-bold text-lg mb-2"
-                  style={{ color: 'hsl(210 100% 60%)' }}
-                >
-                  {index + 1}
-                </span>
+              <div key={step.title} className="flex flex-col items-center text-center">
+                {/* Title with inline number — balanced with invisible spacer */}
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <span 
+                    className="text-sm font-bold w-6 text-right shrink-0"
+                    style={{ color: 'hsl(210 100% 60%)' }}
+                  >
+                    {index + 1}.
+                  </span>
+                  <h3 className="text-xl font-bold tracking-tight">{step.title}</h3>
+                  <span className="w-6 shrink-0" aria-hidden="true" />
+                </div>
                 
-                <h3 className="text-xl font-bold tracking-tight mb-2">{step.title}</h3>
-                
-                <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
+                <p className="text-muted-foreground text-sm leading-relaxed mb-4 max-w-xs">
                   {step.description}
                 </p>
                 
