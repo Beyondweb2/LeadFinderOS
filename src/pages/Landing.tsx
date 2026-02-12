@@ -601,9 +601,6 @@ const Landing = () => {
             </Button>
           </div>
 
-          <p className="text-[11px] sm:text-xs text-muted-foreground/30 mt-2 sm:mt-3 tracking-wide">
-            Full access. Cancel anytime before renewal.
-          </p>
 
           {/* Trust bullets */}
           <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-5 mt-5 sm:mt-7 text-[13px] sm:text-[15px] text-foreground/55">
