@@ -589,8 +589,10 @@ const Landing = () => {
           </div>
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight">
-            <span className="block text-gradient-primary">Find Businesses</span>
-            <span className="block text-foreground mt-0.5 sm:mt-2">Without Websites</span>
+            <span className="block text-gradient-primary sm:hidden">Find Businesses</span>
+            <span className="hidden sm:block text-gradient-primary">LeadFinder</span>
+            <span className="block text-foreground mt-0.5 sm:mt-2 sm:hidden">Without Websites</span>
+            <span className="hidden sm:block text-foreground mt-0.5 sm:mt-2">Find Businesses Without Websites</span>
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
@@ -826,7 +828,7 @@ const Landing = () => {
             {/* Authority statement */}
             <ScrollReveal delay={400} className="text-center mt-14 md:mt-18 max-w-2xl mx-auto">
               <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
-                The difference isn't effort. It's leverage.
+                The difference isn't effort. It's <span className="text-gradient-primary">leverage</span>.
               </h3>
               <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-10">
                 You can keep searching manually. Or you can systemise outreach.
@@ -850,43 +852,8 @@ const Landing = () => {
         </ScrollReveal>
       )}
 
-      {/* Mobile emotional section below comparison */}
-      {isMobile && (
-        <ScrollReveal className="relative z-10 py-14 px-6">
-          <div className="text-center max-w-sm mx-auto">
-            <h3 className="text-2xl font-bold tracking-tight mb-3">
-              This is what changes.
-            </h3>
-            <p className="text-sm text-muted-foreground mb-8">
-              The difference isn't effort. It's leverage.
-            </p>
-            <div className="space-y-5 mb-10">
-              <p className="text-[15px] text-foreground/80 leading-relaxed">
-                Finish outreach before most people find their first lead.
-              </p>
-              <p className="text-[15px] text-foreground/80 leading-relaxed">
-                Open your dashboard and know exactly who to message.
-              </p>
-              <p className="text-[15px] text-foreground/80 leading-relaxed">
-                Start your day with momentum, not scrolling.
-              </p>
-            </div>
-            <Button 
-              size="lg" 
-              className="btn-premium w-full text-base font-semibold py-4 h-auto shadow-lg shadow-primary/20"
-              asChild
-            >
-              <Link to="/auth">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
-            <p className="text-[11px] text-muted-foreground/50 mt-3">
-              No credit card. 24 hours. Cancel anytime.
-            </p>
-          </div>
-        </ScrollReveal>
-      )}
+      {/* Mobile section divider */}
+      {isMobile && <div className="mx-8 h-px bg-white/[0.06]" />}
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
@@ -919,7 +886,7 @@ const Landing = () => {
               'One system. Full control.',
             ].map((item, i) => (
               <ScrollReveal key={i} delay={i * 60}>
-                <div className="flex items-center gap-3 sm:gap-4 justify-center sm:justify-start">
+                <div className="flex items-center gap-3 sm:gap-4 justify-center">
                   <Check 
                     className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0" 
                     style={{ 
@@ -937,13 +904,13 @@ const Landing = () => {
           <ScrollReveal delay={350}>
             <Button 
               size="lg" 
-              className="btn-premium text-base font-semibold px-10 py-5 h-auto shadow-lg shadow-primary/25 w-full sm:w-auto"
+              className="btn-premium text-sm sm:text-base font-semibold px-8 py-3 sm:py-4 h-auto shadow-lg shadow-primary/25 w-full sm:w-auto"
               style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.2), 0 4px 20px hsl(210 100% 50% / 0.15)' }}
               asChild
             >
               <Link to="/auth">
                 Start Free Trial
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
             <p className="text-xs text-muted-foreground/60 mt-4">
