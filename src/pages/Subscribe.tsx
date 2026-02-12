@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTrial } from '@/hooks/useTrial';
@@ -20,7 +21,7 @@ const Subscribe = () => {
   const [isLoading, setIsLoading] = useState(false);
   const { createCheckout, subscribed, isLoading: subLoading, status, isPaidSubscriber } = useSubscription();
   const { isOnTrial, isStripeTrialing, trialUsed, isLoading: trialLoading } = useTrial();
-  const { user, isLoading: authLoading, signOut } = useAuth();
+  const { user, session, isLoading: authLoading, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -49,7 +50,17 @@ const Subscribe = () => {
   const handleSubscribe = async () => {
     setIsLoading(true);
     try {
-      await createCheckout();
+      // Call createCheckout but handle the redirect ourselves via window.open
+      // to work around iframe restrictions in preview
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        window.open(data.url, '_blank');
+      }
     } catch (error) {
       toast({
         title: 'Error',
