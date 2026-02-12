@@ -638,18 +638,66 @@ const Landing = () => {
       </div>
 
 
-      {/* Desktop: Old Way vs New Way comparison */}
-      {!isMobile && (
-        <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
-          <div className="container mx-auto max-w-6xl">
-            <div className="text-center mb-12 md:mb-16">
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-4">
-                Stop Wasting Mornings on <span className="text-gradient-primary">Google Maps</span>
-              </h2>
-              <p className="text-muted-foreground max-w-xl mx-auto text-base md:text-lg">
-                There's a faster way to find businesses without websites.
-              </p>
+      {/* Old Way vs New Way comparison */}
+      <ScrollReveal className="relative z-10 py-10 sm:py-16 md:py-28 px-3 sm:px-4">
+        <div className="container mx-auto max-w-6xl">
+          <div className="text-center mb-8 sm:mb-12 md:mb-16">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-2 sm:mb-4">
+              Stop Wasting Mornings on <span className="text-gradient-primary">Google Maps</span>
+            </h2>
+            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg">
+              There's a faster way to find businesses without websites.
+            </p>
+          </div>
+
+          {/* Mobile layout - stacked */}
+          {isMobile ? (
+            <div className="space-y-8 max-w-sm mx-auto">
+              {/* Old Way */}
+              <div className="opacity-80">
+                <div className="flex items-center gap-2 justify-center mb-3">
+                  <X className="h-4 w-4" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
+                  <h3 className="text-lg font-bold text-foreground/90 tracking-tight">The Old Way</h3>
+                </div>
+                <div 
+                  className="relative rounded-lg overflow-hidden mb-4 aspect-[16/10]"
+                  style={{ 
+                    border: '1px solid hsl(0 60% 40% / 0.25)',
+                    boxShadow: '0 0 20px hsl(0 60% 40% / 0.1)'
+                  }}
+                >
+                  <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" />
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
+                  <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
+                  <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
+                </ul>
+              </div>
+              {/* New Way */}
+              <div>
+                <div className="flex items-center gap-2 justify-center mb-3">
+                  <Check className="h-4 w-4" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />
+                  <h3 className="text-lg font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
+                </div>
+                <div 
+                  className="relative rounded-lg overflow-hidden mb-4 aspect-[16/10]"
+                  style={{ 
+                    border: '1px solid hsl(142 60% 40% / 0.25)',
+                    boxShadow: '0 0 20px hsl(142 60% 40% / 0.1)'
+                  }}
+                >
+                  <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-full object-cover object-top" />
+                </div>
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
+                  <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
+                  <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
+                </ul>
+              </div>
             </div>
+          ) : (
+            /* Desktop layout - side by side */
             <div className="grid grid-cols-2 gap-10 lg:gap-14 max-w-5xl mx-auto items-start">
               {/* Old Way */}
               <ScrollReveal delay={100}>
@@ -710,36 +758,9 @@ const Landing = () => {
                 </div>
               </ScrollReveal>
             </div>
-
-          </div>
-        </ScrollReveal>
-      )}
-
-      {/* Mobile section divider */}
-      <div className="sm:hidden mx-8 my-4 h-px bg-white/[0.06]" />
-
-      {/* Transition Statement */}
-      <section className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
-        <div className="mx-auto h-px max-w-xs sm:max-w-sm bg-white/[0.06] mb-12 sm:mb-16" />
-        <div className="container mx-auto max-w-md sm:max-w-lg text-center">
-          <ScrollReveal>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-snug mb-6 sm:mb-8">
-              Good leads are easy to find.<br />
-              <span className="text-foreground/90">If you stop doing it the hard way.</span>
-            </h2>
-            <p className="text-base sm:text-lg md:text-xl font-medium tracking-wide leading-loose text-foreground/70 mb-6 sm:mb-8">
-              Search. Filter. Message. Track.<br />
-              All in one place.
-            </p>
-            <div className="space-y-2.5 sm:space-y-3">
-              <p className="text-sm sm:text-base font-normal text-foreground/40">No switching apps.</p>
-              <p className="text-sm sm:text-base font-normal text-foreground/40">No messy spreadsheets.</p>
-              <p className="text-sm sm:text-base font-normal text-foreground/40">No wasted mornings.</p>
-            </div>
-          </ScrollReveal>
+          )}
         </div>
-        <div className="mx-auto h-px max-w-xs sm:max-w-sm bg-white/[0.06] mt-12 sm:mt-16" />
-      </section>
+      </ScrollReveal>
 
       {/* How It Works — 4 steps */}
       <HowItWorksSection ScrollReveal={ScrollReveal} />
