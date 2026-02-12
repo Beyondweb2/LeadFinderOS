@@ -620,24 +620,24 @@ const Landing = () => {
           </p>
 
           {/* Power bullets under hero CTA */}
-          <div className="mt-6 sm:mt-10">
-            <div className="flex flex-col gap-4 sm:gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-8 sm:gap-y-3 max-w-sm sm:max-w-none mx-auto">
+          <div className="mt-6 sm:mt-10 flex justify-center">
+            <div className="inline-flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-8 sm:gap-y-3">
               {[
                 'Find 20+ real prospects in minutes',
                 'Send more messages in 10 minutes than most do in a morning',
                 'Track every outreach in one place',
                 'Stop guessing who needs your help',
               ].map((bullet, i) => (
-                <div key={i} className="flex items-center gap-3">
+                <div key={i} className="flex items-start gap-1.5 sm:items-center sm:gap-2.5">
                   <Check 
-                    className="h-6 w-6 sm:h-[22px] sm:w-[22px] flex-shrink-0" 
+                    className="h-4 w-4 sm:h-[22px] sm:w-[22px] flex-shrink-0 mt-[3px] sm:mt-0" 
                     style={{ 
                       color: 'hsl(142 76% 55%)',
                       filter: 'drop-shadow(0 0 6px hsl(142 76% 55% / 0.4))',
                     }} 
                     strokeWidth={3} 
                   />
-                  <span className="text-[15px] sm:text-base font-semibold text-foreground/90">{bullet}</span>
+                  <span className="text-[14px] sm:text-base font-semibold text-foreground/90">{bullet}</span>
                 </div>
               ))}
             </div>
@@ -877,28 +877,30 @@ const Landing = () => {
             </p>
           </ScrollReveal>
 
-          <div className="space-y-5 sm:space-y-6 mb-10 sm:mb-14 max-w-md mx-auto">
-            {[
-              '10x your outreach',
-              'Never miss a lead',
-              'No more manual searching',
-              'No more messy follow-ups',
-              'One system. Full control.',
-            ].map((item, i) => (
-              <ScrollReveal key={i} delay={i * 60}>
-                <div className="flex items-center gap-3 sm:gap-4 justify-center">
-                  <Check 
-                    className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0" 
-                    style={{ 
-                      color: 'hsl(142 76% 55%)',
-                      filter: 'drop-shadow(0 0 8px hsl(142 76% 55% / 0.35))',
-                    }} 
-                    strokeWidth={3} 
-                  />
-                  <span className="text-base sm:text-lg font-semibold text-foreground tracking-tight">{item}</span>
-                </div>
-              </ScrollReveal>
-            ))}
+          <div className="mb-10 sm:mb-14 flex justify-center">
+            <div className="inline-flex flex-col gap-5 sm:gap-6">
+              {[
+                '10x your outreach',
+                'Never miss a lead',
+                'No more manual searching',
+                'No more messy follow-ups',
+                'One system. Full control.',
+              ].map((item, i) => (
+                <ScrollReveal key={i} delay={i * 60}>
+                  <div className="flex items-center gap-3 sm:gap-4">
+                    <Check 
+                      className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0" 
+                      style={{ 
+                        color: 'hsl(142 76% 55%)',
+                        filter: 'drop-shadow(0 0 8px hsl(142 76% 55% / 0.35))',
+                      }} 
+                      strokeWidth={3} 
+                    />
+                    <span className="text-base sm:text-lg font-semibold text-foreground tracking-tight">{item}</span>
+                  </div>
+                </ScrollReveal>
+              ))}
+            </div>
           </div>
 
           <ScrollReveal delay={350}>
