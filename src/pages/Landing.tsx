@@ -601,26 +601,16 @@ const Landing = () => {
             </Button>
           </div>
 
-          <p className="text-xs text-foreground/45 mt-3 sm:mt-4">
+          <p className="text-[11px] sm:text-xs text-muted-foreground/35 mt-4 sm:mt-5 tracking-wide">
             Run 1 real search instantly. No signup. No card.
           </p>
 
-          {/* Hook line */}
-          <p className="text-sm sm:text-base font-medium text-foreground/60 mt-4 sm:mt-5">
-            Know it works before you commit.
-          </p>
-
           {/* Trust bullets */}
-          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-5 mt-3 sm:mt-5 text-[13px] sm:text-[15px] text-foreground/55">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-5 mt-5 sm:mt-7 text-[13px] sm:text-[15px] text-foreground/55">
             <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build an outreach list in seconds</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list instantly</span>
             <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track everything in one place</span>
           </div>
-
-          {/* Authority line */}
-          <p className="text-[11px] sm:text-xs text-muted-foreground/40 mt-4 sm:mt-5">
-            Built for web developers and freelancers looking for clients.
-          </p>
 
           {/* Stats bar - moved above bullets */}
           <div className="mt-6 sm:mt-10 md:mt-12 py-4 sm:py-0 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
