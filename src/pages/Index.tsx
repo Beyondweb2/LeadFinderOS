@@ -6,6 +6,7 @@ import { ContactDialog } from '@/components/ContactDialog';
 import { UpgradePromptDialog } from '@/components/UpgradePromptDialog';
 import { TrialLimitDialog } from '@/components/TrialLimitDialog';
 import { DemoUpgradePanel } from '@/components/DemoUpgradePanel';
+import { DemoOnboardingModal } from '@/components/DemoOnboardingModal';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 import { useContactTracking } from '@/hooks/useContactTracking';
 import { useOutreach } from '@/hooks/useOutreach';
@@ -198,6 +199,9 @@ const Index = () => {
         onOpenChange={setShowUpgradePrompt}
         searchesUsed={searchesUsed}
       />
+
+      {/* Demo Onboarding Modal */}
+      <DemoOnboardingModal isDemoUser={isDemoUser} />
 
       {/* Trial Limit Dialog (when daily limit reached) */}
       <TrialLimitDialog
