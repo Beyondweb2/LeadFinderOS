@@ -127,11 +127,11 @@ const FEATURES = [
 
 const PRICING_FEATURES = [
   'Unlimited lead searches',
-  'Find businesses without websites',
-  'Full CRM access',
-  'Contact tracking & notes',
-  'Email & call templates',
-  'Export leads to outreach',
+  'Instantly find businesses without websites',
+  'Built-in CRM to track every lead',
+  'One-click WhatsApp & SMS outreach',
+  'Message templates included',
+  'Track replies and follow-ups',
   'Priority support',
 ];
 
@@ -1006,20 +1006,20 @@ const Landing = () => {
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Pricing Section */}
-      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
+      <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-4">
         <div className="container mx-auto">
-          <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
+          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
             <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
               Simple, Transparent <span className="text-gradient-primary">Pricing</span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              One plan with everything you need. Cancel anytime.
+              One plan. Full access. Cancel anytime.
             </p>
           </ScrollReveal>
           
           <ScrollReveal delay={150}>
             <div className="relative max-w-md mx-auto">
-              {/* Glow background - fixed brand blue */}
+              {/* Glow background */}
               <div 
                 className="absolute -inset-4 sm:-inset-8 rounded-3xl blur-2xl sm:blur-3xl opacity-50"
                 style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
@@ -1030,14 +1030,13 @@ const Landing = () => {
               />
               
               <Card className="relative glass-panel-strong border-0 overflow-hidden">
-                {/* Top accent line - fixed brand blue */}
+                {/* Top accent line */}
                 <div 
                   className="absolute top-0 left-0 right-0 h-px"
                   style={{ background: 'linear-gradient(to right, transparent, hsl(210 100% 50%), transparent)' }}
                 />
                 
                 <CardHeader className="text-center pb-2 pt-6 sm:pt-8 px-4 sm:px-6">
-                  {/* 1-Day Free Trial Badge */}
                   <div 
                     className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wide mx-auto mb-3 sm:mb-4"
                     style={{ 
@@ -1050,15 +1049,15 @@ const Landing = () => {
                     1-Day Free Trial
                   </div>
                   <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
-                  <div className="mt-4 sm:mt-6">
+                  <div className="mt-4 sm:mt-5">
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">Try everything risk-free — your card won't be charged during the trial</p>
+                  <p className="text-xs text-foreground/50 mt-2">Start with a 24-hour free trial. No charge today.</p>
                 </CardHeader>
                 
-                <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
-                  <ul className="space-y-3 sm:space-y-4">
+                <CardContent className="pt-5 sm:pt-6 px-4 sm:px-6">
+                  <ul className="space-y-2.5 sm:space-y-3">
                     {PRICING_FEATURES.map((feature) => (
                       <li key={feature} className="flex items-center gap-2.5 sm:gap-3">
                         <div 
@@ -1076,24 +1075,16 @@ const Landing = () => {
                   </ul>
                 </CardContent>
                 
-                <CardFooter className="pt-4 sm:pt-6 pb-6 sm:pb-8 flex-col gap-3 sm:gap-4 px-4 sm:px-6">
+                <CardFooter className="pt-4 sm:pt-5 pb-6 sm:pb-7 flex-col gap-3 px-4 sm:px-6">
                   <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
                     <Link to="/auth">
                       Start My Free Trial
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
-                   <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
-                    £0 today · Full access for 24 hours · Cancel anytime, no questions asked
-                   </p>
-                   <div className="flex items-center justify-center gap-1.5 mt-2">
-                     <div className="flex gap-0.5">
-                       {[...Array(5)].map((_, i) => (
-                         <Star key={i} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                       ))}
-                     </div>
-                     <p className="text-[10px] sm:text-xs text-muted-foreground/60">Rated 4.9/5 by freelancers and agencies</p>
-                   </div>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground/60 text-center">
+                    £0 today · Full access for 24 hours · Cancel anytime
+                  </p>
                 </CardFooter>
               </Card>
             </div>
