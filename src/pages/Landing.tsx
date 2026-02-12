@@ -615,22 +615,20 @@ const Landing = () => {
           <div className="mt-7 sm:mt-8">
             {/* Mobile: centered checklist group with fixed icon column */}
             <div className="flex justify-center sm:hidden">
-              <div className="flex flex-col gap-3.5 pl-1">
+              <div className="flex flex-col gap-4">
                 {[
-                  'Stop chasing leads — start choosing them',
-                  'Do in 10 minutes what used to take all morning',
-                  'Never lose track of a follow-up again',
-                  'Finally feel in control of your pipeline',
+                  'Stop wasting mornings manually searching Google Maps',
+                  'Find real businesses without websites in minutes',
+                  'Turn messy outreach into a clear system',
+                  'Keep every lead and follow-up organised in one place',
                 ].map((bullet, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className="w-5 flex-shrink-0 flex justify-center pt-0.5">
-                      <Check 
-                        className="h-[15px] w-[15px]" 
-                        style={{ color: 'hsl(142 65% 50%)' }} 
-                        strokeWidth={2.5} 
-                      />
-                    </div>
-                    <span className="text-[13px] font-normal text-foreground/75 text-left leading-relaxed">{bullet}</span>
+                  <div key={i} className="flex items-center justify-center gap-2.5">
+                    <Check 
+                      className="h-[15px] w-[15px] flex-shrink-0" 
+                      style={{ color: 'hsl(142 65% 50%)' }} 
+                      strokeWidth={2.5} 
+                    />
+                    <span className="text-[13px] font-semibold text-foreground/85 leading-[1.7]">{bullet}</span>
                   </div>
                 ))}
               </div>
@@ -638,10 +636,10 @@ const Landing = () => {
             {/* Desktop: horizontal wrap */}
             <div className="hidden sm:flex flex-wrap justify-center gap-x-8 gap-y-2.5">
               {[
-                'Stop chasing leads — start choosing them',
-                'Do in 10 minutes what used to take all morning',
-                'Never lose track of a follow-up again',
-                'Finally feel in control of your pipeline',
+                'Stop wasting mornings manually searching Google Maps',
+                'Find real businesses without websites in minutes',
+                'Turn messy outreach into a clear system',
+                'Keep every lead and follow-up organised in one place',
               ].map((bullet, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <Check 
@@ -678,14 +676,13 @@ const Landing = () => {
       {/* Unified Testimonials — 3 cards */}
       <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
         <div className="container mx-auto max-w-5xl">
-          {/* Trust line */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-2 mb-8 sm:mb-8">
-            <div className="flex gap-0.5">
+          {/* Stars → Quote → Rating line */}
+          <div className="text-center mb-8 sm:mb-8">
+            <div className="flex gap-0.5 justify-center mb-3.5">
               {[...Array(5)].map((_, i) => (
-                <Star key={i} className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-yellow-400 text-yellow-400" />
+                <Star key={i} className="h-4 w-4 sm:h-5 sm:w-5 fill-yellow-400 text-yellow-400" />
               ))}
             </div>
-            <p className="text-xs sm:text-sm text-muted-foreground/70 font-medium">Rated 4.9/5 by freelancers and agencies</p>
           </div>
 
           {(() => {
@@ -746,6 +743,9 @@ const Landing = () => {
               </div>
             );
           })()}
+
+          {/* Rating line below testimonials */}
+          <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium text-center mt-6 sm:mt-8">Rated 4.9/5 by freelancers and agencies</p>
         </div>
       </ScrollReveal>
 
