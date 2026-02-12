@@ -1,84 +1,87 @@
 
 
-# Implementation Plan — All Remaining Tasks
+# Make Demo Mode Visually Identical to Full App
 
-This plan covers all 5 remaining tasks in a single implementation pass (one credit).
+## Problem
+The `/demo` route currently renders the `Index` page without the `AppLayout` wrapper, so it has no sidebar (desktop) or bottom navigation (mobile). This makes it feel like a stripped-down sandbox rather than the real product, which reduces perceived value and conversion.
 
----
+## Solution Overview
 
-## Task 1: Move "Built for freelancers" paragraph on mobile
+### 1. Create a DemoLayout component
+A new `src/components/DemoLayout.tsx` that mirrors the full `AppLayout` structure (sidebar + bottom nav) but intercepts navigation clicks on gated features. Instead of redirecting to login, clicking a nav item will show an upgrade dialog.
 
-**What changes**: On mobile only, the "Built for freelance web designers..." paragraph currently sits inside the Value Proposition section (line 879-883). On mobile, it will be moved to appear **after** the Lead Toolkit carousel (below the slides), while staying in its current position on desktop.
+- Renders `AppSidebar` on desktop, `MobileBottomNav` on mobile
+- All nav items visible and styled identically to the real app
+- Clicking any nav item (except Find Leads/demo) opens an upgrade modal
 
-**Technical approach**:
-- Hide the existing paragraph on mobile (`hidden sm:block`)
-- Add a mobile-only copy of the paragraph below the `MobileFeatureCarousel` component inside the Lead Toolkit section
+### 2. Create a DemoUpgradeDialog component
+A new `src/components/DemoUpgradeDialog.tsx` modal that appears when demo users click locked nav items:
+- Headline: "Create a free account to unlock this feature."
+- Primary button: "Start Free Trial" (links to `/auth`)
+- Secondary button: "Sign In" (links to `/auth`)
 
----
+### 3. Create DemoAppSidebar and DemoMobileBottomNav
+Lightweight wrappers (or props) around the existing sidebar and bottom nav that intercept link clicks for non-demo routes and trigger the upgrade dialog instead of navigating.
 
-## Task 2: Location search filter on CRM (Outreach) page
+Two approaches:
+- **Option A (cleaner):** Add an `isDemo` prop + `onLockedClick` callback to `AppSidebar` and `MobileBottomNav`. When `isDemo` is true, clicking a non-demo link calls `onLockedClick` instead of navigating.
+- **Option B:** Create thin wrapper components that override link behavior for demo mode.
 
-**What changes**: Add a "Location" text input to the Outreach CRM page that filters leads by their `address` and `country` fields.
+We will go with **Option A** to avoid duplicating the nav components.
 
-**Key decision**: The outreach data is already fetched entirely client-side (all leads loaded into state). There is no server-side pagination endpoint to extend. Therefore this will be a **client-side filter** — efficient and simple, matching the existing search/filter pattern.
+### 4. Update the /demo route in App.tsx
+Wrap the `<Index />` component in the new `DemoLayout` instead of rendering it bare:
 
-**Technical approach**:
-- Add a `locationFilter` state variable in `OutreachTable.tsx`
-- Add a Location input field (with placeholder "City, postcode, area, country...") next to the existing search input
-- Add a clear (X) button on the input
-- Debounce not needed since filtering is instant (client-side, already in memory)
-- In the `filteredAndSortedLeads` useMemo, add location matching logic:
-  - Normalize input (trim, lowercase)
-  - Split on spaces to get tokens
-  - Match ALL tokens against `address` and `country` fields (AND across tokens for relevance)
-  - e.g. "London SW1" requires both "london" and "sw1" to appear somewhere in address+country
-- Handles partial postcodes naturally (substring match)
-- Composes with existing search, status, and country filters via AND logic
-- No backend/database changes needed
+```
+<Route path="/demo" element={<DemoLayout><Index /></DemoLayout>} />
+```
 
----
+### 5. Update SearchForm for demo mode
+- Change the search limit indicator from "2/2 searches left today" to "1 demo search available"
+- After the demo search is used, show: "You've used your free demo search." with an "Unlock Full Access" button
+- Add a `isDemo` prop to `SearchForm` to control this messaging
 
-## Task 3: Mobile emotional section below comparison
+### 6. Update empty state in Index page
+- When on the demo route, replace the large "Ready to find leads" empty state with a compact instructional hint: "Run a demo search to see live businesses."
+- Detect demo mode via the current route path (`useLocation`)
 
-**What changes**: Add a new section on **mobile only** below the comparison section (which is currently desktop-only, so this goes after the `{!isMobile && ...}` comparison block). This section contains emotional copy and a CTA.
+## Files to Create
+- `src/components/DemoLayout.tsx` -- Layout wrapper for demo mode
+- `src/components/DemoUpgradeDialog.tsx` -- Modal for locked features
 
-**Content**:
-- Headline: "This is what changes."
-- Subtext: "The difference isn't effort. It's leverage."
-- 3 emotional statements stacked vertically
-- Full-width "Start Free Trial" button
-- Muted subtext: "No credit card. 24 hours. Cancel anytime."
+## Files to Modify
+- `src/App.tsx` -- Wrap `/demo` route with `DemoLayout`
+- `src/components/AppSidebar.tsx` -- Add `isDemo` + `onLockedClick` props
+- `src/components/MobileBottomNav.tsx` -- Add `isDemo` + `onLockedClick` props
+- `src/components/SearchForm.tsx` -- Add `isDemo` prop for demo-specific copy
+- `src/pages/Index.tsx` -- Demo-aware empty state
 
-**Technical approach**:
-- Add a `{isMobile && ...}` block after the comparison section (around line 803)
-- Use `ScrollReveal` for fade-in animation
-- Clean typography, center-aligned, generous spacing
-- Full-width CTA button with `btn-premium` class
+## Technical Details
 
----
+### DemoLayout.tsx
+- Uses `SidebarProvider`, `AppSidebar`, and `MobileBottomNav` just like `AppLayout`
+- Passes `isDemo={true}` and an `onLockedClick` handler to both nav components
+- Manages open/close state for the `DemoUpgradeDialog`
 
-## Task 4: Desktop emotional section below comparison
+### AppSidebar + MobileBottomNav changes
+- New optional props: `isDemo?: boolean`, `onLockedClick?: (featureName: string) => void`
+- When `isDemo` is true, nav links for all routes except `/demo` call `onLockedClick` via `onClick` with `e.preventDefault()` instead of navigating
+- Visual appearance remains 100% identical
 
-**What changes**: Enhance the existing desktop comparison section with emotional reinforcement and a strong CTA below it.
+### SearchForm changes
+- New `isDemo?: boolean` prop
+- When `isDemo` is true:
+  - Show "1 demo search available" instead of "X/Y searches left today"
+  - After search used (searchesRemaining === 0): show "You've used your free demo search." with "Unlock Full Access" button linking to `/auth`
 
-**Specific changes**:
-1. **Headline update**: "Stop Scrolling Through Google Maps" becomes "Stop Wasting Mornings on Google Maps"
-2. **Emotional transition block** below the two columns: headline + short paragraph + 3 projection lines
-3. **Strong CTA block** with "Start Free Trial" button (enhanced glow/padding)
-4. **Micro interaction**: Add subtle hover glow/elevation on "The LeadFinder Way" column; slightly dim "The Old Way" column
+### Index.tsx changes
+- Detect `/demo` route via `useLocation`
+- When on demo and no leads: show compact hint "Run a demo search to see live businesses." instead of the large empty state block
 
----
-
-## Task 5: (No separate task — Tasks 3 & 4 cover the emotional/comparison sections)
-
----
-
-## Files to modify
-
-| File | Changes |
-|------|---------|
-| `src/pages/Landing.tsx` | Tasks 1, 3, 4 — move freelancer text on mobile, add mobile emotional section, enhance desktop comparison |
-| `src/components/OutreachTable.tsx` | Task 2 — add location filter input and filtering logic |
-
-No database migrations, no new files, no backend changes needed.
-
+## What This Does NOT Change
+- Search logic, limits, or backend calls
+- Stripe/subscription/webhook logic
+- Database schema
+- Existing authenticated user experience
+- Demo search count (stays at 1)
+- Admin logic
