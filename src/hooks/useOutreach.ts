@@ -249,6 +249,9 @@ export function useOutreach() {
       description: `${lead.name} added to your outreach list.`,
     });
 
+    // Notify bottom nav to glow CRM icon
+    window.dispatchEvent(new CustomEvent('crm-lead-added'));
+
     return newLead;
   }, [user, toast]);
 

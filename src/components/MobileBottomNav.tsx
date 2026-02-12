@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, 
@@ -108,6 +108,16 @@ export function MobileBottomNav() {
   const { signOut } = useAuth();
   const { isAdmin } = useSubscription();
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
+  const [crmGlow, setCrmGlow] = useState(false);
+
+  useEffect(() => {
+    const handler = () => {
+      setCrmGlow(true);
+      setTimeout(() => setCrmGlow(false), 2000);
+    };
+    window.addEventListener('crm-lead-added', handler);
+    return () => window.removeEventListener('crm-lead-added', handler);
+  }, []);
   const allMoreItems = isAdmin 
     ? [...moreNavItems, { title: 'Admin', url: '/admin', icon: ShieldCheck }, { title: 'Affiliates', url: '/admin/affiliates', icon: Users }]
     : moreNavItems;
@@ -165,17 +175,23 @@ export function MobileBottomNav() {
                 key={item.url}
                 to={item.url}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px]',
-                  isActive 
-                    ? 'text-primary' 
-                    : 'text-muted-foreground hover:text-foreground'
+                  'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[60px]',
+                  item.title === 'CRM' && crmGlow
+                    ? 'text-green-400'
+                    : isActive 
+                      ? 'text-primary' 
+                      : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 <item.icon className={cn(
-                  'h-5 w-5',
-                  isActive && 'drop-shadow-[0_0_8px_hsl(var(--primary))]'
+                  'h-5 w-5 transition-all',
+                  item.title === 'CRM' && crmGlow && 'drop-shadow-[0_0_10px_#4ade80] scale-110',
+                  isActive && !crmGlow && 'drop-shadow-[0_0_8px_hsl(var(--primary))]'
                 )} />
-                <span className="text-[10px] font-medium">{item.title}</span>
+                <span className={cn(
+                  "text-[10px] font-medium",
+                  item.title === 'CRM' && crmGlow && 'text-green-400'
+                )}>{item.title}</span>
               </Link>
             );
           })}
