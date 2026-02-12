@@ -85,25 +85,16 @@
      const customerId = customers.data[0].id;
      logStep("Found Stripe customer", { customerId });
  
-      // Check for active subscriptions (exclude canceled)
+      // Check for active subscriptions
       const subscriptions = await stripe.subscriptions.list({
         customer: customerId,
-        status: 'all',
         limit: 10,
       });
 
-       // Filter for subscriptions that grant access (active, trialing, or past_due)
-       // Exclude trialing subscriptions that have been cancelled (cancel_at_period_end)
+       // Grant access for active, trialing, or past_due — even if cancel_at_period_end is true
+       // Cancelled trials keep full access until the trial period naturally expires
        const validStatuses = ['active', 'trialing', 'past_due'];
-       const validSubscription = subscriptions.data.find((sub: any) => {
-         if (!validStatuses.includes(sub.status)) return false;
-         // If trialing but user has cancelled, don't grant access
-         if (sub.status === 'trialing' && sub.cancel_at_period_end) {
-           logStep("Trialing subscription cancelled, denying access", { subId: sub.id });
-           return false;
-         }
-         return true;
-       });
+       const validSubscription = subscriptions.data.find((sub: { status: string }) => validStatuses.includes(sub.status));
       
       const hasActiveSub = !!validSubscription;
     let productId: string | null = null;
