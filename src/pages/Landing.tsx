@@ -84,7 +84,7 @@ const FEATURES = [
   {
     icon: Search,
     title: 'Smart Classification',
-    description: 'Instantly see which businesses have no website — hot leads are highlighted so you never waste time on the wrong ones.',
+    description: 'Instantly see which businesses don\'t have a website and prioritise the ones worth contacting.',
     image: featureClassification,
     imageScale: 'scale-100',
   },
