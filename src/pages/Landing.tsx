@@ -621,7 +621,7 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-14 sm:pb-16 md:pt-20 md:pb-24 lg:pt-24 lg:pb-28 px-4">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-28 lg:pt-28 lg:pb-32 px-4">
         <div className="container mx-auto max-w-[1200px]">
           {/* Mobile: original centered layout */}
           <div className="sm:hidden text-center">
@@ -696,11 +696,11 @@ const Landing = () => {
           </div>
 
           {/* Desktop: 2-column hero layout */}
-          <div className="hidden sm:flex items-center gap-12 lg:gap-20">
-            {/* Left column — content (55%) */}
-            <div className="w-[55%] text-left max-w-[600px]">
+          <div className="hidden sm:flex items-center gap-10 lg:gap-14">
+            {/* Left column — content (50%) */}
+            <div className="w-1/2 text-left max-w-[600px]">
               <div 
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-6 backdrop-blur-sm"
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-7 backdrop-blur-sm"
                 style={{ 
                   border: '1px solid hsl(210 100% 50% / 0.2)', 
                   background: 'hsl(210 100% 50% / 0.08)',
@@ -711,17 +711,22 @@ const Landing = () => {
                 <span>The fastest way to land web design clients</span>
               </div>
               
-              <h1 className="text-5xl md:text-6xl lg:text-[4.25rem] xl:text-[4.75rem] font-extrabold mb-6 tracking-tight leading-[1.08]">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-7 tracking-tight leading-[1.08]">
                 <span className="block text-gradient-primary">Find Businesses</span>
-                <span className="block mt-2 text-[1.05em]">Without Websites</span>
+                <span className="block mt-1 text-[1.08em]">Without Websites</span>
               </h1>
               
-              <p className="text-lg md:text-xl text-foreground/50 mb-8 leading-[1.7] max-w-[480px]">
+              <p className="text-base md:text-lg text-foreground/50 mb-9 leading-[1.7] max-w-[520px]">
                 Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
               </p>
               
-              <div className="flex items-center gap-4 mb-8">
-                <Button size="lg" className="btn-premium text-base font-semibold px-10 py-4 h-auto shadow-lg shadow-primary/20" asChild>
+              <div className="flex items-center gap-4 mb-9">
+                <Button 
+                  size="lg" 
+                  className="btn-premium text-base font-semibold px-12 py-5 h-auto"
+                  style={{ boxShadow: '0 0 24px hsl(210 100% 50% / 0.25), 0 4px 16px hsl(210 100% 50% / 0.15)' }}
+                  asChild
+                >
                   <Link to="/auth">
                     Start Free Trial
                     <ArrowRight className="ml-2 h-5 w-5" />
@@ -730,20 +735,20 @@ const Landing = () => {
               </div>
 
               {/* Stats row */}
-              <div className="flex items-center gap-10 md:gap-14 mb-8">
+              <div className="flex items-center gap-12 md:gap-14 mb-8">
                 <CountUpStat target={100000} suffix="+" label="Businesses" />
                 <div className="text-center">
                   <div className="text-2xl md:text-3xl font-extrabold text-gradient-primary tracking-tight">Global</div>
-                  <div className="text-xs text-foreground/40 mt-1 font-medium">Coverage</div>
+                  <div className="text-xs text-foreground/35 mt-1 font-medium">Coverage</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl md:text-3xl font-extrabold text-gradient-primary tracking-tight">Unlimited</div>
-                  <div className="text-xs text-foreground/40 mt-1 font-medium">Searches</div>
+                  <div className="text-xs text-foreground/35 mt-1 font-medium">Searches</div>
                 </div>
               </div>
 
               {/* Benefit ticks — 2x2 grid */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2.5">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3">
                 {[
                   'Find 20+ real prospects in minutes',
                   'Always know who to follow up and when',
@@ -762,8 +767,8 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Right column — product mockup (video) (45%) */}
-            <div className="w-[45%]">
+            {/* Right column — product mockup (video) (50%) */}
+            <div className="w-1/2">
               <DesktopHeroVideo />
             </div>
           </div>
