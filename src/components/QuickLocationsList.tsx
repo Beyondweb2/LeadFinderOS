@@ -216,10 +216,13 @@ export function QuickLocationsList({ onLocationSelect }: QuickLocationsListProps
                     type="button"
                     variant="outline"
                     size="sm"
-                    onClick={() => onLocationSelect(
-                      country === 'UK' ? location : `${location}, ${country === 'NewZealand' ? 'New Zealand' : country === 'SouthAfrica' ? 'South Africa' : country}`,
-                      country
-                    )}
+                    onClick={() => {
+                      onLocationSelect(
+                        country === 'UK' ? location : `${location}, ${country === 'NewZealand' ? 'New Zealand' : country === 'SouthAfrica' ? 'South Africa' : country}`,
+                        country
+                      );
+                      setIsOpen(false);
+                    }}
                     className="text-xs bg-muted/50 hover:bg-primary/10 hover:text-primary hover:border-primary/50"
                   >
                     {location}
