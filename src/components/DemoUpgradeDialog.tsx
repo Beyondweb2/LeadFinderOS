@@ -24,19 +24,19 @@ export function DemoUpgradeDialog({ open, onOpenChange, featureName }: DemoUpgra
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-lg">
-            Start your free trial to unlock {featureName || 'this feature'}.
+            Unlock {featureName || 'this feature'} with 24-Hour Full Access.
           </DialogTitle>
           <DialogDescription>
-            Get full access for 24 hours — unlimited searches, CRM, outreach tools, templates, and more. No charge today.
+            Get unlimited searches, CRM, outreach tools, templates, and more. You'll only be charged after 24 hours.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex-col gap-2 sm:flex-col">
           <Button
-            onClick={() => navigate('/auth')}
+            onClick={() => navigate('/subscribe')}
             className="w-full"
           >
             <Rocket className="mr-2 h-4 w-4" />
-            Start Free Trial
+            Start 24-Hour Full Access
           </Button>
           <Button
             variant="outline"

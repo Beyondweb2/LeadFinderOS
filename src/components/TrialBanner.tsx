@@ -3,33 +3,36 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useTrial } from '@/hooks/useTrial';
 import { Button } from '@/components/ui/button';
 import { X, Clock, Sparkles, Crown, CreditCard, Search } from 'lucide-react';
+import { CheckoutConfirmDialog } from '@/components/CheckoutConfirmDialog';
 
 export function TrialBanner() {
-  const { subscribed, isLoading, status, subscriptionEnd, openCustomerPortal } = useSubscription();
-  const { isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing } = useTrial();
+  const { subscribed, isLoading, status, subscriptionEnd, openCustomerPortal, createCheckout } = useSubscription();
+  const { isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, demoSearchUsed } = useTrial();
   const [dismissed, setDismissed] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+
+  const handleCheckout = async () => {
+    setIsCheckoutLoading(true);
+    try { await createCheckout(); } catch { setIsCheckoutLoading(false); }
+  };
 
   // Don't show if loading or dismissed
-  if (isLoading || dismissed) {
-    return null;
-  }
+  if (isLoading || dismissed) return null;
 
   // Calculate days until charge for trialing users
   const getDaysUntilCharge = () => {
     if (!subscriptionEnd) return 0;
     const endDate = new Date(subscriptionEnd);
     const now = new Date();
-    const msRemaining = endDate.getTime() - now.getTime();
-    return Math.max(0, Math.ceil(msRemaining / (1000 * 60 * 60 * 24)));
+    return Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
   };
 
   const isTrialing = status === 'trialing';
   const daysUntilCharge = isTrialing ? getDaysUntilCharge() : 0;
 
   // Don't show for active subscribers (not trialing)
-  if (subscribed && !isTrialing) {
-    return null;
-  }
+  if (subscribed && !isTrialing) return null;
 
   // Show banner for Stripe trialing users (card already on file, unlimited access)
   if (isTrialing) {
@@ -39,10 +42,10 @@ export function TrialBanner() {
           <div className="flex items-center gap-2 text-sm min-w-0">
             <CreditCard className="h-4 w-4 text-primary shrink-0" />
             <span className="font-medium text-foreground/90 whitespace-nowrap">
-              {daysUntilCharge} day{daysUntilCharge !== 1 ? 's' : ''} until first charge
+              {daysUntilCharge} hour{daysUntilCharge !== 1 ? 's' : ''} of full access remaining
             </span>
             <span className="text-muted-foreground hidden sm:inline truncate">
-              — Enjoying full Pro access with unlimited searches
+              — Enjoying unlimited searches and full features
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -70,68 +73,49 @@ export function TrialBanner() {
     );
   }
 
-  // Show banner for free trial users (no card, limited access)
-  if (isOnTrial && !isStripeTrialing) {
+  // Show banner for demo users (1 search limit)
+  if (!subscribed && !isStripeTrialing) {
     return (
-      <div className="bg-muted/50 border-b border-border px-4 py-2">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm min-w-0">
-            <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-            <span className="font-medium text-foreground/90 whitespace-nowrap">
-              {searchesRemaining} of {dailyLimit} daily search{dailyLimit !== 1 ? 'es' : ''} remaining
-            </span>
-            <span className="text-muted-foreground hidden sm:inline truncate">
-              — Start free trial for unlimited
-            </span>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <Button 
-              size="sm"
-              onClick={() => window.location.href = '/subscribe'}
-            >
-              <Crown className="h-3.5 w-3.5 mr-1.5" />
-              <span className="hidden sm:inline">Start Free Trial</span>
-              <span className="sm:hidden">Upgrade</span>
-            </Button>
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-7 w-7 text-muted-foreground hover:text-foreground"
-              onClick={() => setDismissed(true)}
-              aria-label="Dismiss banner"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+      <>
+        <div className="bg-muted/50 border-b border-border px-4 py-2">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm min-w-0">
+              <Search className="h-4 w-4 text-muted-foreground shrink-0" />
+              <span className="font-medium text-foreground/90 whitespace-nowrap">
+                {demoSearchUsed ? '0' : '1'} demo search{demoSearchUsed ? '' : ''} remaining
+              </span>
+              <span className="text-muted-foreground hidden sm:inline truncate">
+                — Unlock 24-hour full access for unlimited
+              </span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button 
+                size="sm"
+                onClick={() => setShowConfirm(true)}
+              >
+                <Crown className="h-3.5 w-3.5 mr-1.5" />
+                <span className="hidden sm:inline">Start 24-Hour Full Access</span>
+                <span className="sm:hidden">Upgrade</span>
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                onClick={() => setDismissed(true)}
+                aria-label="Dismiss banner"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  // Show expired/no subscription banner
-  if (!subscribed) {
-    return (
-      <div className="bg-destructive/10 border-b border-destructive/20 px-4 py-2.5">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-sm">
-            <Clock className="h-4 w-4 text-destructive shrink-0" />
-            <span className="text-destructive font-medium">
-              No active subscription
-            </span>
-            <span className="text-muted-foreground hidden sm:inline">
-              — Subscribe to access LeadFinder
-            </span>
-          </div>
-          <Button 
-            size="sm" 
-            onClick={() => window.location.href = '/subscribe'}
-            className="shrink-0"
-          >
-            <Crown className="h-3.5 w-3.5 mr-1.5" />
-            Subscribe Now
-          </Button>
-        </div>
-      </div>
+        <CheckoutConfirmDialog
+          open={showConfirm}
+          onOpenChange={setShowConfirm}
+          onConfirm={handleCheckout}
+          isLoading={isCheckoutLoading}
+        />
+      </>
     );
   }
 

@@ -502,6 +502,7 @@ export type Database = {
           avatar_url: string | null
           checkout_abandoned: boolean
           created_at: string
+          demo_search_used: boolean
           id: string
           last_search_date: string | null
           paid_at: string | null
@@ -522,6 +523,7 @@ export type Database = {
           avatar_url?: string | null
           checkout_abandoned?: boolean
           created_at?: string
+          demo_search_used?: boolean
           id?: string
           last_search_date?: string | null
           paid_at?: string | null
@@ -542,6 +544,7 @@ export type Database = {
           avatar_url?: string | null
           checkout_abandoned?: boolean
           created_at?: string
+          demo_search_used?: boolean
           id?: string
           last_search_date?: string | null
           paid_at?: string | null

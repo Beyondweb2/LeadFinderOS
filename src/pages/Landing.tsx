@@ -546,8 +546,8 @@ const Landing = () => {
               asChild 
               className="font-medium text-sm px-3 sm:px-4 btn-premium"
             >
-              <Link to="/demo">
-                <span className="hidden sm:inline">Free Demo</span>
+              <Link to="/auth">
+                <span className="hidden sm:inline">Try Live Demo</span>
                 <span className="sm:hidden">Demo</span>
               </Link>
             </Button>
@@ -589,7 +589,7 @@ const Landing = () => {
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
-              <Link to="/demo">
+              <Link to="/auth">
                 Try Live Demo
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
@@ -605,15 +605,11 @@ const Landing = () => {
             Full access. Cancel anytime before renewal.
           </p>
 
-          <p className="text-[11px] sm:text-xs text-muted-foreground/35 mt-3 sm:mt-4 tracking-wide">
-            Run 1 real search instantly. No signup. No card.
-          </p>
-
           {/* Trust bullets */}
           <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-5 mt-5 sm:mt-7 text-[13px] sm:text-[15px] text-foreground/55">
             <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Contact them instantly</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you reach out to</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
           </div>
 
           {/* System label */}
@@ -980,14 +976,14 @@ const Landing = () => {
                     }}
                   >
                     <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                    Free Trial
+                    24-Hour Full Access
                   </div>
                   <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
                   <div className="mt-4 sm:mt-5">
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs text-foreground/50 mt-2">Start with a free trial. No charge today.</p>
+                  <p className="text-xs text-foreground/50 mt-2">Start with 24-hour full access. No charge today.</p>
                 </CardHeader>
                 
                 <CardContent className="pt-5 sm:pt-6 px-4 sm:px-6">
@@ -1011,7 +1007,7 @@ const Landing = () => {
                 
                 <CardFooter className="pt-4 sm:pt-5 pb-6 sm:pb-7 flex-col gap-3 px-4 sm:px-6">
                   <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
-                    <Link to="/demo">
+                    <Link to="/auth">
                       Try Live Demo
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
@@ -1020,7 +1016,7 @@ const Landing = () => {
                     <Link to="/auth">Start 24-Hour Full Access</Link>
                   </Button>
                   <p className="text-[10px] sm:text-xs text-muted-foreground/60 text-center">
-                    £0 today · Full access · Cancel anytime
+                    £0 today · Full access for 24 hours · Cancel anytime
                   </p>
                 </CardFooter>
               </Card>
@@ -1077,8 +1073,8 @@ const Landing = () => {
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
                 Sign In
               </Link>
-              <Link to="/demo" className="hover:text-foreground transition-colors duration-200">
-                Free Demo
+              <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
+                Try Live Demo
               </Link>
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
                 Start 24-Hour Full Access
@@ -1118,13 +1114,13 @@ const Landing = () => {
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
           <Button size="lg" className="w-full btn-premium font-semibold py-3 h-auto text-sm" asChild>
-            <Link to="/demo">
+            <Link to="/auth">
               Try Live Demo
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            1 free search · No signup needed
+            1 free search · Sign up required
           </p>
         </div>
       )}

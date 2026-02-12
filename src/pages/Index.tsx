@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { useDemoContext } from '@/components/DemoLayout';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { ContactDialog } from '@/components/ContactDialog';
 import { UpgradePromptDialog } from '@/components/UpgradePromptDialog';
 import { TrialLimitDialog } from '@/components/TrialLimitDialog';
+import { DemoUpgradePanel } from '@/components/DemoUpgradePanel';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 import { useContactTracking } from '@/hooks/useContactTracking';
 import { useOutreach } from '@/hooks/useOutreach';
@@ -18,8 +18,6 @@ import type { Lead, Country } from '@/types/lead';
 
 const Index = () => {
   const location = useLocation();
-  const isDemo = location.pathname === '/demo';
-  const demoCtx = useDemoContext();
   const { leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted } = useLeadSearchContext();
   const { 
     markAsContacted, 
@@ -28,18 +26,21 @@ const Index = () => {
   } = useContactTracking();
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
-  const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading } = useTrial();
+  const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed } = useTrial();
   const { subscribed, isLoading: isSubscriptionLoading, status: subStatus } = useSubscription();
   
   // Pro access = active, trialing, or past_due
   const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due';
-  console.log('[Index] access check', { userId: 'current', subStatus, hasProAccess, isStripeTrialing, subscribed });
+  console.log('[Index] access check', { userId: 'current', subStatus, hasProAccess, isStripeTrialing, subscribed, demoSearchUsed });
   const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   
   // Determine if still loading access status
   const isAccessLoading = isTrialLoading || isSubscriptionLoading;
+
+  // Demo user: not pro, demo search used → show upgrade panel instead of search
+  const showDemoUpgrade = !isAccessLoading && !hasProAccess && demoSearchUsed;
 
   // Check if we should show upgrade prompt after searches (only for free trial users, not Stripe trialing)
   useEffect(() => {
@@ -57,6 +58,11 @@ const Index = () => {
 
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
+
+  // Determine search limit for demo users (non-pro, non-trialing)
+  const isDemoUser = !hasProAccess && !isOnTrial;
+  const demoSearchesRemaining = isDemoUser ? (demoSearchUsed ? 0 : 1) : searchesRemaining;
+  const demoDailyLimit = isDemoUser ? 1 : dailyLimit;
 
   return (
     <div className="space-y-4 md:space-y-8">
@@ -96,22 +102,24 @@ const Index = () => {
         </div>
       )}
 
-      {/* Search Section */}
+      {/* Search Section OR Upgrade Panel */}
       <section>
-        <SearchForm 
-          onSearch={(filters) => {
-            setLastSearchCountry(filters.country || 'UK');
-            search(filters, false, isDemo);
-            if (isDemo && demoCtx) demoCtx.markDemoSearchUsed();
-          }} 
-          isLoading={isLoading}
-          isOnTrial={!isAccessLoading && (isOnTrial || isStripeTrialing)}
-          searchesRemaining={isDemo ? (demoCtx?.demoSearchUsed ? 0 : 1) : searchesRemaining}
-          dailyLimit={isDemo ? 1 : dailyLimit}
-          isPaidSubscriber={hasProAccess}
-          disabled={(isDemo && demoCtx?.demoSearchUsed) || (postAbandonExhausted && !hasProAccess)}
-          isDemo={isDemo}
-        />
+        {showDemoUpgrade ? (
+          <DemoUpgradePanel />
+        ) : (
+          <SearchForm 
+            onSearch={(filters) => {
+              setLastSearchCountry(filters.country || 'UK');
+              search(filters, false, false);
+            }} 
+            isLoading={isLoading}
+            isOnTrial={!isAccessLoading && (isOnTrial || isStripeTrialing)}
+            searchesRemaining={demoSearchesRemaining}
+            dailyLimit={demoDailyLimit}
+            isPaidSubscriber={hasProAccess}
+            disabled={postAbandonExhausted && !hasProAccess}
+          />
+        )}
       </section>
 
       {/* Outcome-focused Results Header */}
@@ -132,41 +140,27 @@ const Index = () => {
             onExport={exportToCsv}
             onLogContact={(lead) => setContactDialogLead(lead)}
             getLatestContact={getLatestContact}
-            onAddToOutreach={isDemo ? undefined : (lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
-            isInOutreach={isDemo ? undefined : isInOutreach}
+            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
+            isInOutreach={isInOutreach}
             onMapLinkClick={markAsChecked}
             isChecked={isChecked}
-            isDemo={isDemo}
           />
         </section>
       )}
 
       {/* Empty State */}
-      {leads.length === 0 && !isLoading && (
+      {leads.length === 0 && !isLoading && !showDemoUpgrade && (
         <section className="text-center py-16">
-          {isDemo ? (
-            <>
-              <div className="inline-flex p-3 rounded-full bg-muted/50 mb-4">
-                <Search className="h-8 w-8 text-muted-foreground" />
-              </div>
-              <p className="text-muted-foreground text-sm max-w-sm mx-auto">
-                Run a demo search to see live businesses.
-              </p>
-            </>
-          ) : (
-            <>
-              <div className="inline-flex p-4 rounded-full bg-muted/50 mb-6">
-                <Search className="h-12 w-12 text-muted-foreground" />
-              </div>
-              <h2 className="text-xl font-semibold text-foreground/80 mb-2">
-                Ready to find leads
-              </h2>
-              <p className="text-muted-foreground max-w-md mx-auto">
-                Enter a business type and location above to discover businesses 
-                without websites — your ideal prospects for web development services.
-              </p>
-            </>
-          )}
+          <div className="inline-flex p-4 rounded-full bg-muted/50 mb-6">
+            <Search className="h-12 w-12 text-muted-foreground" />
+          </div>
+          <h2 className="text-xl font-semibold text-foreground/80 mb-2">
+            Ready to find leads
+          </h2>
+          <p className="text-muted-foreground max-w-md mx-auto">
+            Enter a business type and location above to discover businesses 
+            without websites — your ideal prospects for web development services.
+          </p>
         </section>
       )}
 
