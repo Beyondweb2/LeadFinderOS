@@ -93,18 +93,6 @@ export function TrialProgressCard({
           </div>
         </div>
 
-        {/* Upgrade CTA */}
-        <div className="pt-2 flex items-center justify-between gap-4 border-t border-border/50">
-          <p className="text-xs text-muted-foreground">
-            Your plan auto-renews after the trial — manage anytime
-          </p>
-          <Button size="sm" asChild>
-            <Link to="/subscribe" className="flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5" />
-              Subscribe
-            </Link>
-          </Button>
-        </div>
       </CardContent>
     </Card>
   );
