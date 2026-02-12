@@ -180,10 +180,10 @@ const UnlockAccess = () => {
               <div className="w-full text-center space-y-3">
                 <div className="flex items-center justify-center gap-2 text-primary">
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  <span className="font-medium">Waiting for payment...</span>
+                  <span className="font-medium">Completing checkout...</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Complete checkout in the new tab. This page will update automatically.
+                  Finish in the new tab. This page will update automatically.
                 </p>
                 <Button
                   variant="outline"
