@@ -46,18 +46,18 @@ const REVIEWS: Review[] = [
 ];
 
 const ReviewCard = ({ review, minimal }: { review: Review; minimal?: boolean }) => (
-  <div className={`h-full flex flex-col justify-between ${minimal ? 'px-4 py-4' : 'rounded-xl border border-white/[0.08] bg-card/60 backdrop-blur-sm px-5 py-5 sm:px-6 sm:py-6'}`}>
+  <div className={`h-full flex flex-col justify-between ${minimal ? 'px-4 py-4' : 'px-1 py-1'}`}>
     <div className="w-full">
       {review.content.split('\n\n').map((paragraph, i) => (
-        <p key={i} className={`text-foreground/80 text-sm sm:text-base leading-relaxed font-normal ${i > 0 ? 'mt-2.5' : ''}`}>
+        <p key={i} className={`text-foreground/80 text-base sm:text-lg leading-relaxed font-normal ${i > 0 ? 'mt-3' : ''}`}>
           {i === 0 ? `"${paragraph}` : paragraph}
           {i === review.content.split('\n\n').length - 1 ? '"' : ''}
         </p>
       ))}
     </div>
-    <div className="mt-4">
-      <p className="text-foreground/75 text-xs sm:text-sm font-semibold">{review.name}</p>
-      <p className="text-muted-foreground/50 text-[11px] sm:text-xs font-medium mt-0.5">{review.role}</p>
+    <div className="mt-5">
+      <p className="text-foreground/75 text-sm font-semibold">{review.name}</p>
+      <p className="text-muted-foreground/50 text-xs font-medium mt-0.5">{review.role}</p>
     </div>
   </div>
 );
@@ -113,11 +113,13 @@ export const ReviewsSection = () => {
     <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-24 px-4">
       <div className="container mx-auto">
         <div className="text-center mb-6 sm:mb-10 md:mb-12">
-          <div className="flex items-center justify-center gap-1 mb-3">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-            ))}
-          </div>
+          {isMobile && (
+            <div className="flex items-center justify-center gap-1 mb-3">
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+              ))}
+            </div>
+          )}
           <p className="text-foreground/50 text-xs sm:text-sm font-medium mb-4 sm:mb-5">Rated 4.9/5 by freelancers and agencies</p>
           <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
             Real Results from <span className="text-gradient-primary">Real Users</span>
