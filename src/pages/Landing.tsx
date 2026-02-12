@@ -663,12 +663,19 @@ const Landing = () => {
                 quote: "i used to track everything in spreadsheets and sticky notes — half my leads got lost. now it's all in one dashboard. i can see who i've messaged, who replied, and what's next. wish i had this sooner.",
                 stars: 5,
               },
+              {
+                name: 'Sophie K.',
+                role: 'Agency Owner',
+                region: 'UK',
+                quote: "we onboarded three new clients in our first week. the classification saves so much time — you instantly know who's worth reaching out to. it's replaced two tools we were paying for.",
+                stars: 5,
+              },
             ];
 
             return isMobile ? (
               <MobileTestimonialSlider testimonials={testimonials} />
             ) : (
-              <div className="grid grid-cols-3 gap-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                 {testimonials.map((r, i) => (
                   <ScrollReveal key={i} delay={i * 100}>
                     <div 
