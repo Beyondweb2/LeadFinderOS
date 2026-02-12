@@ -602,17 +602,17 @@ const Landing = () => {
           </div>
 
 
+          {/* System label */}
+          <p className="text-[10px] sm:text-xs text-muted-foreground/30 mt-5 sm:mt-7 tracking-widest uppercase font-medium">
+            All-in-one lead discovery and outreach system
+          </p>
+
           {/* Trust bullets */}
-          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-5 mt-5 sm:mt-7 text-[13px] sm:text-[15px] text-foreground/55">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-5 mt-4 sm:mt-5 text-[13px] sm:text-[15px] text-foreground/55">
             <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
             <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
             <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
           </div>
-
-          {/* System label */}
-          <p className="text-[10px] sm:text-xs text-muted-foreground/30 mt-6 sm:mt-8 tracking-widest uppercase font-medium">
-            All-in-one lead discovery and outreach system
-          </p>
 
           {/* Stats bar */}
           <div className="mt-4 sm:mt-6 md:mt-8 py-4 sm:py-0 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
@@ -707,7 +707,7 @@ const Landing = () => {
             <div className="grid grid-cols-2 gap-10 lg:gap-14 max-w-5xl mx-auto items-start">
               {/* Old Way */}
               <ScrollReveal delay={100}>
-                <div className="opacity-80 hover:opacity-90 transition-opacity duration-300">
+                <div className="hover:opacity-90 transition-opacity duration-300">
                   <div className="flex items-center gap-2.5 justify-center mb-5">
                     <X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
                     <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3>
@@ -724,7 +724,7 @@ const Landing = () => {
                         boxShadow: '0 0 30px hsl(0 60% 40% / 0.1)'
                       }}
                     >
-                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" />
+                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-contain" />
                     </div>
                   </div>
                   <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
@@ -835,7 +835,7 @@ const Landing = () => {
                           <img 
                             src={feature.image} 
                             alt={feature.title}
-                            className={`w-full h-auto object-contain transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                            className={`w-full h-[260px] lg:h-[300px] object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
                           />
                         </div>
                       </div>
