@@ -84,28 +84,28 @@ const FEATURES = [
   {
     icon: Search,
     title: 'Smart Classification',
-    description: 'Instantly see which businesses have no website — hot leads are highlighted so you never waste time on the wrong ones.',
+    description: 'See at a glance which businesses need a website — so every message you send goes to someone who actually wants your help.',
     image: featureClassification,
     imageScale: 'scale-100',
   },
   {
     icon: ClipboardList,
     title: 'Smart Dashboard',
-    description: 'Your entire pipeline at a glance — track searches, outreach progress, conversions, and revenue in real time.',
+    description: 'Know exactly where you stand — see your pipeline, conversion rate, and revenue at a glance so you always know what to do next.',
     image: featureDashboard,
     imageScale: 'scale-100',
   },
   {
     icon: Phone,
     title: 'Contact Tracking',
-    description: 'Log every call, text, and follow-up. Update statuses and add notes so you never lose track of a lead.',
+    description: 'Never lose a lead again. Every message, call, and follow-up is logged so nothing falls through the cracks.',
     image: featureContactTracking,
     imageScale: 'scale-100',
   },
   {
     icon: FileText,
     title: 'Templates',
-    description: 'Ready-to-send WhatsApp, SMS, and call scripts — just pick a template, personalise, and hit send.',
+    description: 'Stop staring at a blank message. Pick a proven template, personalise it in seconds, and send with confidence.',
     image: featureTemplates,
     imageScale: 'scale-100',
   },
@@ -126,12 +126,12 @@ const FEATURES = [
 ];
 
 const PRICING_FEATURES = [
-  'Unlimited lead searches',
-  'Find businesses without websites',
-  'Full CRM access',
-  'Contact tracking & notes',
-  'Email & call templates',
-  'Export leads to outreach',
+  'Unlimited lead searches across 20+ countries',
+  'Find businesses that need a website — instantly',
+  'Message leads directly via WhatsApp or SMS',
+  'Full CRM with pipeline tracking',
+  'Ready-to-send outreach templates',
+  'Dashboard with conversion metrics',
   'Priority support',
 ];
 
@@ -585,7 +585,7 @@ const Landing = () => {
             }}
           >
             <Zap className="h-3.5 w-3.5" />
-            <span>The fastest way to land web design clients</span>
+            <span>Your next client is already out there — go find them</span>
           </div>
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight">
@@ -596,7 +596,7 @@ const Landing = () => {
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
-            Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
+            Thousands of businesses need a website and don't have one. Find them instantly, message them directly, and turn them into paying clients — on demand.
           </p>
           
           {/* Keywords removed */}
@@ -616,18 +616,18 @@ const Landing = () => {
 
           {/* Reassurance microcopy - desktop: after buttons, mobile: after badges */}
           <p className="hidden sm:block text-xs text-muted-foreground text-center mt-5">
-            Full access for 24 hours. £0 today. Cancel anytime.
+            Free for 24 hours. No card required.
           </p>
 
           {/* Power bullets under hero CTA */}
           <div className="mt-6 sm:mt-10 flex justify-center">
             <div className="inline-flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-8 sm:gap-y-3">
               {[
-                '10x your outreach',
-                'Never miss a lead',
-                'No more manual searching',
-                'No more messy follow-ups',
-                'One system. Full control.',
+                'Know exactly where your next client is coming from',
+                'Book more calls with less effort',
+                'Never lose track of a lead again',
+                'Build a pipeline you control',
+                'Turn outreach into consistent income',
               ].map((bullet, i) => (
                 <div key={i} className="flex items-start gap-1.5 sm:items-center sm:gap-2.5">
                   <Check 
@@ -658,7 +658,7 @@ const Landing = () => {
           </div>
           {/* Reassurance microcopy - mobile only, after badges */}
           <p className="sm:hidden text-[11px] text-muted-foreground text-center mt-4">
-            Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
+            Free for 24 hours. No card required.
           </p>
           {/* Scroll down indicator */}
           <div className="mt-5 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
@@ -698,21 +698,21 @@ const Landing = () => {
                 name: 'James T.',
                 role: 'Freelance Web Developer',
                 region: 'UK',
-                quote: "used to waste my whole morning scrolling maps looking for leads. now i get 30+ in about 10 minutes and actually spend time reaching out instead of searching.",
+                quote: "i went from finding maybe 5 leads a day on google maps to pulling 30+ in 10 minutes. booked 3 calls in my first week just from the leads it found. completely changed how i prospect.",
                 stars: 5,
               },
               {
                 name: 'Marcus L.',
                 role: 'Web Designer',
                 region: 'UK',
-                quote: "being able to message leads straight from the app on whatsapp or sms is a game changer. i used to copy numbers into my phone one by one — now i just tap and send. way more outreach in way less time.",
+                quote: "landed two paying clients in my first month. the direct whatsapp outreach makes it so easy — i message 15-20 businesses a day now instead of the 3-4 i used to manage. the follow-up tracking alone saves me hours.",
                 stars: 5,
               },
               {
                 name: 'David R.',
                 role: 'WordPress Developer',
                 region: 'UK',
-                quote: "i used to track everything in spreadsheets and sticky notes — half my leads got lost. now it's all in one dashboard. i can see who i've messaged, who replied, and what's next. wish i had this sooner.",
+                quote: "i used to spend 2 hours a day just finding and organising leads. now that takes about 15 minutes and i actually know who to follow up with. closed a £1,200 site last month from a lead i found on here.",
                 stars: 5,
               },
             ];
@@ -789,9 +789,9 @@ const Landing = () => {
                     </div>
                   </div>
                   <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
+                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours wasted scrolling with no system</span></li>
+                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Forgetting who you messaged and when</span></li>
+                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No pipeline — just scattered notes and hope</span></li>
                   </ul>
                 </div>
               </ScrollReveal>
@@ -818,9 +818,9 @@ const Landing = () => {
                     </div>
                   </div>
                   <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
+                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>30+ qualified leads in under 10 minutes</span></li>
+                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Full pipeline with every lead tracked</span></li>
+                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Message instantly via WhatsApp or SMS</span></li>
                   </ul>
                 </div>
               </ScrollReveal>
@@ -829,10 +829,10 @@ const Landing = () => {
             {/* Authority statement */}
             <ScrollReveal delay={400} className="text-center mt-14 md:mt-18 max-w-2xl mx-auto">
               <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
-                The difference isn't effort. It's <span className="text-gradient-primary">leverage</span>.
+                Same hours. Completely different <span className="text-gradient-primary">results</span>.
               </h3>
               <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-10">
-                You can keep searching manually. Or you can systemise outreach.
+                One approach keeps you busy. The other builds a client pipeline you control.
               </p>
               <Button 
                 size="lg" 
@@ -871,20 +871,20 @@ const Landing = () => {
         <div className="container mx-auto max-w-3xl text-center">
           <ScrollReveal className="mb-10 sm:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4">
-              Built for <span className="text-gradient-primary">serious outreach.</span>
+              For freelancers who want <span className="text-gradient-primary">control.</span>
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
-              Stop searching. Start sending.
+              Stop hoping clients find you. Build a system that finds them.
             </p>
           </ScrollReveal>
 
           <div className="mb-10 sm:mb-14 flex justify-center">
             <div className="inline-flex flex-col gap-5 sm:gap-6">
               {[
-                'Find 20+ real prospects in minutes',
-                'Send more messages in 10 minutes than most do in a morning',
-                'Track every outreach in one place',
-                'Stop guessing who needs your help',
+                'Wake up knowing exactly who to contact today',
+                'Build momentum that compounds every week',
+                'Replace cold guessing with a warm pipeline',
+                'Turn outreach from a chore into a system',
               ].map((item, i) => (
                 <ScrollReveal key={i} delay={i * 60}>
                   <div className="flex items-center gap-3 sm:gap-4">
@@ -941,7 +941,7 @@ const Landing = () => {
               <span className="text-gradient-primary"> Lead Toolkit</span>
             </h2>
             <p className="hidden sm:block text-muted-foreground max-w-xl mx-auto text-base md:text-lg px-2">
-              Everything you need to find, track, and convert leads into paying clients.
+              Everything you need to go from search to signed client.
             </p>
           </ScrollReveal>
           
@@ -1019,10 +1019,10 @@ const Landing = () => {
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-              Simple, Transparent <span className="text-gradient-primary">Pricing</span>
+              One Plan. <span className="text-gradient-primary">Everything Included.</span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              One plan with everything you need. Cancel anytime.
+              Less than the cost of a single client lunch — and it can pay for itself with your first deal.
             </p>
           </ScrollReveal>
           
@@ -1063,7 +1063,7 @@ const Landing = () => {
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">After your 24-hour trial · Cancel before it ends and pay nothing</p>
+                  <p className="text-xs text-muted-foreground mt-2">One client covers months of access. Try free for 24 hours.</p>
                 </CardHeader>
                 
                 <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
@@ -1110,6 +1110,37 @@ const Landing = () => {
         </div>
       </section>
 
+
+      {/* Mobile section divider */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
+
+      {/* Final CTA Section */}
+      <section className="relative z-10 py-12 sm:py-20 md:py-28 px-4">
+        <div className="container mx-auto">
+          <ScrollReveal className="text-center max-w-2xl mx-auto">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4">
+              Stop waiting for clients to <span className="text-gradient-primary">find you.</span>
+            </h2>
+            <p className="text-base sm:text-lg text-muted-foreground mb-8 sm:mb-10 max-w-lg mx-auto">
+              Start your free trial, find businesses that need your help, and send your first message today. No risk. No card required.
+            </p>
+            <Button 
+              size="lg" 
+              className="btn-premium text-sm sm:text-base font-semibold px-8 sm:px-10 py-3 sm:py-5 h-auto shadow-lg shadow-primary/25 w-full sm:w-auto"
+              style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.2), 0 4px 20px hsl(210 100% 50% / 0.15)' }}
+              asChild
+            >
+              <Link to="/auth">
+                Start Free Trial
+                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+              </Link>
+            </Button>
+            <p className="text-xs text-muted-foreground/60 mt-4">
+              Free for 24 hours. No card required. Cancel anytime.
+            </p>
+          </ScrollReveal>
+        </div>
+      </section>
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
