@@ -617,10 +617,10 @@ const Landing = () => {
             <div className="flex justify-center sm:hidden">
               <div className="flex flex-col gap-3.5 pl-1">
                 {[
-                  'Find 20+ real prospects in minutes',
-                  'Send more outreach in 10 minutes than most do in a morning',
-                  'Always know who to follow up and when',
-                  'Build a pipeline you can actually rely on',
+                  'Stop chasing leads — start choosing them',
+                  'Do in 10 minutes what used to take all morning',
+                  'Never lose track of a follow-up again',
+                  'Finally feel in control of your pipeline',
                 ].map((bullet, i) => (
                   <div key={i} className="flex items-start gap-3">
                     <div className="w-5 flex-shrink-0 flex justify-center pt-0.5">
@@ -638,10 +638,10 @@ const Landing = () => {
             {/* Desktop: horizontal wrap */}
             <div className="hidden sm:flex flex-wrap justify-center gap-x-8 gap-y-2.5">
               {[
-                'Find 20+ real prospects in minutes',
-                'Send more outreach in 10 minutes than most do in a morning',
-                'Always know who to follow up and when',
-                'Build a pipeline you can actually rely on',
+                'Stop chasing leads — start choosing them',
+                'Do in 10 minutes what used to take all morning',
+                'Never lose track of a follow-up again',
+                'Finally feel in control of your pipeline',
               ].map((bullet, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <Check 
