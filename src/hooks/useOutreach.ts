@@ -652,6 +652,8 @@ export function useOutreach() {
       description: `${lead.business_name} added to Track Leads.`,
     });
 
+    window.dispatchEvent(new CustomEvent('track-lead-added'));
+
     // Log activity
     if (user) {
       await supabase.from('outreach_activities').insert({
@@ -697,6 +699,8 @@ export function useOutreach() {
       title: 'Added to Track Leads',
       description: `${leadIds.length} leads added to Track Leads.`,
     });
+
+    window.dispatchEvent(new CustomEvent('track-lead-added'));
 
     return true;
   }, [toast]);
