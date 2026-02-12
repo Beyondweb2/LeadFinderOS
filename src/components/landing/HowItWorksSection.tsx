@@ -13,7 +13,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import step1Image from '@/assets/howto-step1-search.png';
 import step2Image from '@/assets/howto-step2-results.png';
 import step3Image from '@/assets/howto-step3-outreach-crm.png';
-import step4aImage from '@/assets/feature-contact-tracking.png';
+
 import step4bImage from '@/assets/howto-step4-dashboard.png';
 
 interface StepData {
@@ -50,7 +50,7 @@ const STEPS: StepData[] = [
     icon: BarChart3,
     title: 'Track & Close',
     description: 'See who replied, who needs follow-up, and exactly where your revenue is coming from — all in one dashboard.',
-    images: [step4aImage, step4bImage],
+    images: [step4bImage],
     badge: 'Full Pipeline',
   },
 ];
