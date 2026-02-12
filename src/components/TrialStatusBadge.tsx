@@ -21,11 +21,15 @@ export function TrialStatusBadge({
   isCollapsed = false,
   className 
 }: TrialStatusBadgeProps) {
+  const isExhausted = searchesRemaining <= 0;
+  
   const tooltipContent = (
     <div className="space-y-2 max-w-xs">
       <p className="font-medium">Demo Mode</p>
       <p className="text-xs text-muted-foreground">
-        You have {searchesRemaining} demo search{searchesRemaining !== 1 ? 'es' : ''} remaining. Unlock 24-hour full access for unlimited searches and all features.
+        {isExhausted 
+          ? 'Your free demo search has been used. Unlock 24-hour full access for unlimited searches and all features.'
+          : 'You have 1 free search to try the app. Unlock 24-hour full access for unlimited searches and all features.'}
       </p>
       <div className="pt-1 border-t border-border">
         <Link 
@@ -55,7 +59,7 @@ export function TrialStatusBadge({
             <div className="space-y-1">
               <p className="font-medium text-xs">Demo Mode</p>
               <p className="text-xs text-muted-foreground">
-                {searchesRemaining} search{searchesRemaining !== 1 ? 'es' : ''} remaining
+                {searchesRemaining > 0 ? '1 free search' : 'Free search used'}
               </p>
             </div>
           </TooltipContent>
@@ -78,7 +82,7 @@ export function TrialStatusBadge({
             </span>
           </div>
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            {searchesRemaining} search{searchesRemaining !== 1 ? 'es' : ''} remaining
+            {searchesRemaining > 0 ? '1 free search' : 'Free search used'}
           </p>
         </div>
         

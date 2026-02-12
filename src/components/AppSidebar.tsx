@@ -107,14 +107,23 @@ export function AppSidebar() {
   const location = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const { isAdmin, subscribed, isLoading: isSubscriptionLoading } = useSubscription();
-  const { isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading } = useTrial();
+  const { isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed } = useTrial();
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
   const isCollapsed = state === 'collapsed';
   
-  // Show trial badge for free trial users only (not Stripe trialing or subscribed)
-  // Also wait for loading to complete to prevent flickering
-  const showTrialBadge = !isSubscriptionLoading && !isTrialLoading && isOnTrial && !subscribed && !isStripeTrialing;
+  // Pro access = active, trialing, or past_due
+  const { status: subStatus } = useSubscription();
+  const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due';
+  const isDemoUser = !hasProAccess && !isStripeTrialing;
+  
+  // Demo users get 1 lifetime search, not the legacy daily limit
+  const effectiveSearchesRemaining = isDemoUser ? (demoSearchUsed ? 0 : 1) : searchesRemaining;
+  const effectiveDailyLimit = isDemoUser ? 1 : dailyLimit;
+  
+  // Show badge for demo users (not subscribed, not stripe trialing)
+  // Wait for loading to complete to prevent flickering
+  const showTrialBadge = !isSubscriptionLoading && !isTrialLoading && isDemoUser && !subscribed;
 
   return (
     <Sidebar 
@@ -140,8 +149,8 @@ export function AppSidebar() {
         {showTrialBadge && (
           <div className="mt-3">
             <TrialStatusBadge 
-              searchesRemaining={searchesRemaining} 
-              dailyLimit={dailyLimit}
+              searchesRemaining={effectiveSearchesRemaining} 
+              dailyLimit={effectiveDailyLimit}
               isCollapsed={isCollapsed}
             />
           </div>
