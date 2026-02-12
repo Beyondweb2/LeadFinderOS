@@ -154,11 +154,11 @@ const Auth = () => {
         } else {
           toast({
             title: 'Account created!',
-            description: 'Redirecting to start your free trial...',
+            description: 'Redirecting to unlock full access...',
           });
-          // Redirect to Stripe checkout for card details and trial
-          await redirectToCheckout();
-          return; // Don't set isSubmitting to false - we're redirecting
+          // Redirect to unlock page instead of directly to Stripe
+          navigate('/unlock');
+          return;
         }
       }
     } finally {
@@ -239,7 +239,7 @@ const Auth = () => {
           <CardDescription>
             {isLogin 
               ? 'Sign in to find businesses without websites' 
-              : 'Start your 1-day free trial — no charge today'}
+              : 'Start your 24-hour full access trial — no charge today'}
           </CardDescription>
           {!isLogin && (
             <div className="flex items-center justify-center gap-2 mt-2 text-xs text-muted-foreground">

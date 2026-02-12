@@ -30,6 +30,7 @@ import Landing from "./pages/Landing";
 import Terms from "./pages/Terms";
 import Feedback from "./pages/Feedback";
 import AffiliateProgram from "./pages/AffiliateProgram";
+import UnlockAccess from "./pages/UnlockAccess";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -90,6 +91,14 @@ const App = () => (
              <Route path="/partners" element={<AffiliateProgram />} />
              <Route path="/guide" element={<HowToUse />} />
              <Route path="/demo" element={<Index />} />
+             <Route 
+               path="/unlock" 
+               element={
+                 <ProtectedRoute>
+                   <UnlockAccess />
+                 </ProtectedRoute>
+               } 
+             />
             <Route 
               path="/" 
               element={

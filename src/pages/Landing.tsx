@@ -582,7 +582,7 @@ const Landing = () => {
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
-            Try a live demo search instantly. Unlock full outreach tools with a free trial.
+            Find, contact, and track businesses that need a website — all in one place.
           </p>
           
           {/* Keywords removed */}
@@ -596,24 +596,33 @@ const Landing = () => {
             </Button>
             <Button variant="outline" size="lg" className="text-sm sm:text-base font-medium h-auto px-5 py-2.5 border-foreground/20 hover:bg-foreground/5" asChild>
               <Link to="/auth">
-                Start Free Trial
+                Start 24-Hour Full Access
               </Link>
             </Button>
           </div>
 
-          <p className="text-[11px] sm:text-xs text-muted-foreground/35 mt-4 sm:mt-5 tracking-wide">
+          <p className="text-[11px] sm:text-xs text-muted-foreground/30 mt-2 sm:mt-3 tracking-wide">
+            Full access. Cancel anytime before renewal.
+          </p>
+
+          <p className="text-[11px] sm:text-xs text-muted-foreground/35 mt-3 sm:mt-4 tracking-wide">
             Run 1 real search instantly. No signup. No card.
           </p>
 
           {/* Trust bullets */}
           <div className="flex flex-wrap items-center justify-center gap-2.5 sm:gap-5 mt-5 sm:mt-7 text-[13px] sm:text-[15px] text-foreground/55">
             <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list instantly</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track everything in one place</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Contact them instantly</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you reach out to</span>
           </div>
 
-          {/* Stats bar - moved above bullets */}
-          <div className="mt-6 sm:mt-10 md:mt-12 py-4 sm:py-0 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
+          {/* System label */}
+          <p className="text-[10px] sm:text-xs text-muted-foreground/30 mt-6 sm:mt-8 tracking-widest uppercase font-medium">
+            All-in-one lead discovery and outreach system
+          </p>
+
+          {/* Stats bar */}
+          <div className="mt-4 sm:mt-6 md:mt-8 py-4 sm:py-0 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
               <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
@@ -1008,7 +1017,7 @@ const Landing = () => {
                     </Link>
                   </Button>
                   <Button variant="outline" size="lg" className="w-full text-sm font-medium h-auto py-2 border-foreground/20 hover:bg-foreground/5" asChild>
-                    <Link to="/auth">Start Free Trial</Link>
+                    <Link to="/auth">Start 24-Hour Full Access</Link>
                   </Button>
                   <p className="text-[10px] sm:text-xs text-muted-foreground/60 text-center">
                     £0 today · Full access · Cancel anytime
@@ -1072,7 +1081,7 @@ const Landing = () => {
                 Free Demo
               </Link>
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
-                Start Free Trial
+                Start 24-Hour Full Access
               </Link>
               <Link to="/feedback" className="hover:text-foreground transition-colors duration-200">
                 Feedback
