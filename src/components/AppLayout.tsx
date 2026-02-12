@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
 import { MobileBottomNav } from '@/components/MobileBottomNav';
+import { CheckoutActivationOverlay } from '@/components/CheckoutActivationOverlay';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
 import { usePersistedScroll } from '@/hooks/usePersistedScroll';
@@ -61,6 +62,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         {/* Mobile bottom navigation */}
         <MobileBottomNav />
+        <CheckoutActivationOverlay />
       </div>
     </SidebarProvider>
   );
