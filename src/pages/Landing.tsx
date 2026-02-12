@@ -605,10 +605,20 @@ const Landing = () => {
             </Link>
           </div>
 
-          {/* Reassurance microcopy */}
-          <p className="text-xs text-muted-foreground text-center mt-4 sm:mt-5">
-            Free for 24 hours. No card required. Cancel anytime.
-          </p>
+          {/* Reassurance microcopy removed from hero */}
+
+          {/* Stats bar - moved above bullets */}
+          <div className="mt-6 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
+            <CountUpStat target={100000} suffix="+" label="Businesses" />
+            <div className="text-center">
+              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Coverage</div>
+            </div>
+            <div className="text-center">
+              <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Searches</div>
+            </div>
+          </div>
 
           {/* Power bullets under hero CTA */}
           <div className="mt-6 sm:mt-10">
@@ -616,7 +626,7 @@ const Landing = () => {
             <div className="flex flex-col items-start gap-3 w-fit mx-auto sm:hidden">
               {[
                 'Find 20+ real prospects in minutes',
-                'Send more messages in 10 mins than most do in a morning',
+                'Message more leads in 10 mins than most do in a morning',
                 'Track every outreach in one place',
                 'Stop guessing who needs your help',
               ].map((bullet, i) => (
@@ -650,18 +660,6 @@ const Landing = () => {
             </div>
           </div>
           
-          {/* Stats bar */}
-          <div className="mt-8 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
-            <CountUpStat target={100000} suffix="+" label="Businesses" />
-            <div className="text-center">
-              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Coverage</div>
-            </div>
-            <div className="text-center">
-              <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-              <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Searches</div>
-            </div>
-          </div>
 
           {/* Scroll down indicator */}
           <div className="mt-6 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
@@ -871,10 +869,10 @@ const Landing = () => {
         <div className="container mx-auto max-w-3xl text-center">
           <ScrollReveal className="mb-10 sm:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4">
-              Built for <span className="text-gradient-primary">serious outreach.</span>
+              Your Outreach, <span className="text-gradient-primary">Systemised.</span>
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
-              Stop searching. Start sending.
+              Everything you need to find leads, send messages, and close deals — in one place.
             </p>
           </ScrollReveal>
 
