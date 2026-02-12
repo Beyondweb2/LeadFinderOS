@@ -21,6 +21,7 @@ interface LeadSearchContextType {
   exportToCsv: () => void;
   trialLimitError: TrialLimitError | null;
   clearTrialLimitError: () => void;
+  postAbandonExhausted: boolean;
 }
 
 const LeadSearchContext = createContext<LeadSearchContextType | null>(null);
@@ -30,6 +31,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [isLoading, setIsLoading] = useState(false);
   const [excludedBusinesses, setExcludedBusinesses] = useState<ExcludedBusiness[]>([]);
   const [trialLimitError, setTrialLimitError] = useState<TrialLimitError | null>(null);
+  const [postAbandonExhausted, setPostAbandonExhausted] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -128,6 +130,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const search = useCallback(async (filters: SearchFilters, skipTrialCount: boolean = false) => {
     setIsLoading(true);
     setTrialLimitError(null);
+    setPostAbandonExhausted(false);
     
     // Refresh excluded businesses before searching
     await fetchExcludedBusinesses();
@@ -148,6 +151,10 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
             const body = typeof errorContext.json === 'function' 
               ? await errorContext.json() 
               : errorContext;
+            if (body?.code === 'POST_ABANDON_EXHAUSTED') {
+              setPostAbandonExhausted(true);
+              return;
+            }
             if (body?.code === 'TRIAL_LIMIT_REACHED') {
               setTrialLimitError({
                 searchesToday: body.searches_today || 3,
@@ -286,6 +293,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       exportToCsv,
       trialLimitError,
       clearTrialLimitError,
+      postAbandonExhausted,
     }}>
       {children}
     </LeadSearchContext.Provider>

@@ -8,10 +8,15 @@ interface TrialLimitError {
   limit: number;
 }
 
+interface PostAbandonExhausted {
+  exhausted: true;
+}
+
 export function useLeadSearch() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [trialLimitError, setTrialLimitError] = useState<TrialLimitError | null>(null);
+  const [postAbandonExhausted, setPostAbandonExhausted] = useState(false);
   const { toast } = useToast();
 
   const checkPreviousSearch = async (filters: SearchFilters): Promise<{ searched: boolean; date?: string; count?: number }> => {
@@ -59,6 +64,7 @@ export function useLeadSearch() {
   const search = async (filters: SearchFilters) => {
     setIsLoading(true);
     setTrialLimitError(null);
+    setPostAbandonExhausted(false);
     
     try {
       const { data, error } = await supabase.functions.invoke<SearchResponse>('search-leads', {
@@ -73,6 +79,10 @@ export function useLeadSearch() {
           const errorContext = error.context;
           if (errorContext && typeof errorContext === 'object') {
             const body = await errorContext.json?.() || errorContext;
+            if (body?.code === 'POST_ABANDON_EXHAUSTED') {
+              setPostAbandonExhausted(true);
+              return;
+            }
             if (body?.code === 'TRIAL_LIMIT_REACHED') {
               setTrialLimitError({
                 searchesToday: body.searches_today || 3,
@@ -200,5 +210,7 @@ export function useLeadSearch() {
     exportToCsv,
     trialLimitError,
     clearTrialLimitError,
+    postAbandonExhausted,
+    checkPreviousSearch,
   };
 }

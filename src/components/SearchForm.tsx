@@ -19,6 +19,7 @@ interface SearchFormProps {
   searchesRemaining?: number;
   dailyLimit?: number;
   isPaidSubscriber?: boolean;
+  disabled?: boolean;
 }
 
 export function SearchForm({ 
@@ -27,7 +28,8 @@ export function SearchForm({
   isOnTrial = false, 
   searchesRemaining = 2, 
   dailyLimit = 2,
-  isPaidSubscriber = false 
+  isPaidSubscriber = false,
+  disabled = false,
 }: SearchFormProps) {
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
@@ -198,7 +200,7 @@ export function SearchForm({
             <div className={`flex justify-center sm:justify-end ${!isPaidSubscriber ? '' : 'w-full'}`}>
               <Button 
                 type="submit" 
-                disabled={isLoading || !keyword.trim() || !location.trim()}
+                disabled={isLoading || !keyword.trim() || !location.trim() || disabled}
                 className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-9 sm:h-10 w-full sm:w-auto text-sm"
               >
                 {isLoading ? (
