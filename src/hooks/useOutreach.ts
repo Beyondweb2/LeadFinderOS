@@ -201,6 +201,9 @@ export function useOutreach() {
     const newLead = data as OutreachLead;
     setLeads((prev) => [newLead, ...prev]);
 
+    // Notify bottom nav immediately
+    window.dispatchEvent(new CustomEvent('crm-lead-added'));
+
     // If the user navigates straight to Outreach after adding, ensure they land on page 1.
     try {
       const key = user?.id ? `leadfinder_outreach_force_page1:${user.id}` : 'leadfinder_outreach_force_page1';
@@ -248,9 +251,6 @@ export function useOutreach() {
       title: 'Lead added',
       description: `${lead.name} added to your outreach list.`,
     });
-
-    // Notify bottom nav to glow CRM icon
-    window.dispatchEvent(new CustomEvent('crm-lead-added'));
 
     return newLead;
   }, [user, toast]);
@@ -646,13 +646,13 @@ export function useOutreach() {
     
     setLeads((prev) => prev.map(updateLeadFn));
     setArchivedLeads((prev) => prev.map(updateLeadFn));
+
+    window.dispatchEvent(new CustomEvent('track-lead-added'));
     
     toast({
       title: 'Added to Track Leads',
       description: `${lead.business_name} added to Track Leads.`,
     });
-
-    window.dispatchEvent(new CustomEvent('track-lead-added'));
 
     // Log activity
     if (user) {
@@ -694,13 +694,13 @@ export function useOutreach() {
     
     setLeads((prev) => prev.map(updateLeadFn));
     setArchivedLeads((prev) => prev.map(updateLeadFn));
+
+    window.dispatchEvent(new CustomEvent('track-lead-added'));
     
     toast({
       title: 'Added to Track Leads',
       description: `${leadIds.length} leads added to Track Leads.`,
     });
-
-    window.dispatchEvent(new CustomEvent('track-lead-added'));
 
     return true;
   }, [toast]);
