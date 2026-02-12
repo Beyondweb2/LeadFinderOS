@@ -56,7 +56,12 @@ const Auth = () => {
 
       if (error) throw error;
       if (data?.url) {
-        window.location.href = data.url;
+        // Use window.open to avoid iframe sandbox blocking location changes
+        const opened = window.open(data.url, '_blank');
+        if (!opened) {
+          // Fallback if popup blocked
+          window.location.href = data.url;
+        }
       }
     } catch (err) {
       console.error('Checkout redirect failed:', err);
