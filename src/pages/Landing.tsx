@@ -872,18 +872,17 @@ const Landing = () => {
               Your Outreach, <span className="text-gradient-primary">Systemised.</span>
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
-              Everything you need to find leads, send messages, and close deals — in one place.
+              A simple system that replaces guesswork with clarity — so you can focus on closing, not chasing.
             </p>
           </ScrollReveal>
 
           <div className="mb-10 sm:mb-14">
-            <div className="flex flex-col items-start gap-4 sm:gap-5 w-fit mx-auto">
+            <div className="flex flex-col items-start gap-3 sm:gap-4 w-fit mx-auto">
               {[
-                '10x your outreach',
-                'Never miss a lead',
-                'No more manual searching',
-                'No more messy follow-ups',
-                'One system. Full control.',
+                'Know exactly who to contact every day',
+                'Turn cold outreach into a warm pipeline',
+                'See what\'s working and double down',
+                'Stay in control from first message to paid client',
               ].map((item, i) => (
                 <ScrollReveal key={i} delay={i * 60}>
                   <div className="flex items-center gap-3">
