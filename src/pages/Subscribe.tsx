@@ -123,7 +123,7 @@ const Subscribe = () => {
                   <Skeleton className="h-5 w-32 mx-auto mb-3" />
                 ) : !hideTrialOffer ? (
                   <div className="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-3">
-                    1-Day Free Trial
+                    24-Hour Full Access
                   </div>
                 ) : null}
                 <div>
@@ -136,7 +136,7 @@ const Subscribe = () => {
                   <p className="text-sm text-muted-foreground mt-2">
                     {hideTrialOffer 
                       ? '£19.99/month. Cancel anytime.'
-                      : 'Start free trial, then £19.99/month'
+                      : 'Start free, then £19.99/month. Cancel anytime.'
                     }
                   </p>
                 )}
@@ -172,7 +172,7 @@ const Subscribe = () => {
                 ) : (
                   <>
                     <CreditCard className="mr-2 h-4 w-4" />
-                    {hideTrialOffer ? 'Subscribe Now' : 'Start Free Trial'}
+                    {hideTrialOffer ? 'Subscribe Now' : 'Start 24-Hour Full Access'}
                   </>
                 )}
               </Button>
