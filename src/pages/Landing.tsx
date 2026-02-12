@@ -877,24 +877,28 @@ const Landing = () => {
           </ScrollReveal>
 
           <div className="mb-10 sm:mb-14">
-            <div className="flex flex-col items-start gap-2.5 sm:gap-3 w-fit mx-auto max-w-sm sm:max-w-none">
-              {[
-                'Know exactly who to contact every day',
-                'Turn cold outreach into a warm pipeline',
-                'See exactly where your revenue is coming from',
-                'Stay in control from first message to paid client',
-              ].map((item, i) => (
-                <ScrollReveal key={i} delay={i * 60}>
-                  <div className="flex items-center gap-3">
-                    <Check 
-                      className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0" 
-                      style={{ color: 'hsl(142 76% 55%)' }} 
-                      strokeWidth={3} 
-                    />
-                    <span className="text-base sm:text-lg font-semibold text-foreground/90 tracking-tight">{item}</span>
-                  </div>
-                </ScrollReveal>
-              ))}
+            <div className="flex justify-center">
+              <div className="flex flex-col gap-2.5 sm:gap-3 pl-2 max-w-[340px] sm:max-w-none">
+                {[
+                  'Know exactly who to contact every day',
+                  'Turn cold outreach into a warm pipeline',
+                  'See exactly where your revenue is coming from',
+                  'Stay in control from first message to paid client',
+                ].map((item, i) => (
+                  <ScrollReveal key={i} delay={i * 60}>
+                    <div className="flex items-center gap-3.5">
+                      <div className="w-8 flex-shrink-0 flex justify-center">
+                        <Check 
+                          className="h-6 w-6 sm:h-7 sm:w-7" 
+                          style={{ color: 'hsl(142 76% 55%)' }} 
+                          strokeWidth={3} 
+                        />
+                      </div>
+                      <span className="text-base sm:text-lg font-semibold text-foreground/90 tracking-tight text-left">{item}</span>
+                    </div>
+                  </ScrollReveal>
+                ))}
+              </div>
             </div>
           </div>
 
