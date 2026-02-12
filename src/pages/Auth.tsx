@@ -154,10 +154,9 @@ const Auth = () => {
         } else {
           toast({
             title: 'Account created!',
-            description: 'Redirecting to unlock full access...',
+            description: 'Redirecting to your dashboard...',
           });
-          // Redirect to unlock page instead of directly to Stripe
-          navigate('/unlock');
+          navigate('/');
           return;
         }
       }
