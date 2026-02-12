@@ -594,7 +594,7 @@ const Landing = () => {
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-            <Button variant="outline" size="lg" className="text-sm sm:text-base font-medium h-auto px-5 py-2.5 border-foreground/20 hover:bg-foreground/5" asChild>
+            <Button variant="ghost" size="lg" className="text-sm sm:text-base font-normal h-auto px-5 py-2.5 text-muted-foreground hover:text-foreground hover:bg-transparent" asChild>
               <Link to="/auth?intent=upgrade">
                 Start 24-Hour Full Access
               </Link>
