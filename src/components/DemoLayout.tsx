@@ -72,7 +72,7 @@ export function DemoLayout({ children }: DemoLayoutProps) {
 
           {/* Desktop sidebar */}
           <div className="hidden md:block">
-            <AppSidebar isDemo onLockedClick={handleLockedClick} />
+            <AppSidebar />
           </div>
 
           {/* Main content area */}
@@ -85,7 +85,7 @@ export function DemoLayout({ children }: DemoLayoutProps) {
           </div>
 
           {/* Mobile bottom navigation */}
-          <MobileBottomNav isDemo onLockedClick={handleLockedClick} />
+          <MobileBottomNav />
 
           <DemoUpgradeDialog
             open={upgradeOpen}

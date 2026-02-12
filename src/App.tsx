@@ -8,7 +8,6 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
-import { DemoLayout } from "@/components/DemoLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 import { RefSourceCapture } from "@/components/RefSourceCapture";
 import Index from "./pages/Index";
@@ -17,7 +16,6 @@ import Subscribe from "./pages/Subscribe";
 import BillingSuccess from "./pages/BillingSuccess";
 import BillingCancel from "./pages/BillingCancel";
 import Outreach from "./pages/Outreach";
-import DemoCRM from "./pages/DemoCRM";
 import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
 import NotFound from "./pages/NotFound";
@@ -33,17 +31,6 @@ import Terms from "./pages/Terms";
 import Feedback from "./pages/Feedback";
 import AffiliateProgram from "./pages/AffiliateProgram";
 import UnlockAccess from "./pages/UnlockAccess";
-import { useDemoContext } from "./components/DemoLayout";
-
-function DemoCRMWrapper() {
-  const demoCtx = useDemoContext();
-  return (
-    <DemoCRM
-      demoLeads={demoCtx?.demoLeads ?? []}
-      onRemoveLead={demoCtx?.removeDemoLead}
-    />
-  );
-}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -103,8 +90,6 @@ const App = () => (
              <Route path="/feedback" element={<Feedback />} />
              <Route path="/partners" element={<AffiliateProgram />} />
              <Route path="/guide" element={<HowToUse />} />
-             <Route path="/demo" element={<DemoLayout><Index /></DemoLayout>} />
-             <Route path="/demo/crm" element={<DemoLayout><DemoCRMWrapper /></DemoLayout>} />
              <Route 
                path="/unlock" 
                element={

@@ -109,12 +109,12 @@ const Subscribe = () => {
               <div className="flex justify-center mb-4">
                 <img src={appLogo} alt="LeadFinder Pro" className="h-12 w-12" />
               </div>
-              <CardTitle className="text-2xl font-bold">
-                Lead<span className="text-gradient-primary">Finder</span> Pro
-             </CardTitle>
-             <CardDescription className="text-lg">
-               Get full access to all features
-             </CardDescription>
+               <CardTitle className="text-2xl font-bold">
+                 Lead<span className="text-gradient-primary">Finder</span> Pro
+              </CardTitle>
+              <CardDescription className="text-lg">
+                Unlock full access to all features
+              </CardDescription>
            </CardHeader>
            
             <CardContent className="space-y-6">
@@ -133,12 +133,12 @@ const Subscribe = () => {
                 {eligibilityLoading ? (
                   <Skeleton className="h-4 w-48 mx-auto mt-2" />
                 ) : (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    {hideTrialOffer 
-                      ? '£19.99/month. Cancel anytime.'
-                      : 'Start free, then £19.99/month. Cancel anytime.'
-                    }
-                  </p>
+                   <p className="text-sm text-muted-foreground mt-2">
+                     {hideTrialOffer 
+                       ? '£19.99/month. Cancel anytime.'
+                       : '£0 today · Full access for 24 hours · Cancel anytime'
+                     }
+                   </p>
                 )}
               </div>
  
@@ -162,7 +162,7 @@ const Subscribe = () => {
                 {isLoading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    {hideTrialOffer ? 'Starting checkout...' : 'Starting trial...'}
+                    {hideTrialOffer ? 'Starting checkout...' : 'Starting...'}
                   </>
                 ) : eligibilityLoading ? (
                   <>
@@ -176,12 +176,12 @@ const Subscribe = () => {
                   </>
                 )}
               </Button>
-              <p className="text-xs text-muted-foreground text-center">
-                {hideTrialOffer 
-                  ? 'Secure payment via Stripe. Cancel anytime.'
-                  : 'Card required. Cancel anytime. Secure payment via Stripe.'
-                }
-              </p>
+               <p className="text-xs text-muted-foreground text-center">
+                 {hideTrialOffer 
+                   ? 'Secure payment via Stripe. Cancel anytime.'
+                   : 'Card required. Cancel anytime before renewal. Secure payment via Stripe.'
+                 }
+               </p>
             </CardFooter>
          </Card>
        </div>
