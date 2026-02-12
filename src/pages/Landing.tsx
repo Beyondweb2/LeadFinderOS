@@ -599,7 +599,7 @@ const Landing = () => {
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-            <Link to="/guide" className="text-sm sm:text-base text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-1.5">
+            <Link to="/guide" className="text-sm sm:text-base text-foreground/60 hover:text-foreground/90 transition-colors inline-flex items-center gap-1.5 font-medium">
               See How It Works
               <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             </Link>
@@ -622,31 +622,35 @@ const Landing = () => {
 
           {/* Power bullets under hero CTA */}
           <div className="mt-6 sm:mt-10">
-            {/* Mobile: centered block with fixed icon column */}
-            <div className="flex flex-col gap-3 w-fit mx-auto sm:hidden">
-              {[
-                'Find 20+ real prospects in minutes',
-                'Message more leads in 10 mins than most do in a morning',
-                'Track every outreach in one place',
-                'Stop guessing who needs your help',
-              ].map((bullet, i) => (
-                <div key={i} className="flex items-start gap-3">
-                  <Check 
-                    className="h-5 w-5 flex-shrink-0 mt-0.5" 
-                    style={{ color: 'hsl(142 76% 55%)' }} 
-                    strokeWidth={3} 
-                  />
-                  <span className="text-[14px] font-medium text-foreground/85 text-left">{bullet}</span>
-                </div>
-              ))}
+            {/* Mobile: centered checklist group with fixed icon column */}
+            <div className="flex justify-center sm:hidden">
+              <div className="flex flex-col gap-3">
+                {[
+                  'Find 20+ real prospects in minutes',
+                  'Send more outreach in 10 minutes than most do all morning',
+                  'Never lose track of who you contacted or what\'s next',
+                  'Build a pipeline you can actually rely on',
+                ].map((bullet, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="w-7 flex-shrink-0 flex justify-center pt-0.5">
+                      <Check 
+                        className="h-5 w-5" 
+                        style={{ color: 'hsl(142 76% 55%)' }} 
+                        strokeWidth={3} 
+                      />
+                    </div>
+                    <span className="text-[14px] font-medium text-foreground/85 text-left">{bullet}</span>
+                  </div>
+                ))}
+              </div>
             </div>
             {/* Desktop: horizontal wrap */}
             <div className="hidden sm:flex flex-wrap justify-center gap-x-8 gap-y-3">
               {[
                 'Find 20+ real prospects in minutes',
-                'Send more messages in 10 minutes than most do in a morning',
-                'Track every outreach in one place',
-                'Stop guessing who needs your help',
+                'Send more outreach in 10 minutes than most do all morning',
+                'Never lose track of who you contacted or what\'s next',
+                'Build a pipeline you can actually rely on',
               ].map((bullet, i) => (
                 <div key={i} className="flex items-center gap-2.5">
                   <Check 
