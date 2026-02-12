@@ -107,7 +107,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
   const isMobile = useIsMobile();
 
   return (
-    <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-3 sm:px-4">
+    <section className="relative z-10 py-8 sm:py-12 md:py-16 lg:py-20 px-3 sm:px-4">
       {/* Image Modal */}
       <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
         <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
@@ -132,8 +132,8 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
         </DialogContent>
       </Dialog>
 
-      <div className="container mx-auto">
-        <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-16">
+      <div className="container mx-auto max-w-[1280px]">
+        <ScrollReveal className="text-center mb-8 sm:mb-8 md:mb-12">
           <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
             How It <span className="text-gradient-primary">Works</span>
           </h2>
@@ -193,20 +193,36 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             ))}
           </div>
         ) : (
-          /* Desktop Layout */
-          <div className="max-w-6xl mx-auto space-y-6 sm:space-y-10 md:space-y-14">
+          /* Desktop Layout — 2x2 grid */
+          <div className="grid grid-cols-2 gap-8 lg:gap-10 max-w-[1100px] mx-auto">
             {STEPS.map((step, index) => {
-              const isEven = index % 2 === 0;
-              const imageDirection = isEven ? 'left' : 'right';
-              const textDirection = isEven ? 'right' : 'left';
               const hasMultipleImages = step.images.length > 1;
               
               return (
-                <div key={step.title} className={`flex flex-col-reverse ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-4 sm:gap-6 lg:gap-12`}>
-                  {/* Image Side */}
-                  <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={(index + 1) * 100} direction={imageDirection}>
+                <ScrollReveal key={step.title} delay={index * 100}>
+                  <div className="flex flex-col">
+                    {/* Step header */}
+                    <div className="flex items-center gap-3 mb-3">
+                      <span 
+                        className="inline-flex items-center justify-center w-9 h-9 rounded-lg font-semibold text-base"
+                        style={{ 
+                          background: 'hsl(210 100% 50% / 0.15)',
+                          color: 'hsl(210 100% 60%)',
+                          border: '1px solid hsl(210 100% 50% / 0.3)'
+                        }}
+                      >
+                        {index + 1}
+                      </span>
+                      <h3 className="text-xl lg:text-2xl font-bold tracking-tight">{step.title}</h3>
+                    </div>
+                    
+                    <p className="text-muted-foreground text-sm lg:text-base leading-relaxed mb-4 max-w-md">
+                      {step.description}
+                    </p>
+                    
+                    {/* Screenshot(s) */}
                     {hasMultipleImages ? (
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-2 gap-3">
                         {step.images.map((img, imgIdx) => (
                           <StepImage
                             key={imgIdx}
@@ -230,7 +246,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                           style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.1), transparent)' }}
                         />
                         <div 
-                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
+                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
                           style={{ 
                             border: '1px solid hsl(210 100% 50% / 0.2)',
                             boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
@@ -241,11 +257,11 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                             alt={step.title}
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                           />
-                          <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                          <div className="absolute top-3 left-3 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <Search className="h-4 w-4 text-foreground" />
                           </div>
                           <div 
-                            className="absolute top-3 right-3 sm:top-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold backdrop-blur-md"
+                            className="absolute top-3 right-3 px-3 py-1.5 rounded-full text-xs font-semibold backdrop-blur-md"
                             style={{ 
                               background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.9), hsl(220 80% 45% / 0.9))',
                               color: 'white',
@@ -257,31 +273,8 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         </div>
                       </div>
                     )}
-                  </ScrollReveal>
-                    
-                  {/* Content Side */}
-                  <ScrollReveal className={`flex-1 w-full ${isEven ? 'lg:pl-4' : 'lg:pr-4'}`} delay={(index + 1) * 100 + 50} direction={textDirection}>
-                    <div className="text-center lg:text-left">
-                      <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
-                        <span 
-                          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
-                          style={{ 
-                            background: 'hsl(210 100% 50% / 0.15)',
-                            color: 'hsl(210 100% 60%)',
-                            border: '1px solid hsl(210 100% 50% / 0.3)'
-                          }}
-                        >
-                          {index + 1}
-                        </span>
-                        <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{step.title}</h3>
-                      </div>
-                      
-                      <p className="text-muted-foreground text-sm sm:text-base md:text-lg leading-relaxed max-w-md mx-auto lg:mx-0">
-                        {step.description}
-                      </p>
-                    </div>
-                  </ScrollReveal>
-                </div>
+                  </div>
+                </ScrollReveal>
               );
             })}
           </div>
