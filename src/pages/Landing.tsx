@@ -614,8 +614,32 @@ const Landing = () => {
 
           {/* Reassurance microcopy - desktop: after buttons, mobile: after badges */}
           <p className="hidden sm:block text-xs text-muted-foreground text-center mt-5">
-            Full access for 24 hours. £0 charged today. Cancel before the trial ends and you pay nothing.
+            Full access for 24 hours. £0 today. Cancel anytime.
           </p>
+
+          {/* Power bullets under hero CTA */}
+          <div className="mt-6 sm:mt-10 max-w-lg mx-auto sm:mx-0 sm:max-w-none">
+            <div className="flex flex-col items-center sm:items-start sm:flex-row sm:flex-wrap sm:justify-center gap-3 sm:gap-x-8 sm:gap-y-3">
+              {[
+                'Find 20+ real prospects in minutes',
+                'Send more messages in 10 minutes than most do in a morning',
+                'Track every outreach in one place',
+                'Stop guessing who needs your help',
+              ].map((bullet, i) => (
+                <div key={i} className="flex items-center gap-2.5">
+                  <Check 
+                    className="h-5 w-5 sm:h-[22px] sm:w-[22px] flex-shrink-0" 
+                    style={{ 
+                      color: 'hsl(142 76% 55%)',
+                      filter: 'drop-shadow(0 0 6px hsl(142 76% 55% / 0.4))',
+                    }} 
+                    strokeWidth={3} 
+                  />
+                  <span className="text-[15px] sm:text-base font-medium text-foreground/90">{bullet}</span>
+                </div>
+              ))}
+            </div>
+          </div>
           
           {/* Stats bar */}
           <div className="mt-6 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
@@ -799,24 +823,14 @@ const Landing = () => {
               </ScrollReveal>
             </div>
 
-            {/* Emotional transition block */}
-            <ScrollReveal delay={400} className="text-center mt-16 md:mt-20 max-w-2xl mx-auto">
-              <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-5">
-                This is the difference between hunting for leads and having them ready.
+            {/* Authority statement */}
+            <ScrollReveal delay={400} className="text-center mt-14 md:mt-18 max-w-2xl mx-auto">
+              <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
+                The difference isn't effort. It's leverage.
               </h3>
-              <div className="space-y-2 text-base md:text-lg text-muted-foreground leading-relaxed mb-8">
-                <p>Most freelancers waste their best hours searching.</p>
-                <p>The ones who win start their day with momentum.</p>
-              </div>
-              <div className="space-y-4 text-sm md:text-base text-foreground/80">
-                <p>"Finish outreach before most people have found their first lead."</p>
-                <p>"Open your CRM and see replies instead of chaos."</p>
-                <p>"Know exactly who to message next."</p>
-              </div>
-            </ScrollReveal>
-
-            {/* Strong CTA */}
-            <ScrollReveal delay={500} className="text-center mt-12">
+              <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-10">
+                You can keep searching manually. Or you can systemise outreach.
+              </p>
               <Button 
                 size="lg" 
                 className="btn-premium text-base font-semibold px-10 py-5 h-auto shadow-lg shadow-primary/25"
@@ -884,71 +898,61 @@ const Landing = () => {
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
-      {/* Value Proposition — Open layout, outcome-driven */}
-      <section className="relative z-10 py-10 sm:py-20 md:py-28 lg:py-32 px-4">
-        <div className="container mx-auto max-w-4xl">
-          {/* Section heading — hero-matching hierarchy */}
-          <ScrollReveal className="text-center mb-10 sm:mb-14 md:mb-16">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight mb-4 sm:mb-5">
-              Everything You Need to{' '}
-              <span className="text-gradient-primary">Get Results</span>
+      {/* Power Section — Built for aggressive outreach */}
+      <section className="relative z-10 py-10 sm:py-20 md:py-28 px-4">
+        <div className="container mx-auto max-w-3xl text-center">
+          <ScrollReveal className="mb-10 sm:mb-14">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4">
+              Built for <span className="text-gradient-primary">aggressive outreach.</span>
             </h2>
+            <p className="text-base sm:text-lg text-muted-foreground">
+              Stop searching. Start sending.
+            </p>
           </ScrollReveal>
 
-          {/* Outcome bullets — centered on mobile, left-aligned on desktop */}
-          <div className="space-y-5 sm:space-y-8 md:space-y-10 mb-10 sm:mb-14 md:mb-16">
+          <div className="space-y-5 sm:space-y-6 mb-10 sm:mb-14 max-w-md mx-auto">
             {[
-              {
-                title: 'Find businesses that actually need you',
-                detail: 'Search any area and instantly see which businesses have no website.',
-              },
-              {
-                title: 'Reach out in seconds, not hours',
-                detail: 'Message leads directly on WhatsApp or SMS with ready-to-send templates.',
-              },
-              {
-                title: 'Track every lead from first message to paid client',
-                detail: 'Every status change, follow-up, and note is logged automatically.',
-              },
-              {
-                title: 'Run your entire pipeline from one place',
-                detail: 'Leads, outreach, follow-ups, and conversions in a single dashboard.',
-              },
-              {
-                title: 'Unlimited searches, unlimited leads',
-                detail: 'No daily caps. No credit limits. Search as many areas as you want.',
-              },
+              '10x your outreach',
+              'Never miss a lead',
+              'No more manual searching',
+              'No more messy follow-ups',
+              'One system. Full control.',
             ].map((item, i) => (
-              <ScrollReveal key={i} delay={i * 80}>
-                {/* Mobile: centered, compact */}
-                <div className="sm:hidden text-center px-2">
-                  <Check className="h-7 w-7 mx-auto mb-1.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
-                  <p className="text-[15px] font-semibold text-foreground tracking-tight leading-snug mb-1">{item.title}</p>
-                  <p className="text-sm text-muted-foreground leading-relaxed max-w-xs mx-auto">{item.detail}</p>
-                </div>
-                {/* Desktop: left-aligned with circled tick */}
-                <div className="hidden sm:flex items-start gap-5">
-                  <span 
-                    className="flex-shrink-0 mt-1 w-9 h-9 rounded-full flex items-center justify-center"
+              <ScrollReveal key={i} delay={i * 60}>
+                <div className="flex items-center gap-3 sm:gap-4 justify-center sm:justify-start">
+                  <Check 
+                    className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0" 
                     style={{ 
-                      background: 'hsl(142 76% 55% / 0.15)', 
-                      border: '1.5px solid hsl(142 76% 55% / 0.4)',
-                      boxShadow: '0 0 16px hsl(142 76% 55% / 0.25)',
-                    }}
-                  >
-                    <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={3} />
-                  </span>
-                  <div>
-                    <p className="text-lg md:text-xl font-semibold text-foreground tracking-tight leading-snug">{item.title}</p>
-                    <p className="text-base text-muted-foreground mt-1 leading-relaxed max-w-xl">{item.detail}</p>
-                  </div>
+                      color: 'hsl(142 76% 55%)',
+                      filter: 'drop-shadow(0 0 8px hsl(142 76% 55% / 0.35))',
+                    }} 
+                    strokeWidth={3} 
+                  />
+                  <span className="text-base sm:text-lg font-semibold text-foreground tracking-tight">{item}</span>
                 </div>
               </ScrollReveal>
             ))}
           </div>
 
-          {/* "Who is this for" micro-section — desktop only (mobile version moved below toolkit carousel) */}
-          <ScrollReveal delay={400} className="hidden sm:block text-center mt-8 sm:mt-12">
+          <ScrollReveal delay={350}>
+            <Button 
+              size="lg" 
+              className="btn-premium text-base font-semibold px-10 py-5 h-auto shadow-lg shadow-primary/25 w-full sm:w-auto"
+              style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.2), 0 4px 20px hsl(210 100% 50% / 0.15)' }}
+              asChild
+            >
+              <Link to="/auth">
+                Start Free Trial
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+            <p className="text-xs text-muted-foreground/60 mt-4">
+              No credit card. 24 hours. Cancel anytime.
+            </p>
+          </ScrollReveal>
+
+          {/* "Who is this for" — desktop only */}
+          <ScrollReveal delay={400} className="hidden sm:block mt-10">
             <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-md mx-auto leading-relaxed">
               Built for freelance web designers, WordPress developers, small agencies, and anyone who needs a consistent way to find businesses that need a website.
             </p>
@@ -982,10 +986,10 @@ const Landing = () => {
               </p>
             </>
           ) : (
-            /* Desktop: 6-card grid matching old layout */
+            /* Desktop: 4-card grid — core features only */
             <ScrollReveal>
-              <div className="grid grid-cols-3 gap-x-10 gap-y-14 lg:gap-x-12 lg:gap-y-16 max-w-6xl mx-auto">
-                {FEATURES.map((feature, i) => (
+              <div className="grid grid-cols-2 gap-x-10 gap-y-14 lg:gap-x-14 lg:gap-y-16 max-w-5xl mx-auto">
+                {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature, i) => (
                   <ScrollReveal key={feature.title} delay={i * 80}>
                     <div className="flex flex-col gap-4">
                       {/* Title row */}
@@ -1003,7 +1007,7 @@ const Landing = () => {
                       </div>
                       {/* Description */}
                       <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
-                      {/* Image with glow — matching How It Works style */}
+                      {/* Image with glow */}
                       <div
                         className="group relative cursor-pointer"
                         onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
