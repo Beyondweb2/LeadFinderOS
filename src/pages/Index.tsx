@@ -59,8 +59,9 @@ const Index = () => {
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
 
-  // Determine search limit for demo users (non-pro, non-trialing)
-  const isDemoUser = !hasProAccess && !isOnTrial;
+  // Demo user: no pro access AND hasn't used demo search yet (or just used it)
+  // This overrides the old trial system for users who haven't subscribed
+  const isDemoUser = !hasProAccess && !isStripeTrialing;
   const demoSearchesRemaining = isDemoUser ? (demoSearchUsed ? 0 : 1) : searchesRemaining;
   const demoDailyLimit = isDemoUser ? 1 : dailyLimit;
 
