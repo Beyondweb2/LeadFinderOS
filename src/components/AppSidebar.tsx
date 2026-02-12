@@ -103,7 +103,12 @@ const adminItems = [
   },
 ];
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  isDemo?: boolean;
+  onLockedClick?: (featureName: string) => void;
+}
+
+export function AppSidebar({ isDemo = false, onLockedClick }: AppSidebarProps) {
   const location = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const { isAdmin, subscribed, isLoading: isSubscriptionLoading } = useSubscription();
@@ -161,28 +166,51 @@ export function AppSidebar() {
                       isActive={isActive}
                       tooltip={isCollapsed ? item.title : undefined}
                     >
-                      <Link 
-                        to={item.url}
-                        className={cn(
-                          'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                          isActive 
-                            ? 'bg-sidebar-accent text-sidebar-primary font-medium' 
-                            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-                        )}
-                      >
-                        <item.icon className={cn(
-                          'h-5 w-5 shrink-0',
-                          isActive ? 'text-sidebar-primary' : ''
-                        )} />
-                        {!isCollapsed && (
-                          <div className="flex flex-col overflow-hidden">
-                            <span className="truncate">{item.title}</span>
-                            <span className="text-xs text-sidebar-foreground/50 truncate">
-                              {item.description}
-                            </span>
-                          </div>
-                        )}
-                      </Link>
+                      {isDemo && item.url !== '/find-leads' && item.url !== '/demo' ? (
+                        <button
+                          onClick={(e) => {
+                            e.preventDefault();
+                            onLockedClick?.(item.title);
+                          }}
+                          className={cn(
+                            'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors w-full text-left',
+                            'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                          )}
+                        >
+                          <item.icon className="h-5 w-5 shrink-0" />
+                          {!isCollapsed && (
+                            <div className="flex flex-col overflow-hidden">
+                              <span className="truncate">{item.title}</span>
+                              <span className="text-xs text-sidebar-foreground/50 truncate">
+                                {item.description}
+                              </span>
+                            </div>
+                          )}
+                        </button>
+                      ) : (
+                        <Link 
+                          to={isDemo ? '/demo' : item.url}
+                          className={cn(
+                            'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+                            (isDemo ? item.url === '/find-leads' || item.url === '/demo' : isActive)
+                              ? 'bg-sidebar-accent text-sidebar-primary font-medium' 
+                              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                          )}
+                        >
+                          <item.icon className={cn(
+                            'h-5 w-5 shrink-0',
+                            (isDemo ? item.url === '/find-leads' || item.url === '/demo' : isActive) ? 'text-sidebar-primary' : ''
+                          )} />
+                          {!isCollapsed && (
+                            <div className="flex flex-col overflow-hidden">
+                              <span className="truncate">{item.title}</span>
+                              <span className="text-xs text-sidebar-foreground/50 truncate">
+                                {item.description}
+                              </span>
+                            </div>
+                          )}
+                        </Link>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );

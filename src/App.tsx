@@ -8,6 +8,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
+import { DemoLayout } from "@/components/DemoLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 import { RefSourceCapture } from "@/components/RefSourceCapture";
 import Index from "./pages/Index";
@@ -90,7 +91,7 @@ const App = () => (
              <Route path="/feedback" element={<Feedback />} />
              <Route path="/partners" element={<AffiliateProgram />} />
              <Route path="/guide" element={<HowToUse />} />
-             <Route path="/demo" element={<Index />} />
+             <Route path="/demo" element={<DemoLayout><Index /></DemoLayout>} />
              <Route 
                path="/unlock" 
                element={
