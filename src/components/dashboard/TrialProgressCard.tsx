@@ -30,9 +30,9 @@ function useCountdown(trialEnd: string | null) {
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
 
       if (hours > 0) {
-        setTimeLeft(`Ends in ${hours}h ${minutes}m`);
+        setTimeLeft(`£0 for ${hours}h ${minutes}m`);
       } else {
-        setTimeLeft(`Ends in ${minutes}m`);
+        setTimeLeft(`£0 for ${minutes}m`);
       }
     };
 
@@ -70,11 +70,11 @@ export function TrialProgressCard({
           <div className="flex items-center gap-2">
             <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
             <p className="text-sm font-medium">
-              Full access active · {countdown || 'Calculating...'}
+              {countdown || 'Calculating...'}
             </p>
           </div>
           <p className="text-xs text-muted-foreground">
-            Everything unlocked.
+            Everything unlocked. Then £19.99/mo — cancel anytime.
           </p>
         </div>
 

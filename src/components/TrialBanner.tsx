@@ -42,10 +42,10 @@ export function TrialBanner() {
           <div className="flex items-center gap-2 text-sm min-w-0">
             <CreditCard className="h-4 w-4 text-primary shrink-0" />
             <span className="font-medium text-foreground/90 whitespace-nowrap">
-              Full access active · Ends in {hoursUntilCharge}h
+              £0 for {hoursUntilCharge}h — full access active
             </span>
             <span className="text-muted-foreground hidden sm:inline truncate">
-              — Everything unlocked
+              — then £19.99/mo, cancel anytime
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
