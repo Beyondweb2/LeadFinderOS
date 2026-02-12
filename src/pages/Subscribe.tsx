@@ -38,7 +38,8 @@ const Subscribe = () => {
   const eligibilityLoading = authLoading || trialLoading || subLoading;
   // User should NOT see trial messaging if they've already used a trial
   const alreadyTrialing = isOnTrial || isStripeTrialing || status === 'trialing';
-  const hideTrialOffer = eligibilityLoading || trialUsed || alreadyTrialing;
+  // Show trial offer unless user is already on an active Stripe trial/subscription
+  const hideTrialOffer = eligibilityLoading || alreadyTrialing;
 
   // Debug log for verification
   useEffect(() => {
