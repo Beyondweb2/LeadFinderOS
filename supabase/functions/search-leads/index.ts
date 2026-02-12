@@ -39,6 +39,11 @@ const SearchRequestSchema = z.object({
     .default(true), // Default to requiring a phone number
   deepSearch: z.boolean()
     .default(false), // Enable grid-based multi-point search
+  demo: z.boolean()
+    .default(false), // Demo mode - unauthenticated, 1 search per IP
+  country: z.string()
+    .max(10)
+    .optional(), // Country code (passed through, not used server-side)
 });
 
 // Directory / Platform Blacklist - URLs that don't count as having a website
@@ -660,6 +665,88 @@ serve(async (req) => {
       );
     }
 
+    // Parse body early to check for demo mode
+    const body = await req.json();
+    const isDemo = body?.demo === true;
+
+    // ─── DEMO MODE: unauthenticated, IP-limited to 1 search ───
+    if (isDemo) {
+      const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() 
+        || req.headers.get('cf-connecting-ip') 
+        || 'unknown';
+      const demoKey = `demo:${clientIp}`;
+      
+      // Simple in-memory rate limit for demo (1 search per IP per function instance lifetime)
+      if (!globalThis.__demoSearches) globalThis.__demoSearches = new Set();
+      if (globalThis.__demoSearches.has(demoKey)) {
+        return new Response(
+          JSON.stringify({ error: 'Demo search limit reached. Sign up for unlimited access.', code: 'DEMO_LIMIT' }),
+          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      globalThis.__demoSearches.add(demoKey);
+      
+      console.log(`Demo search from IP: ${clientIp}`);
+      
+      // Validate input
+      const validationResult = SearchRequestSchema.safeParse(body);
+      if (!validationResult.success) {
+        return new Response(
+          JSON.stringify({ error: 'Invalid search parameters.' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { keyword, location, radius, minRating, minReviews, requirePhone } = validationResult.data;
+
+      const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
+      if (!GOOGLE_MAPS_API_KEY) {
+        return new Response(
+          JSON.stringify({ error: 'Service temporarily unavailable.' }),
+          { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`[DEMO] Searching for "${keyword}" in "${location}" within ${radius}m`);
+      const places = await searchPlaces(keyword, location, radius, GOOGLE_MAPS_API_KEY, false);
+      console.log(`[DEMO] Found ${places.length} places`);
+
+      const leads: Lead[] = [];
+      for (const place of places) {
+        try {
+          const details = await getPlaceDetails(place.place_id, GOOGLE_MAPS_API_KEY);
+          if (!details) continue;
+          if (minRating && (!details.rating || details.rating < minRating)) continue;
+          const effectiveMinReviews = Math.max(minReviews || 0, 2);
+          if (!details.user_ratings_total || details.user_ratings_total < effectiveMinReviews) continue;
+          if (requirePhone && !details.formatted_phone_number) continue;
+
+          const classification = classifyWebsite(details.website, details);
+          leads.push({
+            name: details.name,
+            category: details.primaryTypeDisplayName || formatCategory(details.types?.[0]),
+            address: details.formatted_address,
+            phone: details.formatted_phone_number || details.international_phone_number || null,
+            rating: details.rating || null,
+            reviewCount: details.user_ratings_total || null,
+            googleMapsUrl: details.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+            websiteUrl: details.website || null,
+            websiteStatus: classification.status,
+            confidence: classification.confidence,
+            reason: classification.reason,
+          });
+        } catch (e) {
+          console.error(`[DEMO] Error processing place:`, e);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({ leads }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ─── AUTHENTICATED MODE ───
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
@@ -749,13 +836,8 @@ serve(async (req) => {
             const currentSearchesToday = shouldResetDaily ? 0 : trial.searches_today;
             
             // Parse body to check for skipTrialCount flag (for auto-demo searches)
-            let skipTrialCount = false;
-            try {
-              const bodyClone = await req.clone().json();
-              skipTrialCount = bodyClone.skipTrialCount === true;
-            } catch {
-              // Ignore parsing errors
-            }
+            // Check skipTrialCount from already-parsed body
+            const skipTrialCount = body?.skipTrialCount === true;
             
             // Check daily limit for FREE trial users (2 searches per day) - unless skipping for demo
             const DAILY_TRIAL_LIMIT = 2;
@@ -851,8 +933,7 @@ serve(async (req) => {
       );
     }
 
-    // Parse and validate input
-    const body = await req.json();
+    // Validate input (body already parsed above)
     const validationResult = SearchRequestSchema.safeParse(body);
     
     if (!validationResult.success) {

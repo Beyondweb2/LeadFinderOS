@@ -17,7 +17,7 @@ interface TrialLimitError {
 interface LeadSearchContextType {
   leads: Lead[];
   isLoading: boolean;
-  search: (filters: SearchFilters, skipTrialCount?: boolean) => Promise<void>;
+  search: (filters: SearchFilters, skipTrialCount?: boolean, isDemo?: boolean) => Promise<void>;
   exportToCsv: () => void;
   trialLimitError: TrialLimitError | null;
   clearTrialLimitError: () => void;
@@ -127,17 +127,17 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     });
   };
 
-  const search = useCallback(async (filters: SearchFilters, skipTrialCount: boolean = false) => {
+  const search = useCallback(async (filters: SearchFilters, skipTrialCount: boolean = false, isDemo: boolean = false) => {
     setIsLoading(true);
     setTrialLimitError(null);
     setPostAbandonExhausted(false);
     
-    // Refresh excluded businesses before searching
-    await fetchExcludedBusinesses();
+    // Refresh excluded businesses before searching (skip for demo)
+    if (!isDemo) await fetchExcludedBusinesses();
     
     try {
       const { data, error } = await supabase.functions.invoke<SearchResponse>('search-leads', {
-        body: { ...filters, skipTrialCount },
+        body: { ...filters, skipTrialCount, ...(isDemo ? { demo: true } : {}) },
       });
 
       if (error) {

@@ -99,7 +99,7 @@ const Index = () => {
         <SearchForm 
           onSearch={(filters) => {
             setLastSearchCountry(filters.country || 'UK');
-            search(filters);
+            search(filters, false, isDemo);
           }} 
           isLoading={isLoading}
           isOnTrial={!isAccessLoading && (isOnTrial || isStripeTrialing)}
