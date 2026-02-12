@@ -586,7 +586,7 @@ const Landing = () => {
             <span className="block mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
           
-          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
+          <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
             Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
           </p>
           
@@ -604,7 +604,7 @@ const Landing = () => {
           {/* Reassurance microcopy removed from hero */}
 
           {/* Stats bar - moved above bullets */}
-          <div className="mt-6 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
+          <div className="mt-5 sm:mt-10 md:mt-12 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
               <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
@@ -617,20 +617,20 @@ const Landing = () => {
           </div>
 
           {/* Power bullets under hero CTA */}
-          <div className="mt-6 sm:mt-10">
+          <div className="mt-5 sm:mt-8">
             {/* Mobile: centered checklist group with fixed icon column */}
             <div className="flex justify-center sm:hidden">
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 pl-1">
                 {[
                   'Find 20+ real prospects in minutes',
-                  'Send more outreach in 10 minutes than most do all morning',
+                  'Send more outreach in 10 minutes than most do in a morning',
                   'Always know who to follow up and when',
                   'Build a pipeline you can actually rely on',
                 ].map((bullet, i) => (
-                  <div key={i} className="flex items-start gap-2.5">
-                    <div className="w-6 flex-shrink-0 flex justify-center pt-0.5">
+                  <div key={i} className="flex items-start gap-3">
+                    <div className="w-5 flex-shrink-0 flex justify-center pt-0.5">
                       <Check 
-                        className="h-4.5 w-4.5" 
+                        className="h-[18px] w-[18px]" 
                         style={{ color: 'hsl(142 76% 55%)' }} 
                         strokeWidth={3} 
                       />
@@ -644,13 +644,13 @@ const Landing = () => {
             <div className="hidden sm:flex flex-wrap justify-center gap-x-8 gap-y-2.5">
               {[
                 'Find 20+ real prospects in minutes',
-                'Send more outreach in 10 minutes than most do all morning',
+                'Send more outreach in 10 minutes than most do in a morning',
                 'Always know who to follow up and when',
                 'Build a pipeline you can actually rely on',
               ].map((bullet, i) => (
-                <div key={i} className="flex items-center gap-2.5">
+                <div key={i} className="flex items-center gap-3">
                   <Check 
-                    className="h-[22px] w-[22px] flex-shrink-0" 
+                    className="h-[20px] w-[20px] flex-shrink-0" 
                     style={{ color: 'hsl(142 76% 55%)' }} 
                     strokeWidth={3} 
                   />
