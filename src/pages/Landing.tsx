@@ -611,51 +611,8 @@ const Landing = () => {
             </div>
           </div>
 
-          {/* Power bullets under hero CTA */}
-          <div className="mt-7 sm:mt-8">
-            {/* Mobile: centered checklist — icon above text */}
-            <div className="flex justify-center sm:hidden">
-              <div className="flex flex-col gap-5">
-                {[
-                  'Stop wasting mornings manually searching Google Maps',
-                  'Find real businesses without websites in minutes',
-                  'Turn messy outreach into a clear system',
-                  'Keep every lead and follow-up organised in one place',
-                ].map((bullet, i) => (
-                  <div key={i} className="flex flex-col items-center text-center gap-1.5">
-                    <Check 
-                      className="h-[16px] w-[16px]" 
-                      style={{ color: 'hsl(142 65% 50%)' }} 
-                      strokeWidth={2.5} 
-                    />
-                    <span className="text-[13px] font-semibold text-foreground/85 leading-[1.6]">{bullet}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {/* Desktop: horizontal wrap — icon above text */}
-            <div className="hidden sm:flex flex-wrap justify-center gap-x-10 gap-y-5">
-              {[
-                'Stop wasting mornings manually searching Google Maps',
-                'Find real businesses without websites in minutes',
-                'Turn messy outreach into a clear system',
-                'Keep every lead and follow-up organised in one place',
-              ].map((bullet, i) => (
-                <div key={i} className="flex flex-col items-center text-center gap-1.5 max-w-[200px]">
-                  <Check 
-                    className="h-[20px] w-[20px]" 
-                    style={{ color: 'hsl(142 76% 55%)' }} 
-                    strokeWidth={3} 
-                  />
-                  <span className="text-sm font-medium text-foreground/90">{bullet}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-
-          {/* Scroll down indicator - desktop only */}
-          <div className="hidden sm:flex mt-14 flex-col items-center gap-1 animate-bounce opacity-40">
+          {/* Scroll down indicator */}
+          <div className="flex mt-10 sm:mt-14 flex-col items-center gap-1 animate-bounce opacity-40">
             <span className="text-xs text-muted-foreground tracking-wide">Scroll</span>
             <svg width="16" height="24" viewBox="0 0 16 24" fill="none" className="text-muted-foreground">
               <rect x="1" y="1" width="14" height="22" rx="7" stroke="currentColor" strokeWidth="1.5" />
@@ -841,27 +798,27 @@ const Landing = () => {
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4 text-center">
               More Clients, <span className="text-gradient-primary">Less Guesswork.</span>
             </h2>
-            <p className="text-sm sm:text-lg text-muted-foreground text-center max-w-md mx-auto">
-              A structured way to consistently land web design clients — without relying on luck.
+            <p className="text-sm sm:text-lg text-muted-foreground text-center max-w-lg mx-auto">
+              Everything you need to find, reach, and close — in one place.
             </p>
           </ScrollReveal>
 
           <div className="mb-12 sm:mb-14">
-            <div className="flex flex-col gap-4 sm:gap-3 items-center sm:items-start sm:pl-2 max-w-[340px] sm:max-w-none mx-auto sm:mx-0">
+            <div className="flex flex-col gap-5 sm:gap-4 items-center max-w-[360px] sm:max-w-none mx-auto">
               {[
-                'Reach businesses that actually need your help',
-                'Never lose a lead or forget a follow-up',
-                'Know exactly who to contact next',
-                'Go from first message to paying client — smoothly',
+                'Stop wasting mornings manually searching Google Maps',
+                'Find real businesses without websites in minutes',
+                'Turn messy outreach into a clear system',
+                'Keep every lead and follow-up organised in one place',
               ].map((item, i) => (
                 <ScrollReveal key={i} delay={i * 60}>
                   <div className="flex flex-col items-center text-center gap-1.5">
                     <Check 
-                      className="h-5 w-5 sm:h-7 sm:w-7" 
+                      className="h-5 w-5 sm:h-6 sm:w-6" 
                       style={{ color: 'hsl(142 76% 55%)' }} 
                       strokeWidth={2.5} 
                     />
-                    <span className="text-sm sm:text-lg font-medium sm:font-semibold text-foreground/85 tracking-tight">{item}</span>
+                    <span className="text-sm sm:text-lg font-semibold text-foreground/85 tracking-tight">{item}</span>
                   </div>
                 </ScrollReveal>
               ))}
