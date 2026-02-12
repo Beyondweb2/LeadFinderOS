@@ -720,20 +720,44 @@ serve(async (req) => {
           const effectiveMinReviews = Math.max(minReviews || 0, 2);
           if (!details.user_ratings_total || details.user_ratings_total < effectiveMinReviews) continue;
           if (requirePhone && !details.formatted_phone_number) continue;
+          if (details.business_status === 'CLOSED_PERMANENTLY') continue;
 
-          const classification = classifyWebsite(details.website, details);
+          const websiteUrl = details.website;
+          let websiteStatus: Lead['websiteStatus'];
+          let confidence: number;
+          let reason: string;
+
+          if (!websiteUrl) {
+            websiteStatus = 'NO_WEBSITE';
+            confidence = 1.0;
+            reason = 'No website listed on Google Maps profile';
+          } else if (isDirectoryUrl(websiteUrl)) {
+            websiteStatus = 'DIRECTORY_ONLY';
+            confidence = 0.95;
+            reason = `Website is a directory/platform: ${extractDomain(websiteUrl)}`;
+          } else {
+            websiteStatus = 'HAS_OWN_WEBSITE';
+            confidence = 0.7;
+            reason = 'Has own website (demo - no AI verification)';
+          }
+
+          const genericTypes = new Set(['establishment', 'point_of_interest', 'store', 'food', 'locality', 'political', 'premise', 'subpremise']);
+          const category = details.primaryTypeDisplayName
+            || details.primaryType?.replace(/_/g, ' ')
+            || details.types?.find((t: string) => !genericTypes.has(t))?.replace(/_/g, ' ');
+
           leads.push({
             name: details.name,
-            category: details.primaryTypeDisplayName || formatCategory(details.types?.[0]),
+            category: category || null,
             address: details.formatted_address,
             phone: details.formatted_phone_number || details.international_phone_number || null,
             rating: details.rating || null,
             reviewCount: details.user_ratings_total || null,
             googleMapsUrl: details.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
-            websiteUrl: details.website || null,
-            websiteStatus: classification.status,
-            confidence: classification.confidence,
-            reason: classification.reason,
+            websiteUrl: websiteUrl || null,
+            websiteStatus,
+            confidence,
+            reason,
           });
         } catch (e) {
           console.error(`[DEMO] Error processing place:`, e);
