@@ -136,7 +136,7 @@ const Subscribe = () => {
                   <p className="text-sm text-muted-foreground mt-2">
                     {hideTrialOffer 
                       ? '£19.99/month. Cancel anytime.'
-                      : 'Try free for 24 hours, then £19.99/month'
+                      : 'Start free trial, then £19.99/month'
                     }
                   </p>
                 )}

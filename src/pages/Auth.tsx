@@ -215,7 +215,7 @@ const Auth = () => {
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Check className="h-4 w-4 text-primary" />
-                <span>No charge for 24 hours</span>
+                <span>Free trial with full access</span>
               </div>
             </div>
           </div>
