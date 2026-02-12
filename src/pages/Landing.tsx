@@ -555,16 +555,6 @@ const Landing = () => {
         </div>
       </header>
 
-      {/* Works on every device badge */}
-      <div className="relative z-10 flex justify-center px-4 pt-2 sm:pt-3">
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] sm:text-xs font-medium text-muted-foreground/70 bg-muted/30 border border-border/30">
-          <svg className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-primary/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="2" y="3" width="20" height="14" rx="2" /><line x1="8" y1="21" x2="16" y2="21" /><line x1="12" y1="17" x2="12" y2="21" />
-          </svg>
-          <span>Works on desktop & mobile</span>
-        </div>
-      </div>
-
       {/* Hero Section */}
       <section className="relative z-10 pt-6 pb-6 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
         <div className="container mx-auto text-center">
@@ -631,6 +621,11 @@ const Landing = () => {
               <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
             </div>
           </div>
+
+          {/* Works on every device */}
+          <p className="text-[10px] sm:text-xs text-muted-foreground/40 mt-3 sm:mt-4 tracking-wide font-medium">
+            Works seamlessly on desktop & mobile
+          </p>
 
           {/* Scroll down indicator */}
           <div className="flex mt-10 sm:mt-14 flex-col items-center gap-1 animate-bounce opacity-40">
