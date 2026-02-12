@@ -62,22 +62,8 @@ const App = () => (
                  </ProtectedRoute>
                } 
               />
-             <Route 
-               path="/billing/success" 
-               element={
-                 <ProtectedRoute>
-                   <BillingSuccess />
-                 </ProtectedRoute>
-               } 
-             />
-             <Route 
-               path="/billing/cancel" 
-               element={
-                 <ProtectedRoute>
-                   <BillingCancel />
-                 </ProtectedRoute>
-               } 
-             />
+             <Route path="/billing/success" element={<BillingSuccess />} />
+             <Route path="/billing/cancel" element={<BillingCancel />} />
              <Route 
                path="/landing" 
               element={
