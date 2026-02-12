@@ -50,7 +50,7 @@ const STEPS: StepData[] = [
     icon: BarChart3,
     title: 'Track & Close',
     description: 'See who replied, who needs follow-up, and exactly where your revenue is coming from — all in one dashboard.',
-    images: [step4aImage, step4bImage],
+    images: [step4bImage],
     badge: 'Full Pipeline',
   },
 ];
@@ -193,48 +193,39 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             ))}
           </div>
         ) : (
-          /* Desktop Layout — 2x2 grid */
-          <div className="grid grid-cols-2 gap-8 lg:gap-10 max-w-[1100px] mx-auto">
+          /* Desktop Layout — Alternating rows */
+          <div className="flex flex-col gap-20 lg:gap-24 max-w-[1100px] mx-auto">
             {STEPS.map((step, index) => {
-              const hasMultipleImages = step.images.length > 1;
+              const isReversed = index % 2 === 1;
               
               return (
                 <ScrollReveal key={step.title} delay={index * 100}>
-                  <div className="flex flex-col transition-all duration-300 hover:-translate-y-1">
-                    {/* Step header */}
-                    <div className="flex items-center gap-3 mb-3">
-                      <span 
-                        className="inline-flex items-center justify-center w-10 h-10 rounded-lg font-semibold text-base"
-                        style={{ 
-                          background: 'hsl(210 100% 50% / 0.15)',
-                          color: 'hsl(210 100% 60%)',
-                          border: '1px solid hsl(210 100% 50% / 0.3)'
-                        }}
-                      >
-                        {index + 1}
-                      </span>
-                      <h3 className="text-xl lg:text-2xl font-bold tracking-tight">{step.title}</h3>
+                  <div className={`flex items-center gap-12 lg:gap-16 ${isReversed ? 'flex-row-reverse' : ''}`}>
+                    {/* Text side */}
+                    <div className="w-[42%] flex flex-col">
+                      <div className="flex items-center gap-3 mb-4">
+                        <span 
+                          className="inline-flex items-center justify-center w-11 h-11 rounded-xl font-bold text-lg"
+                          style={{ 
+                            background: 'hsl(210 100% 50% / 0.15)',
+                            color: 'hsl(210 100% 60%)',
+                            border: '1px solid hsl(210 100% 50% / 0.3)'
+                          }}
+                        >
+                          {index + 1}
+                        </span>
+                        <h3 className="text-xl lg:text-2xl font-bold tracking-tight">{step.title}</h3>
+                      </div>
+                      
+                      <p className="text-muted-foreground/80 text-sm lg:text-base leading-relaxed max-w-sm">
+                        {step.description}
+                      </p>
                     </div>
                     
-                    <p className="text-muted-foreground/80 text-sm lg:text-base leading-relaxed mb-5 max-w-md">
-                      {step.description}
-                    </p>
-                    
-                    {/* Screenshot(s) */}
-                    {hasMultipleImages ? (
-                      <div className="grid grid-cols-2 gap-3">
-                        {step.images.map((img, imgIdx) => (
-                          <StepImage
-                            key={imgIdx}
-                            src={img}
-                            alt={`${step.title} ${imgIdx + 1}`}
-                            onClick={() => setExpandedImage({ src: img, title: step.title })}
-                          />
-                        ))}
-                      </div>
-                    ) : (
+                    {/* Image side */}
+                    <div className="w-[58%]">
                       <div 
-                        className="relative group cursor-pointer"
+                        className="relative group cursor-pointer transition-all duration-300 hover:-translate-y-1"
                         onClick={() => setExpandedImage({ src: step.images[0], title: step.title })}
                       >
                         <div 
@@ -246,7 +237,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                           style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.1), transparent)' }}
                         />
                         <div 
-                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
+                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.01]"
                           style={{ 
                             border: '1px solid hsl(210 100% 50% / 0.2)',
                             boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
@@ -272,7 +263,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                           </div>
                         </div>
                       </div>
-                    )}
+                    </div>
                   </div>
                 </ScrollReveal>
               );

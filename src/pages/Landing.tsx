@@ -317,13 +317,33 @@ const VideoSection = () => {
 
 // Desktop hero video with sound toggle and enhanced glow
 const DesktopHeroVideo = () => {
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    // Start unmuted at low volume; browsers may block this and fall back to muted
+    if (videoRef.current) {
+      videoRef.current.volume = 0.15;
+      videoRef.current.muted = false;
+      const playPromise = videoRef.current.play();
+      if (playPromise) {
+        playPromise.catch(() => {
+          // Autoplay with sound blocked — fall back to muted
+          if (videoRef.current) {
+            videoRef.current.muted = true;
+            setIsMuted(true);
+            videoRef.current.play();
+          }
+        });
+      }
+    }
+  }, []);
 
   const toggleMute = () => {
     if (videoRef.current) {
       const newMuted = !isMuted;
       videoRef.current.muted = newMuted;
+      if (!newMuted) videoRef.current.volume = 0.15;
       setIsMuted(newMuted);
     }
   };
@@ -332,7 +352,7 @@ const DesktopHeroVideo = () => {
     <div className="relative">
       {/* Soft blue glow behind video */}
       <div 
-        className="absolute -inset-6 rounded-3xl blur-3xl opacity-50"
+        className="absolute -inset-8 rounded-3xl blur-3xl opacity-50"
         style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.25), hsl(220 80% 45% / 0.1), transparent 70%)' }}
       />
       <div 
@@ -351,7 +371,6 @@ const DesktopHeroVideo = () => {
           className="w-full h-auto"
           autoPlay 
           loop 
-          muted
           playsInline
           preload="auto"
         >
@@ -696,11 +715,11 @@ const Landing = () => {
           </div>
 
           {/* Desktop: 2-column hero layout */}
-          <div className="hidden sm:flex items-center gap-10 lg:gap-14">
-            {/* Left column — content (50%) */}
-            <div className="w-1/2 text-left max-w-[600px]">
+          <div className="hidden sm:flex items-center gap-10 lg:gap-12">
+            {/* Left column — content (48%) */}
+            <div className="w-[48%] text-left max-w-[580px]">
               <div 
-                className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-7 backdrop-blur-sm"
+                className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-6 backdrop-blur-sm"
                 style={{ 
                   border: '1px solid hsl(210 100% 50% / 0.2)', 
                   background: 'hsl(210 100% 50% / 0.08)',
@@ -711,16 +730,16 @@ const Landing = () => {
                 <span>The fastest way to land web design clients</span>
               </div>
               
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold mb-7 tracking-tight leading-[1.08]">
+              <h1 className="text-4xl md:text-5xl lg:text-[3.75rem] font-extrabold mb-5 tracking-tight leading-[1.05]">
                 <span className="block text-gradient-primary">Find Businesses</span>
                 <span className="block mt-1 text-[1.08em]">Without Websites</span>
               </h1>
               
-              <p className="text-base md:text-lg text-foreground/50 mb-9 leading-[1.7] max-w-[520px]">
+              <p className="text-base md:text-lg text-foreground/50 mb-8 leading-[1.7] max-w-[480px]">
                 Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
               </p>
               
-              <div className="flex items-center gap-4 mb-9">
+              <div className="flex items-center gap-4 mb-10">
                 <Button 
                   size="lg" 
                   className="btn-premium text-base font-semibold px-12 py-5 h-auto"
@@ -767,8 +786,8 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Right column — product mockup (video) (50%) */}
-            <div className="w-1/2">
+            {/* Right column — product mockup (video) (52%) */}
+            <div className="w-[52%]">
               <DesktopHeroVideo />
             </div>
           </div>
@@ -866,7 +885,7 @@ const Landing = () => {
                 There's a faster way to find businesses without websites.
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-12 lg:gap-16 max-w-[1100px] mx-auto items-start relative">
+            <div className="grid grid-cols-2 gap-14 lg:gap-20 max-w-[1100px] mx-auto items-start relative">
               {/* Vertical divider */}
               <div className="absolute left-1/2 top-0 bottom-0 w-px -translate-x-1/2" style={{ background: 'linear-gradient(to bottom, transparent, hsl(0 0% 100% / 0.08), transparent)' }} />
               {/* Old Way */}
@@ -888,7 +907,7 @@ const Landing = () => {
                         boxShadow: '0 0 30px hsl(0 60% 40% / 0.1)'
                       }}
                     >
-                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-auto object-contain" />
+                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-[280px] object-cover object-top" />
                     </div>
                   </div>
                   <ul className="space-y-2.5 text-sm md:text-base text-muted-foreground">
@@ -917,7 +936,7 @@ const Landing = () => {
                         boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
                       }}
                     >
-                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" />
+                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-[280px] object-cover object-top" />
                     </div>
                   </div>
                   <ul className="space-y-2.5 text-sm md:text-base text-muted-foreground">
@@ -929,17 +948,11 @@ const Landing = () => {
               </ScrollReveal>
             </div>
 
-            {/* Authority statement */}
-            <ScrollReveal delay={400} className="text-center mt-14 md:mt-16 max-w-2xl mx-auto">
-              <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-5">
-                The difference isn't effort. It's leverage.
-              </h3>
-              <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-8">
-                You can keep searching manually. Or you can systemise outreach.
-              </p>
+            {/* CTA */}
+            <ScrollReveal delay={400} className="text-center mt-14 md:mt-16">
               <Button 
                 size="lg" 
-                className="btn-premium text-base font-semibold px-10 py-5 h-auto shadow-lg shadow-primary/25"
+                className="btn-premium text-base font-semibold px-10 py-5 h-auto"
                 style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.2), 0 4px 20px hsl(210 100% 50% / 0.15)' }}
                 asChild
               >
@@ -948,9 +961,6 @@ const Landing = () => {
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
-              <p className="text-xs text-muted-foreground/60 mt-4">
-                No credit card. 24 hours. Cancel anytime.
-              </p>
             </ScrollReveal>
           </div>
         </ScrollReveal>
@@ -1025,15 +1035,27 @@ const Landing = () => {
                 </p>
               </ScrollReveal>
             </div>
-            {/* Right: decorative gradient visual */}
+            {/* Right: product screenshot */}
             <div className="flex-1 flex items-center justify-center">
-              <div 
-                className="w-full max-w-[400px] aspect-square rounded-3xl"
-                style={{
-                  background: 'radial-gradient(ellipse at 30% 30%, hsl(210 100% 50% / 0.12), hsl(220 80% 45% / 0.06), transparent 70%)',
-                  border: '1px solid hsl(210 100% 50% / 0.08)',
-                }}
-              />
+              <div className="relative w-full max-w-[480px]">
+                <div 
+                  className="absolute -inset-6 rounded-3xl blur-3xl opacity-40"
+                  style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.2), transparent 70%)' }}
+                />
+                <div 
+                  className="absolute -inset-px rounded-2xl"
+                  style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.15), transparent)' }}
+                />
+                <div 
+                  className="relative rounded-2xl overflow-hidden"
+                  style={{ 
+                    border: '1px solid hsl(210 100% 50% / 0.2)',
+                    boxShadow: '0 0 30px hsl(210 100% 50% / 0.12), 0 0 60px hsl(210 100% 50% / 0.06), 0 20px 40px hsl(0 0% 0% / 0.3)'
+                  }}
+                >
+                  <img src={featureContactTracking} alt="Outreach tracking dashboard" className="w-full h-auto" />
+                </div>
+              </div>
             </div>
           </div>
 
@@ -1182,7 +1204,7 @@ const Landing = () => {
           </ScrollReveal>
           
           <ScrollReveal delay={150}>
-            <div className="relative max-w-md sm:max-w-xl mx-auto">
+            <div className="relative max-w-md sm:max-w-lg md:max-w-xl mx-auto">
               {/* Glow background */}
               <div 
                 className="absolute -inset-4 sm:-inset-10 rounded-3xl blur-2xl sm:blur-3xl opacity-50"
@@ -1200,7 +1222,7 @@ const Landing = () => {
                   style={{ background: 'linear-gradient(to right, transparent, hsl(210 100% 50%), transparent)' }}
                 />
                 
-                <CardHeader className="text-center pb-2 pt-6 sm:pt-8 px-4 sm:px-6">
+                <CardHeader className="text-center pb-2 pt-6 sm:pt-10 px-4 sm:px-8">
                   <div 
                     className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wide mx-auto mb-3 sm:mb-4"
                     style={{ 
@@ -1212,16 +1234,16 @@ const Landing = () => {
                     <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                     1-Day Free Trial
                   </div>
-                  <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
-                  <div className="mt-4 sm:mt-5">
-                    <span className="text-4xl sm:text-[3.5rem] font-bold tracking-tight">£19.99</span>
-                    <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
+                  <CardTitle className="text-xl sm:text-3xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
+                  <div className="mt-4 sm:mt-6">
+                    <span className="text-4xl sm:text-[4.25rem] font-extrabold tracking-tight">£19.99</span>
+                    <span className="text-muted-foreground ml-1 text-sm sm:text-lg">/month</span>
                   </div>
-                  <p className="text-xs text-foreground/50 mt-2">Start with a 24-hour free trial. No charge today.</p>
+                  <p className="text-xs sm:text-sm text-foreground/50 mt-2">Start with a 24-hour free trial. No charge today.</p>
                 </CardHeader>
                 
-                <CardContent className="pt-5 sm:pt-6 px-4 sm:px-6">
-                  <ul className="space-y-2.5 sm:space-y-3.5">
+                <CardContent className="pt-5 sm:pt-8 px-4 sm:px-8">
+                  <ul className="space-y-2.5 sm:space-y-4">
                     {PRICING_FEATURES.map((feature) => (
                       <li key={feature} className="flex items-center gap-2.5 sm:gap-3">
                         <div 
@@ -1239,8 +1261,8 @@ const Landing = () => {
                   </ul>
                 </CardContent>
                 
-                <CardFooter className="pt-4 sm:pt-5 pb-6 sm:pb-7 flex-col gap-3 px-4 sm:px-6">
-                  <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-5 h-auto" asChild>
+                <CardFooter className="pt-4 sm:pt-6 pb-6 sm:pb-8 flex-col gap-3 px-4 sm:px-8">
+                  <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-6 h-auto" asChild>
                     <Link to="/auth">
                       Start My Free Trial
                       <ArrowRight className="ml-2 h-4 w-4" />
