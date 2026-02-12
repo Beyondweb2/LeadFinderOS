@@ -142,6 +142,7 @@ const logStep = (step: string, details?: unknown) => {
         metadata?: { affiliate_code?: string };
         line_items: Array<{ price: string; quantity: number }>;
         mode: "subscription";
+        payment_method_types: string[];
         subscription_data?: { trial_period_days: number; metadata?: { affiliate_code?: string } };
         payment_method_collection: "always";
         success_url: string;
@@ -157,6 +158,7 @@ const logStep = (step: string, details?: unknown) => {
           },
         ],
         mode: "subscription",
+        payment_method_types: ['card'],
         payment_method_collection: "always",
         success_url: `${req.headers.get("origin")}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${req.headers.get("origin")}/billing/cancel`,
@@ -183,6 +185,12 @@ const logStep = (step: string, details?: unknown) => {
         logStep("Skipping trial - trial_used is true", { branchTaken });
       }
       
+      logStep("Creating checkout session", { 
+        priceId: "price_1SxN38Gi4ps7kJ7R8UE1kYGS", 
+        mode: "subscription",
+        hasCustomer: !!customerId,
+        trialUsed 
+      });
       const session = await stripe.checkout.sessions.create(sessionConfig);
  
      logStep("Checkout session created", { sessionId: session.id, userId: user.id, trialUsed, branchTaken });
