@@ -36,11 +36,11 @@ export function DemoUpgradePanel() {
           </div>
           
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
-              Unlock Full Access
+           <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
+              Get 24 Hours Unlimited Searches — Free
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto">
-              You've used your demo search. Unlock unlimited searches and full outreach system for 24 hours.
+              You've used your demo search. Unlock unlimited searches and the full outreach system free for 24 hours, then £19.99/month.
             </p>
           </div>
 
