@@ -24,12 +24,12 @@ export function CheckoutConfirmDialog({ open, onOpenChange, onConfirm, isLoading
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
             <Shield className="h-6 w-6 text-primary" />
           </div>
-          <DialogTitle className="text-xl">
-            You're unlocking 24 hours of full access.
-          </DialogTitle>
-          <DialogDescription className="text-base">
-            You'll only be charged after 24 hours. Cancel anytime before renewal.
-          </DialogDescription>
+           <DialogTitle className="text-xl">
+             Unlock 24 hours of full access — FREE
+           </DialogTitle>
+           <DialogDescription className="text-base">
+             £0 today · Then £19.99/month · Cancel anytime before renewal.
+           </DialogDescription>
         </DialogHeader>
 
         <DialogFooter className="flex-col gap-2 sm:flex-col">
