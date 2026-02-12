@@ -163,9 +163,12 @@ export function MobileBottomNav({ isDemo = false, onLockedClick }: MobileBottomN
       <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-card/95 backdrop-blur-xl border-t border-border safe-area-pb">
         <div className="flex items-center justify-around h-16 px-2">
           {mainNavItems.map((item) => {
-            const isDemoActive = isDemo && (item.url === '/find-leads' || item.url === '/demo');
-            const isActive = isDemo ? isDemoActive : location.pathname === item.url;
-            const isLocked = isDemo && item.url !== '/find-leads' && item.url !== '/demo';
+            const isDemoSearch = isDemo && (item.url === '/find-leads' || item.url === '/demo');
+            const isDemoCRM = isDemo && item.url === '/outreach';
+            const isActive = isDemo 
+              ? (isDemoSearch ? location.pathname === '/demo' : isDemoCRM ? location.pathname === '/demo/crm' : false)
+              : location.pathname === item.url;
+            const isLocked = isDemo && !isDemoSearch && !isDemoCRM;
             
             if (isLocked) {
               return (
@@ -180,10 +183,12 @@ export function MobileBottomNav({ isDemo = false, onLockedClick }: MobileBottomN
               );
             }
             
+            const linkTo = isDemo ? (isDemoCRM ? '/demo/crm' : '/demo') : item.url;
+            
             return (
               <Link
                 key={item.url}
-                to={isDemo ? '/demo' : item.url}
+                to={linkTo}
                 className={cn(
                   'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[60px]',
                   isActive 

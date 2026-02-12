@@ -166,7 +166,7 @@ export function AppSidebar({ isDemo = false, onLockedClick }: AppSidebarProps) {
                       isActive={isActive}
                       tooltip={isCollapsed ? item.title : undefined}
                     >
-                      {isDemo && item.url !== '/find-leads' && item.url !== '/demo' ? (
+                      {isDemo && item.url !== '/find-leads' && item.url !== '/demo' && item.url !== '/outreach' ? (
                         <button
                           onClick={(e) => {
                             e.preventDefault();
@@ -189,17 +189,29 @@ export function AppSidebar({ isDemo = false, onLockedClick }: AppSidebarProps) {
                         </button>
                       ) : (
                         <Link 
-                          to={isDemo ? '/demo' : item.url}
+                          to={isDemo ? (item.url === '/outreach' ? '/demo/crm' : '/demo') : item.url}
                           className={cn(
                             'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                            (isDemo ? item.url === '/find-leads' || item.url === '/demo' : isActive)
+                            (isDemo 
+                              ? (item.url === '/find-leads' || item.url === '/demo' 
+                                  ? location.pathname === '/demo'
+                                  : item.url === '/outreach' 
+                                    ? location.pathname === '/demo/crm'
+                                    : false)
+                              : isActive)
                               ? 'bg-sidebar-accent text-sidebar-primary font-medium' 
                               : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
                           )}
                         >
                           <item.icon className={cn(
                             'h-5 w-5 shrink-0',
-                            (isDemo ? item.url === '/find-leads' || item.url === '/demo' : isActive) ? 'text-sidebar-primary' : ''
+                            (isDemo 
+                              ? (item.url === '/find-leads' || item.url === '/demo' 
+                                  ? location.pathname === '/demo'
+                                  : item.url === '/outreach' 
+                                    ? location.pathname === '/demo/crm'
+                                    : false)
+                              : isActive) ? 'text-sidebar-primary' : ''
                           )} />
                           {!isCollapsed && (
                             <div className="flex flex-col overflow-hidden">

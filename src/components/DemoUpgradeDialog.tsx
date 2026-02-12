@@ -24,10 +24,10 @@ export function DemoUpgradeDialog({ open, onOpenChange, featureName }: DemoUpgra
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-lg">
-            Create a free account to unlock {featureName || 'this feature'}.
+            Start your free trial to unlock {featureName || 'this feature'}.
           </DialogTitle>
           <DialogDescription>
-            Sign up in seconds to access the full CRM, outreach tools, templates, and unlimited lead searches.
+            Get full access for 24 hours — unlimited searches, CRM, outreach tools, templates, and more. No charge today.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex-col gap-2 sm:flex-col">
