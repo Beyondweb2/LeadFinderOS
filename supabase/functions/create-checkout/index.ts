@@ -144,7 +144,6 @@ const logStep = (step: string, details?: unknown) => {
         mode: "subscription";
         payment_method_types: string[];
         subscription_data?: { trial_period_days: number; metadata?: { affiliate_code?: string } };
-        payment_method_collection: "always";
         success_url: string;
         cancel_url: string;
       } = {
@@ -159,7 +158,6 @@ const logStep = (step: string, details?: unknown) => {
         ],
         mode: "subscription",
         payment_method_types: ['card'],
-        payment_method_collection: "always",
         success_url: `${req.headers.get("origin")}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${req.headers.get("origin")}/billing/cancel`,
       };
