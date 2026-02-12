@@ -594,16 +594,14 @@ const Landing = () => {
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-            <Button 
-              size="lg" 
-              variant="outline" 
-              className="text-sm sm:text-base font-medium px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto border-white/10 hover:border-white/20"
+            <button 
+              className="text-sm sm:text-base font-medium text-muted-foreground/70 hover:text-foreground/90 transition-colors"
               onClick={() => {
                 document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
               }}
             >
-              See How It Works
-            </Button>
+              See How It Works ↓
+            </button>
           </div>
 
           <p className="text-xs text-muted-foreground/50 mt-3 sm:mt-4">
@@ -720,7 +718,30 @@ const Landing = () => {
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 my-4 h-px bg-white/[0.06]" />
 
-      {/* How It Works — 5 steps */}
+      {/* Transition Statement */}
+      <section className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
+        <div className="mx-auto h-px max-w-xs sm:max-w-sm bg-white/[0.06] mb-12 sm:mb-16" />
+        <div className="container mx-auto max-w-md sm:max-w-lg text-center">
+          <ScrollReveal>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-snug mb-6 sm:mb-8">
+              Good leads are easy to find.<br />
+              <span className="text-foreground/90">If you stop doing it the hard way.</span>
+            </h2>
+            <p className="text-base sm:text-lg md:text-xl font-medium tracking-wide leading-loose text-foreground/70 mb-6 sm:mb-8">
+              Search. Filter. Message. Track.<br />
+              All in one place.
+            </p>
+            <div className="space-y-2.5 sm:space-y-3">
+              <p className="text-sm sm:text-base font-normal text-foreground/40">No switching apps.</p>
+              <p className="text-sm sm:text-base font-normal text-foreground/40">No messy spreadsheets.</p>
+              <p className="text-sm sm:text-base font-normal text-foreground/40">No wasted mornings.</p>
+            </div>
+          </ScrollReveal>
+        </div>
+        <div className="mx-auto h-px max-w-xs sm:max-w-sm bg-white/[0.06] mt-12 sm:mt-16" />
+      </section>
+
+      {/* How It Works — 4 steps */}
       <HowItWorksSection ScrollReveal={ScrollReveal} />
 
 
