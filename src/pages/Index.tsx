@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useDemoContext } from '@/components/DemoLayout';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { ContactDialog } from '@/components/ContactDialog';
@@ -18,6 +19,7 @@ import type { Lead, Country } from '@/types/lead';
 const Index = () => {
   const location = useLocation();
   const isDemo = location.pathname === '/demo';
+  const demoCtx = useDemoContext();
   const { leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted } = useLeadSearchContext();
   const { 
     markAsContacted, 
@@ -100,13 +102,14 @@ const Index = () => {
           onSearch={(filters) => {
             setLastSearchCountry(filters.country || 'UK');
             search(filters, false, isDemo);
+            if (isDemo && demoCtx) demoCtx.markDemoSearchUsed();
           }} 
           isLoading={isLoading}
           isOnTrial={!isAccessLoading && (isOnTrial || isStripeTrialing)}
-          searchesRemaining={searchesRemaining}
-          dailyLimit={dailyLimit}
+          searchesRemaining={isDemo ? (demoCtx?.demoSearchUsed ? 0 : 1) : searchesRemaining}
+          dailyLimit={isDemo ? 1 : dailyLimit}
           isPaidSubscriber={hasProAccess}
-          disabled={postAbandonExhausted && !hasProAccess}
+          disabled={(isDemo && demoCtx?.demoSearchUsed) || (postAbandonExhausted && !hasProAccess)}
           isDemo={isDemo}
         />
       </section>

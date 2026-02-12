@@ -11,6 +11,8 @@ interface DemoContextType {
   addDemoLead: (lead: Lead) => void;
   removeDemoLead: (leadId: string) => void;
   isDemoLeadAdded: (name: string, googleMapsUrl?: string) => boolean;
+  demoSearchUsed: boolean;
+  markDemoSearchUsed: () => void;
 }
 
 const DemoContext = createContext<DemoContextType | null>(null);
@@ -27,7 +29,10 @@ export function DemoLayout({ children }: DemoLayoutProps) {
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [lockedFeature, setLockedFeature] = useState('');
   const [demoLeads, setDemoLeads] = useState<Lead[]>([]);
+  const [demoSearchUsed, setDemoSearchUsed] = useState(false);
   const { toast } = useToast();
+
+  const markDemoSearchUsed = useCallback(() => setDemoSearchUsed(true), []);
 
   const handleLockedClick = (featureName: string) => {
     setLockedFeature(featureName);
@@ -56,7 +61,7 @@ export function DemoLayout({ children }: DemoLayoutProps) {
   }, [demoLeads]);
 
   return (
-    <DemoContext.Provider value={{ demoLeads, addDemoLead, removeDemoLead, isDemoLeadAdded }}>
+    <DemoContext.Provider value={{ demoLeads, addDemoLead, removeDemoLead, isDemoLeadAdded, demoSearchUsed, markDemoSearchUsed }}>
       <SidebarProvider defaultOpen={true}>
         <div className="min-h-screen flex w-full bg-background">
           {/* Background glow effect */}
