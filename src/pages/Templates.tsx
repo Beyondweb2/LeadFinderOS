@@ -171,18 +171,20 @@ const Templates = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as TemplateType)}>
-        <div className="flex items-center justify-between">
-          <TabsList>
-            <TabsTrigger value="text" className="gap-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <TabsList className="w-full sm:w-auto">
+            <TabsTrigger value="text" className="gap-2 flex-1 sm:flex-initial">
               <MessageSquare className="h-4 w-4" />
-              Text Messages ({textTemplates.length})
+              <span className="hidden xs:inline">Text Messages</span>
+              <span className="xs:hidden">Texts</span> ({textTemplates.length})
             </TabsTrigger>
-            <TabsTrigger value="voice_script" className="gap-2">
+            <TabsTrigger value="voice_script" className="gap-2 flex-1 sm:flex-initial">
               <Mic className="h-4 w-4" />
-              Voice Scripts ({voiceTemplates.length})
+              <span className="hidden xs:inline">Voice Scripts</span>
+              <span className="xs:hidden">Voice</span> ({voiceTemplates.length})
             </TabsTrigger>
           </TabsList>
-          <Button onClick={() => openCreateDialog(activeTab)}>
+          <Button onClick={() => openCreateDialog(activeTab)} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             Add Template
           </Button>
