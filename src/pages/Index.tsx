@@ -130,15 +130,15 @@ const Index = () => {
 
       {/* Subtle upgrade banner after first demo search */}
       {isDemoUser && demoSearchUsed && !showDemoUpgradePanel && leads.length > 0 && (
-        <div className="flex items-center justify-center gap-2 py-2.5 px-4 bg-primary/5 border border-primary/10 rounded-lg">
-          <Sparkles className="h-4 w-4 text-primary" />
+        <Link 
+          to="/subscribe" 
+          className="flex items-center justify-center gap-2 py-2.5 px-4 bg-primary/5 border border-primary/10 rounded-lg hover:bg-primary/10 transition-colors"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
           <span className="text-sm text-muted-foreground">
-            You've used your demo search.
-            <Link to="/subscribe" className="text-primary font-medium ml-1 hover:underline">
-              Get 24 hours unlimited searches, free →
-            </Link>
+            Demo used · <span className="text-primary font-medium">Get 24h unlimited searches, free →</span>
           </span>
-        </div>
+        </Link>
       )}
 
       {/* Outcome-focused Results Header */}
