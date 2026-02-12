@@ -546,7 +546,7 @@ const Landing = () => {
               asChild 
               className="font-medium text-sm px-3 sm:px-4 btn-premium"
             >
-              <Link to="/auth">
+              <Link to="/auth?intent=demo">
                 <span className="hidden sm:inline">Try Live Demo</span>
                 <span className="sm:hidden">Demo</span>
               </Link>
@@ -589,13 +589,13 @@ const Landing = () => {
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
-              <Link to="/auth">
+              <Link to="/auth?intent=demo">
                 Try Live Demo
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
             <Button variant="outline" size="lg" className="text-sm sm:text-base font-medium h-auto px-5 py-2.5 border-foreground/20 hover:bg-foreground/5" asChild>
-              <Link to="/auth">
+              <Link to="/auth?intent=upgrade">
                 Start 24-Hour Full Access
               </Link>
             </Button>
@@ -1007,13 +1007,13 @@ const Landing = () => {
                 
                 <CardFooter className="pt-4 sm:pt-5 pb-6 sm:pb-7 flex-col gap-3 px-4 sm:px-6">
                   <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
-                    <Link to="/auth">
+                    <Link to="/auth?intent=demo">
                       Try Live Demo
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
                   <Button variant="outline" size="lg" className="w-full text-sm font-medium h-auto py-2 border-foreground/20 hover:bg-foreground/5" asChild>
-                    <Link to="/auth">Start 24-Hour Full Access</Link>
+                    <Link to="/auth?intent=upgrade">Start 24-Hour Full Access</Link>
                   </Button>
                   <p className="text-[10px] sm:text-xs text-muted-foreground/60 text-center">
                     £0 today · Full access for 24 hours · Cancel anytime
@@ -1073,10 +1073,10 @@ const Landing = () => {
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
                 Sign In
               </Link>
-              <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
+              <Link to="/auth?intent=demo" className="hover:text-foreground transition-colors duration-200">
                 Try Live Demo
               </Link>
-              <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
+              <Link to="/auth?intent=upgrade" className="hover:text-foreground transition-colors duration-200">
                 Start 24-Hour Full Access
               </Link>
               <Link to="/feedback" className="hover:text-foreground transition-colors duration-200">
@@ -1114,7 +1114,7 @@ const Landing = () => {
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
           <Button size="lg" className="w-full btn-premium font-semibold py-3 h-auto text-sm" asChild>
-            <Link to="/auth">
+            <Link to="/auth?intent=demo">
               Try Live Demo
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
