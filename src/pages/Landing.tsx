@@ -853,7 +853,12 @@ const Landing = () => {
       {/* Testimonials — after toolkit */}
       <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
         <div className="container mx-auto max-w-5xl">
-          {/* Reviews heading */}
+          {/* Stars — mobile only */}
+          <div className="flex gap-0.5 justify-center mb-3 sm:hidden">
+            {[...Array(5)].map((_, i) => (
+              <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+            ))}
+          </div>
 
           {(() => {
             const testimonials = [
@@ -958,6 +963,13 @@ const Landing = () => {
                 />
                 
                 <CardHeader className="text-center pb-2 pt-6 sm:pt-7 px-4 sm:px-6">
+                  {/* Free trial pill — mobile only */}
+                  <div className="sm:hidden flex justify-center mb-3">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide" style={{ background: 'hsl(142 76% 36% / 0.15)', color: 'hsl(142 76% 55%)' }}>
+                      <Gift className="h-3 w-3" />
+                      24-Hour Free Trial
+                    </span>
+                  </div>
                   <div className="mt-1">
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
