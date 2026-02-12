@@ -619,49 +619,6 @@ const Landing = () => {
             </div>
           </div>
 
-          {/* Power bullets under hero CTA */}
-          <div className="mt-7 sm:mt-8">
-            {/* Mobile: centered checklist — icon above text */}
-            <div className="flex justify-center sm:hidden">
-              <div className="flex flex-col gap-5">
-                {[
-                  'Stop wasting mornings manually searching Google Maps',
-                  'Find real businesses without websites in minutes',
-                  'Turn messy outreach into a clear system',
-                  'Keep every lead and follow-up organised in one place',
-                ].map((bullet, i) => (
-                  <div key={i} className="flex flex-col items-center text-center gap-1.5">
-                    <Check 
-                      className="h-[16px] w-[16px]" 
-                      style={{ color: 'hsl(142 65% 50%)' }} 
-                      strokeWidth={2.5} 
-                    />
-                    <span className="text-[13px] font-semibold text-foreground/85 leading-[1.6]">{bullet}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-            {/* Desktop: horizontal wrap — icon above text */}
-            <div className="hidden sm:flex flex-wrap justify-center gap-x-10 gap-y-5">
-              {[
-                'Stop wasting mornings manually searching Google Maps',
-                'Find real businesses without websites in minutes',
-                'Turn messy outreach into a clear system',
-                'Keep every lead and follow-up organised in one place',
-              ].map((bullet, i) => (
-                <div key={i} className="flex flex-col items-center text-center gap-1.5 max-w-[200px]">
-                  <Check 
-                    className="h-[20px] w-[20px]" 
-                    style={{ color: 'hsl(142 76% 55%)' }} 
-                    strokeWidth={3} 
-                  />
-                  <span className="text-sm font-medium text-foreground/90">{bullet}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-          
-
           {/* Scroll down indicator - desktop only */}
           <div className="hidden sm:flex mt-14 flex-col items-center gap-1 animate-bounce opacity-40">
             <span className="text-xs text-muted-foreground tracking-wide">Scroll</span>
@@ -842,7 +799,56 @@ const Landing = () => {
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
-      {/* Power Section — removed duplicate, keeping single benefit section in hero */}
+      {/* Power Section — outcome benefits */}
+      <ScrollReveal className="relative z-10 py-10 sm:py-16 md:py-20 px-4">
+        <div className="container mx-auto max-w-4xl text-center">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight">
+            More Clients, <span className="text-gradient-primary">Less Guesswork</span>
+          </h2>
+          <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg mb-8 sm:mb-10">
+            A simple system that keeps your pipeline full and your outreach on track.
+          </p>
+
+          {/* Mobile: stacked centered */}
+          <div className="flex justify-center sm:hidden">
+            <div className="flex flex-col gap-5">
+              {[
+                'Stop wasting mornings manually searching Google Maps',
+                'Find real businesses without websites in minutes',
+                'Turn messy outreach into a clear system',
+                'Keep every lead and follow-up organised in one place',
+              ].map((bullet, i) => (
+                <div key={i} className="flex flex-col items-center text-center gap-1.5">
+                  <Check 
+                    className="h-[16px] w-[16px]" 
+                    style={{ color: 'hsl(142 65% 50%)' }} 
+                    strokeWidth={2.5} 
+                  />
+                  <span className="text-[13px] font-semibold text-foreground/85 leading-[1.6]">{bullet}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Desktop: horizontal wrap */}
+          <div className="hidden sm:flex flex-wrap justify-center gap-x-10 gap-y-5">
+            {[
+              'Stop wasting mornings manually searching Google Maps',
+              'Find real businesses without websites in minutes',
+              'Turn messy outreach into a clear system',
+              'Keep every lead and follow-up organised in one place',
+            ].map((bullet, i) => (
+              <div key={i} className="flex flex-col items-center text-center gap-1.5 max-w-[200px]">
+                <Check 
+                  className="h-[20px] w-[20px]" 
+                  style={{ color: 'hsl(142 76% 55%)' }} 
+                  strokeWidth={3} 
+                />
+                <span className="text-sm font-medium text-foreground/90">{bullet}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </ScrollReveal>
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
