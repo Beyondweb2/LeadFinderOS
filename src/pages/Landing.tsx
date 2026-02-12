@@ -927,12 +927,12 @@ const Landing = () => {
       <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
-              Simple, Transparent <span className="text-gradient-primary">Pricing</span>
-            </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              One plan. Full access. Cancel anytime.
+            <p className="text-muted-foreground/50 text-xs sm:text-sm font-medium tracking-wide uppercase mb-3">
+              One plan. Full access.
             </p>
+            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight px-2">
+              Lead<span className="text-gradient-primary">Finder</span> Pro
+            </h2>
           </ScrollReveal>
           
           <ScrollReveal delay={150}>
@@ -954,57 +954,34 @@ const Landing = () => {
                   style={{ background: 'linear-gradient(to right, transparent, hsl(210 100% 50%), transparent)' }}
                 />
                 
-                <CardHeader className="text-center pb-2 pt-6 sm:pt-8 px-4 sm:px-6">
-                  <div 
-                    className="inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-bold uppercase tracking-wide mx-auto mb-3 sm:mb-4"
-                    style={{ 
-                      background: 'linear-gradient(135deg, hsl(142 76% 36% / 0.2), hsl(142 76% 36% / 0.1))', 
-                      border: '1px solid hsl(142 76% 36% / 0.3)',
-                      color: 'hsl(142 76% 50%)'
-                    }}
-                  >
-                    <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                    24-Hour Full Access
-                  </div>
-                  <CardTitle className="text-xl sm:text-2xl font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</CardTitle>
-                  <div className="mt-4 sm:mt-5">
+                <CardHeader className="text-center pb-2 pt-6 sm:pt-7 px-4 sm:px-6">
+                  <div className="mt-1">
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs text-foreground/50 mt-2">Start with 24-hour full access. No charge today.</p>
+                  <p className="text-xs text-foreground/50 mt-2">Try everything free for 24 hours.</p>
                 </CardHeader>
                 
-                <CardContent className="pt-5 sm:pt-6 px-4 sm:px-6">
+                <CardContent className="pt-4 sm:pt-5 px-4 sm:px-6">
                   <ul className="space-y-2.5 sm:space-y-3">
-                    {PRICING_FEATURES.map((feature) => (
+                    {['Unlimited lead searches', 'Find businesses without websites', 'Built-in CRM to stay organised', 'One-click WhatsApp & SMS outreach'].map((feature) => (
                       <li key={feature} className="flex items-center gap-2.5 sm:gap-3">
-                        <div 
-                          className="flex-shrink-0 p-0.5 sm:p-1 rounded-full"
-                          style={{ 
-                            background: 'hsl(210 100% 50% / 0.1)', 
-                            border: '1px solid hsl(210 100% 50% / 0.2)'
-                          }}
-                        >
-                          <Check className="h-3 w-3 sm:h-3.5 sm:w-3.5" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={2.5} />
-                        </div>
+                        <Check className="h-4 w-4 flex-shrink-0" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={2.5} />
                         <span className="text-foreground/90 text-xs sm:text-sm">{feature}</span>
                       </li>
                     ))}
                   </ul>
                 </CardContent>
                 
-                <CardFooter className="pt-4 sm:pt-5 pb-6 sm:pb-7 flex-col gap-3 px-4 sm:px-6">
+                <CardFooter className="pt-4 pb-5 sm:pb-6 flex-col gap-2.5 px-4 sm:px-6">
                   <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
-                    <Link to="/auth?intent=demo">
-                      Try Live Demo
+                    <Link to="/auth?intent=upgrade">
+                      Start 24-Hour Full Access
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
-                  <Button variant="outline" size="lg" className="w-full text-sm font-medium h-auto py-2 border-foreground/20 hover:bg-foreground/5" asChild>
-                    <Link to="/auth?intent=upgrade">Start 24-Hour Full Access</Link>
-                  </Button>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground/60 text-center">
-                    £0 today · Full access for 24 hours · Cancel anytime
+                  <p className="text-[10px] sm:text-xs text-muted-foreground/50 text-center">
+                    £0 today. Cancel anytime before renewal.
                   </p>
                 </CardFooter>
               </Card>
