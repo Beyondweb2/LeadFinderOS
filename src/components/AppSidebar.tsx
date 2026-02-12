@@ -112,9 +112,9 @@ export function AppSidebar() {
   const { user } = useAuth();
   const isCollapsed = state === 'collapsed';
   
-  // Pro access = active, trialing, or past_due
+  // Pro access = active, trialing, past_due, or admin
   const { status: subStatus } = useSubscription();
-  const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due';
+  const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
   const isDemoUser = !hasProAccess && !isStripeTrialing;
   
   // Demo users get 1 lifetime search, not the legacy daily limit
