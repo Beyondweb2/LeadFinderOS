@@ -547,7 +547,7 @@ const Landing = () => {
               className="font-medium text-sm px-3 sm:px-4 btn-premium"
             >
               <Link to="/auth?intent=demo">
-                <span className="hidden sm:inline">Try Live Demo</span>
+                <span className="hidden sm:inline">Try Free Demo</span>
                 <span className="sm:hidden">Demo</span>
               </Link>
             </Button>
@@ -590,7 +590,7 @@ const Landing = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/auth?intent=demo">
-                Try Live Demo
+                Try Free Demo
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
@@ -1039,7 +1039,7 @@ const Landing = () => {
                 Sign In
               </Link>
               <Link to="/auth?intent=demo" className="hover:text-foreground transition-colors duration-200">
-                Try Live Demo
+                Try Free Demo
               </Link>
               <Link to="/auth?intent=upgrade" className="hover:text-foreground transition-colors duration-200">
                 Start 24-Hour Full Access
@@ -1080,7 +1080,7 @@ const Landing = () => {
         >
           <Button size="lg" className="w-full btn-premium font-semibold py-3 h-auto text-sm" asChild>
             <Link to="/auth?intent=demo">
-              Try Live Demo
+              Try Free Demo
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
