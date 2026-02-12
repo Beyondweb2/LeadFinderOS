@@ -296,15 +296,6 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
           </div>
         )}
 
-        {/* Link to full guide */}
-        <ScrollReveal delay={500} className="text-center mt-12 sm:mt-16">
-          <Button variant="outline" size="lg" className="border-white/10 bg-white/[0.03] hover:bg-white/[0.06]" asChild>
-            <Link to="/guide">
-              View Detailed Guide
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
-          </Button>
-        </ScrollReveal>
       </div>
     </section>
   );
