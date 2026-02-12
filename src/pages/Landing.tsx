@@ -877,11 +877,11 @@ const Landing = () => {
           </ScrollReveal>
 
           <div className="mb-10 sm:mb-14">
-            <div className="flex flex-col items-start gap-3 sm:gap-4 w-fit mx-auto">
+            <div className="flex flex-col items-start gap-2.5 sm:gap-3 w-fit mx-auto max-w-sm sm:max-w-none">
               {[
                 'Know exactly who to contact every day',
                 'Turn cold outreach into a warm pipeline',
-                'See what\'s working and double down',
+                'See exactly where your revenue is coming from',
                 'Stay in control from first message to paid client',
               ].map((item, i) => (
                 <ScrollReveal key={i} delay={i * 60}>
