@@ -661,8 +661,7 @@ const Landing = () => {
             <div className="space-y-8 max-w-sm mx-auto">
               {/* Old Way */}
               <div className="opacity-80">
-                <div className="flex items-center gap-2 justify-center mb-3">
-                  <X className="h-4 w-4" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
+                <div className="text-center mb-3">
                   <h3 className="text-lg font-bold text-foreground/90 tracking-tight">The Old Way</h3>
                 </div>
                 <div 
@@ -682,8 +681,7 @@ const Landing = () => {
               </div>
               {/* New Way */}
               <div>
-                <div className="flex items-center gap-2 justify-center mb-3">
-                  <Check className="h-4 w-4" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />
+                <div className="text-center mb-3">
                   <h3 className="text-lg font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
                 </div>
                 <div 
@@ -708,8 +706,7 @@ const Landing = () => {
               {/* Old Way */}
               <ScrollReveal delay={100}>
                 <div className="hover:opacity-90 transition-opacity duration-300">
-                  <div className="flex items-center gap-2.5 justify-center mb-5">
-                    <X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
+                  <div className="text-center mb-5">
                     <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3>
                   </div>
                   <div className="relative group mb-6">
@@ -737,8 +734,7 @@ const Landing = () => {
               {/* New Way */}
               <ScrollReveal delay={300}>
                 <div className="transition-all duration-300 hover:scale-[1.01]" style={{ filter: 'drop-shadow(0 0 24px hsl(142 60% 40% / 0.08))' }}>
-                  <div className="flex items-center gap-2.5 justify-center mb-5">
-                    <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />
+                  <div className="text-center mb-5">
                     <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
                   </div>
                   <div className="relative group mb-6">
