@@ -132,12 +132,10 @@ const Index = () => {
       {isDemoUser && demoSearchUsed && !showDemoUpgradePanel && leads.length > 0 && (
         <Link 
           to="/subscribe" 
-          className="flex items-center justify-center gap-2 py-2.5 px-4 bg-primary/5 border border-primary/10 rounded-lg hover:bg-primary/10 transition-colors"
+          className="block text-center text-xs sm:text-sm text-muted-foreground py-2 hover:text-primary transition-colors"
         >
-          <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
-          <span className="text-sm text-muted-foreground">
-            Demo used · <span className="text-primary font-medium">Get 24h unlimited searches, free →</span>
-          </span>
+          <Sparkles className="h-3 w-3 text-primary inline mr-1" />
+          Unlock unlimited searches free for 24h →
         </Link>
       )}
 
