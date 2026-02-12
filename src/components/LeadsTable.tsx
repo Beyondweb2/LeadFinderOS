@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import {
   Table,
   TableBody,
@@ -42,6 +42,7 @@ import {
 } from '@/components/ui/tooltip';
 import type { Lead, WebsiteStatus } from '@/types/lead';
 import type { LeadContact } from '@/hooks/useContactTracking';
+import { useDemoContext } from '@/components/DemoLayout';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -54,6 +55,7 @@ interface LeadsTableProps {
   isInOutreach?: (leadName: string, googleMapsUrl?: string) => boolean;
   onMapLinkClick?: (businessName: string, googleMapsUrl?: string) => void;
   isChecked?: (businessName: string, googleMapsUrl?: string) => boolean;
+  isDemo?: boolean;
 }
 
 type SortField = 'name' | 'rating' | 'reviewCount' | 'websiteStatus' | 'confidence';
@@ -66,7 +68,23 @@ const statusOrder: Record<WebsiteStatus, number> = {
   HAS_OWN_WEBSITE: 3,
 };
 
-export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, isDemo = false }: LeadsTableProps) {
+  const demoCtx = useDemoContext();
+
+  const handleAddToOutreach = useCallback((lead: Lead) => {
+    if (isDemo && demoCtx) {
+      demoCtx.addDemoLead(lead);
+      return Promise.resolve();
+    }
+    return onAddToOutreach?.(lead);
+  }, [isDemo, demoCtx, onAddToOutreach]);
+
+  const checkIsInOutreach = useCallback((name: string, url?: string) => {
+    if (isDemo && demoCtx) {
+      return demoCtx.isDemoLeadAdded(name, url);
+    }
+    return isInOutreach?.(name, url) ?? false;
+  }, [isDemo, demoCtx, isInOutreach]);
   const [sortField, setSortField] = useState<SortField>('websiteStatus');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [statusFilters, setStatusFilters] = useState<WebsiteStatus[]>([
@@ -300,8 +318,8 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                       </a>
                     </Button>
                   )}
-                  {onAddToOutreach && (
-                    isInOutreach?.(lead.name, lead.googleMapsUrl) ? (
+                   {(onAddToOutreach || isDemo) && (
+                    checkIsInOutreach(lead.name, lead.googleMapsUrl) ? (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -315,7 +333,7 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                         variant="default"
                         size="icon"
                         className="h-8 w-8 bg-primary hover:bg-primary/90"
-                        onClick={() => onAddToOutreach(lead)}
+                        onClick={() => handleAddToOutreach(lead)}
                       >
                         <ClipboardList className="h-3.5 w-3.5" />
                       </Button>
@@ -526,8 +544,8 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                             <TooltipContent>Log contact</TooltipContent>
                           </Tooltip>
                         )}
-                        {onAddToOutreach && (
-                          isInOutreach?.(lead.name, lead.googleMapsUrl) ? (
+                        {(onAddToOutreach || isDemo) && (
+                          checkIsInOutreach(lead.name, lead.googleMapsUrl) ? (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button
@@ -548,7 +566,7 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8 text-green-500 hover:bg-muted hover:text-green-400"
-                                  onClick={() => onAddToOutreach(lead)}
+                                  onClick={() => handleAddToOutreach(lead)}
                                 >
                                   <ClipboardList className="h-4 w-4" />
                                 </Button>

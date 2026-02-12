@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
@@ -129,10 +129,11 @@ const Index = () => {
             onExport={exportToCsv}
             onLogContact={(lead) => setContactDialogLead(lead)}
             getLatestContact={getLatestContact}
-            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
-            isInOutreach={isInOutreach}
+            onAddToOutreach={isDemo ? undefined : (lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
+            isInOutreach={isDemo ? undefined : isInOutreach}
             onMapLinkClick={markAsChecked}
             isChecked={isChecked}
+            isDemo={isDemo}
           />
         </section>
       )}
