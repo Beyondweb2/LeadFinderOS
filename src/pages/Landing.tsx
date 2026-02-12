@@ -171,10 +171,10 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
     <div ref={ref} className="text-center">
-    <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
+    <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
       {count.toLocaleString()}{suffix}
     </div>
-    <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">{label}</div>
+    <div className="text-[10px] sm:text-xs text-foreground/50 mt-1 font-medium">{label}</div>
     </div>
   );
 };
@@ -611,12 +611,12 @@ const Landing = () => {
           <div className="mt-6 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
-              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Coverage</div>
+              <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[10px] sm:text-xs text-foreground/50 mt-1 font-medium">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-              <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Searches</div>
+              <div className="text-sm sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="text-[10px] sm:text-xs text-foreground/50 mt-1 font-medium">Searches</div>
             </div>
           </div>
 
@@ -624,32 +624,32 @@ const Landing = () => {
           <div className="mt-6 sm:mt-10">
             {/* Mobile: centered checklist group with fixed icon column */}
             <div className="flex justify-center sm:hidden">
-              <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2">
                 {[
                   'Find 20+ real prospects in minutes',
                   'Send more outreach in 10 minutes than most do all morning',
-                  'Never lose track of who you contacted or what\'s next',
+                  'Always know who to follow up and when',
                   'Build a pipeline you can actually rely on',
                 ].map((bullet, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className="w-7 flex-shrink-0 flex justify-center pt-0.5">
+                  <div key={i} className="flex items-start gap-2.5">
+                    <div className="w-6 flex-shrink-0 flex justify-center pt-0.5">
                       <Check 
-                        className="h-5 w-5" 
+                        className="h-4.5 w-4.5" 
                         style={{ color: 'hsl(142 76% 55%)' }} 
                         strokeWidth={3} 
                       />
                     </div>
-                    <span className="text-[14px] font-medium text-foreground/85 text-left">{bullet}</span>
+                    <span className="text-[14px] font-medium text-foreground/90 text-left">{bullet}</span>
                   </div>
                 ))}
               </div>
             </div>
             {/* Desktop: horizontal wrap */}
-            <div className="hidden sm:flex flex-wrap justify-center gap-x-8 gap-y-3">
+            <div className="hidden sm:flex flex-wrap justify-center gap-x-8 gap-y-2.5">
               {[
                 'Find 20+ real prospects in minutes',
                 'Send more outreach in 10 minutes than most do all morning',
-                'Never lose track of who you contacted or what\'s next',
+                'Always know who to follow up and when',
                 'Build a pipeline you can actually rely on',
               ].map((bullet, i) => (
                 <div key={i} className="flex items-center gap-2.5">
@@ -658,7 +658,7 @@ const Landing = () => {
                     style={{ color: 'hsl(142 76% 55%)' }} 
                     strokeWidth={3} 
                   />
-                  <span className="text-base font-medium text-foreground/85">{bullet}</span>
+                  <span className="text-base font-medium text-foreground/90">{bullet}</span>
                 </div>
               ))}
             </div>
