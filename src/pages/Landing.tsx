@@ -26,9 +26,12 @@ import newWayImage from '@/assets/new-way-leadfinder.png';
 import demoVideo from '@/assets/leadfinder-demo.mp4';
 import appLogo from '@/assets/logo.png';
 
+import featureCustomization from '@/assets/feature-customization-new.png';
 import featureContactTracking from '@/assets/feature-contact-tracking.png';
 import featureDashboard from '@/assets/howto-step4-dashboard.png';
+import featureExport from '@/assets/feature-export.png';
 import featureClassification from '@/assets/feature-classification.png';
+import featureTemplates from '@/assets/feature-templates.png';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
@@ -81,39 +84,55 @@ const FEATURES = [
   {
     icon: Search,
     title: 'Smart Classification',
-    description: 'Instantly see which businesses need a website — only message the ones who are ready to buy.',
+    description: 'Instantly see which businesses have no website — hot leads are highlighted so you never waste time on the wrong ones.',
     image: featureClassification,
     imageScale: 'scale-100',
   },
   {
-    icon: MessageSquare,
-    title: 'Instant Outreach',
-    description: 'Message leads via WhatsApp or SMS directly from the app — no copying, no switching tabs.',
-    image: featureContactTracking,
-    imageScale: 'scale-100',
-  },
-  {
     icon: ClipboardList,
-    title: 'Pipeline Tracking',
-    description: 'Every lead, follow-up, and status change tracked — nothing falls through the cracks.',
-    image: featureContactTracking,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: ClipboardList,
-    title: 'Performance Dashboard',
-    description: 'See your pipeline, conversions, and revenue at a glance — always know what to do next.',
+    title: 'Smart Dashboard',
+    description: 'Your entire pipeline at a glance — track searches, outreach progress, conversions, and revenue in real time.',
     image: featureDashboard,
+    imageScale: 'scale-100',
+  },
+  {
+    icon: Phone,
+    title: 'Contact Tracking',
+    description: 'Log every call, text, and follow-up. Update statuses and add notes so you never lose track of a lead.',
+    image: featureContactTracking,
+    imageScale: 'scale-100',
+  },
+  {
+    icon: FileText,
+    title: 'Templates',
+    description: 'Ready-to-send WhatsApp, SMS, and call scripts — just pick a template, personalise, and hit send.',
+    image: featureTemplates,
+    imageScale: 'scale-100',
+  },
+  {
+    icon: FileText,
+    title: 'Export Tools',
+    description: 'Export your leads and outreach data to CSV — perfect for backups, reporting, or importing into other tools.',
+    image: featureExport,
+    imageScale: 'scale-100',
+  },
+  {
+    icon: Settings,
+    title: 'Customization',
+    description: 'Set your accent colour, manage templates, and tailor the dashboard to match how you work.',
+    image: featureCustomization,
     imageScale: 'scale-100',
   },
 ];
 
 const PRICING_FEATURES = [
-  'Unlimited lead searches across 20+ countries',
-  'Message leads directly via WhatsApp or SMS',
-  'Full CRM with pipeline tracking & follow-ups',
-  'Ready-to-send outreach templates',
-  'Performance dashboard with conversion metrics',
+  'Unlimited lead searches',
+  'Find businesses without websites',
+  'Full CRM access',
+  'Contact tracking & notes',
+  'Email & call templates',
+  'Export leads to outreach',
+  'Priority support',
 ];
 
 // Count-up animation component
@@ -549,26 +568,36 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-4 sm:pt-10 sm:pb-10 md:pt-16 md:pb-16 lg:pt-20 lg:pb-20 px-4">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-12 sm:pb-16 md:pt-20 md:pb-28 lg:pt-28 lg:pb-36 px-4">
         <div className="container mx-auto text-center">
           {/* Mobile: Video at top instead of logo */}
           <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
           
-          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-5 tracking-tight">
-            <span className="block text-gradient-primary sm:hidden">Find Businesses</span>
-            <span className="block text-foreground mt-0.5 sm:mt-0 sm:hidden">Without Websites</span>
-            <span className="hidden sm:block">
-              <span className="text-foreground">Find Businesses Without Websites.</span>
-              <br />
-              <span className="text-gradient-primary">Close More Deals.</span>
-            </span>
+          {/* Tagline badge - hidden on mobile */}
+          <div 
+            className="hidden sm:inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-6 backdrop-blur-sm"
+            style={{ 
+              border: '1px solid hsl(210 100% 50% / 0.2)', 
+              background: 'hsl(210 100% 50% / 0.08)',
+              color: 'hsl(210 100% 65%)'
+            }}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            <span>The fastest way to land web design clients</span>
+          </div>
+          
+          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight">
+            <span className="block text-gradient-primary">Find Businesses</span>
+            <span className="block text-foreground mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
           
-          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-6 leading-relaxed px-2">
-            Thousands of businesses still don't have a website. Find them instantly, message them directly, and turn them into paying clients — on demand.
+          <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
+            Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
           </p>
+          
+          {/* Keywords removed */}
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
@@ -583,36 +612,37 @@ const Landing = () => {
             </Link>
           </div>
 
-          <p className="text-xs text-muted-foreground text-center mt-3 sm:mt-4">
-            Free for 24 hours. No card required.
+          {/* Reassurance microcopy - desktop: after buttons, mobile: after badges */}
+          <p className="hidden sm:block text-xs text-muted-foreground text-center mt-5">
+            Full access for 24 hours. £0 today. Cancel anytime.
           </p>
 
-          {/* 4 benefit bullets — horizontal on desktop */}
-          <div className="mt-5 sm:mt-8 flex justify-center">
-            <div className="inline-flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:justify-center sm:gap-x-8 sm:gap-y-2.5">
+          {/* Power bullets under hero CTA */}
+          <div className="mt-6 sm:mt-10 max-w-lg mx-auto sm:mx-0 sm:max-w-none">
+            <div className="flex flex-col items-center sm:items-start sm:flex-row sm:flex-wrap sm:justify-center gap-3 sm:gap-x-8 sm:gap-y-3">
               {[
-                'Know exactly where your next client is coming from',
-                'Turn outreach into consistent income',
-                'Never lose track of a lead again',
-                'Build a pipeline you control',
+                'Find 20+ real prospects in minutes',
+                'Send more messages in 10 minutes than most do in a morning',
+                'Track every outreach in one place',
+                'Stop guessing who needs your help',
               ].map((bullet, i) => (
-                <div key={i} className="flex items-start gap-1.5 sm:items-center sm:gap-2">
+                <div key={i} className="flex items-center gap-2.5">
                   <Check 
-                    className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0 mt-[3px] sm:mt-0" 
+                    className="h-5 w-5 sm:h-[22px] sm:w-[22px] flex-shrink-0" 
                     style={{ 
                       color: 'hsl(142 76% 55%)',
                       filter: 'drop-shadow(0 0 6px hsl(142 76% 55% / 0.4))',
                     }} 
                     strokeWidth={3} 
                   />
-                  <span className="text-[14px] sm:text-sm font-semibold text-foreground/90">{bullet}</span>
+                  <span className="text-[15px] sm:text-base font-medium text-foreground/90">{bullet}</span>
                 </div>
               ))}
             </div>
           </div>
           
           {/* Stats bar */}
-          <div className="mt-5 sm:mt-10 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
+          <div className="mt-6 sm:mt-14 md:mt-16 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
               <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
@@ -622,6 +652,18 @@ const Landing = () => {
               <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
               <div className="text-[10px] sm:text-xs text-muted-foreground mt-1 font-medium">Searches</div>
             </div>
+          </div>
+          {/* Reassurance microcopy - mobile only, after badges */}
+          <p className="sm:hidden text-[11px] text-muted-foreground text-center mt-4">
+            Try everything free for 24 hours. No charge until the trial ends. Cancel anytime.
+          </p>
+          {/* Scroll down indicator */}
+          <div className="mt-5 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
+            <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">Scroll</span>
+            <svg width="16" height="24" viewBox="0 0 16 24" fill="none" className="text-muted-foreground">
+              <rect x="1" y="1" width="14" height="22" rx="7" stroke="currentColor" strokeWidth="1.5" />
+              <circle cx="8" cy="8" r="2" fill="currentColor" className="animate-[scroll-dot_2s_ease-in-out_infinite]" />
+            </svg>
           </div>
         </div>
       </section>
@@ -635,7 +677,7 @@ const Landing = () => {
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Unified Testimonials — 3 cards */}
-      <ScrollReveal className="relative z-10 py-8 sm:py-12 md:py-16 px-4">
+      <ScrollReveal className="relative z-10 py-10 sm:py-16 md:py-20 px-4">
         <div className="container mx-auto max-w-5xl">
           {/* Trust line */}
           <div className="flex items-center justify-center gap-2 mb-6 sm:mb-8">
@@ -653,21 +695,21 @@ const Landing = () => {
                 name: 'James T.',
                 role: 'Freelance Web Developer',
                 region: 'UK',
-                quote: "i went from finding maybe 5 leads a day on google maps to pulling 30+ in 10 minutes. booked 3 calls in my first week just from the leads it found. completely changed how i prospect.",
+                quote: "used to waste my whole morning scrolling maps looking for leads. now i get 30+ in about 10 minutes and actually spend time reaching out instead of searching.",
                 stars: 5,
               },
               {
                 name: 'Marcus L.',
                 role: 'Web Designer',
                 region: 'UK',
-                quote: "landed two paying clients in my first month. the direct whatsapp outreach makes it so easy — i message 15-20 businesses a day now instead of the 3-4 i used to manage. the follow-up tracking alone saves me hours.",
+                quote: "being able to message leads straight from the app on whatsapp or sms is a game changer. i used to copy numbers into my phone one by one — now i just tap and send. way more outreach in way less time.",
                 stars: 5,
               },
               {
                 name: 'David R.',
                 role: 'WordPress Developer',
                 region: 'UK',
-                quote: "i used to spend 2 hours a day just finding and organising leads. now that takes about 15 minutes and i actually know who to follow up with. closed a £1,200 site last month from a lead i found on here.",
+                quote: "i used to track everything in spreadsheets and sticky notes — half my leads got lost. now it's all in one dashboard. i can see who i've messaged, who replied, and what's next. wish i had this sooner.",
                 stars: 5,
               },
             ];
@@ -710,14 +752,14 @@ const Landing = () => {
 
       {/* Desktop: Old Way vs New Way comparison */}
       {!isMobile && (
-        <ScrollReveal className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
+        <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
           <div className="container mx-auto max-w-6xl">
-            <div className="text-center mb-10 md:mb-12">
-              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-3">
+            <div className="text-center mb-12 md:mb-16">
+              <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-4">
                 Stop Wasting Mornings on <span className="text-gradient-primary">Google Maps</span>
               </h2>
               <p className="text-muted-foreground max-w-xl mx-auto text-base md:text-lg">
-                Same hours. Completely different results.
+                There's a faster way to find businesses without websites.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-10 lg:gap-14 max-w-5xl mx-auto items-start">
@@ -744,40 +786,38 @@ const Landing = () => {
                     </div>
                   </div>
                   <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours wasted scrolling with no system</span></li>
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Forgetting who you contacted</span></li>
+                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
+                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
                     <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No pipeline</span></li>
                   </ul>
                 </div>
               </ScrollReveal>
               {/* New Way */}
               <ScrollReveal delay={300}>
-                <div className="transition-all duration-300 hover:scale-[1.01]" style={{ filter: 'drop-shadow(0 0 24px hsl(210 100% 50% / 0.1))' }}>
+                <div className="transition-all duration-300 hover:scale-[1.01]" style={{ filter: 'drop-shadow(0 0 24px hsl(142 60% 40% / 0.08))' }}>
                   <div className="flex items-center gap-2.5 justify-center mb-5">
-                    <Check className="h-5 w-5" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={2.5} />
+                    <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />
                     <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
                   </div>
                   <div className="relative group mb-6">
                     <div 
-                      className="absolute -inset-2 rounded-2xl blur-xl opacity-40 group-hover:opacity-60 transition-opacity duration-300"
-                      style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.1))' }}
+                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition-opacity duration-300"
+                      style={{ background: 'linear-gradient(to bottom right, hsl(142 60% 40% / 0.3), hsl(142 60% 40% / 0.1))' }}
                     />
                     <div 
                       className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
                       style={{ 
-                        border: '1px solid hsl(210 100% 50% / 0.3)',
-                        boxShadow: '0 0 30px hsl(210 100% 50% / 0.15), 0 0 60px hsl(210 100% 50% / 0.05)'
+                        border: '1px solid hsl(142 60% 40% / 0.25)',
+                        boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
                       }}
                     >
                       <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-full object-cover object-top" />
                     </div>
                   </div>
                   <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={2.5} /><span>30+ qualified leads in minutes</span></li>
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={2.5} /><span>Full pipeline with every lead tracked</span></li>
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={2.5} /><span>Message instantly from one dashboard</span></li>
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={2.5} /><span>Clear visibility on who to follow up</span></li>
+                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
+                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
+                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
                   </ul>
                 </div>
               </ScrollReveal>
@@ -786,10 +826,10 @@ const Landing = () => {
             {/* Authority statement */}
             <ScrollReveal delay={400} className="text-center mt-14 md:mt-18 max-w-2xl mx-auto">
               <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
-                Same hours. Completely different <span className="text-gradient-primary">results</span>.
+                The difference isn't effort. It's leverage.
               </h3>
               <p className="text-base md:text-lg text-muted-foreground leading-relaxed mb-10">
-                One approach keeps you busy. The other builds a client pipeline you control.
+                You can keep searching manually. Or you can systemise outreach.
               </p>
               <Button 
                 size="lg" 
@@ -810,32 +850,136 @@ const Landing = () => {
         </ScrollReveal>
       )}
 
+      {/* Mobile emotional section below comparison */}
+      {isMobile && (
+        <ScrollReveal className="relative z-10 py-14 px-6">
+          <div className="text-center max-w-sm mx-auto">
+            <h3 className="text-2xl font-bold tracking-tight mb-3">
+              This is what changes.
+            </h3>
+            <p className="text-sm text-muted-foreground mb-8">
+              The difference isn't effort. It's leverage.
+            </p>
+            <div className="space-y-5 mb-10">
+              <p className="text-[15px] text-foreground/80 leading-relaxed">
+                Finish outreach before most people find their first lead.
+              </p>
+              <p className="text-[15px] text-foreground/80 leading-relaxed">
+                Open your dashboard and know exactly who to message.
+              </p>
+              <p className="text-[15px] text-foreground/80 leading-relaxed">
+                Start your day with momentum, not scrolling.
+              </p>
+            </div>
+            <Button 
+              size="lg" 
+              className="btn-premium w-full text-base font-semibold py-4 h-auto shadow-lg shadow-primary/20"
+              asChild
+            >
+              <Link to="/auth">
+                Start Free Trial
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+            <p className="text-[11px] text-muted-foreground/50 mt-3">
+              No credit card. 24 hours. Cancel anytime.
+            </p>
+          </div>
+        </ScrollReveal>
+      )}
+
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
-      {/* How It Works */}
+      {/* How It Works — 5 steps */}
       <HowItWorksSection ScrollReveal={ScrollReveal} />
+
+
+      {/* Mobile section divider */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
+
+      {/* Power Section — Built for aggressive outreach */}
+      <section className="relative z-10 py-10 sm:py-20 md:py-28 px-4">
+        <div className="container mx-auto max-w-3xl text-center">
+          <ScrollReveal className="mb-10 sm:mb-14">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4">
+              Built for <span className="text-gradient-primary">aggressive outreach.</span>
+            </h2>
+            <p className="text-base sm:text-lg text-muted-foreground">
+              Stop searching. Start sending.
+            </p>
+          </ScrollReveal>
+
+          <div className="space-y-5 sm:space-y-6 mb-10 sm:mb-14 max-w-md mx-auto">
+            {[
+              '10x your outreach',
+              'Never miss a lead',
+              'No more manual searching',
+              'No more messy follow-ups',
+              'One system. Full control.',
+            ].map((item, i) => (
+              <ScrollReveal key={i} delay={i * 60}>
+                <div className="flex items-center gap-3 sm:gap-4 justify-center sm:justify-start">
+                  <Check 
+                    className="h-6 w-6 sm:h-7 sm:w-7 flex-shrink-0" 
+                    style={{ 
+                      color: 'hsl(142 76% 55%)',
+                      filter: 'drop-shadow(0 0 8px hsl(142 76% 55% / 0.35))',
+                    }} 
+                    strokeWidth={3} 
+                  />
+                  <span className="text-base sm:text-lg font-semibold text-foreground tracking-tight">{item}</span>
+                </div>
+              </ScrollReveal>
+            ))}
+          </div>
+
+          <ScrollReveal delay={350}>
+            <Button 
+              size="lg" 
+              className="btn-premium text-base font-semibold px-10 py-5 h-auto shadow-lg shadow-primary/25 w-full sm:w-auto"
+              style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.2), 0 4px 20px hsl(210 100% 50% / 0.15)' }}
+              asChild
+            >
+              <Link to="/auth">
+                Start Free Trial
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+            <p className="text-xs text-muted-foreground/60 mt-4">
+              No credit card. 24 hours. Cancel anytime.
+            </p>
+          </ScrollReveal>
+
+          {/* "Who is this for" — desktop only */}
+          <ScrollReveal delay={400} className="hidden sm:block mt-10">
+            <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-md mx-auto leading-relaxed">
+              Built for freelance web designers, WordPress developers, small agencies, and anyone who needs a consistent way to find businesses that need a website.
+            </p>
+          </ScrollReveal>
+        </div>
+      </section>
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Features Section — Lead Toolkit */}
-      <section className="relative z-10 py-8 sm:py-12 md:py-16 lg:py-20 px-4">
+      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
-          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-3 tracking-tight px-2">
-              Everything You Need to Turn Outreach Into
-              <span className="text-gradient-primary"> Clients</span>
+          <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
+            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
+              Your Complete
+              <span className="text-gradient-primary"> Lead Toolkit</span>
             </h2>
             <p className="hidden sm:block text-muted-foreground max-w-xl mx-auto text-base md:text-lg px-2">
-              From search to signed deal — all in one system.
+              Everything you need to find, track, and convert leads into paying clients.
             </p>
           </ScrollReveal>
           
           {/* Mobile: Carousel (4 core features) */}
           {isMobile ? (
             <>
-              <MobileFeatureCarousel features={FEATURES} onExpand={(src, title) => setExpandedImage({ src, title })} />
+              <MobileFeatureCarousel features={FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title))} onExpand={(src, title) => setExpandedImage({ src, title })} />
               {/* "Who is this for" — mobile only, moved from Value Proposition section */}
               <p className="text-xs text-muted-foreground/70 max-w-xs mx-auto leading-relaxed text-center mt-6 px-4">
                 Built for freelance web designers, WordPress developers, small agencies, and anyone who needs a consistent way to find businesses that need a website.
@@ -844,8 +988,8 @@ const Landing = () => {
           ) : (
             /* Desktop: 4-card grid — core features only */
             <ScrollReveal>
-              <div className="grid grid-cols-2 gap-x-10 gap-y-10 lg:gap-x-14 lg:gap-y-12 max-w-5xl mx-auto">
-                {FEATURES.map((feature, i) => (
+              <div className="grid grid-cols-2 gap-x-10 gap-y-14 lg:gap-x-14 lg:gap-y-16 max-w-5xl mx-auto">
+                {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature, i) => (
                   <ScrollReveal key={feature.title} delay={i * 80}>
                     <div className="flex flex-col gap-4">
                       {/* Title row */}
@@ -885,7 +1029,7 @@ const Landing = () => {
                           <img 
                             src={feature.image} 
                             alt={feature.title}
-                            className={`w-full h-52 xl:h-60 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
+                            className={`w-full h-48 xl:h-56 object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
                           />
                         </div>
                       </div>
@@ -902,14 +1046,14 @@ const Landing = () => {
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Pricing Section */}
-      <section className="relative z-10 py-8 sm:py-12 md:py-16 lg:py-20 px-4">
+      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
-          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-2 sm:mb-3 tracking-tight px-2">
-              One Client Covers <span className="text-gradient-primary">the Cost</span>
+          <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
+            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
+              Simple, Transparent <span className="text-gradient-primary">Pricing</span>
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg px-2">
-              Less than the price of a single client lunch — and it can pay for itself with your first deal.
+              One plan with everything you need. Cancel anytime.
             </p>
           </ScrollReveal>
           
@@ -950,7 +1094,7 @@ const Landing = () => {
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">One small client pays for months of access.</p>
+                  <p className="text-xs text-muted-foreground mt-2">After your 24-hour trial · Cancel before it ends and pay nothing</p>
                 </CardHeader>
                 
                 <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
@@ -980,7 +1124,7 @@ const Landing = () => {
                     </Link>
                   </Button>
                    <p className="text-[10px] sm:text-xs text-muted-foreground text-center">
-                    £0 today · Cancel anytime
+                    £0 today · Full access for 24 hours · Cancel anytime, no questions asked
                    </p>
                    <div className="flex items-center justify-center gap-1.5 mt-2">
                      <div className="flex gap-0.5">
@@ -997,34 +1141,6 @@ const Landing = () => {
         </div>
       </section>
 
-
-      {/* Mobile section divider */}
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
-
-      {/* Final CTA Section */}
-      <section className="relative z-10 py-10 sm:py-16 md:py-20 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal className="text-center max-w-2xl mx-auto">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4">
-              Your Next Client Is Already <span className="text-gradient-primary">Out There.</span>
-            </h2>
-            <p className="text-base sm:text-lg text-muted-foreground mb-6 sm:mb-8 max-w-md mx-auto">
-              Stop hoping they find you. Go find them.
-            </p>
-            <Button 
-              size="lg" 
-              className="btn-premium text-sm sm:text-base font-semibold px-8 sm:px-10 py-3 sm:py-5 h-auto shadow-lg shadow-primary/25 w-full sm:w-auto"
-              style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.2), 0 4px 20px hsl(210 100% 50% / 0.15)' }}
-              asChild
-            >
-              <Link to="/auth">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-              </Link>
-            </Button>
-          </ScrollReveal>
-        </div>
-      </section>
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />

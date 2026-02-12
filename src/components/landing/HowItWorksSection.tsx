@@ -31,24 +31,38 @@ import step5Image from '@/assets/howto-step4-dashboard.png';
 const STEPS = [
   {
     icon: Search,
-    title: 'Find Your Leads',
-    description: 'Search any location and instantly see businesses without websites — your ideal prospects, ready to contact.',
+    title: 'Find Leads',
+    description: 'Search by business type and location to find companies without websites',
     image: step1Image,
     badge: '20+ Countries',
   },
   {
+    icon: ClipboardList,
+    title: 'Add to CRM',
+    description: 'See business details, ratings, reviews, and addresses. Filter by classification and add promising leads to your CRM.',
+    image: step2Image,
+    badge: '100,000+ Businesses',
+  },
+  {
     icon: MessageSquare,
-    title: 'Reach Out Directly',
-    description: 'Message leads via WhatsApp or SMS straight from the app. No copying numbers, no switching tabs — just tap and send.',
+    title: 'Start Outreach',
+    description: 'Tap WhatsApp to message a lead directly. If they\'re not on WhatsApp, tap the SMS button instead. Mark leads as "Contacted" after reaching out, then click "Track" to follow up.',
     image: step3Image,
-    badge: 'Instant Outreach',
+    badge: 'Direct Outreach',
+  },
+  {
+    icon: Settings,
+    title: 'Track & Manage',
+    description: 'Set next actions for each lead — schedule follow-ups, mark call-backs, and track every status change. Manage your entire outreach pipeline from one place.',
+    image: step4Image,
+    badge: 'Full Pipeline',
   },
   {
     icon: Users,
-    title: 'Track & Close',
-    description: 'Every lead, follow-up, and status change tracked in one place. See your pipeline, know who to chase, and close more deals.',
+    title: 'Track Results',
+    description: 'Track your outreach performance on the dashboard. See conversion rates, lead progress, and activity metrics to optimise your workflow.',
     image: step5Image,
-    badge: 'Full Pipeline',
+    badge: 'Full Analytics',
   },
 ];
 
@@ -120,7 +134,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
   const isMobile = useIsMobile();
 
   return (
-    <section className="relative z-10 py-8 sm:py-10 md:py-16 lg:py-20 px-3 sm:px-4">
+    <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-28 px-3 sm:px-4">
       {/* Image Modal */}
       <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
         <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
@@ -151,7 +165,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             How It <span className="text-gradient-primary">Works</span>
           </h2>
           <p className="hidden sm:block text-muted-foreground max-w-xl mx-auto text-base md:text-lg px-2">
-            Three steps. That's all it takes.
+            From search to sale in five simple steps
           </p>
         </ScrollReveal>
         
