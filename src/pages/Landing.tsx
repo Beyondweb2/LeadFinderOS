@@ -1048,7 +1048,7 @@ const Landing = () => {
               We typically reply within minutes.
             </p>
             <a
-              href="https://wa.me/447000000000?text=Hi%2C%20I%20have%20a%20question%20about%20LeadFinder%20Pro"
+              href="https://wa.me/447477932564?text=Hi%2C%20I%20have%20a%20question%20about%20LeadFinder%20Pro"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-sm text-black transition-all duration-200 hover:brightness-110"
