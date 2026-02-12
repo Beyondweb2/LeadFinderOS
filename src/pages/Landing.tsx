@@ -170,11 +170,11 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
   }, [target, hasAnimated]);
 
   return (
-    <div ref={ref} className="text-center">
-    <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
+      <div ref={ref} className="text-center">
+    <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
       {count.toLocaleString()}{suffix}
     </div>
-    <div className="text-[10px] sm:text-xs text-foreground/50 mt-1 font-medium">{label}</div>
+    <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">{label}</div>
     </div>
   );
 };
@@ -413,17 +413,12 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
   const t = testimonials[current];
 
   return (
-    <div className="text-center px-2">
-      <div key={current} className="animate-fade-in">
-        <div className="flex gap-0.5 mb-3 justify-center">
-          {[...Array(t.stars)].map((_, i) => (
-            <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-          ))}
-        </div>
-        <p className="text-foreground/80 text-sm leading-relaxed italic font-normal">
+    <div className="text-center px-4">
+      <div key={current} className="animate-fade-in max-w-[300px] mx-auto">
+        <p className="text-foreground/70 text-[13px] leading-[1.7] italic font-normal">
           "{t.quote}"
         </p>
-        <p className="text-muted-foreground/60 text-xs mt-4 font-medium">
+        <p className="text-muted-foreground/50 text-[11px] mt-5 font-medium">
           {t.name} · {t.role} – {t.region}
         </p>
       </div>
@@ -604,23 +599,23 @@ const Landing = () => {
           {/* Reassurance microcopy removed from hero */}
 
           {/* Stats bar - moved above bullets */}
-          <div className="mt-5 sm:mt-10 md:mt-12 grid grid-cols-3 gap-2 sm:gap-8 md:gap-14 max-w-xs sm:max-w-xl mx-auto">
+          <div className="mt-6 sm:mt-10 md:mt-12 py-4 sm:py-0 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
-              <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[10px] sm:text-xs text-foreground/50 mt-1 font-medium">Coverage</div>
+              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-sm sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-              <div className="text-[10px] sm:text-xs text-foreground/50 mt-1 font-medium">Searches</div>
+              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
             </div>
           </div>
 
           {/* Power bullets under hero CTA */}
-          <div className="mt-5 sm:mt-8">
+          <div className="mt-7 sm:mt-8">
             {/* Mobile: centered checklist group with fixed icon column */}
             <div className="flex justify-center sm:hidden">
-              <div className="flex flex-col gap-2 pl-1">
+              <div className="flex flex-col gap-3.5 pl-1">
                 {[
                   'Find 20+ real prospects in minutes',
                   'Send more outreach in 10 minutes than most do in a morning',
@@ -630,12 +625,12 @@ const Landing = () => {
                   <div key={i} className="flex items-start gap-3">
                     <div className="w-5 flex-shrink-0 flex justify-center pt-0.5">
                       <Check 
-                        className="h-[18px] w-[18px]" 
-                        style={{ color: 'hsl(142 76% 55%)' }} 
-                        strokeWidth={3} 
+                        className="h-[15px] w-[15px]" 
+                        style={{ color: 'hsl(142 65% 50%)' }} 
+                        strokeWidth={2.5} 
                       />
                     </div>
-                    <span className="text-[14px] font-medium text-foreground/90 text-left">{bullet}</span>
+                    <span className="text-[13px] font-normal text-foreground/75 text-left leading-relaxed">{bullet}</span>
                   </div>
                 ))}
               </div>
@@ -661,9 +656,9 @@ const Landing = () => {
           </div>
           
 
-          {/* Scroll down indicator */}
-          <div className="mt-6 sm:mt-14 flex flex-col items-center gap-1 animate-bounce opacity-40">
-            <span className="text-[10px] sm:text-xs text-muted-foreground tracking-wide">Scroll</span>
+          {/* Scroll down indicator - desktop only */}
+          <div className="hidden sm:flex mt-14 flex-col items-center gap-1 animate-bounce opacity-40">
+            <span className="text-xs text-muted-foreground tracking-wide">Scroll</span>
             <svg width="16" height="24" viewBox="0 0 16 24" fill="none" className="text-muted-foreground">
               <rect x="1" y="1" width="14" height="22" rx="7" stroke="currentColor" strokeWidth="1.5" />
               <circle cx="8" cy="8" r="2" fill="currentColor" className="animate-[scroll-dot_2s_ease-in-out_infinite]" />
@@ -681,16 +676,16 @@ const Landing = () => {
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Unified Testimonials — 3 cards */}
-      <ScrollReveal className="relative z-10 py-10 sm:py-16 md:py-20 px-4">
+      <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
         <div className="container mx-auto max-w-5xl">
           {/* Trust line */}
-          <div className="flex items-center justify-center gap-2 mb-6 sm:mb-8">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-2 mb-8 sm:mb-8">
             <div className="flex gap-0.5">
               {[...Array(5)].map((_, i) => (
-                <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+                <Star key={i} className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-yellow-400 text-yellow-400" />
               ))}
             </div>
-            <p className="text-sm text-muted-foreground font-medium">Rated 4.9/5 by freelancers and agencies</p>
+            <p className="text-xs sm:text-sm text-muted-foreground/70 font-medium">Rated 4.9/5 by freelancers and agencies</p>
           </div>
 
           {(() => {
@@ -832,7 +827,7 @@ const Landing = () => {
       )}
 
       {/* Mobile section divider */}
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
+      <div className="sm:hidden mx-8 my-4 h-px bg-white/[0.06]" />
 
       {/* How It Works — 5 steps */}
       <HowItWorksSection ScrollReveal={ScrollReveal} />
@@ -842,45 +837,43 @@ const Landing = () => {
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Power Section — Built for serious outreach */}
-      <section className="relative z-10 py-12 sm:py-20 md:py-24 px-4">
+      <section className="relative z-10 py-14 sm:py-20 md:py-24 px-4">
         <div className="container mx-auto max-w-3xl text-center">
           <ScrollReveal className="mb-10 sm:mb-14">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4 text-center">
               Your Outreach, <span className="text-gradient-primary">Systemised.</span>
             </h2>
-            <p className="text-base sm:text-lg text-muted-foreground">
+            <p className="text-sm sm:text-lg text-muted-foreground text-center max-w-md mx-auto">
               A structured workflow for finding leads, sending messages, and tracking every follow-up in one place.
             </p>
           </ScrollReveal>
 
-          <div className="mb-10 sm:mb-14">
-            <div className="flex justify-center">
-              <div className="flex flex-col gap-2.5 sm:gap-3 pl-2 max-w-[340px] sm:max-w-none">
-                {[
-                  'Know who to contact and when',
-                  'Keep every follow-up organised',
-                  'See who replied and what\'s next',
-                  'Manage outreach from first message to client',
-                ].map((item, i) => (
-                  <ScrollReveal key={i} delay={i * 60}>
-                    <div className="flex items-center gap-3.5">
-                      <div className="w-8 flex-shrink-0 flex justify-center">
-                        <Check 
-                          className="h-6 w-6 sm:h-7 sm:w-7" 
-                          style={{ color: 'hsl(142 76% 55%)' }} 
-                          strokeWidth={3} 
-                        />
-                      </div>
-                      <span className="text-base sm:text-lg font-semibold text-foreground/90 tracking-tight text-left">{item}</span>
+          <div className="mb-12 sm:mb-14">
+            <div className="flex flex-col gap-4 sm:gap-3 items-center sm:items-start sm:pl-2 max-w-[340px] sm:max-w-none mx-auto sm:mx-0">
+              {[
+                'Know who to contact and when',
+                'Keep every follow-up organised',
+                'See who replied and what\'s next',
+                'Manage outreach from first message to client',
+              ].map((item, i) => (
+                <ScrollReveal key={i} delay={i * 60}>
+                  <div className="flex items-center gap-3.5">
+                    <div className="w-8 flex-shrink-0 flex justify-center">
+                      <Check 
+                        className="h-5 w-5 sm:h-7 sm:w-7" 
+                        style={{ color: 'hsl(142 76% 55%)' }} 
+                        strokeWidth={2.5} 
+                      />
                     </div>
-                  </ScrollReveal>
-                ))}
-              </div>
+                    <span className="text-sm sm:text-lg font-medium sm:font-semibold text-foreground/85 tracking-tight text-left">{item}</span>
+                  </div>
+                </ScrollReveal>
+              ))}
             </div>
           </div>
 
           <ScrollReveal delay={300}>
-            <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-md mx-auto leading-relaxed text-center mb-8 sm:mb-10">
+            <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-md mx-auto leading-relaxed text-center mb-10 sm:mb-10">
               Built for freelance web designers, WordPress developers, and small agencies who want a consistent way to find businesses that need a website.
             </p>
           </ScrollReveal>
