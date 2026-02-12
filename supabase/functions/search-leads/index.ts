@@ -802,11 +802,41 @@ serve(async (req) => {
         }
         
         if (!isOnAppTrial) {
-          console.log(`User ${userId} has no active subscription or valid trial`);
-          return new Response(
-            JSON.stringify({ error: 'Your trial has expired. Please subscribe to continue using LeadFinder.' }),
-            { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          // ─── POST-ABANDON SEARCH: allow 1 final search after checkout abandonment ───
+          const { data: abandonTrial } = await serviceClient
+            .from('user_trials')
+            .select('checkout_abandoned, post_abandon_search_used')
+            .eq('user_id', userId)
+            .maybeSingle();
+
+          if (abandonTrial?.checkout_abandoned && !abandonTrial?.post_abandon_search_used) {
+            console.log(`User ${userId} using post-abandon search (1 of 1)`);
+            // Mark it used BEFORE executing the search
+            await serviceClient
+              .from('user_trials')
+              .update({ post_abandon_search_used: true })
+              .eq('user_id', userId);
+            isOnAppTrial = true; // Allow the search to proceed
+          } else {
+            console.log(`User ${userId} has no active subscription or valid trial`, {
+              checkout_abandoned: abandonTrial?.checkout_abandoned,
+              post_abandon_search_used: abandonTrial?.post_abandon_search_used,
+            });
+            
+            const errorCode = abandonTrial?.checkout_abandoned && abandonTrial?.post_abandon_search_used
+              ? 'POST_ABANDON_EXHAUSTED'
+              : 'TRIAL_EXPIRED';
+            
+            return new Response(
+              JSON.stringify({ 
+                error: errorCode === 'POST_ABANDON_EXHAUSTED'
+                  ? 'Complete checkout to unlock unlimited searches.'
+                  : 'Your trial has expired. Please subscribe to continue using LeadFinder.',
+                code: errorCode,
+              }),
+              { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+            );
+          }
         }
       }
     } else {

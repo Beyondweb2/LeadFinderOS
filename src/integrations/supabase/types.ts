@@ -500,11 +500,13 @@ export type Database = {
           affiliate_attributed_at: string | null
           affiliate_code: string | null
           avatar_url: string | null
+          checkout_abandoned: boolean
           created_at: string
           id: string
           last_search_date: string | null
           paid_at: string | null
           plan_status: string
+          post_abandon_search_used: boolean
           ref_source: string | null
           searches_today: number
           searches_used: number
@@ -518,11 +520,13 @@ export type Database = {
           affiliate_attributed_at?: string | null
           affiliate_code?: string | null
           avatar_url?: string | null
+          checkout_abandoned?: boolean
           created_at?: string
           id?: string
           last_search_date?: string | null
           paid_at?: string | null
           plan_status?: string
+          post_abandon_search_used?: boolean
           ref_source?: string | null
           searches_today?: number
           searches_used?: number
@@ -536,11 +540,13 @@ export type Database = {
           affiliate_attributed_at?: string | null
           affiliate_code?: string | null
           avatar_url?: string | null
+          checkout_abandoned?: boolean
           created_at?: string
           id?: string
           last_search_date?: string | null
           paid_at?: string | null
           plan_status?: string
+          post_abandon_search_used?: boolean
           ref_source?: string | null
           searches_today?: number
           searches_used?: number

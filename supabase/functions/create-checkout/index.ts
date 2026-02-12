@@ -95,6 +95,13 @@ const logStep = (step: string, details?: unknown) => {
 
       logStep("GUARD: No active subscription found, proceeding with checkout");
       // ─── END GUARD ───
+
+      // ─── Mark checkout_abandoned so user gets 1 post-abandon search ───
+      await supabaseClient
+        .from('user_trials')
+        .update({ checkout_abandoned: true })
+        .eq('user_id', user.id);
+      logStep("Set checkout_abandoned = true", { userId: user.id });
      
       // Check trial_used flag from user_trials (single source of truth)
       const { data: trialRow } = await supabaseClient

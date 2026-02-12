@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { ContactDialog } from '@/components/ContactDialog';
@@ -10,11 +11,12 @@ import { useOutreach } from '@/hooks/useOutreach';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
-import { Flame, Target, Zap, Search } from 'lucide-react';
+import { Flame, Target, Zap, Search, CreditCard, AlertTriangle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { Lead, Country } from '@/types/lead';
 
 const Index = () => {
-  const { leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError } = useLeadSearchContext();
+  const { leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted } = useLeadSearchContext();
   const { 
     markAsContacted, 
     getLatestContact, 
@@ -74,6 +76,22 @@ const Index = () => {
         </div>
       </div>
 
+      {/* Post-Abandon Exhausted Banner */}
+      {postAbandonExhausted && !hasProAccess && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+          <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span className="font-medium">You're one step away from unlimited leads.</span>
+          </div>
+          <Button asChild size="sm" className="shrink-0">
+            <Link to="/subscribe">
+              <CreditCard className="mr-2 h-4 w-4" />
+              Resume Checkout
+            </Link>
+          </Button>
+        </div>
+      )}
+
       {/* Search Section */}
       <section>
         <SearchForm 
@@ -86,6 +104,7 @@ const Index = () => {
           searchesRemaining={searchesRemaining}
           dailyLimit={dailyLimit}
           isPaidSubscriber={hasProAccess}
+          disabled={postAbandonExhausted && !hasProAccess}
         />
       </section>
 
