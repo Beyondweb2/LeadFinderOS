@@ -1,56 +1,84 @@
 
-# Testing Results and Fixes Needed
 
-## What's Working Correctly
+# Implementation Plan — All Remaining Tasks
 
-- **Subscribe page UI**: Properly hides trial badge when `trialUsed = true`, shows skeleton while loading, redirects unauthenticated users.
-- **create-checkout edge function**: Correctly checks `trial_used` flag and branches between trial/no-trial checkout sessions.
-- **search-leads edge function**: Correctly treats `trialing` status as Pro access (unlimited searches).
-- **Webhook code**: Has the right logic to set `trial_used = true` on lines 326-330.
-- **useTrial hook**: Correctly returns `Infinity` for search limits when user has Pro access.
-- **useSubscription hook**: Properly distinguishes `isPaidSubscriber` vs `isStripeTrialing`.
+This plan covers all 5 remaining tasks in a single implementation pass (one credit).
 
-## Issues Found
+---
 
-### 1. Backfill Missing: `trial_used` is `false` for ALL existing users
+## Task 1: Move "Built for freelancers" paragraph on mobile
 
-Every user in the database currently has `trial_used = false`, including users with `active` and `trialing` subscriptions. This means if any of them cancel and come back, they'll incorrectly be offered a free trial again.
+**What changes**: On mobile only, the "Built for freelance web designers..." paragraph currently sits inside the Value Proposition section (line 879-883). On mobile, it will be moved to appear **after** the Lead Toolkit carousel (below the slides), while staying in its current position on desktop.
 
-**Fix**: Run a one-time SQL migration to backfill `trial_used = true` for any user who has ever had an `active` or `trialing` subscription.
+**Technical approach**:
+- Hide the existing paragraph on mobile (`hidden sm:block`)
+- Add a mobile-only copy of the paragraph below the `MobileFeatureCarousel` component inside the Lead Toolkit section
 
-```text
-UPDATE user_trials
-SET trial_used = true
-WHERE user_id IN (
-  SELECT DISTINCT user_id
-  FROM subscriptions
-  WHERE status IN ('active', 'trialing', 'canceled', 'past_due')
-);
-```
+---
 
-### 2. Deploy webhook with trial_used logic
+## Task 2: Location search filter on CRM (Outreach) page
 
-The webhook logs show no evidence of the `trial_used` update running. The `stripe-webhook` edge function needs to be redeployed to ensure the latest code (which sets `trial_used = true`) is live.
+**What changes**: Add a "Location" text input to the Outreach CRM page that filters leads by their `address` and `country` fields.
 
-### 3. SearchForm "Free trial" text shows for Stripe trialing users (minor, already fixed)
+**Key decision**: The outreach data is already fetched entirely client-side (all leads loaded into state). There is no server-side pagination endpoint to extend. Therefore this will be a **client-side filter** — efficient and simple, matching the existing search/filter pattern.
 
-The `Index.tsx` passes `isPaidSubscriber={hasProAccess}` which includes `trialing`, so the "Free trial: X/Y searches left today" indicator should already be hidden for Stripe trialing users. This appears correct in the current code.
+**Technical approach**:
+- Add a `locationFilter` state variable in `OutreachTable.tsx`
+- Add a Location input field (with placeholder "City, postcode, area, country...") next to the existing search input
+- Add a clear (X) button on the input
+- Debounce not needed since filtering is instant (client-side, already in memory)
+- In the `filteredAndSortedLeads` useMemo, add location matching logic:
+  - Normalize input (trim, lowercase)
+  - Split on spaces to get tokens
+  - Match ALL tokens against `address` and `country` fields (AND across tokens for relevance)
+  - e.g. "London SW1" requires both "london" and "sw1" to appear somewhere in address+country
+- Handles partial postcodes naturally (substring match)
+- Composes with existing search, status, and country filters via AND logic
+- No backend/database changes needed
 
-## Implementation Steps
+---
 
-1. **Create a database migration** to backfill `trial_used = true` for all users who have ever had a subscription record (regardless of current status).
-2. **Redeploy the `stripe-webhook` edge function** to ensure future webhook events correctly set `trial_used = true`.
-3. **Verify end-to-end** by checking that:
-   - A trialing user sees no search limits and no "2 free searches" text
-   - The Subscribe page shows "Subscribe Now" (not "Start Free Trial") for users with `trial_used = true`
-   - The create-checkout function skips trial for users with `trial_used = true`
+## Task 3: Mobile emotional section below comparison
 
-## Technical Details
+**What changes**: Add a new section on **mobile only** below the comparison section (which is currently desktop-only, so this goes after the `{!isMobile && ...}` comparison block). This section contains emotional copy and a CTA.
 
-| Scenario | Expected Behavior |
-|---|---|
-| New user, never subscribed | Subscribe page shows "1-Day Free Trial" badge, "Start Free Trial" button |
-| User with active/trialing sub | Redirected away from /subscribe to / |
-| User who canceled, `trial_used = true` | Subscribe page shows "Subscribe Now", no trial badge, checkout has no trial period |
-| Stripe trialing user on search page | No "Free trial: X/Y searches" indicator, unlimited searches |
-| Free app trial user (no Stripe sub) | Shows "Free trial: 2/2 searches left today", 2/day limit enforced |
+**Content**:
+- Headline: "This is what changes."
+- Subtext: "The difference isn't effort. It's leverage."
+- 3 emotional statements stacked vertically
+- Full-width "Start Free Trial" button
+- Muted subtext: "No credit card. 24 hours. Cancel anytime."
+
+**Technical approach**:
+- Add a `{isMobile && ...}` block after the comparison section (around line 803)
+- Use `ScrollReveal` for fade-in animation
+- Clean typography, center-aligned, generous spacing
+- Full-width CTA button with `btn-premium` class
+
+---
+
+## Task 4: Desktop emotional section below comparison
+
+**What changes**: Enhance the existing desktop comparison section with emotional reinforcement and a strong CTA below it.
+
+**Specific changes**:
+1. **Headline update**: "Stop Scrolling Through Google Maps" becomes "Stop Wasting Mornings on Google Maps"
+2. **Emotional transition block** below the two columns: headline + short paragraph + 3 projection lines
+3. **Strong CTA block** with "Start Free Trial" button (enhanced glow/padding)
+4. **Micro interaction**: Add subtle hover glow/elevation on "The LeadFinder Way" column; slightly dim "The Old Way" column
+
+---
+
+## Task 5: (No separate task — Tasks 3 & 4 cover the emotional/comparison sections)
+
+---
+
+## Files to modify
+
+| File | Changes |
+|------|---------|
+| `src/pages/Landing.tsx` | Tasks 1, 3, 4 — move freelancer text on mobile, add mobile emotional section, enhance desktop comparison |
+| `src/components/OutreachTable.tsx` | Task 2 — add location filter input and filtering logic |
+
+No database migrations, no new files, no backend changes needed.
+
