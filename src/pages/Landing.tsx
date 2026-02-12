@@ -594,9 +594,21 @@ const Landing = () => {
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
+            <Button 
+              size="lg" 
+              variant="outline" 
+              className="text-sm sm:text-base font-medium px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto border-white/10 hover:border-white/20"
+              onClick={() => {
+                document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+              }}
+            >
+              See How It Works
+            </Button>
           </div>
 
-          {/* Reassurance microcopy removed from hero */}
+          <p className="text-xs text-muted-foreground/50 mt-3 sm:mt-4">
+            Full access · Cancel anytime
+          </p>
 
           {/* Stats bar - moved above bullets */}
           <div className="mt-6 sm:mt-10 md:mt-12 py-4 sm:py-0 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
@@ -865,31 +877,31 @@ const Landing = () => {
           {(() => {
             const testimonials = [
               {
-                name: 'James T.',
-                role: 'Freelance Web Developer',
+                name: 'Chris P.',
+                role: 'Freelance Designer',
                 region: 'UK',
-                quote: "used to waste my whole morning scrolling maps looking for leads. now i get 30+ in about 10 minutes and actually spend time reaching out instead of searching.",
+                quote: "Within about 10 minutes I had found 30 solid businesses without websites. It took me another 10 minutes to message them all inside the app. That alone sold me.",
                 stars: 5,
               },
               {
-                name: 'Marcus L.',
-                role: 'Web Designer',
-                region: 'UK',
-                quote: "being able to message leads straight from the app on whatsapp or sms is a game changer. i used to copy numbers into my phone one by one — now i just tap and send. way more outreach in way less time.",
+                name: 'Tom H.',
+                role: 'Web Developer',
+                region: 'Australia',
+                quote: "What I like most is being able to tweak the outreach templates quickly. I can adjust the message slightly and send it out without rewriting everything each time.",
                 stars: 5,
               },
               {
-                name: 'David R.',
-                role: 'WordPress Developer',
-                region: 'UK',
-                quote: "i used to track everything in spreadsheets and sticky notes — half my leads got lost. now it's all in one dashboard. i can see who i've messaged, who replied, and what's next. wish i had this sooner.",
+                name: 'Alex M.',
+                role: 'WordPress Freelancer',
+                region: 'Canada',
+                quote: "I used to bounce between Google Maps, notes and WhatsApp. Now I can search, message and track everything in one place and it just feels organised.",
                 stars: 5,
               },
               {
-                name: 'Sophie K.',
+                name: 'Daniel S.',
                 role: 'Agency Owner',
-                region: 'UK',
-                quote: "we onboarded three new clients in our first week. the classification saves so much time — you instantly know who's worth reaching out to. it's replaced two tools we were paying for.",
+                region: 'US',
+                quote: "Fair play, this is well built. Finding leads fast and keeping all my outreach tracked properly makes it way easier to stay consistent.",
                 stars: 5,
               },
             ];
