@@ -732,7 +732,7 @@ const Landing = () => {
           <div className="container mx-auto max-w-6xl">
             <div className="text-center mb-12 md:mb-16">
               <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-4">
-                Stop Scrolling Through <span className="text-gradient-primary">Google Maps</span>
+                Stop Wasting Mornings on <span className="text-gradient-primary">Google Maps</span>
               </h2>
               <p className="text-muted-foreground max-w-xl mx-auto text-base md:text-lg">
                 There's a faster way to find businesses without websites.
@@ -741,7 +741,7 @@ const Landing = () => {
             <div className="grid grid-cols-2 gap-10 lg:gap-14 max-w-5xl mx-auto items-start">
               {/* Old Way */}
               <ScrollReveal delay={100}>
-                <div>
+                <div className="opacity-80 hover:opacity-90 transition-opacity duration-300">
                   <div className="flex items-center gap-2.5 justify-center mb-5">
                     <X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
                     <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3>
@@ -770,14 +770,14 @@ const Landing = () => {
               </ScrollReveal>
               {/* New Way */}
               <ScrollReveal delay={300}>
-                <div>
+                <div className="transition-all duration-300 hover:scale-[1.01]" style={{ filter: 'drop-shadow(0 0 24px hsl(142 60% 40% / 0.08))' }}>
                   <div className="flex items-center gap-2.5 justify-center mb-5">
                     <Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />
                     <h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
                   </div>
                   <div className="relative group mb-6">
                     <div 
-                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
+                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition-opacity duration-300"
                       style={{ background: 'linear-gradient(to bottom right, hsl(142 60% 40% / 0.3), hsl(142 60% 40% / 0.1))' }}
                     />
                     <div 
@@ -798,6 +798,78 @@ const Landing = () => {
                 </div>
               </ScrollReveal>
             </div>
+
+            {/* Emotional transition block */}
+            <ScrollReveal delay={400} className="text-center mt-16 md:mt-20 max-w-2xl mx-auto">
+              <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-5">
+                This is the difference between hunting for leads and having them ready.
+              </h3>
+              <div className="space-y-2 text-base md:text-lg text-muted-foreground leading-relaxed mb-8">
+                <p>Most freelancers waste their best hours searching.</p>
+                <p>The ones who win start their day with momentum.</p>
+              </div>
+              <div className="space-y-4 text-sm md:text-base text-foreground/80">
+                <p>"Finish outreach before most people have found their first lead."</p>
+                <p>"Open your CRM and see replies instead of chaos."</p>
+                <p>"Know exactly who to message next."</p>
+              </div>
+            </ScrollReveal>
+
+            {/* Strong CTA */}
+            <ScrollReveal delay={500} className="text-center mt-12">
+              <Button 
+                size="lg" 
+                className="btn-premium text-base font-semibold px-10 py-5 h-auto shadow-lg shadow-primary/25"
+                style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.2), 0 4px 20px hsl(210 100% 50% / 0.15)' }}
+                asChild
+              >
+                <Link to="/auth">
+                  Start Free Trial
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+              <p className="text-xs text-muted-foreground/60 mt-4">
+                No credit card. 24 hours. Cancel anytime.
+              </p>
+            </ScrollReveal>
+          </div>
+        </ScrollReveal>
+      )}
+
+      {/* Mobile emotional section below comparison */}
+      {isMobile && (
+        <ScrollReveal className="relative z-10 py-14 px-6">
+          <div className="text-center max-w-sm mx-auto">
+            <h3 className="text-2xl font-bold tracking-tight mb-3">
+              This is what changes.
+            </h3>
+            <p className="text-sm text-muted-foreground mb-8">
+              The difference isn't effort. It's leverage.
+            </p>
+            <div className="space-y-5 mb-10">
+              <p className="text-[15px] text-foreground/80 leading-relaxed">
+                Finish outreach before most people find their first lead.
+              </p>
+              <p className="text-[15px] text-foreground/80 leading-relaxed">
+                Open your dashboard and know exactly who to message.
+              </p>
+              <p className="text-[15px] text-foreground/80 leading-relaxed">
+                Start your day with momentum, not scrolling.
+              </p>
+            </div>
+            <Button 
+              size="lg" 
+              className="btn-premium w-full text-base font-semibold py-4 h-auto shadow-lg shadow-primary/20"
+              asChild
+            >
+              <Link to="/auth">
+                Start Free Trial
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Link>
+            </Button>
+            <p className="text-[11px] text-muted-foreground/50 mt-3">
+              No credit card. 24 hours. Cancel anytime.
+            </p>
           </div>
         </ScrollReveal>
       )}
@@ -875,8 +947,8 @@ const Landing = () => {
             ))}
           </div>
 
-          {/* "Who is this for" micro-section */}
-          <ScrollReveal delay={400} className="text-center mt-8 sm:mt-12">
+          {/* "Who is this for" micro-section — desktop only (mobile version moved below toolkit carousel) */}
+          <ScrollReveal delay={400} className="hidden sm:block text-center mt-8 sm:mt-12">
             <p className="text-xs sm:text-sm text-muted-foreground/70 max-w-md mx-auto leading-relaxed">
               Built for freelance web designers, WordPress developers, small agencies, and anyone who needs a consistent way to find businesses that need a website.
             </p>
@@ -902,7 +974,13 @@ const Landing = () => {
           
           {/* Mobile: Carousel (4 core features) */}
           {isMobile ? (
-            <MobileFeatureCarousel features={FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title))} onExpand={(src, title) => setExpandedImage({ src, title })} />
+            <>
+              <MobileFeatureCarousel features={FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title))} onExpand={(src, title) => setExpandedImage({ src, title })} />
+              {/* "Who is this for" — mobile only, moved from Value Proposition section */}
+              <p className="text-xs text-muted-foreground/70 max-w-xs mx-auto leading-relaxed text-center mt-6 px-4">
+                Built for freelance web designers, WordPress developers, small agencies, and anyone who needs a consistent way to find businesses that need a website.
+              </p>
+            </>
           ) : (
             /* Desktop: 6-card grid matching old layout */
             <ScrollReveal>

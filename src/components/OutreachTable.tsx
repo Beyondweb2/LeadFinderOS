@@ -39,6 +39,7 @@ import {
   Eye,
   PhoneOff,
   PhoneCall,
+  X,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -111,6 +112,7 @@ export function OutreachTable({
   const ITEMS_PER_PAGE = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
+  const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
   const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('created_at');
@@ -530,6 +532,15 @@ export function OutreachTable({
       });
     }
 
+    // Filter by location
+    if (locationFilter.trim()) {
+      const tokens = locationFilter.trim().toLowerCase().replace(/\s+/g, ' ').split(' ');
+      result = result.filter((lead) => {
+        const haystack = `${lead.address || ''} ${lead.country || ''}`.toLowerCase();
+        return tokens.every(token => haystack.includes(token));
+      });
+    }
+
     // Filter by status
     if (statusFilter !== 'all') {
       result = result.filter((lead) => lead.status === statusFilter);
@@ -565,7 +576,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leads, searchQuery, statusFilter, countryFilter, sortField, sortDirection]);
+  }, [leads, searchQuery, locationFilter, statusFilter, countryFilter, sortField, sortDirection]);
 
   const newestLeadId = useMemo(() => {
     if (leads.length === 0) return null;
@@ -786,7 +797,7 @@ export function OutreachTable({
           
           {/* Filters row */}
           <div className="flex flex-wrap gap-2">
-            <div className="relative flex-1 min-w-[140px] max-w-[200px]">
+            <div className="relative flex-1 min-w-[120px] max-w-[180px]">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search..."
@@ -797,6 +808,25 @@ export function OutreachTable({
                 }}
                 className="pl-8 h-8 text-xs bg-background"
               />
+            </div>
+            <div className="relative flex-1 min-w-[120px] max-w-[200px]">
+              <Input
+                placeholder="City, postcode, area..."
+                value={locationFilter}
+                onChange={(e) => {
+                  setLocationFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-8 text-xs bg-background pr-7"
+              />
+              {locationFilter && (
+                <button
+                  onClick={() => { setLocationFilter(''); setCurrentPage(1); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
             <Select
               value={statusFilter}
