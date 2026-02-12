@@ -11,12 +11,9 @@ import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
  const FEATURES = [
    'Unlimited lead searches',
-   'Find businesses without websites',
-   'Full CRM access',
-   'Contact tracking & notes',
-   'Email & call templates',
-   'Export leads to outreach',
-   'Priority support',
+   'Full CRM & tracking',
+   'WhatsApp & SMS outreach',
+   'Export & templates',
  ];
  
 const Subscribe = () => {
@@ -115,13 +112,13 @@ const Subscribe = () => {
                   ) : hideTrialOffer ? (
                     <>Lead<span className="text-gradient-primary">Finder</span> Pro</>
                   ) : (
-                    'Unlock Everything — Free for 24 Hours Only'
+                    'Unlock Full Access — Free for 24 Hours'
                   )}
                </CardTitle>
                 <CardDescription className="text-base">
                   {eligibilityLoading ? '' : hideTrialOffer 
                     ? 'Unlock full access to all features'
-                    : '£0 today. Cancel anytime before renewal.'}
+                    : '£0 today · Cancel anytime'}
                 </CardDescription>
              </CardHeader>
              
@@ -181,15 +178,8 @@ const Subscribe = () => {
                    </>
                  )}
                </Button>
-               {!eligibilityLoading && !hideTrialOffer && (
-                 <p className="text-xs text-muted-foreground/60 text-center">
-                   Most users continue after trying it.
-                 </p>
-               )}
                 <p className="text-xs text-muted-foreground text-center">
-                  {hideTrialOffer 
-                    ? 'Secure payment via Stripe. Cancel anytime.'
-                    : 'Secure payment via Stripe · Cancel anytime before renewal'}
+                  Secure payment via Stripe · Cancel anytime
                 </p>
              </CardFooter>
           </Card>
