@@ -279,10 +279,7 @@ export function useSubscription() {
  
      if (error) throw error;
      if (data?.url) {
-       // Open Stripe in a new tab
-       window.open(data.url, '_blank');
-       // Signal the app to start polling for activation
-       window.dispatchEvent(new CustomEvent('checkout-opened'));
+       window.location.href = data.url;
      }
    };
  
