@@ -37,42 +37,9 @@ const Auth = () => {
   // Determine intent from query param: "demo" or "upgrade"
   const intent = intentParam === 'upgrade' ? 'upgrade' : 'demo';
 
-  // Helper to redirect new signups to Stripe checkout
-  const redirectToCheckout = async () => {
-    try {
-      setShowTrialModal(true);
-      setIsRedirectingToCheckout(true);
-      
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (!sessionData?.session?.access_token) {
-        throw new Error('No session available');
-      }
-
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
-        headers: {
-          Authorization: `Bearer ${sessionData.session.access_token}`,
-        },
-      });
-
-      if (error) throw error;
-      if (data?.url) {
-        // Use window.open to avoid iframe sandbox blocking location changes
-        const opened = window.open(data.url, '_blank');
-        if (!opened) {
-          // Fallback if popup blocked
-          window.location.href = data.url;
-        }
-      }
-    } catch (err) {
-      console.error('Checkout redirect failed:', err);
-      setIsRedirectingToCheckout(false);
-      setShowTrialModal(false);
-      toast({
-        title: 'Error',
-        description: 'Failed to start checkout. Please try again.',
-        variant: 'destructive',
-      });
-    }
+  // Helper to redirect to the unlock-access page (which handles Stripe checkout properly)
+  const redirectToCheckout = () => {
+    navigate('/unlock-access', { replace: true });
   };
 
   // Redirect if already authenticated
