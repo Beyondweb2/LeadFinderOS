@@ -21,15 +21,15 @@ export function TrialBanner() {
   if (isLoading || dismissed) return null;
 
   // Calculate days until charge for trialing users
-  const getDaysUntilCharge = () => {
+  const getHoursUntilCharge = () => {
     if (!subscriptionEnd) return 0;
     const endDate = new Date(subscriptionEnd);
     const now = new Date();
-    return Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)));
+    return Math.max(0, Math.ceil((endDate.getTime() - now.getTime()) / (1000 * 60 * 60)));
   };
 
   const isTrialing = status === 'trialing';
-  const daysUntilCharge = isTrialing ? getDaysUntilCharge() : 0;
+  const hoursUntilCharge = isTrialing ? getHoursUntilCharge() : 0;
 
   // Don't show for active subscribers (not trialing)
   if (subscribed && !isTrialing) return null;
@@ -42,7 +42,7 @@ export function TrialBanner() {
           <div className="flex items-center gap-2 text-sm min-w-0">
             <CreditCard className="h-4 w-4 text-primary shrink-0" />
             <span className="font-medium text-foreground/90 whitespace-nowrap">
-              {daysUntilCharge} hour{daysUntilCharge !== 1 ? 's' : ''} of full access remaining
+              Full access ends in {hoursUntilCharge} hour{hoursUntilCharge !== 1 ? 's' : ''}
             </span>
             <span className="text-muted-foreground hidden sm:inline truncate">
               — Enjoying unlimited searches and full features
