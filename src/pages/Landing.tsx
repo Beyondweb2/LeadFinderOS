@@ -599,10 +599,6 @@ const Landing = () => {
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-            <Link to="/guide" className="text-sm sm:text-base text-foreground/60 hover:text-foreground/90 transition-colors inline-flex items-center gap-1.5 font-medium">
-              See How It Works
-              <ArrowRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-            </Link>
           </div>
 
           {/* Reassurance microcopy removed from hero */}
