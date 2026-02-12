@@ -590,27 +590,37 @@ const Landing = () => {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/demo">
-                Start Free Demo
+                Try Live Demo
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-            <Button variant="ghost" size="lg" className="text-sm sm:text-base font-medium text-muted-foreground/70 hover:text-foreground/90 h-auto px-4 py-2" asChild>
+            <Button variant="outline" size="lg" className="text-sm sm:text-base font-medium h-auto px-5 py-2.5 border-foreground/20 hover:bg-foreground/5" asChild>
               <Link to="/auth">
                 Start Free Trial
               </Link>
             </Button>
           </div>
 
-          <p className="text-xs text-muted-foreground/50 mt-3 sm:mt-4">
-            1 demo search per visitor · No signup required
+          <p className="text-xs text-foreground/45 mt-3 sm:mt-4">
+            Run 1 real search instantly. No signup. No card.
+          </p>
+
+          {/* Hook line */}
+          <p className="text-sm sm:text-base font-medium text-foreground/60 mt-4 sm:mt-5">
+            Know it works before you commit.
           </p>
 
           {/* Trust bullets */}
-          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 mt-4 sm:mt-6 text-xs sm:text-sm text-foreground/45">
-            <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />See real businesses</span>
-            <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />View live contact details</span>
-            <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />Test the workflow yourself</span>
+          <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-5 mt-3 sm:mt-5 text-[13px] sm:text-[15px] text-foreground/55">
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build an outreach list in seconds</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track everything in one place</span>
           </div>
+
+          {/* Authority line */}
+          <p className="text-[11px] sm:text-xs text-muted-foreground/40 mt-4 sm:mt-5">
+            Built for web developers and freelancers looking for clients.
+          </p>
 
           {/* Stats bar - moved above bullets */}
           <div className="mt-6 sm:mt-10 md:mt-12 py-4 sm:py-0 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
@@ -647,7 +657,7 @@ const Landing = () => {
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-8 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-2 sm:mb-4">
-              Stop Wasting Mornings on <span className="text-gradient-primary">Google Maps</span>
+              Stop Manually Scrolling <span className="text-gradient-primary">Google Maps</span> for Leads
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg">
               There's a faster way to find businesses without websites.
@@ -685,13 +695,13 @@ const Landing = () => {
                   <h3 className="text-lg font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3>
                 </div>
                 <div 
-                  className="relative rounded-lg overflow-hidden mb-4 aspect-[16/10]"
+                  className="relative rounded-lg overflow-hidden mb-4"
                   style={{ 
                     border: '1px solid hsl(142 60% 40% / 0.25)',
                     boxShadow: '0 0 20px hsl(142 60% 40% / 0.1)'
                   }}
                 >
-                  <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-full object-cover object-top" />
+                  <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" />
                 </div>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
@@ -745,13 +755,13 @@ const Landing = () => {
                       style={{ background: 'linear-gradient(to bottom right, hsl(142 60% 40% / 0.3), hsl(142 60% 40% / 0.1))' }}
                     />
                     <div 
-                      className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
+                      className="relative rounded-xl overflow-hidden"
                       style={{ 
                         border: '1px solid hsl(142 60% 40% / 0.25)',
                         boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
                       }}
                     >
-                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-full object-cover object-top" />
+                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" />
                     </div>
                   </div>
                   <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
@@ -821,11 +831,11 @@ const Landing = () => {
                 asChild
               >
                 <Link to="/demo">
-                  Start Free Demo
+                  Try Live Demo
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
-              <Button variant="ghost" size="lg" className="text-base font-medium text-muted-foreground/70 hover:text-foreground/90 h-auto px-6 py-3" asChild>
+              <Button variant="outline" size="lg" className="text-base font-medium h-auto px-6 py-3 border-foreground/20 hover:bg-foreground/5" asChild>
                 <Link to="/auth">Start Free Trial</Link>
               </Button>
             </div>
@@ -1069,11 +1079,11 @@ const Landing = () => {
                 <CardFooter className="pt-4 sm:pt-5 pb-6 sm:pb-7 flex-col gap-3 px-4 sm:px-6">
                   <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
                     <Link to="/demo">
-                      Start Free Demo
+                      Try Live Demo
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
-                  <Button variant="ghost" size="lg" className="w-full text-sm font-medium text-muted-foreground/70 hover:text-foreground/90 h-auto py-2" asChild>
+                  <Button variant="outline" size="lg" className="w-full text-sm font-medium h-auto py-2 border-foreground/20 hover:bg-foreground/5" asChild>
                     <Link to="/auth">Start Free Trial</Link>
                   </Button>
                   <p className="text-[10px] sm:text-xs text-muted-foreground/60 text-center">
@@ -1176,7 +1186,7 @@ const Landing = () => {
         >
           <Button size="lg" className="w-full btn-premium font-semibold py-3 h-auto text-sm" asChild>
             <Link to="/demo">
-              Start Free Demo
+              Try Live Demo
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
