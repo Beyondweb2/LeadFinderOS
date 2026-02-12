@@ -17,47 +17,48 @@ interface Review {
 const REVIEWS: Review[] = [
   {
     name: 'Chris P.',
-    role: 'Freelance Designer',
-    content: "was spending like an hour every morning just scrolling google maps trying to find businesses to pitch. now i get 30+ in about 10 minutes and actually have time to do the outreach.",
+    role: 'Freelance Designer – UK',
+    content: "I was spending about an hour every morning scrolling Google Maps trying to find businesses to pitch.\n\nNow I get 30+ leads in about 10 minutes and actually have time to do the outreach.",
     avatar: 'CP',
     stars: 5,
   },
   {
     name: 'Tom H.',
-    role: 'Web Developer',
-    content: "honestly the main thing for me is the tracking. i always used to forget who i'd messaged and who needed a follow-up. now it's all in one place and i don't lose leads anymore.",
+    role: 'Web Developer – Australia',
+    content: "The main thing for me is the tracking. I always used to forget who I'd messaged and who needed a follow-up.\n\nNow it's all in one place and I don't lose leads anymore.",
     avatar: 'TH',
     stars: 5,
   },
   {
     name: 'Alex M.',
-    role: 'WordPress Freelancer',
-    content: "got my first paying client about three weeks in. the templates made it way less stressful — i just picked one, tweaked it a bit, and sent. no more staring at a blank message.",
+    role: 'WordPress Freelancer – Canada',
+    content: "Got my first paying client about three weeks in. The templates made it way less stressful.\n\nI just picked one, tweaked it a bit, and sent. No more staring at a blank message.",
     avatar: 'AM',
     stars: 5,
   },
   {
     name: 'Daniel S.',
-    role: 'Agency Owner',
-    content: "we put the whole team on it and prospecting went from being this massive time sink to something that just gets done. follow-ups actually happen now which has been a game changer.",
+    role: 'Agency Owner – US',
+    content: "We put the whole team on it and prospecting went from being a massive time sink to something that just gets done.\n\nFollow-ups actually happen now, which has been a game changer.",
     avatar: 'DS',
     stars: 5,
   },
 ];
 
 const ReviewCard = ({ review, minimal }: { review: Review; minimal?: boolean }) => (
-  <div className={`h-full flex flex-col justify-between ${minimal ? 'px-4 py-5' : 'rounded-xl border border-white/[0.08] bg-card/60 backdrop-blur-sm px-5 py-6 sm:px-6 sm:py-7'}`}>
+  <div className={`h-full flex flex-col justify-between ${minimal ? 'px-4 py-4' : 'rounded-xl border border-white/[0.08] bg-card/60 backdrop-blur-sm px-5 py-5 sm:px-6 sm:py-6'}`}>
     <div className="w-full">
-      <div className="flex gap-0.5 mb-3">
-        {[...Array(review.stars)].map((_, i) => (
-          <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-        ))}
-      </div>
-      <p className="text-foreground/85 text-sm sm:text-base leading-relaxed font-normal">
-        "{review.content}"
-      </p>
+      {review.content.split('\n\n').map((paragraph, i) => (
+        <p key={i} className={`text-foreground/80 text-sm sm:text-base leading-relaxed font-normal ${i > 0 ? 'mt-2.5' : ''}`}>
+          {i === 0 ? `"${paragraph}` : paragraph}
+          {i === review.content.split('\n\n').length - 1 ? '"' : ''}
+        </p>
+      ))}
     </div>
-    <p className="text-muted-foreground/60 text-xs sm:text-sm mt-5 font-medium">{review.name} · {review.role}</p>
+    <div className="mt-4">
+      <p className="text-foreground/75 text-xs sm:text-sm font-semibold">{review.name}</p>
+      <p className="text-muted-foreground/50 text-[11px] sm:text-xs font-medium mt-0.5">{review.role}</p>
+    </div>
   </div>
 );
 
@@ -109,9 +110,15 @@ export const ReviewsSection = () => {
   const isMobile = useIsMobile();
 
   return (
-    <section className="relative z-10 py-10 sm:py-20 md:py-24 lg:py-32 px-4">
+    <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-24 px-4">
       <div className="container mx-auto">
-        <div className="text-center mb-10 sm:mb-12 md:mb-16">
+        <div className="text-center mb-6 sm:mb-10 md:mb-12">
+          <div className="flex items-center justify-center gap-1 mb-3">
+            {[...Array(5)].map((_, i) => (
+              <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+            ))}
+          </div>
+          <p className="text-foreground/50 text-xs sm:text-sm font-medium mb-4 sm:mb-5">Rated 4.9/5 by freelancers and agencies</p>
           <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
             Real Results from <span className="text-gradient-primary">Real Users</span>
           </h2>
