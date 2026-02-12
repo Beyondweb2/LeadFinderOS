@@ -81,7 +81,20 @@ const BillingSuccess = () => {
         </CardHeader>
         
         <CardContent className="flex flex-col items-center gap-4 py-8">
-          {status === 'syncing' && (
+          {!session?.access_token && (
+            <>
+              <CheckCircle2 className="h-12 w-12 text-green-500" />
+              <div className="text-center">
+                <h2 className="text-xl font-semibold mb-2">Payment received!</h2>
+                <p className="text-muted-foreground mb-4">You can close this tab and return to the app.</p>
+                <Button onClick={() => navigate('/', { replace: true })}>
+                  Go to Dashboard
+                </Button>
+              </div>
+            </>
+          )}
+          
+          {session?.access_token && status === 'syncing' && (
             <>
               <Loader2 className="h-12 w-12 text-primary animate-spin" />
               <div className="text-center">
@@ -91,7 +104,7 @@ const BillingSuccess = () => {
             </>
           )}
           
-          {status === 'success' && (
+          {session?.access_token && status === 'success' && (
             <>
               <CheckCircle2 className="h-12 w-12 text-green-500" />
               <div className="text-center">
@@ -101,7 +114,7 @@ const BillingSuccess = () => {
             </>
           )}
           
-          {status === 'error' && (
+          {session?.access_token && status === 'error' && (
             <>
               <AlertCircle className="h-12 w-12 text-destructive" />
               <div className="text-center">

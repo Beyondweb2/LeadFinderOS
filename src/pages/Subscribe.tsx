@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -19,11 +19,13 @@ const FEATURES = [
 
 const Subscribe = () => {
   const [isLoading, setIsLoading] = useState(false);
-  const { createCheckout, subscribed, isLoading: subLoading, status, isPaidSubscriber } = useSubscription();
-  const { isOnTrial, isStripeTrialing, trialUsed, isLoading: trialLoading } = useTrial();
+  const [waitingForPayment, setWaitingForPayment] = useState(false);
+  const { createCheckout, subscribed, isLoading: subLoading, status, isPaidSubscriber, isStripeTrialing, checkSubscription } = useSubscription();
+  const { isOnTrial, isStripeTrialing: trialIsStripeTrialing, trialUsed, isLoading: trialLoading } = useTrial();
   const { user, session, isLoading: authLoading, signOut } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Redirect unauthenticated users to login
   useEffect(() => {
@@ -35,12 +37,28 @@ const Subscribe = () => {
   // Show trial by default, only hide if actively trialing on Stripe
   const hideTrialOffer = isStripeTrialing || status === 'trialing';
 
-  // Redirect paid subscribers away
+  // Redirect paid subscribers or new trialers to dashboard
   useEffect(() => {
-    if (isPaidSubscriber && !subLoading) {
+    if (subLoading) return;
+    if (isPaidSubscriber || isStripeTrialing) {
+      // Clean up polling
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
       navigate('/', { replace: true });
     }
-  }, [isPaidSubscriber, subLoading, navigate]);
+  }, [isPaidSubscriber, isStripeTrialing, subLoading, navigate]);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+  }, []);
 
   const handleBack = useCallback(() => {
     navigate('/');
@@ -49,8 +67,6 @@ const Subscribe = () => {
   const handleSubscribe = async () => {
     setIsLoading(true);
     try {
-      // Call createCheckout but handle the redirect ourselves via window.open
-      // to work around iframe restrictions in preview
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         headers: {
           Authorization: `Bearer ${session?.access_token}`,
@@ -58,7 +74,18 @@ const Subscribe = () => {
       });
       if (error) throw error;
       if (data?.url) {
-        window.location.href = data.url;
+        // Open Stripe in new tab
+        window.open(data.url, '_blank');
+        setWaitingForPayment(true);
+        
+        // Start polling for subscription activation
+        pollRef.current = setInterval(async () => {
+          try {
+            await checkSubscription(true);
+          } catch {
+            // ignore polling errors
+          }
+        }, 3000);
       }
     } catch (error) {
       toast({
@@ -143,27 +170,54 @@ const Subscribe = () => {
           </CardContent>
 
           <CardFooter className="flex flex-col gap-3">
-            <Button
-              onClick={handleSubscribe}
-              className="w-full"
-              size="lg"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Starting...
-                </>
-              ) : (
-                <>
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  {hideTrialOffer ? 'Subscribe Now' : 'Unlock My 24-Hour Access'}
-                </>
-              )}
-            </Button>
-            <p className="text-xs text-muted-foreground text-center">
-              Secure payment via Stripe · Cancel anytime
-            </p>
+            {waitingForPayment ? (
+              <div className="w-full text-center space-y-3">
+                <div className="flex items-center justify-center gap-2 text-primary">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <span className="font-medium">Waiting for payment...</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Complete checkout in the new tab. This page will update automatically.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setWaitingForPayment(false);
+                    if (pollRef.current) {
+                      clearInterval(pollRef.current);
+                      pollRef.current = null;
+                    }
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <>
+                <Button
+                  onClick={handleSubscribe}
+                  className="w-full"
+                  size="lg"
+                  disabled={isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      {hideTrialOffer ? 'Subscribe Now' : 'Unlock My 24-Hour Access'}
+                    </>
+                  )}
+                </Button>
+                <p className="text-xs text-muted-foreground text-center">
+                  Secure payment via Stripe · Cancel anytime
+                </p>
+              </>
+            )}
           </CardFooter>
         </Card>
       </div>
