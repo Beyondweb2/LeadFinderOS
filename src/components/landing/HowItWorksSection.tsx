@@ -120,7 +120,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
   const isMobile = useIsMobile();
 
   return (
-    <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-28 px-3 sm:px-4">
+    <section className="relative z-10 py-8 sm:py-10 md:py-16 lg:py-20 px-3 sm:px-4">
       {/* Image Modal */}
       <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
         <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
