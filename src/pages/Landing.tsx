@@ -546,9 +546,9 @@ const Landing = () => {
               asChild 
               className="font-medium text-sm px-3 sm:px-4 btn-premium"
             >
-              <Link to="/auth">
-                <span className="hidden sm:inline">Start Free Trial</span>
-                <span className="sm:hidden">Free Trial</span>
+              <Link to="/demo">
+                <span className="hidden sm:inline">Free Demo</span>
+                <span className="sm:hidden">Demo</span>
               </Link>
             </Button>
           </div>
@@ -578,35 +578,39 @@ const Landing = () => {
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight">
             <span className="block text-gradient-primary">Find Businesses</span>
-            <span className="block mt-0.5 sm:mt-2">Without Websites</span>
+            <span className="block mt-0.5 sm:mt-2">Without Websites in Seconds</span>
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
-            Find real businesses without websites, reach out directly via WhatsApp or SMS, and track every lead in one simple dashboard.
+            Try a live demo search instantly. Unlock full outreach tools with a free trial.
           </p>
           
           {/* Keywords removed */}
           
           <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
             <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
-              <Link to="/auth">
-                Start Free Trial
+              <Link to="/demo">
+                Start Free Demo
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Link>
             </Button>
-            <button 
-              className="text-sm sm:text-base font-medium text-muted-foreground/70 hover:text-foreground/90 transition-colors"
-              onClick={() => {
-                document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-            >
-              See How It Works ↓
-            </button>
+            <Button variant="ghost" size="lg" className="text-sm sm:text-base font-medium text-muted-foreground/70 hover:text-foreground/90 h-auto px-4 py-2" asChild>
+              <Link to="/auth">
+                Start Free Trial
+              </Link>
+            </Button>
           </div>
 
           <p className="text-xs text-muted-foreground/50 mt-3 sm:mt-4">
-            Full access · Cancel anytime
+            1 demo search per visitor · No signup required
           </p>
+
+          {/* Trust bullets */}
+          <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 mt-4 sm:mt-6 text-xs sm:text-sm text-foreground/45">
+            <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />See real businesses</span>
+            <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />View live contact details</span>
+            <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} />Test the workflow yourself</span>
+          </div>
 
           {/* Stats bar - moved above bullets */}
           <div className="mt-6 sm:mt-10 md:mt-12 py-4 sm:py-0 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
@@ -810,18 +814,23 @@ const Landing = () => {
           </ScrollReveal>
 
           <ScrollReveal delay={350} className="hidden sm:block">
-            <Button 
-              size="lg" 
-              className="btn-premium text-base font-semibold px-10 py-5 h-auto w-auto"
-              asChild
-            >
-              <Link to="/auth">
-                Start Free Trial
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Link>
-            </Button>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Button 
+                size="lg" 
+                className="btn-premium text-base font-semibold px-10 py-5 h-auto w-auto"
+                asChild
+              >
+                <Link to="/demo">
+                  Start Free Demo
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Link>
+              </Button>
+              <Button variant="ghost" size="lg" className="text-base font-medium text-muted-foreground/70 hover:text-foreground/90 h-auto px-6 py-3" asChild>
+                <Link to="/auth">Start Free Trial</Link>
+              </Button>
+            </div>
             <p className="text-xs text-muted-foreground/60 mt-4">
-              Free trial with full access. No card required.
+              1 free demo search · No signup required
             </p>
           </ScrollReveal>
         </div>
@@ -1059,10 +1068,13 @@ const Landing = () => {
                 
                 <CardFooter className="pt-4 sm:pt-5 pb-6 sm:pb-7 flex-col gap-3 px-4 sm:px-6">
                   <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
-                    <Link to="/auth">
-                      Start My Free Trial
+                    <Link to="/demo">
+                      Start Free Demo
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
+                  </Button>
+                  <Button variant="ghost" size="lg" className="w-full text-sm font-medium text-muted-foreground/70 hover:text-foreground/90 h-auto py-2" asChild>
+                    <Link to="/auth">Start Free Trial</Link>
                   </Button>
                   <p className="text-[10px] sm:text-xs text-muted-foreground/60 text-center">
                     £0 today · Full access · Cancel anytime
@@ -1122,6 +1134,9 @@ const Landing = () => {
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
                 Sign In
               </Link>
+              <Link to="/demo" className="hover:text-foreground transition-colors duration-200">
+                Free Demo
+              </Link>
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
                 Start Free Trial
               </Link>
@@ -1160,13 +1175,13 @@ const Landing = () => {
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
           <Button size="lg" className="w-full btn-premium font-semibold py-3 h-auto text-sm" asChild>
-            <Link to="/auth">
-              Start Free Trial
+            <Link to="/demo">
+              Start Free Demo
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            Free trial · Full access · Cancel anytime
+            1 free search · No signup needed
           </p>
         </div>
       )}
