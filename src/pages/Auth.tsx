@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { readLastRoute } from '@/hooks/usePersistLastRoute';
@@ -20,7 +20,9 @@ const authSchema = z.object({
 });
 
 const Auth = () => {
-  const [isLogin, setIsLogin] = useState(true);
+  const [searchParamsInit] = useSearchParams();
+  const intentParam = searchParamsInit.get('intent');
+  const [isLogin, setIsLogin] = useState(!intentParam);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -31,6 +33,9 @@ const Auth = () => {
   const { signIn, signUp, user, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Determine intent from query param: "demo" or "upgrade"
+  const intent = intentParam === 'upgrade' ? 'upgrade' : 'demo';
 
   // Helper to redirect new signups to Stripe checkout
   const redirectToCheckout = async () => {
@@ -152,11 +157,19 @@ const Auth = () => {
             });
           }
         } else {
-          toast({
-            title: 'Account created!',
-            description: 'Redirecting to your dashboard...',
-          });
-          navigate('/');
+          if (intent === 'upgrade') {
+            toast({
+              title: 'Account created!',
+              description: 'Redirecting to checkout...',
+            });
+            navigate('/subscribe');
+          } else {
+            toast({
+              title: 'Account created!',
+              description: 'Redirecting to your dashboard...',
+            });
+            navigate('/');
+          }
           return;
         }
       }
@@ -238,11 +251,15 @@ const Auth = () => {
           <CardDescription>
             {isLogin 
               ? 'Sign in to find businesses without websites' 
-              : 'Create an account to try your first search free'}
+              : intent === 'upgrade'
+                ? 'Create an account to start your 24-Hour Full Access'
+                : 'Create an account to try your first search free'}
           </CardDescription>
           {!isLogin && (
             <p className="text-xs text-muted-foreground mt-2">
-              No card required. See real results instantly.
+              {intent === 'upgrade' 
+                ? 'Card required after sign up. Cancel anytime.'
+                : 'No card required. See real results instantly.'}
             </p>
           )}
         </CardHeader>
