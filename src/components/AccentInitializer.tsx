@@ -7,7 +7,7 @@ const DEFAULT_THEME_ID = 'midnight';
 // Minimal theme data for initialization (before full hook loads)
 const THEMES: Record<string, { mode: 'dark' | 'light'; background: string; card: string; popover: string; secondary: string; muted: string; foreground: string; mutedForeground: string; secondaryForeground: string; border: string; input: string }> = {
   // Dark themes
-  midnight: { mode: 'dark', background: '222 47% 4%', card: '220 40% 6%', popover: '220 40% 8%', secondary: '220 40% 10%', muted: '220 40% 8%', foreground: '210 40% 98%', mutedForeground: '215 20% 50%', secondaryForeground: '210 40% 95%', border: '220 30% 12%', input: '220 30% 10%' },
+  midnight: { mode: 'dark', background: '218 50% 6%', card: '220 40% 6%', popover: '220 40% 8%', secondary: '220 40% 10%', muted: '220 40% 8%', foreground: '210 40% 98%', mutedForeground: '215 20% 50%', secondaryForeground: '210 40% 95%', border: '220 30% 12%', input: '220 30% 10%' },
   charcoal: { mode: 'dark', background: '0 0% 7%', card: '0 0% 10%', popover: '0 0% 12%', secondary: '0 0% 14%', muted: '0 0% 12%', foreground: '0 0% 98%', mutedForeground: '0 0% 55%', secondaryForeground: '0 0% 90%', border: '0 0% 18%', input: '0 0% 14%' },
   slate: { mode: 'dark', background: '215 25% 8%', card: '215 25% 11%', popover: '215 25% 13%', secondary: '215 20% 16%', muted: '215 25% 13%', foreground: '210 30% 98%', mutedForeground: '215 15% 55%', secondaryForeground: '210 20% 90%', border: '215 20% 20%', input: '215 25% 14%' },
   navy: { mode: 'dark', background: '230 35% 6%', card: '230 35% 9%', popover: '230 35% 11%', secondary: '230 30% 14%', muted: '230 35% 11%', foreground: '220 30% 98%', mutedForeground: '230 15% 55%', secondaryForeground: '220 25% 90%', border: '230 25% 18%', input: '230 35% 12%' },
