@@ -872,7 +872,7 @@ const Landing = () => {
               Your Outreach, <span className="text-gradient-primary">Systemised.</span>
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
-              A simple system that replaces guesswork with clarity — so you can focus on closing, not chasing.
+              A structured workflow for finding leads, sending messages, and tracking every follow-up in one place.
             </p>
           </ScrollReveal>
 
@@ -880,10 +880,10 @@ const Landing = () => {
             <div className="flex justify-center">
               <div className="flex flex-col gap-2.5 sm:gap-3 pl-2 max-w-[340px] sm:max-w-none">
                 {[
-                  'Know exactly who to contact every day',
-                  'Turn cold outreach into a warm pipeline',
-                  'See exactly where your revenue is coming from',
-                  'Stay in control from first message to paid client',
+                  'Know who to contact and when',
+                  'Keep every follow-up organised',
+                  'See who replied and what\'s next',
+                  'Manage outreach from first message to client',
                 ].map((item, i) => (
                   <ScrollReveal key={i} delay={i * 60}>
                     <div className="flex items-center gap-3.5">
