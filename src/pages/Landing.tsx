@@ -491,32 +491,32 @@ const Landing = () => {
       </Dialog>
       {/* Cinematic background */}
       <div className="fixed inset-0 pointer-events-none">
-        {/* Deep blue gradient from top */}
+        {/* Deep blue base wash */}
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'radial-gradient(ellipse 120% 80% at 50% -30%, hsl(210 100% 50% / 0.5), transparent 60%)',
+            background: 'linear-gradient(180deg, hsl(215 60% 8%) 0%, hsl(220 50% 5%) 40%, hsl(218 55% 7%) 70%, hsl(215 50% 6%) 100%)',
           }}
         />
-        {/* Blue accent glow - top center */}
-        <div 
-          className="absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[450px]"
-          style={{ 
-            background: 'radial-gradient(ellipse 100% 70% at 50% 0%, hsl(210 100% 50% / 0.2), transparent 70%)',
-          }}
-        />
-        {/* Subtle blue glow - bottom right */}
-        <div 
-          className="absolute bottom-0 right-0 w-[800px] h-[600px]"
-          style={{ 
-            background: 'radial-gradient(ellipse 80% 80% at 100% 100%, hsl(210 100% 40% / 0.15), transparent 60%)',
-          }}
-        />
-        {/* Additional blue wash across page */}
+        {/* Radial blue glow - top */}
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'linear-gradient(180deg, hsl(210 100% 50% / 0.08) 0%, transparent 40%, hsl(210 100% 50% / 0.04) 100%)',
+            background: 'radial-gradient(ellipse 100% 60% at 50% -10%, hsl(210 100% 50% / 0.18), transparent 60%)',
+          }}
+        />
+        {/* Radial blue glow - mid left */}
+        <div 
+          className="absolute top-[30%] left-0 w-[70%] h-[50%]"
+          style={{ 
+            background: 'radial-gradient(ellipse 80% 60% at 20% 50%, hsl(210 100% 50% / 0.06), transparent 70%)',
+          }}
+        />
+        {/* Radial blue glow - bottom right */}
+        <div 
+          className="absolute bottom-0 right-0 w-[60%] h-[40%]"
+          style={{ 
+            background: 'radial-gradient(ellipse 80% 80% at 80% 90%, hsl(210 100% 50% / 0.08), transparent 60%)',
           }}
         />
         {/* Subtle noise texture */}
@@ -597,7 +597,7 @@ const Landing = () => {
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-5xl lg:text-6xl xl:text-7xl font-bold mb-3 sm:mb-6 tracking-tight">
             <span className="block text-gradient-primary">Find Businesses</span>
-            <span className="block text-gradient-subtle mt-0.5 sm:mt-2">Without Websites</span>
+            <span className="block mt-0.5 sm:mt-2">Without Websites</span>
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
@@ -872,7 +872,7 @@ const Landing = () => {
         <div className="container mx-auto max-w-3xl text-center">
           <ScrollReveal className="mb-10 sm:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight mb-3 sm:mb-4">
-              Built for <span className="text-gradient-primary">aggressive outreach.</span>
+              Built for <span className="text-gradient-primary">serious outreach.</span>
             </h2>
             <p className="text-base sm:text-lg text-muted-foreground">
               Stop searching. Start sending.
@@ -903,7 +903,7 @@ const Landing = () => {
             ))}
           </div>
 
-          <ScrollReveal delay={350}>
+          <ScrollReveal delay={350} className="hidden sm:block">
             <Button 
               size="lg" 
               className="btn-premium text-base font-semibold px-10 py-5 h-auto shadow-lg shadow-primary/25 w-full sm:w-auto"
@@ -1063,7 +1063,7 @@ const Landing = () => {
                     <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">After your 24-hour trial · Cancel before it ends and pay nothing</p>
+                  <p className="text-xs text-muted-foreground mt-2">Try everything risk-free — your card won't be charged during the trial</p>
                 </CardHeader>
                 
                 <CardContent className="pt-6 sm:pt-8 px-4 sm:px-6">
