@@ -490,7 +490,7 @@ const Landing = () => {
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'radial-gradient(ellipse 80% 50% at 50% -20%, hsl(210 100% 50% / 0.20), transparent 60%)',
+            background: 'radial-gradient(ellipse 80% 50% at 50% -20%, hsl(210 100% 50% / 0.25), transparent 60%)',
           }}
         />
         {/* Very subtle mid-page glow */}
@@ -564,18 +564,29 @@ const Landing = () => {
           </div>
 
           <div className="max-w-3xl mx-auto">
-            <h1 className="font-display text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-[3.5rem] xl:text-6xl font-extrabold mb-3 sm:mb-5 tracking-tight">
-              <span className="block text-gradient-primary">Your All-in-One</span>
-              <span className="block mt-0.5 sm:mt-2">Client Outreach Tool</span>
+            {/* Blue pill badge */}
+            <div 
+              className="hidden sm:inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-8 backdrop-blur-sm"
+              style={{ border: '1px solid hsl(210 100% 50% / 0.2)', background: 'hsl(210 100% 50% / 0.08)', color: 'hsl(210 100% 70%)' }}
+            >
+              <Zap className="h-3.5 w-3.5" />
+              <span>Lead generation for web professionals</span>
+            </div>
+
+            <h1 className="font-display text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-[4rem] xl:text-7xl font-extrabold mb-4 sm:mb-6 tracking-tight">
+              <span className="block">Find Businesses</span>
+              <span className="block mt-1 sm:mt-2 text-gradient-primary">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
-              Search, contact and track businesses that need a website — in one streamlined workflow.
+            <p className="text-sm sm:text-lg md:text-xl text-foreground/50 max-w-2xl mx-auto mb-4 sm:mb-8 leading-relaxed px-2">
+              Find local businesses without websites and reach out directly.
+              <br className="hidden sm:block" />
+              Stop scrolling Google Maps — start contacting prospects.
             </p>
             
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
-              <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-lg font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-5 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
+              <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-lg font-normal px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-5 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
                 <Link to="/auth?intent=demo">
                   Try Free Demo
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
@@ -584,20 +595,11 @@ const Landing = () => {
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="hidden sm:inline-flex text-base font-semibold px-8 py-4 h-auto border-border/50 hover:bg-muted/30 text-foreground/70 hover:text-foreground transition-colors"
-                onClick={() => {
-                  document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
-                }}
+                className="hidden sm:inline-flex text-base font-normal px-8 py-4 h-auto border-border/50 hover:bg-muted/30 text-foreground/70 hover:text-foreground transition-colors"
+                asChild
               >
-                See How It Works
+                <Link to="/auth">Sign In</Link>
               </Button>
-            </div>
-
-            {/* Trust bullets */}
-            <div className="hidden sm:flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-8 text-[15px] text-foreground/55">
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
             </div>
 
             {/* Mobile trust bullets */}
@@ -610,22 +612,26 @@ const Landing = () => {
 
           {/* Stats bar */}
           <div 
-            className="mt-4 sm:mt-10 md:mt-12 lg:mt-16 py-4 sm:py-6 lg:py-5 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-2xl mx-auto rounded-xl lg:border lg:border-border/40 lg:bg-card/30 lg:backdrop-blur-sm lg:px-8"
+            className="mt-6 sm:mt-12 md:mt-16 lg:mt-20 py-4 sm:py-6 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-2xl mx-auto"
           >
-            <CountUpStat target={100000} suffix="+" label="Businesses Indexed" />
+            <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
               <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="flex items-center justify-center">
+                <svg className="h-5 w-5 sm:h-7 sm:w-7 md:h-8 md:w-8" viewBox="0 0 24 24" fill="none" style={{ color: 'hsl(var(--primary))' }}>
+                  <path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-5.095-8 0-8zM5.822 8c5.096 0 5.096 8 0 8-5.095 0-5.095-8 0-8z" stroke="currentColor" strokeWidth="2"/>
+                </svg>
+              </div>
               <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
             </div>
           </div>
 
-          {/* Works on every device */}
-          <p className="text-[10px] sm:text-xs text-muted-foreground/40 mt-3 sm:mt-2 tracking-wide font-medium text-center">
-            Works seamlessly on desktop & mobile
+          {/* Set up tagline */}
+          <p className="text-[10px] sm:text-xs text-muted-foreground/40 mt-1 sm:mt-2 tracking-wide font-medium text-center">
+            Set up in under 60 seconds. Full access included.
           </p>
 
           {/* Scroll indicator */}
