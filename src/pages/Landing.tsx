@@ -556,42 +556,24 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-28 lg:pt-28 lg:pb-32 px-4">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:pt-28 lg:pb-36 px-4">
         <div className="container mx-auto text-center">
           {/* Mobile: Video at top instead of logo */}
           <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
 
-          {/* Desktop: Video/image above headline */}
-          <div className="hidden sm:block mb-10 md:mb-12 lg:mb-14 max-w-3xl mx-auto">
-            <div className="relative">
-              {/* Blue glow behind video */}
-              <div className="absolute inset-0 rounded-2xl" style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.15) 0%, transparent 70%)', filter: 'blur(40px)', transform: 'scale(1.1)' }} />
-              <div className="relative rounded-xl overflow-hidden shadow-2xl shadow-primary/10 border border-border/30">
-                <video
-                  src={demoVideo}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className="w-full h-auto"
-                />
-              </div>
-            </div>
-          </div>
-
           <div className="max-w-3xl mx-auto">
             {/* Blue pill badge */}
             <div 
-              className="hidden sm:inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-6 backdrop-blur-sm"
+              className="hidden sm:inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-8 backdrop-blur-sm"
               style={{ border: '1px solid hsl(210 100% 50% / 0.2)', background: 'hsl(210 100% 50% / 0.08)', color: 'hsl(210 100% 70%)' }}
             >
               <Zap className="h-3.5 w-3.5" />
               <span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4rem] xl:text-7xl font-extrabold mb-4 sm:mb-5 tracking-tight">
+            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4rem] xl:text-7xl font-extrabold mb-4 sm:mb-6 tracking-tight">
               Find Businesses <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
@@ -623,18 +605,11 @@ const Landing = () => {
               <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
               <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
             </div>
-
-            {/* Desktop trust bullets */}
-            <div className="hidden sm:flex items-center justify-center gap-6 mt-8 text-sm text-foreground/50 font-medium">
-              <span className="flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-              <span className="flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-              <span className="flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
-            </div>
           </div>
 
           {/* Stats bar */}
           <div 
-            className="mt-6 sm:mt-10 md:mt-14 py-4 sm:py-6 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-2xl mx-auto"
+            className="mt-6 sm:mt-12 md:mt-16 lg:mt-20 py-4 sm:py-6 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-2xl mx-auto"
           >
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
@@ -662,7 +637,10 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Video Demo Section removed - now integrated into hero for both mobile and desktop */}
+      {/* Video Demo Section - desktop only (mobile has it in hero) */}
+      <div className="hidden sm:block">
+        <VideoSection />
+      </div>
 
 
       {/* Old Way vs New Way comparison */}
