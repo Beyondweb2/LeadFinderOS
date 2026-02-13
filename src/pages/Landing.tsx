@@ -593,6 +593,20 @@ const Landing = () => {
             </Button>
           </div>
 
+          {/* Trust bullets - desktop only */}
+          <div className="hidden sm:flex flex-wrap items-center justify-center gap-5 mt-10 text-[15px] text-foreground/55">
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
+          </div>
+
+          {/* Mobile trust bullets */}
+          <div className="flex sm:hidden flex-wrap items-center justify-center gap-2.5 mt-4 text-[13px] text-foreground/55">
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
+          </div>
+
           {/* Stats bar */}
           <div className="mt-4 sm:mt-10 md:mt-12 py-4 sm:py-6 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
@@ -610,20 +624,6 @@ const Landing = () => {
           <p className="text-[10px] sm:text-xs text-muted-foreground/40 mt-3 sm:mt-2 tracking-wide font-medium">
             Works seamlessly on desktop & mobile
           </p>
-
-          {/* Trust bullets - desktop only */}
-          <div className="hidden sm:flex flex-wrap items-center justify-center gap-5 mt-6 text-[15px] text-foreground/55">
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
-          </div>
-
-          {/* Mobile trust bullets */}
-          <div className="flex sm:hidden flex-wrap items-center justify-center gap-2.5 mt-4 text-[13px] text-foreground/55">
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
-          </div>
         </div>
       </section>
 
