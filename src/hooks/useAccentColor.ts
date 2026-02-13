@@ -121,103 +121,103 @@ export const DARK_THEMES: ThemePreset[] = [
   },
 ];
 
-// 6 Light themes - more varied and distinctive
+// 6 Light themes - high-contrast, clean SaaS
 export const LIGHT_THEMES: ThemePreset[] = [
   {
     id: 'blush',
     name: 'Blush',
     mode: 'light',
-    background: '350 60% 97%',
+    background: '350 30% 95%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '350 40% 94%',
-    muted: '350 30% 92%',
-    foreground: '350 30% 12%',
-    mutedForeground: '350 15% 40%',
-    secondaryForeground: '350 25% 25%',
-    border: '350 25% 88%',
-    input: '350 35% 95%',
-    preview: '#FDF2F4',
+    secondary: '350 20% 91%',
+    muted: '350 15% 93%',
+    foreground: '350 20% 10%',
+    mutedForeground: '350 10% 42%',
+    secondaryForeground: '350 15% 18%',
+    border: '350 15% 85%',
+    input: '350 20% 92%',
+    preview: '#F5ECEE',
   },
   {
     id: 'peach',
     name: 'Peach',
     mode: 'light',
-    background: '25 70% 96%',
+    background: '30 35% 95%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '25 50% 92%',
-    muted: '25 40% 90%',
-    foreground: '25 40% 12%',
-    mutedForeground: '25 20% 38%',
-    secondaryForeground: '25 30% 22%',
-    border: '25 35% 85%',
-    input: '25 45% 94%',
-    preview: '#FEF3E8',
+    secondary: '30 25% 91%',
+    muted: '30 18% 93%',
+    foreground: '25 25% 10%',
+    mutedForeground: '25 12% 42%',
+    secondaryForeground: '25 18% 18%',
+    border: '30 18% 84%',
+    input: '30 25% 92%',
+    preview: '#F5EEE6',
   },
   {
     id: 'baby-blue',
     name: 'Baby Blue',
     mode: 'light',
-    background: '205 70% 96%',
+    background: '210 30% 95%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '205 50% 92%',
-    muted: '205 40% 90%',
-    foreground: '210 40% 12%',
-    mutedForeground: '210 20% 38%',
-    secondaryForeground: '210 30% 22%',
-    border: '205 35% 85%',
-    input: '205 45% 94%',
-    preview: '#EBF5FC',
+    secondary: '210 22% 91%',
+    muted: '210 16% 93%',
+    foreground: '215 25% 10%',
+    mutedForeground: '215 12% 42%',
+    secondaryForeground: '215 18% 18%',
+    border: '210 18% 84%',
+    input: '210 22% 92%',
+    preview: '#ECF1F7',
   },
   {
     id: 'mint',
     name: 'Mint',
     mode: 'light',
-    background: '160 55% 95%',
+    background: '160 28% 94%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '160 40% 90%',
-    muted: '160 30% 88%',
-    foreground: '165 35% 12%',
-    mutedForeground: '165 18% 38%',
-    secondaryForeground: '165 25% 22%',
-    border: '160 30% 82%',
-    input: '160 40% 93%',
-    preview: '#E8F8F3',
+    secondary: '160 20% 90%',
+    muted: '160 14% 92%',
+    foreground: '165 22% 10%',
+    mutedForeground: '165 10% 42%',
+    secondaryForeground: '165 16% 18%',
+    border: '160 15% 83%',
+    input: '160 20% 91%',
+    preview: '#E6F3EE',
   },
   {
     id: 'lavender',
     name: 'Lavender',
     mode: 'light',
-    background: '265 55% 96%',
+    background: '265 28% 95%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '265 40% 92%',
-    muted: '265 30% 90%',
-    foreground: '270 35% 14%',
-    mutedForeground: '270 18% 40%',
-    secondaryForeground: '270 25% 25%',
-    border: '265 30% 86%',
-    input: '265 40% 94%',
-    preview: '#F3EEFA',
+    secondary: '265 20% 91%',
+    muted: '265 14% 93%',
+    foreground: '270 22% 12%',
+    mutedForeground: '270 10% 42%',
+    secondaryForeground: '270 16% 20%',
+    border: '265 16% 84%',
+    input: '265 20% 92%',
+    preview: '#EFEBF5',
   },
   {
     id: 'cloud',
     name: 'Cloud',
     mode: 'light',
-    background: '220 25% 97%',
+    background: '220 16% 94%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '220 20% 93%',
-    muted: '220 15% 91%',
-    foreground: '225 30% 12%',
-    mutedForeground: '225 15% 40%',
-    secondaryForeground: '225 22% 25%',
-    border: '220 18% 87%',
-    input: '220 22% 95%',
-    preview: '#F4F6FA',
+    secondary: '220 12% 90%',
+    muted: '220 10% 92%',
+    foreground: '225 18% 10%',
+    mutedForeground: '225 8% 42%',
+    secondaryForeground: '225 14% 18%',
+    border: '220 12% 84%',
+    input: '220 14% 91%',
+    preview: '#EDEEF2',
   },
 ];
 
@@ -332,8 +332,16 @@ function applyThemeToDocument(theme: ThemePreset, accentHSL: string) {
   root.style.setProperty('--accent', shades.base);
   root.style.setProperty('--accent-foreground', isLight ? '0 0% 100%' : '210 40% 98%');
   
-  // Sidebar
-  root.style.setProperty('--sidebar-background', theme.card);
+  // Sidebar - slightly darker than main bg in light mode
+  if (isLight) {
+    const bgParts = theme.background.split(' ');
+    const bgH = parseInt(bgParts[0]) || 220;
+    const bgS = parseInt(bgParts[1]) || 16;
+    const bgL = parseInt(bgParts[2]) || 94;
+    root.style.setProperty('--sidebar-background', hslToString(bgH, bgS, Math.max(bgL - 4, 85)));
+  } else {
+    root.style.setProperty('--sidebar-background', theme.card);
+  }
   root.style.setProperty('--sidebar-foreground', theme.foreground);
   root.style.setProperty('--sidebar-primary', shades.base);
   root.style.setProperty('--sidebar-primary-foreground', shades.foreground);
@@ -352,10 +360,10 @@ function applyThemeToDocument(theme: ThemePreset, accentHSL: string) {
   
   // Shadows (enhanced for light theme to make cards pop)
   if (isLight) {
-    root.style.setProperty('--shadow-sm', '0 1px 3px hsl(0 0% 0% / 0.06), 0 1px 2px hsl(0 0% 0% / 0.04)');
-    root.style.setProperty('--shadow-md', '0 4px 6px hsl(0 0% 0% / 0.05), 0 10px 15px hsl(0 0% 0% / 0.08)');
-    root.style.setProperty('--shadow-lg', '0 10px 25px hsl(0 0% 0% / 0.08), 0 20px 48px hsl(0 0% 0% / 0.12)');
-    root.style.setProperty('--shadow-card', '0 2px 8px hsl(0 0% 0% / 0.06), 0 4px 16px hsl(0 0% 0% / 0.04)');
+    root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.05), 0 1px 3px hsl(0 0% 0% / 0.08)');
+    root.style.setProperty('--shadow-md', '0 2px 4px hsl(0 0% 0% / 0.04), 0 4px 12px hsl(0 0% 0% / 0.08)');
+    root.style.setProperty('--shadow-lg', '0 4px 8px hsl(0 0% 0% / 0.04), 0 12px 32px hsl(0 0% 0% / 0.1)');
+    root.style.setProperty('--shadow-card', '0 1px 3px hsl(0 0% 0% / 0.06), 0 4px 12px hsl(0 0% 0% / 0.06)');
   } else {
     root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.4)');
     root.style.setProperty('--shadow-md', '0 4px 12px hsl(0 0% 0% / 0.5)');
