@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
-import { Check, ChevronDown, ChevronUp, Sparkles, Search, UserPlus, Phone, RefreshCw, CalendarClock } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Sparkles, Search, UserPlus, Phone, RefreshCw, CalendarClock, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const steps = [
@@ -27,14 +27,22 @@ const steps = [
   },
   {
     key: 'statusUpdated' as const,
-    label: 'Update status after contact',
+    label: 'Update status & hit track ⭐',
     cta: 'Update Status',
     route: '/outreach',
     icon: RefreshCw,
-    helperText: 'After you contact them, update the status to reflect the outcome.',
+    helperText: 'After contacting, update the status then hit the star to track the lead.',
   },
   {
     key: 'leadTracked' as const,
+    label: 'Lead tracked with star',
+    cta: 'Track a Lead',
+    route: '/outreach',
+    icon: Star,
+    helperText: 'Hit the ⭐ star on any lead to move it to Track Leads.',
+  },
+  {
+    key: 'followUpSet' as const,
     label: 'Set a follow-up action & date',
     cta: 'Go to Track Leads',
     route: '/potential-work',
