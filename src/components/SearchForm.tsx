@@ -20,6 +20,7 @@ interface SearchFormProps {
   dailyLimit?: number;
   isPaidSubscriber?: boolean;
   disabled?: boolean;
+  initialRadius?: number;
 }
 
 export function SearchForm({ 
@@ -30,10 +31,11 @@ export function SearchForm({
   dailyLimit = 2,
   isPaidSubscriber = false,
   disabled = false,
+  initialRadius,
 }: SearchFormProps) {
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
-  const [radius, setRadius] = useState(5);
+  const [radius, setRadius] = useState(initialRadius ?? 5);
   const [minRating, setMinRating] = useState(0);
   const [minReviews, setMinReviews] = useState(2); // Default to 2 to filter out inactive businesses
   const [requirePhone, setRequirePhone] = useState(true);

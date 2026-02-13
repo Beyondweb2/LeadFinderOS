@@ -200,6 +200,9 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
         await saveSearch(filters, filteredLeads.length, noWebsiteCount);
         const excludedMsg = excludedCount > 0 ? ` (${excludedCount} previously seen filtered out)` : '';
 
+        // Notify demo checklist that a search completed
+        window.dispatchEvent(new CustomEvent('demo-checklist-search'));
+
         toast({
           title: 'Search complete',
           description: `Found ${filteredLeads.length} new businesses. ${noWebsiteCount} without websites.${excludedMsg}`,

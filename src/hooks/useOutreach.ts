@@ -334,9 +334,9 @@ export function useOutreach() {
         activity_type: 'status_change',
         description: `Status changed to ${status.replace('_', ' ')}`,
       });
+      // Notify demo checklist that status was changed
+      window.dispatchEvent(new CustomEvent('demo-checklist-status-change'));
     }
-
-    // Auto-archive (not delete) if status set to not_interested - preserves data for future lookup
     if (result && status === 'not_interested' && lead) {
       const { error } = await supabase
         .from('outreach_leads')
