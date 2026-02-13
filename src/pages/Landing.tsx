@@ -556,11 +556,11 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:pt-16 lg:pb-20 px-4">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:min-h-[calc(100vh-64px)] lg:flex lg:items-center lg:pt-0 lg:pb-0 px-4">
         {/* Subtle radial glow behind hero center — desktop only */}
         <div 
-          className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 70% 55% at 50% 30%, hsl(210 100% 50% / 0.08), transparent 70%)' }}
+          className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[800px] pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.10), transparent 70%)' }}
         />
         <div className="container mx-auto text-center lg:max-w-[1140px]">
           {/* Mobile: Video at top instead of logo */}
@@ -578,13 +578,13 @@ const Landing = () => {
               <span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[3.75rem] font-extrabold lg:font-bold mb-4 sm:mb-5 lg:mb-4 tracking-tight" style={{ lineHeight: '1.05' }}>
+            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold mb-4 sm:mb-5 lg:mb-5 tracking-tight" style={{ lineHeight: '1.05' }}>
               Find Businesses{' '}
               <br className="hidden sm:block" />
               <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.2rem] text-foreground/70 max-w-2xl lg:max-w-[38rem] mx-auto mb-4 sm:mb-6 lg:mb-6 leading-relaxed sm:leading-[1.6] px-2">
+            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.2rem] text-foreground/70 max-w-2xl lg:max-w-[38rem] mx-auto mb-4 sm:mb-6 lg:mb-8 leading-relaxed sm:leading-[1.6] px-2">
               The all-in-one tool to find businesses without websites, contact them, and track every follow-up.
             </p>
             
@@ -615,7 +615,7 @@ const Landing = () => {
 
           {/* Stats bar */}
           <div 
-            className="mt-6 sm:mt-12 md:mt-16 lg:mt-10 py-4 sm:py-6 lg:py-5 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-lg mx-auto"
+            className="mt-6 sm:mt-12 md:mt-16 lg:mt-16 py-4 sm:py-6 lg:py-5 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-lg mx-auto"
           >
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
