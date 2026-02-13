@@ -628,12 +628,8 @@ const Landing = () => {
             </div>
           </div>
 
-          {/* Country flags row */}
-          <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 mt-4 sm:mt-6 lg:mt-5 max-w-md sm:max-w-lg mx-auto">
-            {['🇬🇧', '🇺🇸', '🇦🇺', '🇨🇦', '🇩🇪', '🇫🇷', '🇪🇸', '🇮🇹', '🇳🇱', '🇧🇪', '🇮🇪', '🇳🇿', '🇿🇦', '🇮🇳', '🇸🇬', '🇦🇪', '🇧🇷', '🇲🇽', '🇯🇵', '🇸🇪'].map((flag, i) => (
-              <span key={i} className="text-base sm:text-lg lg:text-xl" role="img">{flag}</span>
-            ))}
-          </div>
+
+
 
           {/* Set up tagline */}
           <p className="text-[10px] sm:text-xs text-muted-foreground/50 mt-1 sm:mt-2 lg:mt-3 tracking-wide font-medium text-center">
