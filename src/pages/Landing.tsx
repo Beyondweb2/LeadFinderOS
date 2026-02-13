@@ -976,9 +976,10 @@ const Landing = () => {
                 <CardHeader className="text-center pb-2 pt-6 sm:pt-7 px-4 sm:px-6">
                   {/* Free trial badge */}
                   <div className="flex justify-center mb-4">
-                    <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide" style={{ background: 'hsl(142 76% 36% / 0.15)', color: 'hsl(142 76% 55%)' }}>
-                      <Gift className="h-3.5 w-3.5" />
-                      24-Hour Free Trial · Full Access Included
+                    <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold tracking-wide" style={{ background: 'hsl(142 76% 36% / 0.15)', color: 'hsl(142 76% 55%)' }}>
+                      <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                      <span className="sm:hidden">Free Trial</span>
+                      <span className="hidden sm:inline">24-Hour Free Trial · Full Access Included</span>
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1]">
