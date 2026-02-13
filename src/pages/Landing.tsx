@@ -588,8 +588,8 @@ const Landing = () => {
               The all-in-one tool to find businesses without websites, contact them, and track every follow-up.
             </p>
             
-            {/* CTA Buttons - hidden on mobile, shown after trust bullets */}
-            <div className="hidden sm:flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
               <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-[1.05rem] font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-[1.1rem] h-auto w-full sm:w-auto shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-shadow duration-300" asChild>
                 <Link to="/auth?intent=demo">
                   Start Free Demo
@@ -605,19 +605,11 @@ const Landing = () => {
               </Button>
             </div>
 
-            {/* Mobile trust bullets + CTA below */}
-            <div className="flex sm:hidden flex-col items-center gap-4 mt-4">
-              <div className="flex flex-wrap items-center justify-center gap-2.5 text-[13px] text-foreground/60 font-medium">
-                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
-              </div>
-              <Button size="lg" className="btn-premium text-sm font-semibold px-6 py-3 h-auto w-full shadow-lg shadow-primary/25" asChild>
-                <Link to="/auth?intent=demo">
-                  Start Free Demo
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
+            {/* Mobile trust bullets */}
+            <div className="flex sm:hidden flex-wrap items-center justify-center gap-2.5 mt-4 text-[13px] text-foreground/60 font-medium">
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
             </div>
           </div>
 
