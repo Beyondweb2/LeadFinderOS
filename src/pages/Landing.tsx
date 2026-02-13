@@ -557,103 +557,54 @@ const Landing = () => {
 
       {/* Hero Section */}
       <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:pt-28 lg:pb-36 px-4">
-        <div className="container mx-auto text-center lg:text-left">
+        <div className="container mx-auto text-center">
           {/* Mobile: Video at top instead of logo */}
           <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
 
-          {/* Desktop 2-column grid */}
-          <div className="lg:grid lg:grid-cols-2 lg:gap-12 lg:items-center">
-            {/* Left column: text content */}
-            <div>
-              <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-[3.5rem] xl:text-6xl font-bold mb-3 sm:mb-5 tracking-tight">
-                <span className="block text-gradient-primary">Your All-in-One</span>
-                <span className="block mt-0.5 sm:mt-2">Client Outreach Tool</span>
-              </h1>
-              
-              <p className="text-sm sm:text-lg md:text-xl lg:text-lg xl:text-xl text-foreground/55 max-w-2xl mx-auto lg:mx-0 mb-3 sm:mb-8 lg:mb-8 leading-relaxed px-2 lg:px-0">
-                Search, contact and track businesses that need a website — in one streamlined workflow.
-              </p>
-              
-              {/* CTA Buttons */}
-              <div className="flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-2.5 sm:gap-4">
-                <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-lg font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-5 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
-                  <Link to="/auth?intent=demo">
-                    Try Free Demo
-                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-                  </Link>
-                </Button>
-                <Button 
-                  size="lg" 
-                  variant="outline" 
-                  className="hidden sm:inline-flex lg:hidden text-base font-semibold px-8 py-4 h-auto border-border/50 hover:bg-muted/30 text-foreground/70 hover:text-foreground transition-colors"
-                  onClick={() => {
-                    document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                >
-                  See How It Works
-                </Button>
-              </div>
-
-              {/* Trust bullets - desktop only, left-aligned on lg */}
-              <div className="hidden sm:flex flex-wrap items-center justify-center lg:justify-start gap-x-5 gap-y-2 mt-8 lg:mt-10 text-[15px] text-foreground/55">
-                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
-              </div>
-
-              {/* Mobile trust bullets */}
-              <div className="flex sm:hidden flex-wrap items-center justify-center gap-2.5 mt-4 text-[13px] text-foreground/55">
-                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
-              </div>
+          <div className="max-w-3xl mx-auto">
+            <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-[3.5rem] xl:text-6xl font-bold mb-3 sm:mb-5 tracking-tight">
+              <span className="block text-gradient-primary">Your All-in-One</span>
+              <span className="block mt-0.5 sm:mt-2">Client Outreach Tool</span>
+            </h1>
+            
+            <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-3 sm:mb-8 leading-relaxed px-2">
+              Search, contact and track businesses that need a website — in one streamlined workflow.
+            </p>
+            
+            {/* CTA Buttons */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
+              <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-lg font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-5 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
+                <Link to="/auth?intent=demo">
+                  Try Free Demo
+                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                </Link>
+              </Button>
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="hidden sm:inline-flex text-base font-semibold px-8 py-4 h-auto border-border/50 hover:bg-muted/30 text-foreground/70 hover:text-foreground transition-colors"
+                onClick={() => {
+                  document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+                }}
+              >
+                See How It Works
+              </Button>
             </div>
 
-            {/* Right column: Before & After images - desktop only */}
-            <div className="hidden lg:block relative mt-0">
-              {/* Blue gradient glow behind images */}
-              <div 
-                className="absolute -inset-6 rounded-3xl blur-3xl opacity-50"
-                style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.08), transparent 70%)' }}
-              />
-              <div className="relative flex flex-col gap-4">
-                {/* Old Way */}
-                <div className="relative">
-                  <span className="absolute -left-3 top-3 z-10 px-3 py-1 rounded-full text-xs font-semibold bg-destructive/90 text-destructive-foreground backdrop-blur-sm">The Old Way</span>
-                  <div 
-                    className="relative rounded-xl overflow-hidden"
-                    style={{ 
-                      border: '1px solid hsl(0 60% 40% / 0.25)',
-                      boxShadow: '0 10px 30px hsl(0 0% 0% / 0.4)'
-                    }}
-                  >
-                    <img 
-                      src={oldWayImage} 
-                      alt="Manually scrolling Google Maps" 
-                      className="w-full h-auto object-contain"
-                    />
-                  </div>
-                </div>
-                {/* New Way */}
-                <div className="relative">
-                  <span className="absolute -left-3 top-3 z-10 px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-sm" style={{ background: 'hsl(210 100% 50% / 0.9)', color: 'hsl(220 40% 4%)' }}>The New Way</span>
-                  <div 
-                    className="relative rounded-xl overflow-hidden"
-                    style={{ 
-                      border: '1px solid hsl(210 100% 50% / 0.25)',
-                      boxShadow: '0 10px 30px hsl(0 0% 0% / 0.4), 0 0 20px hsl(210 100% 50% / 0.1)'
-                    }}
-                  >
-                    <img 
-                      src={newWayImage} 
-                      alt="LeadFinder Pro streamlined workflow" 
-                      className="w-full h-auto object-contain"
-                    />
-                  </div>
-                </div>
-              </div>
+            {/* Trust bullets */}
+            <div className="hidden sm:flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-8 text-[15px] text-foreground/55">
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
+            </div>
+
+            {/* Mobile trust bullets */}
+            <div className="flex sm:hidden flex-wrap items-center justify-center gap-2.5 mt-4 text-[13px] text-foreground/55">
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
             </div>
           </div>
 
