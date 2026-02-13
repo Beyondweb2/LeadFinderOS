@@ -31,7 +31,7 @@ export function useLandingTheme() {
     root.classList.add('dark');
     
     // Dark brand foundation (Midnight theme)
-    root.style.setProperty('--background', '220 50% 5%');
+    root.style.setProperty('--background', '220 50% 6%');
     root.style.setProperty('--foreground', '210 40% 98%');
     root.style.setProperty('--card', '220 45% 7%');
     root.style.setProperty('--card-foreground', '210 40% 98%');
