@@ -964,18 +964,19 @@ const Landing = () => {
                 />
                 
                 <CardHeader className="text-center pb-2 pt-6 sm:pt-7 px-4 sm:px-6">
-                  {/* Free trial pill — mobile only */}
-                  <div className="sm:hidden flex justify-center mb-3">
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold tracking-wide" style={{ background: 'hsl(142 76% 36% / 0.15)', color: 'hsl(142 76% 55%)' }}>
-                      <Gift className="h-3 w-3" />
-                      24-Hour Free Trial
+                  {/* Free trial badge */}
+                  <div className="flex justify-center mb-4">
+                    <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold tracking-wide" style={{ background: 'hsl(142 76% 36% / 0.15)', color: 'hsl(142 76% 55%)' }}>
+                      <Gift className="h-3.5 w-3.5" />
+                      24-Hour Free Trial · Full Access Included
                     </span>
                   </div>
-                  <div className="mt-1">
-                    <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
-                    <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
-                  </div>
-                  <p className="text-xs text-foreground/50 mt-2">Try everything free for 24 hours.</p>
+                  <h3 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1]">
+                    Try Everything Free<br />for 24 Hours
+                  </h3>
+                  <p className="text-sm text-muted-foreground mt-2.5">
+                    Then £19.99/month · Cancel anytime
+                  </p>
                 </CardHeader>
                 
                 <CardContent className="pt-4 sm:pt-5 px-4 sm:px-6">
@@ -1000,12 +1001,12 @@ const Landing = () => {
                 <CardFooter className="pt-4 pb-5 sm:pb-6 flex-col gap-2.5 px-4 sm:px-6">
                   <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
                     <Link to="/auth?intent=upgrade">
-                      Start 24-Hour Full Access
+                      Start Free Trial — Full Access
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
                   </Button>
                   <p className="text-[10px] sm:text-xs text-muted-foreground/50 text-center">
-                    £0 today. Cancel anytime before renewal.
+                    No charge today · Cancel anytime before renewal
                   </p>
                 </CardFooter>
               </Card>
