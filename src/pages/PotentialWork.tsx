@@ -151,10 +151,10 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   return (
     <Card className={`border border-border/60 border-l-[3px] ${getStatusBorderColor(lead.status)} hover:border-border transition-colors shadow-sm`}>
       <div className="px-3 py-2.5">
-        {/* Row 1: Name + Status (left) | Follow-up (right) */}
-        <div className="flex items-start justify-between gap-2">
-          {/* Left: Name + status */}
-          <div className="min-w-0 flex-1">
+        {/* Header: 3-column — Name | Status | Follow-up */}
+        <div className="grid items-start gap-2" style={{ gridTemplateColumns: '1fr auto minmax(0, 120px)' }}>
+          {/* Col 1: Business name (dominant) */}
+          <div className="min-w-0">
             {isEditingName ? (
               <div className="flex items-center gap-1.5">
                 <Input
@@ -175,40 +175,42 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 </Button>
               </div>
             ) : (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => setIsEditingName(true)}
-                  className="text-left group flex items-center gap-1 min-w-0"
-                >
-                  <span className="text-sm font-semibold truncate">{lead.business_name}</span>
-                  <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-                </button>
-                <Select
-                  value={lead.status}
-                  onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
-                >
-                  <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0 shrink-0">
-                    <OutreachStatusBadge status={lead.status} compact />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {POTENTIAL_WORK_STATUSES.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              <button
+                onClick={() => setIsEditingName(true)}
+                className="text-left group flex items-start gap-1 min-w-0 w-full"
+              >
+                <span className="text-sm font-semibold leading-snug line-clamp-2">{lead.business_name}</span>
+                <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5" />
+              </button>
             )}
           </div>
 
-          {/* Right: Follow-up highlight */}
-          <div className="shrink-0 text-right pl-2">
+          {/* Col 2: Status badge (compact) */}
+          <div className="shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
+            <Select
+              value={lead.status}
+              onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
+            >
+              <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+                <OutreachStatusBadge status={lead.status} compact />
+              </SelectTrigger>
+              <SelectContent>
+                {POTENTIAL_WORK_STATUSES.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Col 3: Follow-up (right-aligned, stacked) */}
+          <div className="text-right">
             {hasFollowUp ? (
-              <div className="flex flex-col items-end gap-0.5">
-                <span className="text-[11px] font-medium text-foreground/80">{actionLabel}</span>
+              <div className="flex flex-col items-end">
+                <span className="text-[11px] font-medium text-foreground/70 leading-tight">{actionLabel}</span>
                 {lead.next_action_date && (
-                  <span className={`text-[11px] ${getFollowUpStyle()}`}>
+                  <span className={`text-[11px] leading-tight ${getFollowUpStyle()}`}>
                     {isToday(new Date(lead.next_action_date))
                       ? 'Today'
                       : format(new Date(lead.next_action_date), 'MMM d')}
@@ -216,7 +218,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 )}
               </div>
             ) : (
-              <span className="text-[11px] text-muted-foreground/50">No action</span>
+              <span className="text-[11px] text-muted-foreground/40">—</span>
             )}
           </div>
         </div>
