@@ -573,9 +573,8 @@ const Landing = () => {
               <span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="text-[2rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4rem] xl:text-7xl font-extrabold mb-4 sm:mb-6 tracking-tight">
-              <span className="block">Find Businesses</span>
-              <span className="text-gradient-primary"> Without Websites</span>
+            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4rem] xl:text-7xl font-extrabold mb-4 sm:mb-6 tracking-tight">
+              Find Businesses <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl text-foreground/60 max-w-2xl mx-auto mb-4 sm:mb-8 leading-relaxed sm:leading-[1.6] px-2">
