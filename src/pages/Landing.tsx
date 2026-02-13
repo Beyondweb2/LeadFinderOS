@@ -676,6 +676,14 @@ const Landing = () => {
           <p className="text-[10px] sm:text-xs text-muted-foreground/40 mt-3 sm:mt-2 tracking-wide font-medium text-center">
             Works seamlessly on desktop & mobile
           </p>
+
+          {/* Scroll indicator */}
+          <div className="flex flex-col items-center mt-6 sm:mt-8 animate-bounce">
+            <span className="text-[10px] sm:text-xs text-muted-foreground/30 tracking-widest uppercase mb-2">Scroll</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/30">
+              <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
+            </svg>
+          </div>
         </div>
       </section>
 
