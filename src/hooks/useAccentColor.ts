@@ -121,102 +121,102 @@ export const DARK_THEMES: ThemePreset[] = [
   },
 ];
 
-// 6 Light themes - high-contrast, clean SaaS
+// 6 Light themes – high-contrast, professional SaaS
 export const LIGHT_THEMES: ThemePreset[] = [
   {
     id: 'blush',
     name: 'Blush',
     mode: 'light',
-    background: '350 30% 95%',
+    background: '350 20% 96%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '350 20% 91%',
-    muted: '350 15% 93%',
-    foreground: '350 20% 10%',
-    mutedForeground: '350 10% 42%',
-    secondaryForeground: '350 15% 18%',
-    border: '350 15% 85%',
-    input: '350 20% 92%',
+    secondary: '350 16% 94%',
+    muted: '350 12% 96%',
+    foreground: '224 71% 4%',
+    mutedForeground: '220 9% 46%',
+    secondaryForeground: '218 21% 28%',
+    border: '350 14% 84%',
+    input: '350 16% 92%',
     preview: '#F5ECEE',
   },
   {
     id: 'peach',
     name: 'Peach',
     mode: 'light',
-    background: '30 35% 95%',
+    background: '30 25% 96%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '30 25% 91%',
-    muted: '30 18% 93%',
-    foreground: '25 25% 10%',
-    mutedForeground: '25 12% 42%',
-    secondaryForeground: '25 18% 18%',
-    border: '30 18% 84%',
-    input: '30 25% 92%',
+    secondary: '30 18% 94%',
+    muted: '30 14% 96%',
+    foreground: '224 71% 4%',
+    mutedForeground: '220 9% 46%',
+    secondaryForeground: '218 21% 28%',
+    border: '30 16% 84%',
+    input: '30 18% 92%',
     preview: '#F5EEE6',
   },
   {
     id: 'baby-blue',
     name: 'Baby Blue',
     mode: 'light',
-    background: '210 30% 95%',
+    background: '214 18% 97%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '210 22% 91%',
-    muted: '210 16% 93%',
-    foreground: '215 25% 10%',
-    mutedForeground: '215 12% 42%',
-    secondaryForeground: '215 18% 18%',
-    border: '210 18% 84%',
-    input: '210 22% 92%',
+    secondary: '210 14% 94%',
+    muted: '210 11% 96%',
+    foreground: '224 71% 4%',
+    mutedForeground: '220 9% 46%',
+    secondaryForeground: '218 21% 28%',
+    border: '220 13% 84%',
+    input: '210 16% 92%',
     preview: '#ECF1F7',
   },
   {
     id: 'mint',
     name: 'Mint',
     mode: 'light',
-    background: '160 28% 94%',
+    background: '160 18% 96%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '160 20% 90%',
-    muted: '160 14% 92%',
-    foreground: '165 22% 10%',
-    mutedForeground: '165 10% 42%',
-    secondaryForeground: '165 16% 18%',
-    border: '160 15% 83%',
-    input: '160 20% 91%',
+    secondary: '160 14% 94%',
+    muted: '160 10% 96%',
+    foreground: '224 71% 4%',
+    mutedForeground: '220 9% 46%',
+    secondaryForeground: '218 21% 28%',
+    border: '160 12% 84%',
+    input: '160 14% 92%',
     preview: '#E6F3EE',
   },
   {
     id: 'lavender',
     name: 'Lavender',
     mode: 'light',
-    background: '265 28% 95%',
+    background: '265 18% 96%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '265 20% 91%',
-    muted: '265 14% 93%',
-    foreground: '270 22% 12%',
-    mutedForeground: '270 10% 42%',
-    secondaryForeground: '270 16% 20%',
-    border: '265 16% 84%',
-    input: '265 20% 92%',
+    secondary: '265 14% 94%',
+    muted: '265 10% 96%',
+    foreground: '224 71% 4%',
+    mutedForeground: '220 9% 46%',
+    secondaryForeground: '218 21% 28%',
+    border: '265 12% 84%',
+    input: '265 14% 92%',
     preview: '#EFEBF5',
   },
   {
     id: 'cloud',
     name: 'Cloud',
     mode: 'light',
-    background: '220 16% 94%',
+    background: '214 18% 97%',
     card: '0 0% 100%',
     popover: '0 0% 100%',
-    secondary: '220 12% 90%',
-    muted: '220 10% 92%',
-    foreground: '225 18% 10%',
-    mutedForeground: '225 8% 42%',
-    secondaryForeground: '225 14% 18%',
-    border: '220 12% 84%',
-    input: '220 14% 91%',
+    secondary: '220 12% 94%',
+    muted: '220 9% 96%',
+    foreground: '224 71% 4%',
+    mutedForeground: '220 9% 46%',
+    secondaryForeground: '218 21% 28%',
+    border: '220 13% 84%',
+    input: '220 14% 92%',
     preview: '#EDEEF2',
   },
 ];
@@ -338,7 +338,7 @@ function applyThemeToDocument(theme: ThemePreset, accentHSL: string) {
     const bgH = parseInt(bgParts[0]) || 220;
     const bgS = parseInt(bgParts[1]) || 16;
     const bgL = parseInt(bgParts[2]) || 94;
-    root.style.setProperty('--sidebar-background', hslToString(bgH, bgS, Math.max(bgL - 4, 85)));
+    root.style.setProperty('--sidebar-background', hslToString(bgH, Math.max(bgS - 2, 4), Math.max(bgL - 4, 85)));
   } else {
     root.style.setProperty('--sidebar-background', theme.card);
   }
@@ -354,12 +354,12 @@ function applyThemeToDocument(theme: ThemePreset, accentHSL: string) {
   root.style.setProperty('--gradient-primary', `linear-gradient(135deg, hsl(${accentHSL}), hsl(210 100% 50%))`);
   root.style.setProperty('--gradient-glow', 'none');
   
-  // Clean shadows — no glow
+  // Clean shadows — professional depth for light, minimal for dark
   if (isLight) {
-    root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.05), 0 1px 3px hsl(0 0% 0% / 0.08)');
+    root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.06), 0 1px 3px hsl(0 0% 0% / 0.1)');
     root.style.setProperty('--shadow-md', '0 2px 4px hsl(0 0% 0% / 0.04), 0 4px 12px hsl(0 0% 0% / 0.08)');
-    root.style.setProperty('--shadow-lg', '0 4px 8px hsl(0 0% 0% / 0.04), 0 12px 32px hsl(0 0% 0% / 0.1)');
-    root.style.setProperty('--shadow-card', '0 1px 3px hsl(0 0% 0% / 0.06), 0 4px 12px hsl(0 0% 0% / 0.06)');
+    root.style.setProperty('--shadow-lg', '0 4px 8px hsl(0 0% 0% / 0.04), 0 12px 32px hsl(0 0% 0% / 0.12)');
+    root.style.setProperty('--shadow-card', '0 2px 8px hsl(0 0% 0% / 0.05)');
   } else {
     root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.4)');
     root.style.setProperty('--shadow-md', '0 4px 12px hsl(0 0% 0% / 0.5)');
