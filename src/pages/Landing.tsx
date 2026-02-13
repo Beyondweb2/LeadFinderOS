@@ -563,18 +563,6 @@ const Landing = () => {
             <MobileHeroVideo />
           </div>
           
-          {/* Tagline badge - hidden on mobile */}
-          <div 
-            className="hidden sm:inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-8 backdrop-blur-sm"
-            style={{ 
-              border: '1px solid hsl(210 100% 50% / 0.2)', 
-              background: 'hsl(210 100% 50% / 0.08)',
-              color: 'hsl(210 100% 65%)'
-            }}
-          >
-            <Zap className="h-3.5 w-3.5" />
-            <span>The fastest way to land web design clients</span>
-          </div>
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-3 sm:mb-5 tracking-tight">
             <span className="block text-gradient-primary">All-in-One</span>
