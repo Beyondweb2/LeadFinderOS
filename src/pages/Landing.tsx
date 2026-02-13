@@ -580,7 +580,7 @@ const Landing = () => {
               <div className="flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-2.5 sm:gap-4">
                 <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-lg font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-5 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
                   <Link to="/auth?intent=demo">
-                    Start Free Demo — 1 Search, No Card
+                    Try Free Demo
                     <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                   </Link>
                 </Button>
