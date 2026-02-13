@@ -4,8 +4,10 @@ import { useAuth } from '@/hooks/useAuth';
 export interface DemoChecklistState {
   searchDone: boolean;
   addedToCrm: boolean;
+  crmAddCount: number;
   contactAttempted: boolean;
   statusUpdated: boolean;
+  leadTracked: boolean;
 }
 
 interface DemoChecklistContextType {
@@ -32,7 +34,7 @@ function loadState(userId?: string): DemoChecklistState {
     const raw = localStorage.getItem(getKey(userId));
     if (raw) return JSON.parse(raw);
   } catch { /* ignore */ }
-  return { searchDone: false, addedToCrm: false, contactAttempted: false, statusUpdated: false };
+  return { searchDone: false, addedToCrm: false, crmAddCount: 0, contactAttempted: false, statusUpdated: false, leadTracked: false };
 }
 
 function saveState(state: DemoChecklistState, userId?: string) {
@@ -80,9 +82,18 @@ export function DemoChecklistProvider({
     if (!isDemoUser) return;
 
     const onSearch = () => completeStep('searchDone');
-    const onCrmAdd = () => completeStep('addedToCrm');
+    const onCrmAdd = () => {
+      // Track count — mark complete at 3
+      setState(prev => {
+        const newCount = prev.crmAddCount + 1;
+        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 3 };
+        saveState(next, user?.id);
+        return next;
+      });
+    };
     const onContact = () => completeStep('contactAttempted');
     const onStatus = () => completeStep('statusUpdated');
+    const onTrack = () => completeStep('leadTracked');
 
     // Also capture tel: link clicks as contact attempts
     const onTelClick = (e: MouseEvent) => {
@@ -92,9 +103,10 @@ export function DemoChecklistProvider({
     };
 
     window.addEventListener('demo-checklist-search', onSearch);
-    window.addEventListener('crm-lead-added', onCrmAdd); // already dispatched
+    window.addEventListener('crm-lead-added', onCrmAdd);
     window.addEventListener('demo-checklist-contact', onContact);
     window.addEventListener('demo-checklist-status-change', onStatus);
+    window.addEventListener('demo-checklist-lead-tracked', onTrack);
     document.addEventListener('click', onTelClick, true);
 
     return () => {
@@ -102,18 +114,19 @@ export function DemoChecklistProvider({
       window.removeEventListener('crm-lead-added', onCrmAdd);
       window.removeEventListener('demo-checklist-contact', onContact);
       window.removeEventListener('demo-checklist-status-change', onStatus);
+      window.removeEventListener('demo-checklist-lead-tracked', onTrack);
       document.removeEventListener('click', onTelClick, true);
     };
   }, [isDemoUser, completeStep]);
 
-  const completedCount = [state.searchDone, state.addedToCrm, state.contactAttempted, state.statusUpdated].filter(Boolean).length;
+  const completedCount = [state.searchDone, state.addedToCrm, state.contactAttempted, state.statusUpdated, state.leadTracked].filter(Boolean).length;
 
   return (
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
-      totalSteps: 4,
-      allDone: completedCount === 4,
+      totalSteps: 5,
+      allDone: completedCount === 5,
       completeStep,
       isOpen,
       setIsOpen,

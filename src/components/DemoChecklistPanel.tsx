@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
-import { Check, ChevronDown, ChevronUp, Sparkles, Search, UserPlus, Phone, RefreshCw } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Sparkles, Search, UserPlus, Phone, RefreshCw, Star } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const steps = [
@@ -13,14 +13,14 @@ const steps = [
   },
   {
     key: 'addedToCrm' as const,
-    label: 'Add 1 business to CRM',
-    cta: 'Add a Business',
+    label: 'Add 3 businesses to CRM',
+    cta: 'Add Businesses',
     route: '/find-leads',
     icon: UserPlus,
   },
   {
     key: 'contactAttempted' as const,
-    label: 'Attempt contact (message or call)',
+    label: 'Contact one of them',
     cta: 'Attempt Contact',
     route: '/outreach',
     icon: Phone,
@@ -31,7 +31,15 @@ const steps = [
     cta: 'Update Status',
     route: '/outreach',
     icon: RefreshCw,
-    helperText: 'After you contact them, update the status to reflect the outcome: Text sent, Called, Replied, No answer, Interested, etc.',
+    helperText: 'After you contact them, update the status to reflect the outcome.',
+  },
+  {
+    key: 'leadTracked' as const,
+    label: 'Track a positive response',
+    cta: 'Go to Track Leads',
+    route: '/potential-work',
+    icon: Star,
+    helperText: 'Once a business responds positively, move them to Track Leads to follow up and close the deal.',
   },
 ];
 
@@ -99,6 +107,9 @@ export function DemoChecklistPanel() {
                       <div className="flex-1 min-w-0">
                         <span className={`text-xs leading-5 ${done ? 'line-through text-muted-foreground' : ''}`}>
                           {step.label}
+                          {step.key === 'addedToCrm' && !done && state.crmAddCount > 0 && (
+                            <span className="text-primary font-medium ml-1">({state.crmAddCount}/3)</span>
+                          )}
                         </span>
                         {isNext && !done && (
                           <Button
