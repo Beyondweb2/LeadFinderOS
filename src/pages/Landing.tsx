@@ -556,60 +556,93 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:pt-32 lg:pb-40 px-4">
-        <div className="container mx-auto text-center">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:pt-28 lg:pb-36 px-4">
+        <div className="container mx-auto text-center lg:text-left">
           {/* Mobile: Video at top instead of logo */}
           <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
-          
-          
-          <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-3 sm:mb-5 tracking-tight">
-            <span className="block text-gradient-primary">All-in-One</span>
-            <span className="block mt-0.5 sm:mt-2">Outreach Tool</span>
-          </h1>
-          
-          <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-3 sm:mb-10 leading-relaxed px-2">
-            Find, contact, and track businesses that need a website — all in one place.
-          </p>
-          
-          {/* CTA Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
-            <Button size="lg" className="btn-premium text-sm sm:text-base font-semibold px-6 sm:px-8 py-3 sm:py-4 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
-              <Link to="/auth?intent=demo">
-                Try Free Demo
-                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-              </Link>
-            </Button>
-            <Button 
-              size="lg" 
-              variant="outline" 
-              className="hidden sm:inline-flex text-base font-semibold px-8 py-4 h-auto border-border/50 hover:bg-muted/30 text-foreground/70 hover:text-foreground transition-colors"
-              onClick={() => {
-                document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
-              }}
-            >
-              See How It Works
-            </Button>
-          </div>
 
-          {/* Trust bullets - desktop only */}
-          <div className="hidden sm:flex flex-wrap items-center justify-center gap-5 mt-10 text-[15px] text-foreground/55">
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
-          </div>
+          {/* Desktop 2-column grid */}
+          <div className="lg:grid lg:grid-cols-2 lg:gap-12 lg:items-center">
+            {/* Left column: text content */}
+            <div>
+              <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-[3.5rem] xl:text-6xl font-bold mb-3 sm:mb-5 tracking-tight">
+                <span className="block text-gradient-primary">Find Clients Without</span>
+                <span className="block mt-0.5 sm:mt-2">Scrolling Google Maps</span>
+              </h1>
+              
+              <p className="text-sm sm:text-lg md:text-xl lg:text-lg xl:text-xl text-foreground/55 max-w-2xl mx-auto lg:mx-0 mb-3 sm:mb-8 lg:mb-8 leading-relaxed px-2 lg:px-0">
+                Search, contact and track businesses that need a website — in one streamlined workflow.
+              </p>
+              
+              {/* CTA Buttons */}
+              <div className="flex flex-col sm:flex-row items-center lg:items-start justify-center lg:justify-start gap-2.5 sm:gap-4">
+                <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-lg font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-5 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
+                  <Link to="/auth?intent=demo">
+                    Start Free Demo — 1 Search, No Card
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  </Link>
+                </Button>
+                <Button 
+                  size="lg" 
+                  variant="outline" 
+                  className="hidden sm:inline-flex lg:hidden text-base font-semibold px-8 py-4 h-auto border-border/50 hover:bg-muted/30 text-foreground/70 hover:text-foreground transition-colors"
+                  onClick={() => {
+                    document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' });
+                  }}
+                >
+                  See How It Works
+                </Button>
+              </div>
 
-          {/* Mobile trust bullets */}
-          <div className="flex sm:hidden flex-wrap items-center justify-center gap-2.5 mt-4 text-[13px] text-foreground/55">
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-            <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
+              {/* Trust bullets - desktop only, left-aligned on lg */}
+              <div className="hidden sm:flex flex-wrap items-center justify-center lg:justify-start gap-x-5 gap-y-2 mt-8 lg:mt-10 text-[15px] text-foreground/55">
+                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
+                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
+              </div>
+
+              {/* Mobile trust bullets */}
+              <div className="flex sm:hidden flex-wrap items-center justify-center gap-2.5 mt-4 text-[13px] text-foreground/55">
+                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
+                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+                <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
+              </div>
+            </div>
+
+            {/* Right column: Dashboard image - desktop only */}
+            <div className="hidden lg:block relative mt-0">
+              {/* Blue gradient glow behind image */}
+              <div 
+                className="absolute -inset-6 rounded-3xl blur-3xl opacity-50"
+                style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.08), transparent 70%)' }}
+              />
+              <div 
+                className="absolute -inset-px rounded-2xl"
+                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(210 100% 50% / 0.08), transparent)' }}
+              />
+              <div 
+                className="relative rounded-2xl overflow-hidden"
+                style={{ 
+                  border: '1px solid hsl(210 100% 50% / 0.15)',
+                  boxShadow: '0 20px 60px hsl(0 0% 0% / 0.5), 0 0 30px hsl(210 100% 50% / 0.1)'
+                }}
+              >
+                <img 
+                  src={featureDashboard} 
+                  alt="LeadFinder Pro Dashboard" 
+                  className="w-full h-auto object-cover"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Stats bar */}
-          <div className="mt-4 sm:mt-10 md:mt-12 py-4 sm:py-6 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl mx-auto">
-            <CountUpStat target={100000} suffix="+" label="Businesses" />
+          <div 
+            className="mt-4 sm:mt-10 md:mt-12 lg:mt-16 py-4 sm:py-6 lg:py-5 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-2xl mx-auto rounded-xl lg:border lg:border-border/40 lg:bg-card/30 lg:backdrop-blur-sm lg:px-8"
+          >
+            <CountUpStat target={100000} suffix="+" label="Businesses Indexed" />
             <div className="text-center">
               <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
@@ -621,7 +654,7 @@ const Landing = () => {
           </div>
 
           {/* Works on every device */}
-          <p className="text-[10px] sm:text-xs text-muted-foreground/40 mt-3 sm:mt-2 tracking-wide font-medium">
+          <p className="text-[10px] sm:text-xs text-muted-foreground/40 mt-3 sm:mt-2 tracking-wide font-medium text-center">
             Works seamlessly on desktop & mobile
           </p>
         </div>
