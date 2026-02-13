@@ -578,7 +578,7 @@ const Landing = () => {
               <span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold mb-4 sm:mb-5 lg:mb-4 tracking-tight" style={{ lineHeight: '1.05' }}>
+            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[3.75rem] font-extrabold lg:font-bold mb-4 sm:mb-5 lg:mb-4 tracking-tight" style={{ lineHeight: '1.05' }}>
               Find Businesses{' '}
               <br className="hidden sm:block" />
               <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
@@ -592,7 +592,7 @@ const Landing = () => {
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
               <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-[1.05rem] font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-[1.1rem] h-auto w-full sm:w-auto shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-shadow duration-300" asChild>
                 <Link to="/auth?intent=demo">
-                  Start Free Demo — 1 Search
+                  Start Free Demo
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                 </Link>
               </Button>
