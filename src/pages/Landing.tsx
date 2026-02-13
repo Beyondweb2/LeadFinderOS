@@ -615,7 +615,7 @@ const Landing = () => {
 
           {/* Stats bar */}
           <div 
-            className="mt-6 sm:mt-12 md:mt-16 lg:mt-10 py-4 sm:py-6 lg:py-5 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-lg mx-auto lg:rounded-xl lg:border lg:border-white/[0.06] lg:bg-white/[0.02] lg:backdrop-blur-sm"
+            className="mt-6 sm:mt-12 md:mt-16 lg:mt-10 py-4 sm:py-6 lg:py-5 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-lg mx-auto"
           >
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
