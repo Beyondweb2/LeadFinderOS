@@ -39,7 +39,7 @@ const Auth = () => {
 
   // Helper to redirect to the unlock-access page (which handles Stripe checkout properly)
   const redirectToCheckout = () => {
-    navigate('/unlock-access', { replace: true });
+    navigate('/unlock', { replace: true });
   };
 
   // Redirect if already authenticated
