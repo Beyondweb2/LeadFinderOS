@@ -23,7 +23,7 @@ export function OutreachCard({
   const trend = change > 0 ? 'up' : change < 0 ? 'down' : 'stable';
 
   return (
-    <Card className="bg-gradient-to-br from-purple-500/10 via-violet-500/5 to-transparent border-purple-500/20">
+    <Card className="border-border">
       <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
         <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
           <Database className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500" />

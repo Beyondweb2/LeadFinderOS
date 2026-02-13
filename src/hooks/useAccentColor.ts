@@ -350,15 +350,11 @@ function applyThemeToDocument(theme: ThemePreset, accentHSL: string) {
   root.style.setProperty('--sidebar-border', theme.border);
   root.style.setProperty('--sidebar-ring', shades.base);
   
-  // Gradients and glows (adjusted for light/dark)
-  const glowOpacity = isLight ? 0.12 : 0.25;
-  const glowOpacity2 = isLight ? 0.06 : 0.1;
+  // Clean gradients — no glow
   root.style.setProperty('--gradient-primary', `linear-gradient(135deg, hsl(${accentHSL}), hsl(210 100% 50%))`);
-  root.style.setProperty('--gradient-glow', `radial-gradient(ellipse at center, hsl(${h} ${s}% ${l}% / ${isLight ? 0.08 : 0.15}), transparent 70%)`);
-  root.style.setProperty('--shadow-glow', `0 0 20px hsl(${h} ${s}% ${l}% / ${glowOpacity}), 0 0 40px hsl(${h} ${s}% ${l}% / ${glowOpacity2})`);
-  root.style.setProperty('--shadow-glow-lg', `0 0 60px hsl(${h} ${s}% ${l}% / ${isLight ? 0.1 : 0.2}), 0 0 120px hsl(210 100% 50% / ${isLight ? 0.05 : 0.1})`);
+  root.style.setProperty('--gradient-glow', 'none');
   
-  // Shadows (enhanced for light theme to make cards pop)
+  // Clean shadows — no glow
   if (isLight) {
     root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.05), 0 1px 3px hsl(0 0% 0% / 0.08)');
     root.style.setProperty('--shadow-md', '0 2px 4px hsl(0 0% 0% / 0.04), 0 4px 12px hsl(0 0% 0% / 0.08)');

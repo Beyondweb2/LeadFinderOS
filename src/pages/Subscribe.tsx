@@ -109,10 +109,6 @@ const Subscribe = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div
-        className="fixed inset-0 pointer-events-none opacity-30"
-        style={{ background: 'var(--gradient-glow)' }}
-      />
 
       <div className="relative z-10 w-full max-w-lg">
         <Button variant="ghost" className="mb-6" onClick={handleBack}>

@@ -196,9 +196,8 @@ export function MobileBottomNav() {
               >
                 <item.icon className={cn(
                   'h-5 w-5 transition-all',
-                  item.title === 'CRM' && crmGlow && 'drop-shadow-[0_0_10px_#4ade80] scale-110',
-                  item.title === 'Track' && trackGlow && 'drop-shadow-[0_0_10px_#facc15] scale-110',
-                  isActive && !crmGlow && !trackGlow && 'drop-shadow-[0_0_8px_hsl(var(--primary))]'
+                  item.title === 'CRM' && crmGlow && 'scale-110',
+                  item.title === 'Track' && trackGlow && 'scale-110'
                 )} />
                 <span className={cn(
                   "text-[10px] font-medium",
@@ -220,10 +219,7 @@ export function MobileBottomNav() {
                     : 'text-muted-foreground hover:text-foreground'
                 )}
               >
-                <MoreHorizontal className={cn(
-                  'h-5 w-5',
-                  isMoreActive && 'drop-shadow-[0_0_8px_hsl(var(--primary))]'
-                )} />
+                <MoreHorizontal className="h-5 w-5" />
                 <span className="text-[10px] font-medium">More</span>
               </button>
             </DropdownMenuTrigger>
@@ -291,7 +287,7 @@ export function MobileBottomNav() {
                     Primary
                   </Button>
                   <div 
-                    className="h-8 w-8 rounded-lg glow-effect"
+                    className="h-8 w-8 rounded-lg border border-border"
                     style={{ backgroundColor: `hsl(${accent})` }}
                   />
                   <div 
