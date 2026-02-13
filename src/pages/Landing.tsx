@@ -171,7 +171,7 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
       <div ref={ref} className="text-center">
-    <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
+    <div className="font-display text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
       {count.toLocaleString()}{suffix}
     </div>
     <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">{label}</div>
@@ -575,7 +575,7 @@ const Landing = () => {
 
             <h1 className="font-display text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-[4rem] xl:text-7xl font-extrabold mb-4 sm:mb-6 tracking-tight">
               <span className="block">Find Businesses</span>
-              <span className="block mt-1 sm:mt-2 text-gradient-primary">Without Websites</span>
+              <span className="text-gradient-primary"> Without Websites</span>
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl text-foreground/50 max-w-2xl mx-auto mb-4 sm:mb-8 leading-relaxed px-2">
@@ -616,7 +616,7 @@ const Landing = () => {
           >
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
-              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="font-display text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
               <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
             </div>
             <div className="text-center">
@@ -668,7 +668,7 @@ const Landing = () => {
               {/* Old Way */}
               <div className="opacity-80">
                 <div className="text-center mb-3">
-                  <span className="inline-flex items-center gap-2"><X className="h-4 w-4" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-lg font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
+                  <span className="inline-flex items-center gap-2"><X className="h-4 w-4" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="font-display text-lg font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
                 </div>
                 <div 
                   className="relative rounded-lg overflow-hidden mb-4 aspect-[16/10]"
@@ -688,7 +688,7 @@ const Landing = () => {
               {/* New Way */}
               <div>
                 <div className="text-center mb-3">
-                  <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-lg font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
+                  <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="font-display text-lg font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
                 </div>
                 <div 
                   className="relative rounded-lg overflow-hidden mb-4"
@@ -713,7 +713,7 @@ const Landing = () => {
               <ScrollReveal delay={100}>
                 <div className="hover:opacity-90 transition-opacity duration-300">
                   <div className="text-center mb-5">
-                    <span className="inline-flex items-center gap-2.5"><X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
+                    <span className="inline-flex items-center gap-2.5"><X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="font-display text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
                   </div>
                   <div className="relative group mb-6">
                     <div 
@@ -741,7 +741,7 @@ const Landing = () => {
               <ScrollReveal delay={300}>
                 <div className="transition-all duration-300 hover:scale-[1.01]" style={{ filter: 'drop-shadow(0 0 24px hsl(142 60% 40% / 0.08))' }}>
                   <div className="text-center mb-5">
-                    <span className="inline-flex items-center gap-2.5"><Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
+                    <span className="inline-flex items-center gap-2.5"><Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="font-display text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
                   </div>
                   <div className="relative group mb-6">
                     <div 
@@ -813,7 +813,7 @@ const Landing = () => {
                         >
                           <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={1.5} />
                         </div>
-                        <h3 className="text-base lg:text-lg font-semibold tracking-tight">{feature.title}</h3>
+                        <h3 className="font-display text-base lg:text-lg font-semibold tracking-tight">{feature.title}</h3>
                       </div>
                       {/* Description */}
                       <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
@@ -976,7 +976,7 @@ const Landing = () => {
                     </span>
                   </div>
                   <div className="mt-1">
-                    <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
+                    <span className="font-display text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
                   <p className="text-xs text-foreground/50 mt-2">Try everything free for 24 hours.</p>
