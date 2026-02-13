@@ -568,8 +568,8 @@ const Landing = () => {
             {/* Left column: text content */}
             <div>
               <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-[3.5rem] xl:text-6xl font-bold mb-3 sm:mb-5 tracking-tight">
-                <span className="block text-gradient-primary">Find Clients Without</span>
-                <span className="block mt-0.5 sm:mt-2">Scrolling Google Maps</span>
+                <span className="block text-gradient-primary">Your All-in-One</span>
+                <span className="block mt-0.5 sm:mt-2">Client Outreach Tool</span>
               </h1>
               
               <p className="text-sm sm:text-lg md:text-xl lg:text-lg xl:text-xl text-foreground/55 max-w-2xl mx-auto lg:mx-0 mb-3 sm:mb-8 lg:mb-8 leading-relaxed px-2 lg:px-0">
@@ -611,29 +611,48 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Right column: Dashboard image - desktop only */}
+            {/* Right column: Before & After images - desktop only */}
             <div className="hidden lg:block relative mt-0">
-              {/* Blue gradient glow behind image */}
+              {/* Blue gradient glow behind images */}
               <div 
                 className="absolute -inset-6 rounded-3xl blur-3xl opacity-50"
                 style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.08), transparent 70%)' }}
               />
-              <div 
-                className="absolute -inset-px rounded-2xl"
-                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(210 100% 50% / 0.08), transparent)' }}
-              />
-              <div 
-                className="relative rounded-2xl overflow-hidden"
-                style={{ 
-                  border: '1px solid hsl(210 100% 50% / 0.15)',
-                  boxShadow: '0 20px 60px hsl(0 0% 0% / 0.5), 0 0 30px hsl(210 100% 50% / 0.1)'
-                }}
-              >
-                <img 
-                  src={featureDashboard} 
-                  alt="LeadFinder Pro Dashboard" 
-                  className="w-full h-auto object-cover"
-                />
+              <div className="relative flex flex-col gap-4">
+                {/* Old Way */}
+                <div className="relative">
+                  <span className="absolute -left-3 top-3 z-10 px-3 py-1 rounded-full text-xs font-semibold bg-destructive/90 text-destructive-foreground backdrop-blur-sm">The Old Way</span>
+                  <div 
+                    className="relative rounded-xl overflow-hidden"
+                    style={{ 
+                      border: '1px solid hsl(0 60% 40% / 0.25)',
+                      boxShadow: '0 10px 30px hsl(0 0% 0% / 0.4)'
+                    }}
+                  >
+                    <img 
+                      src={oldWayImage} 
+                      alt="Manually scrolling Google Maps" 
+                      className="w-full h-auto object-contain"
+                    />
+                  </div>
+                </div>
+                {/* New Way */}
+                <div className="relative">
+                  <span className="absolute -left-3 top-3 z-10 px-3 py-1 rounded-full text-xs font-semibold backdrop-blur-sm" style={{ background: 'hsl(210 100% 50% / 0.9)', color: 'hsl(220 40% 4%)' }}>The New Way</span>
+                  <div 
+                    className="relative rounded-xl overflow-hidden"
+                    style={{ 
+                      border: '1px solid hsl(210 100% 50% / 0.25)',
+                      boxShadow: '0 10px 30px hsl(0 0% 0% / 0.4), 0 0 20px hsl(210 100% 50% / 0.1)'
+                    }}
+                  >
+                    <img 
+                      src={newWayImage} 
+                      alt="LeadFinder Pro streamlined workflow" 
+                      className="w-full h-auto object-contain"
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
