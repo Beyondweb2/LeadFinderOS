@@ -134,10 +134,10 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
 
       <div className="container mx-auto">
         <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-16">
-          <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
+          <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 tracking-tight leading-[1.1] px-2">
             How It <span className="text-gradient-primary">Works</span>
           </h2>
-          <p className="hidden sm:block text-muted-foreground max-w-xl mx-auto text-base md:text-lg px-2">
+          <p className="hidden sm:block text-muted-foreground/70 max-w-xl mx-auto text-base md:text-lg leading-[1.6] px-2">
             From search to sale in four simple steps
           </p>
         </ScrollReveal>
@@ -154,11 +154,11 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                   >
                     {index + 1}.
                   </span>
-                  <h3 className="text-2xl font-bold tracking-tight">{step.title}</h3>
+                   <h3 className="text-2xl font-bold tracking-tight">{step.title}</h3>
                   <span className="w-6 shrink-0" aria-hidden="true" />
                 </div>
                 
-                <p className="text-muted-foreground text-sm leading-relaxed mb-4 max-w-xs">
+                <p className="text-muted-foreground/70 text-sm leading-[1.6] mb-4 max-w-xs">
                   {step.description}
                 </p>
                 
@@ -276,7 +276,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{step.title}</h3>
                       </div>
                       
-                      <p className="text-muted-foreground text-sm sm:text-base md:text-lg leading-relaxed max-w-md mx-auto lg:mx-0">
+                      <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
                         {step.description}
                       </p>
                     </div>
