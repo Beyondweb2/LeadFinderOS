@@ -35,11 +35,11 @@ const steps = [
   },
   {
     key: 'leadTracked' as const,
-    label: 'Lead tracked with star',
-    cta: 'Track a Lead',
+    label: 'Star a lead → Track Leads page',
+    cta: '',
     route: '/outreach',
     icon: Star,
-    helperText: 'Hit the ⭐ star on any lead to move it to Track Leads.',
+    helperText: 'Hit the ⭐ on a lead — it moves to Track Leads automatically.',
   },
   {
     key: 'followUpSet' as const,
