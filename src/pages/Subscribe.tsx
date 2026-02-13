@@ -131,7 +131,7 @@ const Subscribe = () => {
             <CardDescription className="text-base">
               {hideTrialOffer
                 ? 'Unlock full access to all features'
-                : '£0 today · Cancel anytime'}
+                : '£0 today · £19.99/month after 24 hours · Cancel anytime'}
             </CardDescription>
           </CardHeader>
 
