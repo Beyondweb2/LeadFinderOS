@@ -192,7 +192,16 @@ const logStep = (step: string, details?: unknown) => {
       const session = await stripe.checkout.sessions.create(sessionConfig);
  
      logStep("Checkout session created", { sessionId: session.id, userId: user.id, trialUsed, branchTaken });
- 
+
+     // Log funnel event: trial_started (fire-and-forget)
+     supabaseClient
+       .from('funnel_events')
+       .insert({ user_id: user.id, event_type: 'trial_started' })
+       .then(({ error }) => {
+         if (error) console.log('[FUNNEL] trial_started insert failed', error.message);
+         else console.log('[FUNNEL] trial_started logged', { userId: user.id });
+       });
+
      return new Response(JSON.stringify({ url: session.url }), {
        headers: { ...corsHeaders, "Content-Type": "application/json" },
        status: 200,

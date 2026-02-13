@@ -107,6 +107,15 @@ serve(async (req) => {
 
     logStep("Trial record created successfully", { trialId: newTrial.id });
 
+    // Log funnel event: demo_started (fire-and-forget, never blocks)
+    supabaseClient
+      .from('funnel_events')
+      .insert({ user_id: user.id, event_type: 'demo_started' })
+      .then(({ error }) => {
+        if (error) console.log('[FUNNEL] demo_started insert failed', error.message);
+        else console.log('[FUNNEL] demo_started logged', { userId: user.id });
+      });
+
     return new Response(JSON.stringify({ 
       created: true, 
       trial: newTrial 
