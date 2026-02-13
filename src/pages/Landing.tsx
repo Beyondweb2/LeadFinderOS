@@ -578,7 +578,7 @@ const Landing = () => {
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl text-foreground/60 max-w-2xl mx-auto mb-4 sm:mb-8 leading-relaxed sm:leading-[1.6] px-2">
-              The all-in-one tool to find, contact, and close local businesses without websites.
+              The all-in-one tool to find, contact, and close businesses without websites.
             </p>
             
             {/* CTA Buttons */}
