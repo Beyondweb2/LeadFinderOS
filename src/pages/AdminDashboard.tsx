@@ -59,6 +59,8 @@ interface AdminUser {
   email: string;
   created_at: string;
   subscription_status: string;
+  access_mode: string;
+  billing_status: string;
   current_period_end: string | null;
   search_count: number;
   businesses_added_count: number;
@@ -75,15 +77,47 @@ interface UsageEvent {
   created_at: string;
 }
 
-function statusColor(status: string): string {
+function accessModeColor(mode: string): string {
+  switch (mode) {
+    case 'paid': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+    case 'full_access_trial': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
+    case 'demo': return 'bg-violet-500/15 text-violet-400 border-violet-500/30';
+    case 'restricted': return 'bg-muted text-muted-foreground border-border';
+    default: return 'bg-muted text-muted-foreground border-border';
+  }
+}
+
+function accessModeLabel(mode: string): string {
+  switch (mode) {
+    case 'paid': return 'Paid';
+    case 'full_access_trial': return 'Trial (24h)';
+    case 'demo': return 'Demo';
+    case 'restricted': return 'Restricted';
+    default: return mode;
+  }
+}
+
+function billingStatusColor(status: string): string {
   switch (status) {
     case 'active': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
     case 'trialing': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
-    case 'trial': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
     case 'past_due': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
     case 'canceled': return 'bg-red-500/15 text-red-400 border-red-500/30';
-    case 'expired': return 'bg-muted text-muted-foreground border-border';
+    case 'checkout_started': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
+    case 'no_stripe': return 'bg-muted text-muted-foreground border-border';
     default: return 'bg-muted text-muted-foreground border-border';
+  }
+}
+
+function billingStatusLabel(status: string): string {
+  switch (status) {
+    case 'no_stripe': return 'No Stripe';
+    case 'checkout_started': return 'Checkout Started';
+    case 'trialing': return 'Stripe Trialing';
+    case 'active': return 'Active';
+    case 'past_due': return 'Past Due';
+    case 'canceled': return 'Canceled';
+    default: return status;
   }
 }
 
@@ -247,8 +281,9 @@ export default function AdminDashboard() {
 
   const filtered = users;
 
-  const totalActive = users.filter(u => u.subscription_status === 'active').length;
-  const totalTrialing = users.filter(u => u.subscription_status === 'trial' || u.subscription_status === 'trialing').length;
+  const totalActive = users.filter(u => u.access_mode === 'paid').length;
+  const totalTrialing = users.filter(u => u.access_mode === 'full_access_trial').length;
+  const totalDemo = users.filter(u => u.access_mode === 'demo').length;
   const totalSearches = users.reduce((s, u) => s + u.search_count, 0);
   const totalMessages = users.reduce((s, u) => s + u.messages_sent_count, 0);
 
@@ -307,7 +342,7 @@ export default function AdminDashboard() {
           <Card>
             <CardHeader className="pb-2 pt-4 px-4">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Activity className="h-3.5 w-3.5" /> On Trial
+                <Activity className="h-3.5 w-3.5" /> Stripe Trialing
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4">
@@ -317,11 +352,11 @@ export default function AdminDashboard() {
           <Card>
             <CardHeader className="pb-2 pt-4 px-4">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Search className="h-3.5 w-3.5" /> Total Searches
+                <Users className="h-3.5 w-3.5" /> Demo Users
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{totalSearches}</p>
+              <p className="text-2xl font-bold">{totalDemo}</p>
             </CardContent>
           </Card>
           <Card>
@@ -395,7 +430,7 @@ export default function AdminDashboard() {
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                           No users found
                         </TableCell>
                       </TableRow>
@@ -410,13 +445,17 @@ export default function AdminDashboard() {
                             {u.email}
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline" className={statusColor(u.subscription_status)}>
-                              {u.subscription_status}
+                            <Badge variant="outline" className={accessModeColor(u.access_mode)}>
+                              {accessModeLabel(u.access_mode)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={billingStatusColor(u.billing_status)}>
+                              {billingStatusLabel(u.billing_status)}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-right tabular-nums">{u.search_count}</TableCell>
                           <TableCell className="text-right tabular-nums">{u.businesses_added_count}</TableCell>
-                          <TableCell className="text-right tabular-nums">{u.messages_sent_count}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {timeAgo(u.last_active_at)}
                           </TableCell>
@@ -487,12 +526,18 @@ export default function AdminDashboard() {
               <div className="mt-6 space-y-6">
                 {/* Subscription Info */}
                 <div className="space-y-3">
-                  <h3 className="text-sm font-semibold text-foreground">Subscription</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Status</h3>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs text-muted-foreground">Status</p>
-                      <Badge variant="outline" className={`mt-1 ${statusColor(selectedUser.subscription_status)}`}>
-                        {selectedUser.subscription_status}
+                      <p className="text-xs text-muted-foreground">Access Mode</p>
+                      <Badge variant="outline" className={`mt-1 ${accessModeColor(selectedUser.access_mode)}`}>
+                        {accessModeLabel(selectedUser.access_mode)}
+                      </Badge>
+                    </div>
+                    <div className="rounded-lg border border-border p-3">
+                      <p className="text-xs text-muted-foreground">Billing (Stripe)</p>
+                      <Badge variant="outline" className={`mt-1 ${billingStatusColor(selectedUser.billing_status)}`}>
+                        {billingStatusLabel(selectedUser.billing_status)}
                       </Badge>
                     </div>
                     <div className="rounded-lg border border-border p-3">
