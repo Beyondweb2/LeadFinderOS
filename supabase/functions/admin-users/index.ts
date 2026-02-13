@@ -140,10 +140,10 @@ serve(async (req) => {
           ? serviceClient.from('user_metrics').select('user_id, search_count, businesses_added_count, messages_sent_count, replies_count, last_active_at, last_search_at').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
-          ? serviceClient.from('subscriptions').select('user_id, status, current_period_end').in('user_id', userIds)
+          ? serviceClient.from('subscriptions').select('user_id, status, current_period_end, stripe_customer_id, stripe_subscription_id').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
-          ? serviceClient.from('user_trials').select('user_id, plan_status').in('user_id', userIds)
+          ? serviceClient.from('user_trials').select('user_id, plan_status, demo_search_used, trial_used, checkout_abandoned').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
       ]);
 
@@ -161,6 +161,27 @@ serve(async (req) => {
         const sub = subsMap.get(u.id) as any;
         const trial = trialsMap.get(u.id) as any;
 
+        // --- Billing Status (purely from Stripe data) ---
+        let billing_status = 'no_stripe';
+        if (sub) {
+          billing_status = sub.status; // trialing, active, past_due, canceled
+        } else if (trial?.checkout_abandoned) {
+          billing_status = 'checkout_started';
+        }
+
+        // --- Access Mode (what level of access the user actually has) ---
+        let access_mode = 'restricted';
+        if (sub?.status === 'active') {
+          access_mode = 'paid';
+        } else if (sub?.status === 'trialing') {
+          access_mode = 'full_access_trial';
+        } else if (sub?.status === 'past_due') {
+          access_mode = 'paid'; // still has access during past_due
+        } else if (!sub && trial) {
+          access_mode = 'demo';
+        }
+
+        // Keep legacy subscription_status for filter compatibility
         let subscription_status = 'none';
         if (sub) {
           subscription_status = sub.status;
@@ -173,6 +194,8 @@ serve(async (req) => {
           email: u.email || 'N/A',
           created_at: u.created_at,
           subscription_status,
+          access_mode,
+          billing_status,
           current_period_end: sub?.current_period_end || null,
           search_count: metrics?.search_count ?? 0,
           businesses_added_count: metrics?.businesses_added_count ?? 0,
