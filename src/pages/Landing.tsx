@@ -564,7 +564,7 @@ const Landing = () => {
           </div>
 
           <div className="max-w-3xl mx-auto">
-            <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-[3.5rem] xl:text-6xl font-bold mb-3 sm:mb-5 tracking-tight">
+            <h1 className="font-display text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-[3.5rem] xl:text-6xl font-extrabold mb-3 sm:mb-5 tracking-tight">
               <span className="block text-gradient-primary">Your All-in-One</span>
               <span className="block mt-0.5 sm:mt-2">Client Outreach Tool</span>
             </h1>
@@ -648,7 +648,7 @@ const Landing = () => {
       <ScrollReveal className="relative z-10 py-10 sm:py-16 md:py-28 px-3 sm:px-4">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight mb-2 sm:mb-4">
+            <h2 className="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight mb-2 sm:mb-4">
               Stop Manually Scrolling <span className="text-gradient-primary">Google Maps</span> for Leads
             </h2>
             <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg">
@@ -777,7 +777,7 @@ const Landing = () => {
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
-            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
+            <h2 className="font-display text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold mb-3 sm:mb-4 tracking-tight px-2">
               Your Complete
               <span className="text-gradient-primary"> Lead Toolkit</span>
             </h2>
@@ -937,7 +937,7 @@ const Landing = () => {
             <p className="text-muted-foreground/50 text-xs sm:text-sm font-medium tracking-wide uppercase mb-3">
               One plan. Full access.
             </p>
-            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight px-2">
+            <h2 className="font-display text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight px-2">
               Lead<span className="text-gradient-primary">Finder</span> Pro
             </h2>
           </ScrollReveal>
@@ -1021,7 +1021,7 @@ const Landing = () => {
         <div className="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">
+            <h2 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight mb-2">
               Got Any <span className="text-gradient-primary">Questions?</span>
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground mb-1.5">
