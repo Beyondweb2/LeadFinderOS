@@ -8,6 +8,7 @@ export interface DemoChecklistState {
   contactAttempted: boolean;
   statusUpdated: boolean;
   leadTracked: boolean;
+  followUpSet: boolean;
 }
 
 interface DemoChecklistContextType {
@@ -34,7 +35,7 @@ function loadState(userId?: string): DemoChecklistState {
     const raw = localStorage.getItem(getKey(userId));
     if (raw) return JSON.parse(raw);
   } catch { /* ignore */ }
-  return { searchDone: false, addedToCrm: false, crmAddCount: 0, contactAttempted: false, statusUpdated: false, leadTracked: false };
+  return { searchDone: false, addedToCrm: false, crmAddCount: 0, contactAttempted: false, statusUpdated: false, leadTracked: false, followUpSet: false };
 }
 
 function saveState(state: DemoChecklistState, userId?: string) {
@@ -94,6 +95,7 @@ export function DemoChecklistProvider({
     const onContact = () => completeStep('contactAttempted');
     const onStatus = () => completeStep('statusUpdated');
     const onTrack = () => completeStep('leadTracked');
+    const onFollowUp = () => completeStep('followUpSet');
 
     // Also capture tel: link clicks as contact attempts
     const onTelClick = (e: MouseEvent) => {
@@ -107,7 +109,7 @@ export function DemoChecklistProvider({
     window.addEventListener('demo-checklist-contact', onContact);
     window.addEventListener('demo-checklist-status-change', onStatus);
     window.addEventListener('demo-checklist-lead-tracked', onTrack);
-    window.addEventListener('demo-checklist-next-action-set', onTrack);
+    window.addEventListener('demo-checklist-next-action-set', onFollowUp);
     document.addEventListener('click', onTelClick, true);
 
     return () => {
@@ -116,19 +118,19 @@ export function DemoChecklistProvider({
       window.removeEventListener('demo-checklist-contact', onContact);
       window.removeEventListener('demo-checklist-status-change', onStatus);
       window.removeEventListener('demo-checklist-lead-tracked', onTrack);
-      window.removeEventListener('demo-checklist-next-action-set', onTrack);
+      window.removeEventListener('demo-checklist-next-action-set', onFollowUp);
       document.removeEventListener('click', onTelClick, true);
     };
   }, [isDemoUser, completeStep]);
 
-  const completedCount = [state.searchDone, state.addedToCrm, state.contactAttempted, state.statusUpdated, state.leadTracked].filter(Boolean).length;
+  const completedCount = [state.searchDone, state.addedToCrm, state.contactAttempted, state.statusUpdated, state.leadTracked, state.followUpSet].filter(Boolean).length;
 
   return (
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
-      totalSteps: 5,
-      allDone: completedCount === 5,
+      totalSteps: 6,
+      allDone: completedCount === 6,
       completeStep,
       isOpen,
       setIsOpen,
