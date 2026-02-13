@@ -66,8 +66,13 @@ const UnlockAccess = () => {
       });
       if (error) throw error;
       if (data?.url) {
-        // Open Stripe in new tab (works on published app)
-        window.open(data.url, '_blank');
+        // Try new tab first, fall back to same-window redirect
+        const opened = window.open(data.url, '_blank');
+        if (!opened) {
+          // Popup was blocked — redirect in same window
+          window.location.href = data.url;
+          return;
+        }
         setWaitingForPayment(true);
         setShowConfirmModal(false);
         
