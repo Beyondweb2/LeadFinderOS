@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -201,28 +202,43 @@ export function SearchForm({
               </div>
             )}
             
-            <div className={`flex justify-center sm:justify-end ${!isPaidSubscriber ? '' : 'w-full'}`}>
-              <Button 
-                type="submit" 
-                disabled={isLoading || !keyword.trim() || !location.trim() || disabled}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-9 sm:h-10 w-full sm:w-auto text-sm"
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    Searching...
-                  </>
-                ) : (
-                  <>
-                    <Search className="mr-1.5 h-3.5 w-3.5" />
-                    Find Leads
-                  </>
-                )}
-              </Button>
-              {isLoading && (
-                <p className="text-[10px] sm:text-xs text-muted-foreground/60 mt-1.5 text-center sm:text-right">
-                  This can take 20–30 seconds — hang tight!
-                </p>
+            <div className={`flex flex-col items-center sm:items-end ${!isPaidSubscriber ? '' : 'w-full'}`}>
+              {!isPaidSubscriber && searchesRemaining === 0 && dailyLimit === 1 ? (
+                <Button 
+                  type="button"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-9 sm:h-10 w-full sm:w-auto text-sm"
+                  asChild
+                >
+                  <Link to="/subscribe">
+                    Get Free Trial — Full Access
+                    <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                  </Link>
+                </Button>
+              ) : (
+                <>
+                  <Button 
+                    type="submit" 
+                    disabled={isLoading || !keyword.trim() || !location.trim() || disabled}
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-9 sm:h-10 w-full sm:w-auto text-sm"
+                  >
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        Searching...
+                      </>
+                    ) : (
+                      <>
+                        <Search className="mr-1.5 h-3.5 w-3.5" />
+                        Find Leads
+                      </>
+                    )}
+                  </Button>
+                  {isLoading && (
+                    <p className="text-[10px] sm:text-xs text-muted-foreground/60 mt-1.5 text-center sm:text-right">
+                      This can take 20–30 seconds — hang tight!
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </div>

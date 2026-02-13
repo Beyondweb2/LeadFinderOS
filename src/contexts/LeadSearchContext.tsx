@@ -42,10 +42,12 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     return {
       leads: `leadfinder_cached_leads:${user.id}`,
       filters: `leadfinder_cached_filters:${user.id}`,
+      demoLeads: `leadfinder_demo_leads:${user.id}`,
     };
   }, [user?.id]);
 
   // Restore cached state after reloads so users don't lose progress
+  // Use localStorage for demo leads (survives navigation), sessionStorage for regular
   useEffect(() => {
     if (!storageKeys) {
       setLeads([]);
@@ -53,6 +55,16 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     }
 
     try {
+      // Try demo leads from localStorage first
+      const demoRaw = localStorage.getItem(storageKeys.demoLeads);
+      if (demoRaw) {
+        const cached = JSON.parse(demoRaw) as { leads?: Lead[] };
+        if (Array.isArray(cached?.leads) && cached.leads.length > 0) {
+          setLeads(cached.leads);
+          return;
+        }
+      }
+      // Fall back to sessionStorage
       const cachedLeadsRaw = sessionStorage.getItem(storageKeys.leads);
       if (cachedLeadsRaw) {
         const cached = JSON.parse(cachedLeadsRaw) as { leads?: Lead[] };
@@ -186,9 +198,10 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
 
         setLeads(filteredLeads);
 
-        // Cache last used filters too (for optional UI restore later)
+        // Persist demo leads to localStorage so they survive navigation
         if (storageKeys) {
           try {
+            localStorage.setItem(storageKeys.demoLeads, JSON.stringify({ leads: filteredLeads }));
             sessionStorage.setItem(storageKeys.filters, JSON.stringify({ filters }));
           } catch {
             // ignore
