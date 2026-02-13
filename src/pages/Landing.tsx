@@ -171,10 +171,10 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
       <div ref={ref} className="text-center">
-    <div className="font-display text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
+    <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
       {count.toLocaleString()}{suffix}
     </div>
-    <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">{label}</div>
+    <div className="text-[9px] sm:text-xs text-foreground/50 mt-1.5 font-medium uppercase tracking-wider">{label}</div>
     </div>
   );
 };
@@ -534,7 +534,7 @@ const Landing = () => {
         <div className="container mx-auto px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <img src={appLogo} alt="LeadFinder Pro" className="h-8 w-8 sm:h-9 sm:w-9" />
-            <span className="text-base sm:text-lg font-semibold tracking-tight">
+            <span className="text-base sm:text-lg font-bold tracking-tight">
               Lead<span className="text-gradient-primary">Finder</span> Pro
             </span>
           </div>
@@ -544,7 +544,7 @@ const Landing = () => {
             </Button>
             <Button 
               asChild 
-              className="font-medium text-sm px-3 sm:px-4 btn-premium"
+              className="font-semibold text-sm px-3 sm:px-4 btn-premium"
             >
               <Link to="/auth?intent=demo">
                 <span className="hidden sm:inline">Try Free Demo</span>
@@ -573,12 +573,12 @@ const Landing = () => {
               <span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="font-display text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-[4rem] xl:text-7xl font-extrabold mb-4 sm:mb-6 tracking-tight">
+            <h1 className="text-[2rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4rem] xl:text-7xl font-extrabold mb-4 sm:mb-6 tracking-tight">
               <span className="block">Find Businesses</span>
               <span className="text-gradient-primary"> Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-xl text-foreground/50 max-w-2xl mx-auto mb-4 sm:mb-8 leading-relaxed px-2">
+            <p className="text-sm sm:text-lg md:text-xl text-foreground/60 max-w-2xl mx-auto mb-4 sm:mb-8 leading-relaxed sm:leading-[1.6] px-2">
               Find local businesses without websites and reach out directly.
               <br className="hidden sm:block" />
               Stop scrolling Google Maps — start contacting prospects.
@@ -586,7 +586,7 @@ const Landing = () => {
             
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
-              <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-lg font-normal px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-5 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
+              <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-lg font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-5 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
                 <Link to="/auth?intent=demo">
                   Try Free Demo
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
@@ -595,7 +595,7 @@ const Landing = () => {
               <Button 
                 size="lg" 
                 variant="outline" 
-                className="hidden sm:inline-flex text-base font-normal px-8 py-4 h-auto border-border/50 hover:bg-muted/30 text-foreground/70 hover:text-foreground transition-colors"
+                className="hidden sm:inline-flex text-base font-semibold px-8 py-4 h-auto border-border/50 hover:bg-muted/30 text-foreground/70 hover:text-foreground transition-colors"
                 asChild
               >
                 <Link to="/auth">Sign In</Link>
@@ -603,7 +603,7 @@ const Landing = () => {
             </div>
 
             {/* Mobile trust bullets */}
-            <div className="flex sm:hidden flex-wrap items-center justify-center gap-2.5 mt-4 text-[13px] text-foreground/55">
+            <div className="flex sm:hidden flex-wrap items-center justify-center gap-2.5 mt-4 text-[13px] text-foreground/60 font-medium">
               <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
               <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
               <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
@@ -616,21 +616,17 @@ const Landing = () => {
           >
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
-              <div className="font-display text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[9px] sm:text-xs text-foreground/50 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="flex items-center justify-center">
-                <svg className="h-5 w-5 sm:h-7 sm:w-7 md:h-8 md:w-8" viewBox="0 0 24 24" fill="none" style={{ color: 'hsl(var(--primary))' }}>
-                  <path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-5.095-8 0-8zM5.822 8c5.096 0 5.096 8 0 8-5.095 0-5.095-8 0-8z" stroke="currentColor" strokeWidth="2"/>
-                </svg>
-              </div>
-              <div className="text-[9px] sm:text-xs text-foreground/40 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="text-[9px] sm:text-xs text-foreground/50 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
             </div>
           </div>
 
           {/* Set up tagline */}
-          <p className="text-[10px] sm:text-xs text-muted-foreground/40 mt-1 sm:mt-2 tracking-wide font-medium text-center">
+          <p className="text-[10px] sm:text-xs text-muted-foreground/50 mt-1 sm:mt-2 tracking-wide font-medium text-center">
             Set up in under 60 seconds. Full access included.
           </p>
 
@@ -654,10 +650,10 @@ const Landing = () => {
       <ScrollReveal className="relative z-10 py-10 sm:py-16 md:py-28 px-3 sm:px-4">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="font-display text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight mb-2 sm:mb-4">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-2 sm:mb-4">
               Stop Manually Scrolling <span className="text-gradient-primary">Google Maps</span> for Leads
             </h2>
-            <p className="text-muted-foreground max-w-xl mx-auto text-sm sm:text-base md:text-lg">
+            <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6]">
               There's a faster way to find businesses without websites.
             </p>
           </div>
@@ -668,7 +664,7 @@ const Landing = () => {
               {/* Old Way */}
               <div className="opacity-80">
                 <div className="text-center mb-3">
-                  <span className="inline-flex items-center gap-2"><X className="h-4 w-4" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="font-display text-lg font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
+                  <span className="inline-flex items-center gap-2"><X className="h-4 w-4" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-lg font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
                 </div>
                 <div 
                   className="relative rounded-lg overflow-hidden mb-4 aspect-[16/10]"
@@ -688,7 +684,7 @@ const Landing = () => {
               {/* New Way */}
               <div>
                 <div className="text-center mb-3">
-                  <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="font-display text-lg font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
+                  <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-lg font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
                 </div>
                 <div 
                   className="relative rounded-lg overflow-hidden mb-4"
@@ -713,7 +709,7 @@ const Landing = () => {
               <ScrollReveal delay={100}>
                 <div className="hover:opacity-90 transition-opacity duration-300">
                   <div className="text-center mb-5">
-                    <span className="inline-flex items-center gap-2.5"><X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="font-display text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
+                    <span className="inline-flex items-center gap-2.5"><X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
                   </div>
                   <div className="relative group mb-6">
                     <div 
@@ -741,7 +737,7 @@ const Landing = () => {
               <ScrollReveal delay={300}>
                 <div className="transition-all duration-300 hover:scale-[1.01]" style={{ filter: 'drop-shadow(0 0 24px hsl(142 60% 40% / 0.08))' }}>
                   <div className="text-center mb-5">
-                    <span className="inline-flex items-center gap-2.5"><Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="font-display text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
+                    <span className="inline-flex items-center gap-2.5"><Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
                   </div>
                   <div className="relative group mb-6">
                     <div 
@@ -783,11 +779,11 @@ const Landing = () => {
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
-            <h2 className="font-display text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold mb-3 sm:mb-4 tracking-tight px-2">
+            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight leading-[1.1] px-2">
               Your Complete
               <span className="text-gradient-primary"> Lead Toolkit</span>
             </h2>
-            <p className="hidden sm:block text-muted-foreground max-w-xl mx-auto text-base md:text-lg px-2">
+            <p className="hidden sm:block text-muted-foreground/70 max-w-xl mx-auto text-base md:text-lg leading-[1.6] px-2">
               Everything you need to find, track, and convert leads into paying clients.
             </p>
           </ScrollReveal>
@@ -813,10 +809,10 @@ const Landing = () => {
                         >
                           <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={1.5} />
                         </div>
-                        <h3 className="font-display text-base lg:text-lg font-semibold tracking-tight">{feature.title}</h3>
+                        <h3 className="text-base lg:text-lg font-semibold tracking-tight">{feature.title}</h3>
                       </div>
                       {/* Description */}
-                      <p className="text-muted-foreground text-sm leading-relaxed">{feature.description}</p>
+                      <p className="text-muted-foreground/70 text-sm leading-[1.6]">{feature.description}</p>
                       {/* Image with glow */}
                       <div
                         className="group relative cursor-pointer"
@@ -940,10 +936,10 @@ const Landing = () => {
       <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
-            <p className="text-muted-foreground/50 text-xs sm:text-sm font-medium tracking-wide uppercase mb-3">
+            <p className="text-muted-foreground/60 text-xs sm:text-sm font-medium tracking-wide uppercase mb-3">
               One plan. Full access.
             </p>
-            <h2 className="font-display text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-extrabold tracking-tight px-2">
+            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] px-2">
               Lead<span className="text-gradient-primary">Finder</span> Pro
             </h2>
           </ScrollReveal>
@@ -976,7 +972,7 @@ const Landing = () => {
                     </span>
                   </div>
                   <div className="mt-1">
-                    <span className="font-display text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
+                    <span className="text-4xl sm:text-5xl font-bold tracking-tight">£19.99</span>
                     <span className="text-muted-foreground ml-1 text-sm sm:text-base">/month</span>
                   </div>
                   <p className="text-xs text-foreground/50 mt-2">Try everything free for 24 hours.</p>
@@ -1027,13 +1023,13 @@ const Landing = () => {
         <div className="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
-            <h2 className="font-display text-2xl sm:text-3xl font-extrabold tracking-tight mb-2">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-2">
               Got Any <span className="text-gradient-primary">Questions?</span>
             </h2>
-            <p className="text-sm sm:text-base text-muted-foreground mb-1.5">
+            <p className="text-sm sm:text-base text-muted-foreground/70 mb-1.5 leading-[1.6]">
               Fast responses from a real person — no bots, no waiting.
             </p>
-            <p className="text-xs text-muted-foreground/60 mb-5">
+            <p className="text-xs text-muted-foreground/50 mb-5">
               We typically reply within minutes.
             </p>
             <a
@@ -1059,7 +1055,7 @@ const Landing = () => {
       <footer className="relative z-10 border-t border-white/[0.06] py-8 sm:py-10 md:py-12 mt-4 sm:mt-12 px-4">
         <div className="container mx-auto">
           <div className="flex flex-col items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
-            <span className="font-semibold tracking-tight text-sm sm:text-base">
+            <span className="font-bold tracking-tight text-sm sm:text-base">
               Lead<span className="text-gradient-primary">Finder</span> Pro
             </span>
             <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 md:gap-8 text-xs sm:text-sm text-muted-foreground">

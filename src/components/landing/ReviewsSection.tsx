@@ -121,10 +121,10 @@ export const ReviewsSection = () => {
             </div>
           )}
           <p className="text-foreground/50 text-xs sm:text-sm font-medium mb-4 sm:mb-5">Rated 4.9/5 by freelancers and agencies</p>
-          <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight px-2">
+          <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight leading-[1.1] px-2">
             Real Results from <span className="text-gradient-primary">Real Users</span>
           </h2>
-          <p className="hidden sm:block text-muted-foreground max-w-xl mx-auto text-base md:text-lg px-2">
+          <p className="hidden sm:block text-muted-foreground/70 max-w-xl mx-auto text-base md:text-lg leading-[1.6] px-2">
             See how freelancers and agencies are landing more clients with LeadFinder Pro
           </p>
         </div>
