@@ -100,6 +100,10 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
         nextAction,
         nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined
       );
+      // Fire checklist event when follow-up action + date is saved
+      if (nextAction && nextAction !== 'none' && nextActionDate) {
+        window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
+      }
     } finally {
       setIsSaving(false);
     }

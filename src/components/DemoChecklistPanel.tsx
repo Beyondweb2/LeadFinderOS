@@ -44,10 +44,10 @@ const steps = [
   {
     key: 'followUpSet' as const,
     label: 'Set a follow-up action & date',
-    cta: 'Go to Track Leads',
+    cta: '',
     route: '/potential-work',
     icon: CalendarClock,
-    helperText: 'Open a lead on Track Leads, set "Follow Up" as the next action, pick a date, and save.',
+    helperText: 'Open a lead, set "Follow Up" as the next action, pick a date, and hit Save.',
   },
 ];
 
