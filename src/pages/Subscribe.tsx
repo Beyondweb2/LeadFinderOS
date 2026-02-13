@@ -136,24 +136,15 @@ const Subscribe = () => {
           </CardHeader>
 
           <CardContent className="space-y-6">
-            <div className="text-center">
-              {!hideTrialOffer ? (
-                <div className="space-y-1">
-                  <div className="text-4xl font-bold text-primary">£0 today</div>
-                  <div className="text-sm text-muted-foreground">
-                    £19.99/month after 24 hours
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <span className="text-4xl font-bold">£19.99</span>
-                  <span className="text-muted-foreground">/month</span>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    £19.99/month. Cancel anytime.
-                  </p>
-                </div>
-              )}
-            </div>
+            {hideTrialOffer && (
+              <div className="text-center">
+                <span className="text-4xl font-bold">£19.99</span>
+                <span className="text-muted-foreground">/month</span>
+                <p className="text-sm text-muted-foreground mt-2">
+                  £19.99/month. Cancel anytime.
+                </p>
+              </div>
+            )}
 
             <ul className="space-y-3">
               {FEATURES.map((feature) => (
