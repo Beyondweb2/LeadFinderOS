@@ -577,8 +577,8 @@ const Landing = () => {
           </div>
           
           <h1 className="text-[2rem] leading-[1.1] sm:text-5xl md:text-6xl lg:text-7xl font-bold mb-3 sm:mb-5 tracking-tight">
-            <span className="block text-gradient-primary">Find Businesses</span>
-            <span className="block mt-0.5 sm:mt-2">Without Websites in Seconds</span>
+            <span className="block text-gradient-primary">All-in-One</span>
+            <span className="block mt-0.5 sm:mt-2">Outreach Tool</span>
           </h1>
           
           <p className="text-sm sm:text-lg md:text-xl text-foreground/55 max-w-2xl mx-auto mb-3 sm:mb-10 leading-relaxed px-2">
