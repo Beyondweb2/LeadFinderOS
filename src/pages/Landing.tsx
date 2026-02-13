@@ -556,43 +556,49 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:pt-28 lg:pb-36 px-4">
-        <div className="container mx-auto text-center">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:pt-16 lg:pb-20 px-4">
+        {/* Subtle radial glow behind hero center — desktop only */}
+        <div 
+          className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[900px] h-[600px] pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse 70% 55% at 50% 30%, hsl(210 100% 50% / 0.08), transparent 70%)' }}
+        />
+        <div className="container mx-auto text-center lg:max-w-[1140px]">
           {/* Mobile: Video at top instead of logo */}
           <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
 
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto lg:max-w-2xl">
             {/* Blue pill badge */}
             <div 
-              className="hidden sm:inline-flex items-center gap-2 px-5 py-2 rounded-full text-sm font-medium mb-8 backdrop-blur-sm"
+              className="hidden sm:inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium mb-6 lg:mb-5 backdrop-blur-sm"
               style={{ border: '1px solid hsl(210 100% 50% / 0.2)', background: 'hsl(210 100% 50% / 0.08)', color: 'hsl(210 100% 70%)' }}
             >
-              <Zap className="h-3.5 w-3.5" />
+              <Zap className="h-3 w-3" />
               <span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4rem] xl:text-7xl font-extrabold mb-4 sm:mb-6 tracking-tight">
-              Find Businesses <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
+            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold mb-4 sm:mb-5 lg:mb-4 tracking-tight" style={{ lineHeight: '1.05' }}>
+              Find Businesses{' '}
+              <br className="hidden sm:block" />
+              <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-xl text-foreground/60 max-w-2xl mx-auto mb-4 sm:mb-8 leading-relaxed sm:leading-[1.6] px-2">
-              The all-in-one tool to find, contact, and close businesses without websites.
+            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.2rem] text-foreground/70 max-w-2xl lg:max-w-[38rem] mx-auto mb-4 sm:mb-6 lg:mb-6 leading-relaxed sm:leading-[1.6] px-2">
+              The all-in-one tool to find businesses without websites, contact them, and track every follow-up.
             </p>
             
             {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-4">
-              <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-lg font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-5 h-auto w-full sm:w-auto shadow-lg shadow-primary/20" asChild>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
+              <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-[1.05rem] font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-[1.1rem] h-auto w-full sm:w-auto shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-shadow duration-300" asChild>
                 <Link to="/auth?intent=demo">
-                  Try Free Demo
+                  Start Free Demo — 1 Search
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                 </Link>
               </Button>
               <Button 
-                size="lg" 
-                variant="outline" 
-                className="hidden sm:inline-flex text-base font-semibold px-8 py-4 h-auto border-border/50 hover:bg-muted/30 text-foreground/70 hover:text-foreground transition-colors"
+                variant="ghost" 
+                className="hidden sm:inline-flex text-sm font-medium px-5 py-3 h-auto text-muted-foreground hover:text-foreground transition-colors"
                 asChild
               >
                 <Link to="/auth">Sign In</Link>
@@ -609,26 +615,26 @@ const Landing = () => {
 
           {/* Stats bar */}
           <div 
-            className="mt-6 sm:mt-12 md:mt-16 lg:mt-20 py-4 sm:py-6 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-2xl mx-auto"
+            className="mt-6 sm:mt-12 md:mt-16 lg:mt-10 py-4 sm:py-6 lg:py-5 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-lg mx-auto lg:rounded-xl lg:border lg:border-white/[0.06] lg:bg-white/[0.02] lg:backdrop-blur-sm"
           >
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
-              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[9px] sm:text-xs text-foreground/50 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+              <div className="text-lg sm:text-2xl md:text-3xl lg:text-2xl font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[9px] sm:text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-              <div className="text-[9px] sm:text-xs text-foreground/50 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+              <div className="text-lg sm:text-2xl md:text-3xl lg:text-2xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="text-[9px] sm:text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
             </div>
           </div>
 
           {/* Set up tagline */}
-          <p className="text-[10px] sm:text-xs text-muted-foreground/50 mt-1 sm:mt-2 tracking-wide font-medium text-center">
+          <p className="text-[10px] sm:text-xs text-muted-foreground/50 mt-1 sm:mt-2 lg:mt-3 tracking-wide font-medium text-center">
             Set up in under 60 seconds. Full access included.
           </p>
 
-          {/* Scroll indicator */}
-          <div className="flex flex-col items-center mt-6 sm:mt-8 animate-bounce">
+          {/* Scroll indicator — mobile/tablet only */}
+          <div className="flex lg:hidden flex-col items-center mt-6 sm:mt-8 animate-bounce">
             <span className="text-[10px] sm:text-xs text-muted-foreground/30 tracking-widest uppercase mb-2">Scroll</span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/30">
               <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
