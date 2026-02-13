@@ -43,10 +43,13 @@ const BillingSuccess = () => {
 
         if (data?.success) {
           setStatus('success');
-          // Short delay to show success state, then redirect
+          // Try to close this tab (works if opened via window.open)
+          // If it can't close, redirect to dashboard after delay
           setTimeout(() => {
+            window.close();
+            // If window.close() didn't work (not opened programmatically), redirect
             navigate('/', { replace: true });
-          }, 2000);
+          }, 1500);
         } else {
           setStatus('error');
           setErrorMessage(data?.error || 'Failed to activate subscription');
@@ -108,8 +111,8 @@ const BillingSuccess = () => {
             <>
               <CheckCircle2 className="h-12 w-12 text-green-500" />
               <div className="text-center">
-                <h2 className="text-xl font-semibold mb-2">Welcome to LeadFinder Pro!</h2>
-                <p className="text-muted-foreground">Your subscription is now active. Redirecting...</p>
+                <h2 className="text-xl font-semibold mb-2">You're all set!</h2>
+                <p className="text-muted-foreground">You can close this tab and return to the app.</p>
               </div>
             </>
           )}
