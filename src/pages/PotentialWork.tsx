@@ -151,10 +151,10 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   return (
     <Card className={`border border-border/60 border-l-[3px] ${getStatusBorderColor(lead.status)} hover:border-border transition-colors shadow-sm`}>
       <div className="px-3 py-2.5">
-        {/* Header: 3-column — Name | Status | Follow-up */}
-        <div className="grid items-start gap-2" style={{ gridTemplateColumns: '1fr auto minmax(0, 120px)' }}>
-          {/* Col 1: Business name (dominant) */}
-          <div className="min-w-0">
+        {/* Row 1: Name (left) | Follow-up (right) */}
+        <div className="flex items-start justify-between gap-3">
+          {/* Name — dominant, up to 2 lines */}
+          <div className="min-w-0 flex-1">
             {isEditingName ? (
               <div className="flex items-center gap-1.5">
                 <Input
@@ -185,27 +185,8 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             )}
           </div>
 
-          {/* Col 2: Status badge (compact) */}
-          <div className="shrink-0 pt-0.5" onClick={(e) => e.stopPropagation()}>
-            <Select
-              value={lead.status}
-              onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
-            >
-              <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
-                <OutreachStatusBadge status={lead.status} compact />
-              </SelectTrigger>
-              <SelectContent>
-                {POTENTIAL_WORK_STATUSES.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Col 3: Follow-up (right-aligned, stacked) */}
-          <div className="text-right">
+          {/* Follow-up — stacked, right-aligned, fixed width */}
+          <div className="shrink-0 w-[120px] text-right">
             {hasFollowUp ? (
               <div className="flex flex-col items-end">
                 <span className="text-[11px] font-medium text-foreground/70 leading-tight">{actionLabel}</span>
@@ -223,9 +204,29 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
           </div>
         </div>
 
-        {/* Row 2: Phone + Map + Actions */}
+        {/* Row 2: Status | Phone | Map (left) | Actions (right) */}
         <div className="flex items-center justify-between mt-1.5">
-          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
+            {/* Status badge */}
+            <div onClick={(e) => e.stopPropagation()}>
+              <Select
+                value={lead.status}
+                onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
+              >
+                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+                  <OutreachStatusBadge status={lead.status} compact />
+                </SelectTrigger>
+                <SelectContent>
+                  {POTENTIAL_WORK_STATUSES.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Phone */}
             {lead.phone && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -259,37 +260,33 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
+
+            {/* Map */}
             {lead.google_maps_url && (
               <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-foreground transition-colors">
                 <MapPin className="h-3 w-3" />
-                <span className="hidden sm:inline">Map</span>
                 <ExternalLink className="h-2.5 w-2.5" />
               </a>
             )}
-            {lead.category && (
-              <span className="hidden sm:inline text-muted-foreground/60">{lead.category}</span>
-            )}
           </div>
 
-          {/* Compact actions: expand + overflow menu */}
-          <div className="flex items-center gap-0.5">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <MoreVertical className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[140px]">
-                <DropdownMenuItem onClick={() => setIsExpanded(true)} className="text-xs">
-                  <StickyNote className="h-3.5 w-3.5 mr-2" /> Edit Notes
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
-                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+          {/* 3-dot menu */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-7 w-7">
+                <MoreVertical className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[140px]">
+              <DropdownMenuItem onClick={() => setIsExpanded(true)} className="text-xs">
+                <StickyNote className="h-3.5 w-3.5 mr-2" /> Edit Notes
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
+                <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Notes preview (1 line, collapsed) */}
