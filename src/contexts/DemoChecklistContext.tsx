@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
+import { useLocation } from 'react-router-dom';
 
 export interface DemoChecklistState {
   searchDone: boolean;
@@ -52,6 +53,7 @@ export function DemoChecklistProvider({
   isDemoUser: boolean;
 }) {
   const { user } = useAuth();
+  const location = useLocation();
   const [state, setState] = useState<DemoChecklistState>(() => loadState(user?.id));
   const [isOpen, setIsOpen] = useState(false);
   const initializedRef = useRef(false);
@@ -122,6 +124,14 @@ export function DemoChecklistProvider({
       document.removeEventListener('click', onTelClick, true);
     };
   }, [isDemoUser, completeStep]);
+
+  // Complete "Open Track Leads page" when user visits /potential-work
+  useEffect(() => {
+    if (!isDemoUser) return;
+    if (location.pathname === '/potential-work') {
+      completeStep('leadTracked');
+    }
+  }, [isDemoUser, location.pathname, completeStep]);
 
   const completedCount = [state.searchDone, state.addedToCrm, state.contactAttempted, state.statusUpdated, state.leadTracked, state.followUpSet].filter(Boolean).length;
 
