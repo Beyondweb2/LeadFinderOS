@@ -459,8 +459,6 @@ export default function AdminDashboard() {
                               {billingStatusLabel(u.billing_status)}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right tabular-nums">{u.search_count}</TableCell>
-                          <TableCell className="text-right tabular-nums">{u.businesses_added_count}</TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {formatDate(u.demo_started_at)}
                           </TableCell>
@@ -470,6 +468,8 @@ export default function AdminDashboard() {
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {formatDate(u.paid_at)}
                           </TableCell>
+                          <TableCell className="text-right tabular-nums">{u.search_count}</TableCell>
+                          <TableCell className="text-right tabular-nums">{u.businesses_added_count}</TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {timeAgo(u.last_active_at)}
                           </TableCell>
