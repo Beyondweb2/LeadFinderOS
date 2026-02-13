@@ -62,6 +62,10 @@ export function NextActionEditor({ action, date, onUpdate }: NextActionEditorPro
     const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined;
     onUpdate(selectedAction, dateStr);
     setOpen(false);
+    // Fire checklist completion event when a next action + date is set
+    if (selectedAction && selectedAction !== 'none' && selectedDate) {
+      window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
+    }
   };
 
   const currentAction = action || 'none';
