@@ -135,7 +135,7 @@ serve(async (req) => {
 
       const userIds = authUsers.map(u => u.id);
 
-      const [metricsRes, subsRes, trialsRes] = await Promise.all([
+      const [metricsRes, subsRes, trialsRes, funnelRes] = await Promise.all([
         userIds.length > 0
           ? serviceClient.from('user_metrics').select('user_id, search_count, businesses_added_count, messages_sent_count, replies_count, last_active_at, last_search_at').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
@@ -145,21 +145,38 @@ serve(async (req) => {
         userIds.length > 0
           ? serviceClient.from('user_trials').select('user_id, plan_status, demo_search_used, trial_used, checkout_abandoned').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
+        userIds.length > 0
+          ? serviceClient.from('funnel_events').select('user_id, event_type, created_at').in('user_id', userIds).in('event_type', ['demo_started', 'trial_started', 'subscription_active'])
+          : Promise.resolve({ data: [] }),
       ]);
 
       const metricsData = (metricsRes as any).data || [];
       const subsData = (subsRes as any).data || [];
       const trialsData = (trialsRes as any).data || [];
-      console.log('[ADMIN-USERS] Joined data - metrics:', metricsData.length, 'subs:', subsData.length, 'trials:', trialsData.length);
+      const funnelData = (funnelRes as any).data || [];
+      console.log('[ADMIN-USERS] Joined data - metrics:', metricsData.length, 'subs:', subsData.length, 'trials:', trialsData.length, 'funnel:', funnelData.length);
 
       const metricsMap = new Map(metricsData.map((m: any) => [m.user_id, m]));
       const subsMap = new Map(subsData.map((s: any) => [s.user_id, s]));
       const trialsMap = new Map(trialsData.map((t: any) => [t.user_id, t]));
 
+      // Build funnel map: user_id -> { demo_started_at, trial_started_at, paid_at }
+      const funnelMap = new Map<string, { demo_started_at: string | null; trial_started_at: string | null; paid_at: string | null }>();
+      for (const fe of funnelData) {
+        if (!funnelMap.has(fe.user_id)) {
+          funnelMap.set(fe.user_id, { demo_started_at: null, trial_started_at: null, paid_at: null });
+        }
+        const entry = funnelMap.get(fe.user_id)!;
+        if (fe.event_type === 'demo_started') entry.demo_started_at = fe.created_at;
+        if (fe.event_type === 'trial_started') entry.trial_started_at = fe.created_at;
+        if (fe.event_type === 'subscription_active') entry.paid_at = fe.created_at;
+      }
+
       let users = authUsers.map(u => {
         const metrics = metricsMap.get(u.id) as any;
         const sub = subsMap.get(u.id) as any;
         const trial = trialsMap.get(u.id) as any;
+        const funnel = funnelMap.get(u.id) || { demo_started_at: null, trial_started_at: null, paid_at: null };
 
         // --- Billing Status (purely from Stripe data) ---
         let billing_status = 'no_stripe';
@@ -170,15 +187,15 @@ serve(async (req) => {
         }
 
         // --- Access Mode (what level of access the user actually has) ---
-        let access_mode = 'restricted';
+        let access_mode = 'signed_up';
         if (sub?.status === 'active') {
           access_mode = 'paid';
         } else if (sub?.status === 'trialing') {
           access_mode = 'full_access_trial';
         } else if (sub?.status === 'past_due') {
-          access_mode = 'paid'; // still has access during past_due
-        } else if (!sub && trial) {
-          access_mode = 'demo';
+          access_mode = 'paid';
+        } else if (funnel.demo_started_at) {
+          access_mode = 'demo'; // Only "Demo" if funnel event confirms it
         }
 
         // Keep legacy subscription_status for filter compatibility
@@ -197,6 +214,9 @@ serve(async (req) => {
           access_mode,
           billing_status,
           current_period_end: sub?.current_period_end || null,
+          demo_started_at: funnel.demo_started_at,
+          trial_started_at: funnel.trial_started_at,
+          paid_at: funnel.paid_at,
           search_count: metrics?.search_count ?? 0,
           businesses_added_count: metrics?.businesses_added_count ?? 0,
           messages_sent_count: metrics?.messages_sent_count ?? 0,

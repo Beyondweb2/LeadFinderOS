@@ -62,6 +62,9 @@ interface AdminUser {
   access_mode: string;
   billing_status: string;
   current_period_end: string | null;
+  demo_started_at: string | null;
+  trial_started_at: string | null;
+  paid_at: string | null;
   search_count: number;
   businesses_added_count: number;
   messages_sent_count: number;
@@ -82,7 +85,7 @@ function accessModeColor(mode: string): string {
     case 'paid': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
     case 'full_access_trial': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
     case 'demo': return 'bg-violet-500/15 text-violet-400 border-violet-500/30';
-    case 'restricted': return 'bg-muted text-muted-foreground border-border';
+    case 'signed_up': return 'bg-muted text-muted-foreground border-border';
     default: return 'bg-muted text-muted-foreground border-border';
   }
 }
@@ -92,7 +95,7 @@ function accessModeLabel(mode: string): string {
     case 'paid': return 'Paid';
     case 'full_access_trial': return 'Trial (24h)';
     case 'demo': return 'Demo';
-    case 'restricted': return 'Restricted';
+    case 'signed_up': return 'Signed Up';
     default: return mode;
   }
 }
@@ -418,19 +421,21 @@ export default function AdminDashboard() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Email</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>Access</TableHead>
+                      <TableHead>Billing</TableHead>
+                      <TableHead>Demo Started</TableHead>
+                      <TableHead>Trial Started</TableHead>
+                      <TableHead>Paid At</TableHead>
                       <TableHead className="text-right">Searches</TableHead>
                       <TableHead className="text-right">Added</TableHead>
-                      <TableHead className="text-right">Messages</TableHead>
                       <TableHead>Last Active</TableHead>
-                      <TableHead>Joined</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                           No users found
                         </TableCell>
                       </TableRow>
@@ -456,11 +461,17 @@ export default function AdminDashboard() {
                           </TableCell>
                           <TableCell className="text-right tabular-nums">{u.search_count}</TableCell>
                           <TableCell className="text-right tabular-nums">{u.businesses_added_count}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
-                            {timeAgo(u.last_active_at)}
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatDate(u.demo_started_at)}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatDate(u.trial_started_at)}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatDate(u.paid_at)}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
-                            {formatDate(u.created_at)}
+                            {timeAgo(u.last_active_at)}
                           </TableCell>
                           <TableCell>
                             {u.id !== user?.id && (
