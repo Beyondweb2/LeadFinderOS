@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
 import {
   Sidebar,
   SidebarContent,
@@ -111,6 +112,27 @@ export function AppSidebar() {
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
   const isCollapsed = state === 'collapsed';
+
+  // Flash state for sidebar icons (mirrors mobile bottom nav behavior)
+  const [flashCRM, setFlashCRM] = useState(false);
+  const [flashTrack, setFlashTrack] = useState(false);
+
+  useEffect(() => {
+    const onCRMAdded = () => {
+      setFlashCRM(true);
+      setTimeout(() => setFlashCRM(false), 2000);
+    };
+    const onTrackAdded = () => {
+      setFlashTrack(true);
+      setTimeout(() => setFlashTrack(false), 2000);
+    };
+    window.addEventListener('crm-lead-added', onCRMAdded);
+    window.addEventListener('track-lead-added', onTrackAdded);
+    return () => {
+      window.removeEventListener('crm-lead-added', onCRMAdded);
+      window.removeEventListener('track-lead-added', onTrackAdded);
+    };
+  }, []);
   
   // Pro access = active, trialing, past_due, or admin
   const { status: subStatus } = useSubscription();
@@ -163,6 +185,10 @@ export function AppSidebar() {
             <SidebarMenu>
               {navItems.map((item) => {
                 const isActive = location.pathname === item.url;
+                const isFlashing = 
+                  (item.url === '/outreach' && flashCRM) || 
+                  (item.url === '/potential-work' && flashTrack);
+                const flashColor = item.url === '/outreach' ? 'text-green-400' : item.url === '/potential-work' ? 'text-yellow-400' : '';
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
@@ -180,9 +206,9 @@ export function AppSidebar() {
                           )}
                         >
                           <item.icon className={cn(
-                            'h-5 w-5 shrink-0',
-                            isActive ? 'text-sidebar-primary' : ''
-                          )} />
+                            'h-5 w-5 shrink-0 transition-colors duration-300',
+                            isFlashing ? `${flashColor} animate-pulse` : isActive ? 'text-sidebar-primary' : ''
+                          )} style={isFlashing ? { filter: `drop-shadow(0 0 6px currentColor)` } : undefined} />
                           {!isCollapsed && (
                             <div className="flex flex-col overflow-hidden">
                               <span className="truncate">{item.title}</span>
