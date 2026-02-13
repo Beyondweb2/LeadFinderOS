@@ -967,7 +967,15 @@ const Landing = () => {
         </div>
       </ScrollReveal>
 
-      <InlineCTA text="Join 100+ web pros already using LeadFinder." />
+      <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
+        <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">Had a great experience?</p>
+        <Button variant="outline" className="border-border/30 hover:border-border/50 text-sm rounded-full px-5" asChild>
+          <Link to="/feedback">
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Leave a Review
+          </Link>
+        </Button>
+      </div>
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
@@ -1047,6 +1055,12 @@ const Landing = () => {
                   <p className="text-[10px] sm:text-xs text-muted-foreground/50 text-center">
                     No charge today · Cancel anytime before renewal
                   </p>
+                  <Button variant="ghost" size="sm" className="w-full text-muted-foreground/70 hover:text-foreground text-xs sm:text-sm mt-1" asChild>
+                    <Link to="/auth?intent=demo">
+                      Or try a free demo to see how it works
+                      <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                    </Link>
+                  </Button>
                 </CardFooter>
               </Card>
             </div>
