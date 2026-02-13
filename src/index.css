@@ -7,10 +7,10 @@
 @layer base {
   :root {
     /* Dark futuristic theme - dark navy to black */
-    --background: 222 47% 5%;
+    --background: 220 45% 8%;
     --foreground: 210 20% 92%;
 
-    --card: 220 42% 7%;
+    --card: 220 40% 10%;
     --card-foreground: 210 40% 98%;
 
     --popover: 220 40% 8%;
