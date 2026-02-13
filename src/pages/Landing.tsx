@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { trackLead, trackStartTrial } from '@/lib/fbPixel';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -85,7 +86,7 @@ const InlineCTA = ({ text = 'Ready to find your next client?' }: { text?: string
   <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
     <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" asChild>
-      <Link to="/auth?intent=demo">
+      <Link to="/auth?intent=demo" onClick={() => trackLead()}>
         Start Free Demo
         <ArrowRight className="ml-2 h-4 w-4" />
       </Link>
@@ -619,7 +620,7 @@ const Landing = () => {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
               <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-[1.05rem] font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-[1.1rem] h-auto w-full sm:w-auto shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-shadow duration-300" asChild>
-                <Link to="/auth?intent=demo">
+                <Link to="/auth?intent=demo" onClick={() => trackLead()}>
                   Start Free Demo
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                 </Link>
@@ -1047,7 +1048,7 @@ const Landing = () => {
                 
                 <CardFooter className="pt-4 pb-5 sm:pb-6 flex-col gap-2.5 px-4 sm:px-6">
                   <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
-                    <Link to="/auth?intent=upgrade">
+                    <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
                       Start Free Trial — Full Access
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>

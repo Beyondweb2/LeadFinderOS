@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { Check, Sparkles, CreditCard } from 'lucide-react';
+import { trackStartTrial } from '@/lib/fbPixel';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -56,7 +57,7 @@ export function DemoUpgradePanel() {
           <Button
             size="lg"
             className="btn-premium font-semibold px-8 h-auto py-3"
-            onClick={() => setShowConfirm(true)}
+            onClick={() => { trackStartTrial(); setShowConfirm(true); }}
           >
             <CreditCard className="mr-2 h-4 w-4" />
             Start 24-Hour Full Access
