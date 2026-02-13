@@ -107,6 +107,7 @@ export function DemoChecklistProvider({
     window.addEventListener('demo-checklist-contact', onContact);
     window.addEventListener('demo-checklist-status-change', onStatus);
     window.addEventListener('demo-checklist-lead-tracked', onTrack);
+    window.addEventListener('demo-checklist-next-action-set', onTrack);
     document.addEventListener('click', onTelClick, true);
 
     return () => {
@@ -115,6 +116,7 @@ export function DemoChecklistProvider({
       window.removeEventListener('demo-checklist-contact', onContact);
       window.removeEventListener('demo-checklist-status-change', onStatus);
       window.removeEventListener('demo-checklist-lead-tracked', onTrack);
+      window.removeEventListener('demo-checklist-next-action-set', onTrack);
       document.removeEventListener('click', onTelClick, true);
     };
   }, [isDemoUser, completeStep]);

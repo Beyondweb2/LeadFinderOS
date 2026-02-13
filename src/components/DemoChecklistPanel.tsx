@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
-import { Check, ChevronDown, ChevronUp, Sparkles, Search, UserPlus, Phone, RefreshCw, Star } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Sparkles, Search, UserPlus, Phone, RefreshCw, CalendarClock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const steps = [
@@ -35,11 +35,11 @@ const steps = [
   },
   {
     key: 'leadTracked' as const,
-    label: 'Track a positive response',
+    label: 'Set a follow-up action & date',
     cta: 'Go to Track Leads',
     route: '/potential-work',
-    icon: Star,
-    helperText: 'Once a business responds positively, move them to Track Leads to follow up and close the deal.',
+    icon: CalendarClock,
+    helperText: 'Open a lead on Track Leads, set "Follow Up" as the next action, pick a date, and save.',
   },
 ];
 
@@ -75,14 +75,15 @@ export function DemoChecklistPanel() {
         <div className="bg-card border border-t-0 border-border rounded-b-lg shadow-lg p-3 space-y-2">
           {allDone ? (
             <div className="text-center space-y-3 py-2">
-              <p className="text-sm font-semibold">Nice — you've run the workflow</p>
+              <p className="text-sm font-semibold text-primary">🎉 Walkthrough complete!</p>
+              <p className="text-xs text-muted-foreground">You've seen the full workflow. Unlock everything free for 24 hours.</p>
               <Button
                 size="sm"
-                className="w-full"
+                className="w-full btn-premium"
                 onClick={() => navigate('/subscribe')}
               >
                 <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                Unlock 24h Unlimited (Free)
+                Get 24h Full Access — Free
               </Button>
             </div>
           ) : (
