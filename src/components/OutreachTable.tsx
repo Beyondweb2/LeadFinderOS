@@ -227,11 +227,15 @@ export function OutreachTable({
       // ignore
     }
     setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name });
+    // Notify demo checklist
+    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
   };
 
   // Handle SMS button click for no_whatsapp leads
   const handleSMSClick = (lead: OutreachLead) => {
     setSmsLead({ phone: lead.phone || '', business_name: lead.business_name });
+    // Notify demo checklist
+    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
   };
 
   // Count leads missing phone numbers

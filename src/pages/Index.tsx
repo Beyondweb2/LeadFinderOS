@@ -125,6 +125,7 @@ const Index = () => {
             dailyLimit={demoDailyLimit}
             isPaidSubscriber={isAccessLoading || hasProAccess}
             disabled={postAbandonExhausted && !hasProAccess}
+            initialRadius={isDemoUser ? 100 : undefined}
           />
         )}
       </section>
