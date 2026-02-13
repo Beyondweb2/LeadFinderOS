@@ -55,7 +55,7 @@ export function TrialProgressCard({
   const hasActivity = searchesToday > 0 || totalLeadsAdded > 0 || addedToCRM > 0;
 
   return (
-    <Card className="col-span-2 lg:col-span-4 bg-gradient-to-br from-primary/5 via-background to-background border-primary/20">
+    <Card className="col-span-2 lg:col-span-4 border-border">
       <CardHeader className="pb-2">
         <CardTitle className="text-base sm:text-lg flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-primary/10">

@@ -212,13 +212,8 @@ const Auth = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Background glow effect */}
-      <div 
-        className="fixed inset-0 pointer-events-none opacity-30"
-        style={{ background: 'var(--gradient-glow)' }}
-      />
       
-      <Card className="w-full max-w-md relative z-10 bg-card/80 backdrop-blur-xl border-border/50">
+      <Card className="w-full max-w-md relative z-10 bg-card border-border">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <img src={appLogo} alt="LeadFinder Pro" className="h-12 w-12" />

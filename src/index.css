@@ -52,19 +52,17 @@
     --status-uncertain: 215 20% 45%;
     --status-uncertain-foreground: 0 0% 100%;
 
-    /* Blue gradients */
+    /* Subtle gradients */
     --gradient-primary: linear-gradient(135deg, hsl(210 100% 50%), hsl(220 100% 45%));
     --gradient-card: linear-gradient(180deg, hsl(220 40% 8%), hsl(220 40% 5%));
-    --gradient-glow: radial-gradient(ellipse at center, hsl(210 100% 50% / 0.15), transparent 70%);
-    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(210 100% 50% / 0.25), transparent 60%);
+    --gradient-glow: none;
+    --gradient-hero: radial-gradient(ellipse 80% 50% at 50% -20%, hsl(210 100% 50% / 0.12), transparent 60%);
 
-    /* Shadows with blue glow */
-    --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.4);
-    --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.5);
-    --shadow-lg: 0 10px 40px hsl(0 0% 0% / 0.6);
+    /* Clean shadows — no glow */
+    --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.3);
+    --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.4);
+    --shadow-lg: 0 10px 40px hsl(0 0% 0% / 0.5);
     --shadow-card: none;
-    --shadow-glow: 0 0 20px hsl(210 100% 50% / 0.25), 0 0 40px hsl(210 100% 50% / 0.1);
-    --shadow-glow-lg: 0 0 60px hsl(210 100% 50% / 0.2), 0 0 120px hsl(210 100% 50% / 0.1);
 
     /* Sidebar - keeping for shadcn compatibility */
     --sidebar-background: 220 45% 6%;
@@ -106,31 +104,21 @@
 }
 
 @layer components {
-  /* Glassmorphism panel */
+  /* Clean panel */
   .glass-panel {
-    @apply bg-card/60 backdrop-blur-xl border border-white/[0.08];
-    background: linear-gradient(
-      135deg,
-      hsl(220 40% 8% / 0.8) 0%,
-      hsl(220 40% 5% / 0.9) 100%
-    );
+    @apply bg-card border border-border;
   }
 
   .glass-panel-strong {
-    @apply backdrop-blur-2xl border border-white/[0.1];
-    background: linear-gradient(
-      180deg,
-      hsl(220 40% 10% / 0.95) 0%,
-      hsl(220 40% 6% / 0.98) 100%
-    );
+    @apply bg-card border border-border;
   }
 
   .glow-effect {
-    box-shadow: var(--shadow-glow);
+    /* no glow */
   }
 
   .glow-effect-lg {
-    box-shadow: var(--shadow-glow-lg);
+    /* no glow */
   }
 
   /* Premium button styling - uses fixed brand blue */
@@ -250,7 +238,7 @@
   }
 
   .animate-glow {
-    animation: glow 3s ease-in-out infinite alternate;
+    /* disabled */
   }
 
   .animate-float {
@@ -263,12 +251,8 @@
   }
 
   @keyframes glow {
-    from {
-      box-shadow: 0 0 15px hsl(195 100% 50% / 0.2);
-    }
-    to {
-      box-shadow: 0 0 30px hsl(195 100% 50% / 0.35);
-    }
+    from { box-shadow: none; }
+    to { box-shadow: none; }
   }
 
   @keyframes scroll-dot {

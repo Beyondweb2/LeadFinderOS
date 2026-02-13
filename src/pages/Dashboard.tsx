@@ -145,7 +145,7 @@ const Dashboard = () => {
       <section>
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3 text-center sm:text-left">Quick Actions</h2>
         <div className="grid gap-2 sm:gap-4 grid-cols-3 max-w-md sm:max-w-none mx-auto">
-          <Card className="bg-card/50 border-border/50 hover:bg-card/70 transition-colors cursor-pointer">
+          <Card className="border-border hover:bg-muted/50 transition-colors cursor-pointer">
             <Link to="/find-leads" className="block p-2 sm:p-4 md:p-6">
               <div className="flex flex-col items-center sm:items-start text-center sm:text-left gap-1 sm:gap-2">
                 <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10">
@@ -156,7 +156,7 @@ const Dashboard = () => {
               </div>
             </Link>
           </Card>
-          <Card className="bg-card/50 border-border/50 hover:bg-card/70 transition-colors cursor-pointer">
+          <Card className="border-border hover:bg-muted/50 transition-colors cursor-pointer">
             <Link to="/templates" className="block p-2 sm:p-4 md:p-6">
               <div className="flex flex-col items-center sm:items-start text-center sm:text-left gap-1 sm:gap-2">
                 <div className="p-1.5 sm:p-2 rounded-lg bg-amber-500/10">
@@ -167,7 +167,7 @@ const Dashboard = () => {
               </div>
             </Link>
           </Card>
-          <Card className="bg-card/50 border-border/50 hover:bg-card/70 transition-colors cursor-pointer">
+          <Card className="border-border hover:bg-muted/50 transition-colors cursor-pointer">
             <Link to="/outreach" className="block p-2 sm:p-4 md:p-6">
               <div className="flex flex-col items-center sm:items-start text-center sm:text-left gap-1 sm:gap-2">
                 <div className="p-1.5 sm:p-2 rounded-lg bg-blue-500/10">

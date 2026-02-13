@@ -98,7 +98,7 @@ export function DashboardStats({ leads }: DashboardStatsProps) {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       {statCards.map((stat) => (
-        <Card key={stat.title} className="bg-card/50 border-border/50 backdrop-blur-sm">
+        <Card key={stat.title} className="border-border">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
               {stat.title}

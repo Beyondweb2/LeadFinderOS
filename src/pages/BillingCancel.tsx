@@ -22,12 +22,8 @@ const BillingCancel = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <div 
-        className="fixed inset-0 pointer-events-none opacity-30"
-        style={{ background: 'var(--gradient-glow)' }}
-      />
       
-      <Card className="relative z-10 w-full max-w-md bg-card/80 backdrop-blur-xl border-primary/20">
+      <Card className="relative z-10 w-full max-w-md bg-card border-border">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
             <img src={appLogo} alt="LeadFinder Pro" className="h-12 w-12" />

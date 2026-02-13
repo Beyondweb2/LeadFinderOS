@@ -24,7 +24,7 @@
    };
  
   return (
-     <Card className="bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-transparent border-blue-500/20">
+     <Card className="border-border">
        <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
          <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
            <TrendingUp className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />

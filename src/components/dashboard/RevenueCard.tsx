@@ -17,7 +17,7 @@
    paidForDraftCount,
  }: RevenueCardProps) {
   return (
-     <Card className="bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-transparent border-green-500/20">
+     <Card className="border-border">
        <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
          <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
            <PoundSterling className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-500" />

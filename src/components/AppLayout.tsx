@@ -49,11 +49,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     <DemoChecklistProvider isDemoUser={isDemoUser}>
       <SidebarProvider defaultOpen={true}>
         <div className="min-h-screen flex w-full bg-background">
-          {/* Background glow effect */}
-          <div
-            className="fixed inset-0 pointer-events-none opacity-30"
-            style={{ background: 'var(--gradient-glow)' }}
-          />
 
           {/* Desktop sidebar - hidden on mobile */}
           <div className="hidden md:block">
