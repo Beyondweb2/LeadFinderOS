@@ -25,6 +25,7 @@ import PaidClientsPage from "./pages/PaidClients";
 import HowToUse from "./pages/HowToUse";
 import AdminAffiliates from "./pages/AdminAffiliates";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminFunnel from "./pages/AdminFunnel";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 import Landing from "./pages/Landing";
 import Terms from "./pages/Terms";
@@ -195,6 +196,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <AdminAffiliates />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/admin/funnel-v2" 
+              element={
+                <ProtectedRoute>
+                  <AdminFunnel />
                 </ProtectedRoute>
               } 
             />
