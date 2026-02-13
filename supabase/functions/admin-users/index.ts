@@ -5,6 +5,7 @@ import { checkRateLimit, rateLimitHeaders } from '../_shared/rate-limiter.ts';
 const ALLOWED_ORIGINS = [
   'https://leadfinderapp.lovable.app',
   'https://id-preview--da9919bb-3412-438c-91f0-7b1c8b8e5d96.lovable.app',
+  'https://da9919bb-3412-438c-91f0-7b1c8b8e5d96.lovableproject.com',
 ];
 
 function getCorsHeaders(req: Request): Record<string, string> {
