@@ -6,15 +6,15 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Check, Loader2, ArrowRight, Shield } from 'lucide-react';
+import { Check, Loader2, ArrowRight, Shield, CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
 
 const BENEFITS = [
-  'Unlimited searches',
-  'CRM & tracking',
+  'Unlimited lead searches',
+  'Full CRM & tracking',
   'WhatsApp & SMS outreach',
-  'Templates & export',
+  'Export & templates',
 ];
 
 const UnlockAccess = () => {
@@ -152,16 +152,15 @@ const UnlockAccess = () => {
               <img src={appLogo} alt="LeadFinder Pro" className="h-10 w-10" />
             </div>
             <CardTitle className="text-xl font-bold">
-              Unlock full access for 24 hours
+              Unlock Full Access — Free for 24 Hours
             </CardTitle>
           </CardHeader>
 
           <CardContent className="space-y-4 px-6 pt-2 pb-2">
             {/* Pricing block */}
             <div className="text-center space-y-0.5">
-              <p className="text-3xl font-extrabold text-foreground">£0 today</p>
-              <p className="text-sm text-muted-foreground">Then £19.99/month</p>
-              <p className="text-xs text-muted-foreground/70 pt-1">Cancel anytime before renewal</p>
+              <p className="text-3xl font-extrabold text-primary">£0 today</p>
+              <p className="text-sm text-muted-foreground">£19.99/month after 24 hours · Cancel anytime</p>
             </div>
 
             {/* Benefits */}
@@ -206,11 +205,11 @@ const UnlockAccess = () => {
                   className="w-full btn-premium font-semibold py-3 h-auto text-sm sm:text-base"
                   onClick={() => setShowConfirmModal(true)}
                 >
-                  Start 24-hour access
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  <CreditCard className="mr-2 h-4 w-4" />
+                  Unlock My 24-Hour Access
                 </Button>
                 <p className="text-[10px] text-muted-foreground/50 text-center">
-                  Secure checkout via Stripe
+                  Secure payment via Stripe · Cancel anytime
                 </p>
               </>
             )}
