@@ -1,45 +1,32 @@
 
 
-# Fix: Stripe "Payment Method Not Available" Error
+## Add Loading Spinner to Video Components
 
-## Root Cause
+A simple spinning ring animation will display while the video is buffering/loading, then disappear once the video is ready to play. This is pure CSS -- zero performance impact on the video itself.
 
-The `create-checkout` edge function does **not** specify `payment_method_types` when creating the Stripe Checkout session. This lets Stripe auto-enable payment methods (Link, Google Pay, Apple Pay, etc.) that may not be fully configured on your Stripe account, causing the "Your payment method is currently not available" error.
+### How it works
 
-## What Changes
+1. Add a `videoLoaded` state (starts `false`) to both `MobileHeroVideo` and `VideoSection` components
+2. Listen for the video's `onCanPlayThrough` event to flip `videoLoaded` to `true`
+3. While `videoLoaded` is false, show a centered spinning ring overlay on top of the video container
+4. Once loaded, the spinner fades out and the video is fully visible
 
-**File: `supabase/functions/create-checkout/index.ts`**
+### Changes
 
-Add `payment_method_types: ['card']` to the checkout session configuration. This restricts the checkout to standard card payments only, which are universally supported.
+**`src/pages/Landing.tsx`** (both `MobileHeroVideo` and `VideoSection` components):
 
-No other files, price IDs, trial logic, or subscription logic will be changed.
+- Add `const [videoLoaded, setVideoLoaded] = useState(false);` state
+- Add `onCanPlayThrough={() => setVideoLoaded(true)}` to the `<video>` element
+- Add a loading overlay inside the video container div (positioned absolute, centered):
+  - A spinning ring using Tailwind's `animate-spin` on a bordered circle
+  - Fades out with a transition when `videoLoaded` becomes true
+  - Uses `pointer-events-none` so it doesn't block interaction
 
----
+### Visual
 
-## Technical Details
+- Dark semi-transparent background matching the card
+- A subtle blue spinning ring (matching the brand blue glow already used)
+- Smooth fade-out transition when video is ready
 
-In the session config object (around line 145), add:
-
-```typescript
-payment_method_types: ['card'],
-```
-
-This goes into the `stripe.checkout.sessions.create()` call alongside the existing `mode`, `line_items`, `success_url`, etc.
-
-Additionally, add a log line to record the price ID and mode for future debugging:
-
-```typescript
-logStep("Creating checkout session", { 
-  priceId: "price_1SxN38Gi4ps7kJ7R8UE1kYGS", 
-  mode: "subscription",
-  hasCustomer: !!customerId,
-  trialUsed 
-});
-```
-
-## After Fix
-
-- Card payments will work immediately
-- Link/wallet methods are excluded until you explicitly enable and configure them in your Stripe Dashboard
-- You can re-add other payment methods later by expanding the array (e.g., `['card', 'link']`)
+No new files, no new dependencies -- just a small state + conditional overlay in the two existing video components.
 
