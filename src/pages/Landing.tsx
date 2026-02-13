@@ -182,6 +182,7 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 // Mobile hero video component - compact version for hero section
 const MobileHeroVideo = () => {
   const [isMuted, setIsMuted] = useState(true);
+  const [videoLoaded, setVideoLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const toggleMute = () => {
@@ -211,6 +212,12 @@ const MobileHeroVideo = () => {
           boxShadow: '0 0 20px hsl(210 100% 50% / 0.15)'
         }}
       >
+        {/* Loading spinner overlay */}
+        <div 
+          className={`absolute inset-0 flex items-center justify-center bg-card/90 z-10 pointer-events-none transition-opacity duration-500 ${videoLoaded ? 'opacity-0' : 'opacity-100'}`}
+        >
+          <div className="h-8 w-8 rounded-full border-[3px] border-[hsl(210_100%_50%_/_0.2)] border-t-[hsl(210_100%_50%)] animate-spin" />
+        </div>
         <video 
           ref={videoRef}
           className="w-full h-auto"
@@ -219,6 +226,7 @@ const MobileHeroVideo = () => {
           muted
           playsInline
           preload="auto"
+          onCanPlayThrough={() => setVideoLoaded(true)}
         >
           <source src={demoVideo} type="video/mp4" />
           Your browser does not support the video tag.
@@ -245,6 +253,7 @@ const MobileHeroVideo = () => {
 // Starts muted (required for autoplay) - user can unmute
 const VideoSection = () => {
   const [isMuted, setIsMuted] = useState(true);
+  const [videoLoaded, setVideoLoaded] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   const toggleMute = () => {
@@ -277,6 +286,12 @@ const VideoSection = () => {
               boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)'
             }}
           >
+            {/* Loading spinner overlay */}
+            <div 
+              className={`absolute inset-0 flex items-center justify-center bg-card/90 z-10 pointer-events-none transition-opacity duration-500 ${videoLoaded ? 'opacity-0' : 'opacity-100'}`}
+            >
+              <div className="h-10 w-10 rounded-full border-4 border-[hsl(210_100%_50%_/_0.2)] border-t-[hsl(210_100%_50%)] animate-spin" />
+            </div>
             <video 
               ref={videoRef}
               className="w-full h-auto"
@@ -285,7 +300,7 @@ const VideoSection = () => {
               muted
               playsInline
               preload="auto"
-              
+              onCanPlayThrough={() => setVideoLoaded(true)}
             >
               <source src={demoVideo} type="video/mp4" />
               Your browser does not support the video tag.
