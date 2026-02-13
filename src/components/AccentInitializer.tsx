@@ -13,13 +13,13 @@ const THEMES: Record<string, { mode: 'dark' | 'light'; background: string; card:
   navy: { mode: 'dark', background: '230 35% 6%', card: '230 35% 9%', popover: '230 35% 11%', secondary: '230 30% 14%', muted: '230 35% 11%', foreground: '220 30% 98%', mutedForeground: '230 15% 55%', secondaryForeground: '220 25% 90%', border: '230 25% 18%', input: '230 35% 12%' },
   forest: { mode: 'dark', background: '160 25% 5%', card: '160 25% 8%', popover: '160 25% 10%', secondary: '160 20% 13%', muted: '160 25% 10%', foreground: '150 20% 98%', mutedForeground: '160 15% 50%', secondaryForeground: '150 15% 90%', border: '160 20% 16%', input: '160 25% 11%' },
   plum: { mode: 'dark', background: '280 25% 6%', card: '280 25% 9%', popover: '280 25% 11%', secondary: '280 20% 14%', muted: '280 25% 11%', foreground: '270 20% 98%', mutedForeground: '280 15% 50%', secondaryForeground: '270 15% 90%', border: '280 20% 18%', input: '280 25% 12%' },
-  // Light themes - more varied with white cards
-  blush: { mode: 'light', background: '350 60% 97%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '350 40% 94%', muted: '350 30% 92%', foreground: '350 30% 12%', mutedForeground: '350 15% 40%', secondaryForeground: '350 25% 25%', border: '350 25% 88%', input: '350 35% 95%' },
-  peach: { mode: 'light', background: '25 70% 96%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '25 50% 92%', muted: '25 40% 90%', foreground: '25 40% 12%', mutedForeground: '25 20% 38%', secondaryForeground: '25 30% 22%', border: '25 35% 85%', input: '25 45% 94%' },
-  'baby-blue': { mode: 'light', background: '205 70% 96%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '205 50% 92%', muted: '205 40% 90%', foreground: '210 40% 12%', mutedForeground: '210 20% 38%', secondaryForeground: '210 30% 22%', border: '205 35% 85%', input: '205 45% 94%' },
-  mint: { mode: 'light', background: '160 55% 95%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '160 40% 90%', muted: '160 30% 88%', foreground: '165 35% 12%', mutedForeground: '165 18% 38%', secondaryForeground: '165 25% 22%', border: '160 30% 82%', input: '160 40% 93%' },
-  lavender: { mode: 'light', background: '265 55% 96%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '265 40% 92%', muted: '265 30% 90%', foreground: '270 35% 14%', mutedForeground: '270 18% 40%', secondaryForeground: '270 25% 25%', border: '265 30% 86%', input: '265 40% 94%' },
-  cloud: { mode: 'light', background: '220 25% 97%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '220 20% 93%', muted: '220 15% 91%', foreground: '225 30% 12%', mutedForeground: '225 15% 40%', secondaryForeground: '225 22% 25%', border: '220 18% 87%', input: '220 22% 95%' },
+  // Light themes – high-contrast, professional SaaS
+  blush: { mode: 'light', background: '350 20% 96%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '350 16% 94%', muted: '350 12% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '350 14% 84%', input: '350 16% 92%' },
+  peach: { mode: 'light', background: '30 25% 96%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '30 18% 94%', muted: '30 14% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '30 16% 84%', input: '30 18% 92%' },
+  'baby-blue': { mode: 'light', background: '214 18% 97%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '210 14% 94%', muted: '210 11% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '220 13% 84%', input: '210 16% 92%' },
+  mint: { mode: 'light', background: '160 18% 96%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '160 14% 94%', muted: '160 10% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '160 12% 84%', input: '160 14% 92%' },
+  lavender: { mode: 'light', background: '265 18% 96%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '265 14% 94%', muted: '265 10% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '265 12% 84%', input: '265 14% 92%' },
+  cloud: { mode: 'light', background: '214 18% 97%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '220 12% 94%', muted: '220 9% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '220 13% 84%', input: '220 14% 92%' },
 };
 
 function parseHSL(hsl: string): { h: number; s: number; l: number } {
@@ -92,20 +92,18 @@ function applyThemeToDocument(themeId: string, accentHSL: string) {
   root.style.setProperty('--sidebar-border', theme.border);
   root.style.setProperty('--sidebar-ring', accentHSL);
   
-  // Glows
-  const glowOpacity = isLight ? 0.12 : 0.25;
-  const glowOpacity2 = isLight ? 0.06 : 0.1;
+  // Gradients
   root.style.setProperty('--gradient-primary', `linear-gradient(135deg, hsl(${accentHSL}), hsl(210 100% 50%))`);
-  root.style.setProperty('--gradient-glow', `radial-gradient(ellipse at center, hsl(${h} ${s}% ${l}% / ${isLight ? 0.08 : 0.15}), transparent 70%)`);
-  root.style.setProperty('--shadow-glow', `0 0 20px hsl(${h} ${s}% ${l}% / ${glowOpacity}), 0 0 40px hsl(${h} ${s}% ${l}% / ${glowOpacity2})`);
-  root.style.setProperty('--shadow-glow-lg', `0 0 60px hsl(${h} ${s}% ${l}% / ${isLight ? 0.1 : 0.2}), 0 0 120px hsl(210 100% 50% / ${isLight ? 0.05 : 0.1})`);
+  root.style.setProperty('--gradient-glow', 'none');
+  root.style.setProperty('--shadow-glow', 'none');
+  root.style.setProperty('--shadow-glow-lg', 'none');
   
-  // Shadows (enhanced for light theme)
+  // Shadows – professional depth for light, minimal for dark
   if (isLight) {
-    root.style.setProperty('--shadow-sm', '0 1px 3px hsl(0 0% 0% / 0.06), 0 1px 2px hsl(0 0% 0% / 0.04)');
-    root.style.setProperty('--shadow-md', '0 4px 6px hsl(0 0% 0% / 0.05), 0 10px 15px hsl(0 0% 0% / 0.08)');
-    root.style.setProperty('--shadow-lg', '0 10px 25px hsl(0 0% 0% / 0.08), 0 20px 48px hsl(0 0% 0% / 0.12)');
-    root.style.setProperty('--shadow-card', '0 2px 8px hsl(0 0% 0% / 0.06), 0 4px 16px hsl(0 0% 0% / 0.04)');
+    root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.06), 0 1px 3px hsl(0 0% 0% / 0.1)');
+    root.style.setProperty('--shadow-md', '0 2px 4px hsl(0 0% 0% / 0.04), 0 4px 12px hsl(0 0% 0% / 0.08)');
+    root.style.setProperty('--shadow-lg', '0 4px 8px hsl(0 0% 0% / 0.04), 0 12px 32px hsl(0 0% 0% / 0.12)');
+    root.style.setProperty('--shadow-card', '0 2px 8px hsl(0 0% 0% / 0.05)');
   } else {
     root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.4)');
     root.style.setProperty('--shadow-md', '0 4px 12px hsl(0 0% 0% / 0.5)');

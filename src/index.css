@@ -104,13 +104,15 @@
 }
 
 @layer components {
-  /* Clean panel */
+  /* Clean panel with shadow in light mode */
   .glass-panel {
     @apply bg-card border border-border;
+    box-shadow: var(--shadow-card);
   }
 
   .glass-panel-strong {
     @apply bg-card border border-border;
+    box-shadow: var(--shadow-card);
   }
 
   .glow-effect {
