@@ -80,6 +80,19 @@ const ScrollReveal = ({
   );
 };
 
+// Inline CTA band — desktop only, inserted between sections
+const InlineCTA = ({ text = 'Ready to find your next client?' }: { text?: string }) => (
+  <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
+    <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
+    <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" asChild>
+      <Link to="/auth?intent=demo">
+        Start Free Demo
+        <ArrowRight className="ml-2 h-4 w-4" />
+      </Link>
+    </Button>
+  </div>
+);
+
 const FEATURES = [
   {
     icon: Search,
@@ -792,6 +805,7 @@ const Landing = () => {
         <HowItWorksSection ScrollReveal={ScrollReveal} />
       </div>
 
+      <InlineCTA text="See how easy it is to find leads." />
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
@@ -869,7 +883,8 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Mobile section divider */}
+      <InlineCTA text="Everything you need to land clients. Try it free." />
+
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Testimonials — after toolkit */}
@@ -951,6 +966,8 @@ const Landing = () => {
           <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium text-center mt-6 sm:mt-8">Rated 4.9/5 by freelancers and agencies</p>
         </div>
       </ScrollReveal>
+
+      <InlineCTA text="Join 100+ web pros already using LeadFinder." />
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
