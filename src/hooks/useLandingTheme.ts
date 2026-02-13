@@ -31,18 +31,18 @@ export function useLandingTheme() {
     root.classList.add('dark');
     
     // Dark brand foundation (Midnight theme)
-    root.style.setProperty('--background', '222 47% 4%');
+    root.style.setProperty('--background', '218 70% 8%');
     root.style.setProperty('--foreground', '210 40% 98%');
-    root.style.setProperty('--card', '220 40% 6%');
+    root.style.setProperty('--card', '218 60% 10%');
     root.style.setProperty('--card-foreground', '210 40% 98%');
-    root.style.setProperty('--popover', '220 40% 8%');
+    root.style.setProperty('--popover', '218 60% 11%');
     root.style.setProperty('--popover-foreground', '210 40% 98%');
-    root.style.setProperty('--secondary', '220 40% 10%');
+    root.style.setProperty('--secondary', '218 55% 13%');
     root.style.setProperty('--secondary-foreground', '210 40% 95%');
-    root.style.setProperty('--muted', '220 40% 8%');
+    root.style.setProperty('--muted', '218 50% 12%');
     root.style.setProperty('--muted-foreground', '215 20% 50%');
-    root.style.setProperty('--border', '220 30% 12%');
-    root.style.setProperty('--input', '220 30% 10%');
+    root.style.setProperty('--border', '218 45% 15%');
+    root.style.setProperty('--input', '218 50% 13%');
     
     // Brand blue accent (HSL 210 100% 50%)
     root.style.setProperty('--primary', '210 100% 50%');
@@ -52,13 +52,13 @@ export function useLandingTheme() {
     root.style.setProperty('--accent-foreground', '210 40% 98%');
     
     // Sidebar
-    root.style.setProperty('--sidebar-background', '220 40% 6%');
+    root.style.setProperty('--sidebar-background', '218 60% 9%');
     root.style.setProperty('--sidebar-foreground', '210 40% 98%');
     root.style.setProperty('--sidebar-primary', '210 100% 50%');
     root.style.setProperty('--sidebar-primary-foreground', '220 40% 4%');
-    root.style.setProperty('--sidebar-accent', '220 40% 10%');
+    root.style.setProperty('--sidebar-accent', '218 55% 13%');
     root.style.setProperty('--sidebar-accent-foreground', '210 40% 98%');
-    root.style.setProperty('--sidebar-border', '220 30% 12%');
+    root.style.setProperty('--sidebar-border', '218 45% 15%');
     root.style.setProperty('--sidebar-ring', '210 100% 50%');
     
     // Brand gradients and shadows
