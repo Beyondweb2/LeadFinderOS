@@ -38,9 +38,10 @@ export function DemoOnboardingModal({ isDemoUser }: DemoOnboardingModalProps) {
 
   const steps = [
     { label: 'Search any area', desc: 'Find businesses without websites near you', icon: Search },
-    { label: 'Add to your CRM', desc: 'One click to save hot leads', icon: UserPlus },
-    { label: 'Reach out', desc: 'WhatsApp, SMS, or call — templates included', icon: MessageSquare },
-    { label: 'Track & close', desc: 'Update status, follow up, win the deal', icon: TrendingUp },
+    { label: 'Add 3 businesses to CRM', desc: 'Save hot leads with one click', icon: UserPlus },
+    { label: 'Contact one of them', desc: 'WhatsApp, SMS, or call — templates included', icon: MessageSquare },
+    { label: 'Update their status', desc: 'Mark the outcome after you reach out', icon: TrendingUp },
+    { label: 'Track a positive response', desc: 'When they reply positively, move them to Track Leads', icon: Sparkles },
   ];
 
   return (

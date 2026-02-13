@@ -648,6 +648,7 @@ export function useOutreach() {
     setArchivedLeads((prev) => prev.map(updateLeadFn));
 
     window.dispatchEvent(new CustomEvent('track-lead-added'));
+    window.dispatchEvent(new CustomEvent('demo-checklist-lead-tracked'));
     
     toast({
       title: 'Added to Track Leads',
