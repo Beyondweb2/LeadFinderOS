@@ -58,7 +58,16 @@ export function DemoChecklistPanel() {
   const { planStatus } = useTrial();
   const navigate = useNavigate();
   const location = useLocation();
-  const [dismissed, setDismissed] = useState(false);
+
+  const dismissKey = `demo_walkthrough_dismissed_${typeof window !== 'undefined' ? '' : ''}`;
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem('demo_walkthrough_dismissed') === 'true'; } catch { return false; }
+  });
+
+  const handleDismiss = () => {
+    setDismissed(true);
+    try { localStorage.setItem('demo_walkthrough_dismissed', 'true'); } catch {}
+  };
 
   if (!isDemoUser || dismissed) return null;
 
@@ -88,7 +97,7 @@ export function DemoChecklistPanel() {
           {allDone ? (
             <div className="text-center space-y-2 py-2 relative">
               <button
-                onClick={() => setDismissed(true)}
+                onClick={handleDismiss}
                 className="absolute top-0 right-0 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center"
               >
                 <X className="h-3 w-3 text-muted-foreground" />
