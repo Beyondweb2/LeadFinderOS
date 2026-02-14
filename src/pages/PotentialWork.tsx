@@ -210,216 +210,229 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
 
   const dueBadge = getDueBadge();
 
+  const [showDetails, setShowDetails] = useState(false);
+
+  const allStatuses = [...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses.map(s => ({ value: s.value as LeadStatus, label: s.label }))];
+
   return (
-    <Card className={`border border-border/60 border-l-[3px] ${getStatusBorderColor(lead.status)} hover:border-border transition-colors shadow-sm overflow-hidden`}>
-      <div className="flex flex-col sm:flex-row">
-        {/* Image area — square on desktop */}
-        {lead.image_url ? (
-          <div className="relative w-full sm:w-36 md:w-40 h-32 sm:h-auto sm:aspect-square bg-muted/30 shrink-0">
+    <Card className={`border border-border/60 border-l-[3px] ${getStatusBorderColor(lead.status)} hover:border-border transition-colors shadow-sm`}>
+      <div className="p-4 sm:p-5 space-y-2.5">
+        {/* Row 1: Name + Status Badge + Menu */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            {isEditingName ? (
+              <div className="flex items-center gap-1.5">
+                <Input
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  className="h-7 text-sm font-medium"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveName();
+                    if (e.key === 'Escape') handleCancelNameEdit();
+                  }}
+                />
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleSaveName}>
+                  <Check className="h-3 w-3 text-primary" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleCancelNameEdit}>
+                  <X className="h-3 w-3 text-muted-foreground" />
+                </Button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsEditingName(true)}
+                className="text-left group flex items-start gap-1 min-w-0 w-full"
+              >
+                <span className="text-base sm:text-lg font-bold leading-snug break-words">{lead.business_name}</span>
+                <Pencil className="h-2.5 w-2.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1.5" />
+              </button>
+            )}
+            {lead.category && (
+              <p className="text-xs text-muted-foreground mt-0.5">{lead.category}</p>
+            )}
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            <OutreachStatusBadge status={lead.status} compact />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-6 w-6">
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[140px]">
+                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="text-xs" disabled={isUploadingImage}>
+                  <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
+                </DropdownMenuItem>
+                {lead.image_url && (
+                  <DropdownMenuItem onClick={handleRemoveImage} className="text-xs">
+                    <X className="h-3.5 w-3.5 mr-2" /> Remove Image
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
+                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+            </DropdownMenu>
+          </div>
+        </div>
+
+        {/* Image — medium sized, inline */}
+        {lead.image_url && (
+          <div className="relative w-28 h-28 rounded-md overflow-hidden bg-muted/30">
             <img src={lead.image_url} alt={lead.business_name} className="w-full h-full object-cover" />
             <button
               onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }}
-              className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors z-10"
+              className="absolute top-1 right-1 h-5 w-5 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors"
             >
-              <X className="h-3 w-3" />
+              <X className="h-2.5 w-2.5" />
             </button>
           </div>
-        ) : (
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="hidden sm:flex sm:w-36 md:w-40 sm:aspect-square shrink-0 items-center justify-center bg-muted/20 border-r border-border/30 hover:bg-muted/40 transition-colors cursor-pointer"
-            disabled={isUploadingImage}
-          >
-            <div className="text-center text-muted-foreground/40">
-              <Pencil className="h-4 w-4 mx-auto mb-1" />
-              <span className="text-[10px]">Add image</span>
-            </div>
-          </button>
         )}
 
-        {/* Main content */}
-        <div className="flex-1 min-w-0 px-3 py-3 sm:px-5 sm:py-5">
-          {/* Row 1: Name + due badge + menu */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              {isEditingName ? (
-                <div className="flex items-center gap-1.5">
-                  <Input
-                    value={editedName}
-                    onChange={(e) => setEditedName(e.target.value)}
-                    className="h-7 text-sm font-medium"
-                    autoFocus
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') handleSaveName();
-                      if (e.key === 'Escape') handleCancelNameEdit();
-                    }}
-                  />
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleSaveName}>
-                    <Check className="h-3 w-3 text-primary" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleCancelNameEdit}>
-                    <X className="h-3 w-3 text-muted-foreground" />
-                  </Button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setIsEditingName(true)}
-                  className="text-left group flex items-start gap-1 min-w-0 w-full"
-                >
-                  <span className="text-sm sm:text-lg font-semibold leading-snug break-words">{lead.business_name}</span>
-                  <Pencil className="h-2.5 w-2.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1" />
+        {/* Row 2: Phone + Maps link */}
+        <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
+          {lead.phone && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1.5 hover:text-foreground transition-colors font-mono text-xs">
+                  <Phone className="h-3.5 w-3.5" />{lead.phone}
                 </button>
-              )}
-            </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[140px]">
+                <DropdownMenuItem asChild><a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer text-xs"><PhoneCall className="h-3.5 w-3.5" /> Call</a></DropdownMenuItem>
+                <DropdownMenuItem asChild><a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer text-xs"><Phone className="h-3.5 w-3.5 text-green-500" /> WhatsApp Call</a></DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild><a href={`sms:${lead.phone}`} className="flex items-center gap-2 cursor-pointer text-xs"><MessageCircle className="h-3.5 w-3.5 text-blue-500" /> SMS</a></DropdownMenuItem>
+                <DropdownMenuItem asChild><a href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer text-xs"><MessageSquare className="h-3.5 w-3.5 text-green-500" /> WhatsApp</a></DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          {lead.google_maps_url && (
+            <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-foreground transition-colors text-xs">
+              <MapPin className="h-3.5 w-3.5" /> View on Maps <ExternalLink className="h-2.5 w-2.5" />
+            </a>
+          )}
+        </div>
 
-            <div className="flex items-center gap-1 shrink-0">
-              {dueBadge && (
-                <span className={`text-[10px] sm:text-[11px] font-medium px-1.5 py-0.5 rounded border ${dueBadge.color}`}>
-                  {dueBadge.label}
-                </span>
-              )}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 sm:h-7 sm:w-7">
-                    <MoreVertical className="h-3.5 w-3.5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[140px]">
-                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="text-xs" disabled={isUploadingImage}>
-                    <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
-                    <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-              </DropdownMenu>
-            </div>
+        {/* Row 3: Status dropdown + Next Action + Date */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <div onClick={(e) => e.stopPropagation()}>
+            <Select value={lead.status} onValueChange={(v) => {
+              if (v === '__add_custom__') {
+                onAddCustomStatus();
+                return;
+              }
+              const isDefaultStatus = DEFAULT_POTENTIAL_WORK_STATUSES.some(s => s.value === v);
+              onStatusChange(lead.id, (isDefaultStatus ? v : v) as LeadStatus);
+            }}>
+              <SelectTrigger className="h-8 text-xs border-border/50 bg-muted/20 px-2.5 gap-1 w-auto">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+                {customStatuses.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+                <SelectItem value="__add_custom__" className="text-primary">+ Add Custom Status</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
-          {/* Row 2: Status + phone + map */}
-          <div className="flex items-center gap-2.5 mt-1.5 sm:mt-2 text-xs sm:text-sm text-muted-foreground flex-wrap">
-            <div onClick={(e) => e.stopPropagation()}>
-              <Select value={lead.status} onValueChange={(v) => {
-                const isDefaultStatus = DEFAULT_POTENTIAL_WORK_STATUSES.some(s => s.value === v);
-                onStatusChange(lead.id, (isDefaultStatus ? v : 'on_hold') as LeadStatus);
-              }}>
-                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
-                  <OutreachStatusBadge status={lead.status} compact />
+          {isEditing ? (
+            <>
+              <Select value={nextAction} onValueChange={(v) => setNextAction(v as NextActionType)}>
+                <SelectTrigger className="w-auto h-8 text-xs border-border/50 bg-muted/20 px-2.5 gap-1">
+                  <CalendarIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
+                  {NEXT_ACTION_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-            {lead.phone && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1 hover:text-foreground transition-colors font-mono text-[11px]">
-                    <Phone className="h-3 w-3" />{lead.phone}
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-[140px]">
-                  <DropdownMenuItem asChild><a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer text-xs"><PhoneCall className="h-3.5 w-3.5" /> Call</a></DropdownMenuItem>
-                  <DropdownMenuItem asChild><a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer text-xs"><Phone className="h-3.5 w-3.5 text-green-500" /> WhatsApp Call</a></DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild><a href={`sms:${lead.phone}`} className="flex items-center gap-2 cursor-pointer text-xs"><MessageCircle className="h-3.5 w-3.5 text-blue-500" /> SMS</a></DropdownMenuItem>
-                  <DropdownMenuItem asChild><a href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer text-xs"><MessageSquare className="h-3.5 w-3.5 text-green-500" /> WhatsApp</a></DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {lead.google_maps_url && (
-              <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 hover:text-foreground transition-colors">
-                <MapPin className="h-3 w-3" /><ExternalLink className="h-2.5 w-2.5" />
-              </a>
-            )}
-          </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className={`h-8 text-xs px-2.5 border-border/50`}>
+                    <CalendarIcon className="mr-1 h-3 w-3" />
+                    {nextActionDate ? format(nextActionDate, 'MMM d') : 'Set date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={nextActionDate} onSelect={setNextActionDate} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </>
+          ) : hasFollowUp ? (
+            <button onClick={() => setIsEditing(true)} className="flex items-center gap-1.5 text-xs group/action">
+              <CalendarIcon className={`h-3.5 w-3.5 ${getDueBadge()?.color.split(' ')[0] || 'text-primary'}`} />
+              <span className="font-medium text-primary">{actionLabel}</span>
+              {lead.next_action_date && (
+                <span className={`${getFollowUpStyle()}`}>
+                  {format(new Date(lead.next_action_date), 'MMM d')}
+                </span>
+              )}
+            </button>
+          ) : null}
 
-          {/* Row 3: Next Action + Date + Notes — display or edit mode */}
-          {isEditing ? (
-            <div className="mt-2.5 sm:mt-3 space-y-2">
-              <div className="flex items-center gap-2 flex-wrap">
-                <Select value={nextAction} onValueChange={(v) => setNextAction(v as NextActionType)}>
-                  <SelectTrigger className="w-auto h-7 text-xs border-border/50 bg-muted/20 px-2 gap-1">
-                    <CalendarIcon className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {NEXT_ACTION_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className={`h-7 text-xs px-2 border-border/50 ${getDueBadge()?.color.split(' ')[0] || 'text-muted-foreground'}`}>
-                      <CalendarIcon className="mr-1 h-3 w-3" />
-                      {nextActionDate ? format(nextActionDate, 'MMM d') : 'Set date'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={nextActionDate} onSelect={setNextActionDate} initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Notes..."
-                rows={2}
-                className="resize-none text-xs sm:text-sm min-h-0 bg-muted/10 border-border/30"
-                autoFocus
-              />
-              <div className="flex items-center gap-1.5">
-                <Button size="sm" onClick={handleSave} disabled={isSaving} className="h-7 text-[11px] gap-1 px-3">
-                  <Save className="h-3 w-3" />
-                  {isSaving ? '...' : 'Save'}
-                </Button>
-                <Button size="sm" variant="ghost" onClick={() => {
-                  setNotes(lead.notes || '');
-                  setNextAction(lead.next_action || 'none');
-                  setNextActionDate(lead.next_action_date ? new Date(lead.next_action_date) : undefined);
-                  setIsEditing(false);
-                }} className="h-7 text-[11px] px-2">
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div 
-              className="mt-2.5 sm:mt-3 space-y-1.5 cursor-pointer group/edit rounded-md p-2 -mx-2 hover:bg-muted/20 transition-colors"
-              onClick={() => setIsEditing(true)}
-            >
-              {/* Saved action + date display */}
-              {hasFollowUp ? (
-                <div className="flex items-center gap-2 text-xs sm:text-sm">
-                  <CalendarIcon className={`h-3.5 w-3.5 shrink-0 ${getDueBadge()?.color.split(' ')[0] || 'text-muted-foreground'}`} />
-                  <span className="font-medium">{actionLabel}</span>
-                  {lead.next_action_date && (
-                    <span className={`${getDueBadge()?.color.split(' ')[0] || 'text-muted-foreground'}`}>
-                      {format(new Date(lead.next_action_date), 'MMM d')}
-                    </span>
-                  )}
-                  <Pencil className="h-2.5 w-2.5 text-muted-foreground opacity-0 group-hover/edit:opacity-100 transition-opacity ml-auto shrink-0" />
-                </div>
-              ) : (
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground/60">
-                  <CalendarIcon className="h-3 w-3" />
-                  <span>No action set — click to add</span>
-                </div>
-              )}
-              {/* Saved notes display */}
-              {lead.notes ? (
-                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">{lead.notes}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground/40 italic">No notes — click to add</p>
-              )}
-            </div>
+          {dueBadge && !isEditing && (
+            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${dueBadge.color}`}>
+              {dueBadge.label}
+            </span>
           )}
         </div>
+
+        {/* Notes display (always visible when present) */}
+        {!isEditing && lead.notes && (
+          <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{lead.notes}</p>
+        )}
+
+        {/* Edit mode: notes textarea + save */}
+        {isEditing && (
+          <div className="space-y-2 pt-1">
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Notes..."
+              rows={2}
+              className="resize-none text-sm min-h-0 bg-muted/10 border-border/30"
+              autoFocus
+            />
+            <div className="flex items-center gap-1.5">
+              <Button size="sm" onClick={handleSave} disabled={isSaving} className="h-7 text-xs gap-1 px-3">
+                <Save className="h-3 w-3" />
+                {isSaving ? '...' : 'Save'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => {
+                setNotes(lead.notes || '');
+                setNextAction(lead.next_action || 'none');
+                setNextActionDate(lead.next_action_date ? new Date(lead.next_action_date) : undefined);
+                setIsEditing(false);
+              }} className="h-7 text-xs px-2">
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Show Details & Notes — collapsible for edit access */}
+        {!isEditing && (
+          <button
+            onClick={() => setIsEditing(true)}
+            className="flex items-center justify-between w-full pt-2 border-t border-border/30 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <StickyNote className="h-3.5 w-3.5" />
+              {lead.notes || hasFollowUp ? 'Edit Details & Notes' : 'Show Details & Notes'}
+            </span>
+            <ChevronDown className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
     </Card>
   );
