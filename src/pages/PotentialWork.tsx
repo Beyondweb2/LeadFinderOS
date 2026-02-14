@@ -238,7 +238,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
         )}
 
         {/* Main content */}
-        <div className="flex-1 min-w-0 px-3 py-2.5 sm:px-5 sm:py-4">
+        <div className="flex-1 min-w-0 px-3 py-3 sm:px-5 sm:py-5">
           {/* Row 1: Name + due badge + menu */}
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">
@@ -266,7 +266,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                   onClick={() => setIsEditingName(true)}
                   className="text-left group flex items-start gap-1 min-w-0 w-full"
                 >
-                  <span className="text-sm sm:text-base font-semibold leading-snug truncate">{lead.business_name}</span>
+                  <span className="text-sm sm:text-lg font-semibold leading-snug break-words">{lead.business_name}</span>
                   <Pencil className="h-2.5 w-2.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1" />
                 </button>
               )}
@@ -299,7 +299,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
           </div>
 
           {/* Row 2: Status + phone + map */}
-          <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
+          <div className="flex items-center gap-2.5 mt-1.5 sm:mt-2 text-xs sm:text-sm text-muted-foreground flex-wrap">
             <div onClick={(e) => e.stopPropagation()}>
               <Select value={lead.status} onValueChange={(v) => {
                 const isDefaultStatus = DEFAULT_POTENTIAL_WORK_STATUSES.some(s => s.value === v);
