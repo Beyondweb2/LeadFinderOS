@@ -1167,12 +1167,9 @@ const Landing = () => {
       {!isMobile && (
         <div className="fixed bottom-6 right-6 z-50">
           <Button
+            variant="outline"
             size="lg"
-            className="rounded-full px-8 py-4 h-auto text-base font-bold text-black animate-subtle-bounce shadow-xl"
-            style={{
-              background: 'linear-gradient(135deg, hsl(142 80% 50%), hsl(142 80% 42%))',
-              boxShadow: '0 4px 20px hsl(142 80% 50% / 0.4), 0 0 30px hsl(142 80% 50% / 0.15)',
-            }}
+            className="rounded-full px-8 py-4 h-auto text-base font-bold border-primary text-primary hover:bg-primary/10 animate-subtle-bounce shadow-lg"
             asChild
           >
             <Link to="/auth?intent=demo" onClick={() => trackLead()}>
