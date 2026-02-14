@@ -1164,7 +1164,7 @@ const Landing = () => {
             </Link>
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            No card required · Sign up for free demo
+            No card required · See how it works
           </p>
         </div>
       )}
