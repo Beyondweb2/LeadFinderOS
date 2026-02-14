@@ -657,10 +657,10 @@ const Landing = () => {
             </div>
 
             {/* Feature bullets */}
-            <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-5 mt-8 sm:mt-10 text-[12px] sm:text-[13px] text-foreground/50 font-medium">
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
+            <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-5 mt-8 sm:mt-10 text-[12px] sm:text-[16px] text-foreground/50 font-medium">
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
             </div>
           </div>
 
