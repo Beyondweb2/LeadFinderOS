@@ -55,7 +55,7 @@ export function DemoOnboardingModal({ isDemoUser }: DemoOnboardingModalProps) {
             Your lead-finding workflow — in 60 seconds
           </DialogTitle>
           <DialogDescription className="text-sm text-muted-foreground">
-            Most freelancers spend hours on Google Maps. This does it in minutes — search, save, contact, and track leads from one place.
+            Here's how to find, contact, and close leads — all from one place. Follow the checklist to see the full workflow.
           </DialogDescription>
         </DialogHeader>
 
@@ -74,7 +74,7 @@ export function DemoOnboardingModal({ isDemoUser }: DemoOnboardingModalProps) {
         </ol>
 
         <p className="text-xs text-muted-foreground text-center">
-          You've got <span className="font-semibold text-primary">1 free search</span> — try the full process end to end.
+          Follow the checklist in the bottom-right to see every feature in action.
         </p>
 
         <div className="flex items-center gap-2 pt-1">

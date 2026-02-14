@@ -82,17 +82,9 @@ export function DemoChecklistPanel() {
       {isOpen && (
         <div className="bg-card border border-t-0 border-border rounded-b-lg shadow-lg p-3 space-y-2">
           {allDone ? (
-            <div className="text-center space-y-3 py-2">
+            <div className="text-center space-y-2 py-2">
               <p className="text-sm font-semibold text-primary">🎉 Walkthrough complete!</p>
-              <p className="text-xs text-muted-foreground">You've seen the full workflow. Unlock everything free for 24 hours.</p>
-              <Button
-                size="sm"
-                className="w-full btn-premium"
-                onClick={() => navigate('/subscribe')}
-              >
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                Get 24h Full Access — Free
-              </Button>
+              <p className="text-xs text-muted-foreground">You've seen the full workflow. You're all set!</p>
             </div>
           ) : (
             <ol className="space-y-1.5">
