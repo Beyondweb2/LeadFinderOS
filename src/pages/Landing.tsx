@@ -617,7 +617,7 @@ const Landing = () => {
               The all-in-one tool to find businesses without websites, contact them, and track every follow-up.
             </p>
             
-            {/* CTA Buttons — stacked vertically */}
+            {/* CTA — trial primary, demo as subtle link */}
             <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-8">
               <Button 
                 size="lg" 
@@ -633,27 +633,28 @@ const Landing = () => {
                 No charge today · Cancel anytime before renewal
               </p>
 
-              <Button 
-                variant="ghost"
-                className="mt-5 sm:mt-6 text-[12px] sm:text-[13px] font-normal px-5 sm:px-6 h-[34px] sm:h-[38px] rounded-lg bg-transparent text-foreground/60 hover:text-foreground transition-all duration-300"
-                style={{
-                  border: '1px solid hsl(210 100% 50% / 0.2)',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.45)';
-                  e.currentTarget.style.background = 'hsl(210 100% 50% / 0.04)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.2)';
-                  e.currentTarget.style.background = 'transparent';
-                }}
-                asChild
-              >
-                <Link to="/auth?intent=demo" onClick={() => trackLead()}>Try Free Demo</Link>
-              </Button>
-              <p className="text-[9px] sm:text-[10px] text-foreground/[0.28] font-normal text-center mt-2">
-                No card required · Try 1 real search instantly
-              </p>
+              {/* Mobile: stacked subtle demo link */}
+              <div className="sm:hidden mt-5 text-center">
+                <Link 
+                  to="/auth?intent=demo" 
+                  onClick={() => trackLead()}
+                  className="text-[12px] text-foreground/40 hover:text-foreground/60 transition-colors duration-200"
+                >
+                  Try Free Demo instead <span className="inline-block ml-0.5">→</span>
+                </Link>
+                <p className="text-[9px] text-foreground/[0.22] mt-1.5">No card required</p>
+              </div>
+
+              {/* Desktop: inline demo link next to microcopy */}
+              <div className="hidden sm:flex items-center gap-3 mt-5">
+                <Link 
+                  to="/auth?intent=demo" 
+                  onClick={() => trackLead()}
+                  className="text-[13px] text-foreground/40 hover:text-foreground/60 transition-colors duration-200"
+                >
+                  or try the free demo →
+                </Link>
+              </div>
             </div>
 
             {/* Mobile trust badges — above bullet points */}
