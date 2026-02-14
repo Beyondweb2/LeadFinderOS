@@ -42,14 +42,14 @@ const STEPS: StepData[] = [
   {
     icon: MessageSquare,
     title: 'Start Outreach',
-    description: 'Message instantly via WhatsApp or SMS — no copying numbers, no switching tabs.',
+    description: 'Pick from pre-made templates that auto-fill each business name, then hit send — opens WhatsApp or SMS in a new tab, ready to go.',
     images: [step3Image],
     badge: 'Direct Outreach',
   },
   {
     icon: BarChart3,
     title: 'Track & Close',
-    description: 'See who replied, who needs follow-up, and exactly where your revenue is coming from — all in one dashboard.',
+    description: 'Update statuses like "Interested", "Wants Draft", or "Awaiting Decision" — set follow-up dates, log replies, and watch your pipeline move from first contact to paid client.',
     images: [step4bImage],
     badge: 'Full Pipeline',
   },
