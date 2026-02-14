@@ -633,19 +633,15 @@ const Landing = () => {
                 No charge today · Cancel anytime before renewal
               </p>
 
-              {/* Feature bullets */}
-              <div className="flex flex-col items-center justify-center gap-3 sm:gap-0 mt-5 sm:mt-6 text-[13px] sm:text-[15px] text-foreground/50 font-medium">
-                {/* Mobile: stacked centered. Desktop: first row of 3, all inline */}
-                <div className="hidden sm:flex items-center justify-center gap-10 flex-wrap">
-                  <span className="flex items-center gap-2.5"><Check className="h-4.5 w-4.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
-                  <span className="flex items-center gap-2.5"><Check className="h-4.5 w-4.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-                  <span className="flex items-center gap-2.5"><Check className="h-4.5 w-4.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
-                </div>
-                {/* Mobile: each bullet as inline-flex so icon+text stay as one centered unit */}
-                <div className="flex sm:hidden flex-col items-center gap-3">
-                  <span className="inline-flex items-center gap-2.5"><Check className="h-4 w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
-                  <span className="inline-flex items-center gap-2.5"><Check className="h-4 w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-                  <span className="inline-flex items-center gap-2.5"><Check className="h-4 w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
+              {/* Feature bullets – grid layout for perfect centering */}
+              <div className="flex justify-center mt-6 sm:mt-8">
+                <div className="grid gap-3 sm:gap-4" style={{ gridTemplateColumns: '24px 1fr' }}>
+                  {['Find businesses that need a website', 'Build your outreach list in seconds', 'Track every business you contact'].map((text) => (
+                    <>
+                      <Check key={text} className="h-5 w-5 sm:h-[22px] sm:w-[22px] mt-[1px]" style={{ color: '#22c55e' }} strokeWidth={2.5} />
+                      <span className="text-[15px] sm:text-[17px] font-medium text-foreground/55 leading-snug">{text}</span>
+                    </>
+                  ))}
                 </div>
               </div>
 
