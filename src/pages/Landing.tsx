@@ -619,6 +619,13 @@ const Landing = () => {
             
             {/* CTA Buttons — stacked vertically */}
             <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-8">
+              {/* Feature bullets — mobile only, above both buttons */}
+              <div className="flex sm:hidden flex-col items-center justify-center gap-3 mb-8 text-[12px] text-foreground/50 font-medium">
+                <span className="flex items-center gap-2 whitespace-nowrap"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
+              </div>
+
               <Button 
                 size="lg" 
                 className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto sm:min-w-[360px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
@@ -632,13 +639,6 @@ const Landing = () => {
               <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
                 No charge today · Cancel anytime before renewal
               </p>
-
-              {/* Feature bullets — mobile only, above demo button */}
-              <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-6 text-[12px] text-foreground/50 font-medium">
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
-              </div>
 
               <Button 
                 variant="ghost"
