@@ -86,8 +86,8 @@ const InlineCTA = ({ text = 'Ready to find your next client?' }: { text?: string
   <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
     <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" asChild>
-      <Link to="/auth?intent=demo" onClick={() => trackLead()}>
-        Start Free Demo
+      <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
+        Start Free Trial Full Access
         <ArrowRight className="ml-2 h-4 w-4" />
       </Link>
     </Button>
@@ -575,8 +575,8 @@ const Landing = () => {
               asChild 
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
             >
-              <Link to="/auth?intent=demo">
-                <span className="hidden sm:inline">Try Free Demo</span>
+              <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
+                <span className="hidden sm:inline">Start Free Trial</span>
                 <span className="sm:hidden">Demo</span>
               </Link>
             </Button>
@@ -620,8 +620,8 @@ const Landing = () => {
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
               <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-[1.05rem] font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-[1.1rem] h-auto w-full sm:w-auto shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-shadow duration-300" asChild>
-                <Link to="/auth?intent=demo" onClick={() => trackLead()}>
-                  Start Free Demo
+                <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
+                  Start Free Trial Full Access
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                 </Link>
               </Button>
@@ -1166,6 +1166,22 @@ const Landing = () => {
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
             No card required · See how it works
           </p>
+        </div>
+      )}
+
+      {/* Desktop floating demo button — bottom-right, subtle bounce */}
+      {!isMobile && hasScrolled && (
+        <div className="fixed bottom-6 right-6 z-50 animate-fade-in">
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full px-5 py-2.5 h-auto text-xs font-medium border-border/40 bg-background/80 backdrop-blur-sm hover:bg-background shadow-lg animate-subtle-bounce"
+            asChild
+          >
+            <Link to="/auth?intent=demo" onClick={() => trackLead()}>
+              Try Free Demo
+            </Link>
+          </Button>
         </div>
       )}
 
