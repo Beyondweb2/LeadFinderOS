@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { trackStartTrial } from '@/lib/fbPixel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ const BillingSuccess = () => {
   const { user, session } = useAuth();
   const [status, setStatus] = useState<'syncing' | 'success' | 'error'>('syncing');
   const [errorMessage, setErrorMessage] = useState('');
+  const pixelFired = useRef(false);
 
   useEffect(() => {
     const syncSubscription = async () => {
@@ -42,6 +44,14 @@ const BillingSuccess = () => {
         }
 
         if (data?.success) {
+          // Fire StartTrial pixel only once, only for verified trial starts
+          if (!pixelFired.current) {
+            const subStatus = data.subscription?.status;
+            if (subStatus === 'trialing') {
+              trackStartTrial(sessionId);
+            }
+            pixelFired.current = true;
+          }
           setStatus('success');
           // Try to close this tab (works if opened via window.open)
           // If it can't close, redirect to dashboard after delay

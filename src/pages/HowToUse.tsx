@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { trackStartTrial } from '@/lib/fbPixel';
 import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -167,7 +166,7 @@ const HowToUse = () => {
             {isPublicGuide ? (
               <>
                 <Button asChild className="w-full sm:w-auto">
-                  <Link to="/auth" onClick={() => trackStartTrial()}>
+                  <Link to="/auth">
                     Start Free Trial
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>

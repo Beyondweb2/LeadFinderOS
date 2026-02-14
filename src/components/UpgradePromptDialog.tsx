@@ -9,7 +9,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Check } from 'lucide-react';
-import { trackStartTrial } from '@/lib/fbPixel';
 import { useSubscription } from '@/hooks/useSubscription';
 import { CheckoutConfirmDialog } from '@/components/CheckoutConfirmDialog';
 
@@ -32,7 +31,6 @@ export function UpgradePromptDialog({ open, onOpenChange, searchesUsed }: Upgrad
   const [isLoading, setIsLoading] = useState(false);
 
   const handleUpgrade = () => {
-    trackStartTrial();
     onOpenChange(false);
     setShowConfirm(true);
   };

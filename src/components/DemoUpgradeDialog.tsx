@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom';
-import { trackStartTrial } from '@/lib/fbPixel';
 import {
   Dialog,
   DialogContent,
@@ -33,7 +32,7 @@ export function DemoUpgradeDialog({ open, onOpenChange, featureName }: DemoUpgra
         </DialogHeader>
         <DialogFooter className="flex-col gap-2 sm:flex-col">
           <Button
-            onClick={() => { trackStartTrial(); navigate('/subscribe'); }}
+            onClick={() => navigate('/subscribe')}
             className="w-full"
           >
             <Rocket className="mr-2 h-4 w-4" />
