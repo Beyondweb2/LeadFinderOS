@@ -267,6 +267,7 @@ export type Database = {
           email: string | null
           google_maps_url: string | null
           id: string
+          image_url: string | null
           is_archived: boolean
           is_potential_work: boolean
           list_type: string
@@ -293,6 +294,7 @@ export type Database = {
           email?: string | null
           google_maps_url?: string | null
           id?: string
+          image_url?: string | null
           is_archived?: boolean
           is_potential_work?: boolean
           list_type?: string
@@ -319,6 +321,7 @@ export type Database = {
           email?: string | null
           google_maps_url?: string | null
           id?: string
+          image_url?: string | null
           is_archived?: boolean
           is_potential_work?: boolean
           list_type?: string
