@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
 import {
   AlertDialog,
@@ -9,22 +9,37 @@ import {
   AlertDialogFooter,
   AlertDialogAction,
 } from '@/components/ui/alert-dialog';
-import { AlertTriangle, CreditCard } from 'lucide-react';
+import { AlertTriangle, CreditCard, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const DISMISSED_KEY = 'payment_failure_warning_dismissed';
+
+function formatNextRetry(lastFailedAt: string | null): string {
+  if (!lastFailedAt) return 'within 24 hours';
+  const failed = new Date(lastFailedAt);
+  const retry = new Date(failed.getTime() + 24 * 60 * 60 * 1000);
+  const now = new Date();
+  
+  if (retry <= now) return 'very soon';
+  
+  const hoursLeft = Math.ceil((retry.getTime() - now.getTime()) / (1000 * 60 * 60));
+  if (hoursLeft <= 1) return 'within the next hour';
+  if (hoursLeft <= 24) return `in approximately ${hoursLeft} hours`;
+  return retry.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
 
 export function PaymentFailureDialog() {
   const { paymentFailureCount, lastPaymentFailedAt, isPaymentPaused, openCustomerPortal, isLoading } = useSubscription();
   const [open, setOpen] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
 
+  const nextRetryText = useMemo(() => formatNextRetry(lastPaymentFailedAt), [lastPaymentFailedAt]);
+
   useEffect(() => {
     if (isLoading) return;
 
     // Show for first failure only (not paused — paused users get the full block screen)
-    if (paymentFailureCount === 1 && !isPaymentPaused) {
-      // Check if already dismissed this session
+    if (paymentFailureCount >= 1 && !isPaymentPaused) {
       const dismissed = sessionStorage.getItem(DISMISSED_KEY);
       if (!dismissed) {
         setOpen(true);
@@ -42,7 +57,6 @@ export function PaymentFailureDialog() {
     try {
       await openCustomerPortal();
     } catch {
-      // Portal opens in same window, so this won't execute on success
       setPortalLoading(false);
     }
   };
@@ -59,16 +73,24 @@ export function PaymentFailureDialog() {
             </div>
             <AlertDialogTitle className="text-lg">Payment Failed</AlertDialogTitle>
           </div>
-          <AlertDialogDescription className="space-y-3 text-sm">
-            <p>
-              Your most recent payment could not be processed. We'll retry automatically in <strong>24 hours</strong>.
-            </p>
-            <p>
-              If the next attempt also fails, your account will be <strong>paused</strong> — you won't be able to search for leads or access your CRM until payment goes through.
-            </p>
-            <p className="text-foreground font-medium">
-              Please update your card details or ensure sufficient funds to avoid interruption.
-            </p>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 text-sm">
+              <p>
+                Your most recent payment could not be processed.
+              </p>
+              <div className="flex items-center gap-2 rounded-lg bg-muted/80 border border-border p-3">
+                <Clock className="h-4 w-4 text-muted-foreground shrink-0" />
+                <p className="text-foreground font-medium text-xs">
+                  Next retry: <span className="text-primary">{nextRetryText}</span>
+                </p>
+              </div>
+              <p>
+                If the next attempt also fails, your account will be <strong>restricted</strong> — you won't be able to search for leads or access your CRM until payment goes through.
+              </p>
+              <p className="text-foreground font-medium">
+                Please update your card details or ensure sufficient funds before then.
+              </p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="flex-col sm:flex-row gap-2">
