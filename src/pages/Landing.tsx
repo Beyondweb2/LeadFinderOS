@@ -617,21 +617,30 @@ const Landing = () => {
               The all-in-one tool to find businesses without websites, contact them, and track every follow-up.
             </p>
             
-            {/* CTA Buttons */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 sm:gap-3">
-              <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-[1.05rem] font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-[1.1rem] h-auto w-full sm:w-auto shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-shadow duration-300" asChild>
+            {/* CTA Buttons — stacked vertically */}
+            <div className="flex flex-col items-center gap-1.5">
+              <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-[1.05rem] font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-[1.1rem] h-auto w-full sm:w-auto sm:min-w-[340px] shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" asChild>
                 <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
-                  Start Free Trial Full Access
+                  Start Free Trial — Full Access
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                 </Link>
               </Button>
-              <Button 
-                variant="ghost" 
-                className="hidden sm:inline-flex text-sm font-medium px-5 py-3 h-auto text-muted-foreground hover:text-foreground transition-colors"
-                asChild
-              >
-                <Link to="/auth?intent=demo" onClick={() => trackLead()}>Try Free Demo</Link>
-              </Button>
+              <p className="text-[10px] sm:text-xs text-muted-foreground/50 font-medium">
+                No charge today · Cancel anytime
+              </p>
+
+              <div className="mt-3 sm:mt-4">
+                <Button 
+                  variant="outline" 
+                  className="text-sm font-medium px-6 py-2.5 h-auto border-border/40 text-muted-foreground hover:text-foreground hover:border-border/60 transition-colors"
+                  asChild
+                >
+                  <Link to="/auth?intent=demo" onClick={() => trackLead()}>Try Free Demo</Link>
+                </Button>
+                <p className="text-[10px] text-muted-foreground/40 font-medium text-center mt-1.5">
+                  No card required
+                </p>
+              </div>
             </div>
 
             {/* Mobile trust bullets */}
@@ -1056,6 +1065,13 @@ const Landing = () => {
                   <p className="text-[10px] sm:text-xs text-muted-foreground/50 text-center">
                     No charge today · Cancel anytime before renewal
                   </p>
+                  <Link 
+                    to="/auth?intent=demo" 
+                    onClick={() => trackLead()}
+                    className="text-[10px] sm:text-xs text-muted-foreground/40 hover:text-muted-foreground/60 transition-colors mt-1"
+                  >
+                    Prefer to explore first? Try the free demo
+                  </Link>
                 </CardFooter>
               </Card>
             </div>
@@ -1111,11 +1127,8 @@ const Landing = () => {
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
                 Sign In
               </Link>
-              <Link to="/auth?intent=demo" className="hover:text-foreground transition-colors duration-200">
-                Try Free Demo
-              </Link>
               <Link to="/auth?intent=upgrade" className="hover:text-foreground transition-colors duration-200">
-                Start 24-Hour Full Access
+                Start Free Trial
               </Link>
               <Link to="/feedback" className="hover:text-foreground transition-colors duration-200">
                 Feedback
@@ -1152,30 +1165,14 @@ const Landing = () => {
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
           <Button size="lg" className="w-full btn-premium font-semibold py-3 h-auto text-sm" asChild>
-            <Link to="/auth?intent=demo">
-              Try Free Demo
+            <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
+              Start Free Trial — Full Access
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            No card required · See how it works
+            No charge today · Cancel anytime
           </p>
-        </div>
-      )}
-
-      {/* Desktop floating demo button — bottom-right, always visible, green */}
-      {!isMobile && (
-        <div className="fixed bottom-6 right-6 z-50">
-          <Button
-            variant="outline"
-            size="lg"
-            className="rounded-full px-8 py-4 h-auto text-base font-bold border-primary text-primary hover:bg-primary/10 animate-subtle-bounce shadow-lg"
-            asChild
-          >
-            <Link to="/auth?intent=demo" onClick={() => trackLead()}>
-              Try Free Demo
-            </Link>
-          </Button>
         </div>
       )}
 
