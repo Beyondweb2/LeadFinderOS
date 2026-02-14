@@ -607,13 +607,13 @@ const Landing = () => {
               <span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold mb-5 sm:mb-6 tracking-tight" style={{ lineHeight: '1.05' }}>
+            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold mb-6 tracking-tight" style={{ lineHeight: '1.05' }}>
               Find Businesses{' '}
               <br className="hidden sm:block" />
               <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.2rem] text-foreground/70 max-w-2xl lg:max-w-[38rem] mx-auto mb-6 sm:mb-8 leading-relaxed sm:leading-[1.6] px-2">
+            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.2rem] text-foreground/70 max-w-2xl lg:max-w-[38rem] mx-auto mb-8 leading-relaxed sm:leading-[1.6] px-2">
               The all-in-one tool to find businesses without websites, contact them, and track every follow-up.
             </p>
             
@@ -621,7 +621,7 @@ const Landing = () => {
             <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0">
               <Button 
                 size="lg" 
-                className="btn-premium text-[16px] sm:text-[18px] font-semibold px-7 sm:px-8 h-[52px] sm:h-[56px] rounded-xl w-full sm:w-auto sm:min-w-[340px] shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300" 
+                className="btn-premium text-[16px] sm:text-[18px] font-semibold px-8 sm:px-10 h-[52px] sm:h-[56px] rounded-xl w-full sm:w-auto sm:min-w-[360px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                 asChild
               >
                 <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
@@ -629,23 +629,23 @@ const Landing = () => {
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                 </Link>
               </Button>
-              <p className="text-[10px] sm:text-xs text-muted-foreground/50 font-medium mt-2">
+              <p className="text-[10px] sm:text-xs text-foreground/[0.35] font-medium mt-3 sm:mt-4">
                 No charge today · Cancel anytime
               </p>
 
               <Button 
                 variant="ghost"
-                className="mt-5 text-[15px] sm:text-[16px] font-medium px-7 sm:px-8 h-[44px] sm:h-[48px] rounded-xl w-full sm:w-auto sm:min-w-[280px] bg-transparent text-foreground/90 hover:text-foreground transition-all duration-300"
+                className="mt-6 text-[14px] sm:text-[15px] font-normal px-7 sm:px-8 h-[42px] sm:h-[48px] rounded-xl w-full sm:w-auto sm:min-w-[260px] bg-transparent text-foreground/80 hover:text-foreground transition-all duration-300"
                 style={{
-                  border: '1px solid hsl(210 100% 50% / 0.6)',
+                  border: '1px solid hsl(210 100% 50% / 0.45)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'hsl(210 100% 50%)';
-                  e.currentTarget.style.background = 'hsl(210 100% 50% / 0.06)';
-                  e.currentTarget.style.boxShadow = '0 0 20px hsl(210 100% 50% / 0.1)';
+                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.8)';
+                  e.currentTarget.style.background = 'hsl(210 100% 50% / 0.05)';
+                  e.currentTarget.style.boxShadow = '0 0 16px hsl(210 100% 50% / 0.08)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.6)';
+                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.45)';
                   e.currentTarget.style.background = 'transparent';
                   e.currentTarget.style.boxShadow = 'none';
                 }}
@@ -653,8 +653,8 @@ const Landing = () => {
               >
                 <Link to="/auth?intent=demo" onClick={() => trackLead()}>Try Free Demo</Link>
               </Button>
-              <p className="text-[13px] text-foreground/60 font-medium text-center mt-3">
-                No card required • 1 search demo
+              <p className="text-[11px] sm:text-[12px] text-foreground/[0.4] font-normal text-center mt-3 mb-10">
+                No card required · Explore with 1 free search
               </p>
             </div>
 
