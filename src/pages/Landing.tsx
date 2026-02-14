@@ -211,8 +211,8 @@ const MobileHeroVideo = () => {
     <div className="relative">
       {/* Glow effect behind video */}
       <div 
-        className="absolute -inset-2 rounded-2xl blur-xl opacity-40"
-        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+        className="absolute -inset-2 rounded-2xl blur-lg opacity-30"
+        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(220 80% 45% / 0.08))' }}
       />
       <div 
         className="absolute -inset-px rounded-xl"
@@ -607,21 +607,21 @@ const Landing = () => {
               <span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold mb-6 tracking-tight" style={{ lineHeight: '1.05' }}>
-              Find Businesses{' '}
+            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
+              <span className="tracking-[0.02em]">Find Businesses</span>{' '}
               <br className="hidden sm:block" />
               <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.2rem] text-foreground/70 max-w-2xl lg:max-w-[38rem] mx-auto mb-8 leading-relaxed sm:leading-[1.6] px-2">
+            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
               The all-in-one tool to find businesses without websites, contact them, and track every follow-up.
             </p>
             
             {/* CTA Buttons — stacked vertically */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0">
+            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-8">
               <Button 
                 size="lg" 
-                className="btn-premium text-[13px] sm:text-[18px] font-semibold px-5 sm:px-10 h-[48px] sm:h-[56px] rounded-xl w-full sm:w-auto sm:min-w-[360px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto sm:min-w-[360px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                 asChild
               >
                 <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
@@ -629,44 +629,44 @@ const Landing = () => {
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Link>
               </Button>
-              <p className="text-[10px] sm:text-xs text-foreground/[0.35] font-medium mt-3 sm:mt-4">
-                No charge today · Cancel anytime
+              <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
+                No charge today · Cancel anytime before renewal
               </p>
 
               <Button 
                 variant="ghost"
-                className="mt-5 text-[13px] sm:text-[14px] font-normal px-5 sm:px-6 h-[36px] sm:h-[40px] rounded-lg bg-transparent text-foreground/70 hover:text-foreground transition-all duration-300"
+                className="mt-5 sm:mt-6 text-[12px] sm:text-[13px] font-normal px-5 sm:px-6 h-[34px] sm:h-[38px] rounded-lg bg-transparent text-foreground/60 hover:text-foreground transition-all duration-300"
                 style={{
-                  border: '1px solid hsl(210 100% 50% / 0.3)',
+                  border: '1px solid hsl(210 100% 50% / 0.2)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.6)';
-                  e.currentTarget.style.background = 'hsl(210 100% 50% / 0.05)';
+                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.45)';
+                  e.currentTarget.style.background = 'hsl(210 100% 50% / 0.04)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.3)';
+                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.2)';
                   e.currentTarget.style.background = 'transparent';
                 }}
                 asChild
               >
                 <Link to="/auth?intent=demo" onClick={() => trackLead()}>Try Free Demo</Link>
               </Button>
-              <p className="text-[10px] sm:text-[11px] text-foreground/[0.35] font-normal text-center mt-2 mb-10">
-                No card required · Explore with 1 free search
+              <p className="text-[9px] sm:text-[10px] text-foreground/[0.28] font-normal text-center mt-2">
+                No card required · Try 1 real search instantly
               </p>
             </div>
 
-            {/* Mobile trust bullets */}
-            <div className="flex sm:hidden flex-wrap items-center justify-center gap-2.5 mt-4 text-[13px] text-foreground/60 font-medium">
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-              <span className="flex items-center gap-1.5"><Check className="h-4 w-4" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
+            {/* Feature bullets */}
+            <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-5 mt-8 sm:mt-10 text-[12px] sm:text-[13px] text-foreground/50 font-medium">
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
             </div>
           </div>
 
           {/* Stats bar */}
           <div 
-            className="sm:hidden mt-6 py-4 grid grid-cols-3 gap-6 max-w-sm mx-auto"
+            className="sm:hidden mt-10 py-4 grid grid-cols-3 gap-6 max-w-sm mx-auto"
           >
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
@@ -682,10 +682,6 @@ const Landing = () => {
 
 
 
-          {/* Set up tagline */}
-          <p className="text-[10px] sm:text-xs text-muted-foreground/50 mt-1 sm:mt-2 lg:mt-3 tracking-wide font-medium text-center">
-            Set up in under 60 seconds. Full access included.
-          </p>
 
           {/* Scroll indicator — mobile/tablet only */}
           <div className="flex lg:hidden flex-col items-center mt-6 sm:mt-8 animate-bounce">
@@ -701,7 +697,7 @@ const Landing = () => {
       <div className="hidden sm:block">
         <VideoSection />
         {/* Desktop stats bar — below video */}
-        <div className="container mx-auto max-w-xl py-6 grid grid-cols-3 gap-8 md:gap-14">
+        <div className="container mx-auto max-w-xl py-8 grid grid-cols-3 gap-8 md:gap-14">
           <CountUpStat target={100000} suffix="+" label="Businesses" />
           <div className="text-center">
             <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
@@ -834,6 +830,17 @@ const Landing = () => {
           )}
         </div>
       </ScrollReveal>
+
+      {/* CTA after comparison — button left, text right */}
+      <div className="hidden sm:flex items-center justify-center gap-6 py-8">
+        <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" asChild>
+          <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
+            Start Free Trial
+            <ArrowRight className="ml-2 h-4 w-4" />
+          </Link>
+        </Button>
+        <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">Ready to stop wasting time on Google Maps?</p>
+      </div>
 
       {/* How It Works — 4 steps */}
       <div id="how-it-works">
