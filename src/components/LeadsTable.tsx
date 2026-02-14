@@ -404,8 +404,8 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                     <TableCell className="data-table-cell">
                       {lead.phone ? (
                         <div className="flex items-center gap-1">
-                          <Phone className="h-3.5 w-3.5 text-muted-foreground" />
-                          <span className="font-mono text-xs">{lead.phone}</span>
+                          <Phone className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="font-mono text-xs whitespace-nowrap">{lead.phone}</span>
                         </div>
                       ) : (
                         <span className="text-muted-foreground/50">—</span>
