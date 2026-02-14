@@ -1,32 +1,122 @@
 
 
-## Add Loading Spinner to Video Components
+# Meta Pixel "StartTrial" Tracking on Successful Checkout
 
-A simple spinning ring animation will display while the video is buffering/loading, then disappear once the video is ready to play. This is pure CSS -- zero performance impact on the video itself.
+## Summary
 
-### How it works
+Move the `StartTrial` pixel event from button clicks to the `/billing/success` page, firing only after server-side verification confirms the Stripe Checkout session completed successfully. Also harden the `create-checkout` origin to always use the production domain for Stripe redirect URLs.
 
-1. Add a `videoLoaded` state (starts `false`) to both `MobileHeroVideo` and `VideoSection` components
-2. Listen for the video's `onCanPlayThrough` event to flip `videoLoaded` to `true`
-3. While `videoLoaded` is false, show a centered spinning ring overlay on top of the video container
-4. Once loaded, the spinner fades out and the video is fully visible
+## Changes
 
-### Changes
+### 1. Harden origin in `create-checkout` edge function
 
-**`src/pages/Landing.tsx`** (both `MobileHeroVideo` and `VideoSection` components):
+**File:** `supabase/functions/create-checkout/index.ts`
 
-- Add `const [videoLoaded, setVideoLoaded] = useState(false);` state
-- Add `onCanPlayThrough={() => setVideoLoaded(true)}` to the `<video>` element
-- Add a loading overlay inside the video container div (positioned absolute, centered):
-  - A spinning ring using Tailwind's `animate-spin` on a bordered circle
-  - Fades out with a transition when `videoLoaded` becomes true
-  - Uses `pointer-events-none` so it doesn't block interaction
+Currently, `success_url` and `cancel_url` use `req.headers.get("origin")` directly (line 161-162), which could point to preview/dev domains where the pixel is not configured.
 
-### Visual
+- Define an allowlist of valid origins: `https://lead-finder-app.com`, `https://www.lead-finder-app.com`, `https://leadfinderapp.lovable.app`
+- If the incoming origin is not in the allowlist (or is missing), force it to `https://lead-finder-app.com`
+- Apply this same logic to the portal redirect origin on line 84
 
-- Dark semi-transparent background matching the card
-- A subtle blue spinning ring (matching the brand blue glow already used)
-- Smooth fade-out transition when video is ready
+### 2. Update `fbPixel.ts` to support `eventID` deduplication
 
-No new files, no new dependencies -- just a small state + conditional overlay in the two existing video components.
+**File:** `src/lib/fbPixel.ts`
+
+- Add optional `eventId` and `customData` parameters to `trackFBEvent`
+- When `eventId` is provided, pass it as the 4th argument: `fbq('track', eventName, {}, { eventID: eventId })`
+- Update `trackStartTrial` to accept an optional `eventId` parameter
+
+### 3. Fire `StartTrial` on `/billing/success` after server verification
+
+**File:** `src/pages/BillingSuccess.tsx`
+
+The existing `sync-subscription` call already:
+- Retrieves the Stripe Checkout Session
+- Verifies `status === 'complete'`
+- Confirms the session belongs to the user
+- Returns `subscription.status` (which is `trialing` for trial starts)
+
+Changes:
+- Add a `pixelFired` state ref (useRef) to guard against double-firing
+- After `sync-subscription` returns success AND `subscription.status === 'trialing'`, fire `trackStartTrial(sessionId)` with the `session_id` as `eventID` for deduplication
+- This ensures the pixel only fires for verified, completed checkout sessions with an active trial
+
+### 4. Remove `StartTrial` from all CTA button clicks
+
+**Files to update (remove `trackStartTrial()` calls):**
+- `src/pages/Landing.tsx` — 6 occurrences on Link onClick handlers
+- `src/components/DemoUpgradeDialog.tsx` — 1 occurrence
+- `src/components/UpgradePromptDialog.tsx` — 1 occurrence
+- `src/components/DemoUpgradePanel.tsx` — 1 occurrence
+- `src/pages/HowToUse.tsx` — 1 occurrence
+
+Remove the `trackStartTrial()` calls from these click handlers. The `trackStartTrial` import can also be removed from files that no longer use it. The `trackLead` import in `Landing.tsx` stays as-is.
+
+## What stays unchanged
+
+- Stripe price ID, trial logic, `user_trials` guard, subscription handling
+- `sync-subscription` edge function (no modifications needed — its response already contains what we need)
+- `stripe-webhook` logic
+- `Lead` pixel tracking on demo CTA clicks
+- All existing user data and subscriptions
+
+## Technical Details
+
+### Updated `trackFBEvent` signature
+
+```typescript
+export function trackFBEvent(eventName: string, eventId?: string) {
+  if (typeof window !== 'undefined' && typeof window.fbq === 'function') {
+    if (eventId) {
+      window.fbq('track', eventName, {}, { eventID: eventId });
+    } else {
+      window.fbq('track', eventName);
+    }
+    console.log(`[Meta Pixel] Tracked: ${eventName}${eventId ? ` (eventID: ${eventId})` : ''}`);
+  }
+}
+```
+
+### BillingSuccess pixel firing logic
+
+```typescript
+const pixelFired = useRef(false);
+
+// Inside the sync success handler:
+if (data?.success && !pixelFired.current) {
+  const subStatus = data.subscription?.status;
+  if (subStatus === 'trialing') {
+    trackStartTrial(sessionId);
+  }
+  pixelFired.current = true;
+  setStatus('success');
+}
+```
+
+### Origin allowlist in create-checkout
+
+```typescript
+const ALLOWED_ORIGINS = [
+  'https://lead-finder-app.com',
+  'https://www.lead-finder-app.com',
+  'https://leadfinderapp.lovable.app',
+];
+const DEFAULT_ORIGIN = 'https://lead-finder-app.com';
+
+const rawOrigin = req.headers.get('origin') || '';
+const origin = ALLOWED_ORIGINS.includes(rawOrigin) ? rawOrigin : DEFAULT_ORIGIN;
+```
+
+## Files changed (summary)
+
+| File | Change |
+|------|--------|
+| `supabase/functions/create-checkout/index.ts` | Enforce origin allowlist for success/cancel URLs |
+| `src/lib/fbPixel.ts` | Add `eventId` support for deduplication |
+| `src/pages/BillingSuccess.tsx` | Fire `StartTrial` after verified sync, with double-fire guard |
+| `src/pages/Landing.tsx` | Remove `trackStartTrial()` from 6 CTA clicks |
+| `src/components/DemoUpgradeDialog.tsx` | Remove `trackStartTrial()` call |
+| `src/components/UpgradePromptDialog.tsx` | Remove `trackStartTrial()` call |
+| `src/components/DemoUpgradePanel.tsx` | Remove `trackStartTrial()` call |
+| `src/pages/HowToUse.tsx` | Remove `trackStartTrial()` call |
 
