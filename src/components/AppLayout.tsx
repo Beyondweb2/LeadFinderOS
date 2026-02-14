@@ -24,6 +24,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { status: subStatus, isLoading: isSubLoading } = useSubscription();
   const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
   const isDemoUser = !isTrialLoading && !isSubLoading && !hasProAccess && !isStripeTrialing;
+  const isTrialingUser = !isTrialLoading && !isSubLoading && subStatus === 'trialing';
+  const showWalkthrough = isDemoUser || isTrialingUser;
 
   const pathKey = useMemo(
     () => `${location.pathname}${location.search}${location.hash}`,
@@ -46,7 +48,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   });
 
   return (
-    <DemoChecklistProvider isDemoUser={isDemoUser}>
+    <DemoChecklistProvider isDemoUser={showWalkthrough}>
       <SidebarProvider defaultOpen={true}>
         <div className="min-h-screen flex w-full bg-background">
 

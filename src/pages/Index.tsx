@@ -201,8 +201,8 @@ const Index = () => {
         searchesUsed={searchesUsed}
       />
 
-      {/* Demo Onboarding Modal - only after access status is resolved */}
-      <DemoOnboardingModal isDemoUser={!isAccessLoading && isDemoUser} />
+      {/* Demo Onboarding Modal - for demo and trialing users */}
+      <DemoOnboardingModal isDemoUser={!isAccessLoading && (isDemoUser || isStripeTrialing)} />
 
       {/* Trial Limit Dialog (when daily limit reached) */}
       <TrialLimitDialog
