@@ -5,12 +5,16 @@ declare global {
   }
 }
 
-export function trackFBEvent(eventName: string) {
+export function trackFBEvent(eventName: string, eventId?: string) {
   if (typeof window !== 'undefined' && typeof window.fbq === 'function') {
-    window.fbq('track', eventName);
-    console.log(`[Meta Pixel] Tracked: ${eventName}`);
+    if (eventId) {
+      window.fbq('track', eventName, {}, { eventID: eventId });
+    } else {
+      window.fbq('track', eventName);
+    }
+    console.log(`[Meta Pixel] Tracked: ${eventName}${eventId ? ` (eventID: ${eventId})` : ''}`);
   }
 }
 
 export const trackLead = () => trackFBEvent('Lead');
-export const trackStartTrial = () => trackFBEvent('StartTrial');
+export const trackStartTrial = (eventId?: string) => trackFBEvent('StartTrial', eventId);

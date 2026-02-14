@@ -12,6 +12,17 @@ const corsHeaders = {
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 60000;
 
+const ALLOWED_ORIGINS = [
+  'https://lead-finder-app.com',
+  'https://www.lead-finder-app.com',
+  'https://leadfinderapp.lovable.app',
+];
+const DEFAULT_ORIGIN = 'https://lead-finder-app.com';
+
+const resolveOrigin = (raw: string | null): string => {
+  return raw && ALLOWED_ORIGINS.includes(raw) ? raw : DEFAULT_ORIGIN;
+};
+
 const logStep = (step: string, details?: unknown) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
@@ -81,7 +92,7 @@ const logStep = (step: string, details?: unknown) => {
         });
 
         // Redirect to billing portal instead of creating a new checkout
-        const origin = req.headers.get("origin") || "https://leadfinderapp.lovable.app";
+        const origin = resolveOrigin(req.headers.get("origin"));
         const portalSession = await stripe.billingPortal.sessions.create({
           customer: existingSub.stripe_customer_id,
           return_url: `${origin}/`,
@@ -158,8 +169,8 @@ const logStep = (step: string, details?: unknown) => {
         ],
         mode: "subscription",
         payment_method_types: ['card'],
-        success_url: `${req.headers.get("origin")}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${req.headers.get("origin")}/billing/cancel`,
+        success_url: `${resolveOrigin(req.headers.get("origin"))}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${resolveOrigin(req.headers.get("origin"))}/billing/cancel`,
       };
       
       // Add tracking metadata if present (affiliate_code and/or ref_source)

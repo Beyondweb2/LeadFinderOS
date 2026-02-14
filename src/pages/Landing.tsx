@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { trackLead, trackStartTrial } from '@/lib/fbPixel';
+import { trackLead } from '@/lib/fbPixel';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -86,7 +86,7 @@ const InlineCTA = ({ text = 'Ready to find your next client?' }: { text?: string
   <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
     <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" asChild>
-      <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
+      <Link to="/auth?intent=upgrade">
         Start Free Trial Full Access
         <ArrowRight className="ml-2 h-4 w-4" />
       </Link>
@@ -575,7 +575,7 @@ const Landing = () => {
               asChild 
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
             >
-              <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
+              <Link to="/auth?intent=upgrade">
                 <span className="hidden sm:inline">Start Free Trial</span>
                 <span className="sm:hidden">Free Trial</span>
               </Link>
@@ -624,7 +624,7 @@ const Landing = () => {
                 className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto sm:min-w-[360px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                 asChild
               >
-                <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
+                <Link to="/auth?intent=upgrade">
                   Start Free Trial — Full Access
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Link>
@@ -832,7 +832,7 @@ const Landing = () => {
       {/* CTA after comparison — button left, text right */}
       <div className="hidden sm:flex items-center justify-center gap-6 py-8">
         <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" asChild>
-          <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
+          <Link to="/auth?intent=upgrade">
             Start Free Trial
             <ArrowRight className="ml-2 h-4 w-4" />
           </Link>
@@ -1090,7 +1090,7 @@ const Landing = () => {
                 
                 <CardFooter className="pt-4 pb-5 sm:pb-6 flex-col gap-2.5 px-4 sm:px-6">
                   <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
-                    <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
+                    <Link to="/auth?intent=upgrade">
                       Start Free Trial — Full Access
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Link>
@@ -1198,7 +1198,7 @@ const Landing = () => {
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
           <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" asChild>
-            <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
+            <Link to="/auth?intent=upgrade">
               Start Free Trial — Full Access
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
