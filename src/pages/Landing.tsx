@@ -621,12 +621,12 @@ const Landing = () => {
             <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0">
               <Button 
                 size="lg" 
-                className="btn-premium text-[16px] sm:text-[18px] font-semibold px-8 sm:px-10 h-[52px] sm:h-[56px] rounded-xl w-full sm:w-auto sm:min-w-[360px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                className="btn-premium text-[13px] sm:text-[18px] font-semibold px-5 sm:px-10 h-[48px] sm:h-[56px] rounded-xl w-full sm:w-auto sm:min-w-[360px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                 asChild
               >
                 <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
                   Start Free Trial — Full Access
-                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Link>
               </Button>
               <p className="text-[10px] sm:text-xs text-foreground/[0.35] font-medium mt-3 sm:mt-4">
@@ -635,25 +635,23 @@ const Landing = () => {
 
               <Button 
                 variant="ghost"
-                className="mt-6 text-[14px] sm:text-[15px] font-normal px-7 sm:px-8 h-[42px] sm:h-[48px] rounded-xl w-full sm:w-auto sm:min-w-[260px] bg-transparent text-foreground/80 hover:text-foreground transition-all duration-300"
+                className="mt-5 text-[13px] sm:text-[14px] font-normal px-5 sm:px-6 h-[36px] sm:h-[40px] rounded-lg bg-transparent text-foreground/70 hover:text-foreground transition-all duration-300"
                 style={{
-                  border: '1px solid hsl(210 100% 50% / 0.45)',
+                  border: '1px solid hsl(210 100% 50% / 0.3)',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.8)';
+                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.6)';
                   e.currentTarget.style.background = 'hsl(210 100% 50% / 0.05)';
-                  e.currentTarget.style.boxShadow = '0 0 16px hsl(210 100% 50% / 0.08)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.45)';
+                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.3)';
                   e.currentTarget.style.background = 'transparent';
-                  e.currentTarget.style.boxShadow = 'none';
                 }}
                 asChild
               >
                 <Link to="/auth?intent=demo" onClick={() => trackLead()}>Try Free Demo</Link>
               </Button>
-              <p className="text-[11px] sm:text-[12px] text-foreground/[0.4] font-normal text-center mt-3 mb-10">
+              <p className="text-[10px] sm:text-[11px] text-foreground/[0.35] font-normal text-center mt-2 mb-10">
                 No card required · Explore with 1 free search
               </p>
             </div>
