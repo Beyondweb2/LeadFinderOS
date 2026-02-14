@@ -185,10 +185,10 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
       <div ref={ref} className="text-center">
-    <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
+    <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
       {count.toLocaleString()}{suffix}
     </div>
-    <div className="text-[9px] sm:text-xs text-foreground/50 mt-1.5 font-medium uppercase tracking-wider">{label}</div>
+    <div className="text-[8px] sm:text-xs text-foreground/50 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">{label}</div>
     </div>
   );
 };
@@ -667,15 +667,15 @@ const Landing = () => {
 
 
           {/* Mobile trust badges — under the 3 points */}
-          <div className="sm:hidden container mx-auto max-w-sm py-8 grid grid-cols-3 gap-6">
+          <div className="sm:hidden container mx-auto max-w-[280px] py-6 grid grid-cols-3 gap-4">
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
-              <div className="text-lg font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[9px] text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+              <div className="text-base font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-lg font-bold text-gradient-primary tracking-tight">Unlimited</div>
-              <div className="text-[9px] text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+              <div className="text-base font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Searches</div>
             </div>
           </div>
 
