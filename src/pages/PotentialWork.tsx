@@ -200,15 +200,15 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
         className={`border border-border/50 border-l-[3px] ${borderColor} hover:border-border/80 transition-all cursor-pointer group`}
         onClick={() => setDetailOpen(true)}
       >
-        <div className="flex flex-col sm:flex-row sm:items-start p-3 sm:py-3 sm:px-3.5 gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start p-3 sm:py-4 sm:px-5 gap-3 md:gap-4">
           {/* LEFT: Image / Initials */}
           <div className="hidden sm:flex shrink-0">
             {lead.image_url ? (
-              <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted/30">
+              <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted/30">
                 <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
               </div>
             ) : (
-              <div className="w-12 h-12 rounded-lg bg-muted/30 flex items-center justify-center text-xs font-bold text-muted-foreground/60">
+              <div className="w-14 h-14 rounded-lg bg-muted/30 flex items-center justify-center text-sm font-bold text-muted-foreground/60">
                 {getInitials(lead.business_name)}
               </div>
             )}
@@ -229,9 +229,9 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-bold leading-tight truncate">{lead.business_name}</h3>
+                <h3 className="text-sm sm:text-base font-bold leading-tight truncate">{lead.business_name}</h3>
                 {lead.category && (
-                  <p className="text-[11px] text-muted-foreground/70 truncate">{lead.category}</p>
+                  <p className="text-[11px] sm:text-xs text-muted-foreground/70 truncate">{lead.category}</p>
                 )}
               </div>
               {/* Kebab menu */}
@@ -260,44 +260,44 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             </div>
 
             {/* Meta row: status pill + phone + map */}
-            <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
+            <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground flex-wrap">
               <OutreachStatusBadge status={lead.status} compact />
               {lead.phone && (
                 <span className="flex items-center gap-0.5 font-mono">
-                  <Phone className="h-3 w-3" />{lead.phone}
+                  <Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5" />{lead.phone}
                 </span>
               )}
               {lead.google_maps_url && (
                 <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 hover:text-foreground transition-colors" onClick={(e) => e.stopPropagation()}>
-                  <MapPin className="h-3 w-3" /><ExternalLink className="h-2.5 w-2.5" />
+                  <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5" /><ExternalLink className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                 </a>
               )}
             </div>
 
             {/* Notes preview — visible, 2 lines clamped */}
             {lead.notes && (
-              <p className="text-xs text-foreground/70 leading-relaxed line-clamp-2">{lead.notes}</p>
+              <p className="text-xs sm:text-sm text-foreground/70 leading-relaxed line-clamp-2">{lead.notes}</p>
             )}
           </div>
 
           {/* RIGHT: Next Action + Due */}
-          <div className="sm:w-28 shrink-0 flex sm:flex-col items-start sm:items-end gap-1 sm:gap-0.5 sm:text-right sm:pt-0.5">
+          <div className="sm:w-32 shrink-0 flex sm:flex-col items-start sm:items-end gap-1 sm:gap-0.5 sm:text-right sm:pt-0.5">
             {actionLabel ? (
               <>
-                <span className="text-[11px] font-medium text-foreground/80">{actionLabel}</span>
+                <span className="text-[11px] sm:text-sm font-medium text-foreground/80">{actionLabel}</span>
                 {lead.next_action_date && (
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-[11px] sm:text-xs text-muted-foreground">
                     {format(new Date(lead.next_action_date), 'MMM d')}
                   </span>
                 )}
                 {dueLabel && (
-                  <span className={`text-[10px] font-medium ${dueLabel.cls}`}>
+                  <span className={`text-[10px] sm:text-xs font-medium ${dueLabel.cls}`}>
                     {dueLabel.text}
                   </span>
                 )}
               </>
             ) : (
-              <span className="text-[10px] text-muted-foreground/40">No action set</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground/40">No action set</span>
             )}
           </div>
         </div>
