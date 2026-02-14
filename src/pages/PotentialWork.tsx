@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useOutreach } from '@/hooks/useOutreach';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { AddCustomLeadDialog } from '@/components/AddCustomLeadDialog';
@@ -13,6 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import {
   Collapsible,
   CollapsibleContent,
@@ -51,7 +58,7 @@ import { format, isToday, isPast, startOfDay } from 'date-fns';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
 
-const POTENTIAL_WORK_STATUSES: { value: LeadStatus; label: string }[] = [
+const DEFAULT_POTENTIAL_WORK_STATUSES: { value: LeadStatus; label: string }[] = [
   { value: 'interested', label: 'Interested' },
   { value: 'wants_draft', label: 'Wants a Draft' },
   { value: 'on_hold', label: 'Waiting' },
@@ -59,6 +66,8 @@ const POTENTIAL_WORK_STATUSES: { value: LeadStatus; label: string }[] = [
   { value: 'paid_for_draft', label: 'Paid for Draft' },
   { value: 'completed', label: 'Completed → Paid Client' },
 ];
+
+const CUSTOM_STATUSES_KEY = 'leadfinder_custom_statuses';
 
 const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'none', label: 'None' },
@@ -78,9 +87,11 @@ interface LeadCardProps {
   onNotesChange: (leadId: string, notes: string) => Promise<OutreachLead | null>;
   onBusinessNameChange: (leadId: string, name: string) => Promise<OutreachLead | null>;
   onDelete: (leadId: string, silent?: boolean) => Promise<boolean>;
+  customStatuses: { value: string; label: string }[];
+  onAddCustomStatus: () => void;
 }
 
-const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onDelete }: LeadCardProps) => {
+const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onDelete, customStatuses, onAddCustomStatus }: LeadCardProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const [nextAction, setNextAction] = useState<NextActionType>(lead.next_action || 'none');
@@ -154,7 +165,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
 
   return (
     <Card className={`border border-border/60 border-l-[3px] ${getStatusBorderColor(lead.status)} hover:border-border transition-colors shadow-sm`}>
-      <div className="px-3 py-2.5">
+      <div className="px-3 py-2.5 sm:px-5 sm:py-4">
         {/* Row 1: Name (left) | Follow-up (right) */}
         <div className="flex items-start justify-between gap-3">
           {/* Name — dominant, up to 2 lines */}
@@ -183,7 +194,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 onClick={() => setIsEditingName(true)}
                 className="text-left group flex items-start gap-1 min-w-0 w-full"
               >
-                <span className="text-sm font-semibold leading-snug line-clamp-2">{lead.business_name}</span>
+                <span className="text-sm sm:text-base font-semibold leading-snug line-clamp-2">{lead.business_name}</span>
                 <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5" />
               </button>
             )}
@@ -221,11 +232,17 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                   <OutreachStatusBadge status={lead.status} compact />
                 </SelectTrigger>
                 <SelectContent>
-                  {POTENTIAL_WORK_STATUSES.map((opt) => (
+                  {[...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses].map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
                   ))}
+                  <button
+                    className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground outline-none"
+                    onClick={(e) => { e.stopPropagation(); onAddCustomStatus(); }}
+                  >
+                    + Add custom status
+                  </button>
                 </SelectContent>
               </Select>
             </div>
@@ -383,6 +400,30 @@ const PotentialWorkPage = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
+  const [customStatuses, setCustomStatuses] = useState<{ value: string; label: string }[]>([]);
+  const [showCustomStatusDialog, setShowCustomStatusDialog] = useState(false);
+  const [newStatusLabel, setNewStatusLabel] = useState('');
+
+  // Load custom statuses from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CUSTOM_STATUSES_KEY);
+      if (saved) setCustomStatuses(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  const handleAddCustomStatus = () => {
+    const label = newStatusLabel.trim();
+    if (!label) return;
+    const value = label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const allStatuses = [...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses];
+    if (allStatuses.some(s => s.value === value)) return;
+    const updated = [...customStatuses, { value, label }];
+    setCustomStatuses(updated);
+    localStorage.setItem(CUSTOM_STATUSES_KEY, JSON.stringify(updated));
+    setNewStatusLabel('');
+    setShowCustomStatusDialog(false);
+  };
 
   const potentialWorkLeads = useMemo(() => {
     const interestedStatuses: LeadStatus[] = ['interested', 'wants_draft', 'on_hold', 'reviewing_draft', 'paid_for_draft'];
@@ -457,33 +498,55 @@ const PotentialWorkPage = () => {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
           {potentialWorkLeads.map((lead) => (
-            <LeadCard
-              key={lead.id}
-              lead={lead}
-              onStatusChange={updateStatus}
-              onNextActionChange={updateNextAction}
-              onNotesChange={updateNotes}
-              onBusinessNameChange={updateBusinessName}
-              onDelete={deleteLead}
-            />
-          ))}
-        </div>
-      )}
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                onStatusChange={updateStatus}
+                onNextActionChange={updateNextAction}
+                onNotesChange={updateNotes}
+                onBusinessNameChange={updateBusinessName}
+                onDelete={deleteLead}
+                customStatuses={customStatuses}
+                onAddCustomStatus={() => setShowCustomStatusDialog(true)}
+              />
+            ))}
+          </div>
+        )}
 
-      <OutreachLeadDialog
-        lead={selectedLead}
-        open={!!selectedLead}
-        onOpenChange={(open) => !open && setSelectedLead(null)}
-        onUpdateStatus={updateStatus}
-        onUpdateNextAction={updateNextAction}
-        onUpdateNotes={updateNotes}
-        onDelete={deleteLead}
-        fetchActivities={fetchActivities}
-      />
-    </div>
-  );
-};
+        <OutreachLeadDialog
+          lead={selectedLead}
+          open={!!selectedLead}
+          onOpenChange={(open) => !open && setSelectedLead(null)}
+          onUpdateStatus={updateStatus}
+          onUpdateNextAction={updateNextAction}
+          onUpdateNotes={updateNotes}
+          onDelete={deleteLead}
+          fetchActivities={fetchActivities}
+        />
+
+        {/* Custom Status Dialog */}
+        <Dialog open={showCustomStatusDialog} onOpenChange={setShowCustomStatusDialog}>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Add Custom Status</DialogTitle>
+            </DialogHeader>
+            <Input
+              placeholder="e.g. Sent Quote"
+              value={newStatusLabel}
+              onChange={(e) => setNewStatusLabel(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleAddCustomStatus()}
+              autoFocus
+            />
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setShowCustomStatusDialog(false)}>Cancel</Button>
+              <Button onClick={handleAddCustomStatus} disabled={!newStatusLabel.trim()}>Add</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  };
 
 export default PotentialWorkPage;

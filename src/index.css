@@ -239,6 +239,10 @@
     animation: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
 
+  .animate-subtle-bounce {
+    animation: subtle-bounce 3s ease-in-out infinite;
+  }
+
   .animate-glow {
     /* disabled */
   }
@@ -255,6 +259,11 @@
   @keyframes glow {
     from { box-shadow: none; }
     to { box-shadow: none; }
+  }
+
+  @keyframes subtle-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
   }
 
   @keyframes scroll-dot {
