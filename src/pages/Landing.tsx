@@ -1046,7 +1046,7 @@ const Landing = () => {
                     </span>
                   </div>
                   <h3 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1]">
-                    Try Everything Free<br />for 24 Hours
+                    Start Your Free Trial
                   </h3>
                   <p className="text-sm text-muted-foreground mt-2.5">
                     Then £19.99/month · Cancel anytime
