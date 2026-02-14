@@ -185,10 +185,10 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
       <div ref={ref} className="text-center">
-    <div className="text-lg sm:text-3xl md:text-[2rem] font-bold text-gradient-primary tracking-tight">
+    <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
       {count.toLocaleString()}{suffix}
     </div>
-    <div className="text-[7px] sm:text-[10px] text-foreground/40 mt-1 sm:mt-1.5 font-medium uppercase tracking-[0.12em]">{label}</div>
+    <div className="text-[8px] sm:text-xs text-foreground/50 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">{label}</div>
     </div>
   );
 };
@@ -567,7 +567,7 @@ const Landing = () => {
               Lead<span className="text-gradient-primary">Finder</span> Pro
             </span>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm px-2 sm:px-4" asChild>
               <Link to="/auth">Sign In</Link>
             </Button>
@@ -589,7 +589,7 @@ const Landing = () => {
         {/* Subtle radial glow behind hero center — desktop only */}
         <div 
           className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[800px] pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.06), transparent 70%)' }}
+          style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.10), transparent 70%)' }}
         />
         <div className="container mx-auto text-center lg:max-w-[1140px]">
           {/* Mobile: Video at top instead of logo */}
@@ -600,29 +600,28 @@ const Landing = () => {
           <div className="max-w-3xl mx-auto lg:max-w-2xl">
             {/* Blue pill badge */}
             <div 
-              className="hidden sm:inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium mb-8 backdrop-blur-sm"
+              className="hidden sm:inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium mb-6 lg:mb-5 backdrop-blur-sm"
               style={{ border: '1px solid hsl(210 100% 50% / 0.2)', background: 'hsl(210 100% 50% / 0.08)', color: 'hsl(210 100% 70%)' }}
             >
               <Zap className="h-3 w-3" />
               <span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="text-[1.75rem] sm:text-5xl md:text-6xl lg:text-[4.25rem] tracking-tight" style={{ lineHeight: '1.06' }}>
-              <span className="font-semibold tracking-[0.03em] text-foreground/90">Find Businesses</span>{' '}
+            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
+              <span className="tracking-[0.02em]">Find Businesses</span>{' '}
               <br className="hidden sm:block" />
-              <span className="font-bold text-gradient-primary whitespace-nowrap">Without Websites</span>
+              <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.12rem] text-foreground/55 max-w-2xl lg:max-w-[32rem] mx-auto px-2 mt-5 sm:mt-8" style={{ lineHeight: '1.75' }}>
-              Find businesses with no website.<br className="hidden sm:block" />
-              Contact them instantly. Track every follow-up.
+            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
+              The all-in-one tool to find businesses without websites, contact them, and track every follow-up.
             </p>
             
             {/* CTA — trial primary, demo as subtle link */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-10 sm:mt-14">
+            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-8">
               <Button 
                 size="lg" 
-                className="btn-premium text-[13px] sm:text-[15px] font-semibold px-8 sm:px-14 h-[48px] sm:h-[56px] rounded-xl w-full sm:w-auto sm:min-w-[400px] shadow-primary/15 hover:shadow-primary/25 hover:-translate-y-0.5 transition-all duration-500 ease-out" 
+                className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto sm:min-w-[360px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                 asChild
               >
                 <Link to="/auth?intent=upgrade">
@@ -630,43 +629,44 @@ const Landing = () => {
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Link>
               </Button>
-              <p className="text-[8px] sm:text-[10px] text-foreground/[0.32] font-medium mt-3">
-                No charge today · Cancel anytime
+              <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
+                No charge today · Cancel anytime before renewal
               </p>
 
-              {/* Demo link — mobile */}
+              {/* Mobile: stacked subtle demo link */}
               <div className="sm:hidden mt-5 text-center">
                 <Link 
                   to="/auth?intent=demo" 
                   onClick={() => trackLead()}
-                  className="text-[11px] text-foreground/25 hover:text-foreground/45 hover:underline underline-offset-2 transition-all duration-200"
+                  className="text-[12px] text-foreground/40 hover:text-foreground/60 transition-colors duration-200"
                 >
-                  or try the free demo
+                  Try Free Demo instead <span className="inline-block ml-0.5">→</span>
                 </Link>
+                <p className="text-[9px] text-foreground/[0.22] mt-1.5">No card required</p>
               </div>
 
-              {/* Demo link — desktop */}
-              <div className="hidden sm:block mt-5">
+              {/* Desktop: inline demo link next to microcopy */}
+              <div className="hidden sm:flex items-center gap-3 mt-5">
                 <Link 
                   to="/auth?intent=demo" 
                   onClick={() => trackLead()}
-                  className="text-[11px] text-foreground/25 hover:text-foreground/45 hover:underline underline-offset-2 transition-all duration-200"
+                  className="text-[13px] text-foreground/40 hover:text-foreground/60 transition-colors duration-200"
                 >
-                  or try the free demo
+                  or try the free demo →
                 </Link>
               </div>
             </div>
 
-            {/* Mobile trust badges */}
-            <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-10">
+            {/* Mobile trust badges — above bullet points */}
+            <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-8">
               <CountUpStat target={100000} suffix="+" label="Businesses" />
               <div className="text-center">
-                <div className="text-lg font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-[7px] text-foreground/40 mt-1 font-medium uppercase tracking-[0.12em]">Coverage</div>
+                <div className="text-base font-bold text-gradient-primary tracking-tight">Global</div>
+                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Coverage</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-[7px] text-foreground/40 mt-1 font-medium uppercase tracking-[0.12em]">Searches</div>
+                <div className="text-base font-bold text-gradient-primary tracking-tight">Unlimited</div>
+                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Searches</div>
               </div>
             </div>
 
@@ -677,16 +677,16 @@ const Landing = () => {
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
             </div>
 
-            {/* Desktop trust badges */}
-            <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-12">
+            {/* Desktop trust badges — in hero */}
+            <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-10">
               <CountUpStat target={100000} suffix="+" label="Businesses" />
               <div className="text-center">
-                <div className="text-3xl md:text-[2rem] font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-[10px] text-foreground/40 mt-1.5 font-medium uppercase tracking-[0.12em]">Coverage</div>
+                <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
               </div>
               <div className="text-center">
-                <div className="text-3xl md:text-[2rem] font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-[10px] text-foreground/40 mt-1.5 font-medium uppercase tracking-[0.12em]">Searches</div>
+                <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
               </div>
             </div>
           </div>
