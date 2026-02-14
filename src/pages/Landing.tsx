@@ -607,40 +607,55 @@ const Landing = () => {
               <span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold mb-4 sm:mb-5 lg:mb-5 tracking-tight" style={{ lineHeight: '1.05' }}>
+            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold mb-5 sm:mb-6 tracking-tight" style={{ lineHeight: '1.05' }}>
               Find Businesses{' '}
               <br className="hidden sm:block" />
               <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.2rem] text-foreground/70 max-w-2xl lg:max-w-[38rem] mx-auto mb-4 sm:mb-6 lg:mb-8 leading-relaxed sm:leading-[1.6] px-2">
+            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.2rem] text-foreground/70 max-w-2xl lg:max-w-[38rem] mx-auto mb-6 sm:mb-8 leading-relaxed sm:leading-[1.6] px-2">
               The all-in-one tool to find businesses without websites, contact them, and track every follow-up.
             </p>
             
             {/* CTA Buttons — stacked vertically */}
-            <div className="flex flex-col items-center gap-1.5">
-              <Button size="lg" className="btn-premium text-sm sm:text-base lg:text-[1.05rem] font-semibold px-6 sm:px-8 lg:px-10 py-3 sm:py-4 lg:py-[1.1rem] h-auto w-full sm:w-auto sm:min-w-[340px] shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" asChild>
+            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0">
+              <Button 
+                size="lg" 
+                className="btn-premium text-[16px] sm:text-[18px] font-semibold px-7 sm:px-8 h-[52px] sm:h-[56px] rounded-xl w-full sm:w-auto sm:min-w-[340px] shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300" 
+                asChild
+              >
                 <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
                   Start Free Trial — Full Access
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                 </Link>
               </Button>
-              <p className="text-[10px] sm:text-xs text-muted-foreground/50 font-medium">
+              <p className="text-[10px] sm:text-xs text-muted-foreground/50 font-medium mt-2">
                 No charge today · Cancel anytime
               </p>
 
-              <div className="mt-3 sm:mt-4">
-                <Button 
-                  variant="outline" 
-                  className="text-sm font-medium px-6 py-2.5 h-auto border-border/40 text-muted-foreground hover:text-foreground hover:border-border/60 transition-colors"
-                  asChild
-                >
-                  <Link to="/auth?intent=demo" onClick={() => trackLead()}>Try Free Demo</Link>
-                </Button>
-                <p className="text-[10px] text-muted-foreground/40 font-medium text-center mt-1.5">
-                  No card required
-                </p>
-              </div>
+              <Button 
+                variant="ghost"
+                className="mt-5 text-[15px] sm:text-[16px] font-medium px-7 sm:px-8 h-[44px] sm:h-[48px] rounded-xl w-full sm:w-auto sm:min-w-[280px] bg-transparent text-foreground/90 hover:text-foreground transition-all duration-300"
+                style={{
+                  border: '1px solid hsl(210 100% 50% / 0.6)',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = 'hsl(210 100% 50%)';
+                  e.currentTarget.style.background = 'hsl(210 100% 50% / 0.06)';
+                  e.currentTarget.style.boxShadow = '0 0 20px hsl(210 100% 50% / 0.1)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = 'hsl(210 100% 50% / 0.6)';
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+                asChild
+              >
+                <Link to="/auth?intent=demo" onClick={() => trackLead()}>Try Free Demo</Link>
+              </Button>
+              <p className="text-[13px] text-foreground/60 font-medium text-center mt-3">
+                No card required • 1 search demo
+              </p>
             </div>
 
             {/* Mobile trust bullets */}
@@ -1164,7 +1179,7 @@ const Landing = () => {
           }`}
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
-          <Button size="lg" className="w-full btn-premium font-semibold py-3 h-auto text-sm" asChild>
+          <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" asChild>
             <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
               Start Free Trial — Full Access
               <ArrowRight className="ml-2 h-4 w-4" />
