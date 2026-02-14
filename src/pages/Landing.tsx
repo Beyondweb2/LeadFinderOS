@@ -681,18 +681,6 @@ const Landing = () => {
         <VideoSection />
       </div>
 
-      {/* Stats bar — both mobile and desktop, below video/hero */}
-      <div className="container mx-auto max-w-sm sm:max-w-xl py-8 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14">
-        <CountUpStat target={100000} suffix="+" label="Businesses" />
-        <div className="text-center">
-          <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-          <div className="text-[9px] sm:text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
-        </div>
-        <div className="text-center">
-          <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-          <div className="text-[9px] sm:text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
-        </div>
-      </div>
 
 
       {/* Old Way vs New Way comparison */}
@@ -824,6 +812,19 @@ const Landing = () => {
           </Link>
         </Button>
         <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">Ready to stop wasting time on Google Maps?</p>
+      </div>
+
+      {/* Stats bar — below comparison section */}
+      <div className="container mx-auto max-w-sm sm:max-w-xl py-8 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14">
+        <CountUpStat target={100000} suffix="+" label="Businesses" />
+        <div className="text-center">
+          <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+          <div className="text-[9px] sm:text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+        </div>
+        <div className="text-center">
+          <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+          <div className="text-[9px] sm:text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+        </div>
       </div>
 
       {/* How It Works — 4 steps */}
