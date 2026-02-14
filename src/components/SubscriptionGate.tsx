@@ -2,13 +2,14 @@ import { ReactNode } from 'react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTrial } from '@/hooks/useTrial';
 import { Loader2 } from 'lucide-react';
+import { PaymentPausedScreen } from '@/components/PaymentPausedScreen';
 
 interface SubscriptionGateProps {
   children: ReactNode;
 }
 
 export function SubscriptionGate({ children }: SubscriptionGateProps) {
-  const { isLoading: subLoading } = useSubscription();
+  const { isLoading: subLoading, isPaymentPaused } = useSubscription();
   const { isLoading: trialLoading } = useTrial();
 
   const isLoading = subLoading || trialLoading;
@@ -19,6 +20,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
+  }
+
+  // Block access if payment is paused (2+ failures)
+  if (isPaymentPaused) {
+    return <PaymentPausedScreen />;
   }
 
   // All authenticated users get full app access.

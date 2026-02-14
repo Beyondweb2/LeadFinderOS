@@ -176,7 +176,7 @@
         let subscription: Stripe.Subscription;
         let customerId: string;
 
-        if (event.type === "invoice.payment_failed") {
+      if (event.type === "invoice.payment_failed") {
           const invoice = event.data.object as Stripe.Invoice;
           customerId = typeof invoice.customer === 'string' ? invoice.customer : invoice.customer?.id ?? '';
           
@@ -191,6 +191,13 @@
               status: 200,
             });
           }
+        } else if (event.type === "invoice.paid") {
+          // If we're in the subscription block and got invoice.paid, skip
+          // (handled separately above for affiliates)
+          return new Response(JSON.stringify({ received: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          });
         } else {
           subscription = event.data.object as Stripe.Subscription;
           customerId = typeof subscription.customer === 'string' ? subscription.customer : subscription.customer.id;
@@ -231,7 +238,8 @@
 
          // Determine the status to store
          let status = subscription.status;
-         if (event.type === "invoice.payment_failed") {
+         const isPaymentFailure = event.type === "invoice.payment_failed";
+         if (isPaymentFailure) {
            status = "past_due";
          } else if (event.type === "customer.subscription.deleted") {
            status = "canceled";
@@ -295,6 +303,39 @@
          }
          // ─── END DUPLICATE GUARD ───
 
+         // ─── PAYMENT FAILURE TRACKING ───
+         // Get current failure count for this subscription
+         let currentFailureCount = 0;
+         const { data: existingSub } = await supabaseAdmin
+           .from("subscriptions")
+           .select("payment_failure_count")
+           .eq("stripe_subscription_id", subscription.id)
+           .maybeSingle();
+         
+         if (existingSub) {
+           currentFailureCount = existingSub.payment_failure_count || 0;
+         }
+
+         // If payment failed, increment counter. If payment succeeded (active), reset it.
+         let newFailureCount = currentFailureCount;
+         let lastPaymentFailedAt: string | null = null;
+         
+         if (isPaymentFailure) {
+           newFailureCount = currentFailureCount + 1;
+           lastPaymentFailedAt = new Date().toISOString();
+           logStep("Payment failure tracked", { userId: user.id, failureCount: newFailureCount });
+         } else if (status === 'active') {
+           // Payment succeeded — reset failure count
+           newFailureCount = 0;
+           logStep("Payment succeeded, resetting failure count", { userId: user.id });
+         }
+
+         // If 2+ failures, override status to 'paused' to block access
+         if (newFailureCount >= 2) {
+           status = "paused";
+           logStep("Account PAUSED due to 2+ payment failures", { userId: user.id, failureCount: newFailureCount });
+         }
+
          // Upsert subscription record (normal path)
          const { error: upsertError } = await supabaseAdmin
            .from("subscriptions")
@@ -303,12 +344,14 @@
              stripe_customer_id: customerId,
              stripe_subscription_id: subscription.id,
              status: status,
-            current_period_end: subscription.current_period_end
-              ? new Date(subscription.current_period_end * 1000).toISOString()
-              : (subscription.trial_end
-                ? new Date(subscription.trial_end * 1000).toISOString()
-                : null),
+             current_period_end: subscription.current_period_end
+               ? new Date(subscription.current_period_end * 1000).toISOString()
+               : (subscription.trial_end
+                 ? new Date(subscription.trial_end * 1000).toISOString()
+                 : null),
              updated_at: new Date().toISOString(),
+             payment_failure_count: newFailureCount,
+             ...(lastPaymentFailedAt ? { last_payment_failed_at: lastPaymentFailedAt } : {}),
            }, {
              onConflict: "stripe_subscription_id",
            });

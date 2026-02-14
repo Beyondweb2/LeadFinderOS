@@ -377,6 +377,8 @@ export type Database = {
           created_at: string
           current_period_end: string | null
           id: string
+          last_payment_failed_at: string | null
+          payment_failure_count: number
           status: string
           stripe_customer_id: string
           stripe_subscription_id: string
@@ -387,6 +389,8 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           id?: string
+          last_payment_failed_at?: string | null
+          payment_failure_count?: number
           status?: string
           stripe_customer_id: string
           stripe_subscription_id: string
@@ -397,6 +401,8 @@ export type Database = {
           created_at?: string
           current_period_end?: string | null
           id?: string
+          last_payment_failed_at?: string | null
+          payment_failure_count?: number
           status?: string
           stripe_customer_id?: string
           stripe_subscription_id?: string
