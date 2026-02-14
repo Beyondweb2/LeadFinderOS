@@ -185,11 +185,11 @@ const Auth = () => {
             <div className="text-center space-y-2">
               <h3 className="text-xl font-bold flex items-center justify-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
-                Free Trial Loading
+                24-Hour Full Access
                 <Sparkles className="h-5 w-5 text-primary" />
               </h3>
               <p className="text-muted-foreground text-sm">
-                Setting up your free trial...
+                Setting up your free trial — £0 for 24 hours, then £19.99/mo. Cancel anytime.
               </p>
             </div>
             
@@ -201,12 +201,29 @@ const Auth = () => {
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Check className="h-4 w-4 text-primary" />
-                <span>Full CRM access</span>
+                <span>Full CRM & pipeline tracking</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Check className="h-4 w-4 text-primary" />
-                <span>Free trial with full access</span>
+                <span>WhatsApp & SMS outreach templates</span>
               </div>
+            </div>
+
+            {/* Demo fallback */}
+            <div className="text-center pt-1 border-t border-border/50">
+              <p className="text-xs text-muted-foreground mb-1">
+                Not ready to add a card yet?
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowTrialModal(false);
+                  navigate('/demo');
+                }}
+                className="text-xs text-primary hover:underline font-medium"
+              >
+                1 free search & walkthrough in demo →
+              </button>
             </div>
           </div>
         </DialogContent>
