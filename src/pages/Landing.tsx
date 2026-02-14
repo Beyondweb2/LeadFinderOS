@@ -656,11 +656,24 @@ const Landing = () => {
               </p>
             </div>
 
-            {/* Feature bullets */}
-            <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-5 mt-8 sm:mt-10 text-[12px] sm:text-[16px] text-foreground/50 font-medium">
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
+            {/* Feature bullets — mobile only */}
+            <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-8 text-[12px] text-foreground/50 font-medium">
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
+            </div>
+
+            {/* Desktop trust badges — in hero */}
+            <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-10">
+              <CountUpStat target={100000} suffix="+" label="Businesses" />
+              <div className="text-center">
+                <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+              </div>
+              <div className="text-center">
+                <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+              </div>
             </div>
           </div>
 
@@ -692,17 +705,11 @@ const Landing = () => {
       {/* Video Demo Section - desktop only (mobile has it in hero) */}
       <div className="hidden sm:block">
         <VideoSection />
-        {/* Desktop stats bar — below video */}
-        <div className="container mx-auto max-w-xl py-8 grid grid-cols-3 gap-8 md:gap-14">
-          <CountUpStat target={100000} suffix="+" label="Businesses" />
-          <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-            <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-            <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
-          </div>
+        {/* Desktop feature bullets — below video */}
+        <div className="flex flex-row flex-wrap items-center justify-center gap-5 py-8 text-[16px] text-foreground/50 font-medium">
+          <span className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
+          <span className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+          <span className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
         </div>
       </div>
 
