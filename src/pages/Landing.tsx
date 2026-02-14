@@ -1019,8 +1019,8 @@ const Landing = () => {
         </Button>
       </div>
 
-      {/* Mobile section divider */}
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
+
+
       <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
