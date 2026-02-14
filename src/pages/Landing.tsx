@@ -1068,7 +1068,7 @@ const Landing = () => {
                   <Link 
                     to="/auth?intent=demo" 
                     onClick={() => trackLead()}
-                    className="text-[10px] sm:text-xs text-muted-foreground/40 hover:text-muted-foreground/60 transition-colors mt-1"
+                    className="text-[11px] sm:text-xs text-foreground/70 hover:text-foreground transition-colors mt-1 underline underline-offset-2"
                   >
                     Prefer to explore first? Try the free demo
                   </Link>
