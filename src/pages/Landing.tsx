@@ -668,16 +668,16 @@ const Landing = () => {
 
           {/* Stats bar */}
           <div 
-            className="mt-6 sm:mt-12 md:mt-16 lg:mt-16 py-4 sm:py-6 lg:py-5 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14 max-w-sm sm:max-w-xl lg:max-w-lg mx-auto"
+            className="sm:hidden mt-6 py-4 grid grid-cols-3 gap-6 max-w-sm mx-auto"
           >
             <CountUpStat target={100000} suffix="+" label="Businesses" />
             <div className="text-center">
-              <div className="text-lg sm:text-2xl md:text-3xl lg:text-2xl font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[9px] sm:text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+              <div className="text-lg font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[9px] text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
             </div>
             <div className="text-center">
-              <div className="text-lg sm:text-2xl md:text-3xl lg:text-2xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-              <div className="text-[9px] sm:text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+              <div className="text-lg font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="text-[9px] text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
             </div>
           </div>
 
@@ -702,6 +702,18 @@ const Landing = () => {
       {/* Video Demo Section - desktop only (mobile has it in hero) */}
       <div className="hidden sm:block">
         <VideoSection />
+        {/* Desktop stats bar — below video */}
+        <div className="container mx-auto max-w-xl py-6 grid grid-cols-3 gap-8 md:gap-14">
+          <CountUpStat target={100000} suffix="+" label="Businesses" />
+          <div className="text-center">
+            <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+            <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+          </div>
+          <div className="text-center">
+            <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+            <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+          </div>
+        </div>
       </div>
 
 
