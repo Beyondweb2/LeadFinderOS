@@ -165,17 +165,16 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
 
   return (
     <Card className={`border border-border/60 border-l-[3px] ${getStatusBorderColor(lead.status)} hover:border-border transition-colors shadow-sm`}>
-      <div className="px-3 py-2.5 sm:px-5 sm:py-4">
-        {/* Row 1: Name (left) | Follow-up (right) */}
+      <div className="px-3 py-2.5 sm:px-6 sm:py-5">
+        {/* Row 1: Name (left) | 3-dot menu (right) */}
         <div className="flex items-start justify-between gap-3">
-          {/* Name — dominant, up to 2 lines */}
           <div className="min-w-0 flex-1">
             {isEditingName ? (
               <div className="flex items-center gap-1.5">
                 <Input
                   value={editedName}
                   onChange={(e) => setEditedName(e.target.value)}
-                  className="h-7 text-sm font-medium"
+                  className="h-7 sm:h-8 text-sm sm:text-base font-medium"
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSaveName();
@@ -194,108 +193,17 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 onClick={() => setIsEditingName(true)}
                 className="text-left group flex items-start gap-1 min-w-0 w-full"
               >
-                <span className="text-sm sm:text-base font-semibold leading-snug line-clamp-2">{lead.business_name}</span>
-                <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5" />
+                <span className="text-sm sm:text-lg font-semibold leading-snug line-clamp-2">{lead.business_name}</span>
+                <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1" />
               </button>
-            )}
-          </div>
-
-          {/* Follow-up — stacked, right-aligned, fixed width */}
-          <div className="shrink-0 w-[120px] text-right">
-            {hasFollowUp ? (
-              <div className="flex flex-col items-end">
-                <span className="text-[11px] font-medium text-foreground/70 leading-tight">{actionLabel}</span>
-                {lead.next_action_date && (
-                  <span className={`text-[11px] leading-tight ${getFollowUpStyle()}`}>
-                    {isToday(new Date(lead.next_action_date))
-                      ? 'Today'
-                      : format(new Date(lead.next_action_date), 'MMM d')}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <span className="text-[11px] text-muted-foreground/40">—</span>
-            )}
-          </div>
-        </div>
-
-        {/* Row 2: Status | Phone | Map (left) | Actions (right) */}
-        <div className="flex items-center justify-between mt-1.5">
-          <div className="flex items-center gap-2.5 text-xs text-muted-foreground">
-            {/* Status badge */}
-            <div onClick={(e) => e.stopPropagation()}>
-              <Select
-                value={lead.status}
-                onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
-              >
-                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
-                  <OutreachStatusBadge status={lead.status} compact />
-                </SelectTrigger>
-                <SelectContent>
-                  {[...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses].map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                  <button
-                    className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground outline-none"
-                    onClick={(e) => { e.stopPropagation(); onAddCustomStatus(); }}
-                  >
-                    + Add custom status
-                  </button>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Phone */}
-            {lead.phone && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1 hover:text-foreground transition-colors">
-                    <Phone className="h-3 w-3" />
-                    <span className="font-mono">{lead.phone}</span>
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="min-w-[140px]">
-                  <DropdownMenuItem asChild>
-                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer text-xs">
-                      <PhoneCall className="h-3.5 w-3.5" /> Call
-                    </a>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer text-xs">
-                      <Phone className="h-3.5 w-3.5 text-green-500" /> WhatsApp Call
-                    </a>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <a href={`sms:${lead.phone}`} className="flex items-center gap-2 cursor-pointer text-xs">
-                      <MessageCircle className="h-3.5 w-3.5 text-blue-500" /> SMS
-                    </a>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <a href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer text-xs">
-                      <MessageSquare className="h-3.5 w-3.5 text-green-500" /> WhatsApp
-                    </a>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
-            {/* Map */}
-            {lead.google_maps_url && (
-              <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-foreground transition-colors">
-                <MapPin className="h-3 w-3" />
-                <ExternalLink className="h-2.5 w-2.5" />
-              </a>
             )}
           </div>
 
           {/* 3-dot menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7">
-                <MoreVertical className="h-3.5 w-3.5" />
+              <Button variant="ghost" size="icon" className="h-7 w-7 sm:h-8 sm:w-8">
+                <MoreVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[140px]">
@@ -310,21 +218,125 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
           </DropdownMenu>
         </div>
 
+        {/* Row 2: Status | Phone | Map */}
+        <div className="flex items-center gap-2.5 mt-1.5 sm:mt-2 text-xs sm:text-sm text-muted-foreground">
+          <div onClick={(e) => e.stopPropagation()}>
+            <Select
+              value={lead.status}
+              onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
+            >
+              <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+                <OutreachStatusBadge status={lead.status} compact />
+              </SelectTrigger>
+              <SelectContent>
+                {[...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses].map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+                <button
+                  className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground outline-none"
+                  onClick={(e) => { e.stopPropagation(); onAddCustomStatus(); }}
+                >
+                  + Add custom status
+                </button>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {lead.phone && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1 hover:text-foreground transition-colors">
+                  <Phone className="h-3 w-3" />
+                  <span className="font-mono">{lead.phone}</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-[140px]">
+                <DropdownMenuItem asChild>
+                  <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer text-xs">
+                    <PhoneCall className="h-3.5 w-3.5" /> Call
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer text-xs">
+                    <Phone className="h-3.5 w-3.5 text-green-500" /> WhatsApp Call
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <a href={`sms:${lead.phone}`} className="flex items-center gap-2 cursor-pointer text-xs">
+                    <MessageCircle className="h-3.5 w-3.5 text-blue-500" /> SMS
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer text-xs">
+                    <MessageSquare className="h-3.5 w-3.5 text-green-500" /> WhatsApp
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
+          {lead.google_maps_url && (
+            <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-foreground transition-colors">
+              <MapPin className="h-3 w-3" />
+              <ExternalLink className="h-2.5 w-2.5" />
+            </a>
+          )}
+        </div>
+
+        {/* Row 3: Next Action — always visible, prominent */}
+        <div className="mt-3 sm:mt-4 p-2.5 sm:p-3 rounded-lg bg-muted/30 border border-border/40">
+          <div className="grid grid-cols-[1fr_auto_auto] gap-2 items-end">
+            <div className="space-y-1">
+              <label className="text-[10px] sm:text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Next Action</label>
+              <Select value={nextAction} onValueChange={(v) => setNextAction(v as NextActionType)}>
+                <SelectTrigger className="h-8 sm:h-9 text-xs sm:text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {NEXT_ACTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] sm:text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Date</label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="justify-start text-left font-normal h-8 sm:h-9 text-xs sm:text-sm px-2.5">
+                    <CalendarIcon className="mr-1 h-3 w-3" />
+                    {nextActionDate ? format(nextActionDate, 'MMM d') : 'Pick'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar mode="single" selected={nextActionDate} onSelect={setNextActionDate} initialFocus />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <Button size="sm" onClick={handleSave} disabled={isSaving} className="h-8 sm:h-9 text-xs sm:text-sm gap-1">
+              <Save className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              {isSaving ? '...' : 'Save'}
+            </Button>
+          </div>
+        </div>
+
         {/* Notes preview (1 line, collapsed) */}
         {!isExpanded && lead.notes && (
           <button 
             onClick={() => setIsExpanded(true)}
-            className="flex items-center gap-1.5 mt-1.5 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors w-full text-left"
+            className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors w-full text-left"
           >
             <StickyNote className="h-3 w-3 shrink-0" />
             <span className="truncate">{lead.notes}</span>
           </button>
         )}
 
-        {/* Expandable section */}
+        {/* Expandable notes section */}
         <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
           <CollapsibleContent className="mt-2.5 pt-2.5 border-t border-border/40 space-y-2.5">
-            {/* Notes */}
             <div className="space-y-1">
               <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Notes</label>
               <Textarea
@@ -332,42 +344,9 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add notes..."
                 rows={2}
-                className="resize-none text-xs min-h-0"
+                className="resize-none text-xs sm:text-sm min-h-0"
               />
             </div>
-
-            {/* Next Action + Date */}
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Next Action</label>
-                <Select value={nextAction} onValueChange={(v) => setNextAction(v as NextActionType)}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {NEXT_ACTION_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1">
-                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Date</label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal h-8 text-xs">
-                      <CalendarIcon className="mr-1 h-3 w-3" />
-                      {nextActionDate ? format(nextActionDate, 'MMM d') : 'Pick'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar mode="single" selected={nextActionDate} onSelect={setNextActionDate} initialFocus />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-
-            {/* Save / Close */}
             <div className="flex items-center justify-end gap-2">
               <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setIsExpanded(false)}>
                 Close
