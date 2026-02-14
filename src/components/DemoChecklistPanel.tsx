@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
-import { Check, ChevronDown, ChevronUp, Sparkles, Search, UserPlus, Phone, RefreshCw, CalendarClock, Star } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Sparkles, Search, UserPlus, Phone, RefreshCw, CalendarClock, Star, X } from 'lucide-react';
+import { useTrial } from '@/hooks/useTrial';
 import { Button } from '@/components/ui/button';
 
 const steps = [
@@ -53,10 +55,12 @@ const steps = [
 
 export function DemoChecklistPanel() {
   const { state, completedCount, totalSteps, allDone, isOpen, setIsOpen, isDemoUser } = useDemoChecklist();
+  const { planStatus } = useTrial();
   const navigate = useNavigate();
   const location = useLocation();
+  const [dismissed, setDismissed] = useState(false);
 
-  if (!isDemoUser) return null;
+  if (!isDemoUser || dismissed) return null;
 
   // Find next incomplete step
   const nextStep = steps.find(s => !state[s.key]);
@@ -82,7 +86,13 @@ export function DemoChecklistPanel() {
       {isOpen && (
         <div className="bg-card border border-t-0 border-border rounded-b-lg shadow-lg p-3 space-y-2">
           {allDone ? (
-            <div className="text-center space-y-2 py-2">
+            <div className="text-center space-y-2 py-2 relative">
+              <button
+                onClick={() => setDismissed(true)}
+                className="absolute top-0 right-0 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center"
+              >
+                <X className="h-3 w-3 text-muted-foreground" />
+              </button>
               <p className="text-sm font-semibold text-primary">🎉 Walkthrough complete!</p>
               <p className="text-xs text-muted-foreground">You've seen the full workflow. You're all set!</p>
             </div>
