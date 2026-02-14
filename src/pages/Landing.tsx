@@ -664,23 +664,6 @@ const Landing = () => {
             </div>
           </div>
 
-          {/* Stats bar */}
-          <div 
-            className="sm:hidden mt-10 py-4 grid grid-cols-3 gap-6 max-w-sm mx-auto"
-          >
-            <CountUpStat target={100000} suffix="+" label="Businesses" />
-            <div className="text-center">
-              <div className="text-lg font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[9px] text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
-            </div>
-            <div className="text-center">
-              <div className="text-lg font-bold text-gradient-primary tracking-tight">Unlimited</div>
-              <div className="text-[9px] text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
-            </div>
-          </div>
-
-
-
 
 
           {/* Scroll indicator — mobile/tablet only */}
@@ -696,17 +679,18 @@ const Landing = () => {
       {/* Video Demo Section - desktop only (mobile has it in hero) */}
       <div className="hidden sm:block">
         <VideoSection />
-        {/* Desktop stats bar — below video */}
-        <div className="container mx-auto max-w-xl py-8 grid grid-cols-3 gap-8 md:gap-14">
-          <CountUpStat target={100000} suffix="+" label="Businesses" />
-          <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-            <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-            <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
-          </div>
+      </div>
+
+      {/* Stats bar — both mobile and desktop, below video/hero */}
+      <div className="container mx-auto max-w-sm sm:max-w-xl py-8 grid grid-cols-3 gap-6 sm:gap-8 md:gap-14">
+        <CountUpStat target={100000} suffix="+" label="Businesses" />
+        <div className="text-center">
+          <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+          <div className="text-[9px] sm:text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+        </div>
+        <div className="text-center">
+          <div className="text-lg sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+          <div className="text-[9px] sm:text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
         </div>
       </div>
 
