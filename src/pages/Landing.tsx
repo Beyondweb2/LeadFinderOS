@@ -666,6 +666,19 @@ const Landing = () => {
 
 
 
+          {/* Mobile trust badges — under the 3 points */}
+          <div className="sm:hidden container mx-auto max-w-sm py-8 grid grid-cols-3 gap-6">
+            <CountUpStat target={100000} suffix="+" label="Businesses" />
+            <div className="text-center">
+              <div className="text-lg font-bold text-gradient-primary tracking-tight">Global</div>
+              <div className="text-[9px] text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+            </div>
+            <div className="text-center">
+              <div className="text-lg font-bold text-gradient-primary tracking-tight">Unlimited</div>
+              <div className="text-[9px] text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+            </div>
+          </div>
+
           {/* Scroll indicator — mobile/tablet only */}
           <div className="flex lg:hidden flex-col items-center mt-6 sm:mt-8 animate-bounce">
             <span className="text-[10px] sm:text-xs text-muted-foreground/30 tracking-widest uppercase mb-2">Scroll</span>
@@ -826,18 +839,8 @@ const Landing = () => {
         <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">Ready to stop wasting time on Google Maps?</p>
       </div>
 
-      {/* Stats bar — mobile only, below comparison */}
-      <div className="sm:hidden container mx-auto max-w-sm py-8 grid grid-cols-3 gap-6">
-        <CountUpStat target={100000} suffix="+" label="Businesses" />
-        <div className="text-center">
-          <div className="text-lg font-bold text-gradient-primary tracking-tight">Global</div>
-          <div className="text-[9px] text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
-        </div>
-        <div className="text-center">
-          <div className="text-lg font-bold text-gradient-primary tracking-tight">Unlimited</div>
-          <div className="text-[9px] text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
-        </div>
-      </div>
+      {/* Mobile section divider — between hero/comparison and How It Works */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* How It Works — 4 steps */}
       <div id="how-it-works">
