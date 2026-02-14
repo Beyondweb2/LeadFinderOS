@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useOutreach } from '@/hooks/useOutreach';
+import { AlertTriangle, Clock, CalendarCheck } from 'lucide-react';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { AddCustomLeadDialog } from '@/components/AddCustomLeadDialog';
 import { Card } from '@/components/ui/card';
@@ -20,11 +21,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+// Collapsible removed — notes always visible
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { OutreachStatusBadge } from '@/components/OutreachStatusBadge';
@@ -92,7 +89,6 @@ interface LeadCardProps {
 }
 
 const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onDelete, customStatuses, onAddCustomStatus }: LeadCardProps) => {
-  const [isExpanded, setIsExpanded] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const [nextAction, setNextAction] = useState<NextActionType>(lead.next_action || 'none');
   const [nextActionDate, setNextActionDate] = useState<Date | undefined>(
@@ -207,10 +203,6 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[140px]">
-              <DropdownMenuItem onClick={() => setIsExpanded(true)} className="text-xs">
-                <StickyNote className="h-3.5 w-3.5 mr-2" /> Edit Notes
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
                 <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
               </DropdownMenuItem>
@@ -323,41 +315,28 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
           </div>
         </div>
 
-        {/* Notes preview (1 line, collapsed) */}
-        {!isExpanded && lead.notes && (
-          <button 
-            onClick={() => setIsExpanded(true)}
-            className="flex items-center gap-1.5 mt-2 text-xs text-muted-foreground/70 hover:text-muted-foreground transition-colors w-full text-left"
-          >
-            <StickyNote className="h-3 w-3 shrink-0" />
-            <span className="truncate">{lead.notes}</span>
-          </button>
-        )}
-
-        {/* Expandable notes section */}
-        <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-          <CollapsibleContent className="mt-2.5 pt-2.5 border-t border-border/40 space-y-2.5">
-            <div className="space-y-1">
-              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Notes</label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add notes..."
-                rows={2}
-                className="resize-none text-xs sm:text-sm min-h-0"
-              />
-            </div>
-            <div className="flex items-center justify-end gap-2">
-              <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setIsExpanded(false)}>
-                Close
-              </Button>
-              <Button size="sm" onClick={handleSave} disabled={isSaving} className="h-7 text-xs gap-1">
-                <Save className="h-3 w-3" />
-                {isSaving ? 'Saving...' : 'Save'}
+        {/* Row 4: Notes — always visible */}
+        <div className="mt-2.5 sm:mt-3 space-y-1">
+          <label className="text-[10px] sm:text-[11px] font-medium text-muted-foreground uppercase tracking-wide flex items-center gap-1">
+            <StickyNote className="h-3 w-3" />
+            Notes
+          </label>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Add notes about this lead..."
+            rows={2}
+            className="resize-none text-xs sm:text-sm min-h-0 bg-muted/20"
+          />
+          {notes !== (lead.notes || '') && (
+            <div className="flex justify-end">
+              <Button size="sm" onClick={handleSave} disabled={isSaving} className="h-6 text-[11px] gap-1">
+                <Save className="h-2.5 w-2.5" />
+                {isSaving ? '...' : 'Save Notes'}
               </Button>
             </div>
-          </CollapsibleContent>
-        </Collapsible>
+          )}
+        </div>
       </div>
     </Card>
   );
@@ -469,6 +448,59 @@ const PotentialWorkPage = () => {
         </span>
       </div>
 
+      {/* Metrics Summary */}
+      {potentialWorkLeads.length > 0 && (() => {
+        const now = new Date();
+        const todayStart = startOfDay(now);
+        let overdueCount = 0;
+        let todayCount = 0;
+        let upcomingCount = 0;
+        let noActionCount = 0;
+
+        potentialWorkLeads.forEach(l => {
+          if (!l.next_action_date || !l.next_action || l.next_action === 'none') {
+            noActionCount++;
+            return;
+          }
+          const d = new Date(l.next_action_date);
+          if (isPast(startOfDay(d)) && !isToday(d)) overdueCount++;
+          else if (isToday(d)) todayCount++;
+          else upcomingCount++;
+        });
+
+        return (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${overdueCount > 0 ? 'border-red-500/30 bg-red-500/5' : 'border-border/50 bg-muted/20'}`}>
+              <AlertTriangle className={`h-4 w-4 shrink-0 ${overdueCount > 0 ? 'text-red-500' : 'text-muted-foreground/50'}`} />
+              <div>
+                <p className={`text-lg sm:text-xl font-bold leading-none ${overdueCount > 0 ? 'text-red-500' : 'text-muted-foreground/50'}`}>{overdueCount}</p>
+                <p className="text-[10px] sm:text-[11px] text-muted-foreground">Overdue</p>
+              </div>
+            </div>
+            <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${todayCount > 0 ? 'border-amber-500/30 bg-amber-500/5' : 'border-border/50 bg-muted/20'}`}>
+              <Clock className={`h-4 w-4 shrink-0 ${todayCount > 0 ? 'text-amber-500' : 'text-muted-foreground/50'}`} />
+              <div>
+                <p className={`text-lg sm:text-xl font-bold leading-none ${todayCount > 0 ? 'text-amber-500' : 'text-muted-foreground/50'}`}>{todayCount}</p>
+                <p className="text-[10px] sm:text-[11px] text-muted-foreground">Due Today</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+              <CalendarCheck className="h-4 w-4 shrink-0 text-primary/60" />
+              <div>
+                <p className="text-lg sm:text-xl font-bold leading-none text-foreground/80">{upcomingCount}</p>
+                <p className="text-[10px] sm:text-[11px] text-muted-foreground">Upcoming</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+              <StickyNote className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+              <div>
+                <p className="text-lg sm:text-xl font-bold leading-none text-muted-foreground/60">{noActionCount}</p>
+                <p className="text-[10px] sm:text-[11px] text-muted-foreground">No Action Set</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {/* Cards */}
       {potentialWorkLeads.length === 0 ? (
         <Card className="border-border/50">
