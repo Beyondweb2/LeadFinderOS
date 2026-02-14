@@ -20,18 +20,18 @@ const steps = [
   },
   {
     key: 'contactAttempted' as const,
-    label: 'Contact one of them',
-    cta: 'Attempt Contact',
+    label: 'Go to Outreach CRM to contact one',
+    cta: 'Open Outreach CRM',
     route: '/outreach',
     icon: Phone,
   },
   {
     key: 'statusUpdated' as const,
-    label: 'Update status & hit track ⭐',
+    label: 'Update status & hit Track ⭐',
     cta: 'Update Status',
     route: '/outreach',
     icon: RefreshCw,
-    helperText: 'After contacting, update the status then hit the star to track the lead.',
+    helperText: 'Change the status, then hit the star to track the lead.',
   },
   {
     key: 'leadTracked' as const,
