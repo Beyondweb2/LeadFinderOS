@@ -705,12 +705,6 @@ const Landing = () => {
       {/* Video Demo Section - desktop only (mobile has it in hero) */}
       <div className="hidden sm:block">
         <VideoSection />
-        {/* Desktop feature bullets — below video */}
-        <div className="flex flex-row flex-wrap items-center justify-center gap-5 py-8 text-[16px] text-foreground/50 font-medium">
-          <span className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
-          <span className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-          <span className="flex items-center gap-2"><Check className="h-4 w-4 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
-        </div>
       </div>
 
 
