@@ -257,7 +257,7 @@ export function useOutreach() {
 
   const updateLead = useCallback(async (
     leadId: string,
-    updates: Partial<Pick<OutreachLead, 'status' | 'next_action' | 'next_action_date' | 'notes' | 'email' | 'business_name' | 'amount_paid' | 'paid_for' | 'payment_date' | 'project_duration' | 'next_checkin_date' | 'checkin_notes'>>
+    updates: Partial<Pick<OutreachLead, 'status' | 'next_action' | 'next_action_date' | 'notes' | 'email' | 'business_name' | 'amount_paid' | 'paid_for' | 'payment_date' | 'project_duration' | 'next_checkin_date' | 'checkin_notes' | 'image_url'>>
   ) => {
     const { data, error } = await supabase
       .from('outreach_leads')

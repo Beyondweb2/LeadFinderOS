@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useOutreach } from '@/hooks/useOutreach';
 import { AlertTriangle, Clock, CalendarCheck } from 'lucide-react';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
@@ -7,6 +7,8 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Select,
   SelectContent,
@@ -83,12 +85,14 @@ interface LeadCardProps {
   onNextActionChange: (leadId: string, action: NextActionType, date?: string) => Promise<OutreachLead | null>;
   onNotesChange: (leadId: string, notes: string) => Promise<OutreachLead | null>;
   onBusinessNameChange: (leadId: string, name: string) => Promise<OutreachLead | null>;
+  onImageChange: (leadId: string, imageUrl: string | null) => Promise<OutreachLead | null>;
   onDelete: (leadId: string, silent?: boolean) => Promise<boolean>;
   customStatuses: { value: string; label: string }[];
   onAddCustomStatus: () => void;
+  userId: string | undefined;
 }
 
-const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onDelete, customStatuses, onAddCustomStatus }: LeadCardProps) => {
+const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
   const [notes, setNotes] = useState(lead.notes || '');
   const [nextAction, setNextAction] = useState<NextActionType>(lead.next_action || 'none');
   const [nextActionDate, setNextActionDate] = useState<Date | undefined>(
@@ -97,6 +101,8 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   const [isSaving, setIsSaving] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(lead.business_name);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -135,6 +141,33 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
     }
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !userId) return;
+    setIsUploadingImage(true);
+    try {
+      const ext = file.name.split('.').pop();
+      const path = `${userId}/${lead.id}.${ext}`;
+      const { error: uploadError } = await supabase.storage
+        .from('lead-images')
+        .upload(path, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: { publicUrl } } = supabase.storage
+        .from('lead-images')
+        .getPublicUrl(path);
+      await onImageChange(lead.id, publicUrl);
+    } catch (err: any) {
+      console.error('Image upload failed:', err);
+    } finally {
+      setIsUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleRemoveImage = async () => {
+    await onImageChange(lead.id, null);
+  };
+
   // Follow-up date styling
   const getFollowUpStyle = () => {
     if (!lead.next_action_date) return '';
@@ -160,7 +193,19 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   const actionLabel = hasFollowUp ? NEXT_ACTION_OPTIONS.find(o => o.value === lead.next_action)?.label : null;
 
   return (
-    <Card className={`border border-border/60 border-l-[3px] ${getStatusBorderColor(lead.status)} hover:border-border transition-colors shadow-sm`}>
+    <Card className={`border border-border/60 border-l-[3px] ${getStatusBorderColor(lead.status)} hover:border-border transition-colors shadow-sm overflow-hidden`}>
+      {/* Lead image */}
+      {lead.image_url && (
+        <div className="relative w-full h-28 sm:h-36 bg-muted/30">
+          <img src={lead.image_url} alt={lead.business_name} className="w-full h-full object-cover" />
+          <button
+            onClick={handleRemoveImage}
+            className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
       <div className="px-3 py-2.5 sm:px-6 sm:py-5">
         {/* Row 1: Name (left) | 3-dot menu (right) */}
         <div className="flex items-start justify-between gap-3">
@@ -203,10 +248,21 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-[140px]">
+              <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="text-xs" disabled={isUploadingImage}>
+                <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
                 <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
               </DropdownMenuItem>
             </DropdownMenuContent>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+            />
           </DropdownMenu>
         </div>
 
@@ -356,11 +412,24 @@ const PotentialWorkPage = () => {
     refetch,
   } = useOutreach();
 
+  const { user } = useAuth();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
   const [customStatuses, setCustomStatuses] = useState<{ value: string; label: string }[]>([]);
   const [showCustomStatusDialog, setShowCustomStatusDialog] = useState(false);
   const [newStatusLabel, setNewStatusLabel] = useState('');
+
+  const updateImageUrl = useCallback(async (leadId: string, imageUrl: string | null) => {
+    const { data, error } = await supabase
+      .from('outreach_leads')
+      .update({ image_url: imageUrl })
+      .eq('id', leadId)
+      .select()
+      .single();
+    if (error) return null;
+    return data as OutreachLead;
+  }, []);
 
   // Load custom statuses from localStorage
   useEffect(() => {
@@ -518,9 +587,11 @@ const PotentialWorkPage = () => {
                 onNextActionChange={updateNextAction}
                 onNotesChange={updateNotes}
                 onBusinessNameChange={updateBusinessName}
+                onImageChange={updateImageUrl}
                 onDelete={deleteLead}
                 customStatuses={customStatuses}
                 onAddCustomStatus={() => setShowCustomStatusDialog(true)}
+                userId={user?.id}
               />
             ))}
           </div>

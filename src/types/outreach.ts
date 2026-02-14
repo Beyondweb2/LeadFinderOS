@@ -94,6 +94,7 @@ export interface OutreachLead {
   project_duration?: string | null;
   next_checkin_date?: string | null;
   checkin_notes?: string | null;
+  image_url?: string | null;
 }
 
 export interface OutreachActivity {
