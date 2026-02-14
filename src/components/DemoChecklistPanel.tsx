@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { Check, ChevronDown, ChevronUp, Sparkles, Search, UserPlus, Phone, RefreshCw, CalendarClock, Star, X } from 'lucide-react';
 import { useTrial } from '@/hooks/useTrial';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
 
 const steps = [
@@ -55,7 +56,8 @@ const steps = [
 
 export function DemoChecklistPanel() {
   const { state, completedCount, totalSteps, allDone, isOpen, setIsOpen, isDemoUser } = useDemoChecklist();
-  const { planStatus } = useTrial();
+  const { isStripeTrialing } = useTrial();
+  const { isPaidSubscriber } = useSubscription();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -68,6 +70,16 @@ export function DemoChecklistPanel() {
     setDismissed(true);
     try { localStorage.setItem('demo_walkthrough_dismissed', 'true'); } catch {}
   };
+
+  // Determine mode: trial overrides demo
+  const mode = useMemo(() => {
+    if (isPaidSubscriber) return 'subscribed' as const;
+    if (isStripeTrialing) return 'trial' as const;
+    return 'demo' as const;
+  }, [isPaidSubscriber, isStripeTrialing]);
+
+  const showCompletionCta = allDone && mode === 'demo';
+  console.log('[Walkthrough]', { mode, allDone, showCompletionCta, isDemoUser });
 
   if (!isDemoUser || dismissed) return null;
 
@@ -104,6 +116,19 @@ export function DemoChecklistPanel() {
               </button>
               <p className="text-sm font-semibold text-primary">🎉 Walkthrough complete!</p>
               <p className="text-xs text-muted-foreground">You've seen the full workflow. You're all set!</p>
+              {showCompletionCta && (
+                <div className="pt-1 space-y-0.5">
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={() => navigate('/subscribe')}
+                  >
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                    Start 24hr Free Trial
+                  </Button>
+                  <p className="text-[10px] text-muted-foreground">Full access for 24 hours</p>
+                </div>
+              )}
             </div>
           ) : (
             <ol className="space-y-1.5">
