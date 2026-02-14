@@ -656,8 +656,21 @@ const Landing = () => {
               </p>
             </div>
 
+            {/* Mobile trust badges — above bullet points */}
+            <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-8">
+              <CountUpStat target={100000} suffix="+" label="Businesses" />
+              <div className="text-center">
+                <div className="text-base font-bold text-gradient-primary tracking-tight">Global</div>
+                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Coverage</div>
+              </div>
+              <div className="text-center">
+                <div className="text-base font-bold text-gradient-primary tracking-tight">Unlimited</div>
+                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Searches</div>
+              </div>
+            </div>
+
             {/* Feature bullets — mobile only */}
-            <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-8 text-[12px] text-foreground/50 font-medium">
+            <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-6 text-[12px] text-foreground/50 font-medium">
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
@@ -679,18 +692,6 @@ const Landing = () => {
 
 
 
-          {/* Mobile trust badges — under the 3 points */}
-          <div className="sm:hidden container mx-auto max-w-[280px] py-6 grid grid-cols-3 gap-4">
-            <CountUpStat target={100000} suffix="+" label="Businesses" />
-            <div className="text-center">
-              <div className="text-base font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Coverage</div>
-            </div>
-            <div className="text-center">
-              <div className="text-base font-bold text-gradient-primary tracking-tight">Unlimited</div>
-              <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Searches</div>
-            </div>
-          </div>
 
           {/* Scroll indicator — mobile/tablet only */}
           <div className="flex lg:hidden flex-col items-center mt-6 sm:mt-8 animate-bounce">
