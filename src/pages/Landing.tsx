@@ -185,10 +185,10 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
       <div ref={ref} className="text-center">
-    <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
+    <div className="text-lg sm:text-3xl md:text-[2rem] font-bold text-gradient-primary tracking-tight">
       {count.toLocaleString()}{suffix}
     </div>
-    <div className="text-[8px] sm:text-xs text-foreground/50 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">{label}</div>
+    <div className="text-[7px] sm:text-[10px] text-foreground/40 mt-1 sm:mt-1.5 font-medium uppercase tracking-[0.12em]">{label}</div>
     </div>
   );
 };
@@ -607,21 +607,22 @@ const Landing = () => {
               <span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="text-[1.75rem] leading-[1.08] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-bold tracking-tight" style={{ lineHeight: '1.08' }}>
-              <span className="tracking-[0.02em]">Find Businesses</span>{' '}
+            <h1 className="text-[1.75rem] sm:text-5xl md:text-6xl lg:text-[4.25rem] tracking-tight" style={{ lineHeight: '1.06' }}>
+              <span className="font-semibold tracking-[0.03em] text-foreground/90">Find Businesses</span>{' '}
               <br className="hidden sm:block" />
-              <span className="text-gradient-primary whitespace-nowrap" style={{ filter: 'brightness(1.1)' }}>Without Websites</span>
+              <span className="font-bold text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/65 max-w-2xl lg:max-w-[34rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-5 sm:mt-7">
-              Find businesses with no website, contact them instantly, and track every follow-up — all in one place.
+            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.12rem] text-foreground/55 max-w-2xl lg:max-w-[32rem] mx-auto px-2 mt-5 sm:mt-8" style={{ lineHeight: '1.75' }}>
+              Find businesses with no website.<br className="hidden sm:block" />
+              Contact them instantly. Track every follow-up.
             </p>
             
             {/* CTA — trial primary, demo as subtle link */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-10 sm:mt-12">
+            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-10 sm:mt-14">
               <Button 
                 size="lg" 
-                className="btn-premium text-[13px] sm:text-[16px] font-semibold px-8 sm:px-14 h-[48px] sm:h-[54px] rounded-xl w-full sm:w-auto sm:min-w-[380px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                className="btn-premium text-[13px] sm:text-[15px] font-semibold px-8 sm:px-14 h-[48px] sm:h-[56px] rounded-xl w-full sm:w-auto sm:min-w-[400px] shadow-primary/15 hover:shadow-primary/25 hover:-translate-y-0.5 transition-all duration-500 ease-out" 
                 asChild
               >
                 <Link to="/auth?intent=upgrade">
@@ -629,27 +630,27 @@ const Landing = () => {
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Link>
               </Button>
-              <p className="text-[8px] sm:text-[10px] text-foreground/[0.25] font-medium mt-2.5 sm:mt-3">
+              <p className="text-[8px] sm:text-[10px] text-foreground/[0.32] font-medium mt-3">
                 No charge today · Cancel anytime
               </p>
 
               {/* Demo link — mobile */}
-              <div className="sm:hidden mt-4 text-center">
+              <div className="sm:hidden mt-5 text-center">
                 <Link 
                   to="/auth?intent=demo" 
                   onClick={() => trackLead()}
-                  className="text-[11px] text-foreground/30 hover:text-foreground/50 transition-colors duration-200"
+                  className="text-[11px] text-foreground/25 hover:text-foreground/45 hover:underline underline-offset-2 transition-all duration-200"
                 >
                   or try the free demo
                 </Link>
               </div>
 
               {/* Demo link — desktop */}
-              <div className="hidden sm:block mt-4">
+              <div className="hidden sm:block mt-5">
                 <Link 
                   to="/auth?intent=demo" 
                   onClick={() => trackLead()}
-                  className="text-[12px] text-foreground/30 hover:text-foreground/50 transition-colors duration-200"
+                  className="text-[11px] text-foreground/25 hover:text-foreground/45 hover:underline underline-offset-2 transition-all duration-200"
                 >
                   or try the free demo
                 </Link>
@@ -660,12 +661,12 @@ const Landing = () => {
             <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-10">
               <CountUpStat target={100000} suffix="+" label="Businesses" />
               <div className="text-center">
-                <div className="text-base font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-[8px] text-foreground/45 mt-1 font-medium uppercase tracking-wider">Coverage</div>
+                <div className="text-lg font-bold text-gradient-primary tracking-tight">Global</div>
+                <div className="text-[7px] text-foreground/40 mt-1 font-medium uppercase tracking-[0.12em]">Coverage</div>
               </div>
               <div className="text-center">
-                <div className="text-base font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-[8px] text-foreground/45 mt-1 font-medium uppercase tracking-wider">Searches</div>
+                <div className="text-lg font-bold text-gradient-primary tracking-tight">Unlimited</div>
+                <div className="text-[7px] text-foreground/40 mt-1 font-medium uppercase tracking-[0.12em]">Searches</div>
               </div>
             </div>
 
@@ -677,15 +678,15 @@ const Landing = () => {
             </div>
 
             {/* Desktop trust badges */}
-            <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-14">
+            <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-12">
               <CountUpStat target={100000} suffix="+" label="Businesses" />
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-xs text-foreground/45 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+                <div className="text-3xl md:text-[2rem] font-bold text-gradient-primary tracking-tight">Global</div>
+                <div className="text-[10px] text-foreground/40 mt-1.5 font-medium uppercase tracking-[0.12em]">Coverage</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-xs text-foreground/45 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+                <div className="text-3xl md:text-[2rem] font-bold text-gradient-primary tracking-tight">Unlimited</div>
+                <div className="text-[10px] text-foreground/40 mt-1.5 font-medium uppercase tracking-[0.12em]">Searches</div>
               </div>
             </div>
           </div>
