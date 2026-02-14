@@ -1,0 +1,2 @@
+ALTER TABLE public.outreach_leads DROP CONSTRAINT outreach_leads_list_type_check;
+ALTER TABLE public.outreach_leads ADD CONSTRAINT outreach_leads_list_type_check CHECK (list_type = ANY (ARRAY['no_website'::text, 'broken_website'::text, 'manual'::text]));
