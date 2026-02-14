@@ -92,48 +92,68 @@ interface LeadCardProps {
   userId: string | undefined;
 }
 
+const getInitials = (name: string) => {
+  return name.split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+};
+
+const getDueBorderColor = (nextActionDate: string | null, nextAction: NextActionType | null) => {
+  if (!nextActionDate || !nextAction || nextAction === 'none') return 'border-l-border/40';
+  const d = startOfDay(new Date(nextActionDate));
+  const today = startOfDay(new Date());
+  const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return 'border-l-red-500';
+  if (diffDays === 0) return 'border-l-amber-500';
+  if (diffDays <= 2) return 'border-l-yellow-500';
+  if (diffDays <= 7) return 'border-l-blue-500';
+  return 'border-l-border/40';
+};
+
+const getDueLabel = (nextActionDate: string | null, nextAction: NextActionType | null) => {
+  if (!nextActionDate || !nextAction || nextAction === 'none') return null;
+  const d = startOfDay(new Date(nextActionDate));
+  const today = startOfDay(new Date());
+  const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  if (diffDays < 0) return { text: `Overdue by ${Math.abs(diffDays)}d`, cls: 'text-red-500' };
+  if (diffDays === 0) return { text: 'Due today', cls: 'text-amber-500' };
+  if (diffDays === 1) return { text: 'Due tomorrow', cls: 'text-amber-400' };
+  return { text: `Due in ${diffDays}d`, cls: 'text-muted-foreground' };
+};
+
 const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
+  const [detailOpen, setDetailOpen] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const [nextAction, setNextAction] = useState<NextActionType>(lead.next_action || 'none');
   const [nextActionDate, setNextActionDate] = useState<Date | undefined>(
     lead.next_action_date ? new Date(lead.next_action_date) : undefined
   );
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(lead.business_name);
+  const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSave = async () => {
+  // Sync from prop changes
+  useEffect(() => {
+    setNotes(lead.notes || '');
+    setNextAction(lead.next_action || 'none');
+    setNextActionDate(lead.next_action_date ? new Date(lead.next_action_date) : undefined);
+    setEditedName(lead.business_name);
+  }, [lead.notes, lead.next_action, lead.next_action_date, lead.business_name]);
+
+  const handleSaveAll = async () => {
     setIsSaving(true);
     try {
+      if (editedName.trim() && editedName.trim() !== lead.business_name) {
+        await onBusinessNameChange(lead.id, editedName.trim());
+      }
       await onNotesChange(lead.id, notes);
-      await onNextActionChange(
-        lead.id,
-        nextAction,
-        nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined
-      );
+      await onNextActionChange(lead.id, nextAction, nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined);
       if (nextAction && nextAction !== 'none' && nextActionDate) {
         window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
       }
-      setIsEditing(false);
+      setDetailOpen(false);
     } finally {
       setIsSaving(false);
     }
-  };
-
-  const handleSaveName = async () => {
-    const trimmed = editedName.trim();
-    if (trimmed && trimmed !== lead.business_name) {
-      await onBusinessNameChange(lead.id, trimmed);
-    }
-    setIsEditingName(false);
-  };
-
-  const handleCancelNameEdit = () => {
-    setEditedName(lead.business_name);
-    setIsEditingName(false);
   };
 
   const handleDelete = async () => {
@@ -169,272 +189,223 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
     await onImageChange(lead.id, null);
   };
 
-  // Follow-up date styling
-  const getFollowUpStyle = () => {
-    if (!lead.next_action_date) return '';
-    const d = new Date(lead.next_action_date);
-    if (isToday(d)) return 'text-amber-500 font-medium';
-    if (isPast(startOfDay(d))) return 'text-red-500 font-medium';
-    return 'text-muted-foreground';
-  };
-
-  const getStatusBorderColor = (status: LeadStatus) => {
-    switch (status) {
-      case 'interested': return 'border-l-primary';
-      case 'wants_draft': return 'border-l-yellow-500';
-      case 'on_hold': return 'border-l-orange-500';
-      case 'reviewing_draft': return 'border-l-blue-500';
-      case 'paid_for_draft': return 'border-l-green-500';
-      case 'completed': return 'border-l-emerald-500';
-      default: return 'border-l-muted';
-    }
-  };
-
   const hasFollowUp = lead.next_action && lead.next_action !== 'none';
   const actionLabel = hasFollowUp ? NEXT_ACTION_OPTIONS.find(o => o.value === lead.next_action)?.label : null;
-
-  // Days till due helper
-  const getDueBadge = () => {
-    if (!lead.next_action_date || !lead.next_action || lead.next_action === 'none') return null;
-    const d = startOfDay(new Date(lead.next_action_date));
-    const today = startOfDay(new Date());
-    const diffMs = d.getTime() - today.getTime();
-    const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-
-    if (diffDays < 0) return { label: `${Math.abs(diffDays)}d overdue`, color: 'text-red-500 bg-red-500/10 border-red-500/30' };
-    if (diffDays === 0) return { label: 'Due today', color: 'text-amber-500 bg-amber-500/10 border-amber-500/30' };
-    if (diffDays === 1) return { label: 'Tomorrow', color: 'text-amber-400 bg-amber-400/10 border-amber-400/30' };
-    if (diffDays <= 3) return { label: `In ${diffDays}d`, color: 'text-blue-500 bg-blue-500/10 border-blue-500/30' };
-    return { label: `In ${diffDays}d`, color: 'text-muted-foreground bg-muted/30 border-border/50' };
-  };
-
-  const dueBadge = getDueBadge();
-
-  const [showDetails, setShowDetails] = useState(false);
-
-  const allStatuses = [...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses.map(s => ({ value: s.value as LeadStatus, label: s.label }))];
+  const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
+  const borderColor = getDueBorderColor(lead.next_action_date, lead.next_action);
 
   return (
-    <Card className={`border border-border/60 border-l-[3px] ${getStatusBorderColor(lead.status)} hover:border-border transition-colors shadow-sm`}>
-      <div className="p-4 sm:p-5 space-y-2.5">
-        {/* Row 1: Name + Status Badge + Menu */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1">
-            {isEditingName ? (
-              <div className="flex items-center gap-1.5">
-                <Input
-                  value={editedName}
-                  onChange={(e) => setEditedName(e.target.value)}
-                  className="h-7 text-sm font-medium"
-                  autoFocus
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSaveName();
-                    if (e.key === 'Escape') handleCancelNameEdit();
-                  }}
-                />
-                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleSaveName}>
-                  <Check className="h-3 w-3 text-primary" />
-                </Button>
-                <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={handleCancelNameEdit}>
-                  <X className="h-3 w-3 text-muted-foreground" />
-                </Button>
+    <>
+      <Card
+        className={`border border-border/50 border-l-[3px] ${borderColor} hover:border-border/80 transition-all cursor-pointer group`}
+        onClick={() => setDetailOpen(true)}
+      >
+        <div className="flex flex-col sm:flex-row sm:items-start p-3 sm:py-3 sm:px-3.5 gap-3">
+          {/* LEFT: Image / Initials */}
+          <div className="hidden sm:flex shrink-0">
+            {lead.image_url ? (
+              <div className="w-12 h-12 rounded-lg overflow-hidden bg-muted/30">
+                <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
               </div>
             ) : (
-              <button
-                onClick={() => setIsEditingName(true)}
-                className="text-left group flex items-start gap-1 min-w-0 w-full"
-              >
-                <span className="text-base sm:text-lg font-bold leading-snug break-words">{lead.business_name}</span>
-                <Pencil className="h-2.5 w-2.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-1.5" />
-              </button>
-            )}
-            {lead.category && (
-              <p className="text-xs text-muted-foreground mt-0.5">{lead.category}</p>
+              <div className="w-12 h-12 rounded-lg bg-muted/30 flex items-center justify-center text-xs font-bold text-muted-foreground/60">
+                {getInitials(lead.business_name)}
+              </div>
             )}
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <OutreachStatusBadge status={lead.status} compact />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-6 w-6">
-                  <MoreVertical className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[140px]">
-                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="text-xs" disabled={isUploadingImage}>
-                  <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
-                </DropdownMenuItem>
-                {lead.image_url && (
-                  <DropdownMenuItem onClick={handleRemoveImage} className="text-xs">
-                    <X className="h-3.5 w-3.5 mr-2" /> Remove Image
-                  </DropdownMenuItem>
+
+          {/* MIDDLE: Details + Notes */}
+          <div className="flex-1 min-w-0 space-y-1">
+            {/* Name row */}
+            <div className="flex items-center gap-2">
+              {/* Mobile image */}
+              {lead.image_url ? (
+                <div className="w-9 h-9 rounded-md overflow-hidden bg-muted/30 sm:hidden shrink-0">
+                  <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-9 h-9 rounded-md bg-muted/30 flex items-center justify-center text-[10px] font-bold text-muted-foreground/60 sm:hidden shrink-0">
+                  {getInitials(lead.business_name)}
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-bold leading-tight truncate">{lead.business_name}</h3>
+                {lead.category && (
+                  <p className="text-[11px] text-muted-foreground/70 truncate">{lead.category}</p>
                 )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
-                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-            </DropdownMenu>
+              </div>
+              {/* Kebab menu */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                  <button className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors opacity-0 group-hover:opacity-100 shrink-0">
+                    <MoreVertical className="h-3.5 w-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[140px]">
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }} className="text-xs" disabled={isUploadingImage}>
+                    <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
+                  </DropdownMenuItem>
+                  {lead.image_url && (
+                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }} className="text-xs">
+                      <X className="h-3.5 w-3.5 mr-2" /> Remove Image
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleDelete(); }} className="text-xs text-destructive focus:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} onClick={(e) => e.stopPropagation()} />
+            </div>
+
+            {/* Meta row: status pill + phone + map */}
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
+              <OutreachStatusBadge status={lead.status} compact />
+              {lead.phone && (
+                <span className="flex items-center gap-0.5 font-mono">
+                  <Phone className="h-3 w-3" />{lead.phone}
+                </span>
+              )}
+              {lead.google_maps_url && (
+                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 hover:text-foreground transition-colors" onClick={(e) => e.stopPropagation()}>
+                  <MapPin className="h-3 w-3" /><ExternalLink className="h-2.5 w-2.5" />
+                </a>
+              )}
+            </div>
+
+            {/* Notes preview — visible, 2 lines clamped */}
+            {lead.notes && (
+              <p className="text-xs text-foreground/70 leading-relaxed line-clamp-2">{lead.notes}</p>
+            )}
+          </div>
+
+          {/* RIGHT: Next Action + Due */}
+          <div className="sm:w-28 shrink-0 flex sm:flex-col items-start sm:items-end gap-1 sm:gap-0.5 sm:text-right sm:pt-0.5">
+            {actionLabel ? (
+              <>
+                <span className="text-[11px] font-medium text-foreground/80">{actionLabel}</span>
+                {lead.next_action_date && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {format(new Date(lead.next_action_date), 'MMM d')}
+                  </span>
+                )}
+                {dueLabel && (
+                  <span className={`text-[10px] font-medium ${dueLabel.cls}`}>
+                    {dueLabel.text}
+                  </span>
+                )}
+              </>
+            ) : (
+              <span className="text-[10px] text-muted-foreground/40">No action set</span>
+            )}
           </div>
         </div>
+      </Card>
 
-        {/* Image — medium sized, inline */}
-        {lead.image_url && (
-          <div className="relative w-28 h-28 rounded-md overflow-hidden bg-muted/30">
-            <img src={lead.image_url} alt={lead.business_name} className="w-full h-full object-cover" />
-            <button
-              onClick={(e) => { e.stopPropagation(); handleRemoveImage(); }}
-              className="absolute top-1 right-1 h-5 w-5 rounded-full bg-background/80 backdrop-blur-sm flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors"
-            >
-              <X className="h-2.5 w-2.5" />
-            </button>
-          </div>
-        )}
-
-        {/* Row 2: Phone + Maps link */}
-        <div className="flex items-center gap-3 text-sm text-muted-foreground flex-wrap">
-          {lead.phone && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex items-center gap-1.5 hover:text-foreground transition-colors font-mono text-xs">
-                  <Phone className="h-3.5 w-3.5" />{lead.phone}
+      {/* Detail / Edit Dialog */}
+      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="text-base">Edit Lead</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {/* Image */}
+            {lead.image_url && (
+              <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-muted/30">
+                <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
+                <button onClick={handleRemoveImage} className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-background/80 flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors">
+                  <X className="h-2.5 w-2.5" />
                 </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-[140px]">
-                <DropdownMenuItem asChild><a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer text-xs"><PhoneCall className="h-3.5 w-3.5" /> Call</a></DropdownMenuItem>
-                <DropdownMenuItem asChild><a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer text-xs"><Phone className="h-3.5 w-3.5 text-green-500" /> WhatsApp Call</a></DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild><a href={`sms:${lead.phone}`} className="flex items-center gap-2 cursor-pointer text-xs"><MessageCircle className="h-3.5 w-3.5 text-blue-500" /> SMS</a></DropdownMenuItem>
-                <DropdownMenuItem asChild><a href={`https://wa.me/${lead.phone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer text-xs"><MessageSquare className="h-3.5 w-3.5 text-green-500" /> WhatsApp</a></DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-          {lead.google_maps_url && (
-            <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-foreground transition-colors text-xs">
-              <MapPin className="h-3.5 w-3.5" /> View on Maps <ExternalLink className="h-2.5 w-2.5" />
-            </a>
-          )}
-        </div>
+              </div>
+            )}
+            {!lead.image_url && (
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()} disabled={isUploadingImage}>
+                <Pencil className="h-3 w-3 mr-1.5" /> Add Image
+              </Button>
+            )}
 
-        {/* Row 3: Status dropdown + Next Action + Date */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <div onClick={(e) => e.stopPropagation()}>
-            <Select value={lead.status} onValueChange={(v) => {
-              if (v === '__add_custom__') {
-                onAddCustomStatus();
-                return;
-              }
-              const isDefaultStatus = DEFAULT_POTENTIAL_WORK_STATUSES.some(s => s.value === v);
-              onStatusChange(lead.id, (isDefaultStatus ? v : v) as LeadStatus);
-            }}>
-              <SelectTrigger className="h-8 text-xs border-border/50 bg-muted/20 px-2.5 gap-1 w-auto">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-                {customStatuses.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-                <SelectItem value="__add_custom__" className="text-primary">+ Add Custom Status</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+            {/* Name */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Business Name</label>
+              <Input value={editedName} onChange={(e) => setEditedName(e.target.value)} className="h-8 text-sm" />
+            </div>
 
-          {isEditing ? (
-            <>
-              <Select value={nextAction} onValueChange={(v) => setNextAction(v as NextActionType)}>
-                <SelectTrigger className="w-auto h-8 text-xs border-border/50 bg-muted/20 px-2.5 gap-1">
-                  <CalendarIcon className="h-3 w-3 text-muted-foreground shrink-0" />
+            {/* Status */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Status</label>
+              <Select value={lead.status} onValueChange={(v) => {
+                if (v === '__add_custom__') { onAddCustomStatus(); return; }
+                onStatusChange(lead.id, v as LeadStatus);
+              }}>
+                <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {NEXT_ACTION_OPTIONS.map((opt) => (
+                  {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                   ))}
+                  {customStatuses.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                  <SelectItem value="__add_custom__" className="text-primary">+ Add Custom Status</SelectItem>
                 </SelectContent>
               </Select>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className={`h-8 text-xs px-2.5 border-border/50`}>
-                    <CalendarIcon className="mr-1 h-3 w-3" />
-                    {nextActionDate ? format(nextActionDate, 'MMM d') : 'Set date'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={nextActionDate} onSelect={setNextActionDate} initialFocus />
-                </PopoverContent>
-              </Popover>
-            </>
-          ) : hasFollowUp ? (
-            <button onClick={() => setIsEditing(true)} className="flex items-center gap-1.5 text-xs group/action">
-              <CalendarIcon className={`h-3.5 w-3.5 ${getDueBadge()?.color.split(' ')[0] || 'text-primary'}`} />
-              <span className="font-medium text-primary">{actionLabel}</span>
-              {lead.next_action_date && (
-                <span className={`${getFollowUpStyle()}`}>
-                  {format(new Date(lead.next_action_date), 'MMM d')}
-                </span>
-              )}
-            </button>
-          ) : null}
+            </div>
 
-          {dueBadge && !isEditing && (
-            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${dueBadge.color}`}>
-              {dueBadge.label}
-            </span>
-          )}
-        </div>
+            {/* Next Action + Date */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Next Action</label>
+                <Select value={nextAction} onValueChange={(v) => setNextAction(v as NextActionType)}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {NEXT_ACTION_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Due Date</label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="h-8 text-xs w-full justify-start">
+                      <CalendarIcon className="mr-1.5 h-3 w-3" />
+                      {nextActionDate ? format(nextActionDate, 'MMM d, yyyy') : 'Pick date'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={nextActionDate} onSelect={setNextActionDate} initialFocus />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
 
-        {/* Notes display (always visible when present) */}
-        {!isEditing && lead.notes && (
-          <p className="text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap">{lead.notes}</p>
-        )}
-
-        {/* Edit mode: notes textarea + save */}
-        {isEditing && (
-          <div className="space-y-2 pt-1">
-            <Textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Notes..."
-              rows={2}
-              className="resize-none text-sm min-h-0 bg-muted/10 border-border/30"
-              autoFocus
-            />
-            <div className="flex items-center gap-1.5">
-              <Button size="sm" onClick={handleSave} disabled={isSaving} className="h-7 text-xs gap-1 px-3">
-                <Save className="h-3 w-3" />
-                {isSaving ? '...' : 'Save'}
-              </Button>
-              <Button size="sm" variant="ghost" onClick={() => {
-                setNotes(lead.notes || '');
-                setNextAction(lead.next_action || 'none');
-                setNextActionDate(lead.next_action_date ? new Date(lead.next_action_date) : undefined);
-                setIsEditing(false);
-              }} className="h-7 text-xs px-2">
-                Cancel
-              </Button>
+            {/* Notes */}
+            <div>
+              <label className="text-xs font-medium text-muted-foreground mb-1 block">Notes</label>
+              <Textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Add notes about this lead..."
+                rows={3}
+                className="resize-none text-sm bg-muted/10 border-border/30"
+              />
             </div>
           </div>
-        )}
-
-        {/* Show Details & Notes — collapsible for edit access */}
-        {!isEditing && (
-          <button
-            onClick={() => setIsEditing(true)}
-            className="flex items-center justify-between w-full pt-2 border-t border-border/30 text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <span className="flex items-center gap-1.5">
-              <StickyNote className="h-3.5 w-3.5" />
-              {lead.notes || hasFollowUp ? 'Edit Details & Notes' : 'Show Details & Notes'}
-            </span>
-            <ChevronDown className="h-3.5 w-3.5" />
-          </button>
-        )}
-      </div>
-    </Card>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="ghost" size="sm" onClick={() => setDetailOpen(false)} className="h-8 text-xs">Cancel</Button>
+            <Button size="sm" onClick={handleSaveAll} disabled={isSaving} className="h-8 text-xs gap-1">
+              <Save className="h-3 w-3" />
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
@@ -618,7 +589,7 @@ const PotentialWorkPage = () => {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 md:gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 lg:gap-2.5">
           {potentialWorkLeads.map((lead) => (
               <LeadCard
                 key={lead.id}
