@@ -6,6 +6,7 @@ import { MobileBottomNav } from '@/components/MobileBottomNav';
 import { CheckoutActivationOverlay } from '@/components/CheckoutActivationOverlay';
 import { DemoChecklistProvider } from '@/contexts/DemoChecklistContext';
 import { DemoChecklistPanel } from '@/components/DemoChecklistPanel';
+import { PaymentFailureDialog } from '@/components/PaymentFailureDialog';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
 import { usePersistedScroll } from '@/hooks/usePersistedScroll';
@@ -69,6 +70,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           {/* Mobile bottom navigation */}
           <MobileBottomNav />
           <CheckoutActivationOverlay />
+          <PaymentFailureDialog />
           <DemoChecklistPanel />
         </div>
       </SidebarProvider>

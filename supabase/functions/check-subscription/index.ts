@@ -101,43 +101,71 @@
     let subscriptionEnd: string | null = null;
       let subscriptionStatus: string | null = null;
       let trialEnd: string | null = null;
- 
-      if (hasActiveSub && validSubscription) {
-        // Safely handle the timestamp conversion
-        const periodEnd = validSubscription.current_period_end;
-        if (periodEnd && typeof periodEnd === 'number') {
-          subscriptionEnd = new Date(periodEnd * 1000).toISOString();
-        }
-        subscriptionStatus = validSubscription.status;
 
-        // Extract trial_end from Stripe (source of truth)
-        const stripeTrialEnd = validSubscription.trial_end;
-        if (stripeTrialEnd && typeof stripeTrialEnd === 'number') {
-          trialEnd = new Date(stripeTrialEnd * 1000).toISOString();
+      // Check local DB for payment failure count
+      let paymentFailureCount = 0;
+      let lastPaymentFailedAt: string | null = null;
+      
+      const { data: localSub } = await supabaseClient
+        .from('subscriptions')
+        .select('payment_failure_count, last_payment_failed_at, status')
+        .eq('user_id', user.id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (localSub) {
+        paymentFailureCount = localSub.payment_failure_count || 0;
+        lastPaymentFailedAt = localSub.last_payment_failed_at || null;
+        
+        // If local status is 'paused', override subscription status
+        if (localSub.status === 'paused') {
+          subscriptionStatus = 'paused';
         }
-       
-        const priceProduct = validSubscription.items.data[0]?.price?.product;
-        if (priceProduct) {
-          productId = typeof priceProduct === 'string' ? priceProduct : priceProduct.id;
-        }
-       
-        logStep("Active subscription found", { 
-          subscriptionId: validSubscription.id, 
-          endDate: subscriptionEnd,
-          trialEnd,
-          productId,
-          status: subscriptionStatus
-        });
-      } else {
-        logStep("No active subscription found");
       }
+
+      if (hasActiveSub && validSubscription) {
+         // Safely handle the timestamp conversion
+         const periodEnd = validSubscription.current_period_end;
+         if (periodEnd && typeof periodEnd === 'number') {
+           subscriptionEnd = new Date(periodEnd * 1000).toISOString();
+         }
+         // Only override status if not already paused from local DB
+         if (subscriptionStatus !== 'paused') {
+           subscriptionStatus = validSubscription.status;
+         }
+
+         // Extract trial_end from Stripe (source of truth)
+         const stripeTrialEnd = validSubscription.trial_end;
+         if (stripeTrialEnd && typeof stripeTrialEnd === 'number') {
+           trialEnd = new Date(stripeTrialEnd * 1000).toISOString();
+         }
+        
+         const priceProduct = validSubscription.items.data[0]?.price?.product;
+         if (priceProduct) {
+           productId = typeof priceProduct === 'string' ? priceProduct : priceProduct.id;
+         }
+        
+         logStep("Active subscription found", { 
+           subscriptionId: validSubscription.id, 
+           endDate: subscriptionEnd,
+           trialEnd,
+           productId,
+           status: subscriptionStatus,
+           paymentFailureCount
+         });
+       } else {
+         logStep("No active subscription found");
+       }
  
     return new Response(JSON.stringify({
-       subscribed: hasActiveSub,
+       subscribed: hasActiveSub && subscriptionStatus !== 'paused',
        product_id: productId,
         subscription_end: subscriptionEnd,
         subscription_status: subscriptionStatus,
-        trial_end: trialEnd
+        trial_end: trialEnd,
+        payment_failure_count: paymentFailureCount,
+        last_payment_failed_at: lastPaymentFailedAt
      }), {
        headers: { ...corsHeaders, "Content-Type": "application/json" },
        status: 200,

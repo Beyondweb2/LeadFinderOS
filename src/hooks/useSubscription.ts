@@ -13,6 +13,9 @@ interface SubscriptionState {
   isAdmin: boolean;
   isPaidSubscriber: boolean;  // true only for 'active' or 'past_due' (not trialing)
   isStripeTrialing: boolean;  // true when status is 'trialing'
+  paymentFailureCount: number;
+  lastPaymentFailedAt: string | null;
+  isPaymentPaused: boolean;   // true when 2+ failures — blocks access
 }
 
 export function useSubscription() {
@@ -28,6 +31,9 @@ export function useSubscription() {
     isAdmin: false,
     isPaidSubscriber: false,
     isStripeTrialing: false,
+    paymentFailureCount: 0,
+    lastPaymentFailedAt: null,
+    isPaymentPaused: false,
   });
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   
@@ -52,7 +58,7 @@ export function useSubscription() {
     const accessToken = accessTokenRef.current;
     
     if (!accessToken || !userId) {
-      setState(prev => ({ ...prev, isLoading: false, subscribed: false, status: null, trialEnd: null, isPaidSubscriber: false, isStripeTrialing: false }));
+      setState(prev => ({ ...prev, isLoading: false, subscribed: false, status: null, trialEnd: null, isPaidSubscriber: false, isStripeTrialing: false, paymentFailureCount: 0, lastPaymentFailedAt: null, isPaymentPaused: false }));
       return;
     }
 
@@ -73,6 +79,9 @@ export function useSubscription() {
           isAdmin: true,
           isPaidSubscriber: true,
           isStripeTrialing: false,
+          paymentFailureCount: 0,
+          lastPaymentFailedAt: null,
+          isPaymentPaused: false,
         });
         return;
       }
@@ -95,18 +104,21 @@ export function useSubscription() {
           // so the trial card shows immediately without waiting for Stripe API
           const localTrialEnd = isTrialing ? localSub.current_period_end : null;
           
-          setState({
-            subscribed: isValid,
-            productId: null,
-            subscriptionEnd: localSub.current_period_end,
-            trialEnd: localTrialEnd,
-            isLoading: isValid, // Keep loading if valid - Stripe check will finalize
-            error: null,
-            status: localSub.status,
-            isAdmin: false,
-            isPaidSubscriber: isPaid,
-            isStripeTrialing: isTrialing,
-          });
+           setState({
+             subscribed: isValid,
+             productId: null,
+             subscriptionEnd: localSub.current_period_end,
+             trialEnd: localTrialEnd,
+             isLoading: isValid,
+             error: null,
+             status: localSub.status,
+             isAdmin: false,
+             isPaidSubscriber: isPaid,
+             isStripeTrialing: isTrialing,
+             paymentFailureCount: 0,
+             lastPaymentFailedAt: null,
+             isPaymentPaused: false,
+           });
           
           if (!isValid) return;
         }
@@ -118,18 +130,21 @@ export function useSubscription() {
       
       if (!freshToken) {
         // Session expired - user needs to re-authenticate
-          setState({
-            subscribed: false,
-            productId: null,
-            subscriptionEnd: null,
-            trialEnd: null,
-            isLoading: false,
-            error: null,
-            status: null,
-            isAdmin: false,
-            isPaidSubscriber: false,
-            isStripeTrialing: false,
-          });
+           setState({
+             subscribed: false,
+             productId: null,
+             subscriptionEnd: null,
+             trialEnd: null,
+             isLoading: false,
+             error: null,
+             status: null,
+             isAdmin: false,
+             isPaidSubscriber: false,
+             isStripeTrialing: false,
+             paymentFailureCount: 0,
+             lastPaymentFailedAt: null,
+             isPaymentPaused: false,
+           });
           return;
       }
       
@@ -147,16 +162,19 @@ export function useSubscription() {
         // If auth error, treat as not subscribed rather than showing error
         if (error.message?.includes('Auth') || error.message?.includes('authentication')) {
         setState({
-          subscribed: false,
-          productId: null,
-          subscriptionEnd: null,
-          trialEnd: null,
-          isLoading: false,
-          error: null,
-          status: null,
-          isAdmin: false,
-          isPaidSubscriber: false,
-          isStripeTrialing: false,
+           subscribed: false,
+           productId: null,
+           subscriptionEnd: null,
+           trialEnd: null,
+           isLoading: false,
+           error: null,
+           status: null,
+           isAdmin: false,
+           isPaidSubscriber: false,
+           isStripeTrialing: false,
+           paymentFailureCount: 0,
+           lastPaymentFailedAt: null,
+           isPaymentPaused: false,
         });
           return;
         }
@@ -167,18 +185,24 @@ export function useSubscription() {
       const isPaid = ['active', 'past_due'].includes(subStatus);
       const isTrialing = subStatus === 'trialing';
       
-      setState({
-        subscribed: data.subscribed ?? false,
-        productId: data.product_id ?? null,
-        subscriptionEnd: data.subscription_end ?? null,
-        trialEnd: data.trial_end ?? null,
-        isLoading: false,
-        error: null,
-        status: subStatus,
-        isAdmin: false,
-        isPaidSubscriber: isPaid,
-        isStripeTrialing: isTrialing,
-      });
+       const failureCount = data.payment_failure_count ?? 0;
+       const isPaused = subStatus === 'paused' || failureCount >= 2;
+       
+       setState({
+         subscribed: data.subscribed ?? false,
+         productId: data.product_id ?? null,
+         subscriptionEnd: data.subscription_end ?? null,
+         trialEnd: data.trial_end ?? null,
+         isLoading: false,
+         error: null,
+         status: subStatus,
+         isAdmin: false,
+         isPaidSubscriber: isPaid && !isPaused,
+         isStripeTrialing: isTrialing,
+         paymentFailureCount: failureCount,
+         lastPaymentFailedAt: data.last_payment_failed_at ?? null,
+         isPaymentPaused: isPaused,
+       });
     } catch (err) {
       console.error('Subscription check failed:', err);
       // Preserve existing state (e.g. local DB trial data) — just stop loading
@@ -202,18 +226,21 @@ export function useSubscription() {
       if (newUserId) {
         checkSubscription();
       } else {
-        setState({
-          subscribed: false,
-          productId: null,
-          subscriptionEnd: null,
-          trialEnd: null,
-          isLoading: false,
-          error: null,
-          status: null,
-          isAdmin: false,
-          isPaidSubscriber: false,
-          isStripeTrialing: false,
-        });
+         setState({
+           subscribed: false,
+           productId: null,
+           subscriptionEnd: null,
+           trialEnd: null,
+           isLoading: false,
+           error: null,
+           status: null,
+           isAdmin: false,
+           isPaidSubscriber: false,
+           isStripeTrialing: false,
+           paymentFailureCount: 0,
+           lastPaymentFailedAt: null,
+           isPaymentPaused: false,
+         });
       }
     } else if (newAccessToken !== accessTokenRef.current) {
       // Token refreshed but same user - just update ref, no re-fetch needed
