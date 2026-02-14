@@ -577,7 +577,7 @@ const Landing = () => {
             >
               <Link to="/auth?intent=upgrade" onClick={() => trackStartTrial()}>
                 <span className="hidden sm:inline">Start Free Trial</span>
-                <span className="sm:hidden">Demo</span>
+                <span className="sm:hidden">Free Trial</span>
               </Link>
             </Button>
           </div>
@@ -630,7 +630,7 @@ const Landing = () => {
                 className="hidden sm:inline-flex text-sm font-medium px-5 py-3 h-auto text-muted-foreground hover:text-foreground transition-colors"
                 asChild
               >
-                <Link to="/auth">Sign In</Link>
+                <Link to="/auth?intent=demo" onClick={() => trackLead()}>Try Free Demo</Link>
               </Button>
             </div>
 
@@ -1056,12 +1056,6 @@ const Landing = () => {
                   <p className="text-[10px] sm:text-xs text-muted-foreground/50 text-center">
                     No charge today · Cancel anytime before renewal
                   </p>
-                  <Button variant="ghost" size="sm" className="w-full text-muted-foreground/70 hover:text-foreground text-xs sm:text-sm mt-1" asChild>
-                    <Link to="/auth?intent=demo">
-                      Or try a free demo to see how it works
-                      <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                    </Link>
-                  </Button>
                 </CardFooter>
               </Card>
             </div>
@@ -1169,13 +1163,16 @@ const Landing = () => {
         </div>
       )}
 
-      {/* Desktop floating demo button — bottom-right, subtle bounce */}
-      {!isMobile && hasScrolled && (
-        <div className="fixed bottom-6 right-6 z-50 animate-fade-in">
+      {/* Desktop floating demo button — bottom-right, always visible, green */}
+      {!isMobile && (
+        <div className="fixed bottom-6 right-6 z-50">
           <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full px-5 py-2.5 h-auto text-xs font-medium border-border/40 bg-background/80 backdrop-blur-sm hover:bg-background shadow-lg animate-subtle-bounce"
+            size="lg"
+            className="rounded-full px-8 py-4 h-auto text-base font-bold text-black animate-subtle-bounce shadow-xl"
+            style={{
+              background: 'linear-gradient(135deg, hsl(142 80% 50%), hsl(142 80% 42%))',
+              boxShadow: '0 4px 20px hsl(142 80% 50% / 0.4), 0 0 30px hsl(142 80% 50% / 0.15)',
+            }}
             asChild
           >
             <Link to="/auth?intent=demo" onClick={() => trackLead()}>
