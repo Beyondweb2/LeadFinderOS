@@ -633,6 +633,13 @@ const Landing = () => {
                 No charge today · Cancel anytime before renewal
               </p>
 
+              {/* Feature bullets */}
+              <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-2.5 sm:gap-5 mt-5 sm:mt-6 text-[12px] sm:text-[13px] text-foreground/50 font-medium">
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
+              </div>
+
               <Button 
                 variant="ghost"
                 className="mt-5 sm:mt-6 text-[12px] sm:text-[13px] font-normal px-5 sm:px-6 h-[34px] sm:h-[38px] rounded-lg bg-transparent text-foreground/60 hover:text-foreground transition-all duration-300"
@@ -654,13 +661,6 @@ const Landing = () => {
               <p className="text-[9px] sm:text-[10px] text-foreground/[0.28] font-normal text-center mt-2">
                 No card required · Try 1 real search instantly
               </p>
-            </div>
-
-            {/* Feature bullets */}
-            <div className="flex flex-col sm:flex-row flex-wrap items-center justify-center gap-3 sm:gap-5 mt-8 sm:mt-10 text-[12px] sm:text-[13px] text-foreground/50 font-medium">
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Find businesses that need a website</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(var(--primary))' }} strokeWidth={2.5} />Track every business you contact</span>
             </div>
           </div>
 
