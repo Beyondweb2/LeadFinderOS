@@ -13,13 +13,13 @@ const THEMES: Record<string, { mode: 'dark' | 'light'; background: string; card:
   navy: { mode: 'dark', background: '230 35% 6%', card: '230 35% 9%', popover: '230 35% 11%', secondary: '230 30% 14%', muted: '230 35% 11%', foreground: '220 30% 98%', mutedForeground: '230 15% 55%', secondaryForeground: '220 25% 90%', border: '230 25% 18%', input: '230 35% 12%' },
   forest: { mode: 'dark', background: '160 25% 5%', card: '160 25% 8%', popover: '160 25% 10%', secondary: '160 20% 13%', muted: '160 25% 10%', foreground: '150 20% 98%', mutedForeground: '160 15% 50%', secondaryForeground: '150 15% 90%', border: '160 20% 16%', input: '160 25% 11%' },
   plum: { mode: 'dark', background: '280 25% 6%', card: '280 25% 9%', popover: '280 25% 11%', secondary: '280 20% 14%', muted: '280 25% 11%', foreground: '270 20% 98%', mutedForeground: '280 15% 50%', secondaryForeground: '270 15% 90%', border: '280 20% 18%', input: '280 25% 12%' },
-  // Light themes – high-contrast, professional SaaS
-  blush: { mode: 'light', background: '350 20% 96%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '350 16% 94%', muted: '350 12% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '350 14% 84%', input: '350 16% 92%' },
-  peach: { mode: 'light', background: '30 25% 96%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '30 18% 94%', muted: '30 14% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '30 16% 84%', input: '30 18% 92%' },
-  'baby-blue': { mode: 'light', background: '214 18% 97%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '210 14% 94%', muted: '210 11% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '220 13% 84%', input: '210 16% 92%' },
-  mint: { mode: 'light', background: '160 18% 96%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '160 14% 94%', muted: '160 10% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '160 12% 84%', input: '160 14% 92%' },
-  lavender: { mode: 'light', background: '265 18% 96%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '265 14% 94%', muted: '265 10% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '265 12% 84%', input: '265 14% 92%' },
-  cloud: { mode: 'light', background: '214 18% 97%', card: '0 0% 100%', popover: '0 0% 100%', secondary: '220 12% 94%', muted: '220 9% 96%', foreground: '224 71% 4%', mutedForeground: '220 9% 46%', secondaryForeground: '218 21% 28%', border: '220 13% 84%', input: '220 14% 92%' },
+  // Light themes – layered surfaces, premium SaaS depth
+  blush: { mode: 'light', background: '350 14% 95%', card: '350 10% 99%', popover: '350 10% 99%', secondary: '350 12% 91%', muted: '350 8% 93%', foreground: '220 40% 10%', mutedForeground: '220 10% 42%', secondaryForeground: '220 20% 25%', border: '350 10% 85%', input: '350 12% 90%' },
+  peach: { mode: 'light', background: '30 18% 94%', card: '30 14% 98%', popover: '30 14% 98%', secondary: '30 14% 90%', muted: '30 10% 92%', foreground: '220 40% 10%', mutedForeground: '220 10% 42%', secondaryForeground: '220 20% 25%', border: '30 12% 84%', input: '30 14% 89%' },
+  'baby-blue': { mode: 'light', background: '216 18% 94%', card: '216 14% 98%', popover: '216 14% 98%', secondary: '216 14% 90%', muted: '216 10% 92%', foreground: '220 40% 10%', mutedForeground: '220 10% 42%', secondaryForeground: '220 20% 25%', border: '216 12% 84%', input: '216 14% 89%' },
+  mint: { mode: 'light', background: '160 14% 94%', card: '160 10% 98%', popover: '160 10% 98%', secondary: '160 12% 90%', muted: '160 8% 92%', foreground: '220 40% 10%', mutedForeground: '220 10% 42%', secondaryForeground: '220 20% 25%', border: '160 10% 84%', input: '160 12% 89%' },
+  lavender: { mode: 'light', background: '265 14% 94%', card: '265 10% 98%', popover: '265 10% 98%', secondary: '265 12% 90%', muted: '265 8% 92%', foreground: '220 40% 10%', mutedForeground: '220 10% 42%', secondaryForeground: '220 20% 25%', border: '265 10% 84%', input: '265 12% 89%' },
+  cloud: { mode: 'light', background: '220 16% 94%', card: '220 12% 98%', popover: '220 12% 98%', secondary: '220 12% 90%', muted: '220 8% 92%', foreground: '220 40% 10%', mutedForeground: '220 10% 42%', secondaryForeground: '220 20% 25%', border: '220 10% 84%', input: '220 12% 89%' },
 };
 
 function parseHSL(hsl: string): { h: number; s: number; l: number } {
@@ -98,12 +98,12 @@ function applyThemeToDocument(themeId: string, accentHSL: string) {
   root.style.setProperty('--shadow-glow', 'none');
   root.style.setProperty('--shadow-glow-lg', 'none');
   
-  // Shadows – professional depth for light, minimal for dark
+  // Shadows – layered depth for light, minimal for dark
   if (isLight) {
-    root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.06), 0 1px 3px hsl(0 0% 0% / 0.1)');
-    root.style.setProperty('--shadow-md', '0 2px 4px hsl(0 0% 0% / 0.04), 0 4px 12px hsl(0 0% 0% / 0.08)');
-    root.style.setProperty('--shadow-lg', '0 4px 8px hsl(0 0% 0% / 0.04), 0 12px 32px hsl(0 0% 0% / 0.12)');
-    root.style.setProperty('--shadow-card', '0 2px 8px hsl(0 0% 0% / 0.05)');
+    root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.05), 0 1px 3px hsl(0 0% 0% / 0.08)');
+    root.style.setProperty('--shadow-md', '0 1px 2px hsl(0 0% 0% / 0.04), 0 4px 16px hsl(0 0% 0% / 0.06)');
+    root.style.setProperty('--shadow-lg', '0 2px 4px hsl(0 0% 0% / 0.03), 0 12px 40px hsl(0 0% 0% / 0.08)');
+    root.style.setProperty('--shadow-card', '0 1px 3px hsl(0 0% 0% / 0.04), 0 4px 12px hsl(0 0% 0% / 0.03)');
   } else {
     root.style.setProperty('--shadow-sm', '0 1px 2px hsl(0 0% 0% / 0.4)');
     root.style.setProperty('--shadow-md', '0 4px 12px hsl(0 0% 0% / 0.5)');
