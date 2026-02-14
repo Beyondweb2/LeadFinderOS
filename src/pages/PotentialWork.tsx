@@ -301,18 +301,18 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
           {/* Row 2: Status + phone + map — compact inline */}
           <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
             <div onClick={(e) => e.stopPropagation()}>
-              <Select value={lead.status} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}>
+              <Select value={lead.status} onValueChange={(v) => {
+                // Custom statuses aren't valid DB enum values — map to 'on_hold'
+                const isDefaultStatus = DEFAULT_POTENTIAL_WORK_STATUSES.some(s => s.value === v);
+                onStatusChange(lead.id, (isDefaultStatus ? v : 'on_hold') as LeadStatus);
+              }}>
                 <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
                   <OutreachStatusBadge status={lead.status} compact />
                 </SelectTrigger>
                 <SelectContent>
-                  {[...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses].map((opt) => (
+                  {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                   ))}
-                  <button
-                    className="relative flex w-full cursor-pointer select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-xs text-muted-foreground hover:bg-accent hover:text-accent-foreground outline-none"
-                    onClick={(e) => { e.stopPropagation(); onAddCustomStatus(); }}
-                  >+ Add custom status</button>
                 </SelectContent>
               </Select>
             </div>
