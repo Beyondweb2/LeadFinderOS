@@ -589,7 +589,7 @@ const Landing = () => {
         {/* Subtle radial glow behind hero center — desktop only */}
         <div 
           className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[800px] pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.10), transparent 70%)' }}
+          style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.06), transparent 70%)' }}
         />
         <div className="container mx-auto text-center lg:max-w-[1140px]">
           {/* Mobile: Video at top instead of logo */}
