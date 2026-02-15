@@ -509,6 +509,7 @@ const PotentialWorkPage = () => {
   const { user } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [metricFilter, setMetricFilter] = useState<'overdue' | 'today' | 'upcoming' | 'no_action' | null>(null);
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
   const [customStatuses, setCustomStatuses] = useState<{ value: string; label: string }[]>([]);
   const [showCustomStatusDialog, setShowCustomStatusDialog] = useState(false);
@@ -563,6 +564,19 @@ const PotentialWorkPage = () => {
           lead.phone?.toLowerCase().includes(query)
       );
     }
+
+    // Apply metric filter
+    if (metricFilter) {
+      result = result.filter(l => {
+        if (!l.next_action_date || !l.next_action || l.next_action === 'none') {
+          return metricFilter === 'no_action';
+        }
+        const d = new Date(l.next_action_date);
+        if (isPast(startOfDay(d)) && !isToday(d)) return metricFilter === 'overdue';
+        if (isToday(d)) return metricFilter === 'today';
+        return metricFilter === 'upcoming';
+      });
+    }
     
     result.sort((a, b) => {
       const dateA = a.next_action_date ? new Date(a.next_action_date).getTime() : Infinity;
@@ -571,7 +585,7 @@ const PotentialWorkPage = () => {
     });
     
     return result;
-  }, [leads, archivedLeads, searchQuery]);
+  }, [leads, archivedLeads, searchQuery, metricFilter]);
 
   if (isLoading) {
     return (
@@ -633,34 +647,34 @@ const PotentialWorkPage = () => {
 
         return (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${overdueCount > 0 ? 'border-red-500/30 bg-red-500/5' : 'border-border/50 bg-muted/20'}`}>
+            <button onClick={() => setMetricFilter(f => f === 'overdue' ? null : 'overdue')} className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-all text-left ${metricFilter === 'overdue' ? 'ring-2 ring-red-500/50 border-red-500/50 bg-red-500/10' : overdueCount > 0 ? 'border-red-500/30 bg-red-500/5' : 'border-border/50 bg-muted/20'}`}>
               <AlertTriangle className={`h-4 w-4 shrink-0 ${overdueCount > 0 ? 'text-red-500' : 'text-muted-foreground/50'}`} />
               <div>
                 <p className={`text-lg sm:text-xl font-bold leading-none ${overdueCount > 0 ? 'text-red-500' : 'text-muted-foreground/50'}`}>{overdueCount}</p>
                 <p className="text-[10px] sm:text-[11px] text-muted-foreground">Overdue</p>
               </div>
-            </div>
-            <div className={`flex items-center gap-2 rounded-lg border px-3 py-2 ${todayCount > 0 ? 'border-amber-500/30 bg-amber-500/5' : 'border-border/50 bg-muted/20'}`}>
+            </button>
+            <button onClick={() => setMetricFilter(f => f === 'today' ? null : 'today')} className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-all text-left ${metricFilter === 'today' ? 'ring-2 ring-amber-500/50 border-amber-500/50 bg-amber-500/10' : todayCount > 0 ? 'border-amber-500/30 bg-amber-500/5' : 'border-border/50 bg-muted/20'}`}>
               <Clock className={`h-4 w-4 shrink-0 ${todayCount > 0 ? 'text-amber-500' : 'text-muted-foreground/50'}`} />
               <div>
                 <p className={`text-lg sm:text-xl font-bold leading-none ${todayCount > 0 ? 'text-amber-500' : 'text-muted-foreground/50'}`}>{todayCount}</p>
                 <p className="text-[10px] sm:text-[11px] text-muted-foreground">Due Today</p>
               </div>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+            </button>
+            <button onClick={() => setMetricFilter(f => f === 'upcoming' ? null : 'upcoming')} className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-all text-left ${metricFilter === 'upcoming' ? 'ring-2 ring-primary/50 border-primary/50 bg-primary/10' : 'border-border/50 bg-muted/20'}`}>
               <CalendarCheck className="h-4 w-4 shrink-0 text-primary/60" />
               <div>
                 <p className="text-lg sm:text-xl font-bold leading-none text-foreground/80">{upcomingCount}</p>
                 <p className="text-[10px] sm:text-[11px] text-muted-foreground">Upcoming</p>
               </div>
-            </div>
-            <div className="flex items-center gap-2 rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
+            </button>
+            <button onClick={() => setMetricFilter(f => f === 'no_action' ? null : 'no_action')} className={`flex items-center gap-2 rounded-lg border px-3 py-2 transition-all text-left ${metricFilter === 'no_action' ? 'ring-2 ring-muted-foreground/50 border-muted-foreground/50 bg-muted/30' : 'border-border/50 bg-muted/20'}`}>
               <StickyNote className="h-4 w-4 shrink-0 text-muted-foreground/50" />
               <div>
                 <p className="text-lg sm:text-xl font-bold leading-none text-muted-foreground/60">{noActionCount}</p>
                 <p className="text-[10px] sm:text-[11px] text-muted-foreground">No Action Set</p>
               </div>
-            </div>
+            </button>
           </div>
         );
       })()}
