@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { StatusBadge } from './StatusBadge';
-import { ContactStatusBadge } from './ContactStatusBadge';
 import { 
   ExternalLink, 
   MapPin, 
@@ -24,7 +23,6 @@ import {
   ChevronUp,
   ChevronLeft,
   ChevronRight,
-  MessageSquarePlus,
   ClipboardList,
   Check,
   Eye
@@ -41,7 +39,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { Lead, WebsiteStatus } from '@/types/lead';
-import type { LeadContact } from '@/hooks/useContactTracking';
 import { useDemoContext } from '@/components/DemoLayout';
 
 const ITEMS_PER_PAGE = 25;
@@ -49,8 +46,6 @@ const ITEMS_PER_PAGE = 25;
 interface LeadsTableProps {
   leads: Lead[];
   onExport: () => void;
-  onLogContact?: (lead: Lead) => void;
-  getLatestContact?: (leadId: string) => LeadContact | undefined;
   onAddToOutreach?: (lead: Lead) => Promise<any>;
   isInOutreach?: (leadName: string, googleMapsUrl?: string) => boolean;
   onMapLinkClick?: (businessName: string, googleMapsUrl?: string) => void;
@@ -68,7 +63,7 @@ const statusOrder: Record<WebsiteStatus, number> = {
   HAS_OWN_WEBSITE: 3,
 };
 
-export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, isDemo = false }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, isDemo = false }: LeadsTableProps) {
   const demoCtx = useDemoContext();
 
   const handleAddToOutreach = useCallback((lead: Lead) => {
@@ -364,9 +359,8 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                 <TableHead className="w-[7%]">
                   <SortButton field="confidence">Conf.</SortButton>
                 </TableHead>
-                <TableHead className="w-[10%]">Contact</TableHead>
-                <TableHead className="w-[7%]">Links</TableHead>
-                <TableHead className="w-[6%]">Actions</TableHead>
+                <TableHead className="w-[8%]">Links</TableHead>
+                <TableHead className="w-[7%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -442,26 +436,6 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      {getLatestContact?.(lead.id) ? (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div>
-                              <ContactStatusBadge outcome={getLatestContact(lead.id)!.outcome} />
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="left" className="max-w-[250px] bg-popover border-border">
-                            {getLatestContact(lead.id)?.notes ? (
-                              <p className="text-sm">{getLatestContact(lead.id)?.notes}</p>
-                            ) : (
-                              <p className="text-sm text-muted-foreground">No notes</p>
-                            )}
-                          </TooltipContent>
-                        </Tooltip>
-                      ) : (
-                        <span className="text-muted-foreground/50 text-xs">Not contacted</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
                       <div className="flex items-center gap-1">
                         {isChecked?.(lead.name, lead.googleMapsUrl) ? (
                           <Tooltip>
@@ -529,21 +503,6 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        {onLogContact && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 hover:bg-muted hover:text-primary"
-                                onClick={() => onLogContact(lead)}
-                              >
-                                <MessageSquarePlus className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Log contact</TooltipContent>
-                          </Tooltip>
-                        )}
                         {(onAddToOutreach || isDemo) && (
                           checkIsInOutreach(lead.name, lead.googleMapsUrl) ? (
                             <Tooltip>

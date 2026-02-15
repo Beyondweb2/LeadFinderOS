@@ -2,13 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
-import { ContactDialog } from '@/components/ContactDialog';
+
 import { UpgradePromptDialog } from '@/components/UpgradePromptDialog';
 import { TrialLimitDialog } from '@/components/TrialLimitDialog';
 import { DemoUpgradePanel } from '@/components/DemoUpgradePanel';
 import { DemoOnboardingModal } from '@/components/DemoOnboardingModal';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
-import { useContactTracking } from '@/hooks/useContactTracking';
+
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTrial } from '@/hooks/useTrial';
@@ -20,11 +20,6 @@ import type { Lead, Country } from '@/types/lead';
 const Index = () => {
   const location = useLocation();
   const { leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted } = useLeadSearchContext();
-  const { 
-    markAsContacted, 
-    getLatestContact, 
-    isLoading: isContactLoading 
-  } = useContactTracking();
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed } = useTrial();
@@ -33,7 +28,7 @@ const Index = () => {
   // Pro access = active, trialing, past_due, or admin
   const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
   console.log('[Index] access check', { userId: 'current', subStatus, hasProAccess, isStripeTrialing, subscribed, demoSearchUsed });
-  const [contactDialogLead, setContactDialogLead] = useState<Lead | null>(null);
+  
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   
@@ -159,8 +154,6 @@ const Index = () => {
           <LeadsTable 
             leads={leads} 
             onExport={exportToCsv}
-            onLogContact={(lead) => setContactDialogLead(lead)}
-            getLatestContact={getLatestContact}
             onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
             isInOutreach={isInOutreach}
             onMapLinkClick={markAsChecked}
@@ -185,14 +178,6 @@ const Index = () => {
         </section>
       )}
 
-      {/* Contact Dialog */}
-      <ContactDialog
-        lead={contactDialogLead}
-        open={!!contactDialogLead}
-        onOpenChange={(open) => !open && setContactDialogLead(null)}
-        onSubmit={markAsContacted}
-        isLoading={isContactLoading}
-      />
 
       {/* Upgrade Prompt Dialog (after every 5 searches) */}
       <UpgradePromptDialog
