@@ -24,18 +24,29 @@
     <link rel="icon" type="image/png" href="/favicon.png">
     <meta name="facebook-domain-verification" content="8o1ui4jmnii1egl2efekyudww3259v" />
 
-    <!-- Meta Pixel Code -->
+    <!-- Meta Pixel Code — deferred until after first interaction/idle -->
     <script>
-    !function(f,b,e,v,n,t,s)
-    {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-    if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
-    n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];
-    s.parentNode.insertBefore(t,s)}(window, document,'script',
-    'https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', '1888907435320624');
-    fbq('track', 'PageView');
+    window.__loadFBPixel = function() {
+      if (window.fbq) return;
+      !function(f,b,e,v,n,t,s)
+      {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+      n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];
+      s.parentNode.insertBefore(t,s)}(window, document,'script',
+      'https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init', '1888907435320624');
+      fbq('track', 'PageView');
+    };
+    if ('requestIdleCallback' in window) {
+      requestIdleCallback(window.__loadFBPixel, { timeout: 3000 });
+    } else {
+      setTimeout(window.__loadFBPixel, 2500);
+    }
+    ['scroll','click','touchstart','keydown'].forEach(function(evt) {
+      document.addEventListener(evt, window.__loadFBPixel, { once: true, passive: true });
+    });
     </script>
     <!-- End Meta Pixel Code -->
   </head>
