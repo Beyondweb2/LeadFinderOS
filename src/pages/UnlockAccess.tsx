@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Check, Loader2, ArrowRight, Shield, CreditCard } from 'lucide-react';
+import { Check, Loader2, ArrowRight, Shield, CreditCard, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
 
@@ -150,7 +150,7 @@ const UnlockAccess = () => {
         </DialogContent>
       </Dialog>
 
-      <div className="relative z-10 w-full max-w-sm">
+      <div className="relative z-10 w-full max-w-sm space-y-4">
         <Card className="bg-card/80 backdrop-blur-xl border-primary/20">
           <CardHeader className="text-center pb-2 pt-5 px-6">
             <div className="flex justify-center mb-3">
@@ -216,10 +216,26 @@ const UnlockAccess = () => {
                 <p className="text-[10px] text-muted-foreground/50 text-center">
                   Secure payment via Stripe · Cancel anytime
                 </p>
+                <Link
+                  to="/find-leads"
+                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors mt-1"
+                >
+                  <Search className="h-3 w-3" />
+                  Skip — try 1 free search, no card required
+                </Link>
               </>
             )}
           </CardFooter>
         </Card>
+
+        <div className="text-center">
+          <Link
+            to="/landing"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ← Back to homepage
+          </Link>
+        </div>
       </div>
     </div>
   );
