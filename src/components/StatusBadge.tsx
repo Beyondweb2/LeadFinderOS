@@ -17,7 +17,7 @@ const statusConfig: Record<WebsiteStatus, {
   NO_WEBSITE: {
     label: 'No Website',
     shortLabel: 'No Site',
-    className: 'bg-red-500/20 text-red-400 border-red-500/30',
+    className: 'bg-green-500/20 text-green-400 border-green-500/30',
     icon: Flame,
   },
   DIRECTORY_ONLY: {
@@ -29,7 +29,7 @@ const statusConfig: Record<WebsiteStatus, {
   HAS_OWN_WEBSITE: {
     label: 'Has Website',
     shortLabel: 'Has Site',
-    className: 'bg-green-500/20 text-green-400 border-green-500/30',
+    className: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
     icon: Globe,
   },
   UNCERTAIN: {
