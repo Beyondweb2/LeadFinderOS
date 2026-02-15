@@ -718,31 +718,28 @@ const Landing = () => {
         </div>
 
         <div className="container mx-auto max-w-2xl text-center">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-2 sm:mb-3">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-8 sm:mb-10">
             Is This How You're Finding <span className="text-gradient-primary">Clients?</span>
           </h2>
-          <p className="text-muted-foreground/50 text-sm sm:text-base mb-7 sm:mb-9 italic">
-            Be honest.
-          </p>
 
-          <div className="space-y-2.5 sm:space-y-3 text-sm sm:text-base text-muted-foreground/90">
+          <div className="space-y-5 sm:space-y-6">
             {[
-              'Spending hours searching for leads with no system',
-              'Messaging businesses and forgetting who replied',
+              'Spending hours searching for leads with no real system',
+              'Messaging businesses and forgetting who replied or when',
               'Rewriting the same cold message again and again',
               'Losing potential clients because you didn\'t follow up',
             ].map((pain) => (
-              <p key={pain} className="flex items-center gap-2.5 sm:gap-3 justify-center">
-                <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
-                <span>{pain}</span>
-              </p>
+              <div key={pain} className="flex flex-col items-center gap-1.5">
+                <X className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
+                <p className="text-sm sm:text-base text-foreground/80">{pain}</p>
+              </div>
             ))}
           </div>
 
-          <p className="text-foreground font-bold text-base sm:text-lg mt-7 sm:mt-9">
+          <p className="text-foreground font-extrabold text-base sm:text-lg md:text-xl mt-10 sm:mt-12">
             This is why outreach feels exhausting.
           </p>
-          <p className="text-sm sm:text-base font-semibold mt-3 sm:mt-4" style={{ color: 'hsl(210 100% 65%)' }}>
+          <p className="text-base sm:text-lg font-semibold mt-3 sm:mt-4" style={{ color: 'hsl(210 100% 65%)' }}>
             LeadFinder Pro gives you structure, speed, and control.
           </p>
         </div>
