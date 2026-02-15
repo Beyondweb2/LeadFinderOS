@@ -711,27 +711,45 @@ const Landing = () => {
       </div>
 
       {/* Pain Section */}
-      <ScrollReveal className="relative z-10 py-8 sm:py-10 md:py-14 px-4">
+      <ScrollReveal className="relative z-10 py-10 sm:py-12 md:py-16 px-4">
+        {/* Top divider */}
+        <div className="container mx-auto max-w-xl mb-10 sm:mb-12">
+          <div className="h-px w-16 mx-auto" style={{ background: 'hsl(210 100% 50% / 0.3)' }} />
+        </div>
+
         <div className="container mx-auto max-w-2xl text-center">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-6 sm:mb-8">
-            Sound <span className="text-gradient-primary">Familiar?</span>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-2 sm:mb-3">
+            Is This How You're Finding <span className="text-gradient-primary">Clients?</span>
           </h2>
-          <div className="space-y-3 sm:space-y-4 text-sm sm:text-base text-muted-foreground/70">
+          <p className="text-muted-foreground/50 text-sm sm:text-base mb-7 sm:mb-9 italic">
+            Be honest.
+          </p>
+
+          <div className="space-y-2.5 sm:space-y-3 text-sm sm:text-base text-muted-foreground/90">
             {[
-              'Wasting time hunting for leads',
-              'Forgetting who you\'ve already contacted',
-              'Writing cold messages from scratch every time',
-              'Losing track of follow-ups',
+              'Spending hours searching for leads with no system',
+              'Messaging businesses and forgetting who replied',
+              'Rewriting the same cold message again and again',
+              'Losing potential clients because you didn\'t follow up',
             ].map((pain) => (
               <p key={pain} className="flex items-center gap-2.5 sm:gap-3 justify-center">
-                <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
+                <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
                 <span>{pain}</span>
               </p>
             ))}
           </div>
-          <p className="text-foreground/80 text-sm sm:text-base font-semibold mt-6 sm:mt-8">
+
+          <p className="text-foreground font-bold text-base sm:text-lg mt-7 sm:mt-9">
+            This is why outreach feels exhausting.
+          </p>
+          <p className="text-sm sm:text-base font-semibold mt-3 sm:mt-4" style={{ color: 'hsl(210 100% 65%)' }}>
             LeadFinder Pro gives you structure, speed, and control.
           </p>
+        </div>
+
+        {/* Bottom divider */}
+        <div className="container mx-auto max-w-xl mt-10 sm:mt-12">
+          <div className="h-px w-16 mx-auto" style={{ background: 'hsl(210 100% 50% / 0.3)' }} />
         </div>
       </ScrollReveal>
 
