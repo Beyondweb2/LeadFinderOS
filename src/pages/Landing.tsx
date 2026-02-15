@@ -714,21 +714,21 @@ const Landing = () => {
       <ScrollReveal className="relative z-10 py-8 sm:py-10 md:py-14 px-4">
         <div className="container mx-auto max-w-2xl text-center">
           <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-6 sm:mb-8">
-            Outreach Shouldn't Feel <span className="text-gradient-primary">This Messy</span>
+            Sound <span className="text-gradient-primary">Familiar?</span>
           </h2>
-          <ul className="space-y-3 sm:space-y-4 text-sm sm:text-base text-muted-foreground/70 max-w-md mx-auto">
+          <div className="space-y-3 sm:space-y-4 text-sm sm:text-base text-muted-foreground/70">
             {[
               'Wasting time hunting for leads',
               'Forgetting who you\'ve already contacted',
               'Writing cold messages from scratch every time',
               'Losing track of follow-ups',
             ].map((pain) => (
-              <li key={pain} className="flex items-center gap-2.5 sm:gap-3 justify-center sm:justify-start">
+              <p key={pain} className="flex items-center gap-2.5 sm:gap-3 justify-center">
                 <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
                 <span>{pain}</span>
-              </li>
+              </p>
             ))}
-          </ul>
+          </div>
           <p className="text-foreground/80 text-sm sm:text-base font-semibold mt-6 sm:mt-8">
             LeadFinder Pro gives you structure, speed, and control.
           </p>
@@ -883,9 +883,6 @@ const Landing = () => {
             <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6] px-2">
               Find, message, organise, and track — all in one place.
             </p>
-            <p className="text-foreground/80 text-sm sm:text-base font-bold mt-3 sm:mt-4">
-              Message 30 businesses in 10 minutes.
-            </p>
           </ScrollReveal>
           
           {/* Mobile: Carousel (4 core features) */}
@@ -946,6 +943,9 @@ const Landing = () => {
               </div>
             </ScrollReveal>
           )}
+          <p className="text-foreground/80 text-sm sm:text-base font-bold mt-8 sm:mt-10 text-center">
+            Message 30 businesses in 10 minutes.
+          </p>
         </div>
       </section>
 
