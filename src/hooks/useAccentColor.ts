@@ -262,7 +262,7 @@ export const ACCENT_PRESETS = [
 ] as const;
 
 const DEFAULT_ACCENT = ACCENT_PRESETS[0].hsl;
-const DEFAULT_THEME_ID = 'midnight';
+const DEFAULT_THEME_ID = 'navy';
 const STORAGE_KEY = 'leadfinder-theme';
 
 // Color validation and correction utilities
