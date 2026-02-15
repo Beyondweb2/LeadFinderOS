@@ -799,30 +799,32 @@ const Landing = () => {
         </div>
 
         <div className="container mx-auto max-w-2xl text-center">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-8 sm:mb-10">
-            Not Getting Enough <span className="text-gradient-primary">Clients?</span>
-          </h2>
+          <div className="md:rounded-2xl md:border md:border-border/40 md:bg-card/40 md:backdrop-blur-sm md:p-10 md:shadow-lg">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-8 sm:mb-10">
+              Not Getting Enough <span className="text-gradient-primary">Clients?</span>
+            </h2>
 
-          <div className="space-y-5 sm:space-y-6 md:space-y-7">
-            {[
-              'Wasting hours manually searching for leads',
-              'No proven system to follow',
-              'Never sure where the next client will come from',
-              'Working hard, but not seeing consistent results',
-            ].map((pain) => (
-              <div key={pain} className="flex flex-col items-center gap-1 md:gap-1.5">
-                <X className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
-                <p className="text-sm sm:text-base md:text-lg lg:text-xl text-foreground/90 leading-[1.4]">{pain}</p>
-              </div>
-            ))}
+            <div className="space-y-5 sm:space-y-6 md:space-y-7">
+              {[
+                'Wasting hours manually searching for leads',
+                'No proven system to follow',
+                'Never sure where the next client will come from',
+                'Working hard, but not seeing consistent results',
+              ].map((pain) => (
+                <div key={pain} className="flex flex-col items-center gap-1 md:gap-1.5">
+                  <X className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
+                  <p className="text-sm sm:text-base md:text-lg lg:text-xl text-foreground/90 leading-[1.4]">{pain}</p>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-foreground font-extrabold text-base sm:text-lg md:text-xl mt-10 sm:mt-12">
+              That's why growth feels uncertain.
+            </p>
+            <p className="text-base sm:text-lg md:text-xl font-semibold mt-5 sm:mt-6" style={{ color: 'hsl(210 100% 65%)' }}>
+              LeadFinder Pro gives you a clear, repeatable way to find and contact new clients.
+            </p>
           </div>
-
-          <p className="text-foreground font-extrabold text-base sm:text-lg md:text-xl mt-10 sm:mt-12">
-            That's why growth feels uncertain.
-          </p>
-          <p className="text-base sm:text-lg md:text-xl font-semibold mt-5 sm:mt-6" style={{ color: 'hsl(210 100% 65%)' }}>
-            LeadFinder Pro gives you a clear, repeatable way to find and contact new clients.
-          </p>
         </div>
 
         {/* Bottom divider */}
