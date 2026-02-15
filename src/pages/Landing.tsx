@@ -719,15 +719,15 @@ const Landing = () => {
 
         <div className="container mx-auto max-w-2xl text-center">
           <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-8 sm:mb-10">
-            Not Getting Enough Client <span className="text-gradient-primary">Opportunities?</span>
+            Is This How You're Finding <span className="text-gradient-primary">Clients?</span>
           </h2>
 
           <div className="space-y-4 sm:space-y-5">
             {[
-              'Struggling to find businesses that actually need your help',
-              'No clear system to generate new leads every week',
-              'Spending hours searching with little to show for it',
-              'No predictable flow of new client opportunities',
+              'Struggling to find businesses that actually need a website',
+              'No solid system to consistently generate leads',
+              'Spending hours searching with barely any results',
+              'No predictable way to land your next paying client',
             ].map((pain) => (
               <div key={pain} className="flex flex-col items-center gap-0.5">
                 <X className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
@@ -740,7 +740,7 @@ const Landing = () => {
             This is why growth feels unpredictable.
           </p>
           <p className="text-base sm:text-lg md:text-xl font-semibold mt-5 sm:mt-6" style={{ color: 'hsl(210 100% 65%)' }}>
-            LeadFinder Pro gives you a repeatable way to find and contact new clients.
+            LeadFinder Pro helps you generate more opportunities — consistently.
           </p>
         </div>
 
