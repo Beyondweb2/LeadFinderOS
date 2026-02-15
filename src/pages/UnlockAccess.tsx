@@ -46,6 +46,22 @@ const UnlockAccess = () => {
     }
   }, [isPaidSubscriber, isStripeTrialing, subLoading, navigate]);
 
+  // Intercept browser back button — redirect to demo with welcome popup
+  useEffect(() => {
+    // Push a dummy state so we can detect back navigation
+    window.history.pushState({ fromUnlock: true }, '');
+
+    const handlePopState = (e: PopStateEvent) => {
+      // User pressed back — redirect to demo with welcome flag
+      navigate('/find-leads?welcome=demo', { replace: true });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
+  }, [navigate]);
+
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
