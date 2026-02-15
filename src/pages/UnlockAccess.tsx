@@ -164,36 +164,41 @@ const UnlockAccess = () => {
         </DialogContent>
       </Dialog>
 
-      <div className="relative z-10 w-full max-w-sm space-y-4">
+      <div className="relative z-10 w-full max-w-md space-y-5">
+        {/* Back link — top */}
+        <Link
+          to="/landing"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          ← Back to app
+        </Link>
+
         <Card className="bg-card/80 backdrop-blur-xl border-primary/20">
-          <CardHeader className="text-center pb-2 pt-5 px-6">
-            <div className="flex justify-center mb-3">
-              <img src={appLogo} alt="LeadFinder Pro" className="h-10 w-10" />
+          <CardHeader className="text-center pb-3 pt-8 px-8">
+            <div className="flex justify-center mb-4">
+              <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9" />
             </div>
-            <CardTitle className="text-xl font-bold">
+            <CardTitle className="text-2xl font-bold tracking-tight">
               Unlock Full Access — Free for 24 Hours
             </CardTitle>
+            <p className="text-sm text-muted-foreground mt-2">
+              £0 today · £19.99/month after 24 hours · Cancel anytime
+            </p>
           </CardHeader>
 
-          <CardContent className="space-y-4 px-6 pt-2 pb-2">
-            {/* Pricing block */}
-            <div className="text-center space-y-0.5">
-              <p className="text-3xl font-extrabold text-primary">£0 today</p>
-              <p className="text-sm text-muted-foreground">£19.99/month after 24 hours · Cancel anytime</p>
-            </div>
-
-            {/* Benefits */}
-            <ul className="space-y-2 pt-1">
+          <CardContent className="px-8 pt-2 pb-4">
+            {/* Benefits — centered column */}
+            <ul className="space-y-3.5 max-w-[260px] mx-auto">
               {BENEFITS.map((benefit) => (
-                <li key={benefit} className="flex items-center gap-2.5">
-                  <Check className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={3} />
-                  <span className="text-sm text-foreground/90">{benefit}</span>
+                <li key={benefit} className="flex items-center gap-3">
+                  <Check className="h-4 w-4 text-primary shrink-0" strokeWidth={3} />
+                  <span className="text-[15px] font-medium text-foreground/90">{benefit}</span>
                 </li>
               ))}
             </ul>
           </CardContent>
 
-          <CardFooter className="flex-col gap-2 pt-3 pb-5 px-6">
+          <CardFooter className="flex-col gap-3 pt-4 pb-7 px-8">
             {waitingForPayment ? (
               <div className="w-full text-center space-y-3">
                 <div className="flex items-center justify-center gap-2 text-primary">
@@ -221,13 +226,13 @@ const UnlockAccess = () => {
               <>
                 <Button
                   size="lg"
-                  className="w-full btn-premium font-semibold py-3 h-auto text-sm sm:text-base"
+                  className="w-full btn-premium font-semibold py-3.5 h-auto text-[15px]"
                   onClick={() => setShowConfirmModal(true)}
                 >
                   <CreditCard className="mr-2 h-4 w-4" />
                   Unlock My 24-Hour Access
                 </Button>
-                <p className="text-[10px] text-muted-foreground/50 text-center">
+                <p className="text-[11px] text-muted-foreground/60 text-center">
                   Secure payment via Stripe · Cancel anytime
                 </p>
                 <Link
@@ -241,15 +246,6 @@ const UnlockAccess = () => {
             )}
           </CardFooter>
         </Card>
-
-        <div className="text-center">
-          <Link
-            to="/landing"
-            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
-            ← Back to homepage
-          </Link>
-        </div>
       </div>
     </div>
   );
