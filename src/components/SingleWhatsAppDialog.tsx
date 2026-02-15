@@ -154,12 +154,12 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
           </div>
         )}
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 flex-row justify-end">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           {hasPhone && (
-            <Button onClick={handleSend} className="bg-green-600 hover:bg-green-700">
+            <Button onClick={handleSend} className="bg-green-600 hover:bg-green-700 whitespace-nowrap">
               <Send className="h-4 w-4 mr-2" />
               Open WhatsApp
             </Button>
