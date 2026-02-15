@@ -243,7 +243,8 @@ export function OutreachLeadDialog({
                   <div className="rounded-md bg-primary/10 border border-primary/20 p-3">
                     <NextActionBadge 
                       action={lead.next_action} 
-                      date={lead.next_action_date} 
+                      date={lead.next_action_date}
+                      leadId={lead.id}
                     />
                   </div>
                 )}

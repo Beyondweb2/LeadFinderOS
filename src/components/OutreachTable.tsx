@@ -1017,6 +1017,7 @@ export function OutreachTable({
                               action={lead.next_action}
                               date={lead.next_action_date}
                               onUpdate={(action, date) => onNextActionChange(lead.id, action, date)}
+                              leadId={lead.id}
                             />
                           </TableCell>
                         </>

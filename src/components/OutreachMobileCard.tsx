@@ -100,6 +100,7 @@ export function OutreachMobileCard({
                 action={lead.next_action} 
                 date={lead.next_action_date}
                 compact
+                leadId={lead.id}
               />
             )}
           </div>

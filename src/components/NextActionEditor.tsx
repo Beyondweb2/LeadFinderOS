@@ -13,16 +13,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle, Plus, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import type { NextActionType } from '@/types/outreach';
 import { NEXT_ACTION_OPTIONS } from '@/types/outreach';
+import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 
 interface NextActionEditorProps {
   action: NextActionType | null;
   date?: string | null;
   onUpdate: (action: NextActionType, date?: string) => void;
+  leadId?: string;
 }
 
 const actionIcons: Record<NextActionType, React.ReactNode> = {
@@ -51,24 +54,65 @@ const actionColors: Record<NextActionType, string> = {
   none: 'text-muted-foreground',
 };
 
-export function NextActionEditor({ action, date, onUpdate }: NextActionEditorProps) {
+const CUSTOM_PREFIX = 'custom::';
+
+export function getDisplayLabel(action: NextActionType | null, leadId?: string): string {
+  if (!action || action === 'none') return 'None';
+  // Check for custom action label
+  if (leadId) {
+    const customLabel = getLeadCustomAction(leadId);
+    if (customLabel) return customLabel;
+  }
+  return NEXT_ACTION_OPTIONS.find((o) => o.value === action)?.label || 'None';
+}
+
+export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionEditorProps) {
   const [open, setOpen] = useState(false);
-  const [selectedAction, setSelectedAction] = useState<NextActionType>(action || 'call');
+  const [selectedAction, setSelectedAction] = useState<string>(action || 'call');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     date ? new Date(date) : undefined
   );
+  const [showCustomInput, setShowCustomInput] = useState(false);
+  const [customName, setCustomName] = useState('');
+  const { customActions, addAction } = useCustomNextActions();
+
+  // Check if current lead has a custom action
+  const currentCustomLabel = leadId ? getLeadCustomAction(leadId) : null;
 
   const handleSave = () => {
     const dateStr = selectedDate ? format(selectedDate, 'yyyy-MM-dd') : undefined;
-    onUpdate(selectedAction, dateStr);
+    
+    if (selectedAction.startsWith(CUSTOM_PREFIX)) {
+      const label = selectedAction.slice(CUSTOM_PREFIX.length);
+      // Store custom label for this lead, save as 'follow_up' in DB
+      if (leadId) setLeadCustomAction(leadId, label);
+      onUpdate('follow_up' as NextActionType, dateStr);
+    } else {
+      // Clear any custom label
+      if (leadId) setLeadCustomAction(leadId, null);
+      onUpdate(selectedAction as NextActionType, dateStr);
+    }
+    
     setOpen(false);
-    // Fire checklist completion event when a next action + date is set
     if (selectedAction && selectedAction !== 'none' && selectedDate) {
       window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
     }
   };
 
+  const handleAddCustom = () => {
+    const trimmed = customName.trim();
+    if (!trimmed) return;
+    addAction(trimmed);
+    setSelectedAction(`${CUSTOM_PREFIX}${trimmed}`);
+    setShowCustomInput(false);
+    setCustomName('');
+  };
+
   const currentAction = action || 'none';
+  const displayLabel = currentCustomLabel || NEXT_ACTION_OPTIONS.find((o) => o.value === currentAction)?.label || 'None';
+  const colorClass = currentCustomLabel ? 'text-teal-400' : actionColors[currentAction as NextActionType] || 'text-muted-foreground';
+  const iconEl = currentCustomLabel ? <Tag className="h-3 w-3" /> : actionIcons[currentAction as NextActionType] || <Circle className="h-3 w-3" />;
+
   const formattedDate = date
     ? new Date(date).toLocaleDateString('en-GB', {
         day: 'numeric',
@@ -79,6 +123,11 @@ export function NextActionEditor({ action, date, onUpdate }: NextActionEditorPro
   const isOverdue = date && new Date(date) < new Date(new Date().setHours(0, 0, 0, 0));
   const isToday = date && new Date(date).toDateString() === new Date().toDateString();
 
+  // Determine selected value for Select component
+  const selectValue = selectedAction.startsWith(CUSTOM_PREFIX) 
+    ? selectedAction 
+    : selectedAction;
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -86,14 +135,12 @@ export function NextActionEditor({ action, date, onUpdate }: NextActionEditorPro
           variant="ghost"
           className={cn(
             'h-auto p-1 hover:bg-muted/50 flex flex-col items-start gap-0.5',
-            actionColors[currentAction]
+            colorClass
           )}
         >
           <div className="flex items-center gap-1.5">
-            {actionIcons[currentAction]}
-            <span className="text-sm">
-              {NEXT_ACTION_OPTIONS.find((o) => o.value === currentAction)?.label || 'None'}
-            </span>
+            {iconEl}
+            <span className="text-sm">{displayLabel}</span>
           </div>
           {formattedDate && (
             <span
@@ -111,8 +158,8 @@ export function NextActionEditor({ action, date, onUpdate }: NextActionEditorPro
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Next Action</label>
-            <Select value={selectedAction} onValueChange={(v) => setSelectedAction(v as NextActionType)}>
-              <SelectTrigger className="w-[200px]">
+            <Select value={selectValue} onValueChange={(v) => { setSelectedAction(v); setShowCustomInput(false); }}>
+              <SelectTrigger className="w-[220px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -124,8 +171,47 @@ export function NextActionEditor({ action, date, onUpdate }: NextActionEditorPro
                     </div>
                   </SelectItem>
                 ))}
+                {customActions.length > 0 && (
+                  <>
+                    <div className="h-px bg-border my-1" />
+                    {customActions.map((ca) => (
+                      <SelectItem key={ca.id} value={`${CUSTOM_PREFIX}${ca.label}`}>
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-3 w-3 text-teal-400" />
+                          {ca.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
               </SelectContent>
             </Select>
+
+            {!showCustomInput ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => setShowCustomInput(true)}
+              >
+                <Plus className="h-3 w-3 mr-1.5" />
+                Add custom action
+              </Button>
+            ) : (
+              <div className="flex gap-1.5">
+                <Input
+                  value={customName}
+                  onChange={(e) => setCustomName(e.target.value)}
+                  placeholder="e.g. Send Proposal"
+                  className="h-8 text-sm"
+                  autoFocus
+                  onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
+                />
+                <Button size="sm" className="h-8 px-3" onClick={handleAddCustom}>
+                  Add
+                </Button>
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

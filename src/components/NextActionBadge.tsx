@@ -1,12 +1,14 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle, Tag } from 'lucide-react';
 import type { NextActionType } from '@/types/outreach';
+import { getLeadCustomAction } from '@/hooks/useCustomNextActions';
 
 interface NextActionBadgeProps {
   action: NextActionType | null;
   date?: string | null;
   compact?: boolean;
+  leadId?: string;
 }
 
 const actionConfig: Record<NextActionType, { label: string; shortLabel: string; icon: React.ReactNode; className: string }> = {
@@ -72,12 +74,18 @@ const actionConfig: Record<NextActionType, { label: string; shortLabel: string; 
   },
 };
 
-export function NextActionBadge({ action, date, compact }: NextActionBadgeProps) {
+export function NextActionBadge({ action, date, compact, leadId }: NextActionBadgeProps) {
   if (!action || action === 'none') {
     return <span className="text-muted-foreground text-sm">—</span>;
   }
 
+  const customLabel = leadId ? getLeadCustomAction(leadId) : null;
   const config = actionConfig[action];
+  const displayLabel = customLabel || config.label;
+  const displayShort = customLabel || config.shortLabel;
+  const icon = customLabel ? <Tag className="h-3 w-3" /> : config.icon;
+  const className = customLabel ? 'text-teal-400' : config.className;
+
   const formattedDate = date ? new Date(date).toLocaleDateString('en-GB', {
     day: 'numeric',
     month: 'short',
@@ -89,9 +97,9 @@ export function NextActionBadge({ action, date, compact }: NextActionBadgeProps)
 
   if (compact) {
     return (
-      <div className={`flex items-center gap-1 ${config.className}`}>
-        {React.cloneElement(config.icon as React.ReactElement, { className: 'h-2.5 w-2.5' })}
-        <span className="text-[10px]">{config.shortLabel}</span>
+      <div className={`flex items-center gap-1 ${className}`}>
+        {React.cloneElement(icon as React.ReactElement, { className: 'h-2.5 w-2.5' })}
+        <span className="text-[10px]">{displayShort}</span>
         {formattedDate && (
           <span className={`text-[10px] ${isOverdue ? 'text-red-400' : isToday ? 'text-yellow-400' : 'text-muted-foreground'}`}>
             {isToday ? 'Today' : formattedDate}
@@ -103,9 +111,9 @@ export function NextActionBadge({ action, date, compact }: NextActionBadgeProps)
 
   return (
     <div className="flex flex-col gap-1">
-      <div className={`flex items-center gap-1.5 ${config.className}`}>
-        {config.icon}
-        <span className="text-sm">{config.label}</span>
+      <div className={`flex items-center gap-1.5 ${className}`}>
+        {icon}
+        <span className="text-sm">{displayLabel}</span>
       </div>
       {formattedDate && (
         <span className={`text-xs ${isOverdue ? 'text-red-400' : isToday ? 'text-yellow-400' : 'text-muted-foreground'}`}>
