@@ -93,15 +93,26 @@ const logStep = (step: string, details?: unknown) => {
 
         // Redirect to billing portal instead of creating a new checkout
         const origin = resolveOrigin(req.headers.get("origin"));
-        const portalSession = await stripe.billingPortal.sessions.create({
-          customer: existingSub.stripe_customer_id,
-          return_url: `${origin}/`,
-        });
+        try {
+          const portalSession = await stripe.billingPortal.sessions.create({
+            customer: existingSub.stripe_customer_id,
+            return_url: `${origin}/`,
+          });
 
-        return new Response(JSON.stringify({ url: portalSession.url, redirectedToPortal: true }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-          status: 200,
-        });
+          return new Response(JSON.stringify({ url: portalSession.url, redirectedToPortal: true }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          });
+        } catch (portalError) {
+          // Customer no longer exists in Stripe — clean up stale record and proceed with new checkout
+          const msg = portalError instanceof Error ? portalError.message : String(portalError);
+          logStep("GUARD: Billing portal failed, cleaning stale subscription", { error: msg });
+          await supabaseClient
+            .from('subscriptions')
+            .delete()
+            .eq('id', existingSub.id);
+          logStep("GUARD: Deleted stale subscription record, proceeding with new checkout");
+        }
       }
 
       logStep("GUARD: No active subscription found, proceeding with checkout");
