@@ -24,10 +24,11 @@ const steps = [
   },
   {
     key: 'contactAttempted' as const,
-    label: 'Go to Outreach CRM to contact one',
+    label: 'Contact a lead via WhatsApp or SMS',
     cta: 'Open Outreach CRM',
     route: '/outreach',
     icon: Phone,
+    helperText: 'Open a lead in Outreach CRM, then tap the WhatsApp or SMS button to contact them.',
   },
   {
     key: 'statusUpdated' as const,
