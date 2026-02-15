@@ -65,9 +65,10 @@ export function DemoChecklistProvider({
     setState(loadState(user?.id));
   }, [user?.id]);
 
-  // Auto-open panel after onboarding modal is dismissed (small delay)
+  // Auto-open panel when isDemoUser becomes true (demo or trial)
   useEffect(() => {
-    if (!isDemoUser || initializedRef.current) return;
+    if (!isDemoUser) return;
+    if (initializedRef.current) return;
     initializedRef.current = true;
     const timer = setTimeout(() => setIsOpen(true), 1500);
     return () => clearTimeout(timer);

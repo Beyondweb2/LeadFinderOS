@@ -23,9 +23,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   const mainRef = useRef<HTMLElement>(null);
   const { isStripeTrialing, isLoading: isTrialLoading } = useTrial();
   const { status: subStatus, isLoading: isSubLoading } = useSubscription();
+  const isLoaded = !isTrialLoading && !isSubLoading;
   const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
-  const isDemoUser = !isTrialLoading && !isSubLoading && !hasProAccess && !isStripeTrialing;
-  const isTrialingUser = !isTrialLoading && !isSubLoading && subStatus === 'trialing';
+  const isDemoUser = isLoaded && !hasProAccess && !isStripeTrialing;
+  const isTrialingUser = isLoaded && subStatus === 'trialing';
   const showWalkthrough = isDemoUser || isTrialingUser;
 
 
