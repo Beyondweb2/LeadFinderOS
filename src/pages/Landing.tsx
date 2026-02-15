@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { trackLead } from '@/lib/fbPixel';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -36,7 +36,9 @@ import featureTemplates from '@/assets/feature-templates.png';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
-import { HowItWorksSection } from '@/components/landing/HowItWorksSection';
+
+// Lazy-load heavy below-fold components to reduce initial JS
+const HowItWorksSection = lazy(() => import('@/components/landing/HowItWorksSection').then(m => ({ default: m.HowItWorksSection })));
 
 import { AffiliateCapture } from '@/components/AffiliateCapture';
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
@@ -220,7 +222,7 @@ const MobileHeroVideo = () => {
       />
       
       <div 
-        className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm"
+        className="relative rounded-xl overflow-hidden bg-card/80"
         style={{ 
           border: '1px solid hsl(210 100% 50% / 0.2)',
           boxShadow: '0 0 20px hsl(210 100% 50% / 0.15)'
@@ -240,6 +242,8 @@ const MobileHeroVideo = () => {
           muted
           playsInline
           preload="none"
+          width={640}
+          height={360}
           onCanPlayThrough={() => setVideoLoaded(true)}
         >
           <source src={demoVideo} type="video/mp4" />
@@ -314,6 +318,8 @@ const VideoSection = () => {
               muted
               playsInline
               preload="metadata"
+              width={1280}
+              height={720}
               onCanPlayThrough={() => setVideoLoaded(true)}
             >
               <source src={demoVideo} type="video/mp4" />
@@ -387,6 +393,9 @@ const MobileFeatureCarousel = ({ features, onExpand }: { features: typeof FEATUR
                       src={feature.image} 
                       alt={feature.title}
                       loading="lazy"
+                      decoding="async"
+                      width={640}
+                      height={400}
                       className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-105'}`}
                     />
                     <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
@@ -546,6 +555,10 @@ const Landing = () => {
             key={i}
             src={appLogo}
             alt=""
+            width={64}
+            height={64}
+            loading="lazy"
+            decoding="async"
             className={`absolute ${pos.size} select-none`}
             style={{
               top: pos.top,
@@ -563,7 +576,7 @@ const Landing = () => {
       <header className="relative z-10 backdrop-blur-sm bg-transparent">
         <div className="container mx-auto px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={appLogo} alt="LeadFinder Pro" className="h-8 w-8 sm:h-9 sm:w-9" />
+            <img src={appLogo} alt="LeadFinder Pro" className="h-8 w-8 sm:h-9 sm:w-9" width={36} height={36} />
             <span className="text-base sm:text-lg font-bold tracking-tight">
               Lead<span className="text-gradient-primary">Finder</span> Pro
             </span>
@@ -780,7 +793,7 @@ const Landing = () => {
                     boxShadow: '0 0 20px hsl(0 60% 40% / 0.1)'
                   }}
                 >
-                  <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" loading="lazy" />
+                  <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" loading="lazy" decoding="async" width={640} height={400} />
                 </div>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
@@ -800,7 +813,7 @@ const Landing = () => {
                     boxShadow: '0 0 20px hsl(142 60% 40% / 0.1)'
                   }}
                 >
-                  <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" />
+                  <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" decoding="async" width={640} height={400} />
                 </div>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
@@ -830,7 +843,7 @@ const Landing = () => {
                         boxShadow: '0 0 30px hsl(0 60% 40% / 0.1)'
                       }}
                     >
-                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-contain" loading="lazy" />
+                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-contain" loading="lazy" decoding="async" width={640} height={400} />
                     </div>
                   </div>
                   <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
@@ -858,7 +871,7 @@ const Landing = () => {
                         boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
                       }}
                     >
-                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" />
+                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" decoding="async" width={640} height={400} />
                     </div>
                   </div>
                   <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
@@ -880,7 +893,9 @@ const Landing = () => {
 
       {/* How It Works — 4 steps */}
       <div id="how-it-works">
-        <HowItWorksSection ScrollReveal={ScrollReveal} />
+        <Suspense fallback={<div className="py-20" />}>
+          <HowItWorksSection ScrollReveal={ScrollReveal} />
+        </Suspense>
       </div>
 
       
@@ -948,6 +963,9 @@ const Landing = () => {
                             src={feature.image} 
                             alt={feature.title}
                             loading="lazy"
+                            decoding="async"
+                            width={640}
+                            height={400}
                             className={`w-full h-[260px] lg:h-[300px] object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
                           />
                         </div>
