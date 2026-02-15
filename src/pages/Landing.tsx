@@ -615,7 +615,7 @@ const Landing = () => {
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              The all-in-one tool to find businesses without websites, contact them, and track every follow-up.
+              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
             </p>
             
             {/* CTA — trial primary, demo as subtle link */}
@@ -710,7 +710,33 @@ const Landing = () => {
         <VideoSection />
       </div>
 
+      {/* Pain Section */}
+      <ScrollReveal className="relative z-10 py-10 sm:py-14 md:py-20 px-4">
+        <div className="container mx-auto max-w-2xl text-center">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-6 sm:mb-8">
+            Outreach Shouldn't Feel <span className="text-gradient-primary">This Messy</span>
+          </h2>
+          <ul className="space-y-3 sm:space-y-4 text-sm sm:text-base text-muted-foreground/70 max-w-md mx-auto">
+            {[
+              'Wasting time hunting for leads',
+              'Forgetting who you\'ve already contacted',
+              'Writing cold messages from scratch every time',
+              'Losing track of follow-ups',
+            ].map((pain) => (
+              <li key={pain} className="flex items-center gap-2.5 sm:gap-3 justify-center sm:justify-start">
+                <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} />
+                <span>{pain}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-foreground/80 text-sm sm:text-base font-semibold mt-6 sm:mt-8">
+            LeadFinder Pro gives you structure, speed, and control.
+          </p>
+        </div>
+      </ScrollReveal>
 
+      {/* Mobile section divider */}
+      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Old Way vs New Way comparison */}
       <ScrollReveal className="relative z-10 py-10 sm:py-16 md:py-28 px-3 sm:px-4">
@@ -832,16 +858,7 @@ const Landing = () => {
         </div>
       </ScrollReveal>
 
-      {/* CTA after comparison — button left, text right */}
-      <div className="hidden sm:flex items-center justify-center gap-6 py-8">
-        <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" asChild>
-          <Link to="/auth?intent=upgrade">
-            Start Free Trial
-            <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
-        <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">Ready to stop wasting time on Google Maps?</p>
-      </div>
+      {/* Mobile section divider — between comparison and How It Works */}
 
       {/* Mobile section divider — between hero/comparison and How It Works */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
@@ -861,11 +878,13 @@ const Landing = () => {
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight leading-[1.1] px-2">
-              Your Complete
-              <span className="text-gradient-primary"> Lead Toolkit</span>
+              Never Wonder <span className="text-gradient-primary">What To Say</span> Again
             </h2>
-            <p className="hidden sm:block text-muted-foreground/70 max-w-xl mx-auto text-base md:text-lg leading-[1.6] px-2">
-              Everything you need to find, track, and convert leads into paying clients.
+            <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6] px-2">
+              Use ready-made WhatsApp and SMS templates that auto-fill business names — personalise and send in seconds.
+            </p>
+            <p className="text-foreground/80 text-sm sm:text-base font-bold mt-3 sm:mt-4">
+              Message 30 businesses in 10 minutes.
             </p>
           </ScrollReveal>
           
@@ -930,13 +949,16 @@ const Landing = () => {
         </div>
       </section>
 
-      <InlineCTA text="Everything you need to land clients. Try it free." />
-
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Testimonials — after toolkit */}
       <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
         <div className="container mx-auto max-w-5xl">
+          {/* Section headline */}
+          <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium tracking-wide uppercase text-center mb-4 sm:mb-6">
+            Trusted by freelancers and agencies
+          </p>
+
           {/* Stars — mobile only */}
           <div className="flex gap-0.5 justify-center mb-3 sm:hidden">
             {[...Array(5)].map((_, i) => (
@@ -951,6 +973,7 @@ const Landing = () => {
                 role: 'Freelance Designer',
                 region: 'UK',
                 quote: "Within about 10 minutes I had found 30 solid businesses without websites. It took me another 10 minutes to message them all inside the app. That alone sold me.",
+                boldPhrase: "found 30 solid businesses without websites",
                 stars: 5,
               },
               {
@@ -958,6 +981,7 @@ const Landing = () => {
                 role: 'Web Developer',
                 region: 'Australia',
                 quote: "What I like most is being able to tweak the outreach templates quickly. I can adjust the message slightly and send it out without rewriting everything each time.",
+                boldPhrase: "send it out without rewriting everything each time",
                 stars: 5,
               },
               {
@@ -965,6 +989,7 @@ const Landing = () => {
                 role: 'WordPress Freelancer',
                 region: 'Canada',
                 quote: "I used to bounce between Google Maps, notes and WhatsApp. Now I can search, message and track everything in one place and it just feels organised.",
+                boldPhrase: "search, message and track everything in one place",
                 stars: 5,
               },
               {
@@ -972,9 +997,22 @@ const Landing = () => {
                 role: 'Agency Owner',
                 region: 'US',
                 quote: "Fair play, this is well built. Finding leads fast and keeping all my outreach tracked properly makes it way easier to stay consistent.",
+                boldPhrase: "way easier to stay consistent",
                 stars: 5,
               },
             ];
+
+            const renderQuoteWithBold = (quote: string, boldPhrase: string) => {
+              const idx = quote.indexOf(boldPhrase);
+              if (idx === -1) return `"${quote}"`;
+              return (
+                <>
+                  "{quote.slice(0, idx)}
+                  <strong className="text-foreground font-semibold">{boldPhrase}</strong>
+                  {quote.slice(idx + boldPhrase.length)}"
+                </>
+              );
+            };
 
             return isMobile ? (
               <MobileTestimonialSlider testimonials={testimonials} />
@@ -997,12 +1035,13 @@ const Landing = () => {
                           ))}
                         </div>
                         <p className="text-foreground/80 text-sm leading-relaxed italic font-normal">
-                          "{r.quote}"
+                          {renderQuoteWithBold(r.quote, r.boldPhrase)}
                         </p>
                       </div>
-                      <p className="text-muted-foreground/70 text-xs mt-4 text-center">
-                        {r.name} · {r.role} – {r.region}
-                      </p>
+                      <div className="mt-4 text-center">
+                        <p className="text-foreground/70 text-xs font-semibold">{r.role}</p>
+                        <p className="text-muted-foreground/50 text-[11px] mt-0.5">{r.name} – {r.region}</p>
+                      </div>
                     </div>
                   </ScrollReveal>
                 ))}
@@ -1026,14 +1065,37 @@ const Landing = () => {
 
 
 
+      {/* Value Reinforcement Section */}
+      <ScrollReveal className="relative z-10 py-10 sm:py-14 md:py-18 px-4">
+        <div className="container mx-auto max-w-lg text-center">
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.1] mb-5 sm:mb-6">
+            One Plan. <span className="text-gradient-primary">Full Access.</span>
+          </h2>
+          <ul className="space-y-2.5 sm:space-y-3 text-sm sm:text-base text-foreground/70 max-w-xs mx-auto">
+            {[
+              'Unlimited lead searches',
+              'Built-in CRM',
+              'WhatsApp & SMS outreach',
+              'Ready-made templates',
+              'Dashboard & analytics',
+            ].map((item) => (
+              <li key={item} className="flex items-center gap-2.5 justify-center sm:justify-start">
+                <Check className="h-4 w-4 flex-shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />
+                <span>{item}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-muted-foreground/60 text-xs sm:text-sm mt-5 sm:mt-6">
+            £19.99/month after free trial. Cancel anytime.
+          </p>
+        </div>
+      </ScrollReveal>
+
       <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
-            <p className="text-muted-foreground/60 text-xs sm:text-sm font-medium tracking-wide uppercase mb-3">
-              One plan. Full access.
-            </p>
             <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] px-2">
-              Lead<span className="text-gradient-primary">Finder</span> Pro
+              Start Your <span className="text-gradient-primary">Free Trial</span>
             </h2>
           </ScrollReveal>
           
