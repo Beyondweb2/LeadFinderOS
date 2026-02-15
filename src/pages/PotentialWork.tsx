@@ -56,6 +56,8 @@ import {
 import { format, isToday, isPast, startOfDay } from 'date-fns';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
+import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
+import { Plus, Tag } from 'lucide-react';
 
 const DEFAULT_POTENTIAL_WORK_STATUSES: { value: LeadStatus; label: string }[] = [
   { value: 'interested', label: 'Interested' },
@@ -122,7 +124,10 @@ const getDueLabel = (nextActionDate: string | null, nextAction: NextActionType |
 const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
-  const [nextAction, setNextAction] = useState<NextActionType>(lead.next_action || 'none');
+  const customLabel = getLeadCustomAction(lead.id);
+  const [nextAction, setNextAction] = useState<string>(
+    customLabel ? `custom::${customLabel}` : (lead.next_action || 'none')
+  );
   const [nextActionDate, setNextActionDate] = useState<Date | undefined>(
     lead.next_action_date ? new Date(lead.next_action_date) : undefined
   );
@@ -130,14 +135,18 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { customActions, addAction } = useCustomNextActions();
+  const [showCustomActionInput, setShowCustomActionInput] = useState(false);
+  const [customActionName, setCustomActionName] = useState('');
 
   // Sync from prop changes
   useEffect(() => {
     setNotes(lead.notes || '');
-    setNextAction(lead.next_action || 'none');
+    const cl = getLeadCustomAction(lead.id);
+    setNextAction(cl ? `custom::${cl}` : (lead.next_action || 'none'));
     setNextActionDate(lead.next_action_date ? new Date(lead.next_action_date) : undefined);
     setEditedName(lead.business_name);
-  }, [lead.notes, lead.next_action, lead.next_action_date, lead.business_name]);
+  }, [lead.notes, lead.next_action, lead.next_action_date, lead.business_name, lead.id]);
 
   const handleSaveAll = async () => {
     setIsSaving(true);
@@ -146,8 +155,17 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
         await onBusinessNameChange(lead.id, editedName.trim());
       }
       await onNotesChange(lead.id, notes);
-      await onNextActionChange(lead.id, nextAction, nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined);
-      if (nextAction && nextAction !== 'none' && nextActionDate) {
+      
+      const isCustom = nextAction.startsWith('custom::');
+      const dbAction: NextActionType = isCustom ? 'follow_up' : nextAction as NextActionType;
+      if (isCustom) {
+        setLeadCustomAction(lead.id, nextAction.slice(8));
+      } else {
+        setLeadCustomAction(lead.id, null);
+      }
+      
+      await onNextActionChange(lead.id, dbAction, nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined);
+      if (dbAction && dbAction !== 'none' && nextActionDate) {
         window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
       }
       setDetailOpen(false);
@@ -190,7 +208,8 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   };
 
   const hasFollowUp = lead.next_action && lead.next_action !== 'none';
-  const actionLabel = hasFollowUp ? NEXT_ACTION_OPTIONS.find(o => o.value === lead.next_action)?.label : null;
+  const customActionLabel = getLeadCustomAction(lead.id);
+  const actionLabel = customActionLabel || (hasFollowUp ? NEXT_ACTION_OPTIONS.find(o => o.value === lead.next_action)?.label : null);
   const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
   const borderColor = getDueBorderColor(lead.next_action_date, lead.next_action);
 
@@ -365,7 +384,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-semibold text-primary mb-1.5 block">Next Action</label>
-                <Select value={nextAction} onValueChange={(v) => setNextAction(v as NextActionType)}>
+                <Select value={nextAction} onValueChange={(v) => { setNextAction(v); setShowCustomActionInput(false); }}>
                   <SelectTrigger className="h-9 text-sm border-border/50">
                     <SelectValue />
                   </SelectTrigger>
@@ -373,8 +392,64 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                     {NEXT_ACTION_OPTIONS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
+                    {customActions.length > 0 && (
+                      <>
+                        <div className="h-px bg-border my-1" />
+                        {customActions.map((ca) => (
+                          <SelectItem key={ca.id} value={`custom::${ca.label}`}>
+                            <div className="flex items-center gap-2">
+                              <Tag className="h-3 w-3 text-teal-400" />
+                              {ca.label}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
+                {!showCustomActionInput ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full justify-start text-xs text-muted-foreground hover:text-foreground mt-1"
+                    onClick={() => setShowCustomActionInput(true)}
+                  >
+                    <Plus className="h-3 w-3 mr-1.5" />
+                    Add custom action
+                  </Button>
+                ) : (
+                  <div className="flex gap-1.5 mt-1">
+                    <Input
+                      value={customActionName}
+                      onChange={(e) => setCustomActionName(e.target.value)}
+                      placeholder="e.g. Send Proposal"
+                      className="h-8 text-sm"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const trimmed = customActionName.trim();
+                          if (trimmed) {
+                            addAction(trimmed);
+                            setNextAction(`custom::${trimmed}`);
+                            setShowCustomActionInput(false);
+                            setCustomActionName('');
+                          }
+                        }
+                      }}
+                    />
+                    <Button size="sm" className="h-8 px-3" onClick={() => {
+                      const trimmed = customActionName.trim();
+                      if (trimmed) {
+                        addAction(trimmed);
+                        setNextAction(`custom::${trimmed}`);
+                        setShowCustomActionInput(false);
+                        setCustomActionName('');
+                      }
+                    }}>
+                      Add
+                    </Button>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="text-xs font-semibold text-primary mb-1.5 block">Due Date</label>

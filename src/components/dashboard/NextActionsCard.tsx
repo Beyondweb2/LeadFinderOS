@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { CalendarClock, AlertTriangle, Clock, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { OutreachLead } from '@/types/outreach';
+import { getLeadCustomAction } from '@/hooks/useCustomNextActions';
 
 interface NextActionsCardProps {
   trackedLeads: OutreachLead[];
@@ -129,7 +130,7 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
               </div>
               <div className="flex items-center justify-between ml-5">
                 <span className="text-xs text-muted-foreground">
-                  {ACTION_LABELS[currentLead.next_action || 'none']}
+                  {getLeadCustomAction(currentLead.id) || ACTION_LABELS[currentLead.next_action || 'none']}
                 </span>
                 <span className={`text-xs font-medium ${currentLead.next_action_date && new Date(currentLead.next_action_date) < today ? 'text-red-500' : 'text-amber-500'}`}>
                   {currentLead.next_action_date ? formatDate(currentLead.next_action_date) : '—'}
