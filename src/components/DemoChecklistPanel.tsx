@@ -61,7 +61,8 @@ export function DemoChecklistPanel() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const dismissKey = `demo_walkthrough_dismissed_${typeof window !== 'undefined' ? '' : ''}`;
+  // Dismiss key is per-user so it doesn't leak across accounts
+  const userId = useTrial().demoSearchUsed !== undefined ? '' : '';
   const [dismissed, setDismissed] = useState(() => {
     try { return localStorage.getItem('demo_walkthrough_dismissed') === 'true'; } catch { return false; }
   });
