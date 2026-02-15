@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 const STORAGE_KEY = 'leadfinder-theme';
 const DEFAULT_ACCENT = '210 100% 50%';
-const DEFAULT_THEME_ID = 'midnight';
+const DEFAULT_THEME_ID = 'navy';
 
 // Minimal theme data for initialization (before full hook loads)
 const THEMES: Record<string, { mode: 'dark' | 'light'; background: string; card: string; popover: string; secondary: string; muted: string; foreground: string; mutedForeground: string; secondaryForeground: string; border: string; input: string }> = {
