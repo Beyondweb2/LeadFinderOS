@@ -711,7 +711,7 @@ const Landing = () => {
       </div>
 
       {/* Pain Section */}
-      <ScrollReveal className="relative z-10 py-10 sm:py-14 md:py-20 px-4">
+      <ScrollReveal className="relative z-10 py-8 sm:py-10 md:py-14 px-4">
         <div className="container mx-auto max-w-2xl text-center">
           <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-6 sm:mb-8">
             Outreach Shouldn't Feel <span className="text-gradient-primary">This Messy</span>
@@ -868,7 +868,7 @@ const Landing = () => {
         <HowItWorksSection ScrollReveal={ScrollReveal} />
       </div>
 
-      <InlineCTA text="See how easy it is to find leads." />
+      
 
       {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
@@ -878,10 +878,10 @@ const Landing = () => {
         <div className="container mx-auto">
           <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight leading-[1.1] px-2">
-              Never Wonder <span className="text-gradient-primary">What To Say</span> Again
+              Your Complete <span className="text-gradient-primary">Lead Toolkit</span>
             </h2>
             <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6] px-2">
-              Use ready-made WhatsApp and SMS templates that auto-fill business names — personalise and send in seconds.
+              Find, message, organise, and track — all in one place.
             </p>
             <p className="text-foreground/80 text-sm sm:text-base font-bold mt-3 sm:mt-4">
               Message 30 businesses in 10 minutes.
@@ -1065,31 +1065,8 @@ const Landing = () => {
 
 
 
-      {/* Value Reinforcement Section */}
-      <ScrollReveal className="relative z-10 py-10 sm:py-14 md:py-18 px-4">
-        <div className="container mx-auto max-w-lg text-center">
-          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.1] mb-5 sm:mb-6">
-            One Plan. <span className="text-gradient-primary">Full Access.</span>
-          </h2>
-          <ul className="space-y-2.5 sm:space-y-3 text-sm sm:text-base text-foreground/70 max-w-xs mx-auto">
-            {[
-              'Unlimited lead searches',
-              'Built-in CRM',
-              'WhatsApp & SMS outreach',
-              'Ready-made templates',
-              'Dashboard & analytics',
-            ].map((item) => (
-              <li key={item} className="flex items-center gap-2.5 justify-center sm:justify-start">
-                <Check className="h-4 w-4 flex-shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="text-muted-foreground/60 text-xs sm:text-sm mt-5 sm:mt-6">
-            £19.99/month after free trial. Cancel anytime.
-          </p>
-        </div>
-      </ScrollReveal>
+
+
 
       <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-4">
         <div className="container mx-auto">
