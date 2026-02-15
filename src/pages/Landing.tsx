@@ -724,10 +724,10 @@ const Landing = () => {
 
           <div className="space-y-4 sm:space-y-5">
             {[
-              'Not getting enough opportunities',
-              'No solid working system',
-              'Outreach that feels slow and manual',
-              'No repeatable way to bring in new clients',
+              'Struggling to find businesses that actually need a website',
+              'No solid system to consistently generate leads',
+              'Spending hours searching with barely any results',
+              'No predictable way to land your next paying client',
             ].map((pain) => (
               <div key={pain} className="flex flex-col items-center gap-0.5">
                 <X className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
