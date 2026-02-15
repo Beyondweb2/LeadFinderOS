@@ -256,7 +256,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
               {/* Kebab menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                  <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors opacity-0 group-hover:opacity-100 shrink-0">
+                  <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors shrink-0">
                     <MoreVertical className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
