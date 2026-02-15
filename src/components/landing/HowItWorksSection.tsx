@@ -27,28 +27,28 @@ interface StepData {
 const STEPS: StepData[] = [
   {
     icon: Search,
-    title: 'Find 20+ Website-Less Businesses In Minutes',
+    title: 'Find Leads Fast',
     description: 'Search any location and instantly see which businesses don\'t have a website.',
     images: [step1Image],
     badge: '20+ Countries',
   },
   {
     icon: ClipboardList,
-    title: 'Organise Every Lead In One Click',
+    title: 'Organise In One Click',
     description: 'Save promising leads in one click and organise them into your pipeline.',
     images: [step2Image],
     badge: '100,000+ Businesses',
   },
   {
     icon: MessageSquare,
-    title: 'Message Dozens Of Businesses In Minutes',
+    title: 'Message In Minutes',
     description: 'Choose from ready-made templates that auto-fill each business name — send personalised WhatsApp or SMS messages in seconds.',
     images: [step3Image],
     badge: 'Direct Outreach',
   },
   {
     icon: BarChart3,
-    title: 'See Your Entire Pipeline At A Glance',
+    title: 'Track & Close',
     description: 'Track every lead from first message to paid client — set follow-ups, log replies, and see your full pipeline at a glance.',
     images: [step4bImage],
     badge: 'Full Pipeline',
