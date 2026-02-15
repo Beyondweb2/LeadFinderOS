@@ -1028,7 +1028,7 @@ export function OutreachTable({
                               href={lead.google_maps_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="p-1.5 rounded-md hover:bg-muted text-primary hover:text-primary/80 transition-colors"
+                              className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-500 hover:text-blue-400 transition-colors"
                               title="View on Google Maps"
                             >
                               <ExternalLink className="h-4 w-4" />
@@ -1039,7 +1039,7 @@ export function OutreachTable({
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <button
-                                    className="p-1.5 rounded-md hover:bg-muted text-primary hover:text-primary/80 transition-colors"
+                                    className="p-1.5 rounded-md hover:bg-amber-500/10 text-amber-500 hover:text-amber-400 transition-colors"
                                     title="Call options"
                                   >
                                     <Phone className="h-4 w-4" />
@@ -1067,14 +1067,14 @@ export function OutreachTable({
                               </DropdownMenu>
                               <button
                                     onClick={() => handleSMSClick(lead)}
-                                    className="p-1.5 rounded-md hover:bg-muted text-blue-500 hover:text-blue-400 transition-colors"
+                                    className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-colors"
                                     title="Send SMS"
                                   >
                                     <MessageCircle className="h-4 w-4" />
                                   </button>
                                   <button
                                     onClick={() => handleWhatsAppClick(lead)}
-                                    className="p-1.5 rounded-md hover:bg-muted text-green-500 hover:text-green-400 transition-colors"
+                                    className="p-1.5 rounded-md hover:bg-green-500/10 text-green-500 hover:text-green-400 transition-colors"
                                     title="Send WhatsApp message"
                                   >
                                     <MessageSquare className="h-4 w-4" />

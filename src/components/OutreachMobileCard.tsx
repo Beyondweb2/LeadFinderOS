@@ -108,7 +108,7 @@ export function OutreachMobileCard({
         {/* Right: Action buttons */}
         <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {lead.google_maps_url && (
-            <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10" asChild>
               <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer">
                 <ExternalLink className="h-3.5 w-3.5" />
               </a>
@@ -119,7 +119,7 @@ export function OutreachMobileCard({
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-primary">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10">
                     <Phone className="h-3.5 w-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -146,7 +146,7 @@ export function OutreachMobileCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10"
+                className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                 onClick={onSMSClick}
               >
                 <MessageCircle className="h-3.5 w-3.5" />
