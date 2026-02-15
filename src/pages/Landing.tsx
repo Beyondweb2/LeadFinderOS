@@ -724,10 +724,10 @@ const Landing = () => {
 
           <div className="space-y-4 sm:space-y-5">
             {[
-              'Spending hours searching for leads with no real system',
-              'Messaging businesses and forgetting who replied or when',
-              'Rewriting the same cold message again and again',
-              'Losing potential clients because you didn\'t follow up',
+              'Not getting enough opportunities',
+              'Spending hours searching for just a few leads',
+              'Outreach that feels slow and manual',
+              'No repeatable way to bring in new clients',
             ].map((pain) => (
               <div key={pain} className="flex flex-col items-center gap-0.5">
                 <X className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
@@ -737,10 +737,10 @@ const Landing = () => {
           </div>
 
           <p className="text-foreground font-extrabold text-base sm:text-lg md:text-xl mt-10 sm:mt-12">
-            This is why outreach feels draining.
+            This is why growth feels unpredictable.
           </p>
           <p className="text-base sm:text-lg md:text-xl font-semibold mt-5 sm:mt-6" style={{ color: 'hsl(210 100% 65%)' }}>
-            LeadFinder Pro gives you structure, speed, and control.
+            LeadFinder Pro helps you generate more opportunities — consistently.
           </p>
         </div>
 
