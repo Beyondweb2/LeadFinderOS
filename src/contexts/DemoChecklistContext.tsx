@@ -7,7 +7,9 @@ export interface DemoChecklistState {
   addedToCrm: boolean;
   crmAddCount: number;
   contactAttempted: boolean;
-  statusUpdated: boolean;
+  statusChanged: boolean;
+  trackPressed: boolean;
+  statusUpdated: boolean; // derived: statusChanged && trackPressed
   leadTracked: boolean;
   followUpSet: boolean;
 }
@@ -36,7 +38,7 @@ function loadState(userId?: string): DemoChecklistState {
     const raw = localStorage.getItem(getKey(userId));
     if (raw) return JSON.parse(raw);
   } catch { /* ignore */ }
-  return { searchDone: false, addedToCrm: false, crmAddCount: 0, contactAttempted: false, statusUpdated: false, leadTracked: false, followUpSet: false };
+  return { searchDone: false, addedToCrm: false, crmAddCount: 0, contactAttempted: false, statusChanged: false, trackPressed: false, statusUpdated: false, leadTracked: false, followUpSet: false };
 }
 
 function saveState(state: DemoChecklistState, userId?: string) {
@@ -95,8 +97,25 @@ export function DemoChecklistProvider({
       });
     };
     const onContact = () => completeStep('contactAttempted');
-    const onStatus = () => completeStep('statusUpdated');
-    const onTrack = () => completeStep('leadTracked');
+    const onStatus = () => {
+      // Mark statusChanged, then derive statusUpdated if both conditions met
+      setState(prev => {
+        if (prev.statusChanged) return prev;
+        const next = { ...prev, statusChanged: true, statusUpdated: prev.trackPressed };
+        saveState(next, user?.id);
+        return next;
+      });
+    };
+    const onTrack = () => {
+      // Mark trackPressed, then derive statusUpdated if both conditions met
+      setState(prev => {
+        if (prev.trackPressed) return prev;
+        const next = { ...prev, trackPressed: true, statusUpdated: prev.statusChanged };
+        saveState(next, user?.id);
+        return next;
+      });
+    };
+    const onOpenTrackLeads = () => completeStep('leadTracked');
     const onFollowUp = () => completeStep('followUpSet');
 
     // Also capture tel: link clicks as contact attempts
@@ -110,7 +129,8 @@ export function DemoChecklistProvider({
     window.addEventListener('crm-lead-added', onCrmAdd);
     window.addEventListener('demo-checklist-contact', onContact);
     window.addEventListener('demo-checklist-status-change', onStatus);
-    window.addEventListener('demo-checklist-lead-tracked', onTrack);
+    window.addEventListener('demo-checklist-track-pressed', onTrack);
+    window.addEventListener('demo-checklist-next-action-set', onFollowUp);
     window.addEventListener('demo-checklist-next-action-set', onFollowUp);
     document.addEventListener('click', onTelClick, true);
 
@@ -119,7 +139,8 @@ export function DemoChecklistProvider({
       window.removeEventListener('crm-lead-added', onCrmAdd);
       window.removeEventListener('demo-checklist-contact', onContact);
       window.removeEventListener('demo-checklist-status-change', onStatus);
-      window.removeEventListener('demo-checklist-lead-tracked', onTrack);
+      window.removeEventListener('demo-checklist-track-pressed', onTrack);
+      window.removeEventListener('demo-checklist-next-action-set', onFollowUp);
       window.removeEventListener('demo-checklist-next-action-set', onFollowUp);
       document.removeEventListener('click', onTelClick, true);
     };

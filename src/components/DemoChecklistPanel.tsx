@@ -155,6 +155,11 @@ export function DemoChecklistPanel() {
                           {step.key === 'addedToCrm' && !done && state.crmAddCount > 0 && (
                             <span className="text-primary font-medium ml-1">({state.crmAddCount}/3)</span>
                           )}
+                          {step.key === 'statusUpdated' && !done && (state.statusChanged || state.trackPressed) && (
+                            <span className="text-primary font-medium ml-1">
+                              ({[state.statusChanged && 'status ✓', state.trackPressed && 'track ✓'].filter(Boolean).join(', ')})
+                            </span>
+                          )}
                         </span>
                         {isNext && !done && (
                           <Button
