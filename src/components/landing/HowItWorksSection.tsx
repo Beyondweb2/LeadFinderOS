@@ -42,7 +42,7 @@ const STEPS: StepData[] = [
   {
     icon: MessageSquare,
     title: 'Message In One Click',
-    mobileTitle: 'Message Fast',
+    mobileTitle: 'Message In One Click',
     description: 'Choose a template, auto-fill the business name, and send via WhatsApp or SMS in seconds.',
     images: [step3Image],
     badge: 'Direct Outreach',
@@ -155,7 +155,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                 >
                   {index + 1}.
                 </span>
-                <h3 className="text-xl font-bold tracking-tight leading-[1.15] max-w-[220px] mb-2">{step.mobileTitle || step.title}</h3>
+                <h3 className="text-xl font-bold tracking-tight leading-[1.15] whitespace-nowrap mb-2">{step.mobileTitle || step.title}</h3>
                 
                 <p className="text-muted-foreground/70 text-sm leading-[1.6] mb-4 max-w-xs">
                   {step.description}
