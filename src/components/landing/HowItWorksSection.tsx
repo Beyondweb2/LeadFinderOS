@@ -18,6 +18,7 @@ import step4Image from '@/assets/howto-step3-outreach-crm.png';
 interface StepData {
   icon: typeof Search;
   title: string;
+  mobileTitle?: string;
   description: string;
   images: string[];
   badge: string;
@@ -41,7 +42,8 @@ const STEPS: StepData[] = [
   {
     icon: MessageSquare,
     title: 'Message In One Click',
-    description: 'Choose from ready-made templates that auto-fill each business name — send personalised WhatsApp or SMS messages in seconds.',
+    mobileTitle: 'Message Fast',
+    description: 'Choose a template, auto-fill the business name, and send via WhatsApp or SMS in seconds.',
     images: [step3Image],
     badge: 'Direct Outreach',
   },
@@ -147,16 +149,13 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
           <div className="px-1 space-y-10">
             {STEPS.map((step, index) => (
               <div key={step.title} className="flex flex-col items-center text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
-                  <span 
-                    className="text-sm font-bold w-6 text-right shrink-0"
-                    style={{ color: 'hsl(210 100% 60%)' }}
-                  >
-                    {index + 1}.
-                  </span>
-                   <h3 className="text-2xl font-bold tracking-tight">{step.title}</h3>
-                  <span className="w-6 shrink-0" aria-hidden="true" />
-                </div>
+                <span 
+                  className="text-xs font-bold mb-1"
+                  style={{ color: 'hsl(210 100% 60%)' }}
+                >
+                  {index + 1}.
+                </span>
+                <h3 className="text-xl font-bold tracking-tight leading-[1.15] max-w-[220px] mb-2">{step.mobileTitle || step.title}</h3>
                 
                 <p className="text-muted-foreground/70 text-sm leading-[1.6] mb-4 max-w-xs">
                   {step.description}
