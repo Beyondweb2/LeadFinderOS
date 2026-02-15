@@ -347,26 +347,26 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
 
         {/* Desktop View */}
         <div className="hidden md:block rounded-lg border border-border overflow-hidden">
-          <Table>
+          <Table className="table-fixed w-full">
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="w-[250px]">
+                <TableHead className="w-[20%]">
                   <SortButton field="name">Business Name</SortButton>
                 </TableHead>
-                <TableHead className="w-[200px]">Address</TableHead>
-                <TableHead className="w-[130px]">Phone</TableHead>
-                <TableHead className="w-[100px]">
+                <TableHead className="w-[16%]">Address</TableHead>
+                <TableHead className="w-[13%]">Phone</TableHead>
+                <TableHead className="w-[10%]">
                   <SortButton field="rating">Rating</SortButton>
                 </TableHead>
-                <TableHead className="w-[140px]">
+                <TableHead className="w-[11%]">
                   <SortButton field="websiteStatus">Status</SortButton>
                 </TableHead>
-                <TableHead className="w-[90px]">
+                <TableHead className="w-[7%]">
                   <SortButton field="confidence">Conf.</SortButton>
                 </TableHead>
-                <TableHead className="w-[120px]">Contact Status</TableHead>
-                <TableHead className="w-[100px]">Links</TableHead>
-                <TableHead className="w-[80px]">Actions</TableHead>
+                <TableHead className="w-[10%]">Contact</TableHead>
+                <TableHead className="w-[7%]">Links</TableHead>
+                <TableHead className="w-[6%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -384,19 +384,19 @@ export function LeadsTable({ leads, onExport, onLogContact, getLatestContact, on
                     style={{ animationDelay: `${index * 20}ms` }}
                   >
                     <TableCell className="font-medium data-table-cell">
-                      <div className="flex flex-col">
-                        <span className="truncate max-w-[230px]">{lead.name}</span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="truncate">{lead.name}</span>
                         {lead.category && (
-                          <span className="text-xs text-muted-foreground truncate max-w-[230px]">
+                          <span className="text-xs text-muted-foreground truncate">
                             {lead.category}
                           </span>
                         )}
                       </div>
                     </TableCell>
                     <TableCell className="data-table-cell">
-                      <div className="flex items-start gap-1">
+                      <div className="flex items-start gap-1 min-w-0">
                         <MapPin className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
-                        <span className="truncate max-w-[180px] text-muted-foreground">
+                        <span className="truncate text-muted-foreground">
                           {lead.address}
                         </span>
                       </div>
