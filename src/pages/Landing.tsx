@@ -239,7 +239,7 @@ const MobileHeroVideo = () => {
           loop 
           muted
           playsInline
-          preload="auto"
+          preload="none"
           onCanPlayThrough={() => setVideoLoaded(true)}
         >
           <source src={demoVideo} type="video/mp4" />
@@ -313,7 +313,7 @@ const VideoSection = () => {
               loop 
               muted
               playsInline
-              preload="auto"
+              preload="metadata"
               onCanPlayThrough={() => setVideoLoaded(true)}
             >
               <source src={demoVideo} type="video/mp4" />
@@ -386,6 +386,7 @@ const MobileFeatureCarousel = ({ features, onExpand }: { features: typeof FEATUR
                     <img 
                       src={feature.image} 
                       alt={feature.title}
+                      loading="lazy"
                       className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-105'}`}
                     />
                     <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
@@ -738,7 +739,7 @@ const Landing = () => {
                     boxShadow: '0 0 20px hsl(0 60% 40% / 0.1)'
                   }}
                 >
-                  <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" />
+                  <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" loading="lazy" />
                 </div>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
@@ -758,7 +759,7 @@ const Landing = () => {
                     boxShadow: '0 0 20px hsl(142 60% 40% / 0.1)'
                   }}
                 >
-                  <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" />
+                  <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" />
                 </div>
                 <ul className="space-y-2 text-sm text-muted-foreground">
                   <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
@@ -788,7 +789,7 @@ const Landing = () => {
                         boxShadow: '0 0 30px hsl(0 60% 40% / 0.1)'
                       }}
                     >
-                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-contain" />
+                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-contain" loading="lazy" />
                     </div>
                   </div>
                   <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
@@ -816,7 +817,7 @@ const Landing = () => {
                         boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
                       }}
                     >
-                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" />
+                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" />
                     </div>
                   </div>
                   <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
@@ -915,6 +916,7 @@ const Landing = () => {
                           <img 
                             src={feature.image} 
                             alt={feature.title}
+                            loading="lazy"
                             className={`w-full h-[260px] lg:h-[300px] object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
                           />
                         </div>

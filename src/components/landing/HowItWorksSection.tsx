@@ -93,6 +93,7 @@ const StepImage = ({
       <img 
         src={src} 
         alt={alt}
+        loading="lazy"
         className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
       />
       <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
@@ -180,6 +181,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         <img 
                           src={img} 
                           alt={`${step.title} ${step.images.length > 1 ? imgIdx + 1 : ''}`}
+                          loading="lazy"
                           className="w-full h-full object-cover"
                         />
                         <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
@@ -239,6 +241,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                           <img 
                             src={step.images[0]} 
                             alt={step.title}
+                            loading="lazy"
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
                           />
                           <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
