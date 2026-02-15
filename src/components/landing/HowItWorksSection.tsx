@@ -33,7 +33,7 @@ const STEPS: StepData[] = [
   },
   {
     icon: ClipboardList,
-    title: 'Save & Sort Instantly',
+    title: 'Build Your Pipeline',
     description: 'Save promising leads in one click and organise them into your pipeline.',
     images: [step2Image],
     badge: '100,000+ Businesses',
