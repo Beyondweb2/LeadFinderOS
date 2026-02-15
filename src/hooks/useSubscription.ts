@@ -58,7 +58,14 @@ export function useSubscription() {
     const accessToken = accessTokenRef.current;
     
     if (!accessToken || !userId) {
-      setState(prev => ({ ...prev, isLoading: false, subscribed: false, status: null, trialEnd: null, isPaidSubscriber: false, isStripeTrialing: false, paymentFailureCount: 0, lastPaymentFailedAt: null, isPaymentPaused: false }));
+      // Only reset if we never had a subscription state (avoid clearing during token refresh)
+      setState(prev => {
+        if (prev.subscribed || prev.status) {
+          // Preserve existing state — likely a transient token gap during refresh
+          return { ...prev, isLoading: false };
+        }
+        return { ...prev, isLoading: false, subscribed: false, status: null, trialEnd: null, isPaidSubscriber: false, isStripeTrialing: false, paymentFailureCount: 0, lastPaymentFailedAt: null, isPaymentPaused: false };
+      });
       return;
     }
 
@@ -129,23 +136,12 @@ export function useSubscription() {
       const freshToken = sessionData?.session?.access_token;
       
       if (!freshToken) {
-        // Session expired - user needs to re-authenticate
-           setState({
-             subscribed: false,
-             productId: null,
-             subscriptionEnd: null,
-             trialEnd: null,
-             isLoading: false,
-             error: null,
-             status: null,
-             isAdmin: false,
-             isPaidSubscriber: false,
-             isStripeTrialing: false,
-             paymentFailureCount: 0,
-             lastPaymentFailedAt: null,
-             isPaymentPaused: false,
-           });
-          return;
+        // Session expired temporarily — preserve existing state to avoid flicker
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+        }));
+        return;
       }
       
       // Update the ref with fresh token
@@ -161,21 +157,11 @@ export function useSubscription() {
       if (error) {
         // If auth error, treat as not subscribed rather than showing error
         if (error.message?.includes('Auth') || error.message?.includes('authentication')) {
-        setState({
-           subscribed: false,
-           productId: null,
-           subscriptionEnd: null,
-           trialEnd: null,
-           isLoading: false,
-           error: null,
-           status: null,
-           isAdmin: false,
-           isPaidSubscriber: false,
-           isStripeTrialing: false,
-           paymentFailureCount: 0,
-           lastPaymentFailedAt: null,
-           isPaymentPaused: false,
-        });
+          // Auth error during refresh — preserve existing state to avoid flicker
+          setState(prev => ({
+            ...prev,
+            isLoading: false,
+          }));
           return;
         }
         throw error;

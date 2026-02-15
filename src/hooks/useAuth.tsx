@@ -65,42 +65,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, newSession) => {
+      (event, newSession) => {
         const newUserId = newSession?.user?.id ?? null;
         const userChanged = currentUserIdRef.current !== newUserId;
         
-        // Only update state if user actually changed (not just token refresh)
+        // Always update session (including token refresh) to keep access token current
+        currentUserIdRef.current = newUserId;
+        setSession(newSession);
+        
+        // Only update user object if user actually changed
         if (userChanged || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
-          currentUserIdRef.current = newUserId;
-          setSession(newSession);
           setUser(newSession?.user ?? null);
         }
         
         setIsLoading(false);
         
         // On new signup, attach affiliate code and ref_source if present
+        // Use setTimeout to avoid deadlocks from Supabase calls inside callback
         if (event === 'SIGNED_IN' && newSession?.user) {
-          const affiliateCode = getStoredAffiliateCode();
-          const refSource = getAndClearRefSource();
-          
-          // Build update object with only non-null values
-          const updateData: Record<string, string> = {};
-          if (affiliateCode) {
-            updateData.affiliate_code = affiliateCode;
-            updateData.affiliate_attributed_at = new Date().toISOString();
-          }
-          if (refSource) {
-            updateData.ref_source = refSource;
-          }
-          
-          // Only update if we have something to set
-          if (Object.keys(updateData).length > 0) {
-            await supabase
-              .from('user_trials')
-              .update(updateData)
-              .eq('user_id', newSession.user.id)
-              .is('affiliate_code', null); // Only if not already attributed
-          }
+          const userId = newSession.user.id;
+          setTimeout(async () => {
+            const affiliateCode = getStoredAffiliateCode();
+            const refSource = getAndClearRefSource();
+            
+            const updateData: Record<string, string> = {};
+            if (affiliateCode) {
+              updateData.affiliate_code = affiliateCode;
+              updateData.affiliate_attributed_at = new Date().toISOString();
+            }
+            if (refSource) {
+              updateData.ref_source = refSource;
+            }
+            
+            if (Object.keys(updateData).length > 0) {
+              await supabase
+                .from('user_trials')
+                .update(updateData)
+                .eq('user_id', userId)
+                .is('affiliate_code', null);
+            }
+          }, 0);
         }
       }
     );
