@@ -803,16 +803,16 @@ const Landing = () => {
             Not Getting Enough <span className="text-gradient-primary">Clients?</span>
           </h2>
 
-          <div className="space-y-4 sm:space-y-5">
+          <div className="space-y-5 sm:space-y-6 md:space-y-7">
             {[
               'Wasting hours manually searching for leads',
               'No proven system to follow',
               'Never sure where the next client will come from',
               'Working hard, but not seeing consistent results',
             ].map((pain) => (
-              <div key={pain} className="flex flex-col items-center gap-0.5">
-                <X className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
-                <p className="text-sm sm:text-base text-foreground/90 leading-[1.4]">{pain}</p>
+              <div key={pain} className="flex flex-col items-center gap-1 md:gap-1.5">
+                <X className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
+                <p className="text-sm sm:text-base md:text-lg lg:text-xl text-foreground/90 leading-[1.4]">{pain}</p>
               </div>
             ))}
           </div>
