@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { Check, ChevronDown, ChevronUp, Sparkles, Search, UserPlus, Phone, RefreshCw, CalendarClock, Star, X } from 'lucide-react';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 
 const steps = [
@@ -58,18 +59,29 @@ export function DemoChecklistPanel() {
   const { state, completedCount, totalSteps, allDone, isOpen, setIsOpen, isDemoUser } = useDemoChecklist();
   const { isStripeTrialing } = useTrial();
   const { isPaidSubscriber } = useSubscription();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Dismiss key is per-user so it doesn't leak across accounts
-  const userId = useTrial().demoSearchUsed !== undefined ? '' : '';
-  const [dismissed, setDismissed] = useState(() => {
-    try { return localStorage.getItem('demo_walkthrough_dismissed') === 'true'; } catch { return false; }
-  });
+  // Per-user dismiss key so it doesn't leak across accounts
+  const dismissKey = user?.id ? `demo_walkthrough_dismissed_${user.id}` : null;
+  const [dismissed, setDismissed] = useState(false);
+
+  // Re-check dismissed state when user changes (dismiss is per-user)
+  useEffect(() => {
+    if (!dismissKey) { setDismissed(false); return; }
+    try {
+      // Also clear any old global dismiss key so it doesn't block new users
+      localStorage.removeItem('demo_walkthrough_dismissed');
+      setDismissed(localStorage.getItem(dismissKey) === 'true');
+    } catch { setDismissed(false); }
+  }, [dismissKey]);
 
   const handleDismiss = () => {
     setDismissed(true);
-    try { localStorage.setItem('demo_walkthrough_dismissed', 'true'); } catch {}
+    if (dismissKey) {
+      try { localStorage.setItem(dismissKey, 'true'); } catch {}
+    }
   };
 
   // Determine mode: trial overrides demo
@@ -80,7 +92,7 @@ export function DemoChecklistPanel() {
   }, [isPaidSubscriber, isStripeTrialing]);
 
   const showCompletionCta = allDone && mode === 'demo';
-  console.log('[Walkthrough]', { mode, allDone, showCompletionCta, isDemoUser });
+  console.log('[Walkthrough]', { mode, allDone, showCompletionCta, isDemoUser, dismissed });
 
   if (!isDemoUser || dismissed) return null;
 
