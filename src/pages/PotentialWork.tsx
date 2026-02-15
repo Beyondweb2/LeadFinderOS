@@ -547,7 +547,7 @@ const PotentialWorkPage = () => {
     setShowCustomStatusDialog(false);
   };
 
-  const potentialWorkLeads = useMemo(() => {
+  const allPotentialLeads = useMemo(() => {
     const interestedStatuses: LeadStatus[] = ['interested', 'wants_draft', 'on_hold', 'reviewing_draft', 'paid_for_draft'];
     const allLeads = [...leads, ...archivedLeads];
     
@@ -564,19 +564,6 @@ const PotentialWorkPage = () => {
           lead.phone?.toLowerCase().includes(query)
       );
     }
-
-    // Apply metric filter
-    if (metricFilter) {
-      result = result.filter(l => {
-        if (!l.next_action_date || !l.next_action || l.next_action === 'none') {
-          return metricFilter === 'no_action';
-        }
-        const d = new Date(l.next_action_date);
-        if (isPast(startOfDay(d)) && !isToday(d)) return metricFilter === 'overdue';
-        if (isToday(d)) return metricFilter === 'today';
-        return metricFilter === 'upcoming';
-      });
-    }
     
     result.sort((a, b) => {
       const dateA = a.next_action_date ? new Date(a.next_action_date).getTime() : Infinity;
@@ -585,7 +572,20 @@ const PotentialWorkPage = () => {
     });
     
     return result;
-  }, [leads, archivedLeads, searchQuery, metricFilter]);
+  }, [leads, archivedLeads, searchQuery]);
+
+  const potentialWorkLeads = useMemo(() => {
+    if (!metricFilter) return allPotentialLeads;
+    return allPotentialLeads.filter(l => {
+      if (!l.next_action_date || !l.next_action || l.next_action === 'none') {
+        return metricFilter === 'no_action';
+      }
+      const d = new Date(l.next_action_date);
+      if (isPast(startOfDay(d)) && !isToday(d)) return metricFilter === 'overdue';
+      if (isToday(d)) return metricFilter === 'today';
+      return metricFilter === 'upcoming';
+    });
+  }, [allPotentialLeads, metricFilter]);
 
   if (isLoading) {
     return (
@@ -626,7 +626,7 @@ const PotentialWorkPage = () => {
       </div>
 
       {/* Metrics Summary */}
-      {potentialWorkLeads.length > 0 && (() => {
+      {allPotentialLeads.length > 0 && (() => {
         const now = new Date();
         const todayStart = startOfDay(now);
         let overdueCount = 0;
@@ -634,7 +634,7 @@ const PotentialWorkPage = () => {
         let upcomingCount = 0;
         let noActionCount = 0;
 
-        potentialWorkLeads.forEach(l => {
+        allPotentialLeads.forEach(l => {
           if (!l.next_action_date || !l.next_action || l.next_action === 'none') {
             noActionCount++;
             return;
