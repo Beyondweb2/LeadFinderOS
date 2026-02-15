@@ -722,7 +722,7 @@ const Landing = () => {
                   onClick={() => trackLead()}
                   className="text-[12px] text-foreground/40 hover:text-foreground/60 transition-colors duration-200"
                 >
-                  Try <span className="text-primary">Free Demo</span> instead <span className="inline-block ml-0.5">→</span>
+                  or try the <span className="text-primary">free demo</span> <span className="inline-block ml-0.5">→</span>
                 </Link>
                 <p className="text-[9px] text-foreground/[0.22] mt-1.5">No card required</p>
               </div>
