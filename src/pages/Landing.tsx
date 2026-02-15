@@ -725,7 +725,7 @@ const Landing = () => {
           <div className="space-y-4 sm:space-y-5">
             {[
               'Not getting enough opportunities',
-              'Spending hours searching for just a few leads',
+              'No solid working system',
               'Outreach that feels slow and manual',
               'No repeatable way to bring in new clients',
             ].map((pain) => (
