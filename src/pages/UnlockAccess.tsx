@@ -46,14 +46,12 @@ const UnlockAccess = () => {
     }
   }, [isPaidSubscriber, isStripeTrialing, subLoading, navigate]);
 
-  // Intercept browser back button — redirect to demo with welcome popup
+  // Intercept browser back button — redirect to landing with demo welcome popup
   useEffect(() => {
-    // Push a dummy state so we can detect back navigation
     window.history.pushState({ fromUnlock: true }, '');
 
-    const handlePopState = (e: PopStateEvent) => {
-      // User pressed back — redirect to demo with welcome flag
-      navigate('/find-leads?welcome=demo', { replace: true });
+    const handlePopState = () => {
+      navigate('/landing?welcome=demo', { replace: true });
     };
 
     window.addEventListener('popstate', handlePopState);

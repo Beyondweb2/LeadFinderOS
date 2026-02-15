@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, lazy, Suspense } from 'react';
 import { trackLead } from '@/lib/fbPixel';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -21,6 +22,7 @@ import {
   MessageSquare,
   Gift,
   Star,
+  Sparkles,
 } from 'lucide-react';
 import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
@@ -482,7 +484,21 @@ const Landing = () => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
   const [hasScrolled, setHasScrolled] = useState(false);
   const isMobile = useIsMobile();
+  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   
+  // Demo welcome popup state
+  const [showDemoWelcome, setShowDemoWelcome] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('welcome') === 'demo' && user) {
+      setShowDemoWelcome(true);
+      searchParams.delete('welcome');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [user]);
+
   // Lock landing page to dark brand theme
   useLandingTheme();
 
@@ -500,6 +516,58 @@ const Landing = () => {
     <div className="min-h-screen bg-background overflow-hidden">
       {/* Capture affiliate codes from URL */}
       <AffiliateCapture />
+
+      {/* Demo welcome popup — shown when user backs out of /unlock */}
+      <Dialog open={showDemoWelcome} onOpenChange={setShowDemoWelcome}>
+        <DialogContent className="max-w-sm w-[92vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
+          <div className="flex flex-col items-center p-6 sm:p-8 gap-5 text-center">
+            <div className="inline-flex p-3 rounded-full bg-primary/10 border border-primary/20">
+              <Search className="h-7 w-7 text-primary" />
+            </div>
+
+            <div className="space-y-2.5">
+              <h3 className="text-xl font-bold text-foreground">Try the Free Demo</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Walk through the <span className="font-semibold text-foreground">full workflow</span> — search for businesses, add them to your CRM, track outreach, and manage your pipeline.
+              </p>
+            </div>
+
+            <div className="w-full bg-primary/5 border border-primary/15 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-bold text-primary uppercase tracking-wider">What you get</p>
+              <ul className="space-y-1.5 text-sm text-foreground/90 text-left">
+                <li className="flex items-center gap-2">
+                  <Check className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={3} />
+                  1 free search with real results
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={3} />
+                  Guided walkthrough of every feature
+                </li>
+                <li className="flex items-center gap-2">
+                  <Check className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={3} />
+                  Full CRM & outreach tools to explore
+                </li>
+              </ul>
+            </div>
+
+            <p className="text-sm font-bold text-primary">
+              No card required
+            </p>
+
+            <Button
+              className="w-full btn-premium font-semibold py-3 h-auto text-base"
+              onClick={() => {
+                setShowDemoWelcome(false);
+                navigate('/find-leads');
+              }}
+            >
+              <Sparkles className="mr-2 h-4 w-4" />
+              Start Free Demo
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       {/* Feature Image Modal */}
       <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
         <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
