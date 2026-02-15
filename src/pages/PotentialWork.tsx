@@ -278,13 +278,34 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} onClick={(e) => e.stopPropagation()} />
             </div>
 
-            {/* Meta row: status pill + phone + map */}
+            {/* Meta row: status pill + contact + map */}
             <div className="flex items-center gap-2.5 text-[11px] sm:text-xs text-muted-foreground flex-wrap">
               <OutreachStatusBadge status={lead.status} compact />
               {lead.phone && (
-                <span className="flex items-center gap-1 font-mono">
-                  <Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-500" />{lead.phone}
-                </span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                    <button className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-[11px] sm:text-xs font-medium">
+                      <Phone className="h-3 w-3" /> Contact
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-[160px]">
+                    <DropdownMenuItem asChild>
+                      <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer">
+                        <MessageSquare className="h-4 w-4 text-green-500" /> WhatsApp
+                      </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <a href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`} className="flex items-center gap-2 cursor-pointer">
+                        <MessageCircle className="h-4 w-4 text-blue-400" /> SMS
+                      </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer">
+                        <PhoneCall className="h-4 w-4 text-amber-500" /> Call
+                      </a>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               )}
               {lead.google_maps_url && (
                 <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-blue-400 transition-colors" onClick={(e) => e.stopPropagation()}>
