@@ -720,9 +720,9 @@ const Landing = () => {
                 <Link 
                   to="/auth?intent=demo" 
                   onClick={() => trackLead()}
-                  className="text-[12px] text-primary hover:text-primary/80 transition-colors duration-200"
+                  className="text-[12px] text-foreground/40 hover:text-foreground/60 transition-colors duration-200"
                 >
-                  Try Free Demo instead <span className="inline-block ml-0.5">→</span>
+                  Try <span className="text-primary">Free Demo</span> instead <span className="inline-block ml-0.5">→</span>
                 </Link>
                 <p className="text-[9px] text-foreground/[0.22] mt-1.5">No card required</p>
               </div>
@@ -732,9 +732,9 @@ const Landing = () => {
                 <Link 
                   to="/auth?intent=demo" 
                   onClick={() => trackLead()}
-                  className="text-[13px] text-primary hover:text-primary/80 transition-colors duration-200"
+                  className="text-[13px] text-foreground/40 hover:text-foreground/60 transition-colors duration-200"
                 >
-                  or try the free demo →
+                  or try the <span className="text-primary">free demo</span> →
                 </Link>
               </div>
             </div>
