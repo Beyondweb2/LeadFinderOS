@@ -31,11 +31,11 @@ const steps = [
   },
   {
     key: 'statusUpdated' as const,
-    label: 'Update status & hit Track ⭐',
+    label: 'Update status to "Sent Initial Text" & hit Track ⭐',
     cta: 'Update Status',
     route: '/outreach',
     icon: RefreshCw,
-    helperText: 'Change the status, then hit the star to track the lead.',
+    helperText: 'Change the status to "Sent Initial Text", then hit the star (⭐) to track the lead.',
   },
   {
     key: 'leadTracked' as const,
