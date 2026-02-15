@@ -197,34 +197,34 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   return (
     <>
       <Card
-        className={`border border-border/50 border-l-[3px] ${borderColor} hover:border-border/80 transition-all cursor-pointer group`}
+        className={`border border-border/60 border-l-[4px] ${borderColor} hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 transition-all cursor-pointer group bg-card`}
         onClick={() => setDetailOpen(true)}
       >
-        <div className="flex flex-col sm:flex-row sm:items-start p-3 sm:py-4 sm:px-5 gap-3 md:gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-start p-3 sm:py-5 sm:px-6 gap-3 md:gap-5">
           {/* LEFT: Image / Initials */}
           <div className="hidden sm:flex shrink-0">
             {lead.image_url ? (
-              <div className="w-14 h-14 rounded-lg overflow-hidden bg-muted/30">
+              <div className="w-16 h-16 rounded-xl overflow-hidden bg-muted/30 ring-1 ring-border/30">
                 <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
               </div>
             ) : (
-              <div className="w-14 h-14 rounded-lg bg-muted/30 flex items-center justify-center text-sm font-bold text-muted-foreground/60">
+              <div className="w-16 h-16 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-center text-sm font-bold text-primary/50">
                 {getInitials(lead.business_name)}
               </div>
             )}
           </div>
 
           {/* MIDDLE: Details + Notes */}
-          <div className="flex-1 min-w-0 space-y-1">
+          <div className="flex-1 min-w-0 space-y-1.5">
             {/* Name row */}
             <div className="flex items-center gap-2">
               {/* Mobile image */}
               {lead.image_url ? (
-                <div className="w-9 h-9 rounded-md overflow-hidden bg-muted/30 sm:hidden shrink-0">
+                <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted/30 sm:hidden shrink-0">
                   <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-9 h-9 rounded-md bg-muted/30 flex items-center justify-center text-[10px] font-bold text-muted-foreground/60 sm:hidden shrink-0">
+                <div className="w-10 h-10 rounded-lg bg-primary/5 border border-primary/10 flex items-center justify-center text-[11px] font-bold text-primary/50 sm:hidden shrink-0">
                   {getInitials(lead.business_name)}
                 </div>
               )}
@@ -237,8 +237,8 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
               {/* Kebab menu */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                  <button className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors opacity-0 group-hover:opacity-100 shrink-0">
-                    <MoreVertical className="h-3.5 w-3.5" />
+                  <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors opacity-0 group-hover:opacity-100 shrink-0">
+                    <MoreVertical className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[140px]">
@@ -260,44 +260,45 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             </div>
 
             {/* Meta row: status pill + phone + map */}
-            <div className="flex items-center gap-2 text-[11px] sm:text-xs text-muted-foreground flex-wrap">
+            <div className="flex items-center gap-2.5 text-[11px] sm:text-xs text-muted-foreground flex-wrap">
               <OutreachStatusBadge status={lead.status} compact />
               {lead.phone && (
-                <span className="flex items-center gap-0.5 font-mono">
-                  <Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5" />{lead.phone}
+                <span className="flex items-center gap-1 font-mono">
+                  <Phone className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-500" />{lead.phone}
                 </span>
               )}
               {lead.google_maps_url && (
-                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-0.5 hover:text-foreground transition-colors" onClick={(e) => e.stopPropagation()}>
-                  <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5" /><ExternalLink className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-blue-400 transition-colors" onClick={(e) => e.stopPropagation()}>
+                  <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-blue-500" /><ExternalLink className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
                 </a>
               )}
             </div>
 
             {/* Notes preview — visible, 2 lines clamped */}
             {lead.notes && (
-              <p className="text-xs sm:text-sm text-foreground/70 leading-relaxed line-clamp-2">{lead.notes}</p>
+              <p className="text-xs sm:text-sm text-foreground/70 leading-relaxed line-clamp-2 mt-1">{lead.notes}</p>
             )}
           </div>
 
           {/* RIGHT: Next Action + Due */}
-          <div className="sm:w-32 shrink-0 flex sm:flex-col items-start sm:items-end gap-1 sm:gap-0.5 sm:text-right sm:pt-0.5">
+          <div className="sm:w-36 shrink-0 flex sm:flex-col items-start sm:items-end gap-1 sm:gap-1 sm:text-right sm:pt-1">
             {actionLabel ? (
               <>
-                <span className="text-[11px] sm:text-sm font-medium text-foreground/80">{actionLabel}</span>
+                <span className="text-xs sm:text-sm font-semibold text-foreground/90">{actionLabel}</span>
                 {lead.next_action_date && (
-                  <span className="text-[11px] sm:text-xs text-muted-foreground">
+                  <span className="text-[11px] sm:text-xs text-muted-foreground flex items-center gap-1 sm:justify-end">
+                    <CalendarIcon className="h-3 w-3" />
                     {format(new Date(lead.next_action_date), 'MMM d')}
                   </span>
                 )}
                 {dueLabel && (
-                  <span className={`text-[10px] sm:text-xs font-medium ${dueLabel.cls}`}>
+                  <span className={`text-[10px] sm:text-xs font-semibold ${dueLabel.cls}`}>
                     {dueLabel.text}
                   </span>
                 )}
               </>
             ) : (
-              <span className="text-[10px] sm:text-xs text-muted-foreground/40">No action set</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground/40 italic">No action set</span>
             )}
           </div>
         </div>
@@ -305,40 +306,47 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
 
       {/* Detail / Edit Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle className="text-base">Edit Lead</DialogTitle>
+        <DialogContent className="sm:max-w-lg border-primary/20 bg-card/95 backdrop-blur-xl">
+          <DialogHeader className="pb-2">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <Briefcase className="h-5 w-5 text-primary" />
+              Edit Lead
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            {/* Image */}
-            {lead.image_url && (
-              <div className="relative w-20 h-20 rounded-lg overflow-hidden bg-muted/30">
-                <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
-                <button onClick={handleRemoveImage} className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-background/80 flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors">
-                  <X className="h-2.5 w-2.5" />
-                </button>
-              </div>
-            )}
-            {!lead.image_url && (
-              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()} disabled={isUploadingImage}>
-                <Pencil className="h-3 w-3 mr-1.5" /> Add Image
+          <div className="space-y-4">
+            {/* Image section */}
+            <div className="flex items-center gap-3">
+              {lead.image_url ? (
+                <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-muted/30 ring-2 ring-primary/20">
+                  <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
+                  <button onClick={handleRemoveImage} className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-background/80 flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors">
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="w-16 h-16 rounded-xl bg-primary/5 border-2 border-dashed border-primary/20 flex items-center justify-center text-lg font-bold text-primary/30">
+                  {getInitials(lead.business_name)}
+                </div>
+              )}
+              <Button variant="outline" size="sm" className="text-xs border-primary/20 hover:border-primary/40 hover:bg-primary/5" onClick={() => fileInputRef.current?.click()} disabled={isUploadingImage}>
+                <Pencil className="h-3 w-3 mr-1.5" /> {lead.image_url ? 'Change' : 'Add Image'}
               </Button>
-            )}
+            </div>
 
             {/* Name */}
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Business Name</label>
-              <Input value={editedName} onChange={(e) => setEditedName(e.target.value)} className="h-8 text-sm" />
+              <label className="text-xs font-semibold text-primary mb-1.5 block">Business Name</label>
+              <Input value={editedName} onChange={(e) => setEditedName(e.target.value)} className="h-9 text-sm border-border/50 focus-visible:ring-primary/30" />
             </div>
 
             {/* Status */}
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Status</label>
+              <label className="text-xs font-semibold text-primary mb-1.5 block">Status</label>
               <Select value={lead.status} onValueChange={(v) => {
                 if (v === '__add_custom__') { onAddCustomStatus(); return; }
                 onStatusChange(lead.id, v as LeadStatus);
               }}>
-                <SelectTrigger className="h-8 text-xs">
+                <SelectTrigger className="h-9 text-sm border-border/50">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -354,11 +362,11 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             </div>
 
             {/* Next Action + Date */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Next Action</label>
+                <label className="text-xs font-semibold text-primary mb-1.5 block">Next Action</label>
                 <Select value={nextAction} onValueChange={(v) => setNextAction(v as NextActionType)}>
-                  <SelectTrigger className="h-8 text-xs">
+                  <SelectTrigger className="h-9 text-sm border-border/50">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -369,11 +377,11 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 </Select>
               </div>
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">Due Date</label>
+                <label className="text-xs font-semibold text-primary mb-1.5 block">Due Date</label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className="h-8 text-xs w-full justify-start">
-                      <CalendarIcon className="mr-1.5 h-3 w-3" />
+                    <Button variant="outline" className="h-9 text-sm w-full justify-start border-border/50">
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5 text-primary" />
                       {nextActionDate ? format(nextActionDate, 'MMM d, yyyy') : 'Pick date'}
                     </Button>
                   </PopoverTrigger>
@@ -386,20 +394,20 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
 
             {/* Notes */}
             <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Notes</label>
+              <label className="text-xs font-semibold text-primary mb-1.5 block">Notes</label>
               <Textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Add notes about this lead..."
                 rows={3}
-                className="resize-none text-sm bg-muted/10 border-border/30"
+                className="resize-none text-sm border-border/50 focus-visible:ring-primary/30"
               />
             </div>
           </div>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="ghost" size="sm" onClick={() => setDetailOpen(false)} className="h-8 text-xs">Cancel</Button>
-            <Button size="sm" onClick={handleSaveAll} disabled={isSaving} className="h-8 text-xs gap-1">
-              <Save className="h-3 w-3" />
+          <DialogFooter className="gap-2 sm:gap-0 pt-2">
+            <Button variant="ghost" size="sm" onClick={() => setDetailOpen(false)} className="h-9 text-sm">Cancel</Button>
+            <Button size="sm" onClick={handleSaveAll} disabled={isSaving} className="h-9 text-sm gap-1.5 btn-premium">
+              <Save className="h-3.5 w-3.5" />
               {isSaving ? 'Saving...' : 'Save Changes'}
             </Button>
           </DialogFooter>
