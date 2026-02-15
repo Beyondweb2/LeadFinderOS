@@ -12,9 +12,8 @@ import { useIsMobile } from '@/hooks/use-mobile';
 // Import how-to images
 import step1Image from '@/assets/howto-step1-search.png';
 import step2Image from '@/assets/howto-step2-results.png';
-import step3Image from '@/assets/howto-step3-outreach-crm.png';
-
-import step4bImage from '@/assets/howto-step4-dashboard.png';
+import step3Image from '@/assets/howto-step3-whatsapp-dialog.png';
+import step4Image from '@/assets/howto-step3-outreach-crm.png';
 
 interface StepData {
   icon: typeof Search;
@@ -48,9 +47,9 @@ const STEPS: StepData[] = [
   },
   {
     icon: BarChart3,
-    title: 'Close More Deals',
-    description: 'Track every lead from first message to paid client — set follow-ups, log replies, and see your full pipeline at a glance.',
-    images: [step4bImage],
+    title: 'Track & Close Deals',
+    description: 'Track every lead from first contact to paid client — set follow-ups, log replies, and see your full pipeline at a glance.',
+    images: [step4Image],
     badge: 'Full Pipeline',
   },
 ];
