@@ -719,15 +719,15 @@ const Landing = () => {
 
         <div className="container mx-auto max-w-2xl text-center">
           <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-8 sm:mb-10">
-            Sound <span className="text-gradient-primary">Familiar?</span>
+            Not Getting Enough <span className="text-gradient-primary">Clients?</span>
           </h2>
 
           <div className="space-y-4 sm:space-y-5">
             {[
-              'Tired of hoping the next enquiry comes in',
-              'Scrambling to find businesses to contact',
-              'Too much time searching, not enough time closing',
-              'No reliable way to generate new clients',
+              'Wasting hours manually searching for leads',
+              'No proven system to follow',
+              'Never sure where the next client will come from',
+              'Working hard, but not seeing consistent results',
             ].map((pain) => (
               <div key={pain} className="flex flex-col items-center gap-0.5">
                 <X className="h-4 w-4 sm:h-5 sm:w-5" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
@@ -737,10 +737,10 @@ const Landing = () => {
           </div>
 
           <p className="text-foreground font-extrabold text-base sm:text-lg md:text-xl mt-10 sm:mt-12">
-            You don't have a client problem — you have a lead generation problem.
+            That's why growth feels uncertain.
           </p>
           <p className="text-base sm:text-lg md:text-xl font-semibold mt-5 sm:mt-6" style={{ color: 'hsl(210 100% 65%)' }}>
-            LeadFinder Pro gives you a system to find and close clients — on repeat.
+            LeadFinder Pro gives you a clear, repeatable way to find and contact new clients.
           </p>
         </div>
 
