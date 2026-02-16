@@ -18,6 +18,7 @@ const Outreach = () => {
     updateStatus,
     updateNextAction,
     updateNotes,
+    updateLead,
     deleteLead,
     deleteMultiple,
     deleteAllLeads,
@@ -110,6 +111,7 @@ const Outreach = () => {
           onUpdateStatus={updateStatus}
           onUpdateNextAction={updateNextAction}
           onUpdateNotes={updateNotes}
+          onUpdateLead={updateLead}
           onDelete={deleteLead}
           fetchActivities={fetchActivities}
           readOnly={false}

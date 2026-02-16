@@ -47,6 +47,7 @@ import { NextActionBadge } from './NextActionBadge';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from '@/types/outreach';
 import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS } from '@/types/outreach';
 import { SingleWhatsAppDialog } from './SingleWhatsAppDialog';
+import { FacebookSection } from './FacebookSection';
 
 interface OutreachLeadDialogProps {
   lead: OutreachLead | null;
@@ -55,6 +56,7 @@ interface OutreachLeadDialogProps {
   onUpdateStatus: (leadId: string, status: LeadStatus) => Promise<any>;
   onUpdateNextAction: (leadId: string, action: NextActionType, date?: string) => Promise<any>;
   onUpdateNotes: (leadId: string, notes: string) => Promise<any>;
+  onUpdateLead?: (leadId: string, updates: Partial<OutreachLead>) => Promise<any>;
   onDelete: (leadId: string) => Promise<boolean>;
   fetchActivities: (leadId: string) => Promise<OutreachActivity[]>;
   /** When true, hides status and next action editing */
@@ -68,6 +70,7 @@ export function OutreachLeadDialog({
   onUpdateStatus,
   onUpdateNextAction,
   onUpdateNotes,
+  onUpdateLead,
   onDelete,
   fetchActivities,
   readOnly = false,
@@ -342,6 +345,14 @@ export function OutreachLeadDialog({
             </div>
 
             <Separator />
+
+            {/* Facebook Section */}
+            {onUpdateLead && (
+              <>
+                <FacebookSection lead={lead} onUpdate={onUpdateLead} />
+                <Separator />
+              </>
+            )}
 
             {/* Activity Log */}
             <div>
