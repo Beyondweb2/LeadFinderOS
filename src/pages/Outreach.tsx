@@ -7,7 +7,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useTrial } from '@/hooks/useTrial';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
-import { Loader2, Lock } from 'lucide-react';
+import { Loader2, Lock, AlertTriangle } from 'lucide-react';
 import type { OutreachLead } from '@/types/outreach';
 
 const Outreach = () => {
@@ -54,6 +54,13 @@ const Outreach = () => {
 
   return (
     <div className="space-y-3 sm:space-y-6">
+      {/* Caution Banner */}
+      <Alert className="border-amber-500/30 bg-amber-500/5">
+        <AlertTriangle className="h-4 w-4 text-amber-500" />
+        <AlertDescription className="text-xs sm:text-sm text-amber-200/90">
+          <strong>Caution:</strong> Limit your outreach volume to avoid account restrictions. Switch templates often to prevent spam flags, and use a mix of platforms (WhatsApp, SMS, calls) rather than relying on one channel.
+        </AlertDescription>
+      </Alert>
       {/* Page Header - Compact on mobile */}
       <div className="text-center sm:text-left">
         <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
