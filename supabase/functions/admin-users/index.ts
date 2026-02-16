@@ -2,32 +2,20 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, rateLimitHeaders } from '../_shared/rate-limiter.ts';
 
-const ALLOWED_ORIGINS = [
-  'https://leadfinderapp.lovable.app',
-  'https://id-preview--da9919bb-3412-438c-91f0-7b1c8b8e5d96.lovable.app',
-  'https://da9919bb-3412-438c-91f0-7b1c8b8e5d96.lovableproject.com',
-];
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
 
-function getCorsHeaders(req: Request): Record<string, string> {
-  const origin = req.headers.get('origin') || '';
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
-  return {
-    'Access-Control-Allow-Origin': allowed,
-    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Vary': 'Origin',
-  };
-}
-
-function jsonResponse(body: unknown, status: number, corsHeaders: Record<string, string>, extra?: Record<string, string>) {
+function jsonResponse(body: unknown, status: number, headers: Record<string, string>, extra?: Record<string, string>) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json', ...(extra || {}) },
+    headers: { ...headers, 'Content-Type': 'application/json', ...(extra || {}) },
   });
 }
 
 serve(async (req) => {
-  const corsHeaders = getCorsHeaders(req);
 
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -303,6 +291,6 @@ serve(async (req) => {
     return jsonResponse({ error: 'Unknown action' }, 400, corsHeaders, rlHeaders);
   } catch (error) {
     console.error('[ADMIN-USERS] Unhandled error:', (error as Error).message);
-    return jsonResponse({ error: 'Internal server error' }, 500, getCorsHeaders(req));
+    return jsonResponse({ error: 'Internal server error' }, 500, corsHeaders);
   }
 });
