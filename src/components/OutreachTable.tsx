@@ -691,6 +691,11 @@ export function OutreachTable({
                       onValueChange={(v) => {
                         const ids = Array.from(selectedIds);
                         ids.forEach(id => onStatusChange(id, v as LeadStatus));
+                        // Auto-track when setting to interested
+                        if (v === 'interested' && onMarkAsInterested) {
+                          const untracked = ids.filter(id => !leads.find(l => l.id === id)?.is_potential_work);
+                          if (untracked.length > 0) onMarkAsInterested(untracked);
+                        }
                         setSelectedIds(new Set());
                         toast({
                           title: 'Status updated',
@@ -895,6 +900,7 @@ export function OutreachTable({
                   onWhatsAppClick={() => handleWhatsAppClick(lead)}
                   onSMSClick={() => handleSMSClick(lead)}
                   onTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
+                  onAutoTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
                   readOnly={readOnly}
                   showTrackButton={!!onMarkAsInterested}
                   isHighlighted={lastWhatsAppLeadId === lead.id}
@@ -999,7 +1005,12 @@ export function OutreachTable({
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <Select
                               value={lead.status}
-                              onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}
+                              onValueChange={(v) => {
+                                onStatusChange(lead.id, v as LeadStatus);
+                                if (v === 'interested' && onMarkAsInterested && !lead.is_potential_work) {
+                                  onMarkAsInterested([lead.id]);
+                                }
+                              }}
                             >
                               <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
                                 <OutreachStatusBadge status={lead.status} />

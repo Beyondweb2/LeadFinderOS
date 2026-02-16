@@ -15,7 +15,10 @@ export type LeadStatus =
   | 'reviewing_draft'
   | 'paid_for_draft'
   | 'completed'
-  | 'no_whatsapp';
+  | 'no_whatsapp'
+  | 'sms'
+  | 'whatsapp'
+  | 'facebook_msg';
 
 export type NextActionType = 
   | 'call'
@@ -133,7 +136,9 @@ export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
 // Simplified status options for the Outreach page (initial contact only)
 export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'not_contacted', label: 'Not Contacted' },
-  { value: 'sent_initial_text', label: 'Sent Text / WhatsApp' },
+  { value: 'sms', label: 'SMS' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'facebook_msg', label: 'Facebook' },
   { value: 'contacted', label: 'Called' },
   { value: 'not_answered', label: 'No Answer' },
   { value: 'call_back', label: 'Call Back' },

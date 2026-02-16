@@ -92,6 +92,21 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Completed',
     className: 'bg-green-600/20 text-green-500 border-green-600/30',
   },
+  sms: {
+    label: 'SMS',
+    shortLabel: 'SMS',
+    className: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  },
+  whatsapp: {
+    label: 'WhatsApp',
+    shortLabel: 'WhatsApp',
+    className: 'bg-green-500/20 text-green-400 border-green-500/30',
+  },
+  facebook_msg: {
+    label: 'Facebook',
+    shortLabel: 'Facebook',
+    className: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  },
 };
 
 export function OutreachStatusBadge({ status, compact }: OutreachStatusBadgeProps) {

@@ -32,6 +32,7 @@ interface OutreachMobileCardProps {
   readOnly?: boolean;
   showTrackButton?: boolean;
   isHighlighted?: boolean;
+  onAutoTrack?: () => void;
 }
 
 export function OutreachMobileCard({
@@ -46,6 +47,7 @@ export function OutreachMobileCard({
   readOnly = false,
   showTrackButton = true,
   isHighlighted = false,
+  onAutoTrack,
 }: OutreachMobileCardProps) {
   return (
     <div 
@@ -80,7 +82,13 @@ export function OutreachMobileCard({
             {!readOnly && (
               <Select
                 value={lead.status}
-                onValueChange={onStatusChange}
+                onValueChange={(v) => {
+                  const status = v as LeadStatus;
+                  onStatusChange(status);
+                  if (status === 'interested' && onAutoTrack && !lead.is_potential_work) {
+                    onAutoTrack();
+                  }
+                }}
               >
                 <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
                   <OutreachStatusBadge status={lead.status} compact />

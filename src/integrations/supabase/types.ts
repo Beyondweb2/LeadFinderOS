@@ -678,6 +678,9 @@ export type Database = {
         | "paid_for_draft"
         | "completed"
         | "no_whatsapp"
+        | "sms"
+        | "whatsapp"
+        | "facebook_msg"
       next_action_type:
         | "call"
         | "follow_up"
@@ -843,6 +846,9 @@ export const Constants = {
         "paid_for_draft",
         "completed",
         "no_whatsapp",
+        "sms",
+        "whatsapp",
+        "facebook_msg",
       ],
       next_action_type: [
         "call",
