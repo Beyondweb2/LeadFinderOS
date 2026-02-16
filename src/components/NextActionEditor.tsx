@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle, Plus, Tag } from 'lucide-react';
+import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle, Plus, Tag, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import type { NextActionType } from '@/types/outreach';
@@ -128,32 +128,35 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
     ? selectedAction 
     : selectedAction;
 
+  const showCompleteButton = action && action !== 'none';
+
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          className={cn(
-            'h-auto p-1 hover:bg-muted/50 flex flex-col items-start gap-0.5',
-            colorClass
-          )}
-        >
-          <div className="flex items-center gap-1.5">
-            {iconEl}
-            <span className="text-sm">{displayLabel}</span>
-          </div>
-          {formattedDate && (
-            <span
-              className={cn(
-                'text-xs',
-                isOverdue ? 'text-red-400' : isToday ? 'text-yellow-400' : 'text-muted-foreground'
-              )}
-            >
-              {isToday ? 'Today' : formattedDate}
-            </span>
-          )}
-        </Button>
-      </PopoverTrigger>
+    <div className="flex items-center gap-1">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            className={cn(
+              'h-auto p-1 hover:bg-muted/50 flex flex-col items-start gap-0.5',
+              colorClass
+            )}
+          >
+            <div className="flex items-center gap-1.5">
+              {iconEl}
+              <span className="text-sm">{displayLabel}</span>
+            </div>
+            {formattedDate && (
+              <span
+                className={cn(
+                  'text-xs',
+                  isOverdue ? 'text-red-400' : isToday ? 'text-yellow-400' : 'text-muted-foreground'
+                )}
+              >
+                {isToday ? 'Today' : formattedDate}
+              </span>
+            )}
+          </Button>
+        </PopoverTrigger>
       <PopoverContent className="w-auto p-4" align="start">
         <div className="space-y-4">
           <div className="space-y-2">
@@ -235,5 +238,17 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
         </div>
       </PopoverContent>
     </Popover>
+    {showCompleteButton && (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+        onClick={() => onUpdate('none' as NextActionType)}
+        title="Mark action as done"
+      >
+        <CheckCircle2 className="h-4 w-4" />
+      </Button>
+    )}
+    </div>
   );
 }

@@ -33,6 +33,7 @@ interface OutreachMobileCardProps {
   showTrackButton?: boolean;
   isHighlighted?: boolean;
   onAutoTrack?: () => void;
+  onCompleteAction?: () => void;
 }
 
 export function OutreachMobileCard({
@@ -48,6 +49,7 @@ export function OutreachMobileCard({
   showTrackButton = true,
   isHighlighted = false,
   onAutoTrack,
+  onCompleteAction,
 }: OutreachMobileCardProps) {
   return (
     <div 
@@ -103,12 +105,13 @@ export function OutreachMobileCard({
               </Select>
             )}
 
-            {!readOnly && lead.next_action && (
+            {!readOnly && lead.next_action && lead.next_action !== 'none' && (
               <NextActionBadge 
                 action={lead.next_action} 
                 date={lead.next_action_date}
                 compact
                 leadId={lead.id}
+                onComplete={onCompleteAction}
               />
             )}
           </div>
