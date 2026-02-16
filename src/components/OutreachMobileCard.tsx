@@ -28,6 +28,7 @@ interface OutreachMobileCardProps {
   onStatusChange: (status: LeadStatus) => void;
   onWhatsAppClick: () => void;
   onSMSClick?: () => void;
+  onCallClick?: () => void;
   onTrack?: () => void;
   readOnly?: boolean;
   showTrackButton?: boolean;
@@ -44,6 +45,7 @@ export function OutreachMobileCard({
   onStatusChange,
   onWhatsAppClick,
   onSMSClick,
+  onCallClick,
   onTrack,
   readOnly = false,
   showTrackButton = true,
@@ -146,7 +148,7 @@ export function OutreachMobileCard({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[160px]">
                   <DropdownMenuItem asChild>
-                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer">
+                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => onCallClick?.()}>
                       <PhoneCall className="h-4 w-4" />
                       Normal Call
                     </a>
@@ -157,6 +159,7 @@ export function OutreachMobileCard({
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 cursor-pointer"
+                      onClick={() => onCallClick?.()}
                     >
                       <Phone className="h-4 w-4 text-green-500" />
                       WhatsApp Call
