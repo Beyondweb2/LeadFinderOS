@@ -95,6 +95,10 @@ export interface OutreachLead {
   next_checkin_date?: string | null;
   checkin_notes?: string | null;
   image_url?: string | null;
+  facebook_url?: string | null;
+  facebook_confidence?: number | null;
+  facebook_method?: string | null;
+  facebook_last_checked_at?: string | null;
 }
 
 export interface OutreachActivity {

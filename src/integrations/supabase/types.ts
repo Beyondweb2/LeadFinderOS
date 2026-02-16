@@ -265,6 +265,10 @@ export type Database = {
           country: string | null
           created_at: string
           email: string | null
+          facebook_confidence: number | null
+          facebook_last_checked_at: string | null
+          facebook_method: string | null
+          facebook_url: string | null
           google_maps_url: string | null
           id: string
           image_url: string | null
@@ -292,6 +296,10 @@ export type Database = {
           country?: string | null
           created_at?: string
           email?: string | null
+          facebook_confidence?: number | null
+          facebook_last_checked_at?: string | null
+          facebook_method?: string | null
+          facebook_url?: string | null
           google_maps_url?: string | null
           id?: string
           image_url?: string | null
@@ -319,6 +327,10 @@ export type Database = {
           country?: string | null
           created_at?: string
           email?: string | null
+          facebook_confidence?: number | null
+          facebook_last_checked_at?: string | null
+          facebook_method?: string | null
+          facebook_url?: string | null
           google_maps_url?: string | null
           id?: string
           image_url?: string | null

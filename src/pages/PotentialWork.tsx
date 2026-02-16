@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { Facebook } from 'lucide-react';
 import { useOutreach } from '@/hooks/useOutreach';
 import { AlertTriangle, Clock, CalendarCheck } from 'lucide-react';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
@@ -58,6 +59,7 @@ import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { Plus, Tag } from 'lucide-react';
+import { FacebookSection } from '@/components/FacebookSection';
 
 const DEFAULT_POTENTIAL_WORK_STATUSES: { value: LeadStatus; label: string }[] = [
   { value: 'interested', label: 'Interested' },
@@ -88,6 +90,7 @@ interface LeadCardProps {
   onNotesChange: (leadId: string, notes: string) => Promise<OutreachLead | null>;
   onBusinessNameChange: (leadId: string, name: string) => Promise<OutreachLead | null>;
   onImageChange: (leadId: string, imageUrl: string | null) => Promise<OutreachLead | null>;
+  onUpdateLead: (leadId: string, updates: Partial<OutreachLead>) => Promise<OutreachLead | null>;
   onDelete: (leadId: string, silent?: boolean) => Promise<boolean>;
   customStatuses: { value: string; label: string }[];
   onAddCustomStatus: () => void;
@@ -121,7 +124,7 @@ const getDueLabel = (nextActionDate: string | null, nextAction: NextActionType |
   return { text: `Due in ${diffDays}d`, cls: 'text-muted-foreground' };
 };
 
-const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
+const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const customLabel = getLeadCustomAction(lead.id);
@@ -307,6 +310,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                   </DropdownMenuContent>
                 </DropdownMenu>
               )}
+              <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
               {lead.google_maps_url && (
                 <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-blue-400 transition-colors" onClick={(e) => e.stopPropagation()}>
                   <MapPin className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-blue-500" /><ExternalLink className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
@@ -499,6 +503,10 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 className="resize-none text-sm border-border/50 focus-visible:ring-primary/30"
               />
             </div>
+
+            {/* Facebook */}
+            <FacebookSection lead={lead} onUpdate={onUpdateLead} />
+
           </div>
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <Button variant="ghost" size="sm" onClick={() => setDetailOpen(false)} className="h-9 text-sm">Cancel</Button>
@@ -522,6 +530,7 @@ const PotentialWorkPage = () => {
     updateNextAction,
     updateNotes,
     updateBusinessName,
+    updateLead,
     deleteLead,
     fetchActivities,
     refetch,
@@ -717,6 +726,7 @@ const PotentialWorkPage = () => {
                 onNotesChange={updateNotes}
                 onBusinessNameChange={updateBusinessName}
                 onImageChange={updateImageUrl}
+                onUpdateLead={updateLead}
                 onDelete={deleteLead}
                 customStatuses={customStatuses}
                 onAddCustomStatus={() => setShowCustomStatusDialog(true)}
@@ -733,6 +743,7 @@ const PotentialWorkPage = () => {
           onUpdateStatus={updateStatus}
           onUpdateNextAction={updateNextAction}
           onUpdateNotes={updateNotes}
+          onUpdateLead={updateLead}
           onDelete={deleteLead}
           fetchActivities={fetchActivities}
         />
