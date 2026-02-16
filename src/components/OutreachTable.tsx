@@ -40,6 +40,7 @@ import {
   PhoneOff,
   PhoneCall,
   X,
+  Facebook,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -1023,7 +1024,7 @@ export function OutreachTable({
                         </>
                       )}
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-2">
+                        <div className="flex items-center justify-center gap-1.5">
                           {lead.google_maps_url && (
                             <a
                               href={lead.google_maps_url}
@@ -1035,6 +1036,15 @@ export function OutreachTable({
                               <ExternalLink className="h-4 w-4" />
                             </a>
                           )}
+                          <a
+                            href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-600 hover:text-blue-500 transition-colors"
+                            title="Search Facebook"
+                          >
+                            <Facebook className="h-4 w-4" />
+                          </a>
                           {lead.phone && (
                             <>
                               <DropdownMenu>

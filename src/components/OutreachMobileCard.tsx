@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
@@ -106,21 +106,30 @@ export function OutreachMobileCard({
           </div>
         </div>
 
-        {/* Right: Action buttons */}
-        <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          {lead.google_maps_url && (
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10" asChild>
-              <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-3.5 w-3.5" />
+        {/* Right: Action buttons - 2 rows on mobile */}
+        <div className="flex flex-col gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          {/* Row 1: Maps, Facebook, Call */}
+          <div className="flex items-center gap-0.5">
+            {lead.google_maps_url && (
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10" asChild>
+                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-500 hover:bg-blue-500/10" asChild>
+              <a
+                href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Facebook className="h-3.5 w-3.5" />
               </a>
             </Button>
-          )}
-
-          {lead.phone && (
-            <>
+            {lead.phone && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10">
                     <Phone className="h-3.5 w-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -144,39 +153,45 @@ export function OutreachMobileCard({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                onClick={onSMSClick}
-              >
-                <MessageCircle className="h-3.5 w-3.5" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-green-500 hover:text-green-400 hover:bg-green-500/10"
-                onClick={onWhatsAppClick}
-              >
-                <MessageSquare className="h-3.5 w-3.5" />
-              </Button>
-            </>
-          )}
-
-          {!readOnly && showTrackButton && onTrack && (
-            lead.is_potential_work ? (
-              <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 mx-1" />
-            ) : (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
-                onClick={onTrack}
-              >
-                <Star className="h-3.5 w-3.5" />
-              </Button>
-            )
-          )}
+            )}
+          </div>
+          {/* Row 2: SMS, WhatsApp, Track */}
+          <div className="flex items-center gap-0.5">
+            {lead.phone && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                  onClick={onSMSClick}
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                  onClick={onWhatsAppClick}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+            {!readOnly && showTrackButton && onTrack && (
+              lead.is_potential_work ? (
+                <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 mx-1" />
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
+                  onClick={onTrack}
+                >
+                  <Star className="h-3.5 w-3.5" />
+                </Button>
+              )
+            )}
+          </div>
         </div>
       </div>
     </div>
