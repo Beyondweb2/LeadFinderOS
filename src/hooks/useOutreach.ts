@@ -627,7 +627,6 @@ export function useOutreach() {
       .from('outreach_leads')
       .update({ 
         is_potential_work: true,
-        status: 'interested' as LeadStatus,
       })
       .eq('id', leadId);
 
@@ -640,9 +639,9 @@ export function useOutreach() {
       return false;
     }
 
-    // Update local state
+    // Update local state — preserve existing status
     const updateLeadFn = (l: OutreachLead): OutreachLead => 
-      l.id === leadId ? { ...l, is_potential_work: true, status: 'interested' as LeadStatus } : l;
+      l.id === leadId ? { ...l, is_potential_work: true } : l;
     
     setLeads((prev) => prev.map(updateLeadFn));
     setArchivedLeads((prev) => prev.map(updateLeadFn));
@@ -677,7 +676,6 @@ export function useOutreach() {
       .from('outreach_leads')
       .update({ 
         is_potential_work: true,
-        status: 'interested' as LeadStatus,
       })
       .in('id', leadIds);
 
@@ -690,9 +688,9 @@ export function useOutreach() {
       return false;
     }
 
-    // Update local state
+    // Update local state — preserve existing status
     const updateLeadFn = (l: OutreachLead): OutreachLead => 
-      leadIds.includes(l.id) ? { ...l, is_potential_work: true, status: 'interested' as LeadStatus } : l;
+      leadIds.includes(l.id) ? { ...l, is_potential_work: true } : l;
     
     setLeads((prev) => prev.map(updateLeadFn));
     setArchivedLeads((prev) => prev.map(updateLeadFn));
