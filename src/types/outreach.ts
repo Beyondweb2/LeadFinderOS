@@ -130,6 +130,20 @@ export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'completed', label: 'Completed (Client)' },
 ];
 
+// Simplified status options for the Outreach page (initial contact only)
+export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
+  { value: 'not_contacted', label: 'Not Contacted' },
+  { value: 'sent_initial_text', label: 'Sent Text / WhatsApp' },
+  { value: 'contacted', label: 'Called' },
+  { value: 'not_answered', label: 'No Answer' },
+  { value: 'call_back', label: 'Call Back' },
+  { value: 'sent_voice_note', label: 'Sent Voice Note' },
+  { value: 'replied', label: 'Replied' },
+  { value: 'interested', label: 'Interested ⭐' },
+  { value: 'not_interested', label: 'Not Interested' },
+  { value: 'no_whatsapp', label: 'No WhatsApp' },
+];
+
 export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'send_initial_text', label: 'Send Initial Text' },
   { value: 'send_voice_note', label: 'Send Voice Note' },

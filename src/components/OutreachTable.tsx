@@ -61,7 +61,7 @@ import { SingleSMSDialog } from './SingleSMSDialog';
 import { CSVImportDialog } from './CSVImportDialog';
 import { OutreachMobileCard } from './OutreachMobileCard';
 import type { OutreachLead, LeadStatus, NextActionType, Country } from '@/types/outreach';
-import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS } from '@/types/outreach';
+import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS } from '@/types/outreach';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -702,7 +702,7 @@ export function OutreachTable({
                         <SelectValue placeholder="Set Status..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {STATUS_OPTIONS.map((opt) => (
+                        {OUTREACH_STATUS_OPTIONS.map((opt) => (
                           <SelectItem key={opt.value} value={opt.value}>
                             {opt.label}
                           </SelectItem>
@@ -845,7 +845,7 @@ export function OutreachTable({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
-                {STATUS_OPTIONS.map((opt) => (
+                {OUTREACH_STATUS_OPTIONS.map((opt) => (
                   <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>
@@ -1005,7 +1005,7 @@ export function OutreachTable({
                                 <OutreachStatusBadge status={lead.status} />
                               </SelectTrigger>
                               <SelectContent>
-                                {STATUS_OPTIONS.map((opt) => (
+                                {OUTREACH_STATUS_OPTIONS.map((opt) => (
                                   <SelectItem key={opt.value} value={opt.value}>
                                     {opt.label}
                                   </SelectItem>

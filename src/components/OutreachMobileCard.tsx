@@ -18,7 +18,7 @@ import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
-import { STATUS_OPTIONS } from '@/types/outreach';
+import { STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS } from '@/types/outreach';
 
 interface OutreachMobileCardProps {
   lead: OutreachLead;
@@ -86,7 +86,7 @@ export function OutreachMobileCard({
                   <OutreachStatusBadge status={lead.status} compact />
                 </SelectTrigger>
                 <SelectContent>
-                  {STATUS_OPTIONS.map((opt) => (
+                  {OUTREACH_STATUS_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
