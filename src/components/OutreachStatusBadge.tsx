@@ -13,7 +13,7 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     className: 'bg-muted text-muted-foreground border-muted',
   },
   sent_initial_text: {
-    label: 'Sent Initial Text',
+    label: 'Sent Text / WhatsApp',
     shortLabel: 'Texted',
     className: 'bg-green-500/20 text-green-400 border-green-500/30',
   },
@@ -33,8 +33,8 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     className: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
   },
   contacted: {
-    label: 'Contacted',
-    shortLabel: 'Contacted',
+    label: 'Called',
+    shortLabel: 'Called',
     className: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
   },
   call_back: {
