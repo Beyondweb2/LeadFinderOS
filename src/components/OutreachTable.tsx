@@ -904,6 +904,7 @@ export function OutreachTable({
                   readOnly={readOnly}
                   showTrackButton={!!onMarkAsInterested}
                   isHighlighted={lastWhatsAppLeadId === lead.id}
+                  onCompleteAction={() => onNextActionChange(lead.id, 'none' as NextActionType)}
                 />
               ))
             )}

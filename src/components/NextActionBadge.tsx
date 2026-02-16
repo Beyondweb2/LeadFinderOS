@@ -1,6 +1,7 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle, Tag } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle, Tag, CheckCircle2 } from 'lucide-react';
 import type { NextActionType } from '@/types/outreach';
 import { getLeadCustomAction } from '@/hooks/useCustomNextActions';
 
@@ -9,6 +10,7 @@ interface NextActionBadgeProps {
   date?: string | null;
   compact?: boolean;
   leadId?: string;
+  onComplete?: () => void;
 }
 
 const actionConfig: Record<NextActionType, { label: string; shortLabel: string; icon: React.ReactNode; className: string }> = {
@@ -74,7 +76,7 @@ const actionConfig: Record<NextActionType, { label: string; shortLabel: string; 
   },
 };
 
-export function NextActionBadge({ action, date, compact, leadId }: NextActionBadgeProps) {
+export function NextActionBadge({ action, date, compact, leadId, onComplete }: NextActionBadgeProps) {
   if (!action || action === 'none') {
     return <span className="text-muted-foreground text-sm">—</span>;
   }
@@ -105,6 +107,17 @@ export function NextActionBadge({ action, date, compact, leadId }: NextActionBad
             {isToday ? 'Today' : formattedDate}
           </span>
         )}
+        {onComplete && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 text-green-500 hover:text-green-400 hover:bg-green-500/10 ml-0.5"
+            onClick={(e) => { e.stopPropagation(); onComplete(); }}
+            title="Mark as done"
+          >
+            <CheckCircle2 className="h-3 w-3" />
+          </Button>
+        )}
       </div>
     );
   }
@@ -114,6 +127,17 @@ export function NextActionBadge({ action, date, compact, leadId }: NextActionBad
       <div className={`flex items-center gap-1.5 ${className}`}>
         {icon}
         <span className="text-sm">{displayLabel}</span>
+        {onComplete && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 text-green-500 hover:text-green-400 hover:bg-green-500/10 ml-1"
+            onClick={(e) => { e.stopPropagation(); onComplete(); }}
+            title="Mark as done"
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          </Button>
+        )}
       </div>
       {formattedDate && (
         <span className={`text-xs ${isOverdue ? 'text-red-400' : isToday ? 'text-yellow-400' : 'text-muted-foreground'}`}>
