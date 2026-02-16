@@ -103,8 +103,8 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     className: 'bg-green-500/20 text-green-400 border-green-500/30',
   },
   facebook_msg: {
-    label: 'Facebook',
-    shortLabel: 'Facebook',
+    label: 'FB Messenger',
+    shortLabel: 'FB Msg',
     className: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
   },
 };

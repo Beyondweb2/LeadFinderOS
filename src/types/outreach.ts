@@ -138,7 +138,7 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'not_contacted', label: 'Not Contacted' },
   { value: 'sms', label: 'SMS' },
   { value: 'whatsapp', label: 'WhatsApp' },
-  { value: 'facebook_msg', label: 'Facebook' },
+  { value: 'facebook_msg', label: 'FB Messenger' },
   { value: 'contacted', label: 'Called' },
   { value: 'not_answered', label: 'No Answer' },
   { value: 'call_back', label: 'Call Back' },
