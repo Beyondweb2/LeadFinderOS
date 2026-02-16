@@ -1046,9 +1046,6 @@ const Landing = () => {
               </div>
             </ScrollReveal>
           )}
-          <p className="text-foreground/80 text-sm sm:text-base font-bold mt-8 sm:mt-10 text-center">
-            Message 30 businesses in 10 minutes.
-          </p>
         </div>
       </section>
 
