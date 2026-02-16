@@ -125,7 +125,7 @@ export function OutreachTable({
   const [whatsAppLead, setWhatsAppLead] = useState<{ phone: string; business_name: string } | null>(null);
   const [smsLead, setSmsLead] = useState<{ phone: string; business_name: string } | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
-  const [lastWhatsAppLeadId, setLastWhatsAppLeadId] = useState<string | null>(null);
+  const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
 
   // When a new lead arrives, always bring the user back to page 1 so it's visible immediately.
   const prevNewestLeadIdRef = useRef<string | null>(null);
@@ -134,9 +134,19 @@ export function OutreachTable({
     ? `leadfinder_outreach_table_state:${user.id}`
     : 'leadfinder_outreach_table_state';
   
-  const lastWhatsAppKey = user?.id
-    ? `leadfinder_last_whatsapp:${user.id}`
-    : 'leadfinder_last_whatsapp';
+  const lastContactedKey = user?.id
+    ? `leadfinder_last_contacted:${user.id}`
+    : 'leadfinder_last_contacted';
+
+  const highlightLead = (leadId: string) => {
+    setLastContactedLeadId(leadId);
+    try {
+      sessionStorage.setItem(lastContactedKey, leadId);
+      localStorage.setItem(lastContactedKey, leadId);
+    } catch {
+      // ignore
+    }
+  };
 
   const forcePage1Key = user?.id
     ? `leadfinder_outreach_force_page1:${user.id}`
@@ -196,10 +206,10 @@ export function OutreachTable({
     } else if (typeof parsed.currentPage === 'number' && parsed.currentPage > 0) {
       setCurrentPage(parsed.currentPage);
     }
-    // Restore last WhatsApp lead highlight
+    // Restore last contacted lead highlight
     try {
-      const lastWA = sessionStorage.getItem(lastWhatsAppKey) || localStorage.getItem(lastWhatsAppKey);
-      if (lastWA) setLastWhatsAppLeadId(lastWA);
+      const last = sessionStorage.getItem(lastContactedKey) || localStorage.getItem(lastContactedKey);
+      if (last) setLastContactedLeadId(last);
     } catch {
       // ignore
     }
@@ -220,23 +230,21 @@ export function OutreachTable({
 
   // Handle WhatsApp button click - store lead ID for highlighting
   const handleWhatsAppClick = (lead: OutreachLead) => {
-    setLastWhatsAppLeadId(lead.id);
-    try {
-      sessionStorage.setItem(lastWhatsAppKey, lead.id);
-      localStorage.setItem(lastWhatsAppKey, lead.id);
-    } catch {
-      // ignore
-    }
+    highlightLead(lead.id);
     setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name });
-    // Notify demo checklist
     window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
   };
 
-  // Handle SMS button click for no_whatsapp leads
+  // Handle SMS button click
   const handleSMSClick = (lead: OutreachLead) => {
+    highlightLead(lead.id);
     setSmsLead({ phone: lead.phone || '', business_name: lead.business_name });
-    // Notify demo checklist
     window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+  };
+
+  // Handle Call button click - highlight the lead
+  const handleCallClick = (lead: OutreachLead) => {
+    highlightLead(lead.id);
   };
 
   // Count leads missing phone numbers
@@ -899,11 +907,12 @@ export function OutreachTable({
                   onStatusChange={(status) => onStatusChange(lead.id, status)}
                   onWhatsAppClick={() => handleWhatsAppClick(lead)}
                   onSMSClick={() => handleSMSClick(lead)}
+                  onCallClick={() => handleCallClick(lead)}
                   onTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
                   onAutoTrack={onMarkAsInterested ? () => onMarkAsInterested([lead.id]) : undefined}
                   readOnly={readOnly}
                   showTrackButton={!!onMarkAsInterested}
-                  isHighlighted={lastWhatsAppLeadId === lead.id}
+                  isHighlighted={lastContactedLeadId === lead.id}
                   onCompleteAction={() => onNextActionChange(lead.id, 'none' as NextActionType)}
                 />
               ))
@@ -959,7 +968,7 @@ export function OutreachTable({
                       key={lead.id}
                       className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
                         lead.is_potential_work ? 'bg-primary/5' : ''
-                      } ${lastWhatsAppLeadId === lead.id ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
+                      } ${lastContactedLeadId === lead.id ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
                       onClick={() => onLeadClick(lead)}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
@@ -1070,7 +1079,7 @@ export function OutreachTable({
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="center" className="min-w-[160px]">
                                   <DropdownMenuItem asChild>
-                                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer">
+                                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => handleCallClick(lead)}>
                                       <PhoneCall className="h-4 w-4" />
                                       Normal Call
                                     </a>
@@ -1081,6 +1090,7 @@ export function OutreachTable({
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="flex items-center gap-2 cursor-pointer"
+                                      onClick={() => handleCallClick(lead)}
                                     >
                                       <Phone className="h-4 w-4 text-green-500" />
                                       WhatsApp Call
