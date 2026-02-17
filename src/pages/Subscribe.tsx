@@ -131,7 +131,7 @@ const Subscribe = () => {
             <CardDescription className="text-base">
               {hideTrialOffer
                 ? 'Unlock full access to all features'
-                : '£0 today · £19.99/month after 3 days · Cancel anytime'}
+                : '£0 today · Cancel anytime · We\'ll email you before billing'}
             </CardDescription>
           </CardHeader>
 
@@ -201,8 +201,13 @@ const Subscribe = () => {
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
-                  Secure payment via Stripe · Cancel anytime
+                  No charge today. Cancel anytime from your dashboard in one click.
                 </p>
+                {!hideTrialOffer && (
+                  <p className="text-[11px] text-muted-foreground/70 text-center">
+                    Then £19.99/month after trial.
+                  </p>
+                )}
               </>
             )}
           </CardFooter>

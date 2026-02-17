@@ -283,7 +283,7 @@ export type Database = {
           payment_date: string | null
           phone: string | null
           project_duration: string | null
-          status: Database["public"]["Enums"]["lead_status"]
+          status: string
           updated_at: string
           user_id: string
         }
@@ -314,7 +314,7 @@ export type Database = {
           payment_date?: string | null
           phone?: string | null
           project_duration?: string | null
-          status?: Database["public"]["Enums"]["lead_status"]
+          status?: string
           updated_at?: string
           user_id: string
         }
@@ -345,7 +345,7 @@ export type Database = {
           payment_date?: string | null
           phone?: string | null
           project_duration?: string | null
-          status?: Database["public"]["Enums"]["lead_status"]
+          status?: string
           updated_at?: string
           user_id?: string
         }
