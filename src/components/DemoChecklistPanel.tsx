@@ -138,9 +138,9 @@ export function DemoChecklistPanel() {
                     onClick={() => navigate('/subscribe')}
                   >
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                    Start 24hr Free Trial
-                  </Button>
-                  <p className="text-[10px] text-muted-foreground">Full access for 24 hours</p>
+                     Start 3-Day Free Trial
+                   </Button>
+                   <p className="text-[10px] text-muted-foreground">Full access for 3 days</p>
                 </div>
               )}
             </div>

@@ -27,17 +27,17 @@ export function TrialStatusBadge({
     <div className="space-y-2 max-w-xs">
       <p className="font-medium">Demo Mode</p>
       <p className="text-xs text-muted-foreground">
-        {isExhausted 
-          ? 'Your free demo search has been used. Unlock 24-hour full access for unlimited searches and all features.'
-          : 'You have 1 free search to try the app. Unlock 24-hour full access for unlimited searches and all features.'}
-      </p>
-      <div className="pt-1 border-t border-border">
-        <Link 
-          to="/subscribe" 
-          className="text-xs text-primary hover:underline flex items-center gap-1"
-        >
-          <Sparkles className="h-3 w-3" />
-          Start 24-Hour Full Access
+         {isExhausted 
+           ? 'Your free demo search has been used. Unlock 3-day full access for unlimited searches and all features.'
+           : 'You have 1 free search to try the app. Unlock 3-day full access for unlimited searches and all features.'}
+       </p>
+       <div className="pt-1 border-t border-border">
+         <Link 
+           to="/subscribe" 
+           className="text-xs text-primary hover:underline flex items-center gap-1"
+         >
+           <Sparkles className="h-3 w-3" />
+           Start 3-Day Full Access
         </Link>
       </div>
     </div>

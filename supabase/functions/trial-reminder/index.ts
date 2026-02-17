@@ -45,12 +45,13 @@ serve(async (req) => {
   const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
   try {
-    logStep("Finding trialing subscriptions created ~20 hours ago");
+     logStep("Finding trialing subscriptions created ~68 hours ago");
 
-    // Find subscriptions that started between 19-21 hours ago (window to catch on hourly cron)
-    const now = Date.now();
-    const windowStart = new Date(now - 21 * 60 * 60 * 1000);
-    const windowEnd = new Date(now - 19 * 60 * 60 * 1000);
+     // Find subscriptions that started between 67-69 hours ago (window to catch on hourly cron)
+     // Trial is 3 days (72h), reminder fires ~4 hours before expiry
+     const now = Date.now();
+     const windowStart = new Date(now - 69 * 60 * 60 * 1000);
+     const windowEnd = new Date(now - 67 * 60 * 60 * 1000);
 
     // Query subscriptions table for trialing users in the window
     const { data: subs, error: subsErr } = await supabaseAdmin
@@ -110,7 +111,7 @@ serve(async (req) => {
               <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 20px;">
                 <h2 style="margin: 0 0 16px; font-size: 20px; color: #111;">Your full access ends in 4 hours</h2>
                 <p style="color: #555; line-height: 1.6; margin: 0 0 16px;">
-                  Just a quick reminder — your 24-hour full access to LeadFinder Pro ends soon.
+                  Just a quick reminder — your 3-day full access to LeadFinder Pro ends soon.
                 </p>
                 <p style="color: #555; line-height: 1.6; margin: 0 0 16px;">
                   After your trial ends, your subscription will automatically continue at <strong>£19.99/month</strong>.

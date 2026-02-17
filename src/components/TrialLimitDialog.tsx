@@ -53,7 +53,7 @@ export function TrialLimitDialog({ open, onOpenChange, searchesToday, dailyLimit
               Demo search used
             </DialogTitle>
             <DialogDescription className="text-base">
-              Unlock 24-hour full access for unlimited searches and the complete outreach system.
+              Unlock 3-day full access for unlimited searches and the complete outreach system.
             </DialogDescription>
           </DialogHeader>
 
@@ -74,7 +74,7 @@ export function TrialLimitDialog({ open, onOpenChange, searchesToday, dailyLimit
           <DialogFooter className="flex-col gap-2 sm:flex-col">
             <Button onClick={handleUpgrade} className="w-full gap-2">
               <Sparkles className="h-4 w-4" />
-              Start 24-Hour Full Access
+              Start 3-Day Full Access
             </Button>
             <Button 
               variant="ghost" 

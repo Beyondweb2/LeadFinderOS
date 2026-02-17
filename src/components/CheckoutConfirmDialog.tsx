@@ -25,7 +25,7 @@ export function CheckoutConfirmDialog({ open, onOpenChange, onConfirm, isLoading
             <Shield className="h-6 w-6 text-primary" />
           </div>
            <DialogTitle className="text-xl">
-             Unlock 24 hours of full access — FREE
+             Unlock 3 days of full access — FREE
            </DialogTitle>
            <DialogDescription className="text-base">
              £0 today · Then £19.99/month · Cancel anytime before renewal.

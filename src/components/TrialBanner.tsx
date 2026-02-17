@@ -41,9 +41,9 @@ export function TrialBanner() {
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-sm min-w-0">
             <CreditCard className="h-4 w-4 text-primary shrink-0" />
-            <span className="font-medium text-foreground/90 whitespace-nowrap">
-              £0 for {hoursUntilCharge}h — full access active
-            </span>
+             <span className="font-medium text-foreground/90 whitespace-nowrap">
+               £0 for {hoursUntilCharge >= 24 ? `${Math.ceil(hoursUntilCharge / 24)}d` : `${hoursUntilCharge}h`} — full access active
+             </span>
             <span className="text-muted-foreground hidden sm:inline truncate">
               — then £19.99/mo, cancel anytime
             </span>
@@ -85,7 +85,7 @@ export function TrialBanner() {
                 {demoSearchUsed ? '0' : '1'} demo search{demoSearchUsed ? '' : ''} remaining
               </span>
               <span className="text-muted-foreground hidden sm:inline truncate">
-                — Unlock 24-hour full access for unlimited
+                — Unlock 3-day full access for unlimited
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -94,7 +94,7 @@ export function TrialBanner() {
                 onClick={() => setShowConfirm(true)}
               >
                 <Crown className="h-3.5 w-3.5 mr-1.5" />
-                <span className="hidden sm:inline">Start 24-Hour Full Access</span>
+                <span className="hidden sm:inline">Start 3-Day Full Access</span>
                 <span className="sm:hidden">Upgrade</span>
               </Button>
               <Button

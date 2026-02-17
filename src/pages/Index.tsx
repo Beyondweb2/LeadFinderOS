@@ -132,7 +132,7 @@ const Index = () => {
           <span className="text-sm text-muted-foreground">
             You've used your demo search.
             <Link to="/subscribe" className="text-primary font-medium ml-1 hover:underline">
-              Get 24 hours unlimited searches - FREE →
+              Get 3 days unlimited searches - FREE →
             </Link>
           </span>
         </div>
