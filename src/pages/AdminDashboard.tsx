@@ -93,7 +93,7 @@ function accessModeColor(mode: string): string {
 function accessModeLabel(mode: string): string {
   switch (mode) {
     case 'paid': return 'Paid';
-    case 'full_access_trial': return 'Trial (24h)';
+    case 'full_access_trial': return 'Trial (3d)';
     case 'demo': return 'Demo';
     case 'signed_up': return 'Signed Up';
     default: return mode;

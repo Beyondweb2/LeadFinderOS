@@ -125,13 +125,13 @@ const Subscribe = () => {
               {hideTrialOffer ? (
                 <>Lead<span className="text-gradient-primary">Finder</span> Pro</>
               ) : (
-                'Unlock Full Access — Free for 24 Hours'
+                'Unlock Full Access — Free for 3 Days'
               )}
             </CardTitle>
             <CardDescription className="text-base">
               {hideTrialOffer
                 ? 'Unlock full access to all features'
-                : '£0 today · £19.99/month after 24 hours · Cancel anytime'}
+                : '£0 today · £19.99/month after 3 days · Cancel anytime'}
             </CardDescription>
           </CardHeader>
 
@@ -196,7 +196,7 @@ const Subscribe = () => {
                   ) : (
                     <>
                       <CreditCard className="mr-2 h-4 w-4" />
-                      {hideTrialOffer ? 'Subscribe Now' : 'Unlock My 24-Hour Access'}
+                      {hideTrialOffer ? 'Subscribe Now' : 'Unlock My 3-Day Access'}
                     </>
                   )}
                 </Button>

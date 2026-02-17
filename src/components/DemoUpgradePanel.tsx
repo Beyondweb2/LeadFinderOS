@@ -37,10 +37,10 @@ export function DemoUpgradePanel() {
           
           <div>
            <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
-              Get 24 Hours Unlimited Searches - FREE
-            </h2>
-            <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto">
-              You've used your demo search. Unlock unlimited searches and the full outreach system free for 24 hours, then £19.99/month.
+               Get 3 Days Unlimited Searches - FREE
+             </h2>
+             <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto">
+               You've used your demo search. Unlock unlimited searches and the full outreach system free for 3 days, then £19.99/month.
             </p>
           </div>
 
@@ -59,7 +59,7 @@ export function DemoUpgradePanel() {
             onClick={() => setShowConfirm(true)}
           >
             <CreditCard className="mr-2 h-4 w-4" />
-            Start 24-Hour Full Access
+            Start 3-Day Full Access
           </Button>
 
           <p className="text-xs text-muted-foreground">

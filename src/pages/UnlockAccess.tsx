@@ -133,7 +133,7 @@ const UnlockAccess = () => {
           <div className="flex flex-col items-center py-6 gap-5 text-center">
             <Shield className="h-10 w-10 text-primary" />
             <div className="space-y-2">
-              <h3 className="text-lg font-bold">You're starting a 24-hour full access trial.</h3>
+              <h3 className="text-lg font-bold">You're starting a 3-day full access trial.</h3>
               <p className="text-sm text-muted-foreground">
                 You will only be charged after the trial ends.
                 <br />
@@ -179,10 +179,10 @@ const UnlockAccess = () => {
               <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9" />
             </div>
             <CardTitle className="text-2xl font-bold tracking-tight">
-              Unlock Full Access — Free for 24 Hours
-            </CardTitle>
-            <p className="text-sm text-muted-foreground mt-2">
-              £0 today · £19.99/month after 24 hours · Cancel anytime
+               Unlock Full Access — Free for 3 Days
+             </CardTitle>
+             <p className="text-sm text-muted-foreground mt-2">
+               £0 today · £19.99/month after 3 days · Cancel anytime
             </p>
           </CardHeader>
 
@@ -230,7 +230,7 @@ const UnlockAccess = () => {
                   onClick={() => setShowConfirmModal(true)}
                 >
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Unlock My 24-Hour Access
+                  Unlock My 3-Day Access
                 </Button>
                 <p className="text-[11px] text-muted-foreground/60 text-center">
                   Secure payment via Stripe · Cancel anytime

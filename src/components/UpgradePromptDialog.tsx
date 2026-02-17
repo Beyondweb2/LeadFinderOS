@@ -52,7 +52,7 @@ export function UpgradePromptDialog({ open, onOpenChange, searchesUsed }: Upgrad
               You've completed {searchesUsed} searches!
             </DialogTitle>
             <DialogDescription className="text-base">
-              Unlock 24-hour full access for unlimited searches and powerful features.
+              Unlock 3-day full access for unlimited searches and powerful features.
             </DialogDescription>
           </DialogHeader>
 
@@ -69,7 +69,7 @@ export function UpgradePromptDialog({ open, onOpenChange, searchesUsed }: Upgrad
 
           <DialogFooter className="flex-col gap-2 sm:flex-col">
             <Button onClick={handleUpgrade} className="w-full">
-              Start 24-Hour Full Access – £19.99/mo
+              Start 3-Day Full Access – £19.99/mo
             </Button>
             <Button 
               variant="ghost" 

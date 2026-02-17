@@ -929,7 +929,7 @@ serve(async (req) => {
             
             return new Response(
               JSON.stringify({ 
-                error: 'Your demo search has been used. Unlock 24-hour full access to continue.',
+                error: 'Your demo search has been used. Unlock 3-day full access to continue.',
                 code: 'DEMO_SEARCH_EXHAUSTED',
               }),
               { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

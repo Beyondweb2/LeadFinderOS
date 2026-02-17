@@ -185,11 +185,11 @@ const Auth = () => {
             <div className="text-center space-y-2">
               <h3 className="text-xl font-bold flex items-center justify-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
-                24-Hour Full Access
+                3-Day Full Access
                 <Sparkles className="h-5 w-5 text-primary" />
               </h3>
               <p className="text-muted-foreground text-sm">
-                Setting up your free trial — £0 for 24 hours, then £19.99/mo. Cancel anytime.
+                Setting up your free trial — £0 for 3 days, then £19.99/mo. Cancel anytime.
               </p>
             </div>
             
