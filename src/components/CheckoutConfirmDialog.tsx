@@ -28,7 +28,7 @@ export function CheckoutConfirmDialog({ open, onOpenChange, onConfirm, isLoading
              Unlock 3 days of full access — FREE
            </DialogTitle>
            <DialogDescription className="text-base">
-             £0 today · Then £19.99/month · Cancel anytime before renewal.
+             £0 today · Cancel anytime · We'll email you before billing.
            </DialogDescription>
         </DialogHeader>
 
@@ -50,6 +50,12 @@ export function CheckoutConfirmDialog({ open, onOpenChange, onConfirm, isLoading
               </>
             )}
           </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            No charge today. Cancel anytime from your dashboard in one click.
+          </p>
+          <p className="text-[11px] text-muted-foreground/60 text-center">
+            Then £19.99/month after trial.
+          </p>
           <Button
             variant="ghost"
             onClick={() => onOpenChange(false)}
