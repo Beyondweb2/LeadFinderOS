@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
@@ -25,6 +25,23 @@ const Index = () => {
   const [showPaywall, setShowPaywall] = useState(false);
   
   const isAccessLoading = isTrialLoading || isSubscriptionLoading;
+  const searchSectionRef = useRef<HTMLElement>(null);
+  const [pulseSearch, setPulseSearch] = useState(false);
+
+  // Listen for walkthrough completion focus event
+  useEffect(() => {
+    const handler = () => {
+      searchSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      const input = searchSectionRef.current?.querySelector('input');
+      if (input) {
+        setTimeout(() => input.focus(), 400);
+      }
+      setPulseSearch(true);
+      setTimeout(() => setPulseSearch(false), 2000);
+    };
+    window.addEventListener('focus-search-input', handler);
+    return () => window.removeEventListener('focus-search-input', handler);
+  }, []);
 
   // Show paywall when free limit error comes back from server
   useEffect(() => {
@@ -66,8 +83,8 @@ const Index = () => {
       </div>
 
       {/* Search Section */}
-      <section>
-        <SearchForm 
+      <section ref={searchSectionRef} className={pulseSearch ? 'animate-pulse rounded-lg ring-2 ring-primary/30 transition-all duration-1000' : ''}>
+        <SearchForm
           onSearch={(filters) => {
             setLastSearchCountry(filters.country || 'UK');
             search(filters, false, false);

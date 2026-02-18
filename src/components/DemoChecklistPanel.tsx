@@ -92,8 +92,8 @@ export function DemoChecklistPanel() {
     return 'demo' as const;
   }, [isPaidSubscriber, isStripeTrialing]);
 
-  const showCompletionCta = allDone && mode === 'demo';
-  console.log('[Walkthrough]', { mode, allDone, showCompletionCta, isDemoUser, dismissed });
+  const showCompletionCta = false; // Removed — no upgrade CTA on completion
+  console.log('[Walkthrough]', { mode, allDone, isDemoUser, dismissed });
 
   if (!isDemoUser || dismissed) return null;
 
@@ -121,28 +121,33 @@ export function DemoChecklistPanel() {
       {isOpen && (
         <div className="bg-card border border-t-0 border-border rounded-b-lg shadow-lg p-3 space-y-2">
           {allDone ? (
-            <div className="text-center space-y-2 py-2 relative">
+            <div className="text-center space-y-3 py-3 relative">
               <button
-                onClick={handleDismiss}
-                className="absolute top-0 right-0 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center"
+                onClick={() => {
+                  handleDismiss();
+                  navigate('/find-leads');
+                  setTimeout(() => {
+                    window.dispatchEvent(new CustomEvent('focus-search-input'));
+                  }, 300);
+                }}
+                className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-muted/80 hover:bg-muted flex items-center justify-center transition-all hover:scale-110 hover:shadow-sm"
               >
-                <X className="h-3 w-3 text-muted-foreground" />
+                <X className="h-3.5 w-3.5 text-foreground/70" />
               </button>
-              <p className="text-sm font-semibold text-primary">🎉 Walkthrough complete!</p>
-              <p className="text-xs text-muted-foreground">You've seen the full workflow. You're all set!</p>
-              {showCompletionCta && (
-                <div className="pt-1 space-y-0.5">
-                  <Button
-                    size="sm"
-                    className="w-full"
-                    onClick={() => navigate('/subscribe')}
-                  >
-                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                     Start 3-Day Free Trial
-                   </Button>
-                   <p className="text-[10px] text-muted-foreground">Full access for 3 days</p>
+              <div className="flex justify-center animate-scale-in">
+                <div className="h-10 w-10 rounded-full bg-primary/15 flex items-center justify-center border border-primary/20">
+                  <Check className="h-5 w-5 text-primary animate-fade-in" />
                 </div>
-              )}
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold">You're all set</p>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  You now know how to find leads, message them, and track everything in one place.
+                </p>
+              </div>
+              <p className="text-[10px] text-muted-foreground/70 italic">
+                Start by searching any location to see businesses without websites.
+              </p>
             </div>
           ) : (
             <ol className="space-y-1.5">
