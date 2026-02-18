@@ -471,12 +471,9 @@ const Landing = () => {
       <section id="how-it-works" className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
         <div className="container mx-auto max-w-5xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 tracking-tight leading-[1.1]">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1]">
               How LeadFinder <span className="text-gradient-primary">Works</span>
             </h2>
-            <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6] px-2">
-              A simple system to find, contact, and manage leads — without the chaos.
-            </p>
           </ScrollReveal>
 
           <div className="space-y-14 sm:space-y-18 md:space-y-24 max-w-4xl mx-auto">
@@ -513,45 +510,51 @@ const Landing = () => {
                 img: featureDashboard,
                 alt: 'Dashboard analytics',
               },
-            ].map((step) => (
+            ].map((step, index) => {
+              const isEven = index % 2 === 0;
+              return (
               <ScrollReveal key={step.num} className="w-full" delay={step.num * 80} direction="up">
-                {/* Title + text first */}
-                <div className="text-center mb-6 sm:mb-8">
-                  <span 
-                    className="font-bold text-lg sm:text-xl mb-2 sm:mb-3 block"
-                    style={{ color: 'hsl(210 100% 60%)' }}
-                  >{step.num}.</span>
-                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-2 sm:mb-3">
-                    {step.title}
-                  </h3>
-                  <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-lg mx-auto">
-                    {step.body}
-                  </p>
-                </div>
-                {/* Image below */}
-                <div 
-                  className="relative group cursor-pointer max-w-3xl mx-auto"
-                  onClick={() => setExpandedImage({ src: step.img, title: step.title })}
-                >
+                {/* Mobile: stacked. Desktop: alternating side-by-side */}
+                <div className={`flex flex-col sm:flex-row items-center gap-6 sm:gap-10 md:gap-14 ${!isEven ? 'sm:flex-row-reverse' : ''}`}>
+                  {/* Text side */}
+                  <div className={`flex-1 text-center sm:text-left ${!isEven ? 'sm:text-right' : ''}`}>
+                    <span 
+                      className="font-bold text-lg sm:text-xl mb-2 sm:mb-3 block"
+                      style={{ color: 'hsl(210 100% 60%)' }}
+                    >{step.num}.</span>
+                    <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-2 sm:mb-3">
+                      {step.title}
+                    </h3>
+                    <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-lg mx-auto sm:mx-0">
+                      {step.body}
+                    </p>
+                  </div>
+                  {/* Image side */}
                   <div 
-                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
-                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
-                  />
-                  <div 
-                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
-                    style={{ 
-                      border: '1px solid hsl(210 100% 50% / 0.2)',
-                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
-                    }}
+                    className="flex-1 relative group cursor-pointer w-full"
+                    onClick={() => setExpandedImage({ src: step.img, title: step.title })}
                   >
-                    <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                    <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm transition-opacity duration-300">
-                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground/70" />
+                    <div 
+                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
+                      style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+                    />
+                    <div 
+                      className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
+                      style={{ 
+                        border: '1px solid hsl(210 100% 50% / 0.2)',
+                        boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                      }}
+                    >
+                      <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm transition-opacity duration-300">
+                        <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground/70" />
+                      </div>
                     </div>
                   </div>
                 </div>
               </ScrollReveal>
-            ))}
+              );
+            })}
           </div>
 
         </div>
@@ -559,31 +562,23 @@ const Landing = () => {
 
       {/* Real Results — Benefit Stack */}
       <section className="relative z-10 py-16 sm:py-20 md:py-24 px-4">
-        <div
-          className="absolute inset-0 -z-10"
-          style={{ background: 'linear-gradient(180deg, hsl(220 50% 5%) 0%, hsl(220 50% 6%) 50%, hsl(220 50% 5%) 100%)' }}
-        />
-        <div
-          className="absolute inset-0 -z-10 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 50%, hsl(210 100% 50% / 0.06) 0%, transparent 70%)' }}
-        />
         <div className="container mx-auto max-w-5xl text-center">
           <ScrollReveal>
             <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] mb-6 sm:mb-8" style={{ color: 'hsl(210 100% 60% / 0.6)' }}>
               Real results
             </p>
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-bold tracking-tight text-foreground mb-12 sm:mb-16 leading-snug">
-              Why Freelancers <span className="text-gradient-primary">Stick</span> With LeadFinder
+              Turn Outreach Into a <span className="text-gradient-primary">System</span>
             </h2>
           </ScrollReveal>
 
           <ScrollReveal delay={100}>
             <ul className="max-w-[600px] mx-auto text-left space-y-5 sm:space-y-6 mb-12 sm:mb-16">
               {[
-                'Find 30+ businesses without websites in minutes',
-                'Zero manual searching',
-                'No missed follow-ups',
-                'Total control over your pipeline',
+                'Find businesses that actually need a website',
+                'Build your outreach list in minutes',
+                'Contact them in one click',
+                'Track every lead and next step',
               ].map((point) => (
                 <li key={point} className="flex items-start gap-3 text-[15px] sm:text-base md:text-lg font-semibold text-foreground/85 leading-snug">
                   <span
