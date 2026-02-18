@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
-import demoVideo from '@/assets/leadfinder-demo.mp4';
+import demoVideo from '@/assets/leadfinder-demo-v2.mp4';
 import appLogo from '@/assets/logo.png';
 
 import featureCustomization from '@/assets/feature-customization-new.png';
@@ -698,21 +698,21 @@ const Landing = () => {
         <div className="container mx-auto max-w-2xl text-center">
           <div className="md:rounded-2xl md:border md:border-border/40 md:bg-card/40 md:backdrop-blur-sm md:p-10 md:shadow-lg">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-4 sm:mb-6">
-              Find faster. Message faster. <span className="text-gradient-primary">Stay organised.</span>
+              Your outreach, finally <span className="text-gradient-primary">structured.</span>
             </h2>
 
             <p className="text-sm sm:text-base md:text-lg text-muted-foreground/70 leading-[1.6] mb-8 sm:mb-10 max-w-lg mx-auto">
-              LeadFinder Pro helps you quickly find businesses without websites, contact them in one click, and track every step of your outreach in one place.
+              Prospecting shouldn't feel scattered. Bring your lead discovery and outreach into one clear workflow.
             </p>
 
-            <div className="space-y-5 sm:space-y-6 md:space-y-7">
+            <div className="inline-flex flex-col items-start space-y-5 sm:space-y-6 md:space-y-7">
               {[
-                'Scrolling Google Maps for hours',
-                'Copying numbers into WhatsApp manually',
-                'Rewriting the same message every time',
-                'Outreach that feels random and unstructured',
+                'Scattered prospecting',
+                'Tool-hopping between apps',
+                'Starting from scratch each session',
+                'No defined outreach system',
               ].map((pain) => (
-              <div key={pain} className="flex items-center justify-center gap-2.5 md:gap-3">
+                <div key={pain} className="flex items-center gap-2.5 md:gap-3">
                   <X className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 flex-shrink-0" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
                   <p className="text-sm sm:text-base md:text-lg lg:text-xl text-foreground/90 leading-[1.4]">{pain}</p>
                 </div>
