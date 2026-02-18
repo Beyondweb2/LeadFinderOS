@@ -203,37 +203,30 @@ const MobileHeroVideo = () => {
 
   const toggleMute = () => {
     if (videoRef.current) {
-      const newMuted = !isMuted;
-      videoRef.current.muted = newMuted;
-      setIsMuted(newMuted);
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
     }
   };
 
   return (
-    <div className="relative">
-      <div 
-        className="absolute -inset-2 rounded-xl blur-xl opacity-40"
-        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
+    <div className="relative rounded-xl overflow-hidden border border-border">
+      <video
+        ref={videoRef}
+        src={demoVideo}
+        className="w-full h-auto block"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
       />
-      <div 
-        className="absolute -inset-px rounded-xl"
-        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.15), transparent)' }}
-      />
-      <div 
-        className="relative rounded-xl overflow-hidden bg-card/80"
-        style={{ border: '1px solid hsl(210 100% 50% / 0.2)', boxShadow: '0 0 20px hsl(210 100% 50% / 0.15)' }}
+      <button
+        onClick={toggleMute}
+        className="absolute bottom-2 right-2 p-1.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground"
+        aria-label={isMuted ? "Unmute" : "Mute"}
       >
-        <video ref={videoRef} className="w-full h-auto" autoPlay loop muted playsInline preload="auto" width={640} height={360}>
-          <source src={demoVideo} type="video/mp4" />
-        </video>
-        <button
-          onClick={toggleMute}
-          className="absolute bottom-2 right-2 p-1.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
-          aria-label={isMuted ? "Unmute video" : "Mute video"}
-        >
-          {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
-        </button>
-      </div>
+        {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+      </button>
     </div>
   );
 };
@@ -244,39 +237,32 @@ const VideoSection = () => {
 
   const toggleMute = () => {
     if (videoRef.current) {
-      const newMuted = !isMuted;
-      videoRef.current.muted = newMuted;
-      setIsMuted(newMuted);
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
     }
   };
 
   return (
     <ScrollReveal className="relative z-10 pb-10 sm:pb-14 md:pb-20 px-2 sm:px-4">
       <div className="container mx-auto">
-        <div className="relative max-w-5xl mx-auto">
-          <div 
-            className="absolute -inset-4 rounded-3xl blur-2xl opacity-40"
-            style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
+        <div className="max-w-5xl mx-auto relative rounded-2xl overflow-hidden border border-border">
+          <video
+            ref={videoRef}
+            src={demoVideo}
+            className="w-full h-auto block"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
           />
-          <div 
-            className="absolute -inset-px rounded-2xl"
-            style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.15), transparent)' }}
-          />
-          <div 
-            className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm"
-            style={{ border: '1px solid hsl(210 100% 50% / 0.2)', boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)' }}
+          <button
+            onClick={toggleMute}
+            className="absolute bottom-3 right-3 md:bottom-4 md:right-4 p-2 md:p-2.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground"
+            aria-label={isMuted ? "Unmute" : "Mute"}
           >
-            <video ref={videoRef} className="w-full h-auto" autoPlay loop muted playsInline preload="auto" width={1280} height={720}>
-              <source src={demoVideo} type="video/mp4" />
-            </video>
-            <button
-              onClick={toggleMute}
-              className="absolute bottom-3 right-3 md:bottom-4 md:right-4 p-2 md:p-2.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
-              aria-label={isMuted ? "Unmute video" : "Mute video"}
-            >
-              {isMuted ? <VolumeX className="h-4 w-4 md:h-5 md:w-5" /> : <Volume2 className="h-4 w-4 md:h-5 md:w-5" />}
-            </button>
-          </div>
+            {isMuted ? <VolumeX className="h-4 w-4 md:h-5 md:w-5" /> : <Volume2 className="h-4 w-4 md:h-5 md:w-5" />}
+          </button>
         </div>
         <p className="text-center text-xs sm:text-sm text-muted-foreground/60 mt-6 sm:mt-10">
           See the difference for yourself.
