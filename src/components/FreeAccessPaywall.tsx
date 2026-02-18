@@ -36,10 +36,10 @@ export function FreeAccessPaywall({ open, onOpenChange }: FreeAccessPaywallProps
             
             <div className="space-y-3">
               <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-                Free access complete
+                Unlock unlimited access
               </h2>
               <p className="text-base text-muted-foreground max-w-sm mx-auto leading-relaxed">
-                Upgrade now to unlock unlimited searches and continue finding new clients without limits.
+                Upgrade to continue unlimited searches and keep everything organised in one place.
               </p>
             </div>
 
