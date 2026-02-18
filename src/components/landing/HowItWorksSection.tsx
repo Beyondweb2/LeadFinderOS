@@ -47,21 +47,21 @@ const STEPS: StepData[] = [
     blueWord: 'Leads',
   },
   {
+    icon: MessageSquare,
+    title: 'Send Outreach in One Click',
+    mobileTitle: 'Send Outreach in One Click',
+    description: 'Use templates, auto-fill the business name, then open WhatsApp or SMS instantly.',
+    images: [step3Image],
+    badge: 'Direct Outreach',
+    blueWord: 'Outreach',
+  },
+  {
     icon: ClipboardList,
     title: 'Add to CRM in One Click',
     description: 'Save good leads instantly so nothing gets lost and every follow-up has a place.',
     images: [step2Image],
     badge: 'Instant Save',
     blueWord: 'CRM',
-  },
-  {
-    icon: MessageSquare,
-    title: 'Contact in One Click',
-    mobileTitle: 'Contact in One Click',
-    description: 'Use templates, auto-fill the business name, then open WhatsApp or SMS instantly.',
-    images: [step3Image],
-    badge: 'Direct Outreach',
-    blueWord: 'Contact',
   },
   {
     icon: BarChart3,
@@ -216,101 +216,73 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             ))}
           </div>
         ) : (
-          /* Desktop Layout */
-          <div className="max-w-6xl mx-auto space-y-6 sm:space-y-10 md:space-y-14">
-            {STEPS.map((step, index) => {
-              const isEven = index % 2 === 0;
-              const imageDirection = isEven ? 'left' : 'right';
-              const textDirection = isEven ? 'right' : 'left';
-              const hasMultipleImages = step.images.length > 1;
-              
-              return (
-                <div key={step.title} className={`flex flex-col-reverse ${isEven ? 'lg:flex-row' : 'lg:flex-row-reverse'} items-center gap-4 sm:gap-6 lg:gap-12`}>
-                  {/* Image Side */}
-                  <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={(index + 1) * 100} direction={imageDirection}>
-                    {hasMultipleImages ? (
-                      <div className="grid grid-cols-2 gap-4">
-                        {step.images.map((img, imgIdx) => (
-                          <StepImage
-                            key={imgIdx}
-                            src={img}
-                            alt={`${step.title} ${imgIdx + 1}`}
-                            onClick={() => setExpandedImage({ src: img, title: step.title })}
-                          />
-                        ))}
-                      </div>
-                    ) : (
-                      <div 
-                        className="relative group cursor-pointer"
-                        onClick={() => setExpandedImage({ src: step.images[0], title: step.title })}
-                      >
-                        <div 
-                          className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
-                          style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
-                        />
-                        <div 
-                          className="absolute -inset-px rounded-2xl"
-                          style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.1), transparent)' }}
-                        />
-                        <div 
-                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
-                          style={{ 
-                            border: '1px solid hsl(210 100% 50% / 0.2)',
-                            boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
-                          }}
-                        >
-                          <img 
-                            src={step.images[0]} 
-                            alt={step.title}
-                            loading="lazy"
-                            decoding="async"
-                            width={640}
-                            height={360}
-                            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
-                          />
-                          <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
-                          </div>
-                          <div 
-                            className="absolute top-3 right-3 sm:top-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold backdrop-blur-md"
-                            style={{ 
-                              background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.9), hsl(220 80% 45% / 0.9))',
-                              color: 'white',
-                              boxShadow: '0 4px 12px hsl(210 100% 50% / 0.3)'
-                            }}
-                          >
-                            {step.badge}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </ScrollReveal>
-                    
-                  {/* Content Side */}
-                  <ScrollReveal className={`flex-1 w-full ${isEven ? 'lg:pl-4' : 'lg:pr-4'}`} delay={(index + 1) * 100 + 50} direction={textDirection}>
-                    <div className="text-center lg:text-left">
-                      <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
-                        <span 
-                          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
-                          style={{ 
-                            background: 'hsl(210 100% 50% / 0.15)',
-                            color: 'hsl(210 100% 60%)',
-                            border: '1px solid hsl(210 100% 50% / 0.3)'
-                          }}
-                        >
-                          {index + 1}
-                        </span>
-                        <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{renderTitle(step.title, step.blueWord)}</h3>
-                      </div>
-                      
-                      <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
-                        {step.description}
-                      </p>
-                    </div>
-                  </ScrollReveal>
+          /* Desktop Layout — Title first, image below */
+          <div className="max-w-4xl mx-auto space-y-16 md:space-y-20">
+            {STEPS.map((step, index) => (
+              <ScrollReveal key={step.title} className="w-full" delay={(index + 1) * 100} direction="up">
+                <div className="text-center mb-6 sm:mb-8">
+                  <div className="flex items-center gap-3 justify-center mb-3 sm:mb-4">
+                    <span 
+                      className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
+                      style={{ 
+                        background: 'hsl(210 100% 50% / 0.15)',
+                        color: 'hsl(210 100% 60%)',
+                        border: '1px solid hsl(210 100% 50% / 0.3)'
+                      }}
+                    >
+                      {index + 1}
+                    </span>
+                    <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{renderTitle(step.title, step.blueWord)}</h3>
+                  </div>
+                  <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-lg mx-auto">
+                    {step.description}
+                  </p>
                 </div>
-              );
-            })}
+                <div 
+                  className="relative group cursor-pointer max-w-3xl mx-auto"
+                  onClick={() => setExpandedImage({ src: step.images[0], title: step.title })}
+                >
+                  <div 
+                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
+                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+                  />
+                  <div 
+                    className="absolute -inset-px rounded-2xl"
+                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.1), transparent)' }}
+                  />
+                  <div 
+                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
+                    style={{ 
+                      border: '1px solid hsl(210 100% 50% / 0.2)',
+                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                    }}
+                  >
+                    <img 
+                      src={step.images[0]} 
+                      alt={step.title}
+                      loading="lazy"
+                      decoding="async"
+                      width={640}
+                      height={360}
+                      className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                    />
+                    <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                    </div>
+                    <div 
+                      className="absolute top-3 right-3 sm:top-4 sm:right-4 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold backdrop-blur-md"
+                      style={{ 
+                        background: 'linear-gradient(135deg, hsl(210 100% 50% / 0.9), hsl(220 80% 45% / 0.9))',
+                        color: 'white',
+                        boxShadow: '0 4px 12px hsl(210 100% 50% / 0.3)'
+                      }}
+                    >
+                      {step.badge}
+                    </div>
+                  </div>
+                </div>
+              </ScrollReveal>
+            ))}
           </div>
         )}
 

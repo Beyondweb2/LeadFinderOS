@@ -562,31 +562,32 @@ const Landing = () => {
       </section>
 
       {/* System Section — Emotional Positioning */}
-      <section className="relative z-10 py-[120px] sm:py-[140px] px-4">
-        {/* Subtle radial glow */}
+      <section className="relative z-10 py-[100px] sm:py-[120px] px-4">
+        {/* Stronger radial glow */}
         <div
           className="absolute inset-0 -z-10 pointer-events-none"
           style={{
-            background: 'radial-gradient(ellipse 60% 50% at 50% 50%, hsl(210 100% 50% / 0.06) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse 50% 40% at 50% 45%, hsl(210 100% 50% / 0.12) 0%, transparent 70%)',
           }}
         />
         <div
           className="absolute inset-0 -z-10"
-          style={{ background: 'hsl(220 50% 5% / 0.4)' }}
+          style={{ background: 'hsl(220 50% 4% / 0.5)' }}
         />
         <div className="container mx-auto max-w-[720px] text-center">
-          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground/40 mb-6">
+          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] mb-6" style={{ color: 'hsl(210 100% 60% / 0.5)' }}>
             Why this matters
           </p>
-          <h2 className="text-xl sm:text-2xl md:text-[1.75rem] font-bold tracking-tight text-foreground mb-8 sm:mb-10 leading-snug">
-            Most freelancers don't lack skill. They lack a system.
+          <h2 className="text-2xl sm:text-3xl md:text-[2rem] font-bold tracking-tight text-foreground mb-8 sm:mb-10 leading-snug">
+            Most freelancers don't lack skill.<br />
+            They lack a <span className="text-gradient-primary">system</span>.
           </h2>
-          <div className="space-y-4 sm:space-y-5 text-[15px] sm:text-base text-foreground/55 leading-relaxed">
+          <div className="space-y-3.5 sm:space-y-4 text-[15px] sm:text-base text-foreground/65 leading-relaxed font-medium">
             <p>You already know how to build websites.</p>
             <p>The hard part is doing outreach consistently.</p>
-            <p>Without structure, it becomes random.</p>
-            <p>With structure, it becomes routine.</p>
-            <p>That's the difference.</p>
+            <p className="text-foreground/75">Without structure, it becomes random.</p>
+            <p className="text-foreground/75">With structure, it becomes <span className="text-foreground/90">routine</span>.</p>
+            <p className="text-foreground/85 font-semibold">That's the difference.</p>
           </div>
         </div>
       </section>
