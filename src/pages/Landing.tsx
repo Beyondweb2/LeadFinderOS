@@ -562,40 +562,49 @@ const Landing = () => {
 
       {/* Real Results — Benefit Stack */}
       <section className="relative z-10 py-16 sm:py-20 md:py-24 px-4">
+        {/* Subtle radial glow behind headline */}
+        <div
+          className="absolute inset-0 -z-10 pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse 50% 35% at 50% 25%, hsl(210 100% 50% / 0.06) 0%, transparent 70%)' }}
+        />
         <div className="container mx-auto max-w-5xl text-center">
           <ScrollReveal>
             <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] mb-6 sm:mb-8" style={{ color: 'hsl(210 100% 60% / 0.6)' }}>
               Real results
             </p>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-bold tracking-tight text-foreground mb-12 sm:mb-16 leading-snug">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-extrabold tracking-tight text-foreground mb-12 sm:mb-16 leading-snug">
               Turn Outreach Into a <span className="text-gradient-primary">System</span>
             </h2>
           </ScrollReveal>
 
           <ScrollReveal delay={100}>
-            <ul className="max-w-[600px] mx-auto text-left space-y-5 sm:space-y-6 mb-12 sm:mb-16">
+            <ul className="max-w-[600px] mx-auto text-left space-y-6 sm:space-y-7 mb-10 sm:mb-12">
               {[
-                'Find businesses that actually need a website',
-                'Build your outreach list in minutes',
-                'Contact them in one click',
-                'Track every lead and next step',
+                { text: 'Find businesses that ', highlight: 'actually need', suffix: ' a website' },
+                { text: 'Build your outreach list ', highlight: 'in minutes', suffix: '' },
+                { text: 'Contact them in ', highlight: 'one click', suffix: '' },
+                { text: 'Track ', highlight: 'every lead', suffix: ' and next step' },
               ].map((point) => (
-                <li key={point} className="flex items-start gap-3 text-[15px] sm:text-base md:text-lg font-semibold text-foreground/85 leading-snug">
+                <li key={point.highlight} className="flex items-start gap-3.5 text-[15px] sm:text-base md:text-lg font-semibold text-foreground/85 leading-snug">
                   <span
-                    className="mt-2 w-2 h-2 rounded-full shrink-0"
+                    className="mt-[7px] w-2.5 h-2.5 rounded-full shrink-0"
                     style={{ background: 'hsl(210 100% 55%)' }}
                   />
-                  {point}
+                  <span>
+                    {point.text}<span className="text-gradient-primary">{point.highlight}</span>{point.suffix}
+                  </span>
                 </li>
               ))}
             </ul>
           </ScrollReveal>
 
           <ScrollReveal delay={200}>
-            <div className="w-12 h-px mx-auto mb-8 sm:mb-10" style={{ background: 'hsl(210 100% 50% / 0.2)' }} />
-            <p className="text-base sm:text-lg font-bold text-foreground/90 tracking-tight">
-              Clear system. Less chaos. More clients.
-            </p>
+            <div className="w-12 h-px mx-auto mb-6 sm:mb-8" style={{ background: 'hsl(210 100% 50% / 0.2)' }} />
+            <div className="space-y-1.5 sm:space-y-2">
+              <p className="text-base sm:text-lg font-bold text-foreground/90 tracking-tight">Clear system.</p>
+              <p className="text-base sm:text-lg font-bold text-foreground/90 tracking-tight">Less chaos.</p>
+              <p className="text-lg sm:text-xl font-extrabold tracking-tight text-gradient-primary">More clients.</p>
+            </div>
           </ScrollReveal>
         </div>
       </section>
@@ -708,11 +717,6 @@ const Landing = () => {
       </ScrollReveal>
 
       {/* Transition line */}
-      <div className="relative z-10 py-10 sm:py-14 md:py-16 text-center">
-        <p className="text-xs sm:text-sm text-muted-foreground/35 font-medium">
-          Start free. Upgrade only when you're ready.
-        </p>
-      </div>
 
       {/* Final CTA — Free Access Card */}
       <section className="relative z-10 pb-16 sm:pb-20 md:pb-24 px-4">
