@@ -483,33 +483,33 @@ const Landing = () => {
             {[
               {
                 num: 1,
-                title: 'Find Leads Fast',
-                blueWord: 'Leads',
-                body: "Search any location and instantly see which businesses don't have a website.",
+                title: 'Find Businesses Without Websites',
+                blueWord: 'Businesses',
+                body: "Search any location and instantly see which businesses don't have a website — no manual checking.",
                 img: featureClassification,
                 alt: 'Find businesses without websites',
               },
               {
                 num: 2,
-                title: 'Send Outreach in One Click',
-                blueWord: 'Outreach',
-                body: 'Use templates, auto-fill the business name, then open WhatsApp or SMS instantly.',
-                img: step3WhatsApp,
-                alt: 'Message in one click via WhatsApp',
-              },
-              {
-                num: 3,
-                title: 'Add to CRM in One Click',
-                blueWord: 'CRM',
-                body: 'Save good leads instantly so nothing gets lost and every follow-up has a place.',
+                title: 'Save & Organise Your Leads',
+                blueWord: 'Organise',
+                body: 'Add leads to your pipeline in one click, set a status, and keep every follow-up structured.',
                 img: step2CRM,
                 alt: 'Save and organise your leads',
               },
               {
+                num: 3,
+                title: 'Send Outreach in One Click',
+                blueWord: 'Outreach',
+                body: 'Use templates, auto-fill business names, and open WhatsApp or SMS instantly — no copy and paste.',
+                img: step3WhatsApp,
+                alt: 'Message in one click via WhatsApp',
+              },
+              {
                 num: 4,
-                title: 'Track & Close Deals',
-                blueWord: 'Track',
-                body: 'Track replies, update statuses, and set next actions in one clear dashboard so you always know what to do next.',
+                title: 'Stay in Control',
+                blueWord: 'Control',
+                body: "Track outreach activity, follow-ups, and progress in one clear dashboard — so you always know your next move.",
                 img: featureDashboard,
                 alt: 'Dashboard analytics',
               },
@@ -568,33 +568,86 @@ const Landing = () => {
       </section>
 
       {/* System Section — Emotional Positioning */}
-      <section className="relative z-10 py-[100px] sm:py-[120px] px-4">
-        {/* Stronger radial glow */}
+      <section className="relative z-10 py-20 sm:py-24 md:py-32 px-4">
+        {/* Radial glow */}
         <div
           className="absolute inset-0 -z-10 pointer-events-none"
           style={{
-            background: 'radial-gradient(ellipse 50% 40% at 50% 45%, hsl(210 100% 50% / 0.12) 0%, transparent 70%)',
+            background: 'radial-gradient(ellipse 50% 40% at 50% 45%, hsl(210 100% 50% / 0.10) 0%, transparent 70%)',
           }}
         />
         <div
           className="absolute inset-0 -z-10"
           style={{ background: 'hsl(220 50% 4% / 0.5)' }}
         />
-        <div className="container mx-auto max-w-[720px] text-center">
-          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] mb-6" style={{ color: 'hsl(210 100% 60% / 0.5)' }}>
+        <div className="container mx-auto max-w-[680px] text-center">
+          {/* Eyebrow */}
+          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] mb-6 sm:mb-8" style={{ color: 'hsl(210 100% 60% / 0.6)' }}>
             Why this matters
           </p>
-          <h2 className="text-2xl sm:text-3xl md:text-[2rem] font-bold tracking-tight text-foreground mb-8 sm:mb-10 leading-snug">
+
+          {/* Headline */}
+          <h2 className="text-2xl sm:text-3xl md:text-[2.25rem] font-bold tracking-tight text-foreground mb-6 sm:mb-8 leading-snug">
             Most freelancers don't lack skill.<br />
             They lack a <span className="text-gradient-primary">system</span>.
           </h2>
-          <div className="space-y-3.5 sm:space-y-4 text-[15px] sm:text-base text-foreground/65 leading-relaxed font-medium">
+
+          {/* Intro lines */}
+          <div className="space-y-2 sm:space-y-3 text-[15px] sm:text-base text-foreground/50 leading-relaxed mb-10 sm:mb-14">
             <p>You already know how to build websites.</p>
             <p>The hard part is doing outreach consistently.</p>
-            <p className="text-foreground/75">Without structure, it becomes random.</p>
-            <p className="text-foreground/75">With structure, it becomes <span className="text-foreground/90">routine</span>.</p>
-            <p className="text-foreground/85 font-semibold">That's the difference.</p>
           </div>
+
+          {/* Divider line */}
+          <div className="w-12 h-px mx-auto mb-10 sm:mb-14" style={{ background: 'hsl(210 100% 50% / 0.2)' }} />
+
+          {/* Two columns: Without / With */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 sm:gap-12 text-left max-w-lg mx-auto mb-10 sm:mb-14">
+            {/* Without */}
+            <div>
+              <h4 className="text-sm sm:text-base font-semibold text-foreground/80 mb-4 tracking-wide">Without structure</h4>
+              <ul className="space-y-2.5 text-sm sm:text-[15px] text-foreground/45 leading-relaxed">
+                <li className="flex items-start gap-2.5">
+                  <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: 'hsl(210 100% 50% / 0.4)' }} />
+                  You message randomly
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: 'hsl(210 100% 50% / 0.4)' }} />
+                  You forget to follow up
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: 'hsl(210 100% 50% / 0.4)' }} />
+                  Leads slip through
+                </li>
+              </ul>
+            </div>
+            {/* With */}
+            <div>
+              <h4 className="text-sm sm:text-base font-semibold text-foreground/90 mb-4 tracking-wide">With structure</h4>
+              <ul className="space-y-2.5 text-sm sm:text-[15px] text-foreground/60 leading-relaxed">
+                <li className="flex items-start gap-2.5">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'hsl(210 100% 60%)' }} />
+                  You know who to contact next
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'hsl(210 100% 60%)' }} />
+                  Every lead has a status
+                </li>
+                <li className="flex items-start gap-2.5">
+                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'hsl(210 100% 60%)' }} />
+                  Progress becomes predictable
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          {/* Divider line */}
+          <div className="w-12 h-px mx-auto mb-8 sm:mb-10" style={{ background: 'hsl(210 100% 50% / 0.2)' }} />
+
+          {/* Closing line */}
+          <p className="text-base sm:text-lg font-semibold text-foreground/85 tracking-tight">
+            That's the difference.
+          </p>
         </div>
       </section>
 
