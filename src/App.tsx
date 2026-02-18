@@ -32,7 +32,6 @@ import Terms from "./pages/Terms";
 import Feedback from "./pages/Feedback";
 import AffiliateProgram from "./pages/AffiliateProgram";
 import UnlockAccess from "./pages/UnlockAccess";
-import StartLanding from "./pages/StartLanding";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,7 +77,6 @@ const App = () => (
              <Route path="/feedback" element={<Feedback />} />
              <Route path="/partners" element={<AffiliateProgram />} />
              <Route path="/guide" element={<HowToUse />} />
-             <Route path="/start" element={<StartLanding />} />
              <Route 
                path="/unlock" 
                element={
