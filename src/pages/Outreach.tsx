@@ -67,13 +67,6 @@ const Outreach = () => {
         <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
           Contact businesses via WhatsApp, SMS or call. Update their status, then track promising ones in Track Leads.
         </p>
-        {/* Workflow Tip - More compact on mobile */}
-        <div className="mt-2 sm:mt-3 p-2 sm:p-3 rounded-lg bg-muted/50 border border-border/50 max-w-lg">
-          <p className="text-[10px] sm:text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">💡 Workflow:</span> Contact leads via WhatsApp, SMS or call → Update status → Positive response? Track in{' '}
-            <Link to="/potential-work" className="text-primary hover:underline">Track Leads</Link>
-          </p>
-        </div>
       </div>
 
       {/* Subscribe banner for non-subscribers */}
