@@ -211,7 +211,7 @@ const logStep = (step: string, details?: unknown) => {
       });
       const session = await stripe.checkout.sessions.create(sessionConfig);
  
-     logStep("Checkout session created", { sessionId: session.id, userId: user.id, trialUsed, branchTaken });
+     logStep("Checkout session created", { sessionId: session.id, userId: user.id, trialUsed });
 
      // Log funnel event: trial_started (fire-and-forget)
      supabaseClient
