@@ -131,7 +131,7 @@ serve(async (req) => {
           ? serviceClient.from('subscriptions').select('user_id, status, current_period_end, stripe_customer_id, stripe_subscription_id').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
-          ? serviceClient.from('user_trials').select('user_id, plan_status, demo_search_used, trial_used, checkout_abandoned').in('user_id', userIds)
+          ? serviceClient.from('user_trials').select('user_id, plan_status, demo_search_used, trial_used, checkout_abandoned, free_search_count, walkthrough_completed').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
           ? serviceClient.from('funnel_events').select('user_id, event_type, created_at').in('user_id', userIds).in('event_type', ['demo_started', 'trial_started', 'subscription_active'])
@@ -174,16 +174,14 @@ serve(async (req) => {
           billing_status = 'checkout_started';
         }
 
-        // --- Access Mode (what level of access the user actually has) ---
+        // --- Access Mode ---
         let access_mode = 'signed_up';
-        if (sub?.status === 'active') {
+        if (sub?.status === 'active' || sub?.status === 'past_due') {
           access_mode = 'paid';
         } else if (sub?.status === 'trialing') {
-          access_mode = 'full_access_trial';
-        } else if (sub?.status === 'past_due') {
-          access_mode = 'paid';
-        } else if (funnel.demo_started_at) {
-          access_mode = 'demo'; // Only "Demo" if funnel event confirms it
+          access_mode = 'paid'; // legacy trialing = paid access
+        } else if ((trial?.free_search_count ?? 0) > 0) {
+          access_mode = 'free_user';
         }
 
         // Keep legacy subscription_status for filter compatibility
@@ -205,6 +203,9 @@ serve(async (req) => {
           demo_started_at: funnel.demo_started_at,
           trial_started_at: funnel.trial_started_at,
           paid_at: funnel.paid_at,
+          free_search_count: trial?.free_search_count ?? 0,
+          walkthrough_completed: trial?.walkthrough_completed ?? false,
+          stripe_subscription_id: sub?.stripe_subscription_id || null,
           search_count: metrics?.search_count ?? 0,
           businesses_added_count: metrics?.businesses_added_count ?? 0,
           messages_sent_count: metrics?.messages_sent_count ?? 0,

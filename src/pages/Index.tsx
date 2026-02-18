@@ -5,16 +5,15 @@ import { LeadsTable } from '@/components/LeadsTable';
 
 import { UpgradePromptDialog } from '@/components/UpgradePromptDialog';
 import { TrialLimitDialog } from '@/components/TrialLimitDialog';
-import { DemoUpgradePanel } from '@/components/DemoUpgradePanel';
-import { DemoOnboardingModal } from '@/components/DemoOnboardingModal';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
-import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles } from 'lucide-react';
+import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import type { Lead, Country } from '@/types/lead';
 
 const Index = () => {
@@ -22,28 +21,18 @@ const Index = () => {
   const { leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
-  const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed } = useTrial();
-  const { subscribed, isLoading: isSubscriptionLoading, status: subStatus } = useSubscription();
+  const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed, freeSearchCount } = useTrial();
+  const { subscribed, isLoading: isSubscriptionLoading, status: subStatus, isPaidSubscriber } = useSubscription();
   
-  // Pro access = active, trialing, past_due, or admin
-  const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
-  console.log('[Index] access check', { userId: 'current', subStatus, hasProAccess, isStripeTrialing, subscribed, demoSearchUsed });
+  // Pro access = active, past_due, or admin (trialing kept for legacy)
+  const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
   
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
   
   // Determine if still loading access status
   const isAccessLoading = isTrialLoading || isSubscriptionLoading;
-
-  // Demo user who already used their search — show upgrade on next search attempt
-  const [showDemoUpgradePanel, setShowDemoUpgradePanel] = useState(false);
-
-  // Check if we should show upgrade prompt after searches (only for free trial users, not Stripe trialing)
-  useEffect(() => {
-    if (!hasProAccess && shouldShowUpgradePrompt()) {
-      setShowUpgradePrompt(true);
-    }
-  }, [searchesUsed, hasProAccess, shouldShowUpgradePrompt]);
 
   // Refetch trial data after search completes
   useEffect(() => {
@@ -55,11 +44,8 @@ const Index = () => {
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
 
-  // Demo user: no pro access AND hasn't used demo search yet (or just used it)
-  // This overrides the old trial system for users who haven't subscribed
-  const isDemoUser = !hasProAccess && !isStripeTrialing;
-  const demoSearchesRemaining = isDemoUser ? (demoSearchUsed ? 0 : 1) : searchesRemaining;
-  const demoDailyLimit = isDemoUser ? 1 : dailyLimit;
+  // Free user = not paid
+  const isFreeUser = !hasProAccess;
 
   return (
     <div className="space-y-4 md:space-y-8">
@@ -99,44 +85,26 @@ const Index = () => {
         </div>
       )}
 
-      {/* Search Section OR Upgrade Panel */}
+      {/* Search Section */}
       <section>
-        {showDemoUpgradePanel ? (
-          <DemoUpgradePanel />
-        ) : (
-          <SearchForm 
-            onSearch={(filters) => {
-              // Block second search for demo users
-              if (isDemoUser && demoSearchUsed) {
-                setShowDemoUpgradePanel(true);
-                return;
-              }
-              setLastSearchCountry(filters.country || 'UK');
-              search(filters, false, false);
-            }} 
-            isLoading={isLoading}
-            isOnTrial={!isAccessLoading && (isOnTrial || isStripeTrialing)}
-            searchesRemaining={demoSearchesRemaining}
-            dailyLimit={demoDailyLimit}
-            isPaidSubscriber={isAccessLoading || hasProAccess}
-            disabled={postAbandonExhausted && !hasProAccess}
-            initialRadius={isDemoUser ? 100 : undefined}
-          />
-        )}
+        <SearchForm 
+          onSearch={(filters) => {
+            // Block search if free searches exhausted and not paid
+            if (isFreeUser && (freeSearchCount ?? 0) >= 5) {
+              setShowPaywall(true);
+              return;
+            }
+            setLastSearchCountry(filters.country || 'UK');
+            search(filters, false, false);
+          }} 
+          isLoading={isLoading}
+          isOnTrial={false}
+          searchesRemaining={hasProAccess ? Infinity : Math.max(0, 5 - (freeSearchCount ?? 0))}
+          dailyLimit={hasProAccess ? Infinity : 5}
+          isPaidSubscriber={isAccessLoading || hasProAccess}
+          disabled={postAbandonExhausted && !hasProAccess}
+        />
       </section>
-
-      {/* Subtle upgrade banner after first demo search */}
-      {isDemoUser && demoSearchUsed && !showDemoUpgradePanel && leads.length > 0 && (
-        <div className="flex items-center justify-center gap-2 py-2.5 px-4 bg-primary/5 border border-primary/10 rounded-lg">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span className="text-sm text-muted-foreground">
-            You've used your demo search.
-            <Link to="/subscribe" className="text-primary font-medium ml-1 hover:underline">
-              Get 3 days unlimited searches - FREE →
-            </Link>
-          </span>
-        </div>
-      )}
 
       {/* Outcome-focused Results Header */}
       {leads.length > 0 && noWebsiteCount > 0 && (
@@ -163,7 +131,7 @@ const Index = () => {
       )}
 
       {/* Empty State */}
-      {leads.length === 0 && !isLoading && !showDemoUpgradePanel && (
+      {leads.length === 0 && !isLoading && (
         <section className="text-center py-16">
           <div className="inline-flex p-4 rounded-full bg-muted/50 mb-6">
             <Search className="h-12 w-12 text-muted-foreground" />
@@ -179,15 +147,28 @@ const Index = () => {
       )}
 
 
-      {/* Upgrade Prompt Dialog (after every 5 searches) */}
-      <UpgradePromptDialog
-        open={showUpgradePrompt}
-        onOpenChange={setShowUpgradePrompt}
-        searchesUsed={searchesUsed}
-      />
-
-      {/* Demo Onboarding Modal - for demo and trialing users */}
-      <DemoOnboardingModal isDemoUser={!isAccessLoading && (isDemoUser || isStripeTrialing)} />
+      {/* Paywall Dialog - shown when free searches exhausted */}
+      <Dialog open={showPaywall} onOpenChange={setShowPaywall}>
+        <DialogContent className="max-w-sm mx-auto">
+          <DialogHeader className="text-center space-y-3">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+              <Lock className="h-6 w-6 text-primary" />
+            </div>
+            <DialogTitle className="text-xl font-bold">Unlock unlimited access</DialogTitle>
+            <DialogDescription className="text-sm text-muted-foreground">
+              Upgrade to continue unlimited searches and keep building your pipeline.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col gap-2 sm:flex-col">
+            <Button asChild size="lg" className="w-full">
+              <Link to="/subscribe">
+                Unlock unlimited — £19.99/month
+              </Link>
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">Cancel anytime</p>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Trial Limit Dialog (when daily limit reached) */}
       <TrialLimitDialog

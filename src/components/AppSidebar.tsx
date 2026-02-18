@@ -108,7 +108,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { state, toggleSidebar } = useSidebar();
   const { isAdmin, subscribed, isLoading: isSubscriptionLoading } = useSubscription();
-  const { isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed } = useTrial();
+  const { isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, freeSearchCount } = useTrial();
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
   const isCollapsed = state === 'collapsed';
@@ -137,15 +137,14 @@ export function AppSidebar() {
   // Pro access = active, trialing, past_due, or admin
   const { status: subStatus } = useSubscription();
   const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
-  const isDemoUser = !hasProAccess && !isStripeTrialing;
+  const isFreeUser = !hasProAccess;
   
-  // Demo users get 1 lifetime search, not the legacy daily limit
-  const effectiveSearchesRemaining = isDemoUser ? (demoSearchUsed ? 0 : 1) : searchesRemaining;
-  const effectiveDailyLimit = isDemoUser ? 1 : dailyLimit;
+  // Free users: show remaining free searches out of 5
+  const effectiveSearchesRemaining = isFreeUser ? Math.max(0, 5 - (freeSearchCount ?? 0)) : searchesRemaining;
+  const effectiveDailyLimit = isFreeUser ? 5 : dailyLimit;
   
-  // Show badge for demo users (not subscribed, not stripe trialing)
-  // Wait for loading to complete to prevent flickering
-  const showTrialBadge = !isSubscriptionLoading && !isTrialLoading && isDemoUser && !subscribed;
+  // Show badge for free users who haven't paid
+  const showTrialBadge = !isSubscriptionLoading && !isTrialLoading && isFreeUser && !subscribed;
 
   return (
     <Sidebar 

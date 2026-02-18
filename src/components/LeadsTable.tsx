@@ -39,7 +39,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { Lead, WebsiteStatus } from '@/types/lead';
-import { useDemoContext } from '@/components/DemoLayout';
+
 
 const ITEMS_PER_PAGE = 25;
 
@@ -50,7 +50,7 @@ interface LeadsTableProps {
   isInOutreach?: (leadName: string, googleMapsUrl?: string) => boolean;
   onMapLinkClick?: (businessName: string, googleMapsUrl?: string) => void;
   isChecked?: (businessName: string, googleMapsUrl?: string) => boolean;
-  isDemo?: boolean;
+  
 }
 
 type SortField = 'name' | 'rating' | 'reviewCount' | 'websiteStatus' | 'confidence';
@@ -63,23 +63,14 @@ const statusOrder: Record<WebsiteStatus, number> = {
   HAS_OWN_WEBSITE: 3,
 };
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, isDemo = false }: LeadsTableProps) {
-  const demoCtx = useDemoContext();
-
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked }: LeadsTableProps) {
   const handleAddToOutreach = useCallback((lead: Lead) => {
-    if (isDemo && demoCtx) {
-      demoCtx.addDemoLead(lead);
-      return Promise.resolve();
-    }
     return onAddToOutreach?.(lead);
-  }, [isDemo, demoCtx, onAddToOutreach]);
+  }, [onAddToOutreach]);
 
   const checkIsInOutreach = useCallback((name: string, url?: string) => {
-    if (isDemo && demoCtx) {
-      return demoCtx.isDemoLeadAdded(name, url);
-    }
     return isInOutreach?.(name, url) ?? false;
-  }, [isDemo, demoCtx, isInOutreach]);
+  }, [isInOutreach]);
   const [sortField, setSortField] = useState<SortField>('websiteStatus');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
   const [statusFilters, setStatusFilters] = useState<WebsiteStatus[]>([
@@ -313,7 +304,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                       </a>
                     </Button>
                   )}
-                   {(onAddToOutreach || isDemo) && (
+                   {onAddToOutreach && (
                     checkIsInOutreach(lead.name, lead.googleMapsUrl) ? (
                       <Button
                         variant="ghost"
@@ -503,7 +494,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
-                        {(onAddToOutreach || isDemo) && (
+                        {onAddToOutreach && (
                           checkIsInOutreach(lead.name, lead.googleMapsUrl) ? (
                             <Tooltip>
                               <TooltipTrigger asChild>
