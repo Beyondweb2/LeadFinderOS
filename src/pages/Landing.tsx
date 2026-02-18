@@ -561,6 +561,24 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Social proof strip */}
+      <div className="relative z-10 py-6 sm:py-8 px-4">
+        <div className="container mx-auto max-w-md flex flex-col items-center gap-2.5">
+          <div className="flex items-center gap-1">
+            {[...Array(5)].map((_, i) => (
+              <Star key={i} className="h-4 w-4 sm:h-[18px] sm:w-[18px] fill-yellow-400 text-yellow-400" />
+            ))}
+          </div>
+          <p className="text-sm sm:text-base font-semibold text-foreground/80 tracking-tight text-center">
+            Rated <span className="text-foreground">4.9/5</span> by freelancers and agencies
+          </p>
+          <div
+            className="h-px w-16 mt-1 rounded-full"
+            style={{ background: 'linear-gradient(90deg, transparent, hsl(var(--muted-foreground) / 0.2), transparent)' }}
+          />
+        </div>
+      </div>
+
       {/* Testimonials */}
       <ScrollReveal className="relative z-10 py-8 sm:py-10 md:py-14 px-4">
         <div className="container mx-auto max-w-5xl">
