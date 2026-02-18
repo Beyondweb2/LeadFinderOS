@@ -479,83 +479,89 @@ const Landing = () => {
             </p>
           </ScrollReveal>
 
-          <div className="space-y-12 sm:space-y-16 md:space-y-20">
+          <div className="space-y-14 sm:space-y-18 md:space-y-24 max-w-4xl mx-auto">
             {[
               {
                 num: 1,
-                title: 'Find Businesses Without Websites',
-                body: "Search any location and instantly see which businesses don't have a website — no manual checking.",
+                title: 'Find Leads Fast',
+                blueWord: 'Leads',
+                body: "Search any location and instantly see which businesses don't have a website.",
                 img: featureClassification,
                 alt: 'Find businesses without websites',
-                direction: 'left' as const,
               },
               {
                 num: 2,
-                title: 'Save & Organise Your Leads',
-                body: 'Add leads to your pipeline in one click, set a status, and keep every follow-up structured.',
-                img: step2CRM,
-                alt: 'Save and organise your leads',
-                direction: 'right' as const,
+                title: 'Send Outreach in One Click',
+                blueWord: 'Outreach',
+                body: 'Use templates, auto-fill the business name, then open WhatsApp or SMS instantly.',
+                img: step3WhatsApp,
+                alt: 'Message in one click via WhatsApp',
               },
               {
                 num: 3,
-                title: 'Send Outreach in One Click',
-                body: 'Use templates, auto-fill business names, and open WhatsApp or SMS instantly — no copy and paste.',
-                img: step3WhatsApp,
-                alt: 'Message in one click via WhatsApp',
-                direction: 'left' as const,
+                title: 'Add to CRM in One Click',
+                blueWord: 'CRM',
+                body: 'Save good leads instantly so nothing gets lost and every follow-up has a place.',
+                img: step2CRM,
+                alt: 'Save and organise your leads',
               },
               {
                 num: 4,
-                title: 'Stay in Control',
-                body: "Track outreach activity, follow-ups, and progress in one clear dashboard — so you always know your next move.",
+                title: 'Track & Close Deals',
+                blueWord: 'Track',
+                body: 'Track replies, update statuses, and set next actions in one clear dashboard so you always know what to do next.',
                 img: featureDashboard,
                 alt: 'Dashboard analytics',
-                direction: 'right' as const,
               },
-            ].map((step) => {
-              const isEven = step.num % 2 === 0;
-              return (
-              <div key={step.num} className={`flex flex-col ${isEven ? 'lg:flex-row-reverse' : 'lg:flex-row'} items-center gap-6 lg:gap-12`}>
-                {/* Image side */}
-                <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={step.num * 80} direction={isEven ? 'right' : 'left'}>
-                  <div 
-                    className="relative group cursor-pointer w-full"
-                    onClick={() => setExpandedImage({ src: step.img, title: step.title })}
-                  >
-                    <div 
-                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
-                      style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
-                    />
-                    <div 
-                      className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
-                      style={{ 
-                        border: '1px solid hsl(210 100% 50% / 0.2)',
-                        boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
-                      }}
-                    >
-                      <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm transition-opacity duration-300">
-                        <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground/70" />
-                      </div>
-                    </div>
-                  </div>
-                </ScrollReveal>
-
-                {/* Text side */}
-                <ScrollReveal className={`flex-1 w-full text-center lg:text-left`} delay={step.num * 80 + 50} direction={isEven ? 'left' : 'right'}>
+            ].map((step) => (
+              <ScrollReveal key={step.num} className="w-full" delay={step.num * 80} direction="up">
+                {/* Title + text first */}
+                <div className="text-center mb-6 sm:mb-8">
                   <span 
                     className="font-bold text-lg sm:text-xl mb-2 sm:mb-3 block"
                     style={{ color: 'hsl(210 100% 60%)' }}
                   >{step.num}.</span>
-                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-2 sm:mb-3">{step.title}</h3>
-                  <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
+                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-2 sm:mb-3">
+                    {(() => {
+                      const idx = step.title.indexOf(step.blueWord);
+                      if (idx === -1) return step.title;
+                      return (
+                        <>
+                          {step.title.slice(0, idx)}
+                          <span className="text-gradient-primary">{step.blueWord}</span>
+                          {step.title.slice(idx + step.blueWord.length)}
+                        </>
+                      );
+                    })()}
+                  </h3>
+                  <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-lg mx-auto">
                     {step.body}
                   </p>
-                </ScrollReveal>
-              </div>
-              );
-            })}
+                </div>
+                {/* Image below */}
+                <div 
+                  className="relative group cursor-pointer max-w-3xl mx-auto"
+                  onClick={() => setExpandedImage({ src: step.img, title: step.title })}
+                >
+                  <div 
+                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
+                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+                  />
+                  <div 
+                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
+                    style={{ 
+                      border: '1px solid hsl(210 100% 50% / 0.2)',
+                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                    }}
+                  >
+                    <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                    <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm transition-opacity duration-300">
+                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground/70" />
+                    </div>
+                  </div>
+                </div>
+              </ScrollReveal>
+            ))}
           </div>
 
         </div>
