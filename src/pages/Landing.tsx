@@ -478,7 +478,7 @@ const Landing = () => {
             </h2>
           </ScrollReveal>
 
-          <div className="space-y-14 sm:space-y-18 md:space-y-24 max-w-6xl mx-auto">
+          <div className="space-y-12 sm:space-y-16 md:space-y-20 lg:space-y-24">
             {[
               {
                 num: 1,
@@ -516,24 +516,57 @@ const Landing = () => {
               const isEven = index % 2 === 0;
               return (
               <ScrollReveal key={step.num} className="w-full" delay={step.num * 80} direction="up">
-                {/* Mobile: stacked. Desktop: alternating side-by-side */}
-                <div className={`flex flex-col sm:flex-row items-center gap-6 sm:gap-10 md:gap-14 ${!isEven ? 'sm:flex-row-reverse' : ''}`}>
-                  {/* Text side */}
-                  <div className={`sm:w-[35%] shrink-0 text-center sm:text-left ${!isEven ? 'sm:text-right' : ''}`}>
+                {/* Mobile: stacked vertically */}
+                <div className="lg:hidden flex flex-col items-center text-center gap-5">
+                  <div>
                     <span 
-                      className="font-bold text-lg sm:text-xl mb-2 sm:mb-3 block"
+                      className="font-bold text-lg mb-1.5 block"
                       style={{ color: 'hsl(210 100% 60%)' }}
                     >{step.num}.</span>
-                    <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-2 sm:mb-3">
+                    <h3 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
                       {step.title}
                     </h3>
-                    <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-lg mx-auto sm:mx-0">
+                    <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto">
                       {step.body}
                     </p>
                   </div>
-                  {/* Image side */}
                   <div 
-                    className="sm:w-[65%] relative group cursor-pointer w-full"
+                    className="relative group cursor-pointer w-full"
+                    onClick={() => setExpandedImage({ src: step.img, title: step.title })}
+                  >
+                    <div 
+                      className="relative rounded-2xl overflow-hidden bg-card/80 aspect-[16/10]"
+                      style={{ 
+                        border: '1px solid hsl(210 100% 50% / 0.15)',
+                        boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
+                      }}
+                    >
+                      <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={400} className="w-full h-full object-cover" />
+                      <div className="absolute top-3 right-3 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm">
+                        <Search className="h-3.5 w-3.5 text-foreground/70" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Desktop: 12-column grid, alternating */}
+                <div className={`hidden lg:grid lg:grid-cols-12 lg:gap-16 items-center`}>
+                  {/* Text column — 5 cols */}
+                  <div className={`col-span-5 ${isEven ? 'order-1' : 'order-2'} ${isEven ? 'text-left' : 'text-right'}`}>
+                    <span 
+                      className="font-bold text-xl mb-3 block"
+                      style={{ color: 'hsl(210 100% 60%)' }}
+                    >{step.num}.</span>
+                    <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
+                      {step.title}
+                    </h3>
+                    <p className={`text-muted-foreground/70 text-base md:text-lg leading-[1.6] ${isEven ? '' : 'ml-auto'} max-w-md`}>
+                      {step.body}
+                    </p>
+                  </div>
+                  {/* Image column — 7 cols */}
+                  <div 
+                    className={`col-span-7 ${isEven ? 'order-2' : 'order-1'} relative group cursor-pointer`}
                     onClick={() => setExpandedImage({ src: step.img, title: step.title })}
                   >
                     <div 
@@ -548,8 +581,8 @@ const Landing = () => {
                       }}
                     >
                       <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm transition-opacity duration-300">
-                        <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground/70" />
+                      <div className="absolute top-4 right-4 z-20 p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        <Search className="h-4 w-4 text-foreground/70" />
                       </div>
                     </div>
                   </div>
