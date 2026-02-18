@@ -562,16 +562,25 @@ const Landing = () => {
       </section>
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-8 sm:py-10 md:py-14 px-4">
+      <ScrollReveal className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
+        {/* Subtle background — reduced opacity */}
+        <div
+          className="absolute inset-0 -z-10"
+          style={{
+            background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.25) 20%, hsl(220 30% 6% / 0.35) 50%, hsl(220 30% 6% / 0.25) 80%, transparent 100%)',
+          }}
+        />
         <div className="container mx-auto max-w-5xl">
-          <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium tracking-wide uppercase text-center mb-4 sm:mb-6">
-            Trusted by freelancers and agencies
-          </p>
-
-          <div className="flex gap-0.5 justify-center mb-3 sm:hidden">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            ))}
+          {/* Rating moved ABOVE carousel */}
+          <div className="text-center mb-8 sm:mb-10">
+            <div className="flex gap-0.5 justify-center mb-2.5">
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+              ))}
+            </div>
+            <p className="text-sm sm:text-base text-foreground/60 font-medium">
+              Rated 4.9/5 by freelancers and agencies
+            </p>
           </div>
 
           {(() => {
@@ -642,7 +651,7 @@ const Landing = () => {
                             <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                           ))}
                         </div>
-                        <p className="text-foreground/80 text-sm leading-relaxed italic font-normal">
+                        <p className="text-foreground/80 text-[15px] leading-[1.7] italic font-normal">
                           {renderQuoteWithBold(r.quote, r.boldPhrase)}
                         </p>
                       </div>
@@ -656,33 +665,26 @@ const Landing = () => {
               </div>
             );
           })()}
-
-          <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium text-center mt-6 sm:mt-8">Rated 4.9/5 by freelancers and agencies</p>
         </div>
       </ScrollReveal>
 
+      {/* Transition line */}
+      <div className="relative z-10 py-10 sm:py-14 md:py-16 text-center">
+        <p className="text-xs sm:text-sm text-muted-foreground/35 font-medium">
+          Start free. Upgrade only when you're ready.
+        </p>
+      </div>
+
       {/* Final CTA — Free Access Card */}
-      <section className="relative z-10 pt-14 sm:pt-20 md:pt-28 pb-16 sm:pb-20 md:pb-24 px-4">
+      <section className="relative z-10 pb-16 sm:pb-20 md:pb-24 px-4">
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
-            {/* Subtle pre-heading */}
-            <p className="text-xs sm:text-sm text-muted-foreground/40 font-medium tracking-wide uppercase mb-6 sm:mb-8">
-              One simple plan. Full system access.
-            </p>
-
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3 sm:mb-4">
-              Build Your Outreach System <span className="text-gradient-primary">Today.</span>
-            </h2>
-            <p className="text-sm sm:text-base text-muted-foreground/70 mb-10 sm:mb-12 max-w-md mx-auto leading-[1.6]">
-              Find businesses without websites. Contact them instantly. Track every follow-up in one system.
-            </p>
-
             <div
               className="rounded-2xl p-9 sm:p-12 text-center"
               style={{
                 background: 'linear-gradient(180deg, hsl(220 40% 10%) 0%, hsl(220 45% 7%) 100%)',
-                border: '1px solid hsl(210 100% 50% / 0.18)',
-                boxShadow: '0 0 50px hsl(210 100% 50% / 0.08), 0 0 80px hsl(210 100% 50% / 0.04), 0 8px 32px hsl(220 40% 4% / 0.5)',
+                border: '1px solid hsl(210 100% 50% / 0.2)',
+                boxShadow: '0 0 60px hsl(210 100% 50% / 0.1), 0 0 90px hsl(210 100% 50% / 0.05), 0 8px 32px hsl(220 40% 4% / 0.5)',
               }}
             >
               <span
@@ -692,12 +694,12 @@ const Landing = () => {
                 Free Access
               </span>
 
-              <h3 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Lead<span className="text-gradient-primary">Finder</span> Pro</h3>
-              <p className="text-sm sm:text-base text-foreground/60 leading-relaxed mb-8 max-w-sm mx-auto font-medium">
+              <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">Lead<span className="text-gradient-primary">Finder</span> Pro</h3>
+              <p className="text-sm sm:text-base text-foreground/65 leading-relaxed mb-8 max-w-sm mx-auto font-medium">
                 Everything you need to find, contact and close clients — in one system.
               </p>
 
-              <ul className="space-y-2.5 sm:space-y-3 mb-8 sm:mb-10 text-left max-w-xs mx-auto">
+              <ul className="space-y-2 sm:space-y-2.5 mb-10 sm:mb-12 text-left max-w-xs mx-auto">
                 {[
                   'Find businesses without websites in seconds',
                   'Add leads to your pipeline in one click',
@@ -707,7 +709,7 @@ const Landing = () => {
                   'Smart dashboard to monitor outreach',
                 ].map((item, i) => (
                   <li key={i} className="flex items-center gap-3 text-sm text-foreground/85 font-medium">
-                    <Check className="h-[18px] w-[18px] shrink-0" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
+                    <Check className="h-5 w-5 shrink-0" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
                     <span>{item}</span>
                   </li>
                 ))}
@@ -715,7 +717,7 @@ const Landing = () => {
 
               <Button
                 size="lg"
-                className="btn-premium font-semibold h-[52px] sm:h-14 px-10 sm:px-14 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
+                className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
                 asChild
               >
                 <Link to="/auth?intent=upgrade">
@@ -724,7 +726,7 @@ const Landing = () => {
                 </Link>
               </Button>
 
-              <p className="text-[11px] sm:text-xs text-muted-foreground/60 mt-4">
+              <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
                 No card required · Full access instantly · Cancel anytime
               </p>
             </div>
