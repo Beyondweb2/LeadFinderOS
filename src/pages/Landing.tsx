@@ -561,6 +561,36 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* System Section — Emotional Positioning */}
+      <section className="relative z-10 py-[120px] sm:py-[140px] px-4">
+        {/* Subtle radial glow */}
+        <div
+          className="absolute inset-0 -z-10 pointer-events-none"
+          style={{
+            background: 'radial-gradient(ellipse 60% 50% at 50% 50%, hsl(210 100% 50% / 0.06) 0%, transparent 70%)',
+          }}
+        />
+        <div
+          className="absolute inset-0 -z-10"
+          style={{ background: 'hsl(220 50% 5% / 0.4)' }}
+        />
+        <div className="container mx-auto max-w-[720px] text-center">
+          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground/40 mb-6">
+            Why this matters
+          </p>
+          <h2 className="text-xl sm:text-2xl md:text-[1.75rem] font-bold tracking-tight text-foreground mb-8 sm:mb-10 leading-snug">
+            Most freelancers don't lack skill. They lack a system.
+          </h2>
+          <div className="space-y-4 sm:space-y-5 text-[15px] sm:text-base text-foreground/55 leading-relaxed">
+            <p>You already know how to build websites.</p>
+            <p>The hard part is doing outreach consistently.</p>
+            <p>Without structure, it becomes random.</p>
+            <p>With structure, it becomes routine.</p>
+            <p>That's the difference.</p>
+          </div>
+        </div>
+      </section>
+
       {/* Testimonials */}
       <ScrollReveal className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
         {/* Subtle background — reduced opacity */}
