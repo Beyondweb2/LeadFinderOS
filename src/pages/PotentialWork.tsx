@@ -324,11 +324,23 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             )}
           </div>
 
-          {/* RIGHT: Next Action + Due */}
+          {/* RIGHT: Next Action + Due + Mark as Done */}
           <div className="sm:w-36 shrink-0 flex sm:flex-col items-start sm:items-end gap-1 sm:gap-1 sm:text-right sm:pt-1">
             {actionLabel ? (
               <>
-                <span className="text-xs sm:text-sm font-semibold text-foreground/90">{actionLabel}</span>
+                <div className="flex items-center gap-1.5 sm:justify-end">
+                  <span className="text-xs sm:text-sm font-semibold text-foreground/90">{actionLabel}</span>
+                  <button
+                    className="h-6 w-6 flex items-center justify-center rounded-md text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNextActionChange(lead.id, 'none' as NextActionType);
+                    }}
+                    title="Mark as done"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 {lead.next_action_date && (
                   <span className="text-[11px] sm:text-xs text-muted-foreground flex items-center gap-1 sm:justify-end">
                     <CalendarIcon className="h-3 w-3" />
