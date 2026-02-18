@@ -64,15 +64,13 @@ export function DemoChecklistPanel() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Per-user dismiss key so it doesn't leak across accounts
+  // Per-user dismiss key
   const dismissKey = user?.id ? `demo_walkthrough_dismissed_${user.id}` : null;
   const [dismissed, setDismissed] = useState(false);
 
-  // Re-check dismissed state when user changes (dismiss is per-user)
   useEffect(() => {
     if (!dismissKey) { setDismissed(false); return; }
     try {
-      // Also clear any old global dismiss key so it doesn't block new users
       localStorage.removeItem('demo_walkthrough_dismissed');
       setDismissed(localStorage.getItem(dismissKey) === 'true');
     } catch { setDismissed(false); }
@@ -83,21 +81,32 @@ export function DemoChecklistPanel() {
     if (dismissKey) {
       try { localStorage.setItem(dismissKey, 'true'); } catch {}
     }
+    // Save walkthrough_completed
+    if (user?.id) {
+      try { localStorage.setItem(`walkthrough_completed_${user.id}`, 'true'); } catch {}
+    }
+    // Navigate to dashboard and focus search
+    navigate('/find-leads');
+    setTimeout(() => {
+      const searchInput = document.querySelector<HTMLInputElement>('input[placeholder*="Search"]') || document.querySelector<HTMLInputElement>('input[type="text"]');
+      if (searchInput) {
+        searchInput.focus();
+        searchInput.classList.add('ring-2', 'ring-primary');
+        setTimeout(() => searchInput.classList.remove('ring-2', 'ring-primary'), 2000);
+      }
+    }, 500);
   };
 
-  // Determine mode: trial overrides demo
   const mode = useMemo(() => {
     if (isPaidSubscriber) return 'subscribed' as const;
     if (isStripeTrialing) return 'trial' as const;
     return 'demo' as const;
   }, [isPaidSubscriber, isStripeTrialing]);
 
-  const showCompletionCta = allDone && mode === 'demo';
-  console.log('[Walkthrough]', { mode, allDone, showCompletionCta, isDemoUser, dismissed });
+  console.log('[Walkthrough]', { mode, allDone, isDemoUser, dismissed });
 
   if (!isDemoUser || dismissed) return null;
 
-  // Find next incomplete step
   const nextStep = steps.find(s => !state[s.key]);
 
   return (
@@ -124,25 +133,13 @@ export function DemoChecklistPanel() {
             <div className="text-center space-y-2 py-2 relative">
               <button
                 onClick={handleDismiss}
-                className="absolute top-0 right-0 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center"
+                className="absolute top-0 right-0 h-6 w-6 rounded-full hover:bg-muted flex items-center justify-center"
+                aria-label="Close walkthrough"
               >
-                <X className="h-3 w-3 text-muted-foreground" />
+                <X className="h-4 w-4 text-muted-foreground" />
               </button>
-              <p className="text-sm font-semibold text-primary">🎉 Walkthrough complete!</p>
-              <p className="text-xs text-muted-foreground">You've seen the full workflow. You're all set!</p>
-              {showCompletionCta && (
-                <div className="pt-1 space-y-0.5">
-                  <Button
-                    size="sm"
-                    className="w-full"
-                    onClick={() => navigate('/subscribe')}
-                  >
-                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                     Start 3-Day Free Trial
-                   </Button>
-                   <p className="text-[10px] text-muted-foreground">Full access for 3 days</p>
-                </div>
-              )}
+              <p className="text-sm font-semibold text-primary">🎉 You're all set!</p>
+              <p className="text-xs text-muted-foreground">Start searching to find businesses without websites.</p>
             </div>
           ) : (
             <ol className="space-y-1.5">

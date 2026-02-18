@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useTrial } from '@/hooks/useTrial';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -21,27 +20,21 @@ const Subscribe = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [waitingForPayment, setWaitingForPayment] = useState(false);
   const { createCheckout, subscribed, isLoading: subLoading, status, isPaidSubscriber, isStripeTrialing, checkSubscription } = useSubscription();
-  const { isOnTrial, isStripeTrialing: trialIsStripeTrialing, trialUsed, isLoading: trialLoading } = useTrial();
-  const { user, session, isLoading: authLoading, signOut } = useAuth();
+  const { user, session, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Redirect unauthenticated users to login
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth', { replace: true });
     }
   }, [authLoading, user, navigate]);
 
-  // Show trial by default, only hide if actively trialing on Stripe
-  const hideTrialOffer = isStripeTrialing || status === 'trialing';
-
-  // Redirect paid subscribers or new trialers to dashboard
+  // Redirect paid subscribers to dashboard
   useEffect(() => {
     if (subLoading) return;
     if (isPaidSubscriber || isStripeTrialing) {
-      // Clean up polling
       if (pollRef.current) {
         clearInterval(pollRef.current);
         pollRef.current = null;
@@ -50,7 +43,6 @@ const Subscribe = () => {
     }
   }, [isPaidSubscriber, isStripeTrialing, subLoading, navigate]);
 
-  // Cleanup polling on unmount
   useEffect(() => {
     return () => {
       if (pollRef.current) {
@@ -74,11 +66,9 @@ const Subscribe = () => {
       });
       if (error) throw error;
       if (data?.url) {
-        // Open Stripe in new tab
         window.open(data.url, '_blank');
         setWaitingForPayment(true);
         
-        // Start polling for subscription activation
         pollRef.current = setInterval(async () => {
           try {
             await checkSubscription(true);
@@ -98,7 +88,6 @@ const Subscribe = () => {
     }
   };
 
-  // Only show spinner while auth is resolving
   if (authLoading || !user) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -122,30 +111,14 @@ const Subscribe = () => {
               <img src={appLogo} alt="LeadFinder Pro" className="h-12 w-12" />
             </div>
             <CardTitle className="text-2xl font-bold">
-              {hideTrialOffer ? (
-                <>Lead<span className="text-gradient-primary">Finder</span> Pro</>
-              ) : (
-                'Unlock Full Access — Free for 3 Days'
-              )}
+              Unlock unlimited access
             </CardTitle>
             <CardDescription className="text-base">
-              {hideTrialOffer
-                ? 'Unlock full access to all features'
-                : '£0 today · Cancel anytime · We\'ll email you before billing'}
+              Upgrade to continue unlimited searches and keep building your pipeline.
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-6">
-            {hideTrialOffer && (
-              <div className="text-center">
-                <span className="text-4xl font-bold">£19.99</span>
-                <span className="text-muted-foreground">/month</span>
-                <p className="text-sm text-muted-foreground mt-2">
-                  £19.99/month. Cancel anytime.
-                </p>
-              </div>
-            )}
-
             <ul className="space-y-3">
               {FEATURES.map((feature) => (
                 <li key={feature} className="flex items-center gap-3">
@@ -196,18 +169,13 @@ const Subscribe = () => {
                   ) : (
                     <>
                       <CreditCard className="mr-2 h-4 w-4" />
-                      {hideTrialOffer ? 'Subscribe Now' : 'Unlock My 3-Day Access'}
+                      Unlock unlimited — £19.99/month
                     </>
                   )}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
-                  No charge today. Cancel anytime from your dashboard in one click.
+                  Cancel anytime
                 </p>
-                {!hideTrialOffer && (
-                  <p className="text-[11px] text-muted-foreground/70 text-center">
-                    Then £19.99/month after trial.
-                  </p>
-                )}
               </>
             )}
           </CardFooter>

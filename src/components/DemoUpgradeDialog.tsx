@@ -24,10 +24,10 @@ export function DemoUpgradeDialog({ open, onOpenChange, featureName }: DemoUpgra
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-lg">
-            Unlock {featureName || 'this feature'} with 3-Day Full Access.
+            Unlock {featureName || 'this feature'}
           </DialogTitle>
           <DialogDescription>
-            Get unlimited searches, CRM, outreach tools, templates, and more. You'll only be charged after 3 days.
+            Upgrade to get unlimited searches, CRM, outreach tools, templates, and more.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex-col gap-2 sm:flex-col">
@@ -36,7 +36,7 @@ export function DemoUpgradeDialog({ open, onOpenChange, featureName }: DemoUpgra
             className="w-full"
           >
             <Rocket className="mr-2 h-4 w-4" />
-            Start 3-Day Full Access
+            Unlock unlimited — £19.99/month
           </Button>
           <Button
             variant="outline"

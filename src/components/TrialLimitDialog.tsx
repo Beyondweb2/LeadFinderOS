@@ -50,10 +50,10 @@ export function TrialLimitDialog({ open, onOpenChange, searchesToday, dailyLimit
               <Search className="h-6 w-6 text-primary" />
             </div>
             <DialogTitle className="text-xl">
-              Demo search used
+              Unlock unlimited access
             </DialogTitle>
             <DialogDescription className="text-base">
-              Unlock 3-day full access for unlimited searches and the complete outreach system.
+              Upgrade to continue unlimited searches and keep building your pipeline.
             </DialogDescription>
           </DialogHeader>
 
@@ -74,8 +74,9 @@ export function TrialLimitDialog({ open, onOpenChange, searchesToday, dailyLimit
           <DialogFooter className="flex-col gap-2 sm:flex-col">
             <Button onClick={handleUpgrade} className="w-full gap-2">
               <Sparkles className="h-4 w-4" />
-              Start 3-Day Full Access
+              Unlock unlimited — £19.99/month
             </Button>
+            <p className="text-xs text-muted-foreground text-center">Cancel anytime</p>
             <Button 
               variant="ghost" 
               onClick={() => onOpenChange(false)}
