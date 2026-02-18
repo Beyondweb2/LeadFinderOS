@@ -421,6 +421,7 @@ export default function AdminDashboard() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Email</TableHead>
+                      <TableHead>Signed Up</TableHead>
                       <TableHead>Access</TableHead>
                       <TableHead>Billing</TableHead>
                       <TableHead>Free Searches</TableHead>
@@ -435,7 +436,7 @@ export default function AdminDashboard() {
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
                           No users found
                         </TableCell>
                       </TableRow>
@@ -448,6 +449,9 @@ export default function AdminDashboard() {
                         >
                           <TableCell className="font-medium text-sm max-w-[200px] truncate">
                             {u.email}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {formatDateTime(u.created_at)}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className={accessModeColor(u.access_mode)}>
