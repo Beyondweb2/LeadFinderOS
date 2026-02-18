@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
-import demoVideo from '@/assets/leadfinder-demo-v4.mp4';
+import demoVideo from '@/assets/leadfinder-demo-v5.mp4';
 import appLogo from '@/assets/logo.png';
 
 import featureCustomization from '@/assets/feature-customization-new.png';
