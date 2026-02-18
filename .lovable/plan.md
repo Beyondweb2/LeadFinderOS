@@ -1,26 +1,32 @@
 
-# Fix: Video visible but hidden behind loading overlay
+
+# Fix: Video plays audio but is invisible on landing page
 
 ## Root Cause
-The loading spinner overlay sits on top of the video (`z-10`, `bg-card/90`) and only disappears when `onCanPlayThrough` fires. This event requires the browser to have buffered enough data to play through without interruption. However:
-- Mobile video uses `preload="none"`, so the browser never buffers enough to trigger the event
-- Desktop uses `preload="metadata"`, which is also unreliable for this event
-- Result: the overlay stays permanently visible, covering the playing video
+Multiple previous attempts to fix the loading overlay have failed. The overlay (`bg-card/90 z-10`) covers the video, and the `onPlaying` event may not be firing reliably in all browsers/contexts, keeping `videoLoaded = false` and the overlay permanently visible.
 
-## Fix
-Two changes in `src/pages/Landing.tsx`:
+## Solution: Remove the loading overlay entirely
+Instead of continuing to debug event timing, completely remove the loading spinner overlay from both the mobile (`MobileHeroVideo`) and desktop (`VideoSection`) video components. The video already has `autoPlay` and `muted` set, so it will start playing almost immediately — a loading spinner adds complexity with no real benefit.
 
-1. **Switch from `onCanPlayThrough` to `onPlaying`** -- this event fires as soon as the video actually starts playing, which is a much more reliable signal that the video is ready to be shown.
+## Changes in `src/pages/Landing.tsx`
 
-2. **Change `preload` to `"auto"`** on both video elements so the browser actually buffers the content.
+### 1. MobileHeroVideo (~lines 232-236)
+Remove the overlay div entirely:
+```html
+<!-- DELETE THIS BLOCK -->
+<div class="absolute inset-0 flex items-center justify-center bg-card/90 z-10 ...">
+  <div class="spinner..." />
+</div>
+```
 
-### MobileHeroVideo (line ~237-247)
-- Change `preload="none"` to `preload="auto"`
-- Change `onCanPlayThrough` to `onPlaying`
+Also remove the `videoLoaded` state and `onPlaying` handler since they're no longer needed.
 
-### VideoSection (line ~309-319)
-- Change `preload="metadata"` to `preload="auto"`
-- Change `onCanPlayThrough` to `onPlaying`
+### 2. VideoSection (~lines 272-273, 304-307)
+Same treatment — remove the overlay div and the `videoLoaded` state.
+
+### 3. Cleanup
+- Remove `useState` for `videoLoaded` in both components (since it's no longer used)
+- Remove `onPlaying` handler from both `<video>` elements
 
 ## Files Changed
-- `src/pages/Landing.tsx` -- 4 small attribute changes across 2 video elements
+- `src/pages/Landing.tsx` — remove overlay divs and related state from both video components
