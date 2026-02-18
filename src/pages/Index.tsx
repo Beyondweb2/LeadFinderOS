@@ -11,9 +11,12 @@ import { useOutreach } from '@/hooks/useOutreach';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
-import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
+import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
 import type { Lead, Country } from '@/types/lead';
 
 const Index = () => {
@@ -23,6 +26,8 @@ const Index = () => {
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed, freeSearchCount } = useTrial();
   const { subscribed, isLoading: isSubscriptionLoading, status: subStatus, isPaidSubscriber } = useSubscription();
+  const { session } = useAuth();
+  const { toast } = useToast();
   
   // Pro access = active, past_due, or admin (trialing kept for legacy)
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
@@ -30,6 +35,7 @@ const Index = () => {
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   
   // Determine if still loading access status
   const isAccessLoading = isTrialLoading || isSubscriptionLoading;
@@ -160,10 +166,30 @@ const Index = () => {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex flex-col gap-2 sm:flex-col">
-            <Button asChild size="lg" className="w-full">
-              <Link to="/subscribe">
-                Unlock unlimited — £19.99/month
-              </Link>
+            <Button
+              size="lg"
+              className="w-full"
+              disabled={isCheckoutLoading}
+              onClick={async () => {
+                setIsCheckoutLoading(true);
+                try {
+                  const { data, error } = await supabase.functions.invoke('create-checkout', {
+                    headers: { Authorization: `Bearer ${session?.access_token}` },
+                  });
+                  if (error) throw error;
+                  if (data?.url) window.open(data.url, '_blank');
+                } catch (e) {
+                  toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
+                } finally {
+                  setIsCheckoutLoading(false);
+                }
+              }}
+            >
+              {isCheckoutLoading ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Starting...</>
+              ) : (
+                'Unlock unlimited — £19.99/month'
+              )}
             </Button>
             <p className="text-xs text-muted-foreground text-center">Cancel anytime</p>
           </DialogFooter>
