@@ -680,7 +680,7 @@ const Landing = () => {
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
             <div
-              className="rounded-2xl p-9 sm:p-12 text-center"
+              className="rounded-2xl px-6 py-9 sm:p-12 text-center"
               style={{
                 background: 'linear-gradient(180deg, hsl(220 40% 10%) 0%, hsl(220 45% 7%) 100%)',
                 border: '1px solid hsl(210 100% 50% / 0.2)',
@@ -699,7 +699,7 @@ const Landing = () => {
                 Everything you need to find, contact and close clients — in one system.
               </p>
 
-              <ul className="space-y-2 sm:space-y-2.5 mb-10 sm:mb-12 text-left max-w-xs mx-auto">
+              <ul className="space-y-2.5 sm:space-y-2.5 mb-10 sm:mb-12 text-left max-w-sm mx-auto">
                 {[
                   'Find businesses without websites in seconds',
                   'Add leads to your pipeline in one click',
@@ -708,8 +708,8 @@ const Landing = () => {
                   'Built-in templates to move faster',
                   'Smart dashboard to monitor outreach',
                 ].map((item, i) => (
-                  <li key={i} className="flex items-center gap-3 text-sm text-foreground/85 font-medium">
-                    <Check className="h-5 w-5 shrink-0" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
+                  <li key={i} className="flex items-start gap-3 text-[13px] sm:text-sm text-foreground/85 font-medium leading-snug">
+                    <Check className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 mt-0.5 sm:mt-0" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
                     <span>{item}</span>
                   </li>
                 ))}
