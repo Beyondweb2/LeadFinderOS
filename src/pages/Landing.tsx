@@ -666,7 +666,7 @@ const Landing = () => {
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3 sm:mb-4">
-              Build Your Outreach System Today.
+              Build Your Outreach System <span className="text-gradient-primary">Today.</span>
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground/70 mb-10 sm:mb-12 max-w-md mx-auto leading-[1.6]">
               Find businesses without websites. Contact them instantly. Track every follow-up in one system.
