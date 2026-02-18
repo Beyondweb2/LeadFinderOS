@@ -182,25 +182,7 @@ export function SearchForm({
 
           {/* Submit Button with Trial Indicator */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-            {/* Trial searches remaining indicator - only for free users with actual daily caps */}
-            {!isPaidSubscriber && isFinite(dailyLimit) && (
-              <div className="flex items-center gap-2 text-xs sm:text-sm">
-                <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
-                  searchesRemaining === 0 
-                    ? 'bg-destructive/10 text-destructive border-destructive/20' 
-                    : searchesRemaining === 1 
-                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                      : 'bg-primary/10 text-primary border-primary/20'
-                }`}>
-                  <Search className="h-3 w-3" />
-                  <span className="font-medium">
-                    {dailyLimit === 1 
-                      ? (searchesRemaining === 1 ? '1 free search' : 'Free search used')
-                      : `${searchesRemaining}/${dailyLimit} searches left today`}
-                  </span>
-                </div>
-              </div>
-            )}
+            {/* Search indicator removed - don't show search counts */}
             
             <div className={`flex flex-col items-center sm:items-end ${!isPaidSubscriber ? '' : 'w-full'}`}>
               {!isPaidSubscriber && searchesRemaining === 0 && dailyLimit === 1 ? (

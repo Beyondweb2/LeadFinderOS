@@ -166,16 +166,6 @@ export function AppSidebar() {
           )}
         </div>
         
-        {/* Trial Status Badge */}
-        {showTrialBadge && (
-          <div className="mt-3">
-            <TrialStatusBadge 
-              searchesRemaining={effectiveSearchesRemaining} 
-              dailyLimit={effectiveDailyLimit}
-              isCollapsed={isCollapsed}
-            />
-          </div>
-        )}
       </SidebarHeader>
 
       <SidebarContent className="p-2">
