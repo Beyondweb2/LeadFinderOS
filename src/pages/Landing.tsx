@@ -480,129 +480,59 @@ const Landing = () => {
           </ScrollReveal>
 
           <div className="space-y-16 sm:space-y-20 md:space-y-28">
-            {/* Step 1 */}
-            <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-12">
-              <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={100} direction="left">
-                <div 
-                  className="relative group cursor-pointer"
-                  onClick={() => setExpandedImage({ src: featureClassification, title: 'Find Opportunities Instantly' })}
-                >
-                  <div 
-                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
-                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
-                  />
-                  <div 
-                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
-                    style={{ 
-                      border: '1px solid hsl(210 100% 50% / 0.2)',
-                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
-                    }}
-                  >
-                    <img src={featureClassification} alt="Find businesses without websites" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                    <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
-                    </div>
-                  </div>
-                </div>
-              </ScrollReveal>
-              <ScrollReveal className="flex-1 w-full text-center lg:text-left" delay={150} direction="right">
-                <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
-                  <span 
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
-                    style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
-                  >1</span>
-                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Find Opportunities Instantly</h3>
-                </div>
-                <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
-                  Search any location and instantly see which businesses don't have a website — no manual checking, no guesswork.
-                </p>
-              </ScrollReveal>
-            </div>
+            {[
+              {
+                num: 1,
+                title: 'Find Businesses Without Websites',
+                body: "Search any location and instantly see which businesses don't have a website — no manual checking.",
+                img: featureClassification,
+                alt: 'Find businesses without websites',
+                direction: 'left' as const,
+              },
+              {
+                num: 2,
+                title: 'Save & Organise Your Leads',
+                body: 'Add leads to your pipeline in one click, set a status, and keep every follow-up structured.',
+                img: step2CRM,
+                alt: 'Save and organise your leads',
+                direction: 'right' as const,
+              },
+              {
+                num: 3,
+                title: 'Send Outreach in One Click',
+                body: 'Use templates, auto-fill business names, and open WhatsApp or SMS instantly — no copy and paste.',
+                img: step3WhatsApp,
+                alt: 'Message in one click via WhatsApp',
+                direction: 'left' as const,
+              },
+              {
+                num: 4,
+                title: 'Stay in Control',
+                body: "Track outreach activity, follow-ups, and progress in one clear dashboard — so you always know your next move.",
+                img: featureDashboard,
+                alt: 'Dashboard analytics',
+                direction: 'right' as const,
+              },
+            ].map((step) => (
+              <ScrollReveal key={step.num} className="flex flex-col items-center text-center max-w-3xl mx-auto" delay={step.num * 80}>
+                {/* Number badge */}
+                <span 
+                  className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl font-bold text-sm sm:text-base mb-3 sm:mb-4"
+                  style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
+                >{step.num}</span>
 
-            {/* Step 2 */}
-            <div className="flex flex-col lg:flex-row-reverse items-center gap-6 lg:gap-12">
-              <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={100} direction="right">
-                <div 
-                  className="relative group cursor-pointer"
-                  onClick={() => setExpandedImage({ src: step2CRM, title: 'Stay Organised From Day One' })}
-                >
-                  <div 
-                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
-                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
-                  />
-                  <div 
-                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
-                    style={{ 
-                      border: '1px solid hsl(210 100% 50% / 0.2)',
-                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
-                    }}
-                  >
-                    <img src={step2CRM} alt="Save and organise your leads" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                    <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
-                    </div>
-                  </div>
-                </div>
-              </ScrollReveal>
-              <ScrollReveal className="flex-1 w-full text-center lg:text-left" delay={150} direction="left">
-                <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
-                  <span 
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
-                    style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
-                  >2</span>
-                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Stay Organised From Day One</h3>
-                </div>
-                <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
-                  Save leads in one click, assign statuses, and keep every contact structured inside a clear pipeline.
-                </p>
-              </ScrollReveal>
-            </div>
+                {/* Title */}
+                <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-2 sm:mb-3">{step.title}</h3>
 
-            {/* Step 3 */}
-            <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-12">
-              <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={100} direction="left">
-                <div 
-                  className="relative group cursor-pointer"
-                  onClick={() => setExpandedImage({ src: step3WhatsApp, title: 'Send Outreach in Seconds' })}
-                >
-                  <div 
-                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
-                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
-                  />
-                  <div 
-                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
-                    style={{ 
-                      border: '1px solid hsl(210 100% 50% / 0.2)',
-                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
-                    }}
-                  >
-                    <img src={step3WhatsApp} alt="Message in one click via WhatsApp" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                    <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
-                    </div>
-                  </div>
-                </div>
-              </ScrollReveal>
-              <ScrollReveal className="flex-1 w-full text-center lg:text-left" delay={150} direction="right">
-                <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
-                  <span 
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
-                    style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
-                  >3</span>
-                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Send Outreach in Seconds</h3>
-                </div>
-                <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
-                  Use ready-made templates, auto-fill business names, and open WhatsApp or SMS instantly — no copy and paste.
+                {/* Body */}
+                <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-lg mx-auto mb-6 sm:mb-8">
+                  {step.body}
                 </p>
-              </ScrollReveal>
-            </div>
 
-            {/* Step 4 */}
-            <div className="flex flex-col lg:flex-row-reverse items-center gap-6 lg:gap-12">
-              <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={100} direction="right">
+                {/* Image with always-visible magnifying glass */}
                 <div 
-                  className="relative group cursor-pointer"
-                  onClick={() => setExpandedImage({ src: featureDashboard, title: 'See What\'s Working' })}
+                  className="relative group cursor-pointer w-full"
+                  onClick={() => setExpandedImage({ src: step.img, title: step.title })}
                 >
                   <div 
                     className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
@@ -615,26 +545,15 @@ const Landing = () => {
                       boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
                     }}
                   >
-                    <img src={featureDashboard} alt="Dashboard analytics" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                    <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                    <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                    {/* Always-visible magnifying glass */}
+                    <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm transition-opacity duration-300">
+                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground/70" />
                     </div>
                   </div>
                 </div>
               </ScrollReveal>
-              <ScrollReveal className="flex-1 w-full text-center lg:text-left" delay={150} direction="left">
-                <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
-                  <span 
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
-                    style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
-                  >4</span>
-                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">See What's Working</h3>
-                </div>
-                <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
-                  Track outreach activity, follow-ups, and progress in one clear dashboard — so you always know your next move.
-                </p>
-              </ScrollReveal>
-            </div>
+            ))}
           </div>
 
           {/* CTA after steps */}
