@@ -712,8 +712,8 @@ const Landing = () => {
                 'Rewriting the same message every time',
                 'Outreach that feels random and unstructured',
               ].map((pain) => (
-                <div key={pain} className="flex flex-col items-center gap-1 md:gap-1.5">
-                  <X className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
+              <div key={pain} className="flex items-center justify-center gap-2.5 md:gap-3">
+                  <X className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 flex-shrink-0" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
                   <p className="text-sm sm:text-base md:text-lg lg:text-xl text-foreground/90 leading-[1.4]">{pain}</p>
                 </div>
               ))}
@@ -917,7 +917,7 @@ const Landing = () => {
         </div>
       </section>
 
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
+      {/* separator removed */}
 
       {/* Testimonials */}
       <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
@@ -1029,7 +1029,33 @@ const Landing = () => {
         </Button>
       </div>
 
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
+      {/* Final CTA Section */}
+      <section className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
+        <div className="container mx-auto max-w-2xl text-center">
+          <ScrollReveal>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-3 sm:mb-4">
+              Ready to Find Your Next <span className="text-gradient-primary">Client?</span>
+            </h2>
+            <p className="text-sm sm:text-base md:text-lg text-muted-foreground/70 leading-[1.6] mb-6 sm:mb-8 max-w-lg mx-auto">
+              Join thousands of freelancers and agencies using LeadFinder Pro to find businesses without websites, reach out instantly, and close more deals.
+            </p>
+            <Button size="lg" className="btn-premium font-semibold h-12 sm:h-14 px-8 sm:px-10 text-sm sm:text-base rounded-xl" asChild>
+              <Link to="/auth?intent=upgrade">
+                Try it free
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+            <p className="text-xs sm:text-sm text-muted-foreground/50 mt-3">
+              No card required · Full access · Cancel anytime
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 mt-6 text-xs sm:text-sm text-muted-foreground/50">
+              <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} /> Instant access</span>
+              <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} /> No setup needed</span>
+              <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} /> Cancel anytime</span>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
 
       {/* Got Questions Section */}
       <section className="relative z-10 py-10 sm:py-14 md:py-16 px-4">

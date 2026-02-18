@@ -153,7 +153,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
             {STEPS.map((step, index) => (
               <div key={step.title} className="flex flex-col items-center text-center">
                 <span 
-                  className="text-xs font-bold mb-1"
+                  className="text-lg font-bold mb-1"
                   style={{ color: 'hsl(210 100% 60%)' }}
                 >
                   {index + 1}.
