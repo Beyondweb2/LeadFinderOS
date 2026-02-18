@@ -517,9 +517,9 @@ const Landing = () => {
               <ScrollReveal key={step.num} className="flex flex-col items-center text-center max-w-3xl mx-auto" delay={step.num * 80}>
                 {/* Number badge */}
                 <span 
-                  className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl font-bold text-sm sm:text-base mb-3 sm:mb-4"
-                  style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
-                >{step.num}</span>
+                  className="font-bold text-lg sm:text-xl mb-2 sm:mb-3"
+                  style={{ color: 'hsl(210 100% 60%)' }}
+                >{step.num}.</span>
 
                 {/* Title */}
                 <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-2 sm:mb-3">{step.title}</h3>
@@ -558,8 +558,8 @@ const Landing = () => {
 
           {/* CTA after steps */}
           <ScrollReveal className="text-center mt-16 sm:mt-20 md:mt-28">
-            <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.1] mb-4 sm:mb-6">
-              Ready to try it <span className="text-gradient-primary">yourself?</span>
+            <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.1] mb-2 sm:mb-3">
+              Start Finding Clients <span className="text-gradient-primary">Now.</span>
             </h3>
             <Button size="lg" className="btn-premium font-semibold h-12 sm:h-14 px-8 sm:px-10 text-sm sm:text-base rounded-xl shadow-lg shadow-primary/20" asChild>
               <Link to="/auth?intent=upgrade">
@@ -570,6 +570,8 @@ const Landing = () => {
             <p className="text-xs sm:text-sm text-muted-foreground/50 mt-3">
               No card required · Instant access · Cancel anytime
             </p>
+            {/* Separator line */}
+            <div className="mt-10 sm:mt-14 h-px w-full max-w-3xl mx-auto" style={{ background: 'linear-gradient(90deg, transparent, hsl(210 100% 50% / 0.15), transparent)' }} />
           </ScrollReveal>
         </div>
       </section>
@@ -683,9 +685,12 @@ const Landing = () => {
 
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-10 sm:mb-12">
-              Build your outreach system <span className="text-gradient-primary">today</span>.
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3 sm:mb-4">
+              Simple, Transparent <span className="text-gradient-primary">Access</span>
             </h2>
+            <p className="text-sm sm:text-base text-muted-foreground/70 mb-10 sm:mb-12">
+              Start free. Upgrade only when you're ready.
+            </p>
 
             {/* Pricing Card */}
             <div
@@ -704,19 +709,20 @@ const Landing = () => {
                 Free Access
               </span>
 
-              <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">Try it free</h3>
+              <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">LeadFinder Pro</h3>
               <p className="text-sm sm:text-base text-muted-foreground/70 leading-relaxed mb-8 max-w-sm mx-auto">
-                Create your account and start finding and contacting leads immediately.
+                Create your free account and get instant access to the full system.
               </p>
 
               {/* Feature checklist */}
               <ul className="space-y-3 sm:space-y-3.5 mb-8 sm:mb-10 text-left max-w-xs mx-auto">
                 {[
                   'Find businesses without websites',
-                  'Add leads to your pipeline in one click',
+                  'Save leads into your pipeline in one click',
                   'Message instantly via WhatsApp or SMS',
                   'Track every contact and follow-up',
                   'Built-in templates to move faster',
+                  'Smart dashboard to monitor outreach',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 text-sm text-foreground/80">
                     <Check className="h-4 w-4 shrink-0 mt-0.5" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
