@@ -110,19 +110,29 @@ const Index = () => {
           isPaidSubscriber={isAccessLoading || hasProAccess}
           disabled={postAbandonExhausted && !hasProAccess}
           isUpgradeLoading={isCheckoutLoading}
-          onUpgrade={async () => {
+          onUpgrade={() => {
+            const win = window.open('', '_blank');
             setIsCheckoutLoading(true);
-            try {
-              const { data, error } = await supabase.functions.invoke('create-checkout', {
-                headers: { Authorization: `Bearer ${session?.access_token}` },
-              });
-              if (error) throw error;
-              if (data?.url) window.location.href = data.url;
-            } catch (e) {
-              toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
-            } finally {
-              setIsCheckoutLoading(false);
-            }
+            (async () => {
+              try {
+                const { data, error } = await supabase.functions.invoke('create-checkout', {
+                  headers: { Authorization: `Bearer ${session?.access_token}` },
+                });
+                if (error) throw error;
+                if (data?.url) {
+                  if (win) win.location.href = data.url;
+                  else window.location.href = data.url;
+                  window.dispatchEvent(new CustomEvent('checkout-opened'));
+                } else {
+                  win?.close();
+                }
+              } catch (e) {
+                win?.close();
+                toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
+              } finally {
+                setIsCheckoutLoading(false);
+              }
+            })();
           }}
         />
       </section>
@@ -185,19 +195,29 @@ const Index = () => {
               size="lg"
               className="w-full"
               disabled={isCheckoutLoading}
-              onClick={async () => {
+              onClick={() => {
+                const win = window.open('', '_blank');
                 setIsCheckoutLoading(true);
-                try {
-                  const { data, error } = await supabase.functions.invoke('create-checkout', {
-                    headers: { Authorization: `Bearer ${session?.access_token}` },
-                  });
-                  if (error) throw error;
-                  if (data?.url) window.location.href = data.url;
-                } catch (e) {
-                  toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
-                } finally {
-                  setIsCheckoutLoading(false);
-                }
+                (async () => {
+                  try {
+                    const { data, error } = await supabase.functions.invoke('create-checkout', {
+                      headers: { Authorization: `Bearer ${session?.access_token}` },
+                    });
+                    if (error) throw error;
+                    if (data?.url) {
+                      if (win) win.location.href = data.url;
+                      else window.location.href = data.url;
+                      window.dispatchEvent(new CustomEvent('checkout-opened'));
+                    } else {
+                      win?.close();
+                    }
+                  } catch (e) {
+                    win?.close();
+                    toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
+                  } finally {
+                    setIsCheckoutLoading(false);
+                  }
+                })();
               }}
             >
               {isCheckoutLoading ? (
