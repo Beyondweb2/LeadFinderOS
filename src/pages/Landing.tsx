@@ -686,10 +686,10 @@ const Landing = () => {
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3 sm:mb-4">
-              Simple, Transparent <span className="text-gradient-primary">Access</span>
+              One Plan. Full <span className="text-gradient-primary">System.</span>
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground/70 mb-10 sm:mb-12">
-              Start free. Upgrade only when you're ready.
+              Everything you need to find, contact, and manage leads — in one place.
             </p>
 
             {/* Pricing Card */}
@@ -706,23 +706,23 @@ const Landing = () => {
                 className="inline-block text-[11px] sm:text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full mb-5"
                 style={{ background: 'hsl(142 76% 45% / 0.12)', color: 'hsl(142 76% 55%)' }}
               >
-                Free Access
+                Full Access
               </span>
 
-              <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">LeadFinder Pro</h3>
+              <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">Lead<span className="text-gradient-primary">Finder</span> Pro</h3>
               <p className="text-sm sm:text-base text-muted-foreground/70 leading-relaxed mb-8 max-w-sm mx-auto">
-                Create your free account and get instant access to the full system.
+                Start free and unlock the complete LeadFinder system.
               </p>
 
               {/* Feature checklist */}
               <ul className="space-y-3 sm:space-y-3.5 mb-8 sm:mb-10 text-left max-w-xs mx-auto">
                 {[
-                  'Find businesses without websites',
-                  'Save leads into your pipeline in one click',
-                  'Message instantly via WhatsApp or SMS',
+                  'Find businesses without websites in seconds',
+                  'Add leads to your pipeline in one click',
+                  'Send WhatsApp or SMS instantly with templates',
                   'Track every contact and follow-up',
-                  'Built-in templates to move faster',
-                  'Smart dashboard to monitor outreach',
+                  'Built-in scripts to move faster',
+                  'Clear dashboard to monitor performance',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 text-sm text-foreground/80">
                     <Check className="h-4 w-4 shrink-0 mt-0.5" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
@@ -731,14 +731,14 @@ const Landing = () => {
                 ))}
               </ul>
 
-              {/* CTA Button — slightly larger */}
+              {/* CTA Button */}
               <Button
                 size="lg"
                 className="btn-premium font-semibold h-13 sm:h-14 px-10 sm:px-12 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
                 asChild
               >
                 <Link to="/auth?intent=upgrade">
-                  Create free account
+                  Get full access
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
