@@ -117,7 +117,7 @@ const Index = () => {
                 headers: { Authorization: `Bearer ${session?.access_token}` },
               });
               if (error) throw error;
-              if (data?.url) window.open(data.url, '_blank');
+              if (data?.url) window.location.href = data.url;
             } catch (e) {
               toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
             } finally {
@@ -192,7 +192,7 @@ const Index = () => {
                     headers: { Authorization: `Bearer ${session?.access_token}` },
                   });
                   if (error) throw error;
-                  if (data?.url) window.open(data.url, '_blank');
+                  if (data?.url) window.location.href = data.url;
                 } catch (e) {
                   toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
                 } finally {
