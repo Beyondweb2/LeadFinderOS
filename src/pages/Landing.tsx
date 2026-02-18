@@ -392,13 +392,13 @@ const Landing = () => {
             </div>
 
             <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
-              <span className="tracking-[0.02em]">Build a Predictable</span>{' '}
+              <span className="tracking-[0.02em]">Find Businesses</span>{' '}
               <br className="hidden sm:block" />
-              <span className="text-gradient-primary whitespace-nowrap">Client Pipeline.</span>
+              <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              Find businesses without websites, contact them instantly, and track every follow-up in one clear system.
+              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
             </p>
             
             {/* CTA */}
@@ -475,7 +475,7 @@ const Landing = () => {
               How LeadFinder <span className="text-gradient-primary">Works</span>
             </h2>
             <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6] px-2">
-              Four steps from search to closed deal.
+              A simple system to find, contact, and manage leads — without the chaos.
             </p>
           </ScrollReveal>
 
@@ -483,32 +483,32 @@ const Landing = () => {
             {[
               {
                 num: 1,
-                title: 'Find businesses without websites',
-                body: "Search any location and instantly see which businesses don't have a website.",
+                title: 'Find Businesses Without Websites',
+                body: "Search any location and instantly see which businesses don't have a website — no manual checking.",
                 img: featureClassification,
                 alt: 'Find businesses without websites',
                 direction: 'left' as const,
               },
               {
                 num: 2,
-                title: 'Save leads into your pipeline',
-                body: 'Save leads in one click, set a status, and keep everything organised.',
+                title: 'Save & Organise Your Leads',
+                body: 'Add leads to your pipeline in one click, set a status, and keep every follow-up structured.',
                 img: step2CRM,
-                alt: 'Save leads into your pipeline',
+                alt: 'Save and organise your leads',
                 direction: 'right' as const,
               },
               {
                 num: 3,
-                title: 'Send outreach in one click',
-                body: 'Use templates to message via WhatsApp or SMS instantly.',
+                title: 'Send Outreach in One Click',
+                body: 'Use templates, auto-fill business names, and open WhatsApp or SMS instantly — no copy and paste.',
                 img: step3WhatsApp,
                 alt: 'Message in one click via WhatsApp',
                 direction: 'left' as const,
               },
               {
                 num: 4,
-                title: 'Know your next move',
-                body: "Track activity, follow-ups, and progress in one clear dashboard.",
+                title: 'Stay in Control',
+                body: "Track outreach activity, follow-ups, and progress in one clear dashboard — so you always know your next move.",
                 img: featureDashboard,
                 alt: 'Dashboard analytics',
                 direction: 'right' as const,
@@ -558,36 +558,21 @@ const Landing = () => {
             })}
           </div>
 
-          {/* Single CTA at bottom of How It Works */}
-          <ScrollReveal className="flex flex-col items-center mt-12 sm:mt-16" delay={400}>
-            <Button 
-              size="lg" 
-              className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
-              asChild
-            >
-              <Link to="/auth?intent=upgrade">
-                Try it free
-                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
-              </Link>
-            </Button>
-            <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
-              No card required · Instant access · Cancel anytime
-            </p>
-          </ScrollReveal>
-
         </div>
       </section>
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-10 sm:py-14 md:py-20 px-4">
+      <ScrollReveal className="relative z-10 py-8 sm:py-10 md:py-14 px-4">
         <div className="container mx-auto max-w-5xl">
-          <p className="text-xs sm:text-sm text-muted-foreground/50 font-medium tracking-wide uppercase text-center mb-2 sm:mb-3">
+          <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium tracking-wide uppercase text-center mb-4 sm:mb-6">
             Trusted by freelancers and agencies
           </p>
-          <p className="text-sm sm:text-base text-muted-foreground/70 text-center mb-6 sm:mb-8">
-            Built to keep outreach consistent and organised.
-          </p>
 
+          <div className="flex gap-0.5 justify-center mb-3 sm:hidden">
+            {[...Array(5)].map((_, i) => (
+              <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
+            ))}
+          </div>
 
           {(() => {
             const testimonials = [
@@ -672,14 +657,7 @@ const Landing = () => {
             );
           })()}
 
-          <div className="flex flex-col items-center mt-6 sm:mt-8 gap-2">
-            <div className="flex items-center gap-1">
-              {[...Array(5)].map((_, i) => (
-                <Star key={i} className="h-3.5 w-3.5 sm:h-4 sm:w-4 fill-yellow-400 text-yellow-400" />
-              ))}
-            </div>
-            <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium">Rated 4.9/5 by freelancers and agencies</p>
-          </div>
+          <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium text-center mt-6 sm:mt-8">Rated 4.9/5 by freelancers and agencies</p>
         </div>
       </ScrollReveal>
 
@@ -715,17 +693,18 @@ const Landing = () => {
               </span>
 
               <h3 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Lead<span className="text-gradient-primary">Finder</span> Pro</h3>
-              <p className="text-sm sm:text-base text-foreground/65 leading-relaxed mb-8 max-w-sm mx-auto font-medium">
-                Start free and unlock the complete outreach system.
+              <p className="text-sm sm:text-base text-foreground/60 leading-relaxed mb-8 max-w-sm mx-auto font-medium">
+                Everything you need to find, contact and close clients — in one system.
               </p>
 
               <ul className="space-y-2.5 sm:space-y-3 mb-8 sm:mb-10 text-left max-w-xs mx-auto">
                 {[
-                  'Find businesses without websites',
-                  'Save leads into a simple pipeline',
+                  'Find businesses without websites in seconds',
+                  'Add leads to your pipeline in one click',
                   'Message instantly via WhatsApp or SMS',
-                  'Track every follow-up and status',
-                  'Templates + dashboard included',
+                  'Track every contact and follow-up',
+                  'Built-in templates to move faster',
+                  'Smart dashboard to monitor outreach',
                 ].map((item, i) => (
                   <li key={i} className="flex items-center gap-3 text-sm text-foreground/85 font-medium">
                     <Check className="h-[18px] w-[18px] shrink-0" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
@@ -745,7 +724,7 @@ const Landing = () => {
                 </Link>
               </Button>
 
-              <p className="text-[11px] sm:text-xs text-muted-foreground/55 mt-4">
+              <p className="text-[11px] sm:text-xs text-muted-foreground/60 mt-4">
                 No card required · Full access instantly · Cancel anytime
               </p>
             </div>
@@ -759,10 +738,13 @@ const Landing = () => {
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-2">
-              Got <span className="text-gradient-primary">questions?</span>
+              Got Any <span className="text-gradient-primary">Questions?</span>
             </h2>
-            <p className="text-sm sm:text-base text-muted-foreground/70 mb-5 leading-[1.6]">
-              Message us on WhatsApp — a real person replies.
+            <p className="text-sm sm:text-base text-muted-foreground/70 mb-1.5 leading-[1.6]">
+              Fast responses from a real person — no bots, no waiting.
+            </p>
+            <p className="text-xs text-muted-foreground/50 mb-5">
+              We typically reply within minutes.
             </p>
             <a
               href="https://wa.me/447477932564?text=Hi%2C%20I%20have%20a%20question%20about%20LeadFinder%20Pro"
