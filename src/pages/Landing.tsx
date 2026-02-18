@@ -3,36 +3,23 @@ import { trackLead } from '@/lib/fbPixel';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   Search,
-  Settings,
-  ClipboardList,
-  Phone,
-  FileText,
-  Zap,
   Check,
   ArrowRight,
   X,
-  CheckCircle,
   Volume2,
   VolumeX,
-  
   MessageSquare,
-  Gift,
   Star,
-  Sparkles,
+  Zap,
 } from 'lucide-react';
 import demoVideo from '@/assets/leadfinder-demo-v5.mp4';
 import appLogo from '@/assets/logo.png';
 
-import featureCustomization from '@/assets/feature-customization-new.png';
-import featureContactTracking from '@/assets/feature-contact-tracking.png';
 import featureDashboard from '@/assets/howto-step4-dashboard.png';
-import featureExport from '@/assets/feature-export.png';
 import featureClassification from '@/assets/feature-classification.png';
-import featureTemplates from '@/assets/feature-templates.png';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
@@ -41,8 +28,6 @@ import step3WhatsApp from '@/assets/howto-step3-whatsapp-dialog.png';
 import step2CRM from '@/assets/howto-step3-outreach-crm.png';
 
 import { AffiliateCapture } from '@/components/AffiliateCapture';
-import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
-import Autoplay from 'embla-carousel-autoplay';
 
 // Scroll reveal wrapper component
 const ScrollReveal = ({ 
@@ -96,61 +81,6 @@ const InlineCTA = ({ text = 'Ready to find your next client?' }: { text?: string
   </div>
 );
 
-const FEATURES = [
-  {
-    icon: Search,
-    title: 'Smart Classification',
-    description: 'Instantly see which businesses don\'t have a website and prioritise the ones worth contacting.',
-    image: featureClassification,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: ClipboardList,
-    title: 'Smart Dashboard',
-    description: 'Your entire pipeline at a glance — track searches, outreach progress, conversions, and revenue in real time.',
-    image: featureDashboard,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: Phone,
-    title: 'Contact Tracking',
-    description: 'Log every call, text, and follow-up. Update statuses and add notes so you never lose track of a lead.',
-    image: featureContactTracking,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: FileText,
-    title: 'Templates',
-    description: 'Ready-to-send WhatsApp, SMS, and call scripts — just pick a template, personalise, and hit send.',
-    image: featureTemplates,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: FileText,
-    title: 'Export Tools',
-    description: 'Export your leads and outreach data to CSV — perfect for backups, reporting, or importing into other tools.',
-    image: featureExport,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: Settings,
-    title: 'Customization',
-    description: 'Set your accent colour, manage templates, and tailor the dashboard to match how you work.',
-    image: featureCustomization,
-    imageScale: 'scale-100',
-  },
-];
-
-const PRICING_FEATURES = [
-  'Unlimited lead searches',
-  'Instantly find businesses without websites',
-  'Built-in CRM to track every lead',
-  'One-click WhatsApp & SMS outreach',
-  'Message templates included',
-  'Track replies and follow-ups',
-  'Priority support',
-];
-
 // Count-up animation component
 const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string; label: string }) => {
   const [count, setCount] = useState(0);
@@ -186,12 +116,12 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
   }, [target, hasAnimated]);
 
   return (
-      <div ref={ref} className="text-center">
-    <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
-      {count.toLocaleString()}{suffix}
-    </div>
-    <div className="text-[8px] sm:text-xs text-foreground/50 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">{label}</div>
+    <div ref={ref} className="text-center">
+      <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
+        {count.toLocaleString()}{suffix}
       </div>
+      <div className="text-[8px] sm:text-xs text-foreground/50 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">{label}</div>
+    </div>
   );
 };
 
@@ -270,84 +200,6 @@ const VideoSection = () => {
   );
 };
 
-// Mobile feature carousel with dots and swipe hint
-const MobileFeatureCarousel = ({ features, onExpand }: { features: typeof FEATURES; onExpand: (src: string, title: string) => void }) => {
-  const [api, setApi] = useState<any>(null);
-  const [current, setCurrent] = useState(0);
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    if (!api) return;
-    setCount(api.scrollSnapList().length);
-    setCurrent(api.selectedScrollSnap());
-    api.on('select', () => setCurrent(api.selectedScrollSnap()));
-  }, [api]);
-
-  return (
-    <div className="px-2">
-      <Carousel
-        opts={{ loop: true, align: 'start' }}
-        plugins={[Autoplay({ delay: 4000, stopOnInteraction: true })]}
-        setApi={setApi}
-      >
-        <CarouselContent>
-          {features.map((feature) => (
-            <CarouselItem key={feature.title}>
-              <div 
-                className="flex flex-col items-center text-center cursor-pointer"
-                onClick={() => onExpand(feature.image, feature.title)}
-              >
-                <h3 className="text-lg font-bold tracking-tight mb-1.5">{feature.title}</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
-                  {feature.description}
-                </p>
-                <div className="relative w-full -mx-2">
-                  <div 
-                    className="relative rounded-lg overflow-hidden bg-card/80 aspect-[16/10]"
-                    style={{ 
-                      border: '1px solid hsl(210 100% 50% / 0.15)',
-                      boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
-                    }}
-                  >
-                    <img 
-                      src={feature.image} 
-                      alt={feature.title}
-                      loading="lazy"
-                      decoding="async"
-                      width={640}
-                      height={400}
-                      className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-105'}`}
-                    />
-                    <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
-                      <Search className="h-3.5 w-3.5 text-muted-foreground" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-      </Carousel>
-      <div className="flex items-center justify-center gap-1.5 mt-4">
-        {Array.from({ length: count }).map((_, i) => (
-          <button
-            key={i}
-            className={`rounded-full transition-all duration-300 ${
-              i === current 
-                ? 'w-6 h-2' 
-                : 'w-2 h-2 opacity-30'
-            }`}
-            style={{ background: i === current ? 'hsl(210 100% 50%)' : 'hsl(210 20% 50%)' }}
-            onClick={() => api?.scrollTo(i)}
-          />
-        ))}
-      </div>
-      <p className="text-[10px] text-muted-foreground/50 text-center mt-2 tracking-wide">
-        Swipe to explore
-      </p>
-    </div>
-  );
-};
 
 
 interface Testimonial {
@@ -615,7 +467,7 @@ const Landing = () => {
         <VideoSection />
       </div>
 
-      {/* How LeadFinder Works — 3-step section */}
+      {/* How LeadFinder Works — 4-step section */}
       <section id="how-it-works" className="relative z-10 py-14 sm:py-20 md:py-28 px-3 sm:px-4">
         <div className="container mx-auto max-w-5xl">
           <ScrollReveal className="text-center mb-10 sm:mb-14 md:mb-20">
@@ -623,7 +475,7 @@ const Landing = () => {
               How LeadFinder <span className="text-gradient-primary">Works</span>
             </h2>
             <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6] px-2">
-              A simple 3-step system to find, contact, and manage leads — all in one place.
+              A simple system to find, contact, and manage leads — without the chaos.
             </p>
           </ScrollReveal>
 
@@ -631,19 +483,25 @@ const Landing = () => {
             {/* Step 1 */}
             <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-12">
               <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={100} direction="left">
-                <div className="relative group">
+                <div 
+                  className="relative group cursor-pointer"
+                  onClick={() => setExpandedImage({ src: featureClassification, title: 'Find Opportunities Instantly' })}
+                >
                   <div 
-                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
+                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
                     style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
                   />
                   <div 
-                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9]"
+                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
                     style={{ 
                       border: '1px solid hsl(210 100% 50% / 0.2)',
                       boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
                     }}
                   >
-                    <img src={featureClassification} alt="Find businesses without websites" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover" />
+                    <img src={featureClassification} alt="Find businesses without websites" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                    <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                    </div>
                   </div>
                 </div>
               </ScrollReveal>
@@ -653,10 +511,10 @@ const Landing = () => {
                     className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
                     style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
                   >1</span>
-                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Find Businesses Without Websites</h3>
+                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Find Opportunities Instantly</h3>
                 </div>
                 <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
-                  Search any location and instantly see which businesses don't have a website — no manual checking required.
+                  Search any location and instantly see which businesses don't have a website — no manual checking, no guesswork.
                 </p>
               </ScrollReveal>
             </div>
@@ -664,19 +522,25 @@ const Landing = () => {
             {/* Step 2 */}
             <div className="flex flex-col lg:flex-row-reverse items-center gap-6 lg:gap-12">
               <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={100} direction="right">
-                <div className="relative group">
+                <div 
+                  className="relative group cursor-pointer"
+                  onClick={() => setExpandedImage({ src: step2CRM, title: 'Stay Organised From Day One' })}
+                >
                   <div 
-                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
+                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
                     style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
                   />
                   <div 
-                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9]"
+                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
                     style={{ 
                       border: '1px solid hsl(210 100% 50% / 0.2)',
                       boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
                     }}
                   >
-                    <img src={step2CRM} alt="Save and organise your leads" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover" />
+                    <img src={step2CRM} alt="Save and organise your leads" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                    <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                    </div>
                   </div>
                 </div>
               </ScrollReveal>
@@ -686,10 +550,10 @@ const Landing = () => {
                     className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
                     style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
                   >2</span>
-                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Save & Organise Your Leads</h3>
+                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Stay Organised From Day One</h3>
                 </div>
                 <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
-                  Add promising businesses to your pipeline in one click and keep every contact structured and tracked.
+                  Save leads in one click, assign statuses, and keep every contact structured inside a clear pipeline.
                 </p>
               </ScrollReveal>
             </div>
@@ -697,19 +561,25 @@ const Landing = () => {
             {/* Step 3 */}
             <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-12">
               <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={100} direction="left">
-                <div className="relative group">
+                <div 
+                  className="relative group cursor-pointer"
+                  onClick={() => setExpandedImage({ src: step3WhatsApp, title: 'Send Outreach in Seconds' })}
+                >
                   <div 
-                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
+                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
                     style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
                   />
                   <div 
-                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9]"
+                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
                     style={{ 
                       border: '1px solid hsl(210 100% 50% / 0.2)',
                       boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
                     }}
                   >
-                    <img src={step3WhatsApp} alt="Message in one click via WhatsApp" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover" />
+                    <img src={step3WhatsApp} alt="Message in one click via WhatsApp" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                    <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                    </div>
                   </div>
                 </div>
               </ScrollReveal>
@@ -719,10 +589,49 @@ const Landing = () => {
                     className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
                     style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
                   >3</span>
-                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Message in One Click</h3>
+                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Send Outreach in Seconds</h3>
                 </div>
                 <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
-                  Choose a template, auto-fill the business name, and send via WhatsApp or SMS in seconds.
+                  Use ready-made templates, auto-fill business names, and open WhatsApp or SMS instantly — no copy and paste.
+                </p>
+              </ScrollReveal>
+            </div>
+
+            {/* Step 4 */}
+            <div className="flex flex-col lg:flex-row-reverse items-center gap-6 lg:gap-12">
+              <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={100} direction="right">
+                <div 
+                  className="relative group cursor-pointer"
+                  onClick={() => setExpandedImage({ src: featureDashboard, title: 'See What\'s Working' })}
+                >
+                  <div 
+                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
+                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+                  />
+                  <div 
+                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
+                    style={{ 
+                      border: '1px solid hsl(210 100% 50% / 0.2)',
+                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                    }}
+                  >
+                    <img src={featureDashboard} alt="Dashboard analytics" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                    <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground" />
+                    </div>
+                  </div>
+                </div>
+              </ScrollReveal>
+              <ScrollReveal className="flex-1 w-full text-center lg:text-left" delay={150} direction="left">
+                <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
+                  <span 
+                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
+                    style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
+                  >4</span>
+                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">See What's Working</h3>
+                </div>
+                <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
+                  Track outreach activity, follow-ups, and progress in one clear dashboard — so you always know your next move.
                 </p>
               </ScrollReveal>
             </div>
@@ -745,79 +654,6 @@ const Landing = () => {
           </ScrollReveal>
         </div>
       </section>
-
-      {/* Features Section — Lead Toolkit */}
-      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
-            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight leading-[1.1] px-2">
-              Your Complete <span className="text-gradient-primary">Lead Toolkit</span>
-            </h2>
-            <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6] px-2">
-              Find, message, organise, and track — all in one place.
-            </p>
-          </ScrollReveal>
-          
-          {isMobile ? (
-              <MobileFeatureCarousel features={FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title))} onExpand={(src, title) => setExpandedImage({ src, title })} />
-          ) : (
-            <ScrollReveal>
-              <div className="grid grid-cols-2 gap-x-10 gap-y-14 lg:gap-x-14 lg:gap-y-16 max-w-5xl mx-auto">
-                {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature, i) => (
-                  <ScrollReveal key={feature.title} delay={i * 80}>
-                    <div className="flex flex-col gap-4">
-                      <div className="flex items-center gap-2.5">
-                        <div 
-                          className="p-2 rounded-lg flex-shrink-0"
-                          style={{ 
-                            background: 'hsl(210 100% 50% / 0.12)',
-                            border: '1px solid hsl(210 100% 50% / 0.2)'
-                          }}
-                        >
-                          <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={1.5} />
-                        </div>
-                        <h3 className="text-base lg:text-lg font-semibold tracking-tight">{feature.title}</h3>
-                      </div>
-                      <p className="text-muted-foreground/70 text-sm leading-[1.6]">{feature.description}</p>
-                      <div
-                        className="group relative cursor-pointer"
-                        onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
-                      >
-                        <div 
-                          className="absolute -inset-2 rounded-2xl blur-xl opacity-25 group-hover:opacity-40 transition-opacity duration-300"
-                          style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
-                        />
-                        <div 
-                          className="relative rounded-xl overflow-hidden transition-transform duration-300 group-hover:scale-[1.01]"
-                          style={{ 
-                            border: '1px solid hsl(210 100% 50% / 0.15)',
-                            boxShadow: '0 0 20px hsl(210 100% 50% / 0.08)'
-                          }}
-                        >
-                          <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <Search className="h-4 w-4 text-foreground" />
-                          </div>
-                          <img 
-                            src={feature.image} 
-                            alt={feature.title}
-                            loading="lazy"
-                            decoding="async"
-                            width={640}
-                            height={400}
-                            className={`w-full h-[260px] lg:h-[300px] object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </ScrollReveal>
-                ))}
-              </div>
-            </ScrollReveal>
-          )}
-        </div>
-      </section>
-
-      {/* separator removed */}
 
       {/* Testimonials */}
       <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
@@ -919,40 +755,29 @@ const Landing = () => {
         </div>
       </ScrollReveal>
 
-      <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
-        <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">Had a great experience?</p>
-        <Button variant="outline" className="border-border/30 hover:border-border/50 text-sm rounded-full px-5" asChild>
-          <Link to="/feedback">
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Leave a Review
-          </Link>
-        </Button>
-      </div>
-
       {/* Final CTA Section */}
       <section className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
-        <div className="container mx-auto max-w-2xl text-center">
+        <div className="container mx-auto max-w-3xl text-center">
           <ScrollReveal>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-3 sm:mb-4">
-              Ready to Find Your Next <span className="text-gradient-primary">Client?</span>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.15] mb-6 sm:mb-8">
+              Find businesses <span className="text-gradient-primary">without websites</span>.
+              <br />
+              Contact them <span className="text-gradient-primary">instantly</span>.
+              <br />
+              Track every follow-up in one system.
             </h2>
-            <p className="text-sm sm:text-base md:text-lg text-muted-foreground/70 leading-[1.6] mb-6 sm:mb-8 max-w-lg mx-auto">
-              Join thousands of freelancers and agencies using LeadFinder Pro to find businesses without websites, reach out instantly, and close more deals.
+            <p className="text-sm sm:text-base md:text-lg text-muted-foreground/70 leading-[1.6] mb-8 sm:mb-10 max-w-lg mx-auto">
+              A structured way to find, contact, and manage leads — all in one place.
             </p>
-            <Button size="lg" className="btn-premium font-semibold h-12 sm:h-14 px-8 sm:px-10 text-sm sm:text-base rounded-xl" asChild>
+            <Button size="lg" className="btn-premium font-semibold h-12 sm:h-14 px-8 sm:px-10 text-sm sm:text-base rounded-xl shadow-lg shadow-primary/20" asChild>
               <Link to="/auth?intent=upgrade">
                 Try it free
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            <p className="text-xs sm:text-sm text-muted-foreground/50 mt-3">
-              No card required · Full access · Cancel anytime
+            <p className="text-xs sm:text-sm text-muted-foreground/50 mt-4 sm:mt-5">
+              No card required · Instant access · Cancel anytime
             </p>
-            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 mt-6 text-xs sm:text-sm text-muted-foreground/50">
-              <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} /> Instant access</span>
-              <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} /> No setup needed</span>
-              <span className="flex items-center gap-1.5"><Check className="h-3.5 w-3.5" style={{ color: 'hsl(142 76% 55%)' }} /> Cancel anytime</span>
-            </div>
           </ScrollReveal>
         </div>
       </section>
