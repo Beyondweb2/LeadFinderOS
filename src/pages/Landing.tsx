@@ -558,22 +558,32 @@ const Landing = () => {
             })}
           </div>
 
-          {/* CTA after steps */}
-          <ScrollReveal className="text-center mt-12 sm:mt-16 md:mt-20">
-            <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.1] mb-2 sm:mb-3">
-              Start Finding Clients <span className="text-gradient-primary">Now.</span>
-            </h3>
-            <Button size="lg" className="btn-premium font-semibold h-12 sm:h-14 px-8 sm:px-10 text-sm sm:text-base rounded-xl shadow-lg shadow-primary/20" asChild>
-              <Link to="/auth?intent=upgrade">
-                Try it free
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <p className="text-xs sm:text-sm text-muted-foreground/50 mt-3">
-              No card required · Instant access · Cancel anytime
-            </p>
-            {/* Separator line */}
-            <div className="mt-10 sm:mt-14 h-px w-full max-w-3xl mx-auto" style={{ background: 'linear-gradient(90deg, transparent, hsl(210 100% 50% / 0.15), transparent)' }} />
+          {/* Bridge CTA */}
+          <ScrollReveal className="mt-[120px] sm:mt-[140px] flex justify-center">
+            <div 
+              className="w-full max-w-[720px] text-center py-14 sm:py-16 px-6 sm:px-10 rounded-2xl"
+              style={{
+                background: 'hsl(220 50% 5%)',
+                border: '1px solid hsl(210 100% 50% / 0.15)',
+                boxShadow: '0 0 30px hsl(210 100% 50% / 0.06), 0 0 60px hsl(210 100% 50% / 0.03)',
+              }}
+            >
+              <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.1] mb-3 sm:mb-4">
+                Start Finding Clients Today.
+              </h3>
+              <p className="text-sm sm:text-base text-muted-foreground/70 max-w-md mx-auto leading-[1.6] mb-6 sm:mb-8">
+                Build your outreach system and start generating real opportunities in minutes.
+              </p>
+              <Button size="lg" className="btn-premium font-semibold h-12 sm:h-14 px-8 sm:px-10 text-sm sm:text-base rounded-xl shadow-lg shadow-primary/20" asChild>
+                <Link to="/auth?intent=upgrade">
+                  Try it free
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <p className="text-xs sm:text-sm text-muted-foreground/50 mt-3">
+                No card required · Instant access · Cancel anytime
+              </p>
+            </div>
           </ScrollReveal>
         </div>
       </section>
