@@ -667,57 +667,6 @@ const Landing = () => {
         </div>
       </ScrollReveal>
 
-      {/* Real Results — Benefit Stack */}
-      <section className="relative z-10 py-16 sm:py-20 md:py-24 px-4">
-        {/* Subtle radial glow behind headline */}
-        <div
-          className="absolute inset-0 -z-10 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 50% 35% at 50% 25%, hsl(210 100% 50% / 0.06) 0%, transparent 70%)' }}
-        />
-        <div className="container mx-auto max-w-5xl text-center">
-          <ScrollReveal>
-            <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] mb-6 sm:mb-8" style={{ color: 'hsl(210 100% 60% / 0.6)' }}>
-              Real results
-            </p>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-extrabold tracking-tight text-foreground mb-12 sm:mb-16 leading-snug">
-              Turn Outreach Into a <span className="text-gradient-primary">System</span>
-            </h2>
-          </ScrollReveal>
-
-          <ScrollReveal delay={100}>
-            <ul className="max-w-[600px] mx-auto text-left space-y-7 sm:space-y-8 mb-10 sm:mb-12">
-              {[
-                { text: 'Stop facing weeks with ', highlight: 'no new leads', suffix: '' },
-                { text: 'Spend less time researching, ', highlight: 'more time earning', suffix: '' },
-                { text: 'Get a ', highlight: 'repeatable', suffix: ' system that actually keeps you active' },
-                { text: 'See your next action clearly ', highlight: 'every day', suffix: '' },
-              ].map((point) => (
-                <li key={point.highlight} className="flex items-start gap-3.5 text-[15px] sm:text-base md:text-lg font-semibold text-foreground/85 leading-snug">
-                  <span
-                    className="mt-[7px] w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ background: 'hsl(210 100% 55%)' }}
-                  />
-                  <span>
-                    {point.text}<span className="text-gradient-primary">{point.highlight}</span>{point.suffix}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </ScrollReveal>
-
-          <ScrollReveal delay={200}>
-            <div className="w-12 h-px mx-auto mb-6 sm:mb-8" style={{ background: 'hsl(210 100% 50% / 0.2)' }} />
-            <div className="space-y-1.5 sm:space-y-2">
-              <p className="text-base sm:text-lg font-bold text-foreground/90 tracking-tight">Clear system.</p>
-              <p className="text-base sm:text-lg font-bold text-foreground/90 tracking-tight">Less chaos.</p>
-              <p className="text-lg sm:text-xl font-extrabold tracking-tight text-gradient-primary">More clients.</p>
-            </div>
-          </ScrollReveal>
-        </div>
-      </section>
-
-      {/* Transition line */}
-
       {/* Final CTA — Free Access Card */}
       <section className="relative z-10 pb-16 sm:pb-20 md:pb-24 px-4">
         <div className="container mx-auto max-w-lg text-center">
