@@ -109,6 +109,21 @@ const Index = () => {
           dailyLimit={hasProAccess ? Infinity : 5}
           isPaidSubscriber={isAccessLoading || hasProAccess}
           disabled={postAbandonExhausted && !hasProAccess}
+          isUpgradeLoading={isCheckoutLoading}
+          onUpgrade={async () => {
+            setIsCheckoutLoading(true);
+            try {
+              const { data, error } = await supabase.functions.invoke('create-checkout', {
+                headers: { Authorization: `Bearer ${session?.access_token}` },
+              });
+              if (error) throw error;
+              if (data?.url) window.open(data.url, '_blank');
+            } catch (e) {
+              toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
+            } finally {
+              setIsCheckoutLoading(false);
+            }
+          }}
         />
       </section>
 

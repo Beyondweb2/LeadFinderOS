@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone, ArrowRight } from 'lucide-react';
+import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone, ArrowRight, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,6 +22,8 @@ interface SearchFormProps {
   isPaidSubscriber?: boolean;
   disabled?: boolean;
   initialRadius?: number;
+  onUpgrade?: () => void;
+  isUpgradeLoading?: boolean;
 }
 
 export function SearchForm({ 
@@ -33,6 +35,8 @@ export function SearchForm({
   isPaidSubscriber = false,
   disabled = false,
   initialRadius,
+  onUpgrade,
+  isUpgradeLoading = false,
 }: SearchFormProps) {
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
@@ -185,16 +189,24 @@ export function SearchForm({
             {/* Search indicator removed - don't show search counts */}
             
             <div className={`flex flex-col items-center sm:items-end ${!isPaidSubscriber ? '' : 'w-full'}`}>
-              {!isPaidSubscriber && searchesRemaining === 0 && dailyLimit === 1 ? (
+              {!isPaidSubscriber && searchesRemaining <= 0 ? (
                 <Button 
                   type="button"
                   className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-9 sm:h-10 w-full sm:w-auto text-sm"
-                  asChild
+                  disabled={isUpgradeLoading}
+                  onClick={onUpgrade}
                 >
-                  <Link to="/subscribe">
-                    Get Free Trial — Full Access
-                    <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                  </Link>
+                  {isUpgradeLoading ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      Starting...
+                    </>
+                  ) : (
+                    <>
+                      <CreditCard className="mr-1.5 h-3.5 w-3.5" />
+                      Get Unlimited Searches
+                    </>
+                  )}
                 </Button>
               ) : (
                 <>
