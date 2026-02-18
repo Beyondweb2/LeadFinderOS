@@ -522,17 +522,7 @@ const Landing = () => {
                     style={{ color: 'hsl(210 100% 60%)' }}
                   >{step.num}.</span>
                   <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-2 sm:mb-3">
-                    {(() => {
-                      const idx = step.title.indexOf(step.blueWord);
-                      if (idx === -1) return step.title;
-                      return (
-                        <>
-                          {step.title.slice(0, idx)}
-                          <span className="text-gradient-primary">{step.blueWord}</span>
-                          {step.title.slice(idx + step.blueWord.length)}
-                        </>
-                      );
-                    })()}
+                    {step.title}
                   </h3>
                   <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-lg mx-auto">
                     {step.body}
@@ -648,6 +638,57 @@ const Landing = () => {
           <p className="text-base sm:text-lg font-semibold text-foreground/85 tracking-tight">
             That's the difference.
           </p>
+        </div>
+      </section>
+
+      {/* Real Results — Benefit Stack */}
+      <section className="relative z-10 py-16 sm:py-20 md:py-24 px-4">
+        <div
+          className="absolute inset-0 -z-10"
+          style={{ background: 'linear-gradient(180deg, hsl(220 50% 5%) 0%, hsl(220 50% 6%) 50%, hsl(220 50% 5%) 100%)' }}
+        />
+        <div
+          className="absolute inset-0 -z-10 pointer-events-none"
+          style={{ background: 'radial-gradient(ellipse 60% 40% at 50% 50%, hsl(210 100% 50% / 0.06) 0%, transparent 70%)' }}
+        />
+        <div className="container mx-auto max-w-5xl text-center">
+          <ScrollReveal>
+            <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] mb-6 sm:mb-8" style={{ color: 'hsl(210 100% 60% / 0.6)' }}>
+              Real results
+            </p>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-bold tracking-tight text-foreground mb-4 sm:mb-5 leading-snug">
+              Why Freelancers Stick With LeadFinder
+            </h2>
+            <p className="text-sm sm:text-base text-foreground/50 max-w-[600px] mx-auto mb-12 sm:mb-16 leading-relaxed">
+              It's not about motivation. It's about having a clear system.
+            </p>
+          </ScrollReveal>
+
+          <ScrollReveal delay={100}>
+            <ul className="max-w-[600px] mx-auto text-left space-y-5 sm:space-y-6 mb-12 sm:mb-16">
+              {[
+                'Find 30+ businesses without websites in minutes',
+                'Contact them instantly without copy and paste',
+                'See exactly who replied and who needs a follow-up',
+                'Keep every lead tracked so nothing slips',
+              ].map((point) => (
+                <li key={point} className="flex items-start gap-3 text-[15px] sm:text-base md:text-lg font-semibold text-foreground/85 leading-snug">
+                  <span
+                    className="mt-2 w-2 h-2 rounded-full shrink-0"
+                    style={{ background: 'hsl(210 100% 55%)' }}
+                  />
+                  {point}
+                </li>
+              ))}
+            </ul>
+          </ScrollReveal>
+
+          <ScrollReveal delay={200}>
+            <div className="w-12 h-px mx-auto mb-8 sm:mb-10" style={{ background: 'hsl(210 100% 50% / 0.2)' }} />
+            <p className="text-base sm:text-lg font-bold text-foreground/90 tracking-tight">
+              Clear system. Less chaos. More clients.
+            </p>
+          </ScrollReveal>
         </div>
       </section>
 
