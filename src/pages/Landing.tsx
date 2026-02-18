@@ -662,9 +662,14 @@ const Landing = () => {
       </ScrollReveal>
 
       {/* Final CTA — Free Access Card */}
-      <section className="relative z-10 pt-14 sm:pt-20 md:pt-28 pb-10 sm:pb-14 md:pb-16 px-4">
+      <section className="relative z-10 pt-14 sm:pt-20 md:pt-28 pb-16 sm:pb-20 md:pb-24 px-4">
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
+            {/* Subtle pre-heading */}
+            <p className="text-xs sm:text-sm text-muted-foreground/40 font-medium tracking-wide uppercase mb-6 sm:mb-8">
+              One simple plan. Full system access.
+            </p>
+
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3 sm:mb-4">
               Build Your Outreach System <span className="text-gradient-primary">Today.</span>
             </h2>
@@ -673,11 +678,11 @@ const Landing = () => {
             </p>
 
             <div
-              className="rounded-2xl p-8 sm:p-10 text-center"
+              className="rounded-2xl p-9 sm:p-12 text-center"
               style={{
-                background: 'hsl(220 40% 9%)',
-                border: '1px solid hsl(210 100% 50% / 0.12)',
-                boxShadow: '0 0 40px hsl(210 100% 50% / 0.06), 0 8px 32px hsl(220 40% 4% / 0.5)',
+                background: 'linear-gradient(180deg, hsl(220 40% 10%) 0%, hsl(220 45% 7%) 100%)',
+                border: '1px solid hsl(210 100% 50% / 0.18)',
+                boxShadow: '0 0 50px hsl(210 100% 50% / 0.08), 0 0 80px hsl(210 100% 50% / 0.04), 0 8px 32px hsl(220 40% 4% / 0.5)',
               }}
             >
               <span
@@ -687,12 +692,12 @@ const Landing = () => {
                 Free Access
               </span>
 
-              <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">Lead<span className="text-gradient-primary">Finder</span> Pro</h3>
-              <p className="text-sm sm:text-base text-muted-foreground/70 leading-relaxed mb-8 max-w-sm mx-auto">
-                Create your free account and get instant access to the full LeadFinder system.
+              <h3 className="text-3xl sm:text-4xl font-bold tracking-tight mb-3">Lead<span className="text-gradient-primary">Finder</span> Pro</h3>
+              <p className="text-sm sm:text-base text-foreground/60 leading-relaxed mb-8 max-w-sm mx-auto font-medium">
+                Everything you need to find, contact and close clients — in one system.
               </p>
 
-              <ul className="space-y-3 sm:space-y-3.5 mb-8 sm:mb-10 text-left max-w-xs mx-auto">
+              <ul className="space-y-2.5 sm:space-y-3 mb-8 sm:mb-10 text-left max-w-xs mx-auto">
                 {[
                   'Find businesses without websites in seconds',
                   'Add leads to your pipeline in one click',
@@ -701,8 +706,8 @@ const Landing = () => {
                   'Built-in templates to move faster',
                   'Smart dashboard to monitor outreach',
                 ].map((item, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm text-foreground/80">
-                    <Check className="h-4 w-4 shrink-0 mt-0.5" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
+                  <li key={i} className="flex items-center gap-3 text-sm text-foreground/85 font-medium">
+                    <Check className="h-[18px] w-[18px] shrink-0" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
                     <span>{item}</span>
                   </li>
                 ))}
@@ -710,17 +715,17 @@ const Landing = () => {
 
               <Button
                 size="lg"
-                className="btn-premium font-semibold h-13 sm:h-14 px-10 sm:px-12 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
+                className="btn-premium font-semibold h-[52px] sm:h-14 px-10 sm:px-14 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
                 asChild
               >
                 <Link to="/auth?intent=upgrade">
-                  Create free account
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                  Start free access
+                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                 </Link>
               </Button>
 
-              <p className="text-[11px] sm:text-xs text-muted-foreground/50 mt-4">
-                No card required · Instant access · Cancel anytime
+              <p className="text-[11px] sm:text-xs text-muted-foreground/60 mt-4">
+                No card required · Full access instantly · Cancel anytime
               </p>
             </div>
           </ScrollReveal>
