@@ -203,7 +203,7 @@ export default function AdminDashboard() {
                         <TableCell className="text-right tabular-nums text-muted-foreground">{u.free_search_count}/5</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{timeAgo(u.last_active_at)}</TableCell>
                         <TableCell>
-                          {u.id !== isAdmin && (
+                          {(
                             <AlertDialog>
                               <AlertDialogTrigger asChild><Button variant="ghost" size="icon" onClick={(e) => e.stopPropagation()}><Trash2 className="h-4 w-4" /></Button></AlertDialogTrigger>
                               <AlertDialogContent onClick={(e) => e.stopPropagation()}>
