@@ -491,19 +491,19 @@ const Landing = () => {
               },
               {
                 num: 2,
-                title: 'Save & Organise Your Leads',
-                blueWord: 'Organise',
-                body: 'Add leads to your pipeline in one click, set a status, and keep every follow-up structured.',
-                img: step2CRM,
-                alt: 'Save and organise your leads',
-              },
-              {
-                num: 3,
                 title: 'Send Outreach in One Click',
                 blueWord: 'Outreach',
                 body: 'Use templates, auto-fill business names, and open WhatsApp or SMS instantly — no copy and paste.',
                 img: step3WhatsApp,
                 alt: 'Message in one click via WhatsApp',
+              },
+              {
+                num: 3,
+                title: 'Save & Organise Your Leads',
+                blueWord: 'Organise',
+                body: 'Add leads to your pipeline, set statuses and next actions, and keep everything structured and on track.',
+                img: step2CRM,
+                alt: 'Save and organise your leads',
               },
               {
                 num: 4,
