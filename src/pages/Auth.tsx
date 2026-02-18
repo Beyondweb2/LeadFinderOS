@@ -245,11 +245,9 @@ const Auth = () => {
                 ? 'Create your account to unlock full access'
                 : 'Create an account to try your first search free'}
           </CardDescription>
-          {!isLogin && (
+          {!isLogin && intent !== 'upgrade' && (
             <p className="text-xs text-muted-foreground mt-2">
-              {intent === 'upgrade' 
-                ? 'Create your account to unlock full access'
-                : 'No card required. See real results instantly.'}
+              No card required. See real results instantly.
             </p>
           )}
         </CardHeader>
