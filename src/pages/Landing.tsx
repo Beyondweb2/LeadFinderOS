@@ -513,47 +513,49 @@ const Landing = () => {
                 alt: 'Dashboard analytics',
                 direction: 'right' as const,
               },
-            ].map((step) => (
-              <ScrollReveal key={step.num} className="flex flex-col items-center text-center max-w-3xl mx-auto" delay={step.num * 80}>
-                {/* Number badge */}
-                <span 
-                  className="font-bold text-lg sm:text-xl mb-2 sm:mb-3"
-                  style={{ color: 'hsl(210 100% 60%)' }}
-                >{step.num}.</span>
-
-                {/* Title */}
-                <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-2 sm:mb-3">{step.title}</h3>
-
-                {/* Body */}
-                <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-lg mx-auto mb-6 sm:mb-8">
-                  {step.body}
-                </p>
-
-                {/* Image with always-visible magnifying glass */}
-                <div 
-                  className="relative group cursor-pointer w-full"
-                  onClick={() => setExpandedImage({ src: step.img, title: step.title })}
-                >
+            ].map((step) => {
+              const isEven = step.num % 2 === 0;
+              return (
+              <div key={step.num} className={`flex flex-col ${isEven ? 'lg:flex-row-reverse' : 'lg:flex-row'} items-center gap-6 lg:gap-12`}>
+                {/* Image side */}
+                <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={step.num * 80} direction={isEven ? 'right' : 'left'}>
                   <div 
-                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
-                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
-                  />
-                  <div 
-                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
-                    style={{ 
-                      border: '1px solid hsl(210 100% 50% / 0.2)',
-                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
-                    }}
+                    className="relative group cursor-pointer w-full"
+                    onClick={() => setExpandedImage({ src: step.img, title: step.title })}
                   >
-                    <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                    {/* Always-visible magnifying glass */}
-                    <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm transition-opacity duration-300">
-                      <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground/70" />
+                    <div 
+                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
+                      style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+                    />
+                    <div 
+                      className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
+                      style={{ 
+                        border: '1px solid hsl(210 100% 50% / 0.2)',
+                        boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                      }}
+                    >
+                      <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                      <div className="absolute top-3 right-3 sm:top-4 sm:right-4 z-20 p-1.5 sm:p-2 rounded-lg bg-background/60 backdrop-blur-sm transition-opacity duration-300">
+                        <Search className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-foreground/70" />
+                      </div>
                     </div>
                   </div>
-                </div>
-              </ScrollReveal>
-            ))}
+                </ScrollReveal>
+
+                {/* Text side */}
+                <ScrollReveal className={`flex-1 w-full text-center lg:text-left`} delay={step.num * 80 + 50} direction={isEven ? 'left' : 'right'}>
+                  <span 
+                    className="font-bold text-lg sm:text-xl mb-2 sm:mb-3 block"
+                    style={{ color: 'hsl(210 100% 60%)' }}
+                  >{step.num}.</span>
+                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-2 sm:mb-3">{step.title}</h3>
+                  <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
+                    {step.body}
+                  </p>
+                </ScrollReveal>
+              </div>
+              );
+            })}
           </div>
 
           {/* CTA after steps */}
