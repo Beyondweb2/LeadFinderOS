@@ -545,7 +545,6 @@ export type Database = {
           checkout_abandoned: boolean
           created_at: string
           demo_search_used: boolean
-          free_search_count: number
           id: string
           last_search_date: string | null
           paid_at: string | null
@@ -567,7 +566,6 @@ export type Database = {
           checkout_abandoned?: boolean
           created_at?: string
           demo_search_used?: boolean
-          free_search_count?: number
           id?: string
           last_search_date?: string | null
           paid_at?: string | null
@@ -589,7 +587,6 @@ export type Database = {
           checkout_abandoned?: boolean
           created_at?: string
           demo_search_used?: boolean
-          free_search_count?: number
           id?: string
           last_search_date?: string | null
           paid_at?: string | null

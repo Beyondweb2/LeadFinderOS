@@ -92,8 +92,8 @@ export function DemoChecklistPanel() {
     return 'demo' as const;
   }, [isPaidSubscriber, isStripeTrialing]);
 
-  const showCompletionCta = false; // Removed — no upgrade CTA on completion
-  console.log('[Walkthrough]', { mode, allDone, isDemoUser, dismissed });
+  const showCompletionCta = allDone && mode === 'demo';
+  console.log('[Walkthrough]', { mode, allDone, showCompletionCta, isDemoUser, dismissed });
 
   if (!isDemoUser || dismissed) return null;
 
@@ -121,34 +121,28 @@ export function DemoChecklistPanel() {
       {isOpen && (
         <div className="bg-card border border-t-0 border-border rounded-b-lg shadow-lg p-3 space-y-2">
           {allDone ? (
-            <div className="text-center space-y-3 py-3 relative">
+            <div className="text-center space-y-2 py-2 relative">
               <button
-                onClick={() => {
-                  handleDismiss();
-                  navigate('/find-leads');
-                  setTimeout(() => {
-                    window.dispatchEvent(new CustomEvent('focus-search-input'));
-                  }, 300);
-                }}
-                className="absolute -top-1 -right-1 h-7 w-7 rounded-full bg-muted hover:bg-muted-foreground/20 flex items-center justify-center transition-all hover:scale-110"
-                aria-label="Close walkthrough"
+                onClick={handleDismiss}
+                className="absolute top-0 right-0 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center"
               >
-                <X className="h-4 w-4 text-foreground" />
+                <X className="h-3 w-3 text-muted-foreground" />
               </button>
-              <div className="flex justify-center animate-scale-in">
-                <div className="h-10 w-10 rounded-full bg-primary/15 flex items-center justify-center border border-primary/20">
-                  <Check className="h-5 w-5 text-primary animate-fade-in" />
+              <p className="text-sm font-semibold text-primary">🎉 Walkthrough complete!</p>
+              <p className="text-xs text-muted-foreground">You've seen the full workflow. You're all set!</p>
+              {showCompletionCta && (
+                <div className="pt-1 space-y-0.5">
+                  <Button
+                    size="sm"
+                    className="w-full"
+                    onClick={() => navigate('/subscribe')}
+                  >
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                     Start 3-Day Free Trial
+                   </Button>
+                   <p className="text-[10px] text-muted-foreground">Full access for 3 days</p>
                 </div>
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-semibold">Walkthrough complete</p>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  You're ready to start finding leads
-                </p>
-              </div>
-              <p className="text-[10px] text-muted-foreground/70 italic">
-                Start by searching any location to see businesses without websites.
-              </p>
+              )}
             </div>
           ) : (
             <ol className="space-y-1.5">

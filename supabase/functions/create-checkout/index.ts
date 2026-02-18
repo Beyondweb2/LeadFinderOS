@@ -8,6 +8,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+// Rate limit: 5 requests per minute (prevents checkout spam)
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 60000;
 
@@ -55,7 +56,7 @@ const logStep = (step: string, details?: unknown) => {
       if (!user?.email) throw new Error("User not authenticated or email not available");
       logStep("User authenticated", { userId: user.id, email: user.email });
 
-      // Apply rate limiting
+      // Apply rate limiting (5 requests/minute per user)
       const rateLimitResult = checkRateLimit(`checkout:${user.id}`, RATE_LIMIT, RATE_WINDOW_MS);
       if (!rateLimitResult.allowed) {
         logStep("Rate limit exceeded", { userId: user.id });
@@ -90,6 +91,7 @@ const logStep = (step: string, details?: unknown) => {
           subscriptionId: existingSub.stripe_subscription_id,
         });
 
+        // Redirect to billing portal instead of creating a new checkout
         const origin = resolveOrigin(req.headers.get("origin"));
         try {
           const portalSession = await stripe.billingPortal.sessions.create({
@@ -102,6 +104,7 @@ const logStep = (step: string, details?: unknown) => {
             status: 200,
           });
         } catch (portalError) {
+          // Customer no longer exists in Stripe — clean up stale record and proceed with new checkout
           const msg = portalError instanceof Error ? portalError.message : String(portalError);
           logStep("GUARD: Billing portal failed, cleaning stale subscription", { error: msg });
           await supabaseClient
@@ -113,6 +116,24 @@ const logStep = (step: string, details?: unknown) => {
       }
 
       logStep("GUARD: No active subscription found, proceeding with checkout");
+      // ─── END GUARD ───
+
+      // ─── Mark checkout_abandoned so user gets 1 post-abandon search ───
+      await supabaseClient
+        .from('user_trials')
+        .update({ checkout_abandoned: true })
+        .eq('user_id', user.id);
+      logStep("Set checkout_abandoned = true", { userId: user.id });
+     
+      // Check trial_used flag from user_trials (single source of truth)
+      const { data: trialRow } = await supabaseClient
+        .from('user_trials')
+        .select('trial_used')
+        .eq('user_id', user.id)
+        .single();
+      
+      const trialUsed = trialRow?.trial_used === true;
+      logStep("Trial used check", { userId: user.id, trialUsed });
 
       // Check for existing customer
       const customers = await stripe.customers.list({ email: user.email, limit: 1 });
@@ -134,15 +155,17 @@ const logStep = (step: string, details?: unknown) => {
       const refSource = trialData?.ref_source || null;
       logStep("Tracking data check", { affiliateCode, refSource });
 
-      // Create checkout session — NO TRIAL, immediate billing
+      // Create checkout session
+      // Only offer trial if user has never had a subscription before
       const sessionConfig: {
         customer?: string;
         customer_email?: string;
         client_reference_id: string;
-        metadata?: Record<string, string>;
+        metadata?: { affiliate_code?: string };
         line_items: Array<{ price: string; quantity: number }>;
         mode: "subscription";
         payment_method_types: string[];
+        subscription_data?: { trial_period_days: number; metadata?: { affiliate_code?: string } };
         success_url: string;
         cancel_url: string;
       } = {
@@ -161,7 +184,7 @@ const logStep = (step: string, details?: unknown) => {
         cancel_url: `${resolveOrigin(req.headers.get("origin"))}/billing/cancel`,
       };
       
-      // Add tracking metadata if present
+      // Add tracking metadata if present (affiliate_code and/or ref_source)
       const trackingMetadata: Record<string, string> = {};
       if (affiliateCode) trackingMetadata.affiliate_code = affiliateCode;
       if (refSource) trackingMetadata.ref_source = refSource;
@@ -170,23 +193,35 @@ const logStep = (step: string, details?: unknown) => {
         sessionConfig.metadata = trackingMetadata;
       }
       
-      // NO trial_period_days — subscription starts immediately at £19.99/month
-      logStep("Creating checkout session (no trial)", { 
+      // Only add trial if trial_used is false
+      const branchTaken = trialUsed ? 'no_trial' : 'trial';
+      if (!trialUsed) {
+         sessionConfig.subscription_data = { 
+           trial_period_days: 3,
+           metadata: Object.keys(trackingMetadata).length > 0 ? trackingMetadata : undefined
+         };
+         logStep("Adding 3-day trial to checkout", { branchTaken });
+      } else {
+        logStep("Skipping trial - trial_used is true", { branchTaken });
+      }
+      
+      logStep("Creating checkout session", { 
         priceId: "price_1SxN38Gi4ps7kJ7R8UE1kYGS", 
         mode: "subscription",
         hasCustomer: !!customerId,
+        trialUsed 
       });
       const session = await stripe.checkout.sessions.create(sessionConfig);
  
-     logStep("Checkout session created", { sessionId: session.id, userId: user.id });
+     logStep("Checkout session created", { sessionId: session.id, userId: user.id, trialUsed, branchTaken });
 
-     // Log funnel event (fire-and-forget)
+     // Log funnel event: trial_started (fire-and-forget)
      supabaseClient
        .from('funnel_events')
-       .insert({ user_id: user.id, event_type: 'checkout_started' })
+       .insert({ user_id: user.id, event_type: 'trial_started' })
        .then(({ error }) => {
-         if (error) console.log('[FUNNEL] checkout_started insert failed', error.message);
-         else console.log('[FUNNEL] checkout_started logged', { userId: user.id });
+         if (error) console.log('[FUNNEL] trial_started insert failed', error.message);
+         else console.log('[FUNNEL] trial_started logged', { userId: user.id });
        });
 
      return new Response(JSON.stringify({ url: session.url }), {
@@ -194,8 +229,10 @@ const logStep = (step: string, details?: unknown) => {
        status: 200,
      });
     } catch (error) {
+      // Log detailed error server-side only
       const errorMessage = error instanceof Error ? error.message : String(error);
       logStep("ERROR", { message: errorMessage });
+      // Return generic error to client - don't expose internal details
       return new Response(JSON.stringify({ error: "Unable to create checkout session. Please try again." }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 500,
