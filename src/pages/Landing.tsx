@@ -469,14 +469,16 @@ const Landing = () => {
 
       {/* How LeadFinder Works — 4-step section */}
       <section id="how-it-works" className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
-        <div className="container mx-auto max-w-5xl">
+        <div className="container mx-auto max-w-6xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.1]">
-              How LeadFinder <span className="text-gradient-primary">Works</span>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15]">
+              How Lead<span className="text-gradient-primary">Finder</span>
+              <br />
+              <span className="text-foreground">Works</span>
             </h2>
           </ScrollReveal>
 
-          <div className="space-y-14 sm:space-y-18 md:space-y-24 max-w-4xl mx-auto">
+          <div className="space-y-14 sm:space-y-18 md:space-y-24 max-w-6xl mx-auto">
             {[
               {
                 num: 1,
@@ -517,7 +519,7 @@ const Landing = () => {
                 {/* Mobile: stacked. Desktop: alternating side-by-side */}
                 <div className={`flex flex-col sm:flex-row items-center gap-6 sm:gap-10 md:gap-14 ${!isEven ? 'sm:flex-row-reverse' : ''}`}>
                   {/* Text side */}
-                  <div className={`flex-1 text-center sm:text-left ${!isEven ? 'sm:text-right' : ''}`}>
+                  <div className={`sm:w-[35%] shrink-0 text-center sm:text-left ${!isEven ? 'sm:text-right' : ''}`}>
                     <span 
                       className="font-bold text-lg sm:text-xl mb-2 sm:mb-3 block"
                       style={{ color: 'hsl(210 100% 60%)' }}
@@ -531,7 +533,7 @@ const Landing = () => {
                   </div>
                   {/* Image side */}
                   <div 
-                    className="flex-1 relative group cursor-pointer w-full"
+                    className="sm:w-[65%] relative group cursor-pointer w-full"
                     onClick={() => setExpandedImage({ src: step.img, title: step.title })}
                   >
                     <div 
@@ -664,6 +666,20 @@ const Landing = () => {
               </div>
             );
           })()}
+
+          {/* Leave a Review button */}
+          <div className="text-center mt-8 sm:mt-10">
+            <Button
+              variant="outline"
+              className="border-border/30 hover:border-border/50 text-sm rounded-full px-6"
+              asChild
+            >
+              <Link to="/feedback">
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Leave a Review
+              </Link>
+            </Button>
+          </div>
         </div>
       </ScrollReveal>
 
