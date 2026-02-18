@@ -557,90 +557,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* System Section — Emotional Positioning */}
-      <section className="relative z-10 py-20 sm:py-24 md:py-32 px-4">
-        {/* Radial glow */}
-        <div
-          className="absolute inset-0 -z-10 pointer-events-none"
-          style={{
-            background: 'radial-gradient(ellipse 50% 40% at 50% 45%, hsl(210 100% 50% / 0.10) 0%, transparent 70%)',
-          }}
-        />
-        <div
-          className="absolute inset-0 -z-10"
-          style={{ background: 'hsl(220 50% 4% / 0.5)' }}
-        />
-        <div className="container mx-auto max-w-[680px] text-center">
-          {/* Eyebrow */}
-          <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] mb-6 sm:mb-8" style={{ color: 'hsl(210 100% 60% / 0.6)' }}>
-            Why this matters
-          </p>
-
-          {/* Headline */}
-          <h2 className="text-2xl sm:text-3xl md:text-[2.25rem] font-bold tracking-tight text-foreground mb-6 sm:mb-8 leading-snug">
-            Most freelancers don't lack skill.<br />
-            They lack a <span className="text-gradient-primary">system</span>.
-          </h2>
-
-          {/* Intro lines */}
-          <div className="space-y-2 sm:space-y-3 text-[15px] sm:text-base text-foreground/50 leading-relaxed mb-10 sm:mb-14">
-            <p>You already know how to build websites.</p>
-            <p>The hard part is doing outreach consistently.</p>
-          </div>
-
-          {/* Divider line */}
-          <div className="w-12 h-px mx-auto mb-10 sm:mb-14" style={{ background: 'hsl(210 100% 50% / 0.2)' }} />
-
-          {/* Two columns: Without / With */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 sm:gap-12 text-left max-w-lg mx-auto mb-10 sm:mb-14">
-            {/* Without */}
-            <div>
-              <h4 className="text-sm sm:text-base font-semibold text-foreground/80 mb-4 tracking-wide">Without structure</h4>
-              <ul className="space-y-2.5 text-sm sm:text-[15px] text-foreground/45 leading-relaxed">
-                <li className="flex items-start gap-2.5">
-                  <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: 'hsl(210 100% 50% / 0.4)' }} />
-                  You message randomly
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: 'hsl(210 100% 50% / 0.4)' }} />
-                  You forget to follow up
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="mt-1.5 w-1 h-1 rounded-full shrink-0" style={{ background: 'hsl(210 100% 50% / 0.4)' }} />
-                  Leads slip through
-                </li>
-              </ul>
-            </div>
-            {/* With */}
-            <div>
-              <h4 className="text-sm sm:text-base font-semibold text-foreground/90 mb-4 tracking-wide">With structure</h4>
-              <ul className="space-y-2.5 text-sm sm:text-[15px] text-foreground/60 leading-relaxed">
-                <li className="flex items-start gap-2.5">
-                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'hsl(210 100% 60%)' }} />
-                  You know who to contact next
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'hsl(210 100% 60%)' }} />
-                  Every lead has a status
-                </li>
-                <li className="flex items-start gap-2.5">
-                  <span className="mt-1.5 w-1.5 h-1.5 rounded-full shrink-0" style={{ background: 'hsl(210 100% 60%)' }} />
-                  Progress becomes predictable
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Divider line */}
-          <div className="w-12 h-px mx-auto mb-8 sm:mb-10" style={{ background: 'hsl(210 100% 50% / 0.2)' }} />
-
-          {/* Closing line */}
-          <p className="text-base sm:text-lg font-semibold text-foreground/85 tracking-tight">
-            That's the difference.
-          </p>
-        </div>
-      </section>
-
       {/* Real Results — Benefit Stack */}
       <section className="relative z-10 py-16 sm:py-20 md:py-24 px-4">
         <div
@@ -656,21 +572,18 @@ const Landing = () => {
             <p className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.2em] mb-6 sm:mb-8" style={{ color: 'hsl(210 100% 60% / 0.6)' }}>
               Real results
             </p>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-bold tracking-tight text-foreground mb-4 sm:mb-5 leading-snug">
-              Why Freelancers Stick With LeadFinder
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-[2.75rem] font-bold tracking-tight text-foreground mb-12 sm:mb-16 leading-snug">
+              Why Freelancers <span className="text-gradient-primary">Stick</span> With LeadFinder
             </h2>
-            <p className="text-sm sm:text-base text-foreground/50 max-w-[600px] mx-auto mb-12 sm:mb-16 leading-relaxed">
-              It's not about motivation. It's about having a clear system.
-            </p>
           </ScrollReveal>
 
           <ScrollReveal delay={100}>
             <ul className="max-w-[600px] mx-auto text-left space-y-5 sm:space-y-6 mb-12 sm:mb-16">
               {[
                 'Find 30+ businesses without websites in minutes',
-                'Contact them instantly without copy and paste',
-                'See exactly who replied and who needs a follow-up',
-                'Keep every lead tracked so nothing slips',
+                'Zero manual searching',
+                'No missed follow-ups',
+                'Total control over your pipeline',
               ].map((point) => (
                 <li key={point} className="flex items-start gap-3 text-[15px] sm:text-base md:text-lg font-semibold text-foreground/85 leading-snug">
                   <span
