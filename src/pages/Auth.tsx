@@ -7,8 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Loader2, CreditCard, Sparkles, Gift, Check } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
@@ -26,16 +25,14 @@ const Auth = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRedirectingToCheckout, setIsRedirectingToCheckout] = useState(false);
-  const [showTrialModal, setShowTrialModal] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   
   const { signIn, signUp, user, isLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Determine intent from query param: "demo" or "upgrade"
-  const intent = intentParam === 'upgrade' ? 'upgrade' : 'demo';
+  // "upgrade" intent is only for users coming from the paywall, not the landing page CTA
+  const intent = intentParam === 'upgrade' ? 'upgrade' : 'default';
 
   // Helper to redirect to the unlock-access page (which handles Stripe checkout properly)
   const redirectToCheckout = () => {
@@ -46,7 +43,7 @@ const Auth = () => {
   useEffect(() => {
     if (!user || isLoading) return;
 
-    // If intent is upgrade, go straight to Stripe checkout
+    // If intent is upgrade (from paywall), go to checkout
     if (intent === 'upgrade') {
       redirectToCheckout();
       return;
@@ -140,13 +137,11 @@ const Auth = () => {
               title: 'Account created!',
               description: 'Redirecting to checkout...',
             });
-            // Small delay to let auth state settle, then checkout will trigger via useEffect
           } else {
             toast({
               title: 'Account created!',
-              description: 'Redirecting to your dashboard...',
+              description: 'Welcome! Redirecting to your dashboard...',
             });
-            navigate('/');
           }
           return;
         }
@@ -168,66 +163,6 @@ const Auth = () => {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       {/* Capture affiliate codes from URL */}
       <AffiliateCapture />
-      {/* Free Trial Loading Modal */}
-      <Dialog open={showTrialModal} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-md border-primary/30 bg-card/95 backdrop-blur-xl" hideClose>
-          <div className="flex flex-col items-center justify-center py-8 gap-6">
-            {/* Animated ring */}
-            <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-              <div className="relative h-20 w-20 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Gift className="h-8 w-8 text-primary animate-pulse" />
-              </div>
-            </div>
-            
-            {/* Text content */}
-            <div className="text-center space-y-2">
-              <h3 className="text-xl font-bold flex items-center justify-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                3-Day Full Access
-                <Sparkles className="h-5 w-5 text-primary" />
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                Setting up your free trial — £0 for 3 days, then £19.99/mo. Cancel anytime.
-              </p>
-            </div>
-            
-            {/* Benefits list */}
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Check className="h-4 w-4 text-primary" />
-                <span>Unlimited business searches</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Check className="h-4 w-4 text-primary" />
-                <span>Full CRM & pipeline tracking</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Check className="h-4 w-4 text-primary" />
-                <span>WhatsApp & SMS outreach templates</span>
-              </div>
-            </div>
-
-            {/* Demo fallback */}
-            <div className="text-center pt-1 border-t border-border/50">
-              <p className="text-xs text-muted-foreground mb-1">
-                Not ready to add a card yet?
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTrialModal(false);
-                  navigate('/demo');
-                }}
-                className="text-xs text-primary hover:underline font-medium"
-              >
-                1 free search & walkthrough in demo →
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       
       <Card className="w-full max-w-md relative z-10 bg-card border-border">
@@ -241,15 +176,11 @@ const Auth = () => {
           <CardDescription>
             {isLogin 
               ? 'Sign in to find businesses without websites' 
-              : intent === 'upgrade'
-                ? 'Create your account to unlock full access'
-                : 'Create an account to try your first search free'}
+              : 'Create an account to start finding leads'}
           </CardDescription>
           {!isLogin && (
             <p className="text-xs text-muted-foreground mt-2">
-              {intent === 'upgrade' 
-                ? '£0 today · Cancel anytime'
-                : 'No card required. See real results instantly.'}
+              No card required. See real results instantly.
             </p>
           )}
         </CardHeader>

@@ -130,9 +130,10 @@ export function DemoChecklistPanel() {
                     window.dispatchEvent(new CustomEvent('focus-search-input'));
                   }, 300);
                 }}
-                className="absolute -top-1 -right-1 h-6 w-6 rounded-full bg-muted/80 hover:bg-muted flex items-center justify-center transition-all hover:scale-110 hover:shadow-sm"
+                className="absolute -top-1 -right-1 h-7 w-7 rounded-full bg-muted hover:bg-muted-foreground/20 flex items-center justify-center transition-all hover:scale-110"
+                aria-label="Close walkthrough"
               >
-                <X className="h-3.5 w-3.5 text-foreground/70" />
+                <X className="h-4 w-4 text-foreground" />
               </button>
               <div className="flex justify-center animate-scale-in">
                 <div className="h-10 w-10 rounded-full bg-primary/15 flex items-center justify-center border border-primary/20">
@@ -140,9 +141,9 @@ export function DemoChecklistPanel() {
                 </div>
               </div>
               <div className="space-y-1">
-                <p className="text-sm font-semibold">You're all set</p>
+                <p className="text-sm font-semibold">Walkthrough complete</p>
                 <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  You now know how to find leads, message them, and track everything in one place.
+                  You're ready to start finding leads
                 </p>
               </div>
               <p className="text-[10px] text-muted-foreground/70 italic">
