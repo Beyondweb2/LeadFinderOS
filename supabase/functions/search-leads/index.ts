@@ -32,18 +32,18 @@ const SearchRequestSchema = z.object({
     .int('Review count must be an integer')
     .min(0, 'Review count cannot be negative')
     .max(10000, 'Review count limit is 10000')
-    .default(2), // Default to 2 minimum reviews to filter out inactive businesses
+    .default(2),
   skipTrialCount: z.boolean()
-    .default(false), // Skip counting this search toward trial limit (for auto-demo searches)
+    .default(false),
   requirePhone: z.boolean()
-    .default(true), // Default to requiring a phone number
+    .default(true),
   deepSearch: z.boolean()
-    .default(false), // Enable grid-based multi-point search
+    .default(false),
   demo: z.boolean()
-    .default(false), // Demo mode - unauthenticated, 1 search per IP
+    .default(false),
   country: z.string()
     .max(10)
-    .optional(), // Country code (passed through, not used server-side)
+    .optional(),
 });
 
 // Directory / Platform Blacklist - URLs that don't count as having a website
@@ -102,11 +102,11 @@ function checkRateLimit(userId: string): boolean {
   const limit = rateLimiter.get(userId);
   
   if (!limit || now > limit.resetAt) {
-    rateLimiter.set(userId, { count: 1, resetAt: now + 60000 }); // 1 minute window
+    rateLimiter.set(userId, { count: 1, resetAt: now + 60000 });
     return true;
   }
   
-  if (limit.count >= 10) { // 10 requests per minute
+  if (limit.count >= 10) {
     return false;
   }
   
@@ -127,15 +127,12 @@ function isDirectoryUrl(url: string): boolean {
   const domain = extractDomain(url);
   if (!domain) return false;
   
-  // Check exact match in blacklist
   if (DIRECTORY_BLACKLIST.has(domain)) return true;
   
-  // Check if it's a subdomain of a blacklisted domain
   for (const blocked of DIRECTORY_BLACKLIST) {
     if (domain.endsWith(`.${blocked}`)) return true;
   }
   
-  // Check platform patterns
   for (const pattern of PLATFORM_PATTERNS) {
     if (pattern.test(domain)) return true;
   }
@@ -143,47 +140,29 @@ function isDirectoryUrl(url: string): boolean {
   return false;
 }
 
-// Normalize business name for comparison (lowercase, remove special chars)
 function normalizeForComparison(text: string): string {
   return text.toLowerCase()
     .replace(/[^a-z0-9]/g, '')
     .replace(/limited|ltd|llc|inc|corp|co|plc|services|service/g, '');
 }
 
-// Check if domain likely belongs to the business (heuristic)
 function domainMatchesBusiness(domain: string, businessName: string): { matches: boolean; confidence: number; reason: string } {
   const normalizedDomain = normalizeForComparison(domain.replace(/\.(com|co\.uk|org|net|uk|io|biz)$/i, ''));
   const normalizedName = normalizeForComparison(businessName);
   
-  // Strong match: domain contains significant part of business name
   if (normalizedDomain.length >= 4 && normalizedName.includes(normalizedDomain)) {
-    return { 
-      matches: true, 
-      confidence: 0.9, 
-      reason: `Domain "${domain}" contains business name pattern` 
-    };
+    return { matches: true, confidence: 0.9, reason: `Domain "${domain}" contains business name pattern` };
   }
   
-  // Strong match: business name contains domain
   if (normalizedName.length >= 4 && normalizedDomain.includes(normalizedName)) {
-    return { 
-      matches: true, 
-      confidence: 0.85, 
-      reason: `Business name matches domain "${domain}"` 
-    };
+    return { matches: true, confidence: 0.85, reason: `Business name matches domain "${domain}"` };
   }
   
-  // Partial match: check for word overlap
   const domainWords = normalizedDomain.match(/.{3,}/g) || [];
-  const nameWords = normalizedName.match(/.{3,}/g) || [];
   
   for (const dWord of domainWords) {
     if (dWord.length >= 4 && normalizedName.includes(dWord)) {
-      return { 
-        matches: true, 
-        confidence: 0.75, 
-        reason: `Domain contains keyword "${dWord}" from business name` 
-      };
+      return { matches: true, confidence: 0.75, reason: `Domain contains keyword "${dWord}" from business name` };
     }
   }
   
@@ -198,26 +177,17 @@ async function classifyWithAI(
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   const domain = extractDomain(websiteUrl);
   
-  // First, apply heuristic check - if domain clearly matches business name, it's likely their site
   if (domain) {
     const heuristicResult = domainMatchesBusiness(domain, businessName);
     if (heuristicResult.matches && heuristicResult.confidence >= 0.85) {
       console.log(`Heuristic match for ${businessName}: ${heuristicResult.reason}`);
-      return {
-        status: 'HAS_OWN_WEBSITE',
-        confidence: heuristicResult.confidence,
-        reason: heuristicResult.reason,
-      };
+      return { status: 'HAS_OWN_WEBSITE', confidence: heuristicResult.confidence, reason: heuristicResult.reason };
     }
   }
   
   if (!LOVABLE_API_KEY) {
     console.error('LOVABLE_API_KEY not configured');
-    return {
-      status: 'UNCERTAIN',
-      confidence: 0.3,
-      reason: 'AI verification unavailable',
-    };
+    return { status: 'UNCERTAIN', confidence: 0.3, reason: 'AI verification unavailable' };
   }
   
   try {
@@ -235,23 +205,17 @@ async function classifyWithAI(
             content: `You are an expert website classifier for a lead generation tool. Your job is to determine if a URL represents a business's OWN website or just a directory/listing/profile page.
 
 THINK STEP BY STEP:
-1. Does the domain contain the business name or key words from it? (e.g., "liteupelectrical.com" for "Lite-Up Electrical Services" = likely their own site)
+1. Does the domain contain the business name or key words from it?
 2. Is this a known directory, marketplace, review site, or social media platform?
-3. Does the URL structure suggest a profile page? (e.g., /biz/, /profile/, /p/, /business/)
+3. Does the URL structure suggest a profile page?
 
 CLASSIFICATION RULES:
-- HAS_OWN_WEBSITE: The domain appears to be owned by the business (contains their name/brand, .com/.co.uk with relevant keywords)
-- DIRECTORY_ONLY: The URL is clearly a listing on a third-party site (directories like yell.com, yelp.com, checkatrade, social media, review aggregators, food delivery apps, etc.)
-- UNCERTAIN: Cannot determine (generic domain, unclear ownership, parked/broken domain)
-
-IMPORTANT HEURISTICS:
-- If domain contains business name words → likely HAS_OWN_WEBSITE (e.g., "smithplumbing.co.uk" for "Smith Plumbing")
-- If URL path contains /biz/, /business/, /profile/, /listing/ → likely DIRECTORY_ONLY
-- Facebook, Instagram, Yelp, TripAdvisor, Google, etc. are ALWAYS directories
-- Generic domain + business keywords in domain → likely HAS_OWN_WEBSITE
+- HAS_OWN_WEBSITE: The domain appears to be owned by the business
+- DIRECTORY_ONLY: The URL is clearly a listing on a third-party site
+- UNCERTAIN: Cannot determine
 
 Respond ONLY with valid JSON in this exact format:
-{"status": "HAS_OWN_WEBSITE" | "DIRECTORY_ONLY" | "UNCERTAIN", "confidence": 0.0-1.0, "reason": "brief explanation of your reasoning"}`,
+{"status": "HAS_OWN_WEBSITE" | "DIRECTORY_ONLY" | "UNCERTAIN", "confidence": 0.0-1.0, "reason": "brief explanation"}`,
           },
           {
             role: 'user',
@@ -260,45 +224,29 @@ Respond ONLY with valid JSON in this exact format:
 Business Name: ${businessName}
 Business Category: ${category || 'Unknown'}
 Website URL: ${websiteUrl}
-Domain: ${domain}
-
-Think about whether "${domain}" looks like it could be the business's own branded domain or a third-party directory page.`,
+Domain: ${domain}`,
           },
         ],
       }),
     });
 
     if (response.status === 429) {
-      console.warn('AI rate limited');
-      return {
-        status: 'UNCERTAIN',
-        confidence: 0.4,
-        reason: 'Rate limited - classification pending',
-      };
+      return { status: 'UNCERTAIN', confidence: 0.4, reason: 'Rate limited - classification pending' };
     }
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('AI classification error:', response.status, errorText);
-      return {
-        status: 'UNCERTAIN',
-        confidence: 0.3,
-        reason: 'AI verification failed',
-      };
+      return { status: 'UNCERTAIN', confidence: 0.3, reason: 'AI verification failed' };
     }
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content;
     
     if (!content) {
-      return {
-        status: 'UNCERTAIN',
-        confidence: 0.3,
-        reason: 'AI returned empty response',
-      };
+      return { status: 'UNCERTAIN', confidence: 0.3, reason: 'AI returned empty response' };
     }
 
-    // Parse JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
@@ -309,66 +257,40 @@ Think about whether "${domain}" looks like it could be the business's own brande
       };
     }
 
-    return {
-      status: 'UNCERTAIN',
-      confidence: 0.3,
-      reason: 'Could not parse AI response',
-    };
+    return { status: 'UNCERTAIN', confidence: 0.3, reason: 'Could not parse AI response' };
   } catch (error) {
     console.error('AI classification error:', error);
-    return {
-      status: 'UNCERTAIN',
-      confidence: 0.3,
-      reason: 'AI verification error',
-    };
+    return { status: 'UNCERTAIN', confidence: 0.3, reason: 'AI verification error' };
   }
 }
 
-// Generate grid points for deep search with better coverage
 function generateGridPoints(centerLat: number, centerLng: number, radiusMeters: number): Array<{lat: number, lng: number, radius: number}> {
   const points: Array<{lat: number, lng: number, radius: number}> = [];
   
-  // Determine grid dimensions based on search radius - increased density for better coverage
   let gridSize: number;
   let cellRadius: number;
   let overlapFactor: number;
   
   if (radiusMeters >= 80000) {
-    gridSize = 7; // 7x7 = 49 points for 80km+
-    cellRadius = radiusMeters / 5;
-    overlapFactor = 0.6; // 60% overlap for maximum coverage
+    gridSize = 7; cellRadius = radiusMeters / 5; overlapFactor = 0.6;
   } else if (radiusMeters >= 40000) {
-    gridSize = 6; // 6x6 = 36 points for 40-80km
-    cellRadius = radiusMeters / 4;
-    overlapFactor = 0.5;
+    gridSize = 6; cellRadius = radiusMeters / 4; overlapFactor = 0.5;
   } else if (radiusMeters >= 20000) {
-    gridSize = 5; // 5x5 = 25 points for 20-40km
-    cellRadius = radiusMeters / 3;
-    overlapFactor = 0.5;
+    gridSize = 5; cellRadius = radiusMeters / 3; overlapFactor = 0.5;
   } else if (radiusMeters >= 10000) {
-    gridSize = 4; // 4x4 = 16 points for 10-20km
-    cellRadius = radiusMeters / 2;
-    overlapFactor = 0.4;
+    gridSize = 4; cellRadius = radiusMeters / 2; overlapFactor = 0.4;
   } else if (radiusMeters >= 5000) {
-    gridSize = 3; // 3x3 = 9 points for 5-10km
-    cellRadius = radiusMeters / 1.5;
-    overlapFactor = 0.4;
+    gridSize = 3; cellRadius = radiusMeters / 1.5; overlapFactor = 0.4;
   } else {
-    gridSize = 2; // 2x2 = 4 points for smaller areas
-    cellRadius = radiusMeters;
-    overlapFactor = 0.3;
+    gridSize = 2; cellRadius = radiusMeters; overlapFactor = 0.3;
   }
   
-  // Ensure minimum cell radius for API efficiency
   cellRadius = Math.max(cellRadius, 1000);
   
-  // Calculate step size with overlap (in degrees)
-  // 1 degree latitude ≈ 111km, longitude varies by latitude
   const effectiveStep = (radiusMeters * 2 * (1 - overlapFactor)) / (gridSize - 1);
   const latStep = effectiveStep / 111000;
   const lngStep = latStep / Math.cos(centerLat * Math.PI / 180);
   
-  // Generate grid centered on the search location
   const halfGrid = (gridSize - 1) / 2;
   
   for (let i = 0; i < gridSize; i++) {
@@ -379,7 +301,6 @@ function generateGridPoints(centerLat: number, centerLng: number, radiusMeters: 
     }
   }
   
-  // Always add center point to ensure we cover the exact search location
   if (!points.some(p => p.lat === centerLat && p.lng === centerLng)) {
     points.unshift({ lat: centerLat, lng: centerLng, radius: cellRadius });
   }
@@ -387,7 +308,6 @@ function generateGridPoints(centerLat: number, centerLng: number, radiusMeters: 
   return points;
 }
 
-// Geocode a location to get coordinates
 async function geocodeLocation(location: string, apiKey: string): Promise<{lat: number, lng: number}> {
   const geocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`;
   const geocodeRes = await fetch(geocodeUrl);
@@ -401,18 +321,11 @@ async function geocodeLocation(location: string, apiKey: string): Promise<{lat: 
   return geocodeData.results[0].geometry.location;
 }
 
-// Search places at a specific coordinate with pagination
-async function searchPlacesAtPoint(
-  keyword: string,
-  lat: number,
-  lng: number,
-  radius: number,
-  apiKey: string
-): Promise<any[]> {
+async function searchPlacesAtPoint(keyword: string, lat: number, lng: number, radius: number, apiKey: string): Promise<any[]> {
   const allResults: any[] = [];
   let nextPageToken: string | undefined;
   let pageCount = 0;
-  const maxPages = 3; // Google allows up to 3 pages of results (60 total)
+  const maxPages = 3;
   
   do {
     const searchUrl = nextPageToken
@@ -431,7 +344,6 @@ async function searchPlacesAtPoint(
     nextPageToken = searchData.next_page_token;
     pageCount++;
     
-    // Google requires a short delay before using the next_page_token
     if (nextPageToken && pageCount < maxPages) {
       await new Promise(resolve => setTimeout(resolve, 2000));
     }
@@ -440,14 +352,7 @@ async function searchPlacesAtPoint(
   return allResults;
 }
 
-// Text search for additional coverage (different ranking algorithm)
-async function textSearchAtPoint(
-  keyword: string,
-  lat: number,
-  lng: number,
-  radius: number,
-  apiKey: string
-): Promise<any[]> {
+async function textSearchAtPoint(keyword: string, lat: number, lng: number, radius: number, apiKey: string): Promise<any[]> {
   const allResults: any[] = [];
   let nextPageToken: string | undefined;
   let pageCount = 0;
@@ -477,18 +382,9 @@ async function textSearchAtPoint(
   return allResults;
 }
 
-async function searchPlaces(
-  keyword: string,
-  location: string,
-  radius: number,
-  apiKey: string,
-  deepSearch: boolean = false
-): Promise<any[]> {
-  // Geocode the location first
+async function searchPlaces(keyword: string, location: string, radius: number, apiKey: string, deepSearch: boolean = false): Promise<any[]> {
   const { lat, lng } = await geocodeLocation(location, apiKey);
   
-  // Always use enhanced search for better coverage
-  // Standard search combines nearby + text search at center
   const seenPlaceIds = new Set<string>();
   const allResults: any[] = [];
   
@@ -502,7 +398,6 @@ async function searchPlaces(
   };
   
   if (!deepSearch) {
-    // Standard search: nearby + text search at center for better coverage
     const [nearbyResults, textResults] = await Promise.all([
       searchPlacesAtPoint(keyword, lat, lng, radius, apiKey),
       textSearchAtPoint(keyword, lat, lng, radius, apiKey)
@@ -515,17 +410,14 @@ async function searchPlaces(
     return allResults;
   }
   
-  // Deep search: grid-based multi-point search with both nearby and text
   console.log(`Deep search enabled: generating grid for ${radius}m radius`);
   const gridPoints = generateGridPoints(lat, lng, radius);
   console.log(`Generated ${gridPoints.length} grid points`);
   
-  // Process in batches to avoid overwhelming the API
   const batchSize = 4;
   for (let i = 0; i < gridPoints.length; i += batchSize) {
     const batch = gridPoints.slice(i, i + batchSize);
     
-    // Run nearby search for each point in batch
     const nearbyBatch = await Promise.all(
       batch.map(point => 
         searchPlacesAtPoint(keyword, point.lat, point.lng, point.radius, apiKey)
@@ -540,7 +432,6 @@ async function searchPlaces(
       addResults(results);
     }
     
-    // For large searches, also run text search on some grid points
     if (radius >= 20000 && i % (batchSize * 2) === 0) {
       const textBatch = await Promise.all(
         batch.slice(0, 2).map(point => 
@@ -556,7 +447,6 @@ async function searchPlaces(
     
     console.log(`Batch ${Math.floor(i / batchSize) + 1}: Found ${allResults.length} unique places so far`);
     
-    // Small delay between batches
     if (i + batchSize < gridPoints.length) {
       await new Promise(resolve => setTimeout(resolve, 100));
     }
@@ -566,21 +456,10 @@ async function searchPlaces(
 }
 
 async function getPlaceDetails(placeId: string, apiKey: string): Promise<any> {
-  // Use the new Google Places API v1 for better data including primaryTypeDisplayName
   const fieldMask = [
-    'displayName',
-    'formattedAddress',
-    'location',
-    'nationalPhoneNumber',
-    'internationalPhoneNumber',
-    'rating',
-    'userRatingCount',
-    'websiteUri',
-    'googleMapsUri',
-    'businessStatus',
-    'types',
-    'primaryType',
-    'primaryTypeDisplayName',
+    'displayName', 'formattedAddress', 'location', 'nationalPhoneNumber',
+    'internationalPhoneNumber', 'rating', 'userRatingCount', 'websiteUri',
+    'googleMapsUri', 'businessStatus', 'types', 'primaryType', 'primaryTypeDisplayName',
   ].join(',');
   
   const url = `https://places.googleapis.com/v1/places/${placeId}`;
@@ -599,7 +478,6 @@ async function getPlaceDetails(placeId: string, apiKey: string): Promise<any> {
   
   const data = await res.json();
   
-  // Map new API response to legacy field names for compatibility
   return {
     name: data.displayName?.text,
     formatted_address: data.formattedAddress,
@@ -616,38 +494,25 @@ async function getPlaceDetails(placeId: string, apiKey: string): Promise<any> {
   };
 }
 
-// Error sanitization - return safe messages to clients
 function sanitizeError(error: unknown): { message: string; status: number } {
   if (error instanceof z.ZodError) {
-    return {
-      message: 'Invalid input: ' + error.errors.map(e => e.message).join(', '),
-      status: 400
-    };
+    return { message: 'Invalid input: ' + error.errors.map(e => e.message).join(', '), status: 400 };
   }
   
   if (error instanceof Error) {
     console.error('Detailed error:', error);
-    
     if (error.message === 'Location not found') {
-      return {
-        message: 'Location not found. Please check the address and try again.',
-        status: 400
-      };
+      return { message: 'Location not found. Please check the address and try again.', status: 400 };
     }
-    
     if (error.message.includes('Search service')) {
-      return {
-        message: 'Search service temporarily unavailable. Please try again later.',
-        status: 503
-      };
+      return { message: 'Search service temporarily unavailable. Please try again later.', status: 503 };
     }
   }
   
-  return {
-    message: 'An unexpected error occurred. Please try again.',
-    status: 500
-  };
+  return { message: 'An unexpected error occurred. Please try again.', status: 500 };
 }
+
+const FREE_SEARCH_LIMIT = 5;
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -665,113 +530,10 @@ serve(async (req) => {
       );
     }
 
-    // Parse body early to check for demo mode
+    // Parse body
     const body = await req.json();
-    const isDemo = body?.demo === true;
 
-    // ─── DEMO MODE: unauthenticated, IP-limited to 1 search ───
-    if (isDemo) {
-      const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() 
-        || req.headers.get('cf-connecting-ip') 
-        || 'unknown';
-      const demoKey = `demo:${clientIp}`;
-      
-      // Simple in-memory rate limit for demo (1 search per IP per function instance lifetime)
-      if (!globalThis.__demoSearches) globalThis.__demoSearches = new Set();
-      if (globalThis.__demoSearches.has(demoKey)) {
-        return new Response(
-          JSON.stringify({ error: 'Demo search limit reached. Sign up for unlimited access.', code: 'DEMO_LIMIT' }),
-          { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      globalThis.__demoSearches.add(demoKey);
-      
-      console.log(`Demo search from IP: ${clientIp}`);
-      
-      // Validate input
-      const validationResult = SearchRequestSchema.safeParse(body);
-      if (!validationResult.success) {
-        return new Response(
-          JSON.stringify({ error: 'Invalid search parameters.' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      const { keyword, location, radius, minRating, minReviews, requirePhone } = validationResult.data;
-
-      const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
-      if (!GOOGLE_MAPS_API_KEY) {
-        return new Response(
-          JSON.stringify({ error: 'Service temporarily unavailable.' }),
-          { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-
-      console.log(`[DEMO] Searching for "${keyword}" in "${location}" within ${radius}m`);
-      const places = await searchPlaces(keyword, location, radius, GOOGLE_MAPS_API_KEY, false);
-      console.log(`[DEMO] Found ${places.length} places`);
-
-      const leads: Lead[] = [];
-      for (const place of places) {
-        try {
-          const details = await getPlaceDetails(place.place_id, GOOGLE_MAPS_API_KEY);
-          if (!details) continue;
-          if (minRating && (!details.rating || details.rating < minRating)) continue;
-          const effectiveMinReviews = Math.max(minReviews || 0, 2);
-          if (!details.user_ratings_total || details.user_ratings_total < effectiveMinReviews) continue;
-          if (requirePhone && !details.formatted_phone_number) continue;
-          if (details.business_status === 'CLOSED_PERMANENTLY') continue;
-
-          const websiteUrl = details.website;
-          let websiteStatus: Lead['websiteStatus'];
-          let confidence: number;
-          let reason: string;
-
-          if (!websiteUrl) {
-            websiteStatus = 'NO_WEBSITE';
-            confidence = 1.0;
-            reason = 'No website listed on Google Maps profile';
-          } else if (isDirectoryUrl(websiteUrl)) {
-            websiteStatus = 'DIRECTORY_ONLY';
-            confidence = 0.95;
-            reason = `Website is a directory/platform: ${extractDomain(websiteUrl)}`;
-          } else {
-            websiteStatus = 'HAS_OWN_WEBSITE';
-            confidence = 0.7;
-            reason = 'Has own website (demo - no AI verification)';
-          }
-
-          const genericTypes = new Set(['establishment', 'point_of_interest', 'store', 'food', 'locality', 'political', 'premise', 'subpremise']);
-          const category = details.primaryTypeDisplayName
-            || details.primaryType?.replace(/_/g, ' ')
-            || details.types?.find((t: string) => !genericTypes.has(t))?.replace(/_/g, ' ');
-
-          leads.push({
-            name: details.name,
-            category: category || null,
-            address: details.formatted_address,
-            phone: details.formatted_phone_number || details.international_phone_number || null,
-            rating: details.rating || null,
-            reviewCount: details.user_ratings_total || null,
-            googleMapsUrl: details.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
-            websiteUrl: websiteUrl || null,
-            websiteStatus,
-            confidence,
-            reason,
-          });
-        } catch (e) {
-          console.error(`[DEMO] Error processing place:`, e);
-        }
-      }
-
-      return new Response(
-        JSON.stringify({ leads }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // ─── AUTHENTICATED MODE ───
-    // Verify authentication
+    // ─── AUTHENTICATED MODE ONLY (demo mode removed) ───
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
@@ -807,7 +569,7 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Check if user has admin role (bypass subscription check)
+    // Check if user has admin role (bypass all limits)
     const { data: roleData } = await serviceClient
       .from('user_roles')
       .select('role')
@@ -817,128 +579,69 @@ serve(async (req) => {
 
     const isAdmin = !!roleData;
 
-    // Check subscription status (unless admin)
-    let hasActiveSubscription = false;
-    let isOnAppTrial = false;
-    
-    if (!isAdmin) {
-      // First check for Stripe subscription (active, trialing, or past_due)
+    let canSearch = false;
+
+    if (isAdmin) {
+      console.log(`User ${userId} is admin - bypassing all limits`);
+      canSearch = true;
+    } else {
+      // Check for active Stripe subscription (active, trialing, or past_due = unlimited)
       const { data: subscription } = await serviceClient
         .from('subscriptions')
         .select('status')
         .eq('user_id', userId)
         .maybeSingle();
 
-      // Grant unlimited searches to active, past_due, AND trialing users
-      // Stripe trialing = card on file = full access during trial period
       const fullAccessStatuses = ['active', 'past_due', 'trialing'];
-      hasActiveSubscription = subscription && fullAccessStatuses.includes(subscription.status);
+      const hasActiveSubscription = subscription && fullAccessStatuses.includes(subscription.status);
       
-      console.log(`[SEARCH-LEADS] access check - userId: ${userId}, subStatus: ${subscription?.status ?? 'none'}, hasProAccess: ${hasActiveSubscription}, branch: ${hasActiveSubscription ? 'pro' : 'free'}`);
+      console.log(`[SEARCH-LEADS] access check - userId: ${userId}, subStatus: ${subscription?.status ?? 'none'}, hasProAccess: ${hasActiveSubscription}`);
       
-      // If user has Stripe subscription (active, past_due, or trialing), allow unlimited searches
       if (hasActiveSubscription) {
         console.log(`User ${userId} has Stripe subscription (${subscription.status}) - unlimited searches`);
-        // Continue to search - no limits for paid subscribers
+        canSearch = true;
       } else {
-        // No Stripe subscription - check if user is on free app trial (1 search/day limit)
+        // ─── FREE ACCESS MODEL: 5 searches total, no warnings ───
         const { data: trial } = await serviceClient
           .from('user_trials')
-          .select('*')
+          .select('free_search_count')
           .eq('user_id', userId)
           .maybeSingle();
         
-        if (trial) {
-          const now = new Date();
-          const trialEnd = new Date(trial.trial_end_date);
-          
-          // ─── NEW DEMO SEARCH LOGIC: 1 search per user lifetime ───
-          // Check demo_search_used flag first (new funnel)
-          if (!trial.demo_search_used) {
-            console.log(`User ${userId} using demo search (1 of 1)`);
-            // Mark demo search as used BEFORE executing
-            await serviceClient
-              .from('user_trials')
-              .update({ 
-                demo_search_used: true,
-                searches_used: trial.searches_used + 1,
-              })
-              .eq('user_id', userId);
-            isOnAppTrial = true; // Allow the search to proceed
-          } else if (now <= trialEnd && trial.plan_status === 'trial') {
-            // ─── LEGACY TRIAL LOGIC: daily limits for existing trial users ───
-            const today = now.toISOString().split('T')[0];
-            const lastSearchDate = trial.last_search_date;
-            const shouldResetDaily = lastSearchDate !== today;
-            const currentSearchesToday = shouldResetDaily ? 0 : trial.searches_today;
-            
-            const skipTrialCount = body?.skipTrialCount === true;
-            
-            const DAILY_TRIAL_LIMIT = 2;
-            if (!skipTrialCount && currentSearchesToday >= DAILY_TRIAL_LIMIT) {
-              console.log(`Free trial user ${userId} has reached daily limit (${currentSearchesToday}/${DAILY_TRIAL_LIMIT})`);
-              return new Response(
-                JSON.stringify({ 
-                  error: 'Daily trial limit reached (2 searches/day). Upgrade to continue.',
-                  code: 'TRIAL_LIMIT_REACHED',
-                  searches_today: currentSearchesToday,
-                  limit: DAILY_TRIAL_LIMIT
-                }),
-                { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              );
-            }
-            
-            isOnAppTrial = true;
-            const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            
-            if (!skipTrialCount) {
-              console.log(`Free trial user ${userId} (${daysLeft} days remaining, ${currentSearchesToday + 1}/${DAILY_TRIAL_LIMIT} searches today)`);
-              await serviceClient
-                .from('user_trials')
-                .update({ 
-                  searches_used: trial.searches_used + 1,
-                  searches_today: currentSearchesToday + 1,
-                  last_search_date: today
-                })
-                .eq('user_id', userId);
-            } else {
-              console.log(`Free trial user ${userId} - demo search (not counted toward limit)`);
-            }
-          } else {
-            console.log(`User ${userId} demo search already used and no valid trial`);
-          }
+        const currentCount = trial?.free_search_count ?? 0;
+        
+        if (currentCount >= FREE_SEARCH_LIMIT) {
+          console.log(`User ${userId} has used all ${FREE_SEARCH_LIMIT} free searches`);
+          return new Response(
+            JSON.stringify({ 
+              error: 'Free access complete. Upgrade to unlock unlimited searches.',
+              code: 'FREE_LIMIT_REACHED',
+              free_search_count: currentCount,
+              limit: FREE_SEARCH_LIMIT
+            }),
+            { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
         }
         
-        if (!isOnAppTrial) {
-          // ─── POST-ABANDON SEARCH: allow 1 final search after checkout abandonment ───
-          const { data: abandonTrial } = await serviceClient
-            .from('user_trials')
-            .select('checkout_abandoned, post_abandon_search_used')
-            .eq('user_id', userId)
-            .maybeSingle();
-
-          if (abandonTrial?.checkout_abandoned && !abandonTrial?.post_abandon_search_used) {
-            console.log(`User ${userId} using post-abandon search (1 of 1)`);
-            await serviceClient
-              .from('user_trials')
-              .update({ post_abandon_search_used: true })
-              .eq('user_id', userId);
-            isOnAppTrial = true;
-          } else {
-            console.log(`User ${userId} has no active subscription or valid trial`);
-            
-            return new Response(
-              JSON.stringify({ 
-                error: 'Your demo search has been used. Unlock 3-day full access to continue.',
-                code: 'DEMO_SEARCH_EXHAUSTED',
-              }),
-              { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
-          }
-        }
+        // Increment free_search_count
+        console.log(`User ${userId} free search ${currentCount + 1}/${FREE_SEARCH_LIMIT}`);
+        await serviceClient
+          .from('user_trials')
+          .update({ 
+            free_search_count: currentCount + 1,
+            searches_used: (trial as any)?.searches_used ? (trial as any).searches_used + 1 : 1,
+          })
+          .eq('user_id', userId);
+        
+        canSearch = true;
       }
-    } else {
-      console.log(`User ${userId} is admin - bypassing subscription check`);
+    }
+
+    if (!canSearch) {
+      return new Response(
+        JSON.stringify({ error: 'Access denied.' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     // Check rate limit
@@ -949,38 +652,39 @@ serve(async (req) => {
       );
     }
 
-    // Validate input (body already parsed above)
+    // Validate input
     const validationResult = SearchRequestSchema.safeParse(body);
     
     if (!validationResult.success) {
-       // Log detailed errors server-side only for debugging
        console.error('Validation failed:', validationResult.error.errors);
        
       return new Response(
          JSON.stringify({ error: 'Invalid search parameters. Please check your input and try again.' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const { keyword, location, radius, minRating, minReviews, requirePhone, deepSearch } = validationResult.data;
 
+    // Get API key
     const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
     if (!GOOGLE_MAPS_API_KEY) {
       console.error('GOOGLE_MAPS_API_KEY not configured');
       return new Response(
-        JSON.stringify({ error: 'Service temporarily unavailable. Please try again later.' }),
+        JSON.stringify({ error: 'Search service temporarily unavailable.' }),
         { status: 503, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log(`Searching for "${keyword}" in "${location}" within ${radius}m (deepSearch: ${deepSearch})`);
+    console.log(`Searching for "${keyword}" in "${location}" within ${radius}m (deep: ${deepSearch})`);
 
-    // Search places
+    // Search for places
     const places = await searchPlaces(keyword, location, radius, GOOGLE_MAPS_API_KEY, deepSearch);
     console.log(`Found ${places.length} places`);
 
-    // Get details for each place and classify
+    // Process each place
     const leads: Lead[] = [];
+    const aiClassificationPromises: Promise<void>[] = [];
     
     for (const place of places) {
       try {
@@ -989,105 +693,132 @@ serve(async (req) => {
 
         // Apply filters
         if (minRating && (!details.rating || details.rating < minRating)) continue;
-        
-        // Always require at least 2 reviews (hard floor to filter inactive businesses)
         const effectiveMinReviews = Math.max(minReviews || 0, 2);
         if (!details.user_ratings_total || details.user_ratings_total < effectiveMinReviews) continue;
-        
-        // Skip businesses without phone numbers (unlikely to be reachable)
-        const phone = details.international_phone_number || details.formatted_phone_number;
-        if (requirePhone && !phone) continue;
-        
-        // Skip permanently closed businesses
+        if (requirePhone && !details.formatted_phone_number) continue;
         if (details.business_status === 'CLOSED_PERMANENTLY') continue;
 
         const websiteUrl = details.website;
-        // Get specific business category - prioritize primaryTypeDisplayName from new API
-        const genericTypes = new Set(['establishment', 'point_of_interest', 'store', 'food', 'locality', 'political', 'premise', 'subpremise']);
-        const category = details.primaryTypeDisplayName
-          || details.primaryType?.replace(/_/g, ' ')
-          || details.types?.find((t: string) => !genericTypes.has(t))?.replace(/_/g, ' ');
-        
         let websiteStatus: Lead['websiteStatus'];
         let confidence: number;
         let reason: string;
 
         if (!websiteUrl) {
-          // No website field - definite NO_WEBSITE
           websiteStatus = 'NO_WEBSITE';
           confidence = 1.0;
           reason = 'No website listed on Google Maps profile';
         } else if (isDirectoryUrl(websiteUrl)) {
-          // Matches blacklist - definite DIRECTORY_ONLY
           websiteStatus = 'DIRECTORY_ONLY';
           confidence = 0.95;
           reason = `Website is a directory/platform: ${extractDomain(websiteUrl)}`;
         } else {
-          // Needs AI verification
-          const aiResult = await classifyWithAI(details.name, websiteUrl, category);
-          websiteStatus = aiResult.status;
-          confidence = aiResult.confidence;
-          reason = aiResult.reason;
+          // Use AI classification for ambiguous cases
+          websiteStatus = 'UNCERTAIN';
+          confidence = 0.5;
+          reason = 'Pending AI classification';
+          
+          const lead: Lead = {
+            id: place.place_id,
+            name: details.name,
+            category: null,
+            address: details.formatted_address,
+            phone: details.formatted_phone_number || details.international_phone_number || null,
+            rating: details.rating || null,
+            reviewCount: details.user_ratings_total || null,
+            googleMapsUrl: details.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+            websiteUrl: websiteUrl || null,
+            websiteStatus,
+            confidence,
+            reason,
+          };
+          
+          // Get category
+          const genericTypes = new Set(['establishment', 'point_of_interest', 'store', 'food', 'locality', 'political', 'premise', 'subpremise']);
+          lead.category = details.primaryTypeDisplayName
+            || details.primaryType?.replace(/_/g, ' ')
+            || details.types?.find((t: string) => !genericTypes.has(t))?.replace(/_/g, ' ')
+            || null;
+          
+          leads.push(lead);
+          
+          // Queue AI classification
+          aiClassificationPromises.push(
+            classifyWithAI(details.name, websiteUrl, lead.category || undefined)
+              .then(result => {
+                lead.websiteStatus = result.status;
+                lead.confidence = result.confidence;
+                lead.reason = result.reason;
+              })
+              .catch(err => {
+                console.error('AI classification failed for', details.name, err);
+              })
+          );
+          
+          continue;
         }
+
+        // Get category for non-AI classified leads
+        const genericTypes = new Set(['establishment', 'point_of_interest', 'store', 'food', 'locality', 'political', 'premise', 'subpremise']);
+        const category = details.primaryTypeDisplayName
+          || details.primaryType?.replace(/_/g, ' ')
+          || details.types?.find((t: string) => !genericTypes.has(t))?.replace(/_/g, ' ');
 
         leads.push({
           id: place.place_id,
           name: details.name,
-          category,
+          category: category || null,
           address: details.formatted_address,
-          phone: details.international_phone_number || details.formatted_phone_number,
-          rating: details.rating,
-          reviewCount: details.user_ratings_total,
-          googleMapsUrl: details.url,
-          websiteUrl,
+          phone: details.formatted_phone_number || details.international_phone_number || null,
+          rating: details.rating || null,
+          reviewCount: details.user_ratings_total || null,
+          googleMapsUrl: details.url || `https://www.google.com/maps/place/?q=place_id:${place.place_id}`,
+          websiteUrl: websiteUrl || null,
           websiteStatus,
           confidence,
           reason,
-          businessStatus: details.business_status,
         });
-      } catch (err) {
-        console.error('Error processing place:', place.place_id, err);
+      } catch (e) {
+        console.error(`Error processing place ${place.place_id}:`, e);
       }
     }
 
-    // Sort by website status priority (NO_WEBSITE first)
-    leads.sort((a, b) => {
-      const order = { NO_WEBSITE: 0, DIRECTORY_ONLY: 1, UNCERTAIN: 2, HAS_OWN_WEBSITE: 3 };
-      return order[a.websiteStatus] - order[b.websiteStatus];
-    });
-
-    console.log(`Returning ${leads.length} leads`);
-
-    // Log usage event (additive tracking - never blocks search results)
-    try {
-      await supabaseClient.rpc('log_usage_event', {
-        p_event_type: 'search',
-        p_meta: {
-          query: keyword,
-          location,
-          radius,
-          results_count: leads.length,
-          deep_search: deepSearch,
-          source: 'search-leads',
-        },
-      });
-    } catch (trackingErr) {
-      console.error('Usage tracking failed (non-blocking):', trackingErr);
+    // Wait for AI classifications
+    if (aiClassificationPromises.length > 0) {
+      console.log(`Waiting for ${aiClassificationPromises.length} AI classifications...`);
+      await Promise.allSettled(aiClassificationPromises);
     }
 
+    // Sort leads
+    const statusPriority: Record<string, number> = {
+      'NO_WEBSITE': 0,
+      'DIRECTORY_ONLY': 1,
+      'UNCERTAIN': 2,
+      'HAS_OWN_WEBSITE': 3,
+    };
+
+    leads.sort((a, b) => {
+      const statusDiff = (statusPriority[a.websiteStatus] ?? 2) - (statusPriority[b.websiteStatus] ?? 2);
+      if (statusDiff !== 0) return statusDiff;
+      return b.confidence - a.confidence;
+    });
+
+    console.log(`Returning ${leads.length} leads (${leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length} without websites)`);
+
+    // Dispatch search event (fire-and-forget)
+    serviceClient.rpc('log_usage_event', { 
+      p_event_type: 'search',
+      p_meta: { keyword, location, radius, results: leads.length, no_website: leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length }
+    }).then(() => {}).catch(() => {});
+
     return new Response(
-      JSON.stringify({
-        leads,
-        totalFound: leads.length,
-        searchId: crypto.randomUUID(),
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ leads }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    const { message, status } = sanitizeError(error);
+    const sanitized = sanitizeError(error);
     return new Response(
-      JSON.stringify({ error: message }),
-      { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ error: sanitized.message }),
+      { status: sanitized.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

@@ -1,34 +1,17 @@
-import { useState, useRef, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { trackLead } from '@/lib/fbPixel';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
-  Search,
-  Settings,
-  ClipboardList,
-  Phone,
-  FileText,
-  Zap,
-  Check,
-  ArrowRight,
-  X,
-  CheckCircle,
-  Volume2,
-  VolumeX,
-  
-  MessageSquare,
-  Gift,
-  Star,
-  Sparkles,
+  Search, Settings, ClipboardList, Phone, FileText, Zap, Check, ArrowRight, X, Volume2, VolumeX, MessageSquare, Star, Sparkles
 } from 'lucide-react';
 import oldWayImage from '@/assets/old-way-maps.png';
 import newWayImage from '@/assets/new-way-leadfinder.png';
 import demoVideo from '@/assets/leadfinder-demo.mp4';
 import appLogo from '@/assets/logo.png';
-
 import featureCustomization from '@/assets/feature-customization-new.png';
 import featureContactTracking from '@/assets/feature-contact-tracking.png';
 import featureDashboard from '@/assets/howto-step4-dashboard.png';
@@ -38,15 +21,11 @@ import featureTemplates from '@/assets/feature-templates.png';
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
-
-// Lazy-load heavy below-fold components to reduce initial JS
-const HowItWorksSection = lazy(() => import('@/components/landing/HowItWorksSection').then(m => ({ default: m.HowItWorksSection })));
-
 import { AffiliateCapture } from '@/components/AffiliateCapture';
-import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
+import { Carousel, CarouselContent, CarouselItem } from '@/components/ui/carousel';
 import Autoplay from 'embla-carousel-autoplay';
 
-// Scroll reveal wrapper component
+// Define ScrollReveal locally to pass to lazy loaded component
 const ScrollReveal = ({ 
   children, 
   className = '', 
@@ -85,1274 +64,121 @@ const ScrollReveal = ({
   );
 };
 
-// Inline CTA band — desktop only, inserted between sections
-const InlineCTA = ({ text = 'Ready to find your next client?' }: { text?: string }) => (
-  <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
-    <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
-    <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" asChild>
-      <Link to="/auth?intent=upgrade">
-        Start Free Trial Full Access
-        <ArrowRight className="ml-2 h-4 w-4" />
-      </Link>
-    </Button>
-  </div>
-);
+const HowItWorksSection = lazy(() => import('@/components/landing/HowItWorksSection').then(m => ({ default: m.HowItWorksSection })));
 
 const FEATURES = [
-  {
-    icon: Search,
-    title: 'Smart Classification',
-    description: 'Instantly see which businesses don\'t have a website and prioritise the ones worth contacting.',
-    image: featureClassification,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: ClipboardList,
-    title: 'Smart Dashboard',
-    description: 'Your entire pipeline at a glance — track searches, outreach progress, conversions, and revenue in real time.',
-    image: featureDashboard,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: Phone,
-    title: 'Contact Tracking',
-    description: 'Log every call, text, and follow-up. Update statuses and add notes so you never lose track of a lead.',
-    image: featureContactTracking,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: FileText,
-    title: 'Templates',
-    description: 'Ready-to-send WhatsApp, SMS, and call scripts — just pick a template, personalise, and hit send.',
-    image: featureTemplates,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: FileText,
-    title: 'Export Tools',
-    description: 'Export your leads and outreach data to CSV — perfect for backups, reporting, or importing into other tools.',
-    image: featureExport,
-    imageScale: 'scale-100',
-  },
-  {
-    icon: Settings,
-    title: 'Customization',
-    description: 'Set your accent colour, manage templates, and tailor the dashboard to match how you work.',
-    image: featureCustomization,
-    imageScale: 'scale-100',
-  },
+  { icon: Search, title: 'Smart Classification', description: 'Instantly see which businesses don\'t have a website.', image: featureClassification },
+  { icon: ClipboardList, title: 'Smart Dashboard', description: 'Your entire pipeline at a glance.', image: featureDashboard },
+  { icon: Phone, title: 'Contact Tracking', description: 'Log every call, text, and follow-up.', image: featureContactTracking },
+  { icon: FileText, title: 'Templates', description: 'Ready-to-send WhatsApp, SMS, and call scripts.', image: featureTemplates },
+  { icon: FileText, title: 'Export Tools', description: 'Export your leads and outreach data to CSV.', image: featureExport },
+  { icon: Settings, title: 'Customization', description: 'Tailor the dashboard to match how you work.', image: featureCustomization },
 ];
-
-const PRICING_FEATURES = [
-  'Unlimited lead searches',
-  'Instantly find businesses without websites',
-  'Built-in CRM to track every lead',
-  'One-click WhatsApp & SMS outreach',
-  'Message templates included',
-  'Track replies and follow-ups',
-  'Priority support',
-];
-
-// Count-up animation component
-const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string; label: string }) => {
-  const [count, setCount] = useState(0);
-  const [hasAnimated, setHasAnimated] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !hasAnimated) {
-          setHasAnimated(true);
-          const duration = 3500;
-          const steps = 60;
-          const increment = target / steps;
-          let current = 0;
-          
-          const timer = setInterval(() => {
-            current += increment;
-            if (current >= target) {
-              setCount(target);
-              clearInterval(timer);
-            } else {
-              setCount(Math.floor(current));
-            }
-          }, duration / steps);
-        }
-      },
-      { threshold: 0.5 }
-    );
-
-    if (ref.current) observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, [target, hasAnimated]);
-
-  return (
-      <div ref={ref} className="text-center">
-    <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
-      {count.toLocaleString()}{suffix}
-    </div>
-    <div className="text-[8px] sm:text-xs text-foreground/50 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">{label}</div>
-    </div>
-  );
-};
-
-// Mobile hero video component - compact version for hero section
-const MobileHeroVideo = () => {
-  const [isMuted, setIsMuted] = useState(true);
-  const [videoLoaded, setVideoLoaded] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  const toggleMute = () => {
-    if (videoRef.current) {
-      const newMuted = !isMuted;
-      videoRef.current.muted = newMuted;
-      setIsMuted(newMuted);
-    }
-  };
-
-  return (
-    <div className="relative">
-      {/* Glow effect behind video */}
-      <div 
-        className="absolute -inset-2 rounded-2xl blur-lg opacity-30"
-        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(220 80% 45% / 0.08))' }}
-      />
-      <div 
-        className="absolute -inset-px rounded-xl"
-        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.15), transparent)' }}
-      />
-      
-      <div 
-        className="relative rounded-xl overflow-hidden bg-card/80"
-        style={{ 
-          border: '1px solid hsl(210 100% 50% / 0.2)',
-          boxShadow: '0 0 20px hsl(210 100% 50% / 0.15)'
-        }}
-      >
-        {/* Loading spinner overlay */}
-        <div 
-          className={`absolute inset-0 flex items-center justify-center bg-card/90 z-10 pointer-events-none transition-opacity duration-500 ${videoLoaded ? 'opacity-0' : 'opacity-100'}`}
-        >
-          <div className="h-8 w-8 rounded-full border-[3px] border-[hsl(210_100%_50%_/_0.2)] border-t-[hsl(210_100%_50%)] animate-spin" />
-        </div>
-        <video 
-          ref={videoRef}
-          className="w-full h-auto"
-          autoPlay 
-          loop 
-          muted
-          playsInline
-          preload="none"
-          width={640}
-          height={360}
-          onCanPlayThrough={() => setVideoLoaded(true)}
-        >
-          <source src={demoVideo} type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
-        
-        {/* Sound toggle button */}
-        <button
-          onClick={toggleMute}
-          className="absolute bottom-2 right-2 p-1.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
-          aria-label={isMuted ? "Unmute video" : "Mute video"}
-        >
-          {isMuted ? (
-            <VolumeX className="h-3.5 w-3.5" />
-          ) : (
-            <Volume2 className="h-3.5 w-3.5" />
-          )}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// Video section component with sound toggle (desktop)
-// Starts muted (required for autoplay) - user can unmute
-const VideoSection = () => {
-  const [isMuted, setIsMuted] = useState(true);
-  const [videoLoaded, setVideoLoaded] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  const toggleMute = () => {
-    if (videoRef.current) {
-      const newMuted = !isMuted;
-      videoRef.current.muted = newMuted;
-      setIsMuted(newMuted);
-    }
-  };
-
-  return (
-    <ScrollReveal className="relative z-10 pb-10 sm:pb-14 md:pb-20 px-2 sm:px-4">
-      <div className="container mx-auto">
-        {/* Constrained on larger screens */}
-        <div className="relative max-w-5xl mx-auto">
-          {/* Glow effect behind video - fixed brand blue */}
-          <div 
-            className="absolute -inset-4 rounded-3xl blur-2xl opacity-40"
-            style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
-          />
-          <div 
-            className="absolute -inset-px rounded-2xl"
-            style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.3), hsl(210 100% 50% / 0.15), transparent)' }}
-          />
-          
-          <div 
-            className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm"
-            style={{ 
-              border: '1px solid hsl(210 100% 50% / 0.2)',
-              boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)'
-            }}
-          >
-            {/* Loading spinner overlay */}
-            <div 
-              className={`absolute inset-0 flex items-center justify-center bg-card/90 z-10 pointer-events-none transition-opacity duration-500 ${videoLoaded ? 'opacity-0' : 'opacity-100'}`}
-            >
-              <div className="h-10 w-10 rounded-full border-4 border-[hsl(210_100%_50%_/_0.2)] border-t-[hsl(210_100%_50%)] animate-spin" />
-            </div>
-            <video 
-              ref={videoRef}
-              className="w-full h-auto"
-              autoPlay 
-              loop 
-              muted
-              playsInline
-              preload="metadata"
-              width={1280}
-              height={720}
-              onCanPlayThrough={() => setVideoLoaded(true)}
-            >
-              <source src={demoVideo} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-            
-            {/* Sound toggle button */}
-            <button
-              onClick={toggleMute}
-              className="absolute bottom-3 right-3 md:bottom-4 md:right-4 p-2 md:p-2.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
-              aria-label={isMuted ? "Unmute video" : "Mute video"}
-            >
-              {isMuted ? (
-                <VolumeX className="h-4 w-4 md:h-5 md:w-5" />
-              ) : (
-                <Volume2 className="h-4 w-4 md:h-5 md:w-5" />
-              )}
-            </button>
-          </div>
-        </div>
-        
-        {/* Micro-bridge after video */}
-        <p className="text-center text-xs sm:text-sm text-muted-foreground/60 mt-6 sm:mt-10">
-          See the difference for yourself.
-        </p>
-      </div>
-    </ScrollReveal>
-  );
-};
-
-// Mobile feature carousel with dots and swipe hint
-const MobileFeatureCarousel = ({ features, onExpand }: { features: typeof FEATURES; onExpand: (src: string, title: string) => void }) => {
-  const [api, setApi] = useState<any>(null);
-  const [current, setCurrent] = useState(0);
-  const [count, setCount] = useState(0);
-
-  useEffect(() => {
-    if (!api) return;
-    setCount(api.scrollSnapList().length);
-    setCurrent(api.selectedScrollSnap());
-    api.on('select', () => setCurrent(api.selectedScrollSnap()));
-  }, [api]);
-
-  return (
-    <div className="px-2">
-      <Carousel
-        opts={{ loop: true, align: 'start' }}
-        plugins={[Autoplay({ delay: 4000, stopOnInteraction: true })]}
-        setApi={setApi}
-      >
-        <CarouselContent>
-          {features.map((feature) => (
-            <CarouselItem key={feature.title}>
-              <div 
-                className="flex flex-col items-center text-center cursor-pointer"
-                onClick={() => onExpand(feature.image, feature.title)}
-              >
-                <h3 className="text-lg font-bold tracking-tight mb-1.5">{feature.title}</h3>
-                <p className="text-muted-foreground text-sm leading-relaxed mb-3 max-w-xs">
-                  {feature.description}
-                </p>
-                <div className="relative w-full -mx-2">
-                  <div 
-                    className="relative rounded-lg overflow-hidden bg-card/80 aspect-[16/10]"
-                    style={{ 
-                      border: '1px solid hsl(210 100% 50% / 0.15)',
-                      boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
-                    }}
-                  >
-                    <img 
-                      src={feature.image} 
-                      alt={feature.title}
-                      loading="lazy"
-                      decoding="async"
-                      width={640}
-                      height={400}
-                      className={`w-full h-full object-cover object-top ${feature.imageScale || 'scale-105'}`}
-                    />
-                    <div className="absolute bottom-2 right-2 p-1.5 rounded-md bg-background/70 backdrop-blur-sm">
-                      <Search className="h-3.5 w-3.5 text-muted-foreground" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-      </Carousel>
-      {/* Dot indicators */}
-      <div className="flex items-center justify-center gap-1.5 mt-4">
-        {Array.from({ length: count }).map((_, i) => (
-          <button
-            key={i}
-            className={`rounded-full transition-all duration-300 ${
-              i === current 
-                ? 'w-6 h-2' 
-                : 'w-2 h-2 opacity-30'
-            }`}
-            style={{ background: i === current ? 'hsl(210 100% 50%)' : 'hsl(210 20% 50%)' }}
-            onClick={() => api?.scrollTo(i)}
-          />
-        ))}
-      </div>
-      <p className="text-[10px] text-muted-foreground/50 text-center mt-2 tracking-wide">
-        Swipe to explore
-      </p>
-    </div>
-  );
-};
-
-
-interface Testimonial {
-  name: string;
-  role: string;
-  region: string;
-  quote: string;
-  stars: number;
-}
-
-const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[] }) => {
-  const [current, setCurrent] = useState(0);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrent((prev) => (prev + 1) % testimonials.length);
-    }, 6000);
-    return () => clearInterval(timer);
-  }, [testimonials.length]);
-
-  const t = testimonials[current];
-
-  return (
-    <div className="text-center px-4">
-      <div key={current} className="animate-fade-in max-w-[300px] mx-auto">
-        <p className="text-foreground/70 text-[13px] leading-[1.7] italic font-normal">
-          "{t.quote}"
-        </p>
-        <p className="text-muted-foreground/50 text-[11px] mt-5 font-medium">
-          {t.name} · {t.role} – {t.region}
-        </p>
-      </div>
-      <div className="flex items-center justify-center gap-1.5 mt-5">
-        {testimonials.map((_, index) => (
-          <button
-            key={index}
-            onClick={() => setCurrent(index)}
-            className={`rounded-full transition-all duration-300 ${
-              index === current
-                ? 'w-6 h-2 bg-[hsl(210_100%_50%)]'
-                : 'w-2 h-2 bg-muted-foreground/25'
-            }`}
-          />
-        ))}
-      </div>
-    </div>
-  );
-};
 
 const Landing = () => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
   const [hasScrolled, setHasScrolled] = useState(false);
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   
-  // Demo welcome popup state
-  const [showDemoWelcome, setShowDemoWelcome] = useState(false);
-
-  useEffect(() => {
-    if (searchParams.get('welcome') === 'demo' && user) {
-      setShowDemoWelcome(true);
-      searchParams.delete('welcome');
-      setSearchParams(searchParams, { replace: true });
-    }
-  }, [user]);
-
-  // Lock landing page to dark brand theme
   useLandingTheme();
 
-  // Track scroll to show/hide sticky CTA and adjust header button
   useEffect(() => {
-    const onScroll = () => {
-      const threshold = window.innerHeight * 0.35;
-      setHasScrolled(window.scrollY > threshold);
-    };
+    const onScroll = () => setHasScrolled(window.scrollY > window.innerHeight * 0.35);
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
   
   return (
     <div className="min-h-screen bg-background overflow-hidden">
-      {/* Capture affiliate codes from URL */}
       <AffiliateCapture />
 
-      {/* Demo welcome popup — shown when user backs out of /unlock */}
-      <Dialog open={showDemoWelcome} onOpenChange={setShowDemoWelcome}>
-        <DialogContent className="max-w-sm w-[92vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
-          <div className="flex flex-col items-center p-6 sm:p-8 gap-5 text-center">
-            <div className="inline-flex p-3 rounded-full bg-primary/10 border border-primary/20">
-              <Search className="h-7 w-7 text-primary" />
-            </div>
-
-            <div className="space-y-2.5">
-              <h3 className="text-xl font-bold text-foreground">Try the Free Demo</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Walk through the <span className="font-semibold text-foreground">full workflow</span> — search for businesses, add them to your CRM, track outreach, and manage your pipeline.
-              </p>
-            </div>
-
-            <div className="w-full bg-primary/5 border border-primary/15 rounded-lg p-3 space-y-2">
-              <p className="text-xs font-bold text-primary uppercase tracking-wider">What you get</p>
-              <ul className="space-y-1.5 text-sm text-foreground/90 text-left">
-                <li className="flex items-center gap-2">
-                  <Check className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={3} />
-                  1 free search with real results
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={3} />
-                  Guided walkthrough of every feature
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={3} />
-                  Full CRM & outreach tools to explore
-                </li>
-              </ul>
-            </div>
-
-            <p className="text-sm font-bold text-primary">
-              No card required
-            </p>
-
-            <Button
-              className="w-full btn-premium font-semibold py-3 h-auto text-base"
-              onClick={() => {
-                setShowDemoWelcome(false);
-                navigate('/find-leads');
-              }}
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              Start Free Demo
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* Feature Image Modal */}
-      <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
-        <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
-          <div className="relative">
-            <button
-              onClick={() => setExpandedImage(null)}
-              className="absolute top-3 right-3 z-10 p-2 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background transition-colors"
-            >
-              <X className="h-5 w-5" />
-            </button>
-            {expandedImage && (
-              <div className="p-2">
-                <img 
-                  src={expandedImage.src} 
-                  alt={expandedImage.title}
-                  className="w-full h-auto rounded-lg"
-                />
-                <p className="text-center text-lg font-semibold mt-4 pb-2">{expandedImage.title}</p>
-              </div>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
-      {/* Cinematic background */}
       <div className="fixed inset-0 pointer-events-none">
-        {/* Smooth dark navy-to-black gradient base */}
-        <div 
-          className="absolute inset-0"
-          style={{ 
-            background: 'radial-gradient(ellipse 80% 50% at 50% -20%, hsl(210 100% 50% / 0.12), transparent 60%)',
-          }}
-        />
-        {/* Very subtle mid-page glow */}
-        <div 
-          className="absolute top-[40%] left-1/2 -translate-x-1/2 w-full h-[40%]"
-          style={{ 
-            background: 'radial-gradient(ellipse 90% 50% at 50% 50%, hsl(210 80% 45% / 0.04), transparent 70%)',
-          }}
-        />
-        {/* Subtle noise texture */}
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% -20%, hsl(210 100% 50% / 0.12), transparent 60%)' }} />
         <div className="absolute inset-0 bg-noise" />
       </div>
 
-      {/* Floating logo icons down the page - desktop only, alternating sides */}
-      <div className="hidden md:block fixed inset-0 pointer-events-none z-[1] overflow-hidden">
-        {[
-          { top: '6%', right: '3%', size: 'w-12 h-12 lg:w-16 lg:h-16', opacity: 0.06, duration: 10, delay: 0 },
-          { top: '35%', left: '1.5%', size: 'w-10 h-10 lg:w-14 lg:h-14', opacity: 0.045, duration: 13, delay: -3 },
-          { top: '65%', right: '2%', size: 'w-10 h-10 lg:w-12 lg:h-12', opacity: 0.04, duration: 11, delay: -6 },
-          { top: '88%', left: '4%', size: 'w-10 h-10 lg:w-14 lg:h-14', opacity: 0.035, duration: 15, delay: -4 },
-        ].map((pos, i) => (
-          <img
-            key={i}
-            src={appLogo}
-            alt=""
-            width={64}
-            height={64}
-            loading="lazy"
-            decoding="async"
-            className={`absolute ${pos.size} select-none`}
-            style={{
-              top: pos.top,
-              ...(pos.left ? { left: pos.left } : {}),
-              ...(pos.right ? { right: pos.right } : {}),
-              opacity: pos.opacity,
-              animation: `float ${pos.duration}s ease-in-out infinite`,
-              animationDelay: `${pos.delay}s`,
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Header - blends into hero */}
       <header className="relative z-10 backdrop-blur-sm bg-transparent">
         <div className="container mx-auto px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <img src={appLogo} alt="LeadFinder Pro" className="h-8 w-8 sm:h-9 sm:w-9" width={36} height={36} />
-            <span className="text-base sm:text-lg font-bold tracking-tight">
-              Lead<span className="text-gradient-primary">Finder</span> Pro
-            </span>
+            <img src={appLogo} alt="LeadFinder Pro" className="h-8 w-8 sm:h-9 sm:w-9" />
+            <span className="text-base sm:text-lg font-bold tracking-tight">Lead<span className="text-gradient-primary">Finder</span> Pro</span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm px-2 sm:px-4" asChild>
-              <Link to="/auth">Sign In</Link>
-            </Button>
-            <Button 
-              asChild 
-              className="font-semibold text-sm px-3 sm:px-4 btn-premium"
-            >
-              <Link to="/auth?intent=upgrade">
-                <span className="hidden sm:inline">Start Free Trial</span>
-                <span className="sm:hidden">Free Trial</span>
-              </Link>
-            </Button>
+            <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm" asChild><Link to="/auth">Sign In</Link></Button>
+            <Button asChild className="font-semibold text-sm px-3 sm:px-4 btn-premium"><Link to="/auth?intent=upgrade">Try it free</Link></Button>
           </div>
         </div>
       </header>
 
-      {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:min-h-[calc(100vh-64px)] lg:flex lg:items-center lg:pt-0 lg:pb-0 px-4">
-        {/* Subtle radial glow behind hero center — desktop only */}
-        <div 
-          className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[800px] pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.10), transparent 70%)' }}
-        />
+      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 px-4">
         <div className="container mx-auto text-center lg:max-w-[1140px]">
-          {/* Mobile: Video at top instead of logo */}
-          <div className="sm:hidden mb-6">
-            <MobileHeroVideo />
-          </div>
-
           <div className="max-w-3xl mx-auto lg:max-w-2xl">
-            {/* Blue pill badge */}
-            <div 
-              className="hidden sm:inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium mb-6 lg:mb-5 backdrop-blur-sm"
-              style={{ border: '1px solid hsl(210 100% 50% / 0.2)', background: 'hsl(210 100% 50% / 0.08)', color: 'hsl(210 100% 70%)' }}
-            >
-              <Zap className="h-3 w-3" />
-              <span>Lead generation for web professionals</span>
+            <div className="hidden sm:inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium mb-6 backdrop-blur-sm border border-primary/20 bg-primary/10 text-primary">
+              <Zap className="h-3 w-3" /><span>Lead generation for web professionals</span>
             </div>
 
-            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
-              <span className="tracking-[0.02em]">Find Businesses</span>{' '}
-              <br className="hidden sm:block" />
+            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl font-extrabold tracking-tight">
+              <span>Find Businesses</span> <br className="hidden sm:block" />
               <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
+            <p className="text-sm sm:text-lg md:text-xl text-foreground/60 max-w-2xl mx-auto leading-relaxed mt-4 sm:mt-5">
+              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up.
             </p>
             
-            {/* CTA — trial primary, demo as subtle link */}
             <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-8">
-              <Button 
-                size="lg" 
-                className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto sm:min-w-[360px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
-                asChild
-              >
-                <Link to="/auth?intent=upgrade">
-                  Start Free Trial — Full Access
-                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
-                </Link>
+              <Button size="lg" className="btn-premium text-[16px] font-semibold px-6 sm:px-12 h-[52px] rounded-xl w-full sm:w-auto shadow-lg shadow-primary/20 hover:shadow-primary/30" asChild>
+                <Link to="/auth?intent=upgrade">Try it free <ArrowRight className="ml-2 h-5 w-5" /></Link>
               </Button>
-              <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
-                No charge today · Cancel anytime before renewal
-              </p>
-
-              {/* Mobile: stacked subtle demo link */}
-              <div className="sm:hidden mt-5 text-center">
-                <Link 
-                  to="/auth?intent=demo" 
-                  onClick={() => trackLead()}
-                  className="text-[12px] text-foreground/40 hover:text-foreground/60 transition-colors duration-200"
-                >
-                  or try the <span className="text-primary">free demo</span> <span className="inline-block ml-0.5">→</span>
-                </Link>
-                <p className="text-[9px] text-foreground/[0.22] mt-1.5">No card required</p>
-              </div>
-
-              {/* Desktop: inline demo link next to microcopy */}
-              <div className="hidden sm:flex items-center gap-3 mt-5">
-                <Link 
-                  to="/auth?intent=demo" 
-                  onClick={() => trackLead()}
-                  className="text-[13px] text-foreground/40 hover:text-foreground/60 transition-colors duration-200"
-                >
-                  or try the <span className="text-primary">free demo</span> →
-                </Link>
-              </div>
-            </div>
-
-            {/* Mobile trust badges — above bullet points */}
-            <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-8">
-              <CountUpStat target={100000} suffix="+" label="Businesses" />
-              <div className="text-center">
-                <div className="text-base font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Coverage</div>
-              </div>
-              <div className="text-center">
-                <div className="text-base font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Searches</div>
-              </div>
-            </div>
-
-            {/* Feature bullets — mobile only */}
-            <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-6 text-[12px] text-foreground/50 font-medium">
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
-            </div>
-
-            {/* Desktop trust badges — in hero */}
-            <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-10">
-              <CountUpStat target={100000} suffix="+" label="Businesses" />
-              <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
-              </div>
-            </div>
-          </div>
-
-
-
-
-          {/* Scroll indicator — mobile/tablet only */}
-          <div className="flex lg:hidden flex-col items-center mt-6 sm:mt-8 animate-bounce">
-            <span className="text-[10px] sm:text-xs text-muted-foreground/30 tracking-widest uppercase mb-2">Scroll</span>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/30">
-              <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
-            </svg>
-          </div>
-        </div>
-      </section>
-
-      {/* Video Demo Section - desktop only (mobile has it in hero) */}
-      <div className="hidden sm:block">
-        <VideoSection />
-      </div>
-
-      {/* Pain Section */}
-      <ScrollReveal className="relative z-10 py-10 sm:py-12 md:py-16 px-4">
-        {/* Top divider */}
-        <div className="container mx-auto max-w-xl mb-10 sm:mb-12">
-          <div className="h-px w-16 mx-auto" style={{ background: 'hsl(210 100% 50% / 0.3)' }} />
-        </div>
-
-        <div className="container mx-auto max-w-2xl text-center">
-          <div className="md:rounded-2xl md:border md:border-border/40 md:bg-card/40 md:backdrop-blur-sm md:p-10 md:shadow-lg">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-8 sm:mb-10">
-              Not Getting Enough <span className="text-gradient-primary">Clients?</span>
-            </h2>
-
-            <div className="space-y-5 sm:space-y-6 md:space-y-7">
-              {[
-                'Wasting hours manually searching for leads',
-                'No proven system to follow',
-                'Never sure where the next client will come from',
-                'Working hard, but not seeing consistent results',
-              ].map((pain) => (
-                <div key={pain} className="flex flex-col items-center gap-1 md:gap-1.5">
-                  <X className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
-                  <p className="text-sm sm:text-base md:text-lg lg:text-xl text-foreground/90 leading-[1.4]">{pain}</p>
-                </div>
-              ))}
-            </div>
-
-            <p className="text-foreground font-extrabold text-base sm:text-lg md:text-xl mt-10 sm:mt-12">
-              That's why growth feels uncertain.
-            </p>
-            <p className="text-base sm:text-lg md:text-xl font-semibold mt-5 sm:mt-6" style={{ color: 'hsl(210 100% 65%)' }}>
-              LeadFinder Pro gives you a clear, repeatable way to find and contact new clients.
-            </p>
-          </div>
-        </div>
-
-        {/* Bottom divider */}
-        <div className="container mx-auto max-w-xl mt-10 sm:mt-12">
-          <div className="h-px w-16 mx-auto" style={{ background: 'hsl(210 100% 50% / 0.3)' }} />
-        </div>
-      </ScrollReveal>
-
-      {/* Mobile section divider */}
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
-
-      {/* Old Way vs New Way comparison */}
-      <ScrollReveal className="relative z-10 py-10 sm:py-16 md:py-28 px-3 sm:px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-2 sm:mb-4">
-              Stop Manually Scrolling <span className="text-gradient-primary">Google Maps</span> for Leads
-            </h2>
-            <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6]">
-              There's a faster way to find businesses without websites.
-            </p>
-          </div>
-
-          {/* Mobile layout - stacked */}
-          {isMobile ? (
-            <div className="space-y-8 max-w-sm mx-auto">
-              {/* Old Way */}
-              <div className="opacity-80">
-                <div className="text-center mb-3">
-                  <span className="inline-flex items-center gap-2"><X className="h-4 w-4" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-lg font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
-                </div>
-                <div 
-                  className="relative rounded-lg overflow-hidden mb-4 aspect-[16/10]"
-                  style={{ 
-                    border: '1px solid hsl(0 60% 40% / 0.25)',
-                    boxShadow: '0 0 20px hsl(0 60% 40% / 0.1)'
-                  }}
-                >
-                  <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" loading="lazy" decoding="async" width={640} height={400} />
-                </div>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
-                  <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
-                  <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
-                </ul>
-              </div>
-              {/* New Way */}
-              <div>
-                <div className="text-center mb-3">
-                  <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-lg font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
-                </div>
-                <div 
-                  className="relative rounded-lg overflow-hidden mb-4"
-                  style={{ 
-                    border: '1px solid hsl(142 60% 40% / 0.25)',
-                    boxShadow: '0 0 20px hsl(142 60% 40% / 0.1)'
-                  }}
-                >
-                  <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" decoding="async" width={640} height={400} />
-                </div>
-                <ul className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
-                  <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
-                  <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
-                </ul>
-              </div>
-            </div>
-          ) : (
-            /* Desktop layout - side by side */
-            <div className="grid grid-cols-2 gap-10 lg:gap-14 max-w-5xl mx-auto items-start">
-              {/* Old Way */}
-              <ScrollReveal delay={100}>
-                <div className="hover:opacity-90 transition-opacity duration-300">
-                  <div className="text-center mb-5">
-                    <span className="inline-flex items-center gap-2.5"><X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
-                  </div>
-                  <div className="relative group mb-6">
-                    <div 
-                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
-                      style={{ background: 'linear-gradient(to bottom right, hsl(0 60% 40% / 0.3), hsl(0 60% 40% / 0.1))' }}
-                    />
-                    <div 
-                      className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
-                      style={{ 
-                        border: '1px solid hsl(0 60% 40% / 0.25)',
-                        boxShadow: '0 0 30px hsl(0 60% 40% / 0.1)'
-                      }}
-                    >
-                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-contain" loading="lazy" decoding="async" width={640} height={400} />
-                    </div>
-                  </div>
-                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
-                  </ul>
-                </div>
-              </ScrollReveal>
-              {/* New Way */}
-              <ScrollReveal delay={300}>
-                <div className="transition-all duration-300 hover:scale-[1.01]" style={{ filter: 'drop-shadow(0 0 24px hsl(142 60% 40% / 0.08))' }}>
-                  <div className="text-center mb-5">
-                    <span className="inline-flex items-center gap-2.5"><Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
-                  </div>
-                  <div className="relative group mb-6">
-                    <div 
-                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition-opacity duration-300"
-                      style={{ background: 'linear-gradient(to bottom right, hsl(142 60% 40% / 0.3), hsl(142 60% 40% / 0.1))' }}
-                    />
-                    <div 
-                      className="relative rounded-xl overflow-hidden"
-                      style={{ 
-                        border: '1px solid hsl(142 60% 40% / 0.25)',
-                        boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
-                      }}
-                    >
-                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" decoding="async" width={640} height={400} />
-                    </div>
-                  </div>
-                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
-                  </ul>
-                </div>
-              </ScrollReveal>
-            </div>
-          )}
-        </div>
-      </ScrollReveal>
-
-      {/* Mobile section divider — between comparison and How It Works */}
-
-      {/* Mobile section divider — between hero/comparison and How It Works */}
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
-
-      {/* How It Works — 4 steps */}
-      <div id="how-it-works">
-        <Suspense fallback={<div className="py-20" />}>
-          <HowItWorksSection ScrollReveal={ScrollReveal} />
-        </Suspense>
-      </div>
-
-      
-
-      {/* Mobile section divider */}
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
-
-      {/* Features Section — Lead Toolkit */}
-      <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal className="text-center mb-10 sm:mb-12 md:mb-16">
-            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold mb-3 sm:mb-4 tracking-tight leading-[1.1] px-2">
-              Your Complete <span className="text-gradient-primary">Lead Toolkit</span>
-            </h2>
-            <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6] px-2">
-              Find, message, organise, and track — all in one place.
-            </p>
-          </ScrollReveal>
-          
-          {/* Mobile: Carousel (4 core features) */}
-          {isMobile ? (
-              <MobileFeatureCarousel features={FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title))} onExpand={(src, title) => setExpandedImage({ src, title })} />
-          ) : (
-            /* Desktop: 4-card grid — core features only */
-            <ScrollReveal>
-              <div className="grid grid-cols-2 gap-x-10 gap-y-14 lg:gap-x-14 lg:gap-y-16 max-w-5xl mx-auto">
-                {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature, i) => (
-                  <ScrollReveal key={feature.title} delay={i * 80}>
-                    <div className="flex flex-col gap-4">
-                      {/* Title row */}
-                      <div className="flex items-center gap-2.5">
-                        <div 
-                          className="p-2 rounded-lg flex-shrink-0"
-                          style={{ 
-                            background: 'hsl(210 100% 50% / 0.12)',
-                            border: '1px solid hsl(210 100% 50% / 0.2)'
-                          }}
-                        >
-                          <feature.icon className="h-4 w-4" style={{ color: 'hsl(210 100% 60%)' }} strokeWidth={1.5} />
-                        </div>
-                        <h3 className="text-base lg:text-lg font-semibold tracking-tight">{feature.title}</h3>
-                      </div>
-                      {/* Description */}
-                      <p className="text-muted-foreground/70 text-sm leading-[1.6]">{feature.description}</p>
-                      {/* Image with glow */}
-                      <div
-                        className="group relative cursor-pointer"
-                        onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
-                      >
-                        <div 
-                          className="absolute -inset-2 rounded-2xl blur-xl opacity-25 group-hover:opacity-40 transition-opacity duration-300"
-                          style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
-                        />
-                        <div 
-                          className="relative rounded-xl overflow-hidden transition-transform duration-300 group-hover:scale-[1.01]"
-                          style={{ 
-                            border: '1px solid hsl(210 100% 50% / 0.15)',
-                            boxShadow: '0 0 20px hsl(210 100% 50% / 0.08)'
-                          }}
-                        >
-                          <div className="absolute top-2 right-2 z-20 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <Search className="h-4 w-4 text-foreground" />
-                          </div>
-                          <img 
-                            src={feature.image} 
-                            alt={feature.title}
-                            loading="lazy"
-                            decoding="async"
-                            width={640}
-                            height={400}
-                            className={`w-full h-[260px] lg:h-[300px] object-cover object-top transition-transform duration-300 group-hover:scale-[1.02] ${feature.imageScale || 'scale-100'}`}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </ScrollReveal>
-                ))}
-              </div>
-            </ScrollReveal>
-          )}
-        </div>
-      </section>
-
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
-
-      {/* Testimonials — after toolkit */}
-      <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
-        <div className="container mx-auto max-w-5xl">
-          {/* Section headline */}
-          <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium tracking-wide uppercase text-center mb-4 sm:mb-6">
-            Trusted by freelancers and agencies
-          </p>
-
-          {/* Stars — mobile only */}
-          <div className="flex gap-0.5 justify-center mb-3 sm:hidden">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-            ))}
-          </div>
-
-          {(() => {
-            const testimonials = [
-              {
-                name: 'Chris P.',
-                role: 'Freelance Designer',
-                region: 'UK',
-                quote: "Within about 10 minutes I had found 30 solid businesses without websites. It took me another 10 minutes to message them all inside the app. That alone sold me.",
-                boldPhrase: "found 30 solid businesses without websites",
-                stars: 5,
-              },
-              {
-                name: 'Tom H.',
-                role: 'Web Developer',
-                region: 'Australia',
-                quote: "What I like most is being able to tweak the outreach templates quickly. I can adjust the message slightly and send it out without rewriting everything each time.",
-                boldPhrase: "send it out without rewriting everything each time",
-                stars: 5,
-              },
-              {
-                name: 'Alex M.',
-                role: 'WordPress Freelancer',
-                region: 'Canada',
-                quote: "I used to bounce between Google Maps, notes and WhatsApp. Now I can search, message and track everything in one place and it just feels organised.",
-                boldPhrase: "search, message and track everything in one place",
-                stars: 5,
-              },
-              {
-                name: 'Daniel S.',
-                role: 'Agency Owner',
-                region: 'US',
-                quote: "Fair play, this is well built. Finding leads fast and keeping all my outreach tracked properly makes it way easier to stay consistent.",
-                boldPhrase: "way easier to stay consistent",
-                stars: 5,
-              },
-            ];
-
-            const renderQuoteWithBold = (quote: string, boldPhrase: string) => {
-              const idx = quote.indexOf(boldPhrase);
-              if (idx === -1) return `"${quote}"`;
-              return (
-                <>
-                  "{quote.slice(0, idx)}
-                  <strong className="text-foreground font-semibold">{boldPhrase}</strong>
-                  {quote.slice(idx + boldPhrase.length)}"
-                </>
-              );
-            };
-
-            return isMobile ? (
-              <MobileTestimonialSlider testimonials={testimonials} />
-            ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                {testimonials.map((r, i) => (
-                  <ScrollReveal key={i} delay={i * 100}>
-                    <div 
-                      className="h-full flex flex-col justify-between text-center px-5 py-6 sm:px-6 sm:py-7 rounded-xl"
-                      style={{
-                        background: 'hsl(220 30% 8% / 0.6)',
-                        border: '1px solid hsl(0 0% 100% / 0.06)',
-                        boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
-                      }}
-                    >
-                      <div>
-                        <div className="flex gap-0.5 mb-3 justify-center">
-                          {[...Array(r.stars)].map((_, si) => (
-                            <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          ))}
-                        </div>
-                        <p className="text-foreground/80 text-sm leading-relaxed italic font-normal">
-                          {renderQuoteWithBold(r.quote, r.boldPhrase)}
-                        </p>
-                      </div>
-                      <div className="mt-4 text-center">
-                        <p className="text-foreground/70 text-xs font-semibold">{r.role}</p>
-                        <p className="text-muted-foreground/50 text-[11px] mt-0.5">{r.name} – {r.region}</p>
-                      </div>
-                    </div>
-                  </ScrollReveal>
-                ))}
-              </div>
-            );
-          })()}
-
-          <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium text-center mt-6 sm:mt-8">Rated 4.9/5 by freelancers and agencies</p>
-        </div>
-      </ScrollReveal>
-
-      <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
-        <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">Had a great experience?</p>
-        <Button variant="outline" className="border-border/30 hover:border-border/50 text-sm rounded-full px-5" asChild>
-          <Link to="/feedback">
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Leave a Review
-          </Link>
-        </Button>
-      </div>
-
-
-
-
-
-
-      <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] px-2">
-              Start Your <span className="text-gradient-primary">Free Trial</span>
-            </h2>
-          </ScrollReveal>
-          
-          <ScrollReveal delay={150}>
-            <div className="relative max-w-md mx-auto">
-              {/* Glow background */}
-              <div 
-                className="absolute -inset-4 sm:-inset-8 rounded-3xl blur-2xl sm:blur-3xl opacity-50"
-                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
-              />
-              <div 
-                className="absolute -inset-px rounded-2xl"
-                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.4), hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.2))' }}
-              />
               
-              <Card className="relative glass-panel-strong border-0 overflow-hidden">
-                {/* Top accent line */}
-                <div 
-                  className="absolute top-0 left-0 right-0 h-px"
-                  style={{ background: 'linear-gradient(to right, transparent, hsl(210 100% 50%), transparent)' }}
-                />
-                
-                <CardHeader className="text-center pb-2 pt-6 sm:pt-7 px-4 sm:px-6">
-                  {/* Free trial badge */}
-                  <div className="flex justify-center mb-4">
-                    <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold tracking-wide" style={{ background: 'hsl(142 76% 36% / 0.15)', color: 'hsl(142 76% 55%)' }}>
-                      <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                      <span className="sm:hidden">Free Trial</span>
-                      <span className="hidden sm:inline">3-Day Free Trial · Full Access Included</span>
-                    </span>
-                  </div>
-                  <h3 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1]">
-                    Start Your Free Trial
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-2.5">
-                    Then £19.99/month · Cancel anytime
-                  </p>
-                </CardHeader>
-                
-                <CardContent className="pt-4 sm:pt-5 px-4 sm:px-6">
-                  <ul className="space-y-2.5 sm:space-y-3">
-                    {[
-                      'Unlimited lead searches',
-                      'Find businesses without websites',
-                      'Built-in CRM to stay organised',
-                      'One-click WhatsApp & SMS outreach',
-                      'Ready-made message templates',
-                      'Smart dashboard & analytics',
-                      'Export leads to CSV',
-                    ].map((feature) => (
-                      <li key={feature} className="flex items-center gap-2.5 sm:gap-3">
-                        <Check className="h-4 w-4 flex-shrink-0" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={2.5} />
-                        <span className="text-foreground/90 text-xs sm:text-sm">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-                
-                <CardFooter className="pt-4 pb-5 sm:pb-6 flex-col gap-2.5 px-4 sm:px-6">
-                  <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
-                    <Link to="/auth?intent=upgrade">
-                      Start Free Trial — Full Access
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground/50 text-center">
-                    No charge today · Cancel anytime before renewal
-                  </p>
-                  <Link 
-                    to="/auth?intent=demo" 
-                    onClick={() => trackLead()}
-                    className="text-[11px] sm:text-xs text-foreground/70 hover:text-foreground transition-colors mt-1 underline underline-offset-2"
-                  >
-                    Prefer to explore first? Try the free demo
-                  </Link>
-                </CardFooter>
-              </Card>
+              <div className="flex flex-wrap justify-center gap-3 sm:gap-6 mt-4 text-[10px] sm:text-xs text-muted-foreground/60 font-medium">
+                <span className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> No card required</span>
+                <span className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> Instant access</span>
+                <span className="flex items-center gap-1.5"><Check className="h-3 w-3 text-primary" /> Cancel anytime</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground/40 mt-2">Get your first leads in 30 seconds</p>
             </div>
-          </ScrollReveal>
+          </div>
         </div>
       </section>
 
-
-      {/* Mobile section divider */}
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
-
-      {/* Got Questions Section */}
-      <section className="relative z-10 py-10 sm:py-14 md:py-16 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal className="text-center max-w-lg mx-auto">
-            <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-2">
-              Got Any <span className="text-gradient-primary">Questions?</span>
-            </h2>
-            <p className="text-sm sm:text-base text-muted-foreground/70 mb-1.5 leading-[1.6]">
-              Fast responses from a real person — no bots, no waiting.
-            </p>
-            <p className="text-xs text-muted-foreground/50 mb-5">
-              We typically reply within minutes.
-            </p>
-            <a
-              href="https://wa.me/447477932564?text=Hi%2C%20I%20have%20a%20question%20about%20LeadFinder%20Pro"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-lg font-semibold text-sm text-black transition-all duration-200 hover:brightness-110"
-              style={{
-                background: 'linear-gradient(135deg, hsl(142 80% 50%), hsl(142 80% 45%))',
-                boxShadow: '0 4px 14px hsl(142 80% 50% / 0.4), 0 0 20px hsl(142 80% 50% / 0.2)',
-              }}
-            >
-              <svg viewBox="0 0 24 24" className="h-5 w-5 fill-current">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-              </svg>
-              Message Us on WhatsApp
-            </a>
-          </ScrollReveal>
+      <section className="relative z-10 py-10 px-4">
+        <div className="container mx-auto max-w-6xl text-center">
+          <h2 className="text-2xl sm:text-4xl font-bold mb-4">Stop Manually Scrolling <span className="text-gradient-primary">Google Maps</span></h2>
+          <p className="text-muted-foreground max-w-xl mx-auto mb-12">There's a faster way to find businesses without websites.</p>
+          <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-2xl">
+            <img src={newWayImage} alt="LeadFinder Pro Interface" className="w-full h-auto" />
+          </div>
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="relative z-10 border-t border-white/[0.06] py-8 sm:py-10 md:py-12 mt-4 sm:mt-12 px-4">
-        <div className="container mx-auto">
-          <div className="flex flex-col items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
-            <span className="font-bold tracking-tight text-sm sm:text-base">
-              Lead<span className="text-gradient-primary">Finder</span> Pro
-            </span>
-            <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 md:gap-8 text-xs sm:text-sm text-muted-foreground">
-              <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
-                Sign In
-              </Link>
-              <Link to="/auth?intent=upgrade" className="hover:text-foreground transition-colors duration-200">
-                Start Free Trial
-              </Link>
-              <Link to="/feedback" className="hover:text-foreground transition-colors duration-200">
-                Feedback
-              </Link>
-              <Link to="/terms" className="hover:text-foreground transition-colors duration-200">
-                Terms & Conditions
-              </Link>
+      <div id="how-it-works"><Suspense fallback={<div className="py-20" />}><HowItWorksSection ScrollReveal={ScrollReveal} /></Suspense></div>
+
+      <footer className="relative z-10 border-t border-white/[0.06] py-12 mt-12 px-4">
+        <div className="container mx-auto text-center space-y-6">
+          <div className="flex flex-col items-center gap-4">
+            <span className="font-bold tracking-tight text-base">Lead<span className="text-gradient-primary">Finder</span> Pro</span>
+            <div className="flex flex-wrap justify-center gap-6 text-sm text-muted-foreground">
+              <Link to="/auth" className="hover:text-foreground">Sign In</Link>
+              <Link to="/auth?intent=upgrade" className="hover:text-foreground">Try it free</Link>
+              <Link to="/feedback" className="hover:text-foreground">Feedback</Link>
+              <Link to="/terms" className="hover:text-foreground">Terms</Link>
             </div>
           </div>
-          
-          {/* Disclaimer + Copyright + Contact */}
-          <div className="border-t border-white/[0.04] pt-6 sm:pt-8 text-center space-y-2 sm:space-y-3">
-            <p className="text-[10px] sm:text-xs text-muted-foreground/70 max-w-2xl mx-auto leading-relaxed px-2">
-              Disclaimer: LeadFinder Pro uses AI classification and third-party data sources. 
-              Results are not guaranteed to be 100% accurate and may contain errors. 
-              Please verify business information independently before taking action.
-            </p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground/50">
-              © {new Date().getFullYear()} LeadFinder Pro. All rights reserved.
-            </p>
-            <p className="text-[10px] sm:text-xs text-muted-foreground/40">
-              Need help? <a href="mailto:beyondwebcraft@outlook.com" className="hover:text-muted-foreground transition-colors">beyondwebcraft@outlook.com</a>
-            </p>
-          </div>
+          <p className="text-xs text-muted-foreground/50">© {new Date().getFullYear()} LeadFinder Pro. All rights reserved.</p>
         </div>
       </footer>
 
-      {/* Mobile sticky bottom CTA - only after scrolling past hero */}
       {isMobile && (
-        <div 
-          className={`fixed bottom-0 left-0 right-0 z-50 p-3 backdrop-blur-xl border-t border-white/10 transition-all duration-300 ${
-            hasScrolled ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'
-          }`}
-          style={{ background: 'hsl(220 40% 4% / 0.95)' }}
-        >
+        <div className={`fixed bottom-0 left-0 right-0 z-50 p-3 backdrop-blur-xl border-t border-white/10 transition-all duration-300 ${hasScrolled ? 'translate-y-0 opacity-100' : 'translate-y-full opacity-0'}`} style={{ background: 'hsl(220 40% 4% / 0.95)' }}>
           <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" asChild>
-            <Link to="/auth?intent=upgrade">
-              Start Free Trial — Full Access
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
+            <Link to="/auth?intent=upgrade">Try it free <ArrowRight className="ml-2 h-4 w-4" /></Link>
           </Button>
-          <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            No charge today · Cancel anytime
-          </p>
+          <p className="text-[10px] text-muted-foreground text-center mt-1.5">No card required · Cancel anytime</p>
         </div>
       )}
-
-      {/* Spacer for sticky CTA on mobile */}
       {isMobile && hasScrolled && <div className="h-24" />}
     </div>
   );
