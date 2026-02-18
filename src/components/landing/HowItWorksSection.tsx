@@ -22,7 +22,20 @@ interface StepData {
   description: string;
   images: string[];
   badge: string;
+  blueWord: string;
 }
+
+const renderTitle = (title: string, blueWord: string) => {
+  const idx = title.indexOf(blueWord);
+  if (idx === -1) return title;
+  return (
+    <>
+      {title.slice(0, idx)}
+      <span className="text-gradient-primary">{blueWord}</span>
+      {title.slice(idx + blueWord.length)}
+    </>
+  );
+};
 
 const STEPS: StepData[] = [
   {
@@ -31,28 +44,32 @@ const STEPS: StepData[] = [
     description: 'Search any location and instantly see which businesses don\'t have a website.',
     images: [step1Image],
     badge: '20+ Countries',
+    blueWord: 'Leads',
   },
   {
     icon: ClipboardList,
-    title: 'Build Your Pipeline',
-    description: 'Save promising leads in one click and organise them into your pipeline.',
+    title: 'Add to CRM in One Click',
+    description: 'Save good leads instantly so nothing gets lost and every follow-up has a place.',
     images: [step2Image],
-    badge: '100,000+ Businesses',
+    badge: 'Instant Save',
+    blueWord: 'CRM',
   },
   {
     icon: MessageSquare,
-    title: 'Message In One Click',
-    mobileTitle: 'Message In One Click',
-    description: 'Choose a template, auto-fill the business name, and send via WhatsApp or SMS in seconds.',
+    title: 'Contact in One Click',
+    mobileTitle: 'Contact in One Click',
+    description: 'Use templates, auto-fill the business name, then open WhatsApp or SMS instantly.',
     images: [step3Image],
     badge: 'Direct Outreach',
+    blueWord: 'Contact',
   },
   {
     icon: BarChart3,
     title: 'Track & Close Deals',
-    description: 'Track every lead from first contact to paid client — set follow-ups, log replies, and see your full pipeline at a glance.',
+    description: 'Track replies, update statuses, and set next actions in one clear dashboard so you always know what to do next.',
     images: [step4Image],
     badge: 'Full Pipeline',
+    blueWord: 'Track',
   },
 ];
 
@@ -158,7 +175,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                 >
                   {index + 1}.
                 </span>
-                <h3 className="text-xl font-bold tracking-tight leading-[1.15] whitespace-nowrap mb-2">{step.mobileTitle || step.title}</h3>
+                <h3 className="text-xl font-bold tracking-tight leading-[1.15] whitespace-nowrap mb-2">{renderTitle(step.mobileTitle || step.title, step.blueWord)}</h3>
                 
                 <p className="text-muted-foreground/70 text-sm leading-[1.6] mb-4 max-w-xs">
                   {step.description}
@@ -283,7 +300,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                         >
                           {index + 1}
                         </span>
-                        <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{step.title}</h3>
+                        <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{renderTitle(step.title, step.blueWord)}</h3>
                       </div>
                       
                       <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
