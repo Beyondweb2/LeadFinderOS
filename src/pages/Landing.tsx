@@ -755,29 +755,89 @@ const Landing = () => {
         </div>
       </ScrollReveal>
 
-      {/* Final CTA Section */}
-      <section className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
-        <div className="container mx-auto max-w-3xl text-center">
+      {/* Final CTA — Pricing Card */}
+      <section className="relative z-10 pt-24 sm:pt-32 md:pt-40 pb-12 sm:pb-16 md:pb-20 px-4">
+        {/* Subtle top divider */}
+        <div className="container mx-auto max-w-3xl mb-12 sm:mb-16">
+          <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, hsl(210 100% 50% / 0.15), transparent)' }} />
+        </div>
+
+        <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.15] mb-6 sm:mb-8">
-              Find businesses <span className="text-gradient-primary">without websites</span>.
-              <br />
-              Contact them <span className="text-gradient-primary">instantly</span>.
-              <br />
-              Track every follow-up in one system.
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-10 sm:mb-12">
+              Build your outreach system <span className="text-gradient-primary">today</span>.
             </h2>
-            <p className="text-sm sm:text-base md:text-lg text-muted-foreground/70 leading-[1.6] mb-8 sm:mb-10 max-w-lg mx-auto">
-              A structured way to find, contact, and manage leads — all in one place.
-            </p>
-            <Button size="lg" className="btn-premium font-semibold h-12 sm:h-14 px-8 sm:px-10 text-sm sm:text-base rounded-xl shadow-lg shadow-primary/20" asChild>
-              <Link to="/auth?intent=upgrade">
-                Try it free
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
-            </Button>
-            <p className="text-xs sm:text-sm text-muted-foreground/50 mt-4 sm:mt-5">
-              No card required · Instant access · Cancel anytime
-            </p>
+
+            {/* Pricing Card */}
+            <div
+              className="rounded-2xl p-8 sm:p-10 text-center"
+              style={{
+                background: 'hsl(220 40% 9%)',
+                border: '1px solid hsl(210 100% 50% / 0.12)',
+                boxShadow: '0 0 40px hsl(210 100% 50% / 0.06), 0 8px 32px hsl(220 40% 4% / 0.5)',
+              }}
+            >
+              {/* Badge */}
+              <span
+                className="inline-block text-[11px] sm:text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full mb-5"
+                style={{ background: 'hsl(142 76% 45% / 0.12)', color: 'hsl(142 76% 55%)' }}
+              >
+                Free Access
+              </span>
+
+              <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">Try it free</h3>
+              <p className="text-sm sm:text-base text-muted-foreground/70 leading-relaxed mb-8 max-w-sm mx-auto">
+                Create your account and start finding and contacting leads immediately.
+              </p>
+
+              {/* Feature checklist */}
+              <ul className="space-y-3 sm:space-y-3.5 mb-8 sm:mb-10 text-left max-w-xs mx-auto">
+                {[
+                  'Find businesses without websites',
+                  'Add leads to your pipeline in one click',
+                  'Message instantly via WhatsApp or SMS',
+                  'Track every contact and follow-up',
+                  'Built-in templates to move faster',
+                ].map((item, i) => (
+                  <li key={i} className="flex items-start gap-3 text-sm text-foreground/80">
+                    <Check className="h-4 w-4 shrink-0 mt-0.5" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+
+              {/* CTA Button — slightly larger */}
+              <Button
+                size="lg"
+                className="btn-premium font-semibold h-13 sm:h-14 px-10 sm:px-12 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
+                asChild
+              >
+                <Link to="/auth?intent=upgrade">
+                  Create free account
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+
+              <p className="text-[11px] sm:text-xs text-muted-foreground/50 mt-4">
+                No card required · Instant access · Cancel anytime
+              </p>
+            </div>
+
+            {/* Trust row */}
+            <div className="flex items-center justify-center gap-5 sm:gap-8 mt-8 sm:mt-10 text-[10px] sm:text-xs text-muted-foreground/35 font-medium">
+              <span className="flex items-center gap-1.5">
+                <svg className="h-3.5 w-3.5 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Secure payments
+              </span>
+              <span className="flex items-center gap-1.5">
+                <svg className="h-3.5 w-3.5 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                WhatsApp support
+              </span>
+              <span className="flex items-center gap-1.5">
+                <svg className="h-3.5 w-3.5 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                256-bit encryption
+              </span>
+            </div>
           </ScrollReveal>
         </div>
       </section>
