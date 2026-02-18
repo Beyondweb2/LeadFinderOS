@@ -603,7 +603,7 @@ const Landing = () => {
           </div>
 
           {/* Scroll indicator — mobile/tablet only */}
-          <div className="flex lg:hidden flex-col items-center mt-6 sm:mt-8 animate-bounce">
+          <div className="flex lg:hidden flex-col items-center mt-10 sm:mt-12 animate-bounce">
             <span className="text-[10px] sm:text-xs text-muted-foreground/30 tracking-widest uppercase mb-2">Scroll</span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/30">
               <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
@@ -617,47 +617,8 @@ const Landing = () => {
         <VideoSection />
       </div>
 
-      {/* Pain Section */}
-      <ScrollReveal className="relative z-10 py-10 sm:py-12 md:py-16 px-4">
-        <div className="container mx-auto max-w-xl mb-10 sm:mb-12">
-          <div className="h-px w-16 mx-auto" style={{ background: 'hsl(210 100% 50% / 0.3)' }} />
-        </div>
-
-        <div className="container mx-auto max-w-2xl text-center">
-          <div className="md:rounded-2xl md:border md:border-border/40 md:bg-card/40 md:backdrop-blur-sm md:p-10 md:shadow-lg">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-4 sm:mb-6">
-              Your outreach, finally <span className="text-gradient-primary">structured.</span>
-            </h2>
-
-            <p className="text-sm sm:text-base md:text-lg text-muted-foreground/70 leading-[1.6] mb-8 sm:mb-10 max-w-lg mx-auto">
-              Prospecting shouldn't feel scattered. Bring your lead discovery and outreach into one clear workflow.
-            </p>
-
-            <div className="inline-flex flex-col items-start space-y-5 sm:space-y-6 md:space-y-7">
-              {[
-                'Scattered prospecting',
-                'Tool-hopping between apps',
-                'Starting from scratch each session',
-                'No defined outreach system',
-              ].map((pain) => (
-                <div key={pain} className="flex items-center gap-2.5 md:gap-3">
-                  <X className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 flex-shrink-0" style={{ color: 'hsl(0 70% 55%)' }} strokeWidth={3} />
-                  <p className="text-sm sm:text-base md:text-lg lg:text-xl text-foreground/90 leading-[1.4]">{pain}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="container mx-auto max-w-xl mt-10 sm:mt-12">
-          <div className="h-px w-16 mx-auto" style={{ background: 'hsl(210 100% 50% / 0.3)' }} />
-        </div>
-      </ScrollReveal>
-
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
-
       {/* Old Way vs New Way comparison */}
-      <ScrollReveal className="relative z-10 py-10 sm:py-16 md:py-28 px-3 sm:px-4">
+      <ScrollReveal className="relative z-10 pt-14 sm:pt-20 md:pt-28 pb-10 sm:pb-16 md:pb-28 px-3 sm:px-4">
         <div className="container mx-auto max-w-6xl">
           <div className="text-center mb-8 sm:mb-12 md:mb-16">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-2 sm:mb-4">
