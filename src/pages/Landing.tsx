@@ -558,33 +558,6 @@ const Landing = () => {
             })}
           </div>
 
-          {/* Bridge CTA */}
-          <ScrollReveal className="mt-[120px] sm:mt-[140px] flex justify-center">
-            <div 
-              className="w-full max-w-[720px] text-center py-14 sm:py-16 px-6 sm:px-10 rounded-2xl"
-              style={{
-                background: 'hsl(220 50% 5%)',
-                border: '1px solid hsl(210 100% 50% / 0.15)',
-                boxShadow: '0 0 30px hsl(210 100% 50% / 0.06), 0 0 60px hsl(210 100% 50% / 0.03)',
-              }}
-            >
-              <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.1] mb-3 sm:mb-4">
-                Start Finding Clients Today.
-              </h3>
-              <p className="text-sm sm:text-base text-muted-foreground/70 max-w-md mx-auto leading-[1.6] mb-6 sm:mb-8">
-                Build your outreach system and start generating real opportunities in minutes.
-              </p>
-              <Button size="lg" className="btn-premium font-semibold h-12 sm:h-14 px-8 sm:px-10 text-sm sm:text-base rounded-xl shadow-lg shadow-primary/20" asChild>
-                <Link to="/auth?intent=upgrade">
-                  Try it free
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-              <p className="text-xs sm:text-sm text-muted-foreground/50 mt-3">
-                No card required · Instant access · Cancel anytime
-              </p>
-            </div>
-          </ScrollReveal>
         </div>
       </section>
 
@@ -688,23 +661,17 @@ const Landing = () => {
         </div>
       </ScrollReveal>
 
-      {/* Final CTA — Pricing Card */}
-      <section className="relative z-10 pt-10 sm:pt-14 md:pt-20 pb-10 sm:pb-14 md:pb-16 px-4">
-        {/* Subtle top divider */}
-        <div className="container mx-auto max-w-3xl mb-8 sm:mb-10">
-          <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, hsl(210 100% 50% / 0.15), transparent)' }} />
-        </div>
-
+      {/* Final CTA — Free Access Card */}
+      <section className="relative z-10 pt-14 sm:pt-20 md:pt-28 pb-10 sm:pb-14 md:pb-16 px-4">
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight mb-3 sm:mb-4">
-              One Plan. Full <span className="text-gradient-primary">System.</span>
+              Build Your Outreach System Today.
             </h2>
-            <p className="text-sm sm:text-base text-muted-foreground/70 mb-10 sm:mb-12">
-              Everything you need to find, contact, and manage leads — in one place.
+            <p className="text-sm sm:text-base text-muted-foreground/70 mb-10 sm:mb-12 max-w-md mx-auto leading-[1.6]">
+              Find businesses without websites. Contact them instantly. Track every follow-up in one system.
             </p>
 
-            {/* Pricing Card */}
             <div
               className="rounded-2xl p-8 sm:p-10 text-center"
               style={{
@@ -713,28 +680,26 @@ const Landing = () => {
                 boxShadow: '0 0 40px hsl(210 100% 50% / 0.06), 0 8px 32px hsl(220 40% 4% / 0.5)',
               }}
             >
-              {/* Badge */}
               <span
                 className="inline-block text-[11px] sm:text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full mb-5"
                 style={{ background: 'hsl(142 76% 45% / 0.12)', color: 'hsl(142 76% 55%)' }}
               >
-                Full Access
+                Free Access
               </span>
 
               <h3 className="text-2xl sm:text-3xl font-bold tracking-tight mb-2">Lead<span className="text-gradient-primary">Finder</span> Pro</h3>
               <p className="text-sm sm:text-base text-muted-foreground/70 leading-relaxed mb-8 max-w-sm mx-auto">
-                Start free and unlock the complete LeadFinder system.
+                Create your free account and get instant access to the full LeadFinder system.
               </p>
 
-              {/* Feature checklist */}
               <ul className="space-y-3 sm:space-y-3.5 mb-8 sm:mb-10 text-left max-w-xs mx-auto">
                 {[
                   'Find businesses without websites in seconds',
                   'Add leads to your pipeline in one click',
-                  'Send WhatsApp or SMS instantly with templates',
+                  'Message instantly via WhatsApp or SMS',
                   'Track every contact and follow-up',
-                  'Built-in scripts to move faster',
-                  'Clear dashboard to monitor performance',
+                  'Built-in templates to move faster',
+                  'Smart dashboard to monitor outreach',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 text-sm text-foreground/80">
                     <Check className="h-4 w-4 shrink-0 mt-0.5" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
@@ -743,14 +708,13 @@ const Landing = () => {
                 ))}
               </ul>
 
-              {/* CTA Button */}
               <Button
                 size="lg"
                 className="btn-premium font-semibold h-13 sm:h-14 px-10 sm:px-12 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
                 asChild
               >
                 <Link to="/auth?intent=upgrade">
-                  Get full access
+                  Create free account
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
@@ -759,7 +723,6 @@ const Landing = () => {
                 No card required · Instant access · Cancel anytime
               </p>
             </div>
-
           </ScrollReveal>
         </div>
       </section>
