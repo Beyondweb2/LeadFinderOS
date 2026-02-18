@@ -241,10 +241,10 @@ const MobileHeroVideo = () => {
           loop 
           muted
           playsInline
-          preload="none"
+          preload="auto"
           width={640}
           height={360}
-          onCanPlayThrough={() => setVideoLoaded(true)}
+          onPlaying={() => setVideoLoaded(true)}
         >
           <source src={demoVideo} type="video/mp4" />
           Your browser does not support the video tag.
@@ -313,10 +313,10 @@ const VideoSection = () => {
               loop 
               muted
               playsInline
-              preload="metadata"
+              preload="auto"
               width={1280}
               height={720}
-              onCanPlayThrough={() => setVideoLoaded(true)}
+              onPlaying={() => setVideoLoaded(true)}
             >
               <source src={demoVideo} type="video/mp4" />
               Your browser does not support the video tag.
