@@ -18,6 +18,7 @@ interface TrialState {
   isStripeTrialing: boolean;
   trialUsed: boolean;
   demoSearchUsed: boolean;
+  freeSearchCount: number;
 }
 
 const SEARCHES_BEFORE_PROMPT = 5;
@@ -47,6 +48,7 @@ export function useTrial() {
     isStripeTrialing: false,
     trialUsed: false,
     demoSearchUsed: false,
+    freeSearchCount: 0,
   });
   
   const hasAttemptedEnsure = useRef(false);
@@ -134,6 +136,7 @@ export function useTrial() {
               isStripeTrialing: false,
               trialUsed: newData.trial_used === true,
               demoSearchUsed: (newData as any).demo_search_used === true,
+              freeSearchCount: (newData as any).free_search_count ?? 0,
             });
             return;
           }
@@ -155,6 +158,7 @@ export function useTrial() {
           isStripeTrialing: false,
           trialUsed: false,
           demoSearchUsed: false,
+          freeSearchCount: 0,
         });
         return;
       }
@@ -182,6 +186,7 @@ export function useTrial() {
         isStripeTrialing: false,
         trialUsed: data.trial_used === true,
         demoSearchUsed: (data as any).demo_search_used === true,
+        freeSearchCount: (data as any).free_search_count ?? 0,
       });
     } catch (err) {
       console.error('Trial check failed:', err);
@@ -228,6 +233,7 @@ export function useTrial() {
       isStripeTrialing,
       searchesRemaining: Infinity,
       dailyLimit: Infinity,
+      freeSearchCount: state.freeSearchCount ?? 0,
       isLoading: isSubscriptionLoading,
       checkTrial,
       shouldShowUpgradePrompt: () => false,

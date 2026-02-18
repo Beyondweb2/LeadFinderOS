@@ -65,6 +65,9 @@ interface AdminUser {
   demo_started_at: string | null;
   trial_started_at: string | null;
   paid_at: string | null;
+  free_search_count: number;
+  walkthrough_completed: boolean;
+  stripe_subscription_id: string | null;
   search_count: number;
   businesses_added_count: number;
   messages_sent_count: number;
@@ -83,8 +86,7 @@ interface UsageEvent {
 function accessModeColor(mode: string): string {
   switch (mode) {
     case 'paid': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
-    case 'full_access_trial': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
-    case 'demo': return 'bg-violet-500/15 text-violet-400 border-violet-500/30';
+    case 'free_user': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
     case 'signed_up': return 'bg-muted text-muted-foreground border-border';
     default: return 'bg-muted text-muted-foreground border-border';
   }
@@ -92,9 +94,8 @@ function accessModeColor(mode: string): string {
 
 function accessModeLabel(mode: string): string {
   switch (mode) {
-    case 'paid': return 'Paid';
-    case 'full_access_trial': return 'Trial (3d)';
-    case 'demo': return 'Demo';
+    case 'paid': return 'Paid (Unlimited)';
+    case 'free_user': return 'Free Access';
     case 'signed_up': return 'Signed Up';
     default: return mode;
   }
@@ -285,8 +286,7 @@ export default function AdminDashboard() {
   const filtered = users;
 
   const totalActive = users.filter(u => u.access_mode === 'paid').length;
-  const totalTrialing = users.filter(u => u.access_mode === 'full_access_trial').length;
-  const totalDemo = users.filter(u => u.access_mode === 'demo').length;
+  const totalFreeUsers = users.filter(u => u.access_mode === 'free_user').length;
   const totalSearches = users.reduce((s, u) => s + u.search_count, 0);
   const totalMessages = users.reduce((s, u) => s + u.messages_sent_count, 0);
 
@@ -345,21 +345,21 @@ export default function AdminDashboard() {
           <Card>
             <CardHeader className="pb-2 pt-4 px-4">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Activity className="h-3.5 w-3.5" /> Stripe Trialing
+                <Activity className="h-3.5 w-3.5" /> Free Users
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{totalTrialing}</p>
+              <p className="text-2xl font-bold">{totalFreeUsers}</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2 pt-4 px-4">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5" /> Demo Users
+                <Search className="h-3.5 w-3.5" /> Total Searches
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{totalDemo}</p>
+              <p className="text-2xl font-bold">{totalSearches}</p>
             </CardContent>
           </Card>
           <Card>
@@ -423,8 +423,8 @@ export default function AdminDashboard() {
                       <TableHead>Email</TableHead>
                       <TableHead>Access</TableHead>
                       <TableHead>Billing</TableHead>
-                      <TableHead>Demo Started</TableHead>
-                      <TableHead>Trial Started</TableHead>
+                      <TableHead>Free Searches</TableHead>
+                      <TableHead>Walkthrough</TableHead>
                       <TableHead>Paid At</TableHead>
                       <TableHead className="text-right">Searches</TableHead>
                       <TableHead className="text-right">Added</TableHead>
@@ -460,10 +460,10 @@ export default function AdminDashboard() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {formatDate(u.demo_started_at)}
+                            {u.free_search_count}/5
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {formatDate(u.trial_started_at)}
+                            {u.walkthrough_completed ? '✅' : '—'}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {formatDate(u.paid_at)}
@@ -563,6 +563,20 @@ export default function AdminDashboard() {
                       <p className="text-xs text-muted-foreground">Last Active</p>
                       <p className="text-sm font-medium mt-1">{timeAgo(selectedUser.last_active_at)}</p>
                     </div>
+                    <div className="rounded-lg border border-border p-3">
+                      <p className="text-xs text-muted-foreground">Free Searches</p>
+                      <p className="text-sm font-medium mt-1">{selectedUser.free_search_count}/5</p>
+                    </div>
+                    <div className="rounded-lg border border-border p-3">
+                      <p className="text-xs text-muted-foreground">Walkthrough</p>
+                      <p className="text-sm font-medium mt-1">{selectedUser.walkthrough_completed ? 'Completed' : 'Not completed'}</p>
+                    </div>
+                    {selectedUser.stripe_subscription_id && (
+                      <div className="rounded-lg border border-border p-3 col-span-2">
+                        <p className="text-xs text-muted-foreground">Stripe Subscription</p>
+                        <p className="text-sm font-mono font-medium mt-1 truncate">{selectedUser.stripe_subscription_id}</p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
