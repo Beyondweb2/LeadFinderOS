@@ -248,7 +248,7 @@ const Auth = () => {
           {!isLogin && (
             <p className="text-xs text-muted-foreground mt-2">
               {intent === 'upgrade' 
-                ? '£0 today · Cancel anytime'
+                ? 'Create your account to unlock full access'
                 : 'No card required. See real results instantly.'}
             </p>
           )}
