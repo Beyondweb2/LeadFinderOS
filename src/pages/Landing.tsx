@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, lazy, Suspense } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { trackLead } from '@/lib/fbPixel';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -24,8 +24,6 @@ import {
   Star,
   Sparkles,
 } from 'lucide-react';
-import oldWayImage from '@/assets/old-way-maps.png';
-import newWayImage from '@/assets/new-way-leadfinder.png';
 import demoVideo from '@/assets/leadfinder-demo-v5.mp4';
 import appLogo from '@/assets/logo.png';
 
@@ -39,8 +37,8 @@ import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
 
-// Lazy-load heavy below-fold components to reduce initial JS
-const HowItWorksSection = lazy(() => import('@/components/landing/HowItWorksSection').then(m => ({ default: m.HowItWorksSection })));
+import step3WhatsApp from '@/assets/howto-step3-whatsapp-dialog.png';
+import step2CRM from '@/assets/howto-step3-outreach-crm.png';
 
 import { AffiliateCapture } from '@/components/AffiliateCapture';
 import { Carousel, CarouselContent, CarouselItem, CarouselPrevious, CarouselNext } from '@/components/ui/carousel';
@@ -617,123 +615,136 @@ const Landing = () => {
         <VideoSection />
       </div>
 
-      {/* Old Way vs New Way comparison */}
-      <ScrollReveal className="relative z-10 pt-14 sm:pt-20 md:pt-28 pb-10 sm:pb-16 md:pb-28 px-3 sm:px-4">
-        <div className="container mx-auto max-w-6xl">
-          <div className="text-center mb-8 sm:mb-12 md:mb-16">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] mb-2 sm:mb-4">
-              Stop Manually Scrolling <span className="text-gradient-primary">Google Maps</span> for Leads
+      {/* How LeadFinder Works — 3-step section */}
+      <section id="how-it-works" className="relative z-10 py-14 sm:py-20 md:py-28 px-3 sm:px-4">
+        <div className="container mx-auto max-w-5xl">
+          <ScrollReveal className="text-center mb-10 sm:mb-14 md:mb-20">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 tracking-tight leading-[1.1]">
+              How LeadFinder <span className="text-gradient-primary">Works</span>
             </h2>
-            <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6]">
-              There's a faster way to find businesses without websites.
+            <p className="text-muted-foreground/70 max-w-xl mx-auto text-sm sm:text-base md:text-lg leading-[1.6] px-2">
+              A simple 3-step system to find, contact, and manage leads — all in one place.
             </p>
+          </ScrollReveal>
+
+          <div className="space-y-16 sm:space-y-20 md:space-y-28">
+            {/* Step 1 */}
+            <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-12">
+              <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={100} direction="left">
+                <div className="relative group">
+                  <div 
+                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
+                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+                  />
+                  <div 
+                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9]"
+                    style={{ 
+                      border: '1px solid hsl(210 100% 50% / 0.2)',
+                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                    }}
+                  >
+                    <img src={featureClassification} alt="Find businesses without websites" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover" />
+                  </div>
+                </div>
+              </ScrollReveal>
+              <ScrollReveal className="flex-1 w-full text-center lg:text-left" delay={150} direction="right">
+                <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
+                  <span 
+                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
+                    style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
+                  >1</span>
+                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Find Businesses Without Websites</h3>
+                </div>
+                <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
+                  Search any location and instantly see which businesses don't have a website — no manual checking required.
+                </p>
+              </ScrollReveal>
+            </div>
+
+            {/* Step 2 */}
+            <div className="flex flex-col lg:flex-row-reverse items-center gap-6 lg:gap-12">
+              <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={100} direction="right">
+                <div className="relative group">
+                  <div 
+                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
+                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+                  />
+                  <div 
+                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9]"
+                    style={{ 
+                      border: '1px solid hsl(210 100% 50% / 0.2)',
+                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                    }}
+                  >
+                    <img src={step2CRM} alt="Save and organise your leads" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover" />
+                  </div>
+                </div>
+              </ScrollReveal>
+              <ScrollReveal className="flex-1 w-full text-center lg:text-left" delay={150} direction="left">
+                <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
+                  <span 
+                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
+                    style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
+                  >2</span>
+                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Save & Organise Your Leads</h3>
+                </div>
+                <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
+                  Add promising businesses to your pipeline in one click and keep every contact structured and tracked.
+                </p>
+              </ScrollReveal>
+            </div>
+
+            {/* Step 3 */}
+            <div className="flex flex-col lg:flex-row items-center gap-6 lg:gap-12">
+              <ScrollReveal className="flex-1 w-full lg:flex-[1.2]" delay={100} direction="left">
+                <div className="relative group">
+                  <div 
+                    className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
+                    style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+                  />
+                  <div 
+                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9]"
+                    style={{ 
+                      border: '1px solid hsl(210 100% 50% / 0.2)',
+                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                    }}
+                  >
+                    <img src={step3WhatsApp} alt="Message in one click via WhatsApp" loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover" />
+                  </div>
+                </div>
+              </ScrollReveal>
+              <ScrollReveal className="flex-1 w-full text-center lg:text-left" delay={150} direction="right">
+                <div className="flex items-center gap-3 justify-center lg:justify-start mb-3 sm:mb-4">
+                  <span 
+                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
+                    style={{ background: 'hsl(210 100% 50% / 0.15)', color: 'hsl(210 100% 60%)', border: '1px solid hsl(210 100% 50% / 0.3)' }}
+                  >3</span>
+                  <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Message in One Click</h3>
+                </div>
+                <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto lg:mx-0">
+                  Choose a template, auto-fill the business name, and send via WhatsApp or SMS in seconds.
+                </p>
+              </ScrollReveal>
+            </div>
           </div>
 
-          {/* Mobile layout - stacked */}
-          {isMobile ? (
-            <div className="space-y-8 max-w-sm mx-auto">
-              {/* Old Way */}
-              <div className="opacity-80">
-                <div className="text-center mb-4">
-                  <span className="inline-flex items-center gap-2"><X className="h-4 w-4" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-base font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
-                </div>
-                <div className="relative rounded-xl overflow-hidden h-[200px]" style={{ border: '1px solid hsl(0 60% 40% / 0.2)' }}>
-                  <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-contain" loading="lazy" decoding="async" width={640} height={400} />
-                </div>
-                <ul className="space-y-2 mt-4 text-xs text-muted-foreground">
-                  <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
-                  <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
-                  <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
-                </ul>
-              </div>
-              {/* New Way */}
-              <div>
-                <div className="text-center mb-4">
-                  <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-base font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
-                </div>
-                <div className="relative rounded-xl overflow-hidden" style={{ border: '1px solid hsl(142 60% 40% / 0.2)' }}>
-                  <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" decoding="async" width={640} height={400} />
-                </div>
-                <ul className="space-y-2 mt-4 text-xs text-muted-foreground">
-                  <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
-                  <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
-                  <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
-                </ul>
-              </div>
-            </div>
-          ) : (
-            <div className="grid md:grid-cols-2 gap-8 md:gap-12 lg:gap-16 items-start">
-              {/* Old Way */}
-              <ScrollReveal delay={100}>
-                <div className="hover:opacity-90 transition-opacity duration-300">
-                  <div className="text-center mb-5">
-                    <span className="inline-flex items-center gap-2.5"><X className="h-5 w-5" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-xl font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
-                  </div>
-                  <div className="relative group mb-6">
-                    <div 
-                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30"
-                      style={{ background: 'linear-gradient(to bottom right, hsl(0 60% 40% / 0.3), hsl(0 60% 40% / 0.1))' }}
-                    />
-                    <div 
-                      className="relative rounded-xl overflow-hidden h-[280px] lg:h-[320px]"
-                      style={{ 
-                        border: '1px solid hsl(0 60% 40% / 0.25)',
-                        boxShadow: '0 0 30px hsl(0 60% 40% / 0.1)'
-                      }}
-                    >
-                      <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-contain" loading="lazy" decoding="async" width={640} height={400} />
-                    </div>
-                  </div>
-                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground flex flex-col items-center">
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
-                    <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
-                  </ul>
-                </div>
-              </ScrollReveal>
-              {/* New Way */}
-              <ScrollReveal delay={300}>
-                <div className="transition-all duration-300 hover:scale-[1.01]" style={{ filter: 'drop-shadow(0 0 24px hsl(142 60% 40% / 0.08))' }}>
-                  <div className="text-center mb-5">
-                    <span className="inline-flex items-center gap-2.5"><Check className="h-5 w-5" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-xl font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
-                  </div>
-                  <div className="relative group mb-6">
-                    <div 
-                      className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-50 transition-opacity duration-300"
-                      style={{ background: 'linear-gradient(to bottom right, hsl(142 60% 40% / 0.3), hsl(142 60% 40% / 0.1))' }}
-                    />
-                    <div 
-                      className="relative rounded-xl overflow-hidden"
-                      style={{ 
-                        border: '1px solid hsl(142 60% 40% / 0.25)',
-                        boxShadow: '0 0 30px hsl(142 60% 40% / 0.1)'
-                      }}
-                    >
-                      <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" decoding="async" width={640} height={400} />
-                    </div>
-                  </div>
-                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground flex flex-col items-center">
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
-                    <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
-                  </ul>
-                </div>
-              </ScrollReveal>
-            </div>
-          )}
+          {/* CTA after steps */}
+          <ScrollReveal className="text-center mt-16 sm:mt-20 md:mt-28">
+            <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.1] mb-4 sm:mb-6">
+              Ready to try it <span className="text-gradient-primary">yourself?</span>
+            </h3>
+            <Button size="lg" className="btn-premium font-semibold h-12 sm:h-14 px-8 sm:px-10 text-sm sm:text-base rounded-xl shadow-lg shadow-primary/20" asChild>
+              <Link to="/auth?intent=upgrade">
+                Try it free
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+            <p className="text-xs sm:text-sm text-muted-foreground/50 mt-3">
+              No card required · Instant access · Cancel anytime
+            </p>
+          </ScrollReveal>
         </div>
-      </ScrollReveal>
-
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
-
-      {/* How It Works */}
-      <div id="how-it-works">
-        <Suspense fallback={<div className="py-20" />}>
-          <HowItWorksSection ScrollReveal={ScrollReveal} />
-        </Suspense>
-      </div>
-
-      <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
+      </section>
 
       {/* Features Section — Lead Toolkit */}
       <section className="relative z-10 py-8 sm:py-16 md:py-20 lg:py-28 px-4">
