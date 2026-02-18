@@ -684,7 +684,7 @@ const Landing = () => {
                       <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-contain" loading="lazy" decoding="async" width={640} height={400} />
                     </div>
                   </div>
-                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
+                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground flex flex-col items-center">
                     <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
                     <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
                     <li className="flex items-start gap-2.5"><X className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
@@ -712,7 +712,7 @@ const Landing = () => {
                       <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" decoding="async" width={640} height={400} />
                     </div>
                   </div>
-                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground">
+                  <ul className="space-y-3 text-sm md:text-base text-muted-foreground flex flex-col items-center">
                     <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
                     <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
                     <li className="flex items-start gap-2.5"><Check className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
