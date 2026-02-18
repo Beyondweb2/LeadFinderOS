@@ -1,32 +1,71 @@
 
 
-# Fix: Video plays audio but is invisible on landing page
+# Fix: Video audible but invisible — nuclear approach
 
-## Root Cause
-Multiple previous attempts to fix the loading overlay have failed. The overlay (`bg-card/90 z-10`) covers the video, and the `onPlaying` event may not be firing reliably in all browsers/contexts, keeping `videoLoaded = false` and the overlay permanently visible.
+## Root Cause (most likely)
+The video file may use a codec (like HEVC/H.265) that the browser can decode audio for but cannot render visually. Alternatively, the `<source>` child element pattern can sometimes cause rendering quirks. The decorative gradient overlay divs may also interfere in some browsers.
 
-## Solution: Remove the loading overlay entirely
-Instead of continuing to debug event timing, completely remove the loading spinner overlay from both the mobile (`MobileHeroVideo`) and desktop (`VideoSection`) video components. The video already has `autoPlay` and `muted` set, so it will start playing almost immediately — a loading spinner adds complexity with no real benefit.
+## Solution: Strip everything to bare minimum
+Remove all decorative wrappers and use the simplest possible video implementation to eliminate every possible cause:
 
-## Changes in `src/pages/Landing.tsx`
+### Changes in `src/pages/Landing.tsx`
 
-### 1. MobileHeroVideo (~lines 232-236)
-Remove the overlay div entirely:
-```html
-<!-- DELETE THIS BLOCK -->
-<div class="absolute inset-0 flex items-center justify-center bg-card/90 z-10 ...">
-  <div class="spinner..." />
-</div>
+**1. Use `src` attribute directly on `<video>` instead of `<source>` child**
+Some browsers handle `src` on the video element more reliably than nested `<source>` tags.
+
+**2. Add explicit `display: block` and minimum height**
+Prevents the video from collapsing to zero dimensions.
+
+**3. Remove all decorative gradient divs wrapping the video**
+These absolute-positioned gradient overlays could interfere with rendering in some browsers. Strip them completely.
+
+**4. Simplify both MobileHeroVideo and VideoSection to bare-bones:**
+
+```tsx
+const MobileHeroVideo = () => {
+  const [isMuted, setIsMuted] = useState(true);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
+  };
+
+  return (
+    <div className="relative rounded-xl overflow-hidden border border-border">
+      <video
+        ref={videoRef}
+        src={demoVideo}
+        className="w-full h-auto block"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="auto"
+      />
+      <button
+        onClick={toggleMute}
+        className="absolute bottom-2 right-2 p-1.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground"
+        aria-label={isMuted ? "Unmute" : "Mute"}
+      >
+        {isMuted ? <VolumeX className="h-3.5 w-3.5" /> : <Volume2 className="h-3.5 w-3.5" />}
+      </button>
+    </div>
+  );
+};
 ```
 
-Also remove the `videoLoaded` state and `onPlaying` handler since they're no longer needed.
+Same simplification for `VideoSection` (desktop version).
 
-### 2. VideoSection (~lines 272-273, 304-307)
-Same treatment — remove the overlay div and the `videoLoaded` state.
-
-### 3. Cleanup
-- Remove `useState` for `videoLoaded` in both components (since it's no longer used)
-- Remove `onPlaying` handler from both `<video>` elements
+**Key differences from current code:**
+- `src={demoVideo}` on `<video>` directly (no `<source>` child)
+- Added `block` class to prevent inline rendering gaps
+- Removed all 3 decorative gradient wrapper divs
+- Removed `bg-card/80` and `backdrop-blur-sm` from container (these can interfere with video compositing)
+- Removed `width`/`height` attributes (let CSS handle sizing via `w-full h-auto`)
 
 ## Files Changed
-- `src/pages/Landing.tsx` — remove overlay divs and related state from both video components
+- `src/pages/Landing.tsx` — simplify both video components to bare-minimum markup
+
