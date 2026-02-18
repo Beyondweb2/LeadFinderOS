@@ -1,23 +1,38 @@
 
 
-## Fix: Video Not Playing on Landing Page
+# Fix: Stripe checkout redirect getting stuck
 
-**Root Cause**: The new video file (`leadfinder-demo-v2.mp4`) that was copied from the user upload appears to be empty or corrupted. The browser loads it without errors but shows a blank player because there's no valid video data to decode.
+## Problem
+The "Get Unlimited Searches" button triggers an async call to `create-checkout`, then tries to redirect. Using `window.location.href` fails inside iframes, and `window.open` after an async call gets blocked by popup blockers. The result is a frozen loading screen.
 
-**Solution**: Re-copy the uploaded video file (`Final_LeadFinderApp_Video-2.mp4`) to `src/assets/leadfinder-demo-v2.mp4`, overwriting the current broken file. The import in `Landing.tsx` already points to this filename, so no code changes are needed -- only the asset file needs to be replaced.
+## Solution
+Use the standard pattern to avoid popup blockers: open a blank window **synchronously** (on the click event), then set its URL once the Stripe session URL is returned. If the call fails, close the blank window.
 
-### Steps
+This applies to **two places** in `src/pages/Index.tsx`:
+1. The `onUpgrade` handler passed to `SearchForm` (the "Get Unlimited Searches" button)
+2. The paywall `Dialog` button ("Unlock unlimited")
 
-1. **Replace the video asset** -- Copy the user-uploaded file (`user-uploads://Final_LeadFinderApp_Video-2.mp4`) to `src/assets/leadfinder-demo-v2.mp4`, ensuring the binary content is fully transferred.
+## Technical Details
 
-2. **Verify playback** -- Confirm the video plays in both the mobile hero section and the desktop video section on the landing page.
+In both checkout handlers in `src/pages/Index.tsx`, replace the current pattern:
 
-No other files or sections will be modified.
+```typescript
+// Before (broken)
+if (data?.url) window.location.href = data.url;
 
-### Technical Details
+// After (works reliably)
+const win = window.open('', '_blank');  // opened synchronously = no popup block
+// ... async call ...
+if (data?.url) {
+  if (win) win.location.href = data.url;
+  else window.location.href = data.url; // fallback
+} else {
+  win?.close();
+}
+// In catch block: win?.close();
+```
 
-- File: `src/assets/leadfinder-demo-v2.mp4` (overwrite)
-- Import in `src/pages/Landing.tsx` line 29 already correct: `import demoVideo from '@/assets/leadfinder-demo-v2.mp4'`
-- Both `MobileHeroVideo` and `VideoSection` components reference `demoVideo` -- no code changes needed
-- Video attributes (`autoPlay`, `muted`, `playsInline`, `loop`) are correctly set for autoplay compliance
+Also dispatch the `checkout-opened` event so the `CheckoutActivationOverlay` shows a "Waiting for payment..." screen while the user completes checkout in the new tab. This provides feedback instead of leaving the user on a seemingly frozen page.
 
+## Files Changed
+- `src/pages/Index.tsx` -- both checkout handlers updated
