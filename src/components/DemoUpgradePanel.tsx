@@ -1,4 +1,3 @@
-import { useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { Check, Sparkles, CreditCard } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -37,10 +36,10 @@ export function DemoUpgradePanel() {
           
           <div>
            <h2 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
-               Get 3 Days Unlimited Searches - FREE
+               Unlock unlimited access
              </h2>
              <p className="text-sm sm:text-base text-muted-foreground max-w-md mx-auto">
-               You've used your demo search. Unlock unlimited searches and the full outreach system free for 3 days, then £19.99/month.
+               Upgrade to continue unlimited searches and keep building your pipeline.
             </p>
           </div>
 
@@ -59,11 +58,11 @@ export function DemoUpgradePanel() {
             onClick={() => setShowConfirm(true)}
           >
             <CreditCard className="mr-2 h-4 w-4" />
-            Start 3-Day Full Access
+            Unlock unlimited — £19.99/month
           </Button>
 
           <p className="text-xs text-muted-foreground">
-            Card required. Cancel anytime. Secure payment via Stripe.
+            Cancel anytime
           </p>
         </CardContent>
       </Card>

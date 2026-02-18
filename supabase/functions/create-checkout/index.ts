@@ -193,16 +193,14 @@ const logStep = (step: string, details?: unknown) => {
         sessionConfig.metadata = trackingMetadata;
       }
       
-      // Only add trial if trial_used is false
-      const branchTaken = trialUsed ? 'no_trial' : 'trial';
-      if (!trialUsed) {
-         sessionConfig.subscription_data = { 
-           trial_period_days: 3,
-           metadata: Object.keys(trackingMetadata).length > 0 ? trackingMetadata : undefined
-         };
-         logStep("Adding 3-day trial to checkout", { branchTaken });
-      } else {
-        logStep("Skipping trial - trial_used is true", { branchTaken });
+      // No trial - subscription starts immediately at £19.99/month
+      logStep("Creating checkout without trial (immediate subscription)");
+      
+      // Add tracking metadata to subscription if present
+      if (Object.keys(trackingMetadata).length > 0) {
+        sessionConfig.subscription_data = {
+          metadata: trackingMetadata
+        };
       }
       
       logStep("Creating checkout session", { 

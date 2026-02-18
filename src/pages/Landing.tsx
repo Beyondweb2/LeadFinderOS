@@ -91,7 +91,7 @@ const InlineCTA = ({ text = 'Ready to find your next client?' }: { text?: string
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
     <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" asChild>
       <Link to="/auth?intent=upgrade">
-        Start Free Trial Full Access
+        Try it free
         <ArrowRight className="ml-2 h-4 w-4" />
       </Link>
     </Button>
@@ -193,7 +193,7 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
       {count.toLocaleString()}{suffix}
     </div>
     <div className="text-[8px] sm:text-xs text-foreground/50 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">{label}</div>
-    </div>
+      </div>
   );
 };
 
@@ -213,7 +213,6 @@ const MobileHeroVideo = () => {
 
   return (
     <div className="relative">
-      {/* Glow effect behind video */}
       <div 
         className="absolute -inset-2 rounded-2xl blur-lg opacity-30"
         style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.15), hsl(220 80% 45% / 0.08))' }}
@@ -230,7 +229,6 @@ const MobileHeroVideo = () => {
           boxShadow: '0 0 20px hsl(210 100% 50% / 0.15)'
         }}
       >
-        {/* Loading spinner overlay */}
         <div 
           className={`absolute inset-0 flex items-center justify-center bg-card/90 z-10 pointer-events-none transition-opacity duration-500 ${videoLoaded ? 'opacity-0' : 'opacity-100'}`}
         >
@@ -252,7 +250,6 @@ const MobileHeroVideo = () => {
           Your browser does not support the video tag.
         </video>
         
-        {/* Sound toggle button */}
         <button
           onClick={toggleMute}
           className="absolute bottom-2 right-2 p-1.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
@@ -287,9 +284,7 @@ const VideoSection = () => {
   return (
     <ScrollReveal className="relative z-10 pb-10 sm:pb-14 md:pb-20 px-2 sm:px-4">
       <div className="container mx-auto">
-        {/* Constrained on larger screens */}
         <div className="relative max-w-5xl mx-auto">
-          {/* Glow effect behind video - fixed brand blue */}
           <div 
             className="absolute -inset-4 rounded-3xl blur-2xl opacity-40"
             style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
@@ -306,7 +301,6 @@ const VideoSection = () => {
               boxShadow: '0 0 20px hsl(210 100% 50% / 0.15), 0 0 40px hsl(210 100% 50% / 0.05)'
             }}
           >
-            {/* Loading spinner overlay */}
             <div 
               className={`absolute inset-0 flex items-center justify-center bg-card/90 z-10 pointer-events-none transition-opacity duration-500 ${videoLoaded ? 'opacity-0' : 'opacity-100'}`}
             >
@@ -328,7 +322,6 @@ const VideoSection = () => {
               Your browser does not support the video tag.
             </video>
             
-            {/* Sound toggle button */}
             <button
               onClick={toggleMute}
               className="absolute bottom-3 right-3 md:bottom-4 md:right-4 p-2 md:p-2.5 rounded-full bg-background/80 backdrop-blur-sm border border-white/10 text-foreground hover:bg-background/90 transition-colors duration-200"
@@ -343,7 +336,6 @@ const VideoSection = () => {
           </div>
         </div>
         
-        {/* Micro-bridge after video */}
         <p className="text-center text-xs sm:text-sm text-muted-foreground/60 mt-6 sm:mt-10">
           See the difference for yourself.
         </p>
@@ -410,7 +402,6 @@ const MobileFeatureCarousel = ({ features, onExpand }: { features: typeof FEATUR
           ))}
         </CarouselContent>
       </Carousel>
-      {/* Dot indicators */}
       <div className="flex items-center justify-center gap-1.5 mt-4">
         {Array.from({ length: count }).map((_, i) => (
           <button
@@ -487,17 +478,6 @@ const Landing = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  
-  // Demo welcome popup state
-  const [showDemoWelcome, setShowDemoWelcome] = useState(false);
-
-  useEffect(() => {
-    if (searchParams.get('welcome') === 'demo' && user) {
-      setShowDemoWelcome(true);
-      searchParams.delete('welcome');
-      setSearchParams(searchParams, { replace: true });
-    }
-  }, [user]);
 
   // Lock landing page to dark brand theme
   useLandingTheme();
@@ -517,57 +497,6 @@ const Landing = () => {
       {/* Capture affiliate codes from URL */}
       <AffiliateCapture />
 
-      {/* Demo welcome popup — shown when user backs out of /unlock */}
-      <Dialog open={showDemoWelcome} onOpenChange={setShowDemoWelcome}>
-        <DialogContent className="max-w-sm w-[92vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
-          <div className="flex flex-col items-center p-6 sm:p-8 gap-5 text-center">
-            <div className="inline-flex p-3 rounded-full bg-primary/10 border border-primary/20">
-              <Search className="h-7 w-7 text-primary" />
-            </div>
-
-            <div className="space-y-2.5">
-              <h3 className="text-xl font-bold text-foreground">Try the Free Demo</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Walk through the <span className="font-semibold text-foreground">full workflow</span> — search for businesses, add them to your CRM, track outreach, and manage your pipeline.
-              </p>
-            </div>
-
-            <div className="w-full bg-primary/5 border border-primary/15 rounded-lg p-3 space-y-2">
-              <p className="text-xs font-bold text-primary uppercase tracking-wider">What you get</p>
-              <ul className="space-y-1.5 text-sm text-foreground/90 text-left">
-                <li className="flex items-center gap-2">
-                  <Check className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={3} />
-                  1 free search with real results
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={3} />
-                  Guided walkthrough of every feature
-                </li>
-                <li className="flex items-center gap-2">
-                  <Check className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={3} />
-                  Full CRM & outreach tools to explore
-                </li>
-              </ul>
-            </div>
-
-            <p className="text-sm font-bold text-primary">
-              No card required
-            </p>
-
-            <Button
-              className="w-full btn-premium font-semibold py-3 h-auto text-base"
-              onClick={() => {
-                setShowDemoWelcome(false);
-                navigate('/find-leads');
-              }}
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              Start Free Demo
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
       {/* Feature Image Modal */}
       <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
         <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
@@ -593,25 +522,22 @@ const Landing = () => {
       </Dialog>
       {/* Cinematic background */}
       <div className="fixed inset-0 pointer-events-none">
-        {/* Smooth dark navy-to-black gradient base */}
         <div 
           className="absolute inset-0"
           style={{ 
             background: 'radial-gradient(ellipse 80% 50% at 50% -20%, hsl(210 100% 50% / 0.12), transparent 60%)',
           }}
         />
-        {/* Very subtle mid-page glow */}
         <div 
           className="absolute top-[40%] left-1/2 -translate-x-1/2 w-full h-[40%]"
           style={{ 
             background: 'radial-gradient(ellipse 90% 50% at 50% 50%, hsl(210 80% 45% / 0.04), transparent 70%)',
           }}
         />
-        {/* Subtle noise texture */}
         <div className="absolute inset-0 bg-noise" />
       </div>
 
-      {/* Floating logo icons down the page - desktop only, alternating sides */}
+      {/* Floating logo icons down the page - desktop only */}
       <div className="hidden md:block fixed inset-0 pointer-events-none z-[1] overflow-hidden">
         {[
           { top: '6%', right: '3%', size: 'w-12 h-12 lg:w-16 lg:h-16', opacity: 0.06, duration: 10, delay: 0 },
@@ -640,7 +566,7 @@ const Landing = () => {
         ))}
       </div>
 
-      {/* Header - blends into hero */}
+      {/* Header */}
       <header className="relative z-10 backdrop-blur-sm bg-transparent">
         <div className="container mx-auto px-4 py-3 sm:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -658,8 +584,7 @@ const Landing = () => {
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
             >
               <Link to="/auth?intent=upgrade">
-                <span className="hidden sm:inline">Start Free Trial</span>
-                <span className="sm:hidden">Free Trial</span>
+                Try it free
               </Link>
             </Button>
           </div>
@@ -668,13 +593,12 @@ const Landing = () => {
 
       {/* Hero Section */}
       <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:min-h-[calc(100vh-64px)] lg:flex lg:items-center lg:pt-0 lg:pb-0 px-4">
-        {/* Subtle radial glow behind hero center — desktop only */}
         <div 
           className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[800px] pointer-events-none"
           style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.10), transparent 70%)' }}
         />
         <div className="container mx-auto text-center lg:max-w-[1140px]">
-          {/* Mobile: Video at top instead of logo */}
+          {/* Mobile: Video at top */}
           <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
@@ -699,7 +623,7 @@ const Landing = () => {
               The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
             </p>
             
-            {/* CTA — trial primary, demo as subtle link */}
+            {/* CTA */}
             <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-8">
               <Button 
                 size="lg" 
@@ -707,39 +631,16 @@ const Landing = () => {
                 asChild
               >
                 <Link to="/auth?intent=upgrade">
-                  Start Free Trial — Full Access
+                  Try it free
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Link>
               </Button>
               <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
-                No charge today · Cancel anytime before renewal
+                No card required · Instant access · Cancel anytime
               </p>
-
-              {/* Mobile: stacked subtle demo link */}
-              <div className="sm:hidden mt-5 text-center">
-                <Link 
-                  to="/auth?intent=demo" 
-                  onClick={() => trackLead()}
-                  className="text-[12px] text-foreground/40 hover:text-foreground/60 transition-colors duration-200"
-                >
-                  or try the <span className="text-primary">free demo</span> <span className="inline-block ml-0.5">→</span>
-                </Link>
-                <p className="text-[9px] text-foreground/[0.22] mt-1.5">No card required</p>
-              </div>
-
-              {/* Desktop: inline demo link next to microcopy */}
-              <div className="hidden sm:flex items-center gap-3 mt-5">
-                <Link 
-                  to="/auth?intent=demo" 
-                  onClick={() => trackLead()}
-                  className="text-[13px] text-foreground/40 hover:text-foreground/60 transition-colors duration-200"
-                >
-                  or try the <span className="text-primary">free demo</span> →
-                </Link>
-              </div>
             </div>
 
-            {/* Mobile trust badges — above bullet points */}
+            {/* Mobile trust badges */}
             <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-8">
               <CountUpStat target={100000} suffix="+" label="Businesses" />
               <div className="text-center">
@@ -759,7 +660,7 @@ const Landing = () => {
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
             </div>
 
-            {/* Desktop trust badges — in hero */}
+            {/* Desktop trust badges */}
             <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-10">
               <CountUpStat target={100000} suffix="+" label="Businesses" />
               <div className="text-center">
@@ -773,9 +674,6 @@ const Landing = () => {
             </div>
           </div>
 
-
-
-
           {/* Scroll indicator — mobile/tablet only */}
           <div className="flex lg:hidden flex-col items-center mt-6 sm:mt-8 animate-bounce">
             <span className="text-[10px] sm:text-xs text-muted-foreground/30 tracking-widest uppercase mb-2">Scroll</span>
@@ -786,14 +684,13 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Video Demo Section - desktop only (mobile has it in hero) */}
+      {/* Video Demo Section - desktop only */}
       <div className="hidden sm:block">
         <VideoSection />
       </div>
 
       {/* Pain Section */}
       <ScrollReveal className="relative z-10 py-10 sm:py-12 md:py-16 px-4">
-        {/* Top divider */}
         <div className="container mx-auto max-w-xl mb-10 sm:mb-12">
           <div className="h-px w-16 mx-auto" style={{ background: 'hsl(210 100% 50% / 0.3)' }} />
         </div>
@@ -827,13 +724,11 @@ const Landing = () => {
           </div>
         </div>
 
-        {/* Bottom divider */}
         <div className="container mx-auto max-w-xl mt-10 sm:mt-12">
           <div className="h-px w-16 mx-auto" style={{ background: 'hsl(210 100% 50% / 0.3)' }} />
         </div>
       </ScrollReveal>
 
-      {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Old Way vs New Way comparison */}
@@ -853,19 +748,13 @@ const Landing = () => {
             <div className="space-y-8 max-w-sm mx-auto">
               {/* Old Way */}
               <div className="opacity-80">
-                <div className="text-center mb-3">
-                  <span className="inline-flex items-center gap-2"><X className="h-4 w-4" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-lg font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
+                <div className="text-center mb-4">
+                  <span className="inline-flex items-center gap-2"><X className="h-4 w-4" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><h3 className="text-base font-bold text-foreground/90 tracking-tight">The Old Way</h3></span>
                 </div>
-                <div 
-                  className="relative rounded-lg overflow-hidden mb-4 aspect-[16/10]"
-                  style={{ 
-                    border: '1px solid hsl(0 60% 40% / 0.25)',
-                    boxShadow: '0 0 20px hsl(0 60% 40% / 0.1)'
-                  }}
-                >
-                  <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-cover" loading="lazy" decoding="async" width={640} height={400} />
+                <div className="relative rounded-xl overflow-hidden h-[200px]" style={{ border: '1px solid hsl(0 60% 40% / 0.2)' }}>
+                  <img src={oldWayImage} alt="Manually scrolling Google Maps" className="w-full h-full object-contain" loading="lazy" decoding="async" width={640} height={400} />
                 </div>
-                <ul className="space-y-2 text-sm text-muted-foreground">
+                <ul className="space-y-2 mt-4 text-xs text-muted-foreground">
                   <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Hours spent scrolling Google Maps</span></li>
                   <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>No way to track who you've contacted</span></li>
                   <li className="flex items-start gap-2"><X className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(0 80% 60%)' }} strokeWidth={2.5} /><span>Leads lost in notes and spreadsheets</span></li>
@@ -873,19 +762,13 @@ const Landing = () => {
               </div>
               {/* New Way */}
               <div>
-                <div className="text-center mb-3">
-                  <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-lg font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
+                <div className="text-center mb-4">
+                  <span className="inline-flex items-center gap-2"><Check className="h-4 w-4" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><h3 className="text-base font-bold text-foreground/90 tracking-tight">The LeadFinder Way</h3></span>
                 </div>
-                <div 
-                  className="relative rounded-lg overflow-hidden mb-4"
-                  style={{ 
-                    border: '1px solid hsl(142 60% 40% / 0.25)',
-                    boxShadow: '0 0 20px hsl(142 60% 40% / 0.1)'
-                  }}
-                >
+                <div className="relative rounded-xl overflow-hidden" style={{ border: '1px solid hsl(142 60% 40% / 0.2)' }}>
                   <img src={newWayImage} alt="LeadFinder Pro results" className="w-full h-auto object-contain" loading="lazy" decoding="async" width={640} height={400} />
                 </div>
-                <ul className="space-y-2 text-sm text-muted-foreground">
+                <ul className="space-y-2 mt-4 text-xs text-muted-foreground">
                   <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Find 20+ leads in minutes</span></li>
                   <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>Track every message and follow-up</span></li>
                   <li className="flex items-start gap-2"><Check className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" style={{ color: 'hsl(142 76% 55%)' }} strokeWidth={2.5} /><span>One click WhatsApp and SMS outreach</span></li>
@@ -893,8 +776,7 @@ const Landing = () => {
               </div>
             </div>
           ) : (
-            /* Desktop layout - side by side */
-            <div className="grid grid-cols-2 gap-10 lg:gap-14 max-w-5xl mx-auto items-start">
+            <div className="grid md:grid-cols-2 gap-8 md:gap-12 lg:gap-16 items-start">
               {/* Old Way */}
               <ScrollReveal delay={100}>
                 <div className="hover:opacity-90 transition-opacity duration-300">
@@ -956,21 +838,15 @@ const Landing = () => {
         </div>
       </ScrollReveal>
 
-      {/* Mobile section divider — between comparison and How It Works */}
-
-      {/* Mobile section divider — between hero/comparison and How It Works */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
-      {/* How It Works — 4 steps */}
+      {/* How It Works */}
       <div id="how-it-works">
         <Suspense fallback={<div className="py-20" />}>
           <HowItWorksSection ScrollReveal={ScrollReveal} />
         </Suspense>
       </div>
 
-      
-
-      {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Features Section — Lead Toolkit */}
@@ -985,17 +861,14 @@ const Landing = () => {
             </p>
           </ScrollReveal>
           
-          {/* Mobile: Carousel (4 core features) */}
           {isMobile ? (
               <MobileFeatureCarousel features={FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title))} onExpand={(src, title) => setExpandedImage({ src, title })} />
           ) : (
-            /* Desktop: 4-card grid — core features only */
             <ScrollReveal>
               <div className="grid grid-cols-2 gap-x-10 gap-y-14 lg:gap-x-14 lg:gap-y-16 max-w-5xl mx-auto">
                 {FEATURES.filter(f => !['Export Tools', 'Customization'].includes(f.title)).map((feature, i) => (
                   <ScrollReveal key={feature.title} delay={i * 80}>
                     <div className="flex flex-col gap-4">
-                      {/* Title row */}
                       <div className="flex items-center gap-2.5">
                         <div 
                           className="p-2 rounded-lg flex-shrink-0"
@@ -1008,9 +881,7 @@ const Landing = () => {
                         </div>
                         <h3 className="text-base lg:text-lg font-semibold tracking-tight">{feature.title}</h3>
                       </div>
-                      {/* Description */}
                       <p className="text-muted-foreground/70 text-sm leading-[1.6]">{feature.description}</p>
-                      {/* Image with glow */}
                       <div
                         className="group relative cursor-pointer"
                         onClick={() => setExpandedImage({ src: feature.image, title: feature.title })}
@@ -1051,15 +922,13 @@ const Landing = () => {
 
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
-      {/* Testimonials — after toolkit */}
+      {/* Testimonials */}
       <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
         <div className="container mx-auto max-w-5xl">
-          {/* Section headline */}
           <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium tracking-wide uppercase text-center mb-4 sm:mb-6">
             Trusted by freelancers and agencies
           </p>
 
-          {/* Stars — mobile only */}
           <div className="flex gap-0.5 justify-center mb-3 sm:hidden">
             {[...Array(5)].map((_, i) => (
               <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
@@ -1163,100 +1032,6 @@ const Landing = () => {
         </Button>
       </div>
 
-
-
-
-
-
-      <section className="relative z-10 py-8 sm:py-14 md:py-20 lg:py-24 px-4">
-        <div className="container mx-auto">
-          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h2 className="text-3xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.1] px-2">
-              Start Your <span className="text-gradient-primary">Free Trial</span>
-            </h2>
-          </ScrollReveal>
-          
-          <ScrollReveal delay={150}>
-            <div className="relative max-w-md mx-auto">
-              {/* Glow background */}
-              <div 
-                className="absolute -inset-4 sm:-inset-8 rounded-3xl blur-2xl sm:blur-3xl opacity-50"
-                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1), hsl(210 100% 50% / 0.1))' }}
-              />
-              <div 
-                className="absolute -inset-px rounded-2xl"
-                style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.4), hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.2))' }}
-              />
-              
-              <Card className="relative glass-panel-strong border-0 overflow-hidden">
-                {/* Top accent line */}
-                <div 
-                  className="absolute top-0 left-0 right-0 h-px"
-                  style={{ background: 'linear-gradient(to right, transparent, hsl(210 100% 50%), transparent)' }}
-                />
-                
-                <CardHeader className="text-center pb-2 pt-6 sm:pt-7 px-4 sm:px-6">
-                  {/* Free trial badge */}
-                  <div className="flex justify-center mb-4">
-                    <span className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold tracking-wide" style={{ background: 'hsl(142 76% 36% / 0.15)', color: 'hsl(142 76% 55%)' }}>
-                      <Gift className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-                      <span className="sm:hidden">Free Trial</span>
-                      <span className="hidden sm:inline">3-Day Free Trial · Full Access Included</span>
-                    </span>
-                  </div>
-                  <h3 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1]">
-                    Start Your Free Trial
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-2.5">
-                    Then £19.99/month · Cancel anytime
-                  </p>
-                </CardHeader>
-                
-                <CardContent className="pt-4 sm:pt-5 px-4 sm:px-6">
-                  <ul className="space-y-2.5 sm:space-y-3">
-                    {[
-                      'Unlimited lead searches',
-                      'Find businesses without websites',
-                      'Built-in CRM to stay organised',
-                      'One-click WhatsApp & SMS outreach',
-                      'Ready-made message templates',
-                      'Smart dashboard & analytics',
-                      'Export leads to CSV',
-                    ].map((feature) => (
-                      <li key={feature} className="flex items-center gap-2.5 sm:gap-3">
-                        <Check className="h-4 w-4 flex-shrink-0" style={{ color: 'hsl(210 100% 50%)' }} strokeWidth={2.5} />
-                        <span className="text-foreground/90 text-xs sm:text-sm">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </CardContent>
-                
-                <CardFooter className="pt-4 pb-5 sm:pb-6 flex-col gap-2.5 px-4 sm:px-6">
-                  <Button size="lg" className="w-full btn-premium text-sm sm:text-base font-semibold py-3 sm:py-4 h-auto" asChild>
-                    <Link to="/auth?intent=upgrade">
-                      Start Free Trial — Full Access
-                      <ArrowRight className="ml-2 h-4 w-4" />
-                    </Link>
-                  </Button>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground/50 text-center">
-                    No charge today · Cancel anytime before renewal
-                  </p>
-                  <Link 
-                    to="/auth?intent=demo" 
-                    onClick={() => trackLead()}
-                    className="text-[11px] sm:text-xs text-foreground/70 hover:text-foreground transition-colors mt-1 underline underline-offset-2"
-                  >
-                    Prefer to explore first? Try the free demo
-                  </Link>
-                </CardFooter>
-              </Card>
-            </div>
-          </ScrollReveal>
-        </div>
-      </section>
-
-
-      {/* Mobile section divider */}
       <div className="sm:hidden mx-8 h-px bg-white/[0.06]" />
 
       {/* Got Questions Section */}
@@ -1304,7 +1079,7 @@ const Landing = () => {
                 Sign In
               </Link>
               <Link to="/auth?intent=upgrade" className="hover:text-foreground transition-colors duration-200">
-                Start Free Trial
+                Try it free
               </Link>
               <Link to="/feedback" className="hover:text-foreground transition-colors duration-200">
                 Feedback
@@ -1315,7 +1090,6 @@ const Landing = () => {
             </div>
           </div>
           
-          {/* Disclaimer + Copyright + Contact */}
           <div className="border-t border-white/[0.04] pt-6 sm:pt-8 text-center space-y-2 sm:space-y-3">
             <p className="text-[10px] sm:text-xs text-muted-foreground/70 max-w-2xl mx-auto leading-relaxed px-2">
               Disclaimer: LeadFinder Pro uses AI classification and third-party data sources. 
@@ -1332,7 +1106,7 @@ const Landing = () => {
         </div>
       </footer>
 
-      {/* Mobile sticky bottom CTA - only after scrolling past hero */}
+      {/* Mobile sticky bottom CTA */}
       {isMobile && (
         <div 
           className={`fixed bottom-0 left-0 right-0 z-50 p-3 backdrop-blur-xl border-t border-white/10 transition-all duration-300 ${
@@ -1342,17 +1116,16 @@ const Landing = () => {
         >
           <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" asChild>
             <Link to="/auth?intent=upgrade">
-              Start Free Trial — Full Access
+              Try it free
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            No charge today · Cancel anytime
+            No card required · Instant access · Cancel anytime
           </p>
         </div>
       )}
 
-      {/* Spacer for sticky CTA on mobile */}
       {isMobile && hasScrolled && <div className="h-24" />}
     </div>
   );

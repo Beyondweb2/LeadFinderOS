@@ -852,60 +852,24 @@ serve(async (req) => {
           const now = new Date();
           const trialEnd = new Date(trial.trial_end_date);
           
-          // ─── NEW DEMO SEARCH LOGIC: 1 search per user lifetime ───
-          // Check demo_search_used flag first (new funnel)
-          if (!trial.demo_search_used) {
-            console.log(`User ${userId} using demo search (1 of 1)`);
-            // Mark demo search as used BEFORE executing
+          // ─── 5-SEARCH FREE ACCESS MODEL ───
+          const currentFreeCount = trial.free_search_count || 0;
+          const FREE_SEARCH_LIMIT = 5;
+          
+          if (currentFreeCount < FREE_SEARCH_LIMIT) {
+            console.log(`User ${userId} using free search (${currentFreeCount + 1} of ${FREE_SEARCH_LIMIT})`);
+            // Increment free_search_count
             await serviceClient
               .from('user_trials')
               .update({ 
-                demo_search_used: true,
+                free_search_count: currentFreeCount + 1,
                 searches_used: trial.searches_used + 1,
+                demo_search_used: true,
               })
               .eq('user_id', userId);
-            isOnAppTrial = true; // Allow the search to proceed
-          } else if (now <= trialEnd && trial.plan_status === 'trial') {
-            // ─── LEGACY TRIAL LOGIC: daily limits for existing trial users ───
-            const today = now.toISOString().split('T')[0];
-            const lastSearchDate = trial.last_search_date;
-            const shouldResetDaily = lastSearchDate !== today;
-            const currentSearchesToday = shouldResetDaily ? 0 : trial.searches_today;
-            
-            const skipTrialCount = body?.skipTrialCount === true;
-            
-            const DAILY_TRIAL_LIMIT = 2;
-            if (!skipTrialCount && currentSearchesToday >= DAILY_TRIAL_LIMIT) {
-              console.log(`Free trial user ${userId} has reached daily limit (${currentSearchesToday}/${DAILY_TRIAL_LIMIT})`);
-              return new Response(
-                JSON.stringify({ 
-                  error: 'Daily trial limit reached (2 searches/day). Upgrade to continue.',
-                  code: 'TRIAL_LIMIT_REACHED',
-                  searches_today: currentSearchesToday,
-                  limit: DAILY_TRIAL_LIMIT
-                }),
-                { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              );
-            }
-            
             isOnAppTrial = true;
-            const daysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-            
-            if (!skipTrialCount) {
-              console.log(`Free trial user ${userId} (${daysLeft} days remaining, ${currentSearchesToday + 1}/${DAILY_TRIAL_LIMIT} searches today)`);
-              await serviceClient
-                .from('user_trials')
-                .update({ 
-                  searches_used: trial.searches_used + 1,
-                  searches_today: currentSearchesToday + 1,
-                  last_search_date: today
-                })
-                .eq('user_id', userId);
-            } else {
-              console.log(`Free trial user ${userId} - demo search (not counted toward limit)`);
-            }
           } else {
-            console.log(`User ${userId} demo search already used and no valid trial`);
+            console.log(`User ${userId} has used all ${FREE_SEARCH_LIMIT} free searches`);
           }
         }
         
@@ -929,8 +893,8 @@ serve(async (req) => {
             
             return new Response(
               JSON.stringify({ 
-                error: 'Your demo search has been used. Unlock 3-day full access to continue.',
-                code: 'DEMO_SEARCH_EXHAUSTED',
+                error: 'You\'ve used your free searches. Upgrade to continue.',
+                code: 'FREE_SEARCH_EXHAUSTED',
               }),
               { status: 402, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
