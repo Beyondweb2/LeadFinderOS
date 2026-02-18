@@ -1,21 +1,23 @@
 
-# Fix: Track Button Not Completing Walkthrough Step 4
 
-## Problem
-The Track (star) button in the Outreach table calls `markMultipleAsInterested`, which only dispatches `track-lead-added` but **does not** dispatch `demo-checklist-track-pressed`. The single-lead `markAsInterested` function has the correct event dispatch, but the table uses the bulk version.
+## Fix: Video Not Playing on Landing Page
 
-## Solution
-Add the missing `demo-checklist-track-pressed` event dispatch to the `markMultipleAsInterested` function in `src/hooks/useOutreach.ts`.
+**Root Cause**: The new video file (`leadfinder-demo-v2.mp4`) that was copied from the user upload appears to be empty or corrupted. The browser loads it without errors but shows a blank player because there's no valid video data to decode.
 
-## Technical Details
+**Solution**: Re-copy the uploaded video file (`Final_LeadFinderApp_Video-2.mp4`) to `src/assets/leadfinder-demo-v2.mp4`, overwriting the current broken file. The import in `Landing.tsx` already points to this filename, so no code changes are needed -- only the asset file needs to be replaced.
 
-**File: `src/hooks/useOutreach.ts`** (line ~700)
+### Steps
 
-Add the missing event dispatch after `track-lead-added`:
+1. **Replace the video asset** -- Copy the user-uploaded file (`user-uploads://Final_LeadFinderApp_Video-2.mp4`) to `src/assets/leadfinder-demo-v2.mp4`, ensuring the binary content is fully transferred.
 
-```typescript
-window.dispatchEvent(new CustomEvent('track-lead-added'));
-window.dispatchEvent(new CustomEvent('demo-checklist-track-pressed')); // ADD THIS
-```
+2. **Verify playback** -- Confirm the video plays in both the mobile hero section and the desktop video section on the landing page.
 
-This single-line addition ensures that pressing the Track button on any lead (whether via the star icon on individual leads or the bulk "Track" button) will properly trigger the walkthrough step 4 completion -- provided the user has also changed the status (which fires `demo-checklist-status-change` separately).
+No other files or sections will be modified.
+
+### Technical Details
+
+- File: `src/assets/leadfinder-demo-v2.mp4` (overwrite)
+- Import in `src/pages/Landing.tsx` line 29 already correct: `import demoVideo from '@/assets/leadfinder-demo-v2.mp4'`
+- Both `MobileHeroVideo` and `VideoSection` components reference `demoVideo` -- no code changes needed
+- Video attributes (`autoPlay`, `muted`, `playsInline`, `loop`) are correctly set for autoplay compliance
+
