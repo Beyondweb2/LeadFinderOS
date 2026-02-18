@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone, ArrowRight } from 'lucide-react';
+import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,33 +15,24 @@ import type { SearchFilters } from '@/types/lead';
 interface SearchFormProps {
   onSearch: (filters: SearchFilters) => void;
   isLoading: boolean;
-  isOnTrial?: boolean;
-  searchesRemaining?: number;
-  dailyLimit?: number;
   isPaidSubscriber?: boolean;
   disabled?: boolean;
-  initialRadius?: number;
 }
 
 export function SearchForm({ 
   onSearch, 
   isLoading, 
-  isOnTrial = false, 
-  searchesRemaining = 2, 
-  dailyLimit = 2,
   isPaidSubscriber = false,
   disabled = false,
-  initialRadius,
 }: SearchFormProps) {
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
-  const [radius, setRadius] = useState(initialRadius ?? 5);
+  const [radius, setRadius] = useState(5);
   const [minRating, setMinRating] = useState(0);
-  const [minReviews, setMinReviews] = useState(2); // Default to 2 to filter out inactive businesses
+  const [minReviews, setMinReviews] = useState(2);
   const [requirePhone, setRequirePhone] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country>('UK' as Country);
-  // Deep search removed - was causing edge function timeouts at large radius
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +41,7 @@ export function SearchForm({
     onSearch({
       keyword: keyword.trim(),
       location: location.trim(),
-      radius: radius * 1000, // Convert to meters
+      radius: radius * 1000,
       minRating: minRating > 0 ? minRating : undefined,
       minReviews: minReviews > 0 ? minReviews : undefined,
       requirePhone,
@@ -119,7 +109,7 @@ export function SearchForm({
             </div>
           </div>
 
-          {/* Advanced Filters - Hidden by default for trial users */}
+          {/* Advanced Filters */}
           {isPaidSubscriber && (
             <Collapsible open={showFilters} onOpenChange={setShowFilters}>
               <CollapsibleTrigger asChild>
@@ -174,71 +164,35 @@ export function SearchForm({
                       </span>
                     </div>
                   </div>
-
                 </div>
               </CollapsibleContent>
             </Collapsible>
           )}
 
-          {/* Submit Button with Trial Indicator */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-            {/* Trial searches remaining indicator - only for free users with actual daily caps */}
-            {!isPaidSubscriber && isFinite(dailyLimit) && (
-              <div className="flex items-center gap-2 text-xs sm:text-sm">
-                <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${
-                  searchesRemaining === 0 
-                    ? 'bg-destructive/10 text-destructive border-destructive/20' 
-                    : searchesRemaining === 1 
-                      ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
-                      : 'bg-primary/10 text-primary border-primary/20'
-                }`}>
-                  <Search className="h-3 w-3" />
-                  <span className="font-medium">
-                    {dailyLimit === 1 
-                      ? (searchesRemaining === 1 ? '1 free search' : 'Free search used')
-                      : `${searchesRemaining}/${dailyLimit} searches left today`}
-                  </span>
-                </div>
-              </div>
-            )}
-            
-            <div className={`flex flex-col items-center sm:items-end ${!isPaidSubscriber ? '' : 'w-full'}`}>
-              {!isPaidSubscriber && searchesRemaining === 0 && dailyLimit === 1 ? (
-                <Button 
-                  type="button"
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-9 sm:h-10 w-full sm:w-auto text-sm"
-                  asChild
-                >
-                  <Link to="/subscribe">
-                    Get Free Trial — Full Access
-                    <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                  </Link>
-                </Button>
-              ) : (
-                <>
-                  <Button 
-                    type="submit" 
-                    disabled={isLoading || !keyword.trim() || !location.trim() || disabled}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-9 sm:h-10 w-full sm:w-auto text-sm"
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        Searching...
-                      </>
-                    ) : (
-                      <>
-                        <Search className="mr-1.5 h-3.5 w-3.5" />
-                        Find Leads
-                      </>
-                    )}
-                  </Button>
-                  {isLoading && (
-                    <p className="text-[10px] sm:text-xs text-muted-foreground/60 mt-1.5 text-center sm:text-right">
-                      This can take 20–30 seconds — hang tight!
-                    </p>
-                  )}
-                </>
+          {/* Submit Button — no counters, no limits shown */}
+          <div className="flex flex-col sm:flex-row items-center justify-end gap-3 sm:gap-4">
+            <div className="flex flex-col items-center sm:items-end w-full sm:w-auto">
+              <Button 
+                type="submit" 
+                disabled={isLoading || !keyword.trim() || !location.trim() || disabled}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-9 sm:h-10 w-full sm:w-auto text-sm"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    Searching...
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-1.5 h-3.5 w-3.5" />
+                    Find Leads
+                  </>
+                )}
+              </Button>
+              {isLoading && (
+                <p className="text-[10px] sm:text-xs text-muted-foreground/60 mt-1.5 text-center sm:text-right">
+                  This can take 20–30 seconds — hang tight!
+                </p>
               )}
             </div>
           </div>
