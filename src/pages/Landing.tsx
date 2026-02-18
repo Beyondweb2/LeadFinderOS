@@ -468,9 +468,9 @@ const Landing = () => {
       </div>
 
       {/* How LeadFinder Works — 4-step section */}
-      <section id="how-it-works" className="relative z-10 py-14 sm:py-20 md:py-28 px-3 sm:px-4">
+      <section id="how-it-works" className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
         <div className="container mx-auto max-w-5xl">
-          <ScrollReveal className="text-center mb-10 sm:mb-14 md:mb-20">
+          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-3 sm:mb-4 tracking-tight leading-[1.1]">
               How LeadFinder <span className="text-gradient-primary">Works</span>
             </h2>
@@ -479,7 +479,7 @@ const Landing = () => {
             </p>
           </ScrollReveal>
 
-          <div className="space-y-16 sm:space-y-20 md:space-y-28">
+          <div className="space-y-12 sm:space-y-16 md:space-y-20">
             {[
               {
                 num: 1,
@@ -557,7 +557,7 @@ const Landing = () => {
           </div>
 
           {/* CTA after steps */}
-          <ScrollReveal className="text-center mt-16 sm:mt-20 md:mt-28">
+          <ScrollReveal className="text-center mt-12 sm:mt-16 md:mt-20">
             <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.1] mb-2 sm:mb-3">
               Start Finding Clients <span className="text-gradient-primary">Now.</span>
             </h3>
@@ -577,7 +577,7 @@ const Landing = () => {
       </section>
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
+      <ScrollReveal className="relative z-10 py-8 sm:py-10 md:py-14 px-4">
         <div className="container mx-auto max-w-5xl">
           <p className="text-xs sm:text-sm text-muted-foreground/60 font-medium tracking-wide uppercase text-center mb-4 sm:mb-6">
             Trusted by freelancers and agencies
@@ -677,9 +677,9 @@ const Landing = () => {
       </ScrollReveal>
 
       {/* Final CTA — Pricing Card */}
-      <section className="relative z-10 pt-24 sm:pt-32 md:pt-40 pb-12 sm:pb-16 md:pb-20 px-4">
+      <section className="relative z-10 pt-10 sm:pt-14 md:pt-20 pb-10 sm:pb-14 md:pb-16 px-4">
         {/* Subtle top divider */}
-        <div className="container mx-auto max-w-3xl mb-12 sm:mb-16">
+        <div className="container mx-auto max-w-3xl mb-8 sm:mb-10">
           <div className="h-px w-full" style={{ background: 'linear-gradient(90deg, transparent, hsl(210 100% 50% / 0.15), transparent)' }} />
         </div>
 
