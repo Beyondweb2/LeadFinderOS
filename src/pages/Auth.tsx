@@ -34,23 +34,9 @@ const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Determine intent from query param: "demo" or "upgrade"
-  const intent = intentParam === 'upgrade' ? 'upgrade' : 'demo';
-
-  // Helper to redirect to the unlock-access page (which handles Stripe checkout properly)
-  const redirectToCheckout = () => {
-    navigate('/unlock', { replace: true });
-  };
-
-  // Redirect if already authenticated
+  // Redirect if already authenticated — always go to app (silent free searches handle limits)
   useEffect(() => {
     if (!user || isLoading) return;
-
-    // If intent is upgrade, go straight to Stripe checkout
-    if (intent === 'upgrade') {
-      redirectToCheckout();
-      return;
-    }
 
     let redirectTo: string | null = null;
     try {
@@ -71,7 +57,7 @@ const Auth = () => {
     }
 
     navigate(redirectTo, { replace: true });
-  }, [user, isLoading, navigate, intent]);
+  }, [user, isLoading, navigate]);
 
   const validateForm = () => {
     const result = authSchema.safeParse({ email, password });
@@ -135,19 +121,11 @@ const Auth = () => {
             });
           }
         } else {
-          if (intent === 'upgrade') {
-            toast({
-              title: 'Account created!',
-              description: 'Redirecting to checkout...',
-            });
-            // Small delay to let auth state settle, then checkout will trigger via useEffect
-          } else {
-            toast({
-              title: 'Account created!',
-              description: 'Redirecting to your dashboard...',
-            });
-            navigate('/');
-          }
+          toast({
+            title: 'Account created!',
+            description: 'Welcome! Redirecting to your dashboard...',
+          });
+          navigate('/');
           return;
         }
       }
@@ -241,11 +219,9 @@ const Auth = () => {
           <CardDescription>
             {isLogin 
               ? 'Sign in to find businesses without websites' 
-              : intent === 'upgrade'
-                ? 'Create your account to unlock full access'
-                : 'Create an account to try your first search free'}
+              : 'Create an account to try your first search free'}
           </CardDescription>
-          {!isLogin && intent !== 'upgrade' && (
+          {!isLogin && (
             <p className="text-xs text-muted-foreground mt-2">
               No card required. See real results instantly.
             </p>
