@@ -38,6 +38,7 @@ import {
   Carousel,
   CarouselContent,
   CarouselItem,
+  type CarouselApi,
 } from '@/components/ui/carousel';
 import Autoplay from 'embla-carousel-autoplay';
 
@@ -215,6 +216,92 @@ const VideoSection = () => {
 };
 
 
+interface ToolkitFeature {
+  title: string;
+  description: string;
+  img: string;
+}
+
+const ToolkitCarousel = ({ features, onExpand }: { features: ToolkitFeature[]; onExpand: (src: string, title: string) => void }) => {
+  const [api, setApi] = useState<CarouselApi>();
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    if (!api) return;
+    const onSelect = () => setCurrent(api.selectedScrollSnap());
+    api.on('select', onSelect);
+    onSelect();
+    return () => { api.off('select', onSelect); };
+  }, [api]);
+
+  return (
+    <ScrollReveal>
+      <Carousel
+        setApi={setApi}
+        opts={{ loop: true, align: 'center' }}
+        plugins={[Autoplay({ delay: 4000, stopOnInteraction: true })]}
+        className="max-w-xl mx-auto"
+      >
+        <CarouselContent>
+          {features.map((feature, i) => (
+            <CarouselItem key={i}>
+              <div className="text-center px-2">
+                <h3 className="text-lg sm:text-xl font-bold tracking-tight mb-2 sm:mb-3">{feature.title}</h3>
+                <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto mb-5 sm:mb-6">
+                  {feature.description}
+                </p>
+                <div 
+                  className="relative group cursor-pointer w-full"
+                  onClick={() => onExpand(feature.img, feature.title)}
+                >
+                  <div 
+                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.01]"
+                    style={{ 
+                      border: '1px solid hsl(210 100% 50% / 0.2)',
+                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                    }}
+                  >
+                    <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" width={640} height={400} className="w-full h-full object-cover" />
+                    <div className="absolute bottom-3 right-3 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm">
+                      <Search className="h-3.5 w-3.5 text-foreground/70" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </CarouselItem>
+          ))}
+        </CarouselContent>
+
+        {/* Navigation arrows */}
+        <div className="flex items-center justify-center gap-4 mt-5">
+          <button
+            onClick={() => api?.scrollPrev()}
+            className="p-2 rounded-full border border-border/30 hover:border-border/60 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Previous feature"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+
+          <div className="flex items-center gap-1.5">
+            <ToolkitDots count={features.length} api={api} />
+          </div>
+
+          <button
+            onClick={() => api?.scrollNext()}
+            className="p-2 rounded-full border border-border/30 hover:border-border/60 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Next feature"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        </div>
+
+        <p className="text-center text-xs text-muted-foreground/40 mt-2">
+          {current + 1} / {features.length} · Swipe to explore
+        </p>
+      </Carousel>
+    </ScrollReveal>
+  );
+};
 
 interface Testimonial {
   name: string;
@@ -263,15 +350,26 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
   );
 };
 
-const ToolkitDots = ({ count }: { count: number }) => {
-  // This is a simple visual indicator; active dot is driven by embla internally
-  // We'll use a basic approach with CSS
+const ToolkitDots = ({ count, api }: { count: number; api: any }) => {
+  const [active, setActive] = useState(0);
+  useEffect(() => {
+    if (!api) return;
+    const onSelect = () => setActive(api.selectedScrollSnap());
+    api.on('select', onSelect);
+    onSelect();
+    return () => { api.off('select', onSelect); };
+  }, [api]);
   return (
     <>
       {Array.from({ length: count }).map((_, i) => (
-        <div
+        <button
           key={i}
-          className="rounded-full w-2 h-2 bg-muted-foreground/25"
+          onClick={() => api?.scrollTo(i)}
+          className={`rounded-full transition-all duration-300 ${
+            i === active
+              ? 'w-6 h-2 bg-[hsl(210_100%_50%)]'
+              : 'w-2 h-2 bg-muted-foreground/25 hover:bg-muted-foreground/40'
+          }`}
         />
       ))}
     </>
@@ -623,47 +721,7 @@ const Landing = () => {
             ];
 
             return (
-              <ScrollReveal>
-                <Carousel
-                  opts={{ loop: true, align: 'center' }}
-                  plugins={[Autoplay({ delay: 5000, stopOnInteraction: true })]}
-                  className="max-w-xl mx-auto"
-                >
-                  <CarouselContent>
-                    {toolkitFeatures.map((feature, i) => (
-                      <CarouselItem key={i}>
-                        <div className="text-center px-2">
-                          <h3 className="text-lg sm:text-xl font-bold tracking-tight mb-2 sm:mb-3">{feature.title}</h3>
-                          <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto mb-5 sm:mb-6">
-                            {feature.description}
-                          </p>
-                          <div 
-                            className="relative group cursor-pointer w-full"
-                            onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
-                          >
-                            <div 
-                              className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.01]"
-                              style={{ 
-                                border: '1px solid hsl(210 100% 50% / 0.2)',
-                                boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
-                              }}
-                            >
-                              <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" width={640} height={400} className="w-full h-full object-cover" />
-                              <div className="absolute bottom-3 right-3 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm">
-                                <Search className="h-3.5 w-3.5 text-foreground/70" />
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </CarouselItem>
-                    ))}
-                  </CarouselContent>
-                  <div className="flex items-center justify-center gap-1.5 mt-5">
-                    <ToolkitDots count={toolkitFeatures.length} />
-                  </div>
-                  <p className="text-center text-xs text-muted-foreground/40 mt-2">Swipe to explore</p>
-                </Carousel>
-              </ScrollReveal>
+              <ToolkitCarousel features={toolkitFeatures} onExpand={(src, title) => setExpandedImage({ src, title })} />
             );
           })()}
         </div>
