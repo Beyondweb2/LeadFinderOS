@@ -9,6 +9,7 @@ import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { PostWalkthroughTipsModal } from '@/components/PostWalkthroughTipsModal';
 
 const steps = [
   { key: 'searchDone' as const, label: 'Run 1 search', cta: 'Go to Find Leads', route: '/find-leads', icon: Search },
@@ -94,9 +95,28 @@ export function DemoChecklistPanel() {
   const [userSwitchedTab, setUserSwitchedTab] = useState(false);
   const autoSwitchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isUpgradeLoading, setIsUpgradeLoading] = useState(false);
+  
+  // Walkthrough collapse state (Condition B: 2+ searches before walkthrough done)
+  const [walkthroughCollapsed, setWalkthroughCollapsed] = useState(false);
+  
+  // Post-walkthrough tips modal state
+  const [showTipsModal, setShowTipsModal] = useState(false);
+  const tipsModalShownRef = useRef(false);
+  const prevAllDoneRef = useRef(allDone);
 
   const isFreeUser = !isPaidSubscriber && !isStripeTrialing;
   const showTipsTab = isFreeUser && (freeSearchCount ?? 0) >= 1;
+
+  // Check if tips were permanently dismissed
+  const tipsDismissedKey = user?.id ? `post_walkthrough_tips_dismissed_${user.id}` : null;
+  const [tipsDismissed, setTipsDismissed] = useState(false);
+  
+  useEffect(() => {
+    if (!tipsDismissedKey) return;
+    try {
+      setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true');
+    } catch {}
+  }, [tipsDismissedKey]);
 
   useEffect(() => {
     if (!dismissKey) { setDismissed(false); return; }
@@ -106,22 +126,43 @@ export function DemoChecklistPanel() {
     } catch { setDismissed(false); }
   }, [dismissKey]);
 
+  // Condition A: walkthrough just completed → show tips modal
+  useEffect(() => {
+    if (!isFreeUser || tipsDismissed || tipsModalShownRef.current) return;
+    if (allDone && !prevAllDoneRef.current) {
+      // Walkthrough just completed
+      tipsModalShownRef.current = true;
+      setShowTipsModal(true);
+    }
+    prevAllDoneRef.current = allDone;
+  }, [allDone, isFreeUser, tipsDismissed]);
+
   // Listen for post-search tip trigger
   useEffect(() => {
     if (!isFreeUser) return;
     const handler = () => {
+      const currentSearchCount = freeSearchCount ?? 0;
+      
+      // Condition B: 2+ searches and walkthrough not done → collapse walkthrough, show modal
+      if (currentSearchCount >= 2 && !allDone && !tipsModalShownRef.current && !tipsDismissed) {
+        setWalkthroughCollapsed(true);
+        setIsOpen(false);
+        tipsModalShownRef.current = true;
+        // Small delay so walkthrough collapses first
+        setTimeout(() => setShowTipsModal(true), 200);
+        return;
+      }
+      
+      // Normal tab-based tips for search 1
       setUserSwitchedTab(false);
       setActiveTab('tips');
       setIsOpen(true);
 
-      // Auto-switch back after 4s unless search limit reached or user manually switched
-      if ((freeSearchCount ?? 0) < FREE_SEARCH_LIMIT) {
+      // Auto-switch back after 4s unless search limit reached
+      if (currentSearchCount < FREE_SEARCH_LIMIT) {
         if (autoSwitchTimerRef.current) clearTimeout(autoSwitchTimerRef.current);
         autoSwitchTimerRef.current = setTimeout(() => {
-          setActiveTab(prev => {
-            // Only switch back if user didn't manually change tab
-            return 'walkthrough';
-          });
+          setActiveTab('walkthrough');
         }, 4000);
       }
     };
@@ -130,7 +171,7 @@ export function DemoChecklistPanel() {
       window.removeEventListener('post-search-tip', handler);
       if (autoSwitchTimerRef.current) clearTimeout(autoSwitchTimerRef.current);
     };
-  }, [isFreeUser, freeSearchCount, setIsOpen]);
+  }, [isFreeUser, freeSearchCount, setIsOpen, allDone, tipsDismissed]);
 
   // Cancel auto-switch if user manually changes tab
   const handleTabClick = useCallback((tab: 'walkthrough' | 'tips') => {
@@ -186,131 +227,164 @@ export function DemoChecklistPanel() {
     })();
   }, [session?.access_token, toast]);
 
-  const mode = useMemo(() => {
-    if (isPaidSubscriber) return 'subscribed' as const;
-    if (isStripeTrialing) return 'trial' as const;
-    return 'demo' as const;
-  }, [isPaidSubscriber, isStripeTrialing]);
+  const handleTipsModalClose = useCallback((open: boolean) => {
+    setShowTipsModal(open);
+    if (!open) {
+      // Mark as shown so it doesn't reappear this session
+      tipsModalShownRef.current = true;
+      // Check if dismissed permanently
+      if (tipsDismissedKey) {
+        try {
+          setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true');
+        } catch {}
+      }
+    }
+  }, [tipsDismissedKey]);
 
   if (!isDemoUser || dismissed) return null;
 
   const nextStep = steps.find(s => !state[s.key]);
   const walkthroughActive = !allDone;
 
+  // Collapsed pill mode (Condition B triggered)
+  if (walkthroughCollapsed && walkthroughActive) {
+    return (
+      <>
+        <button
+          onClick={() => {
+            setWalkthroughCollapsed(false);
+            setIsOpen(true);
+          }}
+          className="fixed bottom-20 md:bottom-4 right-4 z-40 flex items-center gap-2 px-3 py-2 rounded-full bg-card border border-border shadow-lg text-xs font-medium hover:bg-muted/50 transition-colors"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-primary" />
+          <span>Continue walkthrough</span>
+          <span className="text-muted-foreground">{completedCount}/{totalSteps}</span>
+        </button>
+        <PostWalkthroughTipsModal open={showTipsModal} onOpenChange={handleTipsModalClose} />
+      </>
+    );
+  }
+
   return (
-    <div className="fixed bottom-20 md:bottom-4 right-4 z-40 w-72 max-w-[calc(100vw-2rem)]">
-      {/* Collapsed header */}
-      <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-t-lg bg-card border border-border shadow-lg text-sm font-medium"
-      >
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <span>{activeTab === 'tips' && showTipsTab ? 'Tips' : 'Walkthrough'}</span>
-          {activeTab !== 'tips' && (
-            <span className="text-xs text-muted-foreground">{completedCount}/{totalSteps}</span>
-          )}
-        </div>
-        {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-      </button>
+    <>
+      <div className="fixed bottom-20 md:bottom-4 right-4 z-40 w-72 max-w-[calc(100vw-2rem)]">
+        {/* Collapsed header */}
+        <button
+          onClick={() => setIsOpen(!isOpen)}
+          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-t-lg bg-card border border-border shadow-lg text-sm font-medium"
+        >
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <span>{activeTab === 'tips' && showTipsTab ? 'Tips' : 'Walkthrough'}</span>
+            {activeTab !== 'tips' && (
+              <span className="text-xs text-muted-foreground">{completedCount}/{totalSteps}</span>
+            )}
+          </div>
+          {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
+        </button>
 
-      {/* Expanded body */}
-      {isOpen && (
-        <div className="bg-card border border-t-0 border-border rounded-b-lg shadow-lg p-3 space-y-2">
-          {/* Tab toggle — only show if tips tab is available AND walkthrough is active */}
-          {showTipsTab && walkthroughActive && (
-            <div className="flex gap-1 mb-1">
-              <button
-                onClick={() => handleTabClick('walkthrough')}
-                className={`flex-1 text-[10px] font-medium py-1 px-2 rounded transition-colors ${
-                  activeTab === 'walkthrough'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Walkthrough
-              </button>
-              <button
-                onClick={() => handleTabClick('tips')}
-                className={`flex-1 text-[10px] font-medium py-1 px-2 rounded transition-colors ${
-                  activeTab === 'tips'
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Tips
-              </button>
-            </div>
-          )}
+        {/* Expanded body */}
+        {isOpen && (
+          <div className="bg-card border border-t-0 border-border rounded-b-lg shadow-lg p-3 space-y-2">
+            {/* Tab toggle — only show if tips tab is available AND walkthrough is active */}
+            {showTipsTab && walkthroughActive && (
+              <div className="flex gap-1 mb-1">
+                <button
+                  onClick={() => handleTabClick('walkthrough')}
+                  className={`flex-1 text-[10px] font-medium py-1 px-2 rounded transition-colors ${
+                    activeTab === 'walkthrough'
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Walkthrough
+                </button>
+                <button
+                  onClick={() => handleTabClick('tips')}
+                  className={`flex-1 text-[10px] font-medium py-1 px-2 rounded transition-colors ${
+                    activeTab === 'tips'
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Tips
+                </button>
+              </div>
+            )}
 
-          {/* Tips content */}
-          {((activeTab === 'tips' && showTipsTab) || (showTipsTab && !walkthroughActive)) ? (
-            <TipsContent searchCount={freeSearchCount ?? 0} onUpgrade={handleUpgrade} isUpgradeLoading={isUpgradeLoading} />
-          ) : (
-            <>
-              {/* Walkthrough content */}
-              {allDone ? (
-                <div className="text-center space-y-2 py-2 relative">
-                  <button
-                    onClick={handleDismiss}
-                    className="absolute top-0 right-0 h-6 w-6 rounded-full hover:bg-muted flex items-center justify-center"
-                    aria-label="Close walkthrough"
-                  >
-                    <X className="h-4 w-4 text-muted-foreground" />
-                  </button>
-                  <p className="text-sm font-semibold text-primary">🎉 You're all set!</p>
-                  <p className="text-xs text-muted-foreground">Start searching to find businesses without websites.</p>
-                </div>
-              ) : (
-                <ol className="space-y-1.5">
-                  {steps.map((step, i) => {
-                    const done = state[step.key];
-                    const Icon = step.icon;
-                    const isNext = nextStep?.key === step.key;
-                    return (
-                      <li key={step.key} className="space-y-1">
-                        <div className="flex items-start gap-2">
-                          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold mt-0.5 ${done ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
-                            {done ? <Check className="h-3 w-3" /> : i + 1}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <span className={`text-xs leading-5 ${done ? 'line-through text-muted-foreground' : ''}`}>
-                              {step.label}
-                              {step.key === 'addedToCrm' && !done && state.crmAddCount > 0 && (
-                                <span className="text-primary font-medium ml-1">({state.crmAddCount}/3)</span>
-                              )}
-                              {step.key === 'statusUpdated' && !done && (state.statusChanged || state.trackPressed) && (
-                                <span className="text-primary font-medium ml-1">
-                                  ({[state.statusChanged && 'status ✓', state.trackPressed && 'track ✓'].filter(Boolean).join(', ')})
-                                </span>
-                              )}
+            {/* Tips content */}
+            {((activeTab === 'tips' && showTipsTab) || (showTipsTab && !walkthroughActive)) ? (
+              <TipsContent searchCount={freeSearchCount ?? 0} onUpgrade={handleUpgrade} isUpgradeLoading={isUpgradeLoading} />
+            ) : (
+              <>
+                {/* Walkthrough content */}
+                {allDone ? (
+                  <div className="text-center space-y-2 py-2 relative">
+                    <button
+                      onClick={handleDismiss}
+                      className="absolute top-0 right-0 h-6 w-6 rounded-full hover:bg-muted flex items-center justify-center"
+                      aria-label="Close walkthrough"
+                    >
+                      <X className="h-4 w-4 text-muted-foreground" />
+                    </button>
+                    <p className="text-sm font-semibold text-primary">🎉 You're all set!</p>
+                    <p className="text-xs text-muted-foreground">Start searching to find businesses without websites.</p>
+                  </div>
+                ) : (
+                  <ol className="space-y-1.5">
+                    {steps.map((step, i) => {
+                      const done = state[step.key];
+                      const Icon = step.icon;
+                      const isNext = nextStep?.key === step.key;
+                      return (
+                        <li key={step.key} className="space-y-1">
+                          <div className="flex items-start gap-2">
+                            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold mt-0.5 ${done ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'}`}>
+                              {done ? <Check className="h-3 w-3" /> : i + 1}
                             </span>
-                            {isNext && !done && (
-                              <Button variant="link" size="sm" className="h-auto p-0 text-xs text-primary ml-1" onClick={() => { if (location.pathname !== step.route) navigate(step.route); }}>
-                                → {step.cta}
-                              </Button>
-                            )}
-                            {isNext && step.helperText && (
-                              <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{step.helperText}</p>
-                            )}
+                            <div className="flex-1 min-w-0">
+                              <span className={`text-xs leading-5 ${done ? 'line-through text-muted-foreground' : ''}`}>
+                                {step.label}
+                                {step.key === 'addedToCrm' && !done && state.crmAddCount > 0 && (
+                                  <span className="text-primary font-medium ml-1">({state.crmAddCount}/3)</span>
+                                )}
+                                {step.key === 'statusUpdated' && !done && (state.statusChanged || state.trackPressed) && (
+                                  <span className="text-primary font-medium ml-1">
+                                    ({[state.statusChanged && 'status ✓', state.trackPressed && 'track ✓'].filter(Boolean).join(', ')})
+                                  </span>
+                                )}
+                              </span>
+                              {isNext && !done && (
+                                <Button variant="link" size="sm" className="h-auto p-0 text-xs text-primary ml-1" onClick={() => { if (location.pathname !== step.route) navigate(step.route); }}>
+                                  → {step.cta}
+                                </Button>
+                              )}
+                              {isNext && step.helperText && (
+                                <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{step.helperText}</p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ol>
-              )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                )}
 
-              {/* Progress bar */}
-              {!allDone && (
-                <div className="w-full bg-muted rounded-full h-1.5 mt-2">
-                  <div className="bg-primary h-1.5 rounded-full transition-all duration-300" style={{ width: `${(completedCount / totalSteps) * 100}%` }} />
-                </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
-    </div>
+                {/* Progress bar */}
+                {!allDone && (
+                  <div className="w-full bg-muted rounded-full h-1.5 mt-2">
+                    <div className="bg-primary h-1.5 rounded-full transition-all duration-300" style={{ width: `${(completedCount / totalSteps) * 100}%` }} />
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Post-walkthrough tips modal */}
+      <PostWalkthroughTipsModal open={showTipsModal} onOpenChange={handleTipsModalClose} />
+    </>
   );
 }
