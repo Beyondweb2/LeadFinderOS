@@ -33,8 +33,8 @@ export function TrialLimitDialog({
   totalBusinessesFound = 0,
   noWebsiteCount = 0,
 }: TrialLimitDialogProps) {
-  const { createCheckout } = useSubscription();
-  const { user } = useAuth();
+  const { } = useSubscription();
+  const { user, session } = useAuth();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
 
@@ -60,17 +60,36 @@ export function TrialLimitDialog({
   const handleCheckoutDirect = async () => {
     console.log('[TrialLimitDialog] CTA clicked — initiating Stripe checkout');
     setIsLoading(true);
+    
+    // Open blank tab synchronously to avoid popup blocker
+    const win = window.open('', '_blank');
+    
     try {
-      await createCheckout();
-      // createCheckout redirects via window.location.href, so we won't reach here normally
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      
+      if (error) throw error;
+      
+      if (data?.url) {
+        if (win) win.location.href = data.url;
+        else window.location.href = data.url;
+        window.dispatchEvent(new CustomEvent('checkout-opened'));
+        onOpenChange(false);
+      } else {
+        win?.close();
+        throw new Error('No checkout URL returned');
+      }
     } catch (err: any) {
+      win?.close();
       console.error('[TrialLimitDialog] Checkout session creation failed:', err);
-      setIsLoading(false);
       toast({
         title: 'Checkout failed',
         description: 'Something went wrong opening checkout. Please try again.',
         variant: 'destructive',
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
