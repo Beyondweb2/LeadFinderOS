@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
+import { PostSearchTips } from '@/components/PostSearchTips';
+import { OutreachProgressSummary } from '@/components/OutreachProgressSummary';
+import { UpgradeCornerPopup } from '@/components/UpgradeCornerPopup';
 
 import { UpgradePromptDialog } from '@/components/UpgradePromptDialog';
 import { TrialLimitDialog } from '@/components/TrialLimitDialog';
@@ -12,12 +15,16 @@ import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
+import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
+import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { supabase } from '@/integrations/supabase/client';
 import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, Country } from '@/types/lead';
+
+const FREE_SEARCH_LIMIT = 3;
 
 const Index = () => {
   const location = useLocation();
@@ -28,6 +35,8 @@ const Index = () => {
   const { subscribed, isLoading: isSubscriptionLoading, status: subStatus, isPaidSubscriber } = useSubscription();
   const { session } = useAuth();
   const { toast } = useToast();
+  const { walkthroughOpen, walkthroughCompleted } = useWalkthroughStatus();
+  const { metrics } = useDashboardMetrics();
   
   // Pro access = active, past_due, or admin (trialing kept for legacy)
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
@@ -52,6 +61,37 @@ const Index = () => {
 
   // Free user = not paid
   const isFreeUser = !hasProAccess;
+
+  // Free search exhausted at limit of 3
+  const freeSearchesExhausted = isFreeUser && (freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT;
+
+  // Should show new guidance (tips/summary/popup) only when walkthrough is done and user is free
+  const showPostSearchGuidance = isFreeUser && !walkthroughOpen && !isAccessLoading;
+
+  const handleCheckout = useCallback(() => {
+    const win = window.open('', '_blank');
+    setIsCheckoutLoading(true);
+    (async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke('create-checkout', {
+          headers: { Authorization: `Bearer ${session?.access_token}` },
+        });
+        if (error) throw error;
+        if (data?.url) {
+          if (win) win.location.href = data.url;
+          else window.location.href = data.url;
+          window.dispatchEvent(new CustomEvent('checkout-opened'));
+        } else {
+          win?.close();
+        }
+      } catch (e) {
+        win?.close();
+        toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
+      } finally {
+        setIsCheckoutLoading(false);
+      }
+    })();
+  }, [session?.access_token, toast]);
 
   return (
     <div className="space-y-4 md:space-y-8">
@@ -96,7 +136,7 @@ const Index = () => {
         <SearchForm 
           onSearch={(filters) => {
             // Block search if free searches exhausted and not paid
-            if (isFreeUser && (freeSearchCount ?? 0) >= 5) {
+            if (isFreeUser && (freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT) {
               setShowPaywall(true);
               return;
             }
@@ -105,35 +145,12 @@ const Index = () => {
           }} 
           isLoading={isLoading}
           isOnTrial={false}
-          searchesRemaining={hasProAccess ? Infinity : Math.max(0, 5 - (freeSearchCount ?? 0))}
-          dailyLimit={hasProAccess ? Infinity : 5}
+          searchesRemaining={hasProAccess ? Infinity : Math.max(0, FREE_SEARCH_LIMIT - (freeSearchCount ?? 0))}
+          dailyLimit={hasProAccess ? Infinity : FREE_SEARCH_LIMIT}
           isPaidSubscriber={isAccessLoading || hasProAccess}
           disabled={postAbandonExhausted && !hasProAccess}
           isUpgradeLoading={isCheckoutLoading}
-          onUpgrade={() => {
-            const win = window.open('', '_blank');
-            setIsCheckoutLoading(true);
-            (async () => {
-              try {
-                const { data, error } = await supabase.functions.invoke('create-checkout', {
-                  headers: { Authorization: `Bearer ${session?.access_token}` },
-                });
-                if (error) throw error;
-                if (data?.url) {
-                  if (win) win.location.href = data.url;
-                  else window.location.href = data.url;
-                  window.dispatchEvent(new CustomEvent('checkout-opened'));
-                } else {
-                  win?.close();
-                }
-              } catch (e) {
-                win?.close();
-                toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
-              } finally {
-                setIsCheckoutLoading(false);
-              }
-            })();
-          }}
+          onUpgrade={handleCheckout}
         />
       </section>
 
@@ -159,54 +176,25 @@ const Index = () => {
             isChecked={isChecked}
           />
 
-          {/* Subtle free access usage indicator — only for free users, only after 3+ searches */}
-          {isFreeUser && !isAccessLoading && (freeSearchCount ?? 0) >= 3 && (freeSearchCount ?? 0) < 5 && (
-            <div className="flex items-center justify-center gap-2 mt-4 py-2">
-              {(freeSearchCount ?? 0) === 4 ? (
-                <p className="text-xs text-muted-foreground/60">
-                  You have 1 search left in free access.{' '}
-                  <button
-                    onClick={() => {
-                      const win = window.open('', '_blank');
-                      setIsCheckoutLoading(true);
-                      (async () => {
-                        try {
-                          const { data, error } = await supabase.functions.invoke('create-checkout', {
-                            headers: { Authorization: `Bearer ${session?.access_token}` },
-                          });
-                          if (error) throw error;
-                          if (data?.url) {
-                            if (win) win.location.href = data.url;
-                            else window.location.href = data.url;
-                            window.dispatchEvent(new CustomEvent('checkout-opened'));
-                          } else {
-                            win?.close();
-                          }
-                        } catch (e) {
-                          win?.close();
-                          toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
-                        } finally {
-                          setIsCheckoutLoading(false);
-                        }
-                      })();
-                    }}
-                    className="text-xs text-muted-foreground/80 underline underline-offset-2 hover:text-foreground/70 transition-colors"
-                  >
-                    Upgrade for unlimited searches
-                  </button>
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground/50">
-                  Free access – {5 - (freeSearchCount ?? 0)} searches remaining
-                </p>
-              )}
-            </div>
+          {/* Post-search tips — only for free users after walkthrough is complete, searches 1 & 2 */}
+          {showPostSearchGuidance && (freeSearchCount ?? 0) >= 1 && (freeSearchCount ?? 0) <= 2 && (
+            <PostSearchTips searchCount={freeSearchCount ?? 0} />
           )}
         </section>
       )}
 
+      {/* Search 3+ upgrade summary — replaces results area when searches exhausted */}
+      {showPostSearchGuidance && freeSearchesExhausted && (
+        <OutreachProgressSummary
+          businessesFound={metrics.noWebsiteBusinesses}
+          addedToCrm={metrics.totalBusinessesAdded}
+          messagesSent={metrics.activity.totalLeadsContacted}
+          leadsTracked={metrics.trackedLeads.length}
+        />
+      )}
+
       {/* Empty State */}
-      {leads.length === 0 && !isLoading && (
+      {leads.length === 0 && !isLoading && !freeSearchesExhausted && (
         <section className="text-center py-16">
           <div className="inline-flex p-4 rounded-full bg-muted/50 mb-6">
             <Search className="h-12 w-12 text-muted-foreground" />
@@ -221,7 +209,6 @@ const Index = () => {
         </section>
       )}
 
-
       {/* Paywall Dialog - shown when free searches exhausted */}
       <Dialog open={showPaywall} onOpenChange={setShowPaywall}>
         <DialogContent className="max-w-sm mx-auto">
@@ -231,7 +218,7 @@ const Index = () => {
             </div>
             <DialogTitle className="text-xl font-bold">Unlock unlimited access</DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              Upgrade to continue unlimited searches and keep building your pipeline.
+              You've used your free searches. Upgrade to continue unlimited searches.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex flex-col gap-2 sm:flex-col">
@@ -239,30 +226,7 @@ const Index = () => {
               size="lg"
               className="w-full"
               disabled={isCheckoutLoading}
-              onClick={() => {
-                const win = window.open('', '_blank');
-                setIsCheckoutLoading(true);
-                (async () => {
-                  try {
-                    const { data, error } = await supabase.functions.invoke('create-checkout', {
-                      headers: { Authorization: `Bearer ${session?.access_token}` },
-                    });
-                    if (error) throw error;
-                    if (data?.url) {
-                      if (win) win.location.href = data.url;
-                      else window.location.href = data.url;
-                      window.dispatchEvent(new CustomEvent('checkout-opened'));
-                    } else {
-                      win?.close();
-                    }
-                  } catch (e) {
-                    win?.close();
-                    toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
-                  } finally {
-                    setIsCheckoutLoading(false);
-                  }
-                })();
-              }}
+              onClick={handleCheckout}
             >
               {isCheckoutLoading ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Starting...</>
@@ -281,6 +245,11 @@ const Index = () => {
         onOpenChange={(open) => !open && clearTrialLimitError()}
         searchesToday={trialLimitError?.searchesToday || 3}
         dailyLimit={trialLimitError?.limit || 3}
+      />
+
+      {/* Bottom-right upgrade popup — only when walkthrough is done and searches exhausted */}
+      <UpgradeCornerPopup
+        visible={showPostSearchGuidance && freeSearchesExhausted}
       />
     </div>
   );

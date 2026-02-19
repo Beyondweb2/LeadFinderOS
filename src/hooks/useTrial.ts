@@ -21,7 +21,7 @@ interface TrialState {
   freeSearchCount: number;
 }
 
-const SEARCHES_BEFORE_PROMPT = 5;
+const SEARCHES_BEFORE_PROMPT = 3;
 const DAILY_TRIAL_LIMIT = 2;
 
 export function useTrial() {
