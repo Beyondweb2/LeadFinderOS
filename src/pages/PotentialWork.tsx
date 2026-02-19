@@ -128,6 +128,8 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   const [detailOpen, setDetailOpen] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
   const customLabel = getLeadCustomAction(lead.id);
   const [nextAction, setNextAction] = useState<string>(
     customLabel ? `custom::${customLabel}` : (lead.next_action || 'none')
@@ -138,9 +140,9 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   const [editingName, setEditingName] = useState(false);
   const [editedName, setEditedName] = useState(lead.business_name);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const [notesExpanded, setNotesExpanded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { customActions, addAction } = useCustomNextActions();
+  const notesRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setNotes(lead.notes || '');
@@ -159,10 +161,17 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   };
 
   const handleSaveNotes = async () => {
-    if (notesDirty) {
-      await onNotesChange(lead.id, notes);
-      setNotesDirty(false);
-    }
+    await onNotesChange(lead.id, notes);
+    setNotesDirty(false);
+    setNotesSaved(true);
+    setIsEditingNotes(false);
+    setTimeout(() => setNotesSaved(false), 2000);
+  };
+
+  const handleCancelNotes = () => {
+    setNotes(lead.notes || '');
+    setNotesDirty(false);
+    setIsEditingNotes(false);
   };
 
   const handleNextActionChange = async (v: string) => {
@@ -226,8 +235,8 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   return (
     <>
       <Card className={`border border-border/60 border-l-[4px] ${borderColor} hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 transition-all bg-card overflow-hidden`}>
-        {/* === 1. IDENTITY SECTION === */}
-        <div className="flex items-start gap-3 p-3 sm:p-4 pb-2 sm:pb-2.5">
+        {/* === 1. IDENTITY: Name + Status + Due === */}
+        <div className="flex items-start gap-2.5 p-3 sm:p-4 pb-1.5 sm:pb-2">
           {/* Image / Avatar */}
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -235,22 +244,22 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             title={lead.image_url ? 'Change image' : 'Add image'}
           >
             {lead.image_url ? (
-              <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-muted/30 ring-1 ring-border/30 group-hover/img:ring-primary/40 transition-all">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden bg-muted/30 ring-1 ring-border/30 group-hover/img:ring-primary/40 transition-all">
                 <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
               </div>
             ) : (
-              <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-center text-xs sm:text-sm font-bold text-primary/50 group-hover/img:border-primary/30 transition-all">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/5 border border-primary/10 flex items-center justify-center text-xs font-bold text-primary/50 group-hover/img:border-primary/30 transition-all">
                 {getInitials(lead.business_name)}
               </div>
             )}
-            <div className="absolute inset-0 rounded-xl bg-black/0 group-hover/img:bg-black/20 flex items-center justify-center transition-all opacity-0 group-hover/img:opacity-100">
+            <div className="absolute inset-0 rounded-lg bg-black/0 group-hover/img:bg-black/20 flex items-center justify-center transition-all opacity-0 group-hover/img:opacity-100">
               <Pencil className="h-3 w-3 text-white" />
             </div>
           </button>
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
 
-          {/* Name + Category + Status */}
-          <div className="flex-1 min-w-0 space-y-0.5">
+          {/* Name + Category */}
+          <div className="flex-1 min-w-0">
             {editingName ? (
               <div className="flex items-center gap-1">
                 <Input
@@ -272,12 +281,9 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 {lead.business_name}
               </h3>
             )}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {lead.category && (
-                <span className="text-[10px] sm:text-[11px] text-muted-foreground/70 truncate max-w-[140px]">{lead.category}</span>
-              )}
-              <OutreachStatusBadge status={lead.status} compact />
-            </div>
+            {lead.category && (
+              <span className="text-[10px] text-muted-foreground/60 truncate block">{lead.category}</span>
+            )}
           </div>
 
           {/* Maps + Menu */}
@@ -316,56 +322,69 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
           </div>
         </div>
 
-        {/* === 2. QUICK CONTACT ROW === */}
+        {/* === 2. STATUS + DUE BADGES (prominent) === */}
+        <div className="flex items-center gap-1.5 flex-wrap px-3 sm:px-4 pb-2">
+          {/* Status — larger, clickable to change */}
+          <Select value={lead.status} onValueChange={(v) => {
+            if (v === '__add_custom__') { onAddCustomStatus(); return; }
+            onStatusChange(lead.id, v as LeadStatus);
+          }}>
+            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0 shadow-none">
+              <OutreachStatusBadge status={lead.status} />
+            </SelectTrigger>
+            <SelectContent>
+              {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+              {customStatuses.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+              <SelectItem value="__add_custom__" className="text-primary">+ Custom</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Due badge — prominent */}
+          {dueLabel && (
+            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${
+              dueLabel.cls === 'text-red-500' ? 'bg-red-500/15 text-red-500 border border-red-500/25' :
+              dueLabel.cls === 'text-amber-500' ? 'bg-amber-500/15 text-amber-500 border border-amber-500/25' :
+              dueLabel.cls === 'text-amber-400' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+              'bg-muted text-muted-foreground border border-border/50'
+            }`}>
+              <Clock className="h-3 w-3" />
+              {dueLabel.text}
+            </span>
+          )}
+        </div>
+
+        {/* === 3. CONTACT BUTTONS (compact) === */}
         {lead.phone && (
-          <div className="flex items-center gap-1.5 px-3 sm:px-4 pb-2">
+          <div className="flex items-center gap-1 px-3 sm:px-4 pb-2">
             <a
               href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium bg-green-500/10 text-green-500 hover:bg-green-500/20 border border-green-500/20 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-medium bg-green-500/10 text-green-500 hover:bg-green-500/20 border border-green-500/20 transition-colors"
             >
-              <MessageSquare className="h-3.5 w-3.5" /> WhatsApp
+              <MessageSquare className="h-3 w-3" /> WhatsApp
             </a>
             <a
               href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors"
             >
-              <MessageCircle className="h-3.5 w-3.5" /> SMS
+              <MessageCircle className="h-3 w-3" /> SMS
             </a>
             <a
               href={`tel:${lead.phone}`}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 h-8 rounded-md text-xs font-medium bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-medium bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20 transition-colors"
             >
-              <PhoneCall className="h-3.5 w-3.5" /> Call
+              <PhoneCall className="h-3 w-3" /> Call
             </a>
           </div>
         )}
 
-        {/* === 3. STATUS + NEXT ACTION === */}
-        <div className="flex items-center gap-2 px-3 sm:px-4 pb-2">
-          {/* Status dropdown */}
-          <div className="flex-1 min-w-0">
-            <Select value={lead.status} onValueChange={(v) => {
-              if (v === '__add_custom__') { onAddCustomStatus(); return; }
-              onStatusChange(lead.id, v as LeadStatus);
-            }}>
-              <SelectTrigger className="h-7 text-[11px] sm:text-xs border-border/50 px-2">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-                {customStatuses.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-                <SelectItem value="__add_custom__" className="text-primary">+ Custom</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Next action dropdown */}
+        {/* === 4. NEXT ACTION CONTROLS === */}
+        <div className="flex items-center gap-1.5 px-3 sm:px-4 pb-2">
           <div className="flex-1 min-w-0">
             <Select value={nextAction} onValueChange={handleNextActionChange}>
               <SelectTrigger className="h-7 text-[11px] sm:text-xs border-border/50 px-2">
@@ -392,7 +411,6 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             </Select>
           </div>
 
-          {/* Date picker */}
           <Popover>
             <PopoverTrigger asChild>
               <button className="h-7 px-2 inline-flex items-center gap-1 rounded-md border border-border/50 text-[11px] sm:text-xs text-muted-foreground hover:text-foreground hover:border-border transition-colors shrink-0">
@@ -411,7 +429,6 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             </PopoverContent>
           </Popover>
 
-          {/* Complete action button */}
           {hasFollowUp && (
             <button
               className="h-6 w-6 flex items-center justify-center rounded-md text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors shrink-0"
@@ -423,57 +440,54 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
           )}
         </div>
 
-        {/* Due label */}
-        {dueLabel && (
-          <div className="px-3 sm:px-4 pb-1.5">
-            <span className={`text-[10px] sm:text-xs font-semibold ${dueLabel.cls}`}>
-              {dueLabel.text}
-            </span>
-          </div>
-        )}
-
-        {/* === 4. NOTES SECTION === */}
-        <div className="px-3 sm:px-4 pb-3 sm:pb-4">
-          {notes ? (
-            <div>
-              <p
-                className={`text-xs sm:text-sm text-foreground/70 leading-relaxed cursor-pointer hover:text-foreground/90 transition-colors ${notesExpanded ? '' : 'line-clamp-2'}`}
-                onClick={() => setNotesExpanded(!notesExpanded)}
-                title="Click to expand"
-              >
-                {notes}
-              </p>
-              {notesExpanded && (
-                <div className="mt-1.5">
-                  <Textarea
-                    value={notes}
-                    onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
-                    rows={3}
-                    className="resize-none text-xs sm:text-sm border-border/50"
-                    placeholder="Add notes..."
-                  />
-                  {notesDirty && (
-                    <div className="flex justify-end mt-1">
-                      <Button size="sm" variant="ghost" className="h-6 text-xs text-primary" onClick={handleSaveNotes}>
-                        <Save className="h-3 w-3 mr-1" /> Save
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
+        {/* === 5. NOTES SECTION (functional) === */}
+        <div className="px-3 sm:px-4 pb-3 sm:pb-3.5 border-t border-border/30 pt-2 mt-0.5">
+          {isEditingNotes ? (
+            <div className="space-y-1.5">
+              <Textarea
+                ref={notesRef}
+                value={notes}
+                onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
+                rows={3}
+                className="resize-none text-xs sm:text-sm border-border/50"
+                placeholder="Add notes about this lead..."
+                autoFocus
+              />
+              <div className="flex items-center justify-end gap-1.5">
+                <Button size="sm" variant="ghost" className="h-6 text-xs text-muted-foreground" onClick={handleCancelNotes}>
+                  Cancel
+                </Button>
+                <Button size="sm" className="h-6 text-xs gap-1" onClick={handleSaveNotes}>
+                  <Save className="h-3 w-3" /> Save
+                </Button>
+              </div>
             </div>
           ) : (
-            <button
-              className="text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors flex items-center gap-1"
-              onClick={() => { setNotesExpanded(true); setNotes(' '); setTimeout(() => setNotes(''), 0); }}
-            >
-              <StickyNote className="h-3 w-3" /> Add notes...
-            </button>
+            <div className="flex items-start gap-1.5">
+              <div className="flex-1 min-w-0">
+                {notes ? (
+                  <p className="text-xs sm:text-sm text-foreground/70 leading-relaxed line-clamp-2">{notes}</p>
+                ) : (
+                  <span className="text-xs text-muted-foreground/40 italic">No notes</span>
+                )}
+              </div>
+              <button
+                onClick={() => setIsEditingNotes(true)}
+                className="shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+              >
+                <Pencil className="h-2.5 w-2.5" /> {notes ? 'Edit' : 'Add'}
+              </button>
+              {notesSaved && (
+                <span className="text-[10px] text-green-500 shrink-0 flex items-center gap-0.5">
+                  <Check className="h-2.5 w-2.5" /> Saved
+                </span>
+              )}
+            </div>
           )}
         </div>
       </Card>
 
-      {/* Detail / Edit Dialog (kept for full editing) */}
+      {/* Detail / Edit Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
         <DialogContent className="sm:max-w-lg border-primary/20 bg-card/95 backdrop-blur-xl">
           <DialogHeader className="pb-2">
@@ -483,7 +497,6 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {/* Image section */}
             <div className="flex items-center gap-3">
               {lead.image_url ? (
                 <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-muted/30 ring-2 ring-primary/20">
@@ -501,12 +514,10 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 <Pencil className="h-3 w-3 mr-1.5" /> {lead.image_url ? 'Change' : 'Add Image'}
               </Button>
             </div>
-            {/* Name */}
             <div>
               <label className="text-xs font-semibold text-primary mb-1.5 block">Business Name</label>
               <Input value={editedName} onChange={(e) => setEditedName(e.target.value)} className="h-9 text-sm border-border/50 focus-visible:ring-primary/30" />
             </div>
-            {/* Notes */}
             <div>
               <label className="text-xs font-semibold text-primary mb-1.5 block">Notes</label>
               <Textarea
@@ -537,7 +548,6 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
     </>
   );
 };
-
 const PotentialWorkPage = () => {
   const {
     leads,
