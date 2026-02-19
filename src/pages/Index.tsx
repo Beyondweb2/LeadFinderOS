@@ -15,11 +15,11 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, Country } from '@/types/lead';
 
 const FREE_SEARCH_LIMIT = 3;
+const PAYWALL_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const Index = () => {
   const location = useLocation();
@@ -36,16 +36,31 @@ const Index = () => {
   
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
-  const [showPaywall, setShowPaywall] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
   const [showUpgradeAfterLimit, setShowUpgradeAfterLimit] = useState(false);
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
+  // Session-level dismissal tracking
+  const [paywallDismissedThisSession, setPaywallDismissedThisSession] = useState(false);
   
   // Determine if still loading access status
   const isAccessLoading = isTrialLoading || isSubscriptionLoading;
 
   // Free user = not paid
   const isFreeUser = !hasProAccess;
+
+  // Free search exhausted at limit of 3
+  const freeSearchesExhausted = isFreeUser && (freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT;
+
+  // Check if paywall was dismissed within cooldown period
+  const isWithinCooldown = useCallback(() => {
+    try {
+      const dismissed = localStorage.getItem('paywallDismissedAt');
+      if (!dismissed) return false;
+      return Date.now() - parseInt(dismissed, 10) < PAYWALL_COOLDOWN_MS;
+    } catch {
+      return false;
+    }
+  }, []);
 
   // Refetch trial data and fire tip event after search completes
   useEffect(() => {
@@ -56,22 +71,12 @@ const Index = () => {
         
         // Track cumulative businesses found
         setTotalBusinessesFound(prev => prev + leads.length);
-        
-        // Show upgrade popup when limit reached
-        const currentCount = (freeSearchCount ?? 0);
-        if (currentCount >= FREE_SEARCH_LIMIT) {
-          setTimeout(() => setShowUpgradeAfterLimit(true), 1200);
-        }
       }
     }
-  }, [isLoading, leads.length, checkTrial, isFreeUser, freeSearchCount]);
+  }, [isLoading, leads.length, checkTrial, isFreeUser]);
 
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
-
-  // Free search exhausted at limit of 3
-  const freeSearchesExhausted = isFreeUser && (freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT;
-
 
   const handleCheckout = useCallback(() => {
     const win = window.open('', '_blank');
@@ -98,6 +103,33 @@ const Index = () => {
     })();
   }, [session?.access_token, toast]);
 
+  // Handle search attempt — show paywall if exhausted
+  const handleSearch = useCallback((filters: any) => {
+    if (isFreeUser && (freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT) {
+      // Only show modal if not dismissed this session and not within cooldown
+      if (!paywallDismissedThisSession && !isWithinCooldown()) {
+        setShowUpgradeAfterLimit(true);
+      } else {
+        // User already dismissed — show it again since they're actively trying to search
+        setShowUpgradeAfterLimit(true);
+      }
+      return;
+    }
+    setLastSearchCountry(filters.country || 'UK');
+    search(filters, false, false);
+  }, [isFreeUser, freeSearchCount, paywallDismissedThisSession, isWithinCooldown, search]);
+
+  // Handle paywall dismissal
+  const handlePaywallDismiss = useCallback((open: boolean) => {
+    if (!open) {
+      setShowUpgradeAfterLimit(false);
+      setPaywallDismissedThisSession(true);
+      try {
+        localStorage.setItem('paywallDismissedAt', Date.now().toString());
+      } catch {}
+    }
+  }, []);
+
   return (
     <div className="space-y-4 md:space-y-8">
       {/* Page Header - Compact on mobile */}
@@ -120,9 +152,6 @@ const Index = () => {
         </div>
       </div>
 
-
-
-
       {/* Post-Abandon Exhausted Banner */}
       {postAbandonExhausted && !hasProAccess && (
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
@@ -142,15 +171,7 @@ const Index = () => {
       {/* Search Section */}
       <section>
         <SearchForm 
-          onSearch={(filters) => {
-            // Block search if free searches exhausted and not paid
-            if (isFreeUser && (freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT) {
-              setShowPaywall(true);
-              return;
-            }
-            setLastSearchCountry(filters.country || 'UK');
-            search(filters, false, false);
-          }} 
+          onSearch={handleSearch} 
           isLoading={isLoading}
           isOnTrial={false}
           searchesRemaining={hasProAccess ? Infinity : Math.max(0, FREE_SEARCH_LIMIT - (freeSearchCount ?? 0))}
@@ -159,6 +180,7 @@ const Index = () => {
           disabled={postAbandonExhausted && !hasProAccess}
           isUpgradeLoading={isCheckoutLoading}
           onUpgrade={handleCheckout}
+          freeSearchesExhausted={freeSearchesExhausted}
         />
       </section>
 
@@ -202,36 +224,6 @@ const Index = () => {
         </section>
       )}
 
-      {/* Paywall Dialog - shown when free searches exhausted */}
-      <Dialog open={showPaywall} onOpenChange={setShowPaywall}>
-        <DialogContent className="max-w-sm mx-auto">
-          <DialogHeader className="text-center space-y-3">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <Lock className="h-6 w-6 text-primary" />
-            </div>
-            <DialogTitle className="text-xl font-bold">Unlock unlimited access</DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
-              You've used your free searches. Upgrade to continue unlimited searches.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex flex-col gap-2 sm:flex-col">
-            <Button
-              size="lg"
-              className="w-full"
-              disabled={isCheckoutLoading}
-              onClick={handleCheckout}
-            >
-              {isCheckoutLoading ? (
-                <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Starting...</>
-              ) : (
-                'Unlock unlimited — £19.99/month'
-              )}
-            </Button>
-            <p className="text-xs text-muted-foreground text-center">Cancel anytime</p>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Trial Limit Dialog (when daily limit reached) */}
       <TrialLimitDialog
         open={!!trialLimitError}
@@ -242,10 +234,10 @@ const Index = () => {
         noWebsiteCount={noWebsiteCount}
       />
 
-      {/* Upgrade After Limit Popup */}
+      {/* Upgrade After Limit Popup — action-triggered only */}
       <TrialLimitDialog
         open={showUpgradeAfterLimit}
-        onOpenChange={setShowUpgradeAfterLimit}
+        onOpenChange={handlePaywallDismiss}
         searchesToday={FREE_SEARCH_LIMIT}
         dailyLimit={FREE_SEARCH_LIMIT}
         totalBusinessesFound={totalBusinessesFound}
