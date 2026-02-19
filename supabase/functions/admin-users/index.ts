@@ -175,13 +175,13 @@ serve(async (req) => {
         }
 
         // --- Access Mode ---
-        let access_mode = 'signed_up';
+        // All new accounts get Free Access immediately on signup.
+        // Only paid/trialing Stripe users get 'paid' mode.
+        let access_mode = 'free_user';
         if (sub?.status === 'active' || sub?.status === 'past_due') {
           access_mode = 'paid';
         } else if (sub?.status === 'trialing') {
           access_mode = 'paid'; // legacy trialing = paid access
-        } else if ((trial?.free_search_count ?? 0) > 0) {
-          access_mode = 'free_user';
         }
 
         // Keep legacy subscription_status for filter compatibility

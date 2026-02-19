@@ -87,8 +87,7 @@ function accessModeColor(mode: string): string {
   switch (mode) {
     case 'paid': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
     case 'free_user': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
-    case 'signed_up': return 'bg-muted text-muted-foreground border-border';
-    default: return 'bg-muted text-muted-foreground border-border';
+    default: return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
   }
 }
 
@@ -96,8 +95,7 @@ function accessModeLabel(mode: string): string {
   switch (mode) {
     case 'paid': return 'Paid (Unlimited)';
     case 'free_user': return 'Free Access';
-    case 'signed_up': return 'Signed Up';
-    default: return mode;
+    default: return 'Free Access';
   }
 }
 
