@@ -13,6 +13,7 @@ import {
   VolumeX,
   MessageSquare,
   Star,
+  Zap,
 } from 'lucide-react';
 import demoVideo from '@/assets/leadfinder-demo-v5.mp4';
 import appLogo from '@/assets/logo.png';
@@ -171,13 +172,8 @@ const VideoSection = () => {
 
   return (
     <ScrollReveal className="relative z-10 pb-10 sm:pb-14 md:pb-20 px-2 sm:px-4">
-        <div className="container mx-auto">
-          <div className="max-w-5xl mx-auto relative">
-            <div 
-              className="absolute -inset-4 rounded-3xl blur-2xl opacity-40 pointer-events-none"
-              style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.12), transparent 70%)' }}
-            />
-            <div className="relative rounded-2xl overflow-hidden border border-border" style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.08), 0 0 60px hsl(210 100% 50% / 0.04)' }}>
+      <div className="container mx-auto">
+        <div className="max-w-5xl mx-auto relative rounded-2xl overflow-hidden border border-border">
           <video
             ref={videoRef}
             src={demoVideo}
@@ -195,7 +191,6 @@ const VideoSection = () => {
           >
             {isMuted ? <VolumeX className="h-4 w-4 md:h-5 md:w-5" /> : <Volume2 className="h-4 w-4 md:h-5 md:w-5" />}
           </button>
-          </div>
         </div>
         <p className="text-center text-xs sm:text-sm text-muted-foreground/60 mt-6 sm:mt-10">
           See the difference for yourself.
@@ -351,20 +346,20 @@ const Landing = () => {
 
       {/* Header */}
       <header className="relative z-10 backdrop-blur-sm bg-transparent">
-        <div className="container mx-auto px-4 py-4 sm:py-5 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
+        <div className="container mx-auto px-4 py-3 sm:py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
             <img src={appLogo} alt="LeadFinder Pro" className="h-8 w-8 sm:h-9 sm:w-9" width={36} height={36} />
             <span className="text-base sm:text-lg font-bold tracking-tight">
               Lead<span className="text-gradient-primary">Finder</span> Pro
             </span>
           </div>
-          <div className="flex items-center gap-3 sm:gap-4">
-            <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm px-3 sm:px-4" asChild>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm px-2 sm:px-4" asChild>
               <Link to="/auth">Sign In</Link>
             </Button>
             <Button 
               asChild 
-              className="font-semibold text-sm px-4 sm:px-5 btn-premium"
+              className="font-semibold text-sm px-3 sm:px-4 btn-premium"
             >
               <Link to="/auth?intent=upgrade">
                 Try it free
@@ -375,43 +370,42 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-8 pb-8 sm:pt-16 sm:pb-12 md:pt-20 md:pb-16 lg:pt-24 lg:pb-20 px-4">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:min-h-[calc(100vh-64px)] lg:flex lg:items-center lg:pt-0 lg:pb-0 px-4">
         <div 
           className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[800px] pointer-events-none"
           style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.10), transparent 70%)' }}
         />
         <div className="container mx-auto text-center lg:max-w-[1140px]">
           {/* Mobile: Video at top */}
-          <div className="sm:hidden mb-10">
+          <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
 
-          <div className="max-w-3xl mx-auto">
-            {/* Eyebrow */}
-            <p className="text-[9px] sm:text-[11px] uppercase tracking-[0.3em] text-muted-foreground/35 font-medium mb-8 sm:mb-10">
-              For Freelance Web Developers & Small Agencies
-            </p>
-
-            {/* Headline */}
-            <h1 
-              className="text-[2.1rem] sm:text-[3rem] md:text-[3.5rem] lg:text-[4rem] font-bold" 
-              style={{ lineHeight: '1.05', letterSpacing: '-0.015em' }}
+          <div className="max-w-3xl mx-auto lg:max-w-2xl">
+            {/* Blue pill badge */}
+            <div 
+              className="hidden sm:inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium mb-6 lg:mb-5 backdrop-blur-sm"
+              style={{ border: '1px solid hsl(210 100% 50% / 0.2)', background: 'hsl(210 100% 50% / 0.08)', color: 'hsl(210 100% 70%)' }}
             >
-              Find Clients
-              <br />
-              <span className="text-gradient-primary">On Demand</span>
+              <Zap className="h-3 w-3" />
+              <span>Lead generation for web professionals</span>
+            </div>
+
+            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
+              <span className="tracking-[0.02em]">Find Businesses</span>{' '}
+              <br className="hidden sm:block" />
+              <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            {/* Subheading */}
-            <p className="text-[15px] sm:text-[1.125rem] md:text-[1.2rem] text-foreground/50 max-w-[590px] mx-auto leading-[1.75] sm:leading-[1.8] mt-8 sm:mt-10 font-normal">
-              Find businesses without websites, contact them instantly, and manage every lead in one simple system.
+            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
+              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
             </p>
             
             {/* CTA */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-12 sm:mt-14">
+            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-8">
               <Button 
                 size="lg" 
-                className="btn-premium text-[15px] sm:text-[17px] font-semibold px-10 sm:px-16 h-[54px] sm:h-[60px] rounded-2xl w-full sm:w-auto sm:min-w-[300px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto sm:min-w-[360px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                 asChild
               >
                 <Link to="/auth?intent=upgrade">
@@ -419,13 +413,13 @@ const Landing = () => {
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Link>
               </Button>
-              <p className="text-[10px] sm:text-[11px] text-foreground/35 font-medium mt-5 sm:mt-6 tracking-wide">
+              <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
                 No card required · Instant access · Cancel anytime
               </p>
             </div>
 
             {/* Mobile trust badges */}
-            <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-12">
+            <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-8">
               <CountUpStat target={100000} suffix="+" label="Businesses" />
               <div className="text-center">
                 <div className="text-base font-bold text-gradient-primary tracking-tight">Global</div>
@@ -444,24 +438,32 @@ const Landing = () => {
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
             </div>
 
-            {/* Desktop stats row */}
-            <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-16 md:mt-20">
+            {/* Desktop trust badges */}
+            <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-10">
               <CountUpStat target={100000} suffix="+" label="Businesses" />
               <div className="text-center">
                 <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-xs text-foreground/50 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-xs text-foreground/50 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
               </div>
             </div>
+          </div>
+
+          {/* Scroll indicator — mobile/tablet only */}
+          <div className="flex lg:hidden flex-col items-center mt-10 sm:mt-12 animate-bounce">
+            <span className="text-[10px] sm:text-xs text-muted-foreground/30 tracking-widest uppercase mb-2">Scroll</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/30">
+              <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
+            </svg>
           </div>
         </div>
       </section>
 
       {/* Video Demo Section - desktop only */}
-      <div className="hidden sm:block mt-6 sm:mt-10">
+      <div className="hidden sm:block">
         <VideoSection />
       </div>
 
@@ -510,11 +512,24 @@ const Landing = () => {
                 img: featureDashboard,
                 alt: 'Dashboard analytics',
               },
-            ].map((step) => {
+            ].map((step, index) => {
+              const isEven = index % 2 === 0;
               return (
               <ScrollReveal key={step.num} className="w-full" delay={step.num * 80} direction="up">
-                {/* Mobile: image above text */}
+                {/* Mobile: stacked vertically */}
                 <div className="lg:hidden flex flex-col items-center text-center gap-5">
+                  <div>
+                    <span 
+                      className="font-bold text-lg mb-1.5 block"
+                      style={{ color: 'hsl(210 100% 60%)' }}
+                    >{step.num}.</span>
+                    <h3 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
+                      {step.title}
+                    </h3>
+                    <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto">
+                      {step.body}
+                    </p>
+                  </div>
                   <div 
                     className="relative group cursor-pointer w-full"
                     onClick={() => setExpandedImage({ src: step.img, title: step.title })}
@@ -532,24 +547,26 @@ const Landing = () => {
                       </div>
                     </div>
                   </div>
-                  <div>
+                </div>
+
+                {/* Desktop: 12-column grid, alternating */}
+                <div className={`hidden lg:grid lg:grid-cols-12 lg:gap-16 items-center`}>
+                  {/* Text column — 5 cols */}
+                  <div className={`col-span-5 ${isEven ? 'order-1' : 'order-2'} ${isEven ? 'text-left' : 'text-right'}`}>
                     <span 
-                      className="font-bold text-lg mb-1.5 block"
+                      className="font-bold text-xl mb-3 block"
                       style={{ color: 'hsl(210 100% 60%)' }}
                     >{step.num}.</span>
-                    <h3 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
+                    <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
                       {step.title}
                     </h3>
-                    <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto">
+                    <p className={`text-muted-foreground/70 text-base md:text-lg leading-[1.6] ${isEven ? '' : 'ml-auto'} max-w-md`}>
                       {step.body}
                     </p>
                   </div>
-                </div>
-
-                {/* Desktop: image on top, text below — centered */}
-                <div className="hidden lg:flex lg:flex-col lg:items-center lg:text-center lg:gap-8 max-w-4xl mx-auto">
+                  {/* Image column — 7 cols */}
                   <div 
-                    className="relative group cursor-pointer w-full"
+                    className={`col-span-7 ${isEven ? 'order-2' : 'order-1'} relative group cursor-pointer`}
                     onClick={() => setExpandedImage({ src: step.img, title: step.title })}
                   >
                     <div 
@@ -568,18 +585,6 @@ const Landing = () => {
                         <Search className="h-4 w-4 text-foreground/70" />
                       </div>
                     </div>
-                  </div>
-                  <div className="max-w-xl">
-                    <span 
-                      className="font-bold text-xl mb-3 block"
-                      style={{ color: 'hsl(210 100% 60%)' }}
-                    >{step.num}.</span>
-                    <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
-                      {step.title}
-                    </h3>
-                    <p className="text-muted-foreground/70 text-base md:text-lg leading-[1.6] max-w-md mx-auto">
-                      {step.body}
-                    </p>
                   </div>
                 </div>
               </ScrollReveal>

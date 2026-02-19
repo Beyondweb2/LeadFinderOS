@@ -12,7 +12,6 @@ import { Loader2, CreditCard, Sparkles, Gift, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
-import { trackFBEvent } from '@/lib/fbPixel';
 import appLogo from '@/assets/logo.png';
 
 const authSchema = z.object({
@@ -122,7 +121,6 @@ const Auth = () => {
             });
           }
         } else {
-          trackFBEvent('CompleteRegistration');
           toast({
             title: 'Account created!',
             description: 'Welcome! Redirecting to your dashboard...',
@@ -220,9 +218,14 @@ const Auth = () => {
           </CardTitle>
           <CardDescription>
             {isLogin 
-              ? 'Sign in to your account' 
-              : 'Create an account to get full access'}
+              ? 'Sign in to find businesses without websites' 
+              : 'Create an account to try your first search free'}
           </CardDescription>
+          {!isLogin && (
+            <p className="text-xs text-muted-foreground mt-2">
+              No card required. See real results instantly.
+            </p>
+          )}
         </CardHeader>
         
         <form onSubmit={handleSubmit}>
