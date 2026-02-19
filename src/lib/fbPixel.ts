@@ -18,3 +18,4 @@ export function trackFBEvent(eventName: string, eventId?: string) {
 
 export const trackLead = () => trackFBEvent('Lead');
 export const trackStartTrial = (eventId?: string) => trackFBEvent('StartTrial', eventId);
+export const trackCompleteRegistration = () => trackFBEvent('CompleteRegistration');

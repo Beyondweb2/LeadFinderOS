@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
 import appLogo from '@/assets/logo.png';
+import { trackCompleteRegistration } from '@/lib/fbPixel';
 
 const authSchema = z.object({
   email: z.string().trim().email({ message: 'Please enter a valid email address' }),
@@ -121,6 +122,7 @@ const Auth = () => {
             });
           }
         } else {
+          trackCompleteRegistration();
           toast({
             title: 'Account created!',
             description: 'Welcome! Redirecting to your dashboard...',
