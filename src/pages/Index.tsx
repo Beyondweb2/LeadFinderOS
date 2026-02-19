@@ -38,6 +38,9 @@ const Index = () => {
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [countdownBanner, setCountdownBanner] = useState<string | null>(null);
+  const [showUpgradeAfterLimit, setShowUpgradeAfterLimit] = useState(false);
+  const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   
   // Determine if still loading access status
   const isAccessLoading = isTrialLoading || isSubscriptionLoading;
@@ -51,9 +54,27 @@ const Index = () => {
       checkTrial();
       if (isFreeUser) {
         setTimeout(() => window.dispatchEvent(new CustomEvent('post-search-tip')), 300);
+        
+        // Track cumulative businesses found
+        setTotalBusinessesFound(prev => prev + leads.length);
+        
+        // Show countdown banner or upgrade popup
+        const currentCount = (freeSearchCount ?? 0);
+        const remaining = FREE_SEARCH_LIMIT - currentCount;
+        if (remaining > 0) {
+          const msg = remaining === 1 
+            ? '1 search remaining — make it count!' 
+            : `${remaining} searches remaining`;
+          setCountdownBanner(msg);
+          const timer = setTimeout(() => setCountdownBanner(null), 5000);
+          return () => clearTimeout(timer);
+        } else if (currentCount >= FREE_SEARCH_LIMIT) {
+          // Small delay so user sees results first
+          setTimeout(() => setShowUpgradeAfterLimit(true), 1200);
+        }
       }
     }
-  }, [isLoading, leads.length, checkTrial, isFreeUser]);
+  }, [isLoading, leads.length, checkTrial, isFreeUser, freeSearchCount]);
 
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
@@ -108,6 +129,14 @@ const Index = () => {
           </div>
         </div>
       </div>
+
+      {/* Search Countdown Banner */}
+      {countdownBanner && isFreeUser && (
+        <div className="flex items-center justify-center gap-2 py-2.5 px-4 bg-primary/10 border border-primary/20 rounded-lg animate-fade-in">
+          <Search className="h-4 w-4 text-primary" />
+          <span className="text-sm font-medium text-foreground">{countdownBanner}</span>
+        </div>
+      )}
 
       {/* Post-Abandon Exhausted Banner */}
       {postAbandonExhausted && !hasProAccess && (
@@ -224,6 +253,18 @@ const Index = () => {
         onOpenChange={(open) => !open && clearTrialLimitError()}
         searchesToday={trialLimitError?.searchesToday || 3}
         dailyLimit={trialLimitError?.limit || 3}
+        totalBusinessesFound={totalBusinessesFound}
+        noWebsiteCount={noWebsiteCount}
+      />
+
+      {/* Upgrade After Limit Popup */}
+      <TrialLimitDialog
+        open={showUpgradeAfterLimit}
+        onOpenChange={setShowUpgradeAfterLimit}
+        searchesToday={FREE_SEARCH_LIMIT}
+        dailyLimit={FREE_SEARCH_LIMIT}
+        totalBusinessesFound={totalBusinessesFound}
+        noWebsiteCount={noWebsiteCount}
       />
     </div>
   );

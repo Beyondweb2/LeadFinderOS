@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Search, Check, Sparkles } from 'lucide-react';
+import { Check, Sparkles, TrendingUp, Users, Target, Rocket } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { CheckoutConfirmDialog } from '@/components/CheckoutConfirmDialog';
 
@@ -17,16 +17,25 @@ interface TrialLimitDialogProps {
   onOpenChange: (open: boolean) => void;
   searchesToday: number;
   dailyLimit: number;
+  totalBusinessesFound?: number;
+  noWebsiteCount?: number;
 }
 
 const UPGRADE_BENEFITS = [
-  'Unlimited lead searches',
-  'Advanced search filters',
-  'Full Outreach CRM access',
-  'Priority support',
+  { text: 'Unlimited lead searches', icon: Rocket },
+  { text: 'Full Outreach CRM & pipeline', icon: Target },
+  { text: 'Track leads from first contact to paid client', icon: TrendingUp },
+  { text: 'Priority support', icon: Users },
 ];
 
-export function TrialLimitDialog({ open, onOpenChange, searchesToday, dailyLimit }: TrialLimitDialogProps) {
+export function TrialLimitDialog({ 
+  open, 
+  onOpenChange, 
+  searchesToday, 
+  dailyLimit,
+  totalBusinessesFound = 0,
+  noWebsiteCount = 0,
+}: TrialLimitDialogProps) {
   const { createCheckout } = useSubscription();
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -41,30 +50,46 @@ export function TrialLimitDialog({ open, onOpenChange, searchesToday, dailyLimit
     try { await createCheckout(); } catch { setIsLoading(false); }
   };
 
+  const hasStats = totalBusinessesFound > 0 || noWebsiteCount > 0;
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader className="text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <Search className="h-6 w-6 text-primary" />
+          <DialogHeader className="text-center space-y-3">
+            <div className="mx-auto mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-primary/10">
+              <Sparkles className="h-7 w-7 text-primary" />
             </div>
-            <DialogTitle className="text-xl">
-              Unlock unlimited access
+            <DialogTitle className="text-xl font-bold">
+              {hasStats 
+                ? `You've found ${totalBusinessesFound} businesses`
+                : 'Unlock unlimited access'}
             </DialogTitle>
-            <DialogDescription className="text-base">
-              Upgrade to continue unlimited searches and keep building your pipeline.
+            <DialogDescription className="text-sm text-muted-foreground">
+              {noWebsiteCount > 0 
+                ? `${noWebsiteCount} of them don't have a website — those are your ideal clients.`
+                : 'You\'ve used your free searches. Unlock unlimited to keep building your pipeline.'}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="py-4 space-y-4">
-            <div className="space-y-2">
-              <p className="text-sm font-medium text-foreground">What you'll unlock:</p>
+          <div className="py-3 space-y-4">
+            {/* Social proof */}
+            <div className="text-center p-3 rounded-lg bg-muted/50 border border-border">
+              <p className="text-sm font-medium text-foreground">
+                💰 Users who upgrade close their first deal within 2 weeks
+              </p>
+            </div>
+
+            {/* Benefits */}
+            <div className="space-y-2.5">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">What you'll get:</p>
               <ul className="space-y-2">
-                {UPGRADE_BENEFITS.map((benefit) => (
-                  <li key={benefit} className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Check className="h-4 w-4 text-primary shrink-0" />
-                    <span>{benefit}</span>
+                {UPGRADE_BENEFITS.map(({ text, icon: Icon }) => (
+                  <li key={text} className="flex items-center gap-2.5 text-sm text-foreground">
+                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                      <Check className="h-3 w-3 text-primary" />
+                    </div>
+                    <span>{text}</span>
                   </li>
                 ))}
               </ul>
@@ -72,15 +97,15 @@ export function TrialLimitDialog({ open, onOpenChange, searchesToday, dailyLimit
           </div>
 
           <DialogFooter className="flex-col gap-2 sm:flex-col">
-            <Button onClick={handleUpgrade} className="w-full gap-2">
+            <Button onClick={handleUpgrade} size="lg" className="w-full gap-2 text-base">
               <Sparkles className="h-4 w-4" />
               Unlock unlimited — £19.99/month
             </Button>
-            <p className="text-xs text-muted-foreground text-center">Cancel anytime</p>
+            <p className="text-xs text-muted-foreground text-center">Cancel anytime · No commitment</p>
             <Button 
               variant="ghost" 
               onClick={() => onOpenChange(false)}
-              className="w-full text-muted-foreground"
+              className="w-full text-muted-foreground text-sm"
             >
               Maybe later
             </Button>
