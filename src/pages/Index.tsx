@@ -2,9 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
-import { PostSearchTips } from '@/components/PostSearchTips';
-import { OutreachProgressSummary } from '@/components/OutreachProgressSummary';
-import { UpgradeCornerPopup } from '@/components/UpgradeCornerPopup';
 
 import { UpgradePromptDialog } from '@/components/UpgradePromptDialog';
 import { TrialLimitDialog } from '@/components/TrialLimitDialog';
@@ -15,8 +12,6 @@ import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
-import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
-import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { supabase } from '@/integrations/supabase/client';
 import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -35,8 +30,6 @@ const Index = () => {
   const { subscribed, isLoading: isSubscriptionLoading, status: subStatus, isPaidSubscriber } = useSubscription();
   const { session } = useAuth();
   const { toast } = useToast();
-  const { walkthroughOpen, walkthroughCompleted } = useWalkthroughStatus();
-  const { metrics } = useDashboardMetrics();
   
   // Pro access = active, past_due, or admin (trialing kept for legacy)
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
@@ -49,24 +42,25 @@ const Index = () => {
   // Determine if still loading access status
   const isAccessLoading = isTrialLoading || isSubscriptionLoading;
 
-  // Refetch trial data after search completes
+  // Free user = not paid
+  const isFreeUser = !hasProAccess;
+
+  // Refetch trial data and fire tip event after search completes
   useEffect(() => {
     if (!isLoading && leads.length > 0) {
       checkTrial();
+      if (isFreeUser) {
+        setTimeout(() => window.dispatchEvent(new CustomEvent('post-search-tip')), 300);
+      }
     }
-  }, [isLoading, leads.length, checkTrial]);
+  }, [isLoading, leads.length, checkTrial, isFreeUser]);
 
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
 
-  // Free user = not paid
-  const isFreeUser = !hasProAccess;
-
   // Free search exhausted at limit of 3
   const freeSearchesExhausted = isFreeUser && (freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT;
 
-  // Should show new guidance (tips/summary/popup) only when walkthrough is done and user is free
-  const showPostSearchGuidance = isFreeUser && !walkthroughOpen && !isAccessLoading;
 
   const handleCheckout = useCallback(() => {
     const win = window.open('', '_blank');
@@ -175,22 +169,7 @@ const Index = () => {
             onMapLinkClick={markAsChecked}
             isChecked={isChecked}
           />
-
-          {/* Post-search tips — only for free users after walkthrough is complete, searches 1 & 2 */}
-          {showPostSearchGuidance && (freeSearchCount ?? 0) >= 1 && (freeSearchCount ?? 0) <= 2 && (
-            <PostSearchTips searchCount={freeSearchCount ?? 0} />
-          )}
         </section>
-      )}
-
-      {/* Search 3+ upgrade summary — replaces results area when searches exhausted */}
-      {showPostSearchGuidance && freeSearchesExhausted && (
-        <OutreachProgressSummary
-          businessesFound={metrics.noWebsiteBusinesses}
-          addedToCrm={metrics.totalBusinessesAdded}
-          messagesSent={metrics.activity.totalLeadsContacted}
-          leadsTracked={metrics.trackedLeads.length}
-        />
       )}
 
       {/* Empty State */}
@@ -245,11 +224,6 @@ const Index = () => {
         onOpenChange={(open) => !open && clearTrialLimitError()}
         searchesToday={trialLimitError?.searchesToday || 3}
         dailyLimit={trialLimitError?.limit || 3}
-      />
-
-      {/* Bottom-right upgrade popup — only when walkthrough is done and searches exhausted */}
-      <UpgradeCornerPopup
-        visible={showPostSearchGuidance && freeSearchesExhausted}
       />
     </div>
   );
