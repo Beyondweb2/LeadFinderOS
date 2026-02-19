@@ -314,32 +314,29 @@ export function DemoChecklistPanel() {
             )}
 
             {/* Tips content */}
-            {((activeTab === 'tips' && showTipsTab) || (showTipsTab && !walkthroughActive)) ? (
-              <TipsContent searchCount={freeSearchCount ?? 0} onUpgrade={handleUpgrade} isUpgradeLoading={isUpgradeLoading} />
+            {((activeTab === 'tips' && showTipsTab) || allDone || (showTipsTab && !walkthroughActive)) ? (
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setDismissed(true);
+                    if (dismissKey) {
+                      try { localStorage.setItem(dismissKey, 'true'); } catch {}
+                    }
+                    if (user?.id) {
+                      try { localStorage.setItem(`walkthrough_completed_${user.id}`, 'true'); } catch {}
+                    }
+                  }}
+                  className="absolute -top-1 -right-1 h-5 w-5 rounded-full hover:bg-muted flex items-center justify-center z-10"
+                  aria-label="Close panel"
+                >
+                  <X className="h-3.5 w-3.5 text-muted-foreground" />
+                </button>
+                <TipsContent searchCount={freeSearchCount ?? 0} onUpgrade={handleUpgrade} isUpgradeLoading={isUpgradeLoading} />
+              </div>
             ) : (
               <>
                 {/* Walkthrough content */}
-                {allDone ? (
-                  <div className="text-center space-y-2 py-2 relative">
-                    <button
-                      onClick={() => {
-                        setDismissed(true);
-                        if (dismissKey) {
-                          try { localStorage.setItem(dismissKey, 'true'); } catch {}
-                        }
-                        if (user?.id) {
-                          try { localStorage.setItem(`walkthrough_completed_${user.id}`, 'true'); } catch {}
-                        }
-                      }}
-                      className="absolute top-0 right-0 h-6 w-6 rounded-full hover:bg-muted flex items-center justify-center"
-                      aria-label="Close walkthrough permanently"
-                    >
-                      <X className="h-4 w-4 text-muted-foreground" />
-                    </button>
-                    <p className="text-sm font-semibold text-primary">🎉 You're all set!</p>
-                    <p className="text-xs text-muted-foreground">You've completed the walkthrough. Close this panel anytime.</p>
-                  </div>
-                ) : (
+                {allDone ? null : (
                 <ol className="space-y-1.5">
                     {steps.map((step, i) => {
                       const done = state[step.key];
