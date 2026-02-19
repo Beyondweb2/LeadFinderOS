@@ -38,7 +38,6 @@ const Index = () => {
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
-  const [countdownBanner, setCountdownBanner] = useState<string | null>(null);
   const [showUpgradeAfterLimit, setShowUpgradeAfterLimit] = useState(false);
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   
@@ -58,18 +57,9 @@ const Index = () => {
         // Track cumulative businesses found
         setTotalBusinessesFound(prev => prev + leads.length);
         
-        // Show countdown banner or upgrade popup
+        // Show upgrade popup when limit reached
         const currentCount = (freeSearchCount ?? 0);
-        const remaining = FREE_SEARCH_LIMIT - currentCount;
-        if (remaining > 0) {
-          const msg = remaining === 1 
-            ? '1 search remaining — make it count!' 
-            : `${remaining} searches remaining`;
-          setCountdownBanner(msg);
-          const timer = setTimeout(() => setCountdownBanner(null), 5000);
-          return () => clearTimeout(timer);
-        } else if (currentCount >= FREE_SEARCH_LIMIT) {
-          // Small delay so user sees results first
+        if (currentCount >= FREE_SEARCH_LIMIT) {
           setTimeout(() => setShowUpgradeAfterLimit(true), 1200);
         }
       }
@@ -130,13 +120,8 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Search Countdown Banner */}
-      {countdownBanner && isFreeUser && (
-        <div className="flex items-center justify-center gap-2 py-2.5 px-4 bg-primary/10 border border-primary/20 rounded-lg animate-fade-in">
-          <Search className="h-4 w-4 text-primary" />
-          <span className="text-sm font-medium text-foreground">{countdownBanner}</span>
-        </div>
-      )}
+
+
 
       {/* Post-Abandon Exhausted Banner */}
       {postAbandonExhausted && !hasProAccess && (
