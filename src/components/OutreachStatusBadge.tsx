@@ -110,7 +110,11 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
 };
 
 export function OutreachStatusBadge({ status, compact }: OutreachStatusBadgeProps) {
-  const config = statusConfig[status];
+  const config = statusConfig[status] ?? {
+    label: status ?? 'Unknown',
+    shortLabel: status ?? '?',
+    className: 'bg-muted text-muted-foreground border-muted',
+  };
 
   return (
     <Badge 
