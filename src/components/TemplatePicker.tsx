@@ -75,7 +75,8 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text' }: Temp
             <div className="p-3 text-xs text-muted-foreground text-center">Loading templates...</div>
           ) : templates.length === 0 ? (
             <div className="p-3 text-xs text-muted-foreground text-center">
-              No templates found. Create some on the Templates page.
+              No templates found. Create some on the{' '}
+              <a href="/templates" className="text-primary underline hover:text-primary/80">Templates page</a>.
             </div>
           ) : (
             <ScrollArea className="max-h-48">

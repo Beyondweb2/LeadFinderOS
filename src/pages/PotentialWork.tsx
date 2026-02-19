@@ -323,47 +323,119 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             )}
           </div>
 
-          {/* RIGHT: Next Action + Due + Mark as Done */}
-          <div className="sm:w-36 shrink-0 flex sm:flex-col items-start sm:items-end gap-1 sm:gap-1 sm:text-right sm:pt-1">
-            {actionLabel ? (
-              <>
-                <div className="flex items-center gap-1.5 sm:justify-end">
-                  <span className="text-xs sm:text-sm font-semibold text-foreground/90">{actionLabel}</span>
-                  <button
-                    className="h-6 w-6 flex items-center justify-center rounded-md text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onNextActionChange(lead.id, 'none' as NextActionType);
-                    }}
-                    title="Mark as done"
-                  >
-                    <Check className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                {lead.next_action_date && (
-                  <span className="text-[11px] sm:text-xs text-muted-foreground flex items-center gap-1 sm:justify-end">
+          {/* RIGHT: Next Action + Due + Follow-up selector + Contact */}
+          <div className="sm:w-44 shrink-0 flex sm:flex-col items-start sm:items-end gap-1 sm:gap-1.5 sm:text-right sm:pt-1">
+            {/* Follow-up action quick selector */}
+            <div className="flex items-center gap-1.5 sm:justify-end" onClick={(e) => e.stopPropagation()}>
+              <Select
+                value={nextAction}
+                onValueChange={(v) => {
+                  setNextAction(v);
+                  const isCustom = v.startsWith('custom::');
+                  const dbAction: NextActionType = isCustom ? 'follow_up' : v as NextActionType;
+                  if (isCustom) setLeadCustomAction(lead.id, v.slice(8));
+                  else setLeadCustomAction(lead.id, null);
+                  onNextActionChange(lead.id, dbAction, nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined);
+                  if (dbAction !== 'none' && nextActionDate) {
+                    window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
+                  }
+                }}
+              >
+                <SelectTrigger className="h-7 text-[11px] sm:text-xs w-auto min-w-[100px] border-border/50 px-2">
+                  <SelectValue placeholder="Set action" />
+                </SelectTrigger>
+                <SelectContent>
+                  {NEXT_ACTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {hasFollowUp && (
+                <button
+                  className="h-6 w-6 flex items-center justify-center rounded-md text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onNextActionChange(lead.id, 'none' as NextActionType);
+                  }}
+                  title="Mark as done"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Date picker inline */}
+            <div onClick={(e) => e.stopPropagation()}>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className="h-7 px-2 inline-flex items-center gap-1 rounded-md border border-border/50 text-[11px] sm:text-xs text-muted-foreground hover:text-foreground hover:border-border transition-colors">
                     <CalendarIcon className="h-3 w-3" />
-                    {format(new Date(lead.next_action_date), 'MMM d')}
-                  </span>
-                )}
-                {dueLabel && (
-                  <span className={`text-[10px] sm:text-xs font-semibold ${dueLabel.cls}`}>
-                    {dueLabel.text}
-                  </span>
-                )}
-              </>
-            ) : (
-              <span className="text-[10px] sm:text-xs text-muted-foreground/40 italic">No action set</span>
+                    {nextActionDate ? format(nextActionDate, 'MMM d') : 'Set date'}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    selected={nextActionDate}
+                    onSelect={(d) => {
+                      setNextActionDate(d);
+                      if (d) {
+                        const isCustom = nextAction.startsWith('custom::');
+                        const dbAction: NextActionType = isCustom ? 'follow_up' : nextAction as NextActionType;
+                        onNextActionChange(lead.id, dbAction, format(d, 'yyyy-MM-dd'));
+                      }
+                    }}
+                    initialFocus
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {dueLabel && (
+              <span className={`text-[10px] sm:text-xs font-semibold ${dueLabel.cls}`}>
+                {dueLabel.text}
+              </span>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-1 h-7 text-xs gap-1"
-              onClick={(e) => { e.stopPropagation(); setDetailOpen(true); }}
-            >
-              <Pencil className="h-3 w-3" />
-              Edit
-            </Button>
+
+            {/* Contact + Edit row */}
+            <div className="flex items-center gap-1 mt-0.5" onClick={(e) => e.stopPropagation()}>
+              {lead.phone && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-7 text-xs gap-1 border-border/50">
+                      <MessageSquare className="h-3 w-3" />
+                      Reach Out
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[160px]">
+                    <DropdownMenuItem asChild>
+                      <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer">
+                        <MessageSquare className="h-4 w-4 text-green-500" /> WhatsApp
+                      </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <a href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`} className="flex items-center gap-2 cursor-pointer">
+                        <MessageCircle className="h-4 w-4 text-blue-400" /> SMS
+                      </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer">
+                        <PhoneCall className="h-4 w-4 text-amber-500" /> Call
+                      </a>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1 border-border/50"
+                onClick={() => setDetailOpen(true)}
+              >
+                <Pencil className="h-3 w-3" />
+                Edit
+              </Button>
+            </div>
           </div>
         </div>
       </Card>
@@ -669,7 +741,7 @@ const PotentialWorkPage = () => {
             className="pl-8 h-8 text-sm"
           />
         </div>
-        <AddCustomLeadDialog onLeadAdded={refetch} />
+        {/* AddCustomLeadDialog removed — leads should be added via Find Leads */}
         <span className="text-xs text-muted-foreground whitespace-nowrap">
           {potentialWorkLeads.length} leads
         </span>

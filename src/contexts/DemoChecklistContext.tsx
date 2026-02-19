@@ -89,10 +89,10 @@ export function DemoChecklistProvider({
 
     const onSearch = () => completeStep('searchDone');
     const onCrmAdd = () => {
-      // Track count — mark complete at 3
+      // Track count — mark complete at 1
       setState(prev => {
         const newCount = prev.crmAddCount + 1;
-        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 3 };
+        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 1 };
         saveState(next, user?.id);
         return next;
       });

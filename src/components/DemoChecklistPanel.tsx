@@ -12,8 +12,8 @@ import { useToast } from '@/hooks/use-toast';
 import { PostWalkthroughTipsModal } from '@/components/PostWalkthroughTipsModal';
 
 const steps = [
-  { key: 'searchDone' as const, label: 'Run 1 search', cta: 'Go to Find Leads', route: '/find-leads', icon: Search },
-  { key: 'addedToCrm' as const, label: 'Add 3 businesses to CRM', cta: 'Add Businesses', route: '/find-leads', icon: UserPlus },
+  { key: 'searchDone' as const, label: 'Search for leads', cta: 'Go to Find Leads', route: '/find-leads', icon: Search, helperText: 'Enter a business type (e.g. "Barbers"), enter an area (e.g. "Manchester"), then hit Search.' },
+  { key: 'addedToCrm' as const, label: 'Add a business to CRM', cta: 'Add a Business', route: '/find-leads', icon: UserPlus, helperText: 'Click the 📋 Add to CRM button next to any lead in your search results.' },
   { key: 'contactAttempted' as const, label: 'Contact a lead via WhatsApp or SMS', cta: 'Open Outreach CRM', route: '/outreach', icon: Phone, helperText: 'Open a lead in Outreach CRM, then tap the WhatsApp or SMS button to contact them.' },
   { key: 'statusUpdated' as const, label: 'Update status & hit Track ⭐', cta: 'Update Status', route: '/outreach', icon: RefreshCw, helperText: 'Set the status to the contact method you used (e.g. WhatsApp, SMS), then hit the star (⭐) to track the lead.' },
   { key: 'leadTracked' as const, label: 'Open Track Leads page', cta: 'Go to Track Leads', route: '/potential-work', icon: Star, helperText: 'Your starred leads appear here. Open the page to continue.' },
@@ -340,11 +340,13 @@ export function DemoChecklistPanel() {
                     <p className="text-xs text-muted-foreground">You've completed the walkthrough. Close this panel anytime.</p>
                   </div>
                 ) : (
-                  <ol className="space-y-1.5">
+                <ol className="space-y-1.5">
                     {steps.map((step, i) => {
                       const done = state[step.key];
                       const Icon = step.icon;
                       const isNext = nextStep?.key === step.key;
+                      // Only show: completed steps (collapsed) + current active step (expanded)
+                      if (!done && !isNext) return null;
                       return (
                         <li key={step.key} className="space-y-1">
                           <div className="flex items-start gap-2">
@@ -354,16 +356,13 @@ export function DemoChecklistPanel() {
                             <div className="flex-1 min-w-0">
                               <span className={`text-xs leading-5 ${done ? 'line-through text-muted-foreground' : ''}`}>
                                 {step.label}
-                                {step.key === 'addedToCrm' && !done && state.crmAddCount > 0 && (
-                                  <span className="text-primary font-medium ml-1">({state.crmAddCount}/3)</span>
-                                )}
                                 {step.key === 'statusUpdated' && !done && (state.statusChanged || state.trackPressed) && (
                                   <span className="text-primary font-medium ml-1">
                                     ({[state.statusChanged && 'status ✓', state.trackPressed && 'track ✓'].filter(Boolean).join(', ')})
                                   </span>
                                 )}
                               </span>
-                              {isNext && !done && (
+                              {isNext && !done && step.cta && (
                                 <Button variant="link" size="sm" className="h-auto p-0 text-xs text-primary ml-1" onClick={() => { if (location.pathname !== step.route) navigate(step.route); }}>
                                   → {step.cta}
                                 </Button>
