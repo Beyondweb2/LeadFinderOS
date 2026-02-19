@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone, ArrowRight, CreditCard } from 'lucide-react';
+import { Search, MapPin, Radius, Star, MessageSquare, Loader2, Phone, ArrowRight, CreditCard, Lock, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,6 +24,7 @@ interface SearchFormProps {
   initialRadius?: number;
   onUpgrade?: () => void;
   isUpgradeLoading?: boolean;
+  freeSearchesExhausted?: boolean;
 }
 
 export function SearchForm({ 
@@ -37,16 +38,16 @@ export function SearchForm({
   initialRadius,
   onUpgrade,
   isUpgradeLoading = false,
+  freeSearchesExhausted = false,
 }: SearchFormProps) {
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
   const [radius, setRadius] = useState(initialRadius ?? 5);
   const [minRating, setMinRating] = useState(0);
-  const [minReviews, setMinReviews] = useState(2); // Default to 2 to filter out inactive businesses
+  const [minReviews, setMinReviews] = useState(2);
   const [requirePhone, setRequirePhone] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedCountry, setSelectedCountry] = useState<Country>('UK' as Country);
-  // Deep search removed - was causing edge function timeouts at large radius
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +56,7 @@ export function SearchForm({
     onSearch({
       keyword: keyword.trim(),
       location: location.trim(),
-      radius: radius * 1000, // Convert to meters
+      radius: radius * 1000,
       minRating: minRating > 0 ? minRating : undefined,
       minReviews: minReviews > 0 ? minReviews : undefined,
       requirePhone,
@@ -186,28 +187,40 @@ export function SearchForm({
 
           {/* Submit Button with Trial Indicator */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-            {/* Search indicator removed - don't show search counts */}
-            
-            <div className={`flex flex-col items-center sm:items-end ${!isPaidSubscriber ? '' : 'w-full'}`}>
-              {!isPaidSubscriber && searchesRemaining <= 0 ? (
-                <Button 
-                  type="button"
-                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-9 sm:h-10 w-full sm:w-auto text-sm"
-                  disabled={isUpgradeLoading}
-                  onClick={onUpgrade}
-                >
-                  {isUpgradeLoading ? (
-                    <>
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="mr-1.5 h-3.5 w-3.5" />
-                      Get Unlimited Searches
-                    </>
-                  )}
-                </Button>
+            <div className={`flex flex-col items-center sm:items-end w-full ${isPaidSubscriber ? '' : 'sm:w-auto'}`}>
+              {freeSearchesExhausted && !isPaidSubscriber ? (
+                /* Exhausted state: disabled search + upgrade CTA */
+                <div className="w-full space-y-3">
+                  <Button 
+                    type="submit"
+                    disabled
+                    className="w-full sm:w-auto bg-muted text-muted-foreground cursor-not-allowed font-semibold px-5 sm:px-8 h-9 sm:h-10 text-sm opacity-60"
+                  >
+                    <Lock className="mr-1.5 h-3.5 w-3.5" />
+                    Find Leads
+                  </Button>
+                  <div className="text-center sm:text-right space-y-2">
+                    <p className="text-xs text-muted-foreground">
+                      You've used your 3 free searches
+                    </p>
+                    <p className="text-xs text-muted-foreground/70">
+                      Upgrade to unlock unlimited searches
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="gap-1.5"
+                      disabled={isUpgradeLoading}
+                      onClick={onUpgrade}
+                    >
+                      {isUpgradeLoading ? (
+                        <><Loader2 className="h-3.5 w-3.5 animate-spin" />Starting...</>
+                      ) : (
+                        <><Sparkles className="h-3.5 w-3.5" />Unlock Unlimited</>
+                      )}
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 <>
                   <Button 

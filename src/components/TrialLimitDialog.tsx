@@ -61,13 +61,15 @@ export function TrialLimitDialog({
               <Sparkles className="h-7 w-7 text-primary" />
             </div>
             <DialogTitle className="text-xl font-bold">
-              {hasStats 
-                ? `You've found ${totalBusinessesFound} businesses`
-                : 'Unlock unlimited access'}
+              {noWebsiteCount > 0
+                ? `You've found ${noWebsiteCount} potential clients`
+                : hasStats
+                  ? `You've found ${totalBusinessesFound} businesses`
+                  : 'Unlock unlimited access'}
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
               {noWebsiteCount > 0 
-                ? `${noWebsiteCount} of them don't have a website — those are your ideal clients.`
+                ? `${noWebsiteCount} business${noWebsiteCount !== 1 ? 'es' : ''} without a website — each one is a potential client. If just one closes at £800, that's £800 from a single search.`
                 : 'You\'ve used your free searches. Unlock unlimited to keep building your pipeline.'}
             </DialogDescription>
           </DialogHeader>

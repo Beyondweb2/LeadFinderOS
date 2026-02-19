@@ -5,6 +5,16 @@ import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
 import type { Lead } from '@/types/lead';
 
+// Statuses that represent an outreach attempt (message/call sent)
+const OUTREACH_STATUSES: LeadStatus[] = [
+  'sms',
+  'whatsapp',
+  'facebook_msg',
+  'contacted',        // Called
+  'sent_initial_text',
+  'sent_voice_note',
+];
+
 interface OutreachHistoryEntry {
   business_name: string;
   google_maps_url: string | null;
@@ -324,6 +334,9 @@ export function useOutreach() {
     const archivedLead = archivedLeads.find((l) => l.id === leadId);
     const targetLead = lead || archivedLead;
     
+    // Capture previous status BEFORE the update for outreach tracking
+    const previousStatus = targetLead?.status;
+    
     const result = await updateLead(leadId, { status });
     
     // Log activity inline (avoid dependency issue with logActivity)
@@ -336,6 +349,28 @@ export function useOutreach() {
       });
       // Notify demo checklist that status was changed
       window.dispatchEvent(new CustomEvent('demo-checklist-status-change'));
+      
+      // Auto-increment messages_sent if transitioning FROM non-outreach TO outreach status
+      const wasOutreach = previousStatus ? OUTREACH_STATUSES.includes(previousStatus) : false;
+      const isNowOutreach = OUTREACH_STATUSES.includes(status);
+      
+      if (!wasOutreach && isNowOutreach) {
+        try {
+          await supabase.rpc('log_usage_event', {
+            p_event_type: 'message_sent',
+            p_meta: {
+              lead_id: leadId,
+              business_name: targetLead.business_name,
+              status,
+              source: 'status_change',
+            },
+          });
+          // Emit event so dashboard/progress panels can update in real time
+          window.dispatchEvent(new CustomEvent('outreach-message-sent'));
+        } catch (e) {
+          console.error('Failed to log message_sent (non-blocking):', e);
+        }
+      }
     }
     if (result && status === 'not_interested' && lead) {
       const { error } = await supabase
