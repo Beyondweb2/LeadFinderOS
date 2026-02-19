@@ -219,8 +219,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   return (
     <>
       <Card
-        className={`border border-border/60 border-l-[4px] ${borderColor} hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 transition-all cursor-pointer group bg-card`}
-        onClick={() => setDetailOpen(true)}
+        className={`border border-border/60 border-l-[4px] ${borderColor} hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 transition-all group bg-card`}
       >
         <div className="flex flex-col sm:flex-row sm:items-start p-3 sm:py-5 sm:px-6 gap-3 md:gap-5">
           {/* LEFT: Image / Initials */}
@@ -356,6 +355,15 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             ) : (
               <span className="text-[10px] sm:text-xs text-muted-foreground/40 italic">No action set</span>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-1 h-7 text-xs gap-1"
+              onClick={(e) => { e.stopPropagation(); setDetailOpen(true); }}
+            >
+              <Pencil className="h-3 w-3" />
+              Edit
+            </Button>
           </div>
         </div>
       </Card>
