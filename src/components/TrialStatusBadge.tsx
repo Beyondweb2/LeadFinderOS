@@ -25,11 +25,11 @@ export function TrialStatusBadge({
   
   const tooltipContent = (
     <div className="space-y-2 max-w-xs">
-      <p className="font-medium">Demo Mode</p>
+      <p className="font-medium">Free Access</p>
       <p className="text-xs text-muted-foreground">
          {isExhausted 
-           ? 'Your free demo search has been used. Unlock 3-day full access for unlimited searches and all features.'
-           : 'You have 1 free search to try the app. Unlock 3-day full access for unlimited searches and all features.'}
+           ? 'You\'ve used all 5 free searches. Unlock unlimited searches for full access.'
+           : `You have ${searchesRemaining} free search${searchesRemaining !== 1 ? 'es' : ''} remaining.`}
        </p>
        <div className="pt-1 border-t border-border">
          <Link 
@@ -37,7 +37,7 @@ export function TrialStatusBadge({
            className="text-xs text-primary hover:underline flex items-center gap-1"
          >
            <Sparkles className="h-3 w-3" />
-           Start 3-Day Full Access
+           Get Unlimited Searches
         </Link>
       </div>
     </div>
@@ -57,9 +57,9 @@ export function TrialStatusBadge({
           </TooltipTrigger>
           <TooltipContent side="right" className="max-w-xs">
             <div className="space-y-1">
-              <p className="font-medium text-xs">Demo Mode</p>
+              <p className="font-medium text-xs">Free Access</p>
               <p className="text-xs text-muted-foreground">
-                {searchesRemaining > 0 ? '1 free search' : 'Free search used'}
+                {searchesRemaining > 0 ? `${searchesRemaining}/5 searches` : 'Searches used'}
               </p>
             </div>
           </TooltipContent>
@@ -78,11 +78,11 @@ export function TrialStatusBadge({
           <div className="flex items-center gap-1.5">
             <Search className="h-3.5 w-3.5 text-primary shrink-0" />
             <span className="text-xs font-medium text-foreground truncate">
-              Demo Mode
+              Free Access
             </span>
           </div>
           <p className="text-[10px] text-muted-foreground mt-0.5">
-            {searchesRemaining > 0 ? '1 free search' : 'Free search used'}
+            {searchesRemaining > 0 ? `${searchesRemaining}/5 searches left` : 'Searches used'}
           </p>
         </div>
         
