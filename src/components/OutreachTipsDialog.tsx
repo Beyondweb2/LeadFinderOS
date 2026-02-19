@@ -9,24 +9,34 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { MessageSquare, Phone, Heart, Repeat, Rocket } from 'lucide-react';
+import { MessageSquare, Phone, Heart, Repeat, Rocket, Ban, HandshakeIcon } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
 const TIPS = [
   {
     icon: MessageSquare,
-    title: 'Start casual',
-    description: "Open with a friendly message — introduce yourself and mention you noticed they don't have a website. Keep it short and personal.",
+    title: 'Just confirm the number first',
+    description: "Your first message should simply ask \"Hi, is this [business name]?\" — that's it. Get a reply before pitching anything.",
+  },
+  {
+    icon: Ban,
+    title: 'No links, images or videos',
+    description: "Don't send links, portfolios or media in your first message. It looks spammy and gets you blocked. Strike up a conversation first.",
+  },
+  {
+    icon: HandshakeIcon,
+    title: 'Keep it human',
+    description: "Once they reply, introduce yourself naturally. Mention you noticed they don't have a website and ask if they've thought about one. Be curious, not pushy.",
   },
   {
     icon: Phone,
     title: 'Mix your channels',
-    description: 'Use WhatsApp, SMS and calls. Some people prefer texts, others pick up the phone. Covering all channels doubles your reply rate.',
+    description: "Try WhatsApp first, then SMS, then a call. Some people prefer texts, others pick up the phone. Covering all channels doubles your replies.",
   },
   {
     icon: Repeat,
     title: 'Follow up — always',
-    description: "Most deals close on the 2nd or 3rd follow-up. If they don't reply, send a polite nudge 2–3 days later. Persistence pays off.",
+    description: "80% of deals happen after the 2nd or 3rd follow-up. If they don't reply, send a polite nudge 2–3 days later. Consistency wins.",
   },
 ];
 

@@ -227,7 +227,7 @@ export function SearchForm({
                       </>
                     )}
                   </Button>
-                  {!isPaidSubscriber && searchesRemaining > 0 && searchesRemaining < Infinity && (
+                  {!isPaidSubscriber && searchesRemaining > 0 && searchesRemaining < Infinity && searchesRemaining < dailyLimit && (
                     <p className="text-xs text-muted-foreground mt-1.5 text-center sm:text-right">
                       {searchesRemaining} free search{searchesRemaining !== 1 ? 'es' : ''} remaining
                     </p>
