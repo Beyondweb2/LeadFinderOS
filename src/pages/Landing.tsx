@@ -388,24 +388,24 @@ const Landing = () => {
 
             {/* Headline */}
             <h1 
-              className="text-[2.25rem] sm:text-[3.25rem] md:text-[4rem] lg:text-[4.75rem] font-extrabold" 
+              className="text-[2rem] sm:text-[3rem] md:text-[3.75rem] lg:text-[4.25rem] font-bold" 
               style={{ lineHeight: '1.05', letterSpacing: '-0.02em' }}
             >
-              Web Design Clients
+              Get Clients
               <br />
               <span className="text-gradient-primary">On Demand</span>
             </h1>
             
             {/* Subheading */}
-            <p className="text-sm sm:text-lg md:text-[1.15rem] text-foreground/50 max-w-lg mx-auto leading-relaxed sm:leading-[1.7] mt-6 sm:mt-8 font-normal">
-              Find businesses without websites, reach out instantly, and track every lead — all in one place.
+            <p className="text-[15px] sm:text-lg md:text-[1.2rem] text-foreground/55 max-w-[580px] mx-auto leading-[1.7] sm:leading-[1.75] mt-7 sm:mt-10 font-normal">
+              Find businesses without websites, contact them instantly, and manage every lead in one simple system.
             </p>
             
             {/* CTA */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-10 sm:mt-12">
+            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-10 sm:mt-14">
               <Button 
                 size="lg" 
-                className="btn-premium text-[14px] sm:text-[16px] font-semibold px-8 sm:px-14 h-[50px] sm:h-[56px] rounded-xl w-full sm:w-auto sm:min-w-[320px] shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300" 
+                className="btn-premium text-[14px] sm:text-[17px] font-semibold px-10 sm:px-16 h-[52px] sm:h-[58px] rounded-2xl w-full sm:w-auto sm:min-w-[300px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                 asChild
               >
                 <Link to="/auth?intent=upgrade">
@@ -413,7 +413,7 @@ const Landing = () => {
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Link>
               </Button>
-              <p className="text-[10px] sm:text-[11px] text-foreground/25 font-medium mt-3 sm:mt-4 tracking-wide">
+              <p className="text-[10px] sm:text-[11px] text-foreground/30 font-medium mt-4 sm:mt-5 tracking-wide">
                 No card required · Instant access · Cancel anytime
               </p>
             </div>
@@ -439,7 +439,7 @@ const Landing = () => {
             </div>
 
             {/* Desktop stats row */}
-            <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-14 md:mt-16">
+            <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-16 md:mt-20">
               <CountUpStat target={100000} suffix="+" label="Businesses" />
               <div className="text-center">
                 <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
@@ -504,24 +504,11 @@ const Landing = () => {
                 img: featureDashboard,
                 alt: 'Dashboard analytics',
               },
-            ].map((step, index) => {
-              const isEven = index % 2 === 0;
+            ].map((step) => {
               return (
               <ScrollReveal key={step.num} className="w-full" delay={step.num * 80} direction="up">
-                {/* Mobile: stacked vertically */}
+                {/* Mobile: image above text */}
                 <div className="lg:hidden flex flex-col items-center text-center gap-5">
-                  <div>
-                    <span 
-                      className="font-bold text-lg mb-1.5 block"
-                      style={{ color: 'hsl(210 100% 60%)' }}
-                    >{step.num}.</span>
-                    <h3 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
-                      {step.title}
-                    </h3>
-                    <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto">
-                      {step.body}
-                    </p>
-                  </div>
                   <div 
                     className="relative group cursor-pointer w-full"
                     onClick={() => setExpandedImage({ src: step.img, title: step.title })}
@@ -539,26 +526,24 @@ const Landing = () => {
                       </div>
                     </div>
                   </div>
-                </div>
-
-                {/* Desktop: 12-column grid, alternating */}
-                <div className={`hidden lg:grid lg:grid-cols-12 lg:gap-16 items-center`}>
-                  {/* Text column — 5 cols */}
-                  <div className={`col-span-5 ${isEven ? 'order-1' : 'order-2'} ${isEven ? 'text-left' : 'text-right'}`}>
+                  <div>
                     <span 
-                      className="font-bold text-xl mb-3 block"
+                      className="font-bold text-lg mb-1.5 block"
                       style={{ color: 'hsl(210 100% 60%)' }}
                     >{step.num}.</span>
-                    <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
+                    <h3 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
                       {step.title}
                     </h3>
-                    <p className={`text-muted-foreground/70 text-base md:text-lg leading-[1.6] ${isEven ? '' : 'ml-auto'} max-w-md`}>
+                    <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto">
                       {step.body}
                     </p>
                   </div>
-                  {/* Image column — 7 cols */}
+                </div>
+
+                {/* Desktop: image on top, text below — centered */}
+                <div className="hidden lg:flex lg:flex-col lg:items-center lg:text-center lg:gap-8 max-w-4xl mx-auto">
                   <div 
-                    className={`col-span-7 ${isEven ? 'order-2' : 'order-1'} relative group cursor-pointer`}
+                    className="relative group cursor-pointer w-full"
                     onClick={() => setExpandedImage({ src: step.img, title: step.title })}
                   >
                     <div 
@@ -577,6 +562,18 @@ const Landing = () => {
                         <Search className="h-4 w-4 text-foreground/70" />
                       </div>
                     </div>
+                  </div>
+                  <div className="max-w-xl">
+                    <span 
+                      className="font-bold text-xl mb-3 block"
+                      style={{ color: 'hsl(210 100% 60%)' }}
+                    >{step.num}.</span>
+                    <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
+                      {step.title}
+                    </h3>
+                    <p className="text-muted-foreground/70 text-base md:text-lg leading-[1.6] max-w-md mx-auto">
+                      {step.body}
+                    </p>
                   </div>
                 </div>
               </ScrollReveal>
