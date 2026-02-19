@@ -221,7 +221,7 @@ const Auth = () => {
           <CardDescription>
             {isLogin 
               ? 'Sign in to find businesses without websites' 
-              : 'Create an account to try your first search free'}
+              : 'Create an account and find more clients today'}
           </CardDescription>
           {!isLogin && (
             <p className="text-xs text-muted-foreground mt-2">
