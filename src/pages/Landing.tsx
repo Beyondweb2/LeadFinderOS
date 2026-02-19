@@ -393,10 +393,10 @@ const Landing = () => {
 
             <p className="text-xs sm:text-sm uppercase tracking-[0.2em] text-muted-foreground/70 font-medium mb-3 sm:mb-4">For Freelance Web Developers & Small Agencies</p>
 
-            <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
-              <span className="tracking-[0.02em]">Get Web Design Clients</span>{' '}
-              <br className="hidden sm:block" />
-              <span className="text-gradient-primary whitespace-nowrap">On Demand</span>
+            <h1 className="text-[2rem] sm:text-5xl md:text-[3.75rem] lg:text-[4.5rem] font-extrabold tracking-tight" style={{ lineHeight: '1.05' }}>
+              Web Design Clients
+              <br />
+              <span className="text-gradient-primary">On Demand</span>
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
