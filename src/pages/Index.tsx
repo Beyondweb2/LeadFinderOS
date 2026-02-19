@@ -36,7 +36,7 @@ const Index = () => {
   
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
-  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [isCheckoutLoading] = useState(false);
   const [showUpgradeAfterLimit, setShowUpgradeAfterLimit] = useState(false);
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   // Session-level dismissal tracking
@@ -78,30 +78,10 @@ const Index = () => {
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
 
-  const handleCheckout = useCallback(() => {
-    const win = window.open('', '_blank');
-    setIsCheckoutLoading(true);
-    (async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke('create-checkout', {
-          headers: { Authorization: `Bearer ${session?.access_token}` },
-        });
-        if (error) throw error;
-        if (data?.url) {
-          if (win) win.location.href = data.url;
-          else window.location.href = data.url;
-          window.dispatchEvent(new CustomEvent('checkout-opened'));
-        } else {
-          win?.close();
-        }
-      } catch (e) {
-        win?.close();
-        toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
-      } finally {
-        setIsCheckoutLoading(false);
-      }
-    })();
-  }, [session?.access_token, toast]);
+  // "Unlock Unlimited" button on search form now opens the modal instead of going to Stripe directly
+  const handleUnlockClick = useCallback(() => {
+    setShowUpgradeAfterLimit(true);
+  }, []);
 
   // Handle search attempt — show paywall if exhausted
   const handleSearch = useCallback((filters: any) => {
@@ -179,7 +159,7 @@ const Index = () => {
           isPaidSubscriber={isAccessLoading || hasProAccess}
           disabled={postAbandonExhausted && !hasProAccess}
           isUpgradeLoading={isCheckoutLoading}
-          onUpgrade={handleCheckout}
+          onUpgrade={handleUnlockClick}
           freeSearchesExhausted={freeSearchesExhausted}
         />
       </section>
