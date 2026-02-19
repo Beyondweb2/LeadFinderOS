@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,9 +8,11 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Check, Sparkles, TrendingUp, Users, Target, Rocket } from 'lucide-react';
+import { Check, Sparkles, TrendingUp, Users, Target, Rocket, Search, MessageSquare, Loader2 } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
 import { CheckoutConfirmDialog } from '@/components/CheckoutConfirmDialog';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 interface TrialLimitDialogProps {
   open: boolean;
@@ -21,12 +23,7 @@ interface TrialLimitDialogProps {
   noWebsiteCount?: number;
 }
 
-const UPGRADE_BENEFITS = [
-  { text: 'Unlimited lead searches', icon: Rocket },
-  { text: 'Full Outreach CRM & pipeline', icon: Target },
-  { text: 'Track leads from first contact to paid client', icon: TrendingUp },
-  { text: 'Priority support', icon: Users },
-];
+const OUTREACH_STATUSES = ['sms', 'whatsapp', 'facebook_msg', 'contacted', 'sent_initial_text', 'sent_voice_note'];
 
 export function TrialLimitDialog({ 
   open, 
@@ -37,8 +34,28 @@ export function TrialLimitDialog({
   noWebsiteCount = 0,
 }: TrialLimitDialogProps) {
   const { createCheckout } = useSubscription();
+  const { user } = useAuth();
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Real stats from DB
+  const [stats, setStats] = useState({ businesses: 0, hotLeads: 0, crmLeads: 0, messagesSent: 0 });
+
+  useEffect(() => {
+    if (!open || !user) return;
+    (async () => {
+      const [searchRes, leadsRes] = await Promise.all([
+        supabase.from('search_history').select('results_count, no_website_count').eq('user_id', user.id),
+        supabase.from('outreach_leads').select('status').eq('user_id', user.id),
+      ]);
+      const searches = searchRes.data || [];
+      const leads = leadsRes.data || [];
+      const totalBiz = searches.reduce((s, r) => s + (r.results_count || 0), 0);
+      const hotLeads = searches.reduce((s, r) => s + (r.no_website_count || 0), 0);
+      const messagesSent = leads.filter(l => OUTREACH_STATUSES.includes(l.status)).length;
+      setStats({ businesses: totalBiz, hotLeads, crmLeads: leads.length, messagesSent });
+    })();
+  }, [open, user]);
 
   const handleUpgrade = () => {
     onOpenChange(false);
@@ -50,7 +67,12 @@ export function TrialLimitDialog({
     try { await createCheckout(); } catch { setIsLoading(false); }
   };
 
-  const hasStats = totalBusinessesFound > 0 || noWebsiteCount > 0;
+  const statItems = [
+    { label: 'Businesses Found', value: stats.businesses || totalBusinessesFound, icon: Search },
+    { label: 'Hot Leads (No Website)', value: stats.hotLeads || noWebsiteCount, icon: Target },
+    { label: 'Added to CRM', value: stats.crmLeads, icon: Users },
+    { label: 'Messages Sent', value: stats.messagesSent, icon: MessageSquare },
+  ];
 
   return (
     <>
@@ -61,35 +83,49 @@ export function TrialLimitDialog({
               <Sparkles className="h-7 w-7 text-primary" />
             </div>
             <DialogTitle className="text-xl font-bold">
-              {noWebsiteCount > 0
-                ? `You've found ${noWebsiteCount} potential clients`
-                : hasStats
-                  ? `You've found ${totalBusinessesFound} businesses`
-                  : 'Unlock unlimited access'}
+              You've built a real pipeline
             </DialogTitle>
             <DialogDescription className="text-sm text-muted-foreground">
-              {noWebsiteCount > 0 
-                ? `${noWebsiteCount} business${noWebsiteCount !== 1 ? 'es' : ''} without a website — each one is a potential client. If just one closes at £800, that's £800 from a single search.`
-                : 'You\'ve used your free searches. Unlock unlimited to keep building your pipeline.'}
+              Here's what you've accomplished so far — imagine what unlimited access could do.
             </DialogDescription>
           </DialogHeader>
 
           <div className="py-3 space-y-4">
-            {/* Social proof */}
-            <div className="text-center p-3 rounded-lg bg-muted/50 border border-border">
+            {/* Stats grid */}
+            <div className="grid grid-cols-2 gap-3">
+              {statItems.map((s) => {
+                const Icon = s.icon;
+                return (
+                  <div key={s.label} className="text-center p-3 rounded-lg bg-muted/50 border border-border space-y-1">
+                    <Icon className="h-4 w-4 mx-auto text-primary/70" />
+                    <p className="text-lg font-bold text-foreground">{s.value}</p>
+                    <p className="text-[11px] text-muted-foreground leading-tight">{s.label}</p>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Revenue reframing */}
+            <div className="text-center p-3 rounded-lg bg-primary/5 border border-primary/10">
               <p className="text-sm font-medium text-foreground">
-                💰 Users who upgrade close their first deal within 2 weeks
+                💰 One closed deal at £800 could cover <span className="text-primary font-bold">months</span> of access
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Users who upgrade close their first deal within 2 weeks
               </p>
             </div>
 
             {/* Benefits */}
-            <div className="space-y-2.5">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">What you'll get:</p>
-              <ul className="space-y-2">
-                {UPGRADE_BENEFITS.map(({ text, icon: Icon }) => (
-                  <li key={text} className="flex items-center gap-2.5 text-sm text-foreground">
-                    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/10 shrink-0">
-                      <Check className="h-3 w-3 text-primary" />
+            <div className="space-y-2">
+              <ul className="space-y-1.5">
+                {[
+                  'Unlimited lead searches',
+                  'Full Outreach CRM & pipeline',
+                  'Track leads from first contact to paid client',
+                ].map((text) => (
+                  <li key={text} className="flex items-center gap-2 text-sm text-foreground">
+                    <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 shrink-0">
+                      <Check className="h-2.5 w-2.5 text-primary" />
                     </div>
                     <span>{text}</span>
                   </li>
@@ -101,7 +137,7 @@ export function TrialLimitDialog({
           <DialogFooter className="flex-col gap-2 sm:flex-col">
             <Button onClick={handleUpgrade} size="lg" className="w-full gap-2 text-base">
               <Sparkles className="h-4 w-4" />
-              Unlock unlimited — £19.99/month
+              Unlock Unlimited — £19.99/month
             </Button>
             <p className="text-xs text-muted-foreground text-center">Cancel anytime · No commitment</p>
             <Button 
