@@ -24,8 +24,22 @@ import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
 
-import step3WhatsApp from '@/assets/howto-step3-whatsapp-dialog.png';
-import step2CRM from '@/assets/howto-step3-outreach-crm.png';
+import step1Search from '@/assets/howto-step1-search.png';
+import step2Results from '@/assets/howto-step2-results.png';
+import step3Outreach from '@/assets/howto-step3-outreach-crm.png';
+import step4Dashboard from '@/assets/howto-step4-dashboard.png';
+
+import featureTemplates from '@/assets/feature-templates.png';
+import featureContactTracking from '@/assets/feature-contact-tracking.png';
+import featureCustomization from '@/assets/feature-customization-new.png';
+import featureExport from '@/assets/feature-export.png';
+
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+} from '@/components/ui/carousel';
+import Autoplay from 'embla-carousel-autoplay';
 
 import { AffiliateCapture } from '@/components/AffiliateCapture';
 
@@ -246,6 +260,21 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
         ))}
       </div>
     </div>
+  );
+};
+
+const ToolkitDots = ({ count }: { count: number }) => {
+  // This is a simple visual indicator; active dot is driven by embla internally
+  // We'll use a basic approach with CSS
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-full w-2 h-2 bg-muted-foreground/25"
+        />
+      ))}
+    </>
   );
 };
 
@@ -478,95 +507,53 @@ const Landing = () => {
             </h2>
           </ScrollReveal>
 
-          <div className="space-y-12 sm:space-y-16 md:space-y-20 lg:space-y-24">
+          <div className="space-y-12 sm:space-y-16 md:space-y-20">
             {[
               {
                 num: 1,
-                title: 'Find Businesses Without Websites',
-                blueWord: 'Businesses',
-                body: "Search any location and instantly see which businesses don't have a website — no manual checking.",
-                img: featureClassification,
-                alt: 'Find businesses without websites',
+                title: 'Find Leads',
+                body: "Search any location and instantly see which businesses don't have a website.",
+                img: step1Search,
+                alt: 'Find leads search form',
               },
               {
                 num: 2,
-                title: 'Send Outreach in One Click',
-                blueWord: 'Outreach',
-                body: 'Use templates, auto-fill business names, and open WhatsApp or SMS instantly — no copy and paste.',
-                img: step3WhatsApp,
-                alt: 'Message in one click via WhatsApp',
+                title: 'Add to CRM',
+                body: 'Save promising leads in one click and organise them into your pipeline.',
+                img: step2Results,
+                alt: 'Add leads to CRM',
               },
               {
                 num: 3,
-                title: 'Save & Organise Your Leads',
-                blueWord: 'Organise',
-                body: 'Add leads to your pipeline, set statuses and next actions, and keep everything structured and on track.',
-                img: step2CRM,
-                alt: 'Save and organise your leads',
+                title: 'Start Outreach',
+                body: 'Choose from ready-made templates that auto-fill each business name — send personalised WhatsApp or SMS messages in seconds.',
+                img: step3Outreach,
+                alt: 'Start outreach with templates',
               },
               {
                 num: 4,
-                title: 'Stay in Control',
-                blueWord: 'Control',
-                body: "Track outreach activity, follow-ups, and progress in one clear dashboard — so you always know your next move.",
-                img: featureDashboard,
+                title: 'Track & Close',
+                body: "Track every lead from first message to paid client — set follow-ups, log replies, and see your full pipeline at a glance.",
+                img: step4Dashboard,
                 alt: 'Dashboard analytics',
               },
-            ].map((step, index) => {
-              const isEven = index % 2 === 0;
-              return (
+            ].map((step) => (
               <ScrollReveal key={step.num} className="w-full" delay={step.num * 80} direction="up">
-                {/* Mobile: stacked vertically */}
-                <div className="lg:hidden flex flex-col items-center text-center gap-5">
-                  <div>
+                <div className="flex flex-col items-center text-center">
+                  <div className="mb-4 sm:mb-6">
                     <span 
                       className="font-bold text-lg mb-1.5 block"
                       style={{ color: 'hsl(210 100% 60%)' }}
                     >{step.num}.</span>
-                    <h3 className="text-xl sm:text-2xl font-bold tracking-tight mb-2">
+                    <h3 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight mb-2 sm:mb-3">
                       {step.title}
                     </h3>
-                    <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto">
+                    <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto">
                       {step.body}
                     </p>
                   </div>
                   <div 
-                    className="relative group cursor-pointer w-full"
-                    onClick={() => setExpandedImage({ src: step.img, title: step.title })}
-                  >
-                    <div 
-                      className="relative rounded-2xl overflow-hidden bg-card/80 aspect-[16/10]"
-                      style={{ 
-                        border: '1px solid hsl(210 100% 50% / 0.15)',
-                        boxShadow: '0 0 12px hsl(210 100% 50% / 0.08)'
-                      }}
-                    >
-                      <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={400} className="w-full h-full object-cover" />
-                      <div className="absolute top-3 right-3 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm">
-                        <Search className="h-3.5 w-3.5 text-foreground/70" />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Desktop: 12-column grid, alternating */}
-                <div className={`hidden lg:grid lg:grid-cols-12 lg:gap-16 items-center`}>
-                  {/* Text column — 5 cols */}
-                  <div className={`col-span-5 ${isEven ? 'order-1' : 'order-2'} ${isEven ? 'text-left' : 'text-right'}`}>
-                    <span 
-                      className="font-bold text-xl mb-3 block"
-                      style={{ color: 'hsl(210 100% 60%)' }}
-                    >{step.num}.</span>
-                    <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
-                      {step.title}
-                    </h3>
-                    <p className={`text-muted-foreground/70 text-base md:text-lg leading-[1.6] ${isEven ? '' : 'ml-auto'} max-w-md`}>
-                      {step.body}
-                    </p>
-                  </div>
-                  {/* Image column — 7 cols */}
-                  <div 
-                    className={`col-span-7 ${isEven ? 'order-2' : 'order-1'} relative group cursor-pointer`}
+                    className="relative group cursor-pointer w-full max-w-2xl mx-auto"
                     onClick={() => setExpandedImage({ src: step.img, title: step.title })}
                   >
                     <div 
@@ -574,24 +561,111 @@ const Landing = () => {
                       style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
                     />
                     <div 
-                      className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] transition-transform duration-300 group-hover:scale-[1.01]"
+                      className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.01]"
                       style={{ 
                         border: '1px solid hsl(210 100% 50% / 0.2)',
                         boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
                       }}
                     >
-                      <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={360} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                      <div className="absolute top-4 right-4 z-20 p-2 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <Search className="h-4 w-4 text-foreground/70" />
+                      <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={400} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                      <div className="absolute bottom-3 right-3 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm">
+                        <Search className="h-3.5 w-3.5 text-foreground/70" />
                       </div>
                     </div>
                   </div>
                 </div>
               </ScrollReveal>
-              );
-            })}
+            ))}
           </div>
 
+        </div>
+      </section>
+
+      {/* Your Complete Lead Toolkit — carousel */}
+      <section className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
+        <div
+          className="absolute inset-0 -z-10"
+          style={{
+            background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.25) 20%, hsl(220 30% 6% / 0.35) 50%, hsl(220 30% 6% / 0.25) 80%, transparent 100%)',
+          }}
+        />
+        <div className="container mx-auto max-w-5xl">
+          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15]">
+              Your Complete
+              <br />
+              <span className="text-gradient-primary">Lead Toolkit</span>
+            </h2>
+          </ScrollReveal>
+
+          {(() => {
+            const toolkitFeatures = [
+              {
+                title: 'Templates',
+                description: 'Ready-to-send WhatsApp, SMS, and call scripts — just pick a template, personalise, and hit send.',
+                img: featureTemplates,
+              },
+              {
+                title: 'Dashboard',
+                description: 'See your full pipeline at a glance — revenue, conversion rate, activity, and quick actions all in one place.',
+                img: featureDashboard,
+              },
+              {
+                title: 'Customisation',
+                description: 'Make the app yours — accent colours, custom statuses, and personalised templates that match your workflow.',
+                img: featureCustomization,
+              },
+              {
+                title: 'Export & Reports',
+                description: 'Download your leads and outreach data anytime — CSV exports for easy reporting and backup.',
+                img: featureExport,
+              },
+            ];
+
+            return (
+              <ScrollReveal>
+                <Carousel
+                  opts={{ loop: true, align: 'center' }}
+                  plugins={[Autoplay({ delay: 5000, stopOnInteraction: true })]}
+                  className="max-w-xl mx-auto"
+                >
+                  <CarouselContent>
+                    {toolkitFeatures.map((feature, i) => (
+                      <CarouselItem key={i}>
+                        <div className="text-center px-2">
+                          <h3 className="text-lg sm:text-xl font-bold tracking-tight mb-2 sm:mb-3">{feature.title}</h3>
+                          <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto mb-5 sm:mb-6">
+                            {feature.description}
+                          </p>
+                          <div 
+                            className="relative group cursor-pointer w-full"
+                            onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
+                          >
+                            <div 
+                              className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.01]"
+                              style={{ 
+                                border: '1px solid hsl(210 100% 50% / 0.2)',
+                                boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                              }}
+                            >
+                              <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" width={640} height={400} className="w-full h-full object-cover" />
+                              <div className="absolute bottom-3 right-3 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm">
+                                <Search className="h-3.5 w-3.5 text-foreground/70" />
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </CarouselItem>
+                    ))}
+                  </CarouselContent>
+                  <div className="flex items-center justify-center gap-1.5 mt-5">
+                    <ToolkitDots count={toolkitFeatures.length} />
+                  </div>
+                  <p className="text-center text-xs text-muted-foreground/40 mt-2">Swipe to explore</p>
+                </Carousel>
+              </ScrollReveal>
+            );
+          })()}
         </div>
       </section>
 
