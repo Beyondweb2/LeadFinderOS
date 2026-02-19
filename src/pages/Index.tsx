@@ -158,6 +158,50 @@ const Index = () => {
             onMapLinkClick={markAsChecked}
             isChecked={isChecked}
           />
+
+          {/* Subtle free access usage indicator — only for free users, only after 3+ searches */}
+          {isFreeUser && !isAccessLoading && (freeSearchCount ?? 0) >= 3 && (freeSearchCount ?? 0) < 5 && (
+            <div className="flex items-center justify-center gap-2 mt-4 py-2">
+              {(freeSearchCount ?? 0) === 4 ? (
+                <p className="text-xs text-muted-foreground/60">
+                  You have 1 search left in free access.{' '}
+                  <button
+                    onClick={() => {
+                      const win = window.open('', '_blank');
+                      setIsCheckoutLoading(true);
+                      (async () => {
+                        try {
+                          const { data, error } = await supabase.functions.invoke('create-checkout', {
+                            headers: { Authorization: `Bearer ${session?.access_token}` },
+                          });
+                          if (error) throw error;
+                          if (data?.url) {
+                            if (win) win.location.href = data.url;
+                            else window.location.href = data.url;
+                            window.dispatchEvent(new CustomEvent('checkout-opened'));
+                          } else {
+                            win?.close();
+                          }
+                        } catch (e) {
+                          win?.close();
+                          toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
+                        } finally {
+                          setIsCheckoutLoading(false);
+                        }
+                      })();
+                    }}
+                    className="text-xs text-muted-foreground/80 underline underline-offset-2 hover:text-foreground/70 transition-colors"
+                  >
+                    Upgrade for unlimited searches
+                  </button>
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground/50">
+                  Free access – {5 - (freeSearchCount ?? 0)} searches remaining
+                </p>
+              )}
+            </div>
+          )}
         </section>
       )}
 
