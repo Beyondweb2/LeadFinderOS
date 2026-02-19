@@ -635,18 +635,21 @@ const Landing = () => {
                 img: step4Dashboard,
                 alt: 'Dashboard analytics',
               },
-            ].map((step) => (
+            ].map((step) => {
+              const isEven = step.num % 2 === 0;
+              return (
               <ScrollReveal key={step.num} className="w-full" delay={step.num * 80} direction="up">
-                <div className="flex flex-col items-center text-center">
+                {/* Mobile: stacked centered */}
+                <div className="flex flex-col items-center text-center md:hidden">
                   <div className="mb-4 sm:mb-6">
                     <span 
                       className="font-bold text-lg mb-1.5 block"
                       style={{ color: 'hsl(210 100% 60%)' }}
                     >{step.num}.</span>
-                    <h3 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight mb-2 sm:mb-3">
+                    <h3 className="text-xl sm:text-2xl font-bold tracking-tight mb-2 sm:mb-3">
                       {step.title}
                     </h3>
-                    <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-md mx-auto">
+                    <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto">
                       {step.body}
                     </p>
                   </div>
@@ -672,8 +675,50 @@ const Landing = () => {
                     </div>
                   </div>
                 </div>
+
+                {/* Desktop: alternating 12-col grid */}
+                <div className={`hidden md:grid grid-cols-12 gap-8 lg:gap-12 items-center`}>
+                  {/* Text column */}
+                  <div className={`col-span-5 ${isEven ? 'order-2 text-left' : 'order-1 text-left'}`}>
+                    <span 
+                      className="font-bold text-lg mb-2 block"
+                      style={{ color: 'hsl(210 100% 60%)' }}
+                    >{step.num}.</span>
+                    <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
+                      {step.title}
+                    </h3>
+                    <p className="text-muted-foreground/70 text-base md:text-lg leading-[1.6]">
+                      {step.body}
+                    </p>
+                  </div>
+                  {/* Image column */}
+                  <div className={`col-span-7 ${isEven ? 'order-1' : 'order-2'}`}>
+                    <div 
+                      className="relative group cursor-pointer w-full lg:w-[95%] mx-auto"
+                      onClick={() => setExpandedImage({ src: step.img, title: step.title })}
+                    >
+                      <div 
+                        className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
+                        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+                      />
+                      <div 
+                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.01]"
+                        style={{ 
+                          border: '1px solid hsl(210 100% 50% / 0.2)',
+                          boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                        }}
+                      >
+                        <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={400} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                        <div className="absolute bottom-3 right-3 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm">
+                          <Search className="h-3.5 w-3.5 text-foreground/70" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </ScrollReveal>
-            ))}
+              );
+            })}
           </div>
 
         </div>
@@ -720,8 +765,38 @@ const Landing = () => {
               },
             ];
 
-            return (
+            return isMobile ? (
               <ToolkitCarousel features={toolkitFeatures} onExpand={(src, title) => setExpandedImage({ src, title })} />
+            ) : (
+              <ScrollReveal>
+                <div className="grid grid-cols-4 gap-6">
+                  {toolkitFeatures.map((feature, i) => (
+                    <div key={i} className="text-center">
+                      <div 
+                        className="relative group cursor-pointer w-full mb-4"
+                        onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
+                      >
+                        <div 
+                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.02]"
+                          style={{ 
+                            border: '1px solid hsl(210 100% 50% / 0.2)',
+                            boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                          }}
+                        >
+                          <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" width={640} height={400} className="w-full h-full object-cover" />
+                          <div className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Search className="h-3.5 w-3.5 text-foreground/70" />
+                          </div>
+                        </div>
+                      </div>
+                      <h3 className="text-base lg:text-lg font-bold tracking-tight mb-1.5">{feature.title}</h3>
+                      <p className="text-muted-foreground/70 text-xs lg:text-sm leading-[1.6]">
+                        {feature.description}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </ScrollReveal>
             );
           })()}
         </div>
