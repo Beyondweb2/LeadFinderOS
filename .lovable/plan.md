@@ -1,39 +1,44 @@
 
-# Add Explicit "Edit" Button to Track Leads Cards
+# Search Countdown and Upgrade Popup
 
-## Problem
-Currently, tapping/clicking anywhere on a tracked lead card opens the edit dialog. This is not discoverable -- users may not realize they can edit leads.
+## What Changes
 
-## Solution
-Remove the full-card click handler and add a visible "Edit" button on each card that opens the detail/edit dialog.
+### 1. Search Countdown Notification (after searches 1 and 2)
+After each successful search, free users will see a brief, noticeable notification showing how many searches they have left:
+- After search 1: "2 searches remaining"
+- After search 2: "1 search remaining -- make it count!"
 
-## Changes
+This will appear as a small banner above the results, not a blocking popup, so it doesn't interrupt the flow.
 
-### File: `src/pages/PotentialWork.tsx`
+### 2. Convincing Upgrade Popup (after search 3)
+After the 3rd search completes, a dialog will appear with:
+- A bold headline: "You've found [X] businesses so far"
+- A summary of what they've discovered (businesses found, ones without websites)
+- Social proof messaging: "Users who upgrade close their first deal within 2 weeks"
+- Clear value proposition with benefits list
+- A prominent "Unlock Unlimited Searches" button
+- A subtle "Maybe later" dismiss option
 
-1. **Remove `onClick` from the Card** (line 223)
-   - Remove `onClick={() => setDetailOpen(true)}` and `cursor-pointer` from the Card's className
+### Technical Details
 
-2. **Add an "Edit" / "Manage" button to the card**
-   - In the RIGHT section of the card (around line 328), add a small button below the next action info that says "Edit" (with a Pencil icon)
-   - This button will call `setDetailOpen(true)` with `e.stopPropagation()`
-   - Styled as a compact outlined/ghost button so it's clearly clickable
+**File: `src/pages/Index.tsx`**
+- Add a `searchCountdownBanner` state that shows after each search with remaining count
+- Add a `showUpgradeAfterLimit` dialog state triggered when `freeSearchCount` reaches 3
+- Track cumulative businesses found across searches for the upgrade popup messaging
+- The countdown banner auto-dismisses after 5 seconds or on next search
 
-### Layout
-The button will sit in the right-hand column beneath the next action details, making it visible but not intrusive:
+**File: `src/components/TrialLimitDialog.tsx`**
+- Rework the dialog content to be more persuasive:
+  - Dynamic stats showing what the user has already found
+  - Benefit-oriented copy focused on ROI
+  - Urgency/social proof elements
+  - Keep the pricing and "Cancel anytime" reassurance
 
+**Flow:**
+```text
+Search 1 complete --> Banner: "2 searches remaining"
+Search 2 complete --> Banner: "1 search remaining"  
+Search 3 complete --> Results shown + Upgrade popup appears
 ```
-[Image] [Name / Status / Contact / Notes]  [Next Action info]
-                                            [Due date]
-                                            [Edit button]
-```
 
-On mobile, the Edit button will appear inline at the bottom of the card section.
-
-## Technical Details
-
-- Remove `cursor-pointer` and `onClick={() => setDetailOpen(true)}` from the `<Card>` element on line 222-223
-- Add a `<Button>` with variant `outline`, size `sm`, containing a Pencil icon and "Edit" text
-- Place it after the existing next action / due label content in the right column (around line 358)
-- The button uses `onClick={(e) => { e.stopPropagation(); setDetailOpen(true); }}` for safety
-- Keep existing `e.stopPropagation()` calls on other interactive elements (they remain valid)
+The popup won't block results -- users can dismiss it and still see their 3rd search results, but the search input will be locked after that.
