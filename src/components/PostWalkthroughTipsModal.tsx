@@ -15,17 +15,17 @@ const tips = [
   {
     icon: MessageCircle,
     title: 'Start casual',
-    description: 'Ask if this is the right number first',
+    description: "Ask if it's the right number — keep it friendly, not salesy.",
   },
   {
     icon: Link2Off,
-    title: 'No links in message one',
-    description: 'Send links only after they reply',
+    title: 'No links first',
+    description: 'Wait for them to reply before sending any links or prices.',
   },
   {
     icon: RefreshCw,
-    title: 'Follow ups win',
-    description: 'Most clients come from the second message',
+    title: 'Follow up = close',
+    description: "80% of deals happen after the 2nd message. Don't give up early.",
   },
 ];
 
@@ -65,8 +65,8 @@ export function PostWalkthroughTipsModal({ open, onOpenChange }: PostWalkthrough
             >
               <X className="h-4 w-4 text-muted-foreground" />
             </button>
-            <h2 className="text-lg font-bold text-foreground">Quick tip before you continue</h2>
-            <p className="text-sm text-muted-foreground">This will massively increase your reply rate</p>
+            <h2 className="text-lg font-bold text-foreground">Quick tips that actually work</h2>
+            <p className="text-sm text-muted-foreground">These 3 things will massively increase your reply rate</p>
           </div>
 
           {/* Tip Cards */}
@@ -90,17 +90,16 @@ export function PostWalkthroughTipsModal({ open, onOpenChange }: PostWalkthrough
             })}
           </div>
 
+          {/* Motivational line */}
+          <p className="text-center text-xs text-muted-foreground italic">
+            Consistency is everything — the people who send 10+ messages a day land clients within weeks, not months.
+          </p>
+
           {/* Actions */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             <Button size="lg" className="w-full" onClick={() => handleClose(true)}>
-              Keep going
+              Keep going 💪
             </Button>
-            <button
-              onClick={() => handleClose()}
-              className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors text-center"
-            >
-              Close
-            </button>
           </div>
 
           {/* Don't show again */}
