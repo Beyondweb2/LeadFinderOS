@@ -171,8 +171,13 @@ const VideoSection = () => {
 
   return (
     <ScrollReveal className="relative z-10 pb-10 sm:pb-14 md:pb-20 px-2 sm:px-4">
-      <div className="container mx-auto">
-        <div className="max-w-5xl mx-auto relative rounded-2xl overflow-hidden border border-border">
+        <div className="container mx-auto">
+          <div className="max-w-5xl mx-auto relative">
+            <div 
+              className="absolute -inset-4 rounded-3xl blur-2xl opacity-40 pointer-events-none"
+              style={{ background: 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.12), transparent 70%)' }}
+            />
+            <div className="relative rounded-2xl overflow-hidden border border-border" style={{ boxShadow: '0 0 30px hsl(210 100% 50% / 0.08), 0 0 60px hsl(210 100% 50% / 0.04)' }}>
           <video
             ref={videoRef}
             src={demoVideo}
@@ -190,6 +195,7 @@ const VideoSection = () => {
           >
             {isMuted ? <VolumeX className="h-4 w-4 md:h-5 md:w-5" /> : <Volume2 className="h-4 w-4 md:h-5 md:w-5" />}
           </button>
+          </div>
         </div>
         <p className="text-center text-xs sm:text-sm text-muted-foreground/60 mt-6 sm:mt-10">
           See the difference for yourself.
@@ -369,43 +375,43 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-10 pb-8 sm:pt-20 sm:pb-16 md:pt-28 md:pb-20 lg:pt-32 lg:pb-24 px-4">
+      <section className="relative z-10 pt-8 pb-8 sm:pt-16 sm:pb-12 md:pt-20 md:pb-16 lg:pt-24 lg:pb-20 px-4">
         <div 
           className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[800px] pointer-events-none"
           style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.10), transparent 70%)' }}
         />
         <div className="container mx-auto text-center lg:max-w-[1140px]">
           {/* Mobile: Video at top */}
-          <div className="sm:hidden mb-8">
+          <div className="sm:hidden mb-10">
             <MobileHeroVideo />
           </div>
 
-          <div className="max-w-3xl mx-auto lg:max-w-2xl">
-            {/* Audience tag — very subtle */}
-            <p className="text-[10px] sm:text-xs uppercase tracking-[0.25em] text-muted-foreground/40 font-medium mb-6 sm:mb-8">
+          <div className="max-w-3xl mx-auto">
+            {/* Eyebrow */}
+            <p className="text-[9px] sm:text-[11px] uppercase tracking-[0.3em] text-muted-foreground/35 font-medium mb-8 sm:mb-10">
               For Freelance Web Developers & Small Agencies
             </p>
 
             {/* Headline */}
             <h1 
-              className="text-[2rem] sm:text-[3rem] md:text-[3.75rem] lg:text-[4.25rem] font-bold" 
-              style={{ lineHeight: '1.05', letterSpacing: '-0.02em' }}
+              className="text-[2.1rem] sm:text-[3rem] md:text-[3.5rem] lg:text-[4rem] font-bold" 
+              style={{ lineHeight: '1.05', letterSpacing: '-0.015em' }}
             >
-              Get Clients
+              Find Clients
               <br />
               <span className="text-gradient-primary">On Demand</span>
             </h1>
             
             {/* Subheading */}
-            <p className="text-[15px] sm:text-lg md:text-[1.2rem] text-foreground/55 max-w-[580px] mx-auto leading-[1.7] sm:leading-[1.75] mt-7 sm:mt-10 font-normal">
+            <p className="text-[15px] sm:text-[1.125rem] md:text-[1.2rem] text-foreground/50 max-w-[590px] mx-auto leading-[1.75] sm:leading-[1.8] mt-8 sm:mt-10 font-normal">
               Find businesses without websites, contact them instantly, and manage every lead in one simple system.
             </p>
             
             {/* CTA */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-10 sm:mt-14">
+            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-12 sm:mt-14">
               <Button 
                 size="lg" 
-                className="btn-premium text-[14px] sm:text-[17px] font-semibold px-10 sm:px-16 h-[52px] sm:h-[58px] rounded-2xl w-full sm:w-auto sm:min-w-[300px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                className="btn-premium text-[15px] sm:text-[17px] font-semibold px-10 sm:px-16 h-[54px] sm:h-[60px] rounded-2xl w-full sm:w-auto sm:min-w-[300px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                 asChild
               >
                 <Link to="/auth?intent=upgrade">
@@ -413,13 +419,13 @@ const Landing = () => {
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Link>
               </Button>
-              <p className="text-[10px] sm:text-[11px] text-foreground/30 font-medium mt-4 sm:mt-5 tracking-wide">
+              <p className="text-[10px] sm:text-[11px] text-foreground/35 font-medium mt-5 sm:mt-6 tracking-wide">
                 No card required · Instant access · Cancel anytime
               </p>
             </div>
 
             {/* Mobile trust badges */}
-            <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-10">
+            <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-12">
               <CountUpStat target={100000} suffix="+" label="Businesses" />
               <div className="text-center">
                 <div className="text-base font-bold text-gradient-primary tracking-tight">Global</div>
@@ -455,7 +461,7 @@ const Landing = () => {
       </section>
 
       {/* Video Demo Section - desktop only */}
-      <div className="hidden sm:block mt-4 sm:mt-8">
+      <div className="hidden sm:block mt-6 sm:mt-10">
         <VideoSection />
       </div>
 
