@@ -391,6 +391,8 @@ const Landing = () => {
               <span>Lead generation for web professionals</span>
             </div>
 
+            <p className="text-xs sm:text-sm uppercase tracking-[0.2em] text-muted-foreground/70 font-medium mb-3 sm:mb-4">For Freelance Web Developers & Small Agencies</p>
+
             <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
               <span className="tracking-[0.02em]">Get Web Design Clients</span>{' '}
               <br className="hidden sm:block" />
