@@ -1,0 +1,1 @@
+ALTER TABLE public.outreach_leads ADD COLUMN IF NOT EXISTS contact_method text DEFAULT null;

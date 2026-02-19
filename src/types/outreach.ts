@@ -102,6 +102,7 @@ export interface OutreachLead {
   facebook_confidence?: number | null;
   facebook_method?: string | null;
   facebook_last_checked_at?: string | null;
+  contact_method?: string | null;
 }
 
 export interface OutreachActivity {
