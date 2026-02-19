@@ -9,7 +9,7 @@ interface OutreachStatusBadgeProps {
 const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; className: string }> = {
   not_contacted: {
     label: 'Not Contacted',
-    shortLabel: 'New',
+    shortLabel: 'Status',
     className: 'bg-muted text-muted-foreground border-muted',
   },
   sent_initial_text: {
