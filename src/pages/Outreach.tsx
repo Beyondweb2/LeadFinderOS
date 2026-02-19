@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { OutreachTable } from '@/components/OutreachTable';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
+import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
 import { useOutreach } from '@/hooks/useOutreach';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, Lightbulb } from 'lucide-react';
@@ -97,6 +98,9 @@ const Outreach = () => {
           readOnly={false}
         />
       )}
+
+      {/* First-time outreach tips */}
+      <OutreachTipsDialog />
     </div>
   );
 };
