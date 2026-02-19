@@ -262,6 +262,7 @@ export type Database = {
           business_name: string
           category: string | null
           checkin_notes: string | null
+          contact_method: string | null
           country: string | null
           created_at: string
           email: string | null
@@ -293,6 +294,7 @@ export type Database = {
           business_name: string
           category?: string | null
           checkin_notes?: string | null
+          contact_method?: string | null
           country?: string | null
           created_at?: string
           email?: string | null
@@ -324,6 +326,7 @@ export type Database = {
           business_name?: string
           category?: string | null
           checkin_notes?: string | null
+          contact_method?: string | null
           country?: string | null
           created_at?: string
           email?: string | null

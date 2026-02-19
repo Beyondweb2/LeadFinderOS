@@ -322,9 +322,14 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
           </div>
         </div>
 
-        {/* === 2. STATUS + DUE BADGES (prominent) === */}
+        {/* === 2. CONTACT METHOD + STATUS + DUE BADGES (prominent) === */}
         <div className="flex items-center gap-1.5 flex-wrap px-3 sm:px-4 pb-2">
-          {/* Status — larger, clickable to change */}
+          {/* Contact Method — persistent, only show if different from current status */}
+          {lead.contact_method && lead.contact_method !== lead.status && (
+            <OutreachStatusBadge status={lead.contact_method as any} />
+          )}
+
+          {/* Pipeline Status — clickable to change */}
           <Select value={lead.status} onValueChange={(v) => {
             if (v === '__add_custom__') { onAddCustomStatus(); return; }
             onStatusChange(lead.id, v as LeadStatus);

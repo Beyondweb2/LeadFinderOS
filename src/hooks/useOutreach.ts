@@ -267,7 +267,7 @@ export function useOutreach() {
 
   const updateLead = useCallback(async (
     leadId: string,
-    updates: Partial<Pick<OutreachLead, 'status' | 'next_action' | 'next_action_date' | 'notes' | 'email' | 'business_name' | 'amount_paid' | 'paid_for' | 'payment_date' | 'project_duration' | 'next_checkin_date' | 'checkin_notes' | 'image_url' | 'facebook_url' | 'facebook_confidence' | 'facebook_method' | 'facebook_last_checked_at'>>
+    updates: Partial<Pick<OutreachLead, 'status' | 'next_action' | 'next_action_date' | 'notes' | 'email' | 'business_name' | 'amount_paid' | 'paid_for' | 'payment_date' | 'project_duration' | 'next_checkin_date' | 'checkin_notes' | 'image_url' | 'facebook_url' | 'facebook_confidence' | 'facebook_method' | 'facebook_last_checked_at' | 'contact_method'>>
   ) => {
     const { data, error } = await supabase
       .from('outreach_leads')
@@ -337,7 +337,14 @@ export function useOutreach() {
     // Capture previous status BEFORE the update for outreach tracking
     const previousStatus = targetLead?.status;
     
-    const result = await updateLead(leadId, { status });
+    // If new status is an outreach/contact method, persist it as contact_method
+    const CONTACT_METHOD_STATUSES: LeadStatus[] = ['whatsapp', 'sms', 'contacted', 'facebook_msg', 'sent_initial_text', 'sent_voice_note'];
+    const updates: Partial<OutreachLead> = { status };
+    if (CONTACT_METHOD_STATUSES.includes(status)) {
+      updates.contact_method = status;
+    }
+    
+    const result = await updateLead(leadId, updates);
     
     // Log activity inline (avoid dependency issue with logActivity)
     if (result && targetLead && user) {
