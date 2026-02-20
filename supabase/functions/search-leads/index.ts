@@ -104,14 +104,46 @@ async function generateCacheKey(keyword: string, location: string, radius: numbe
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function geocodeLocation(location: string, apiKey: string): Promise<{ lat: number; lng: number }> {
+// ═══════════════════════════════════════════════
+// DIAGNOSTIC: track Google API calls
+// ═══════════════════════════════════════════════
+interface DebugMeta {
+  googleCallsMade: { geocode: number; textSearchPages: number; placeDetails: number };
+  apiKeyPresent: boolean;
+  authMethod: 'getClaims' | 'getUser' | 'failed' | 'demo';
+  cached: boolean;
+}
+
+function createDebugMeta(): DebugMeta {
+  return {
+    googleCallsMade: { geocode: 0, textSearchPages: 0, placeDetails: 0 },
+    apiKeyPresent: false,
+    authMethod: 'failed',
+    cached: false,
+  };
+}
+
+async function geocodeLocation(location: string, apiKey: string, debug: DebugMeta): Promise<{ lat: number; lng: number }> {
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`;
+  console.log(`[DIAG-GEOCODE] Request URL: ${url.replace(apiKey, '[REDACTED]')}`);
+  
   const res = await fetch(url);
-  const data = await res.json();
+  debug.googleCallsMade.geocode++;
+  
+  const rawText = await res.text();
+  console.log(`[DIAG-GEOCODE] Response status: ${res.status}`);
+  console.log(`[DIAG-GEOCODE] Response body (first 1000 chars): ${rawText.substring(0, 1000)}`);
+  
+  const data = JSON.parse(rawText);
+  
   if (data.status !== 'OK' || !data.results?.[0]) {
+    console.error(`[DIAG-GEOCODE] FAILED — Google status: ${data.status}, error_message: ${data.error_message || 'none'}`);
     throw new Error('Location not found');
   }
-  return data.results[0].geometry.location;
+  
+  const coords = data.results[0].geometry.location;
+  console.log(`[DIAG-GEOCODE] SUCCESS — lat: ${coords.lat}, lng: ${coords.lng}`);
+  return coords;
 }
 
 interface SearchLead {
@@ -135,18 +167,25 @@ function classifyWebsite(websiteUri: string | null | undefined): { status: Searc
 }
 
 // ═══════════════════════════════════════════════
-// TEXT SEARCH (New API) — minimal fields, paginated
+// TEXT SEARCH (New API) — with diagnostic logging
 // ═══════════════════════════════════════════════
 async function textSearchPlaces(
   keyword: string,
   lat: number,
   lng: number,
   radius: number,
-  apiKey: string
+  apiKey: string,
+  debug: DebugMeta
 ): Promise<SearchLead[]> {
   const leads: SearchLead[] = [];
   const seenIds = new Set<string>();
   let pageToken: string | undefined;
+  const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken';
+
+  console.log(`[DIAG-SEARCH] Endpoint: ${ENDPOINT}`);
+  console.log(`[DIAG-SEARCH] Field mask: ${FIELD_MASK}`);
+  console.log(`[DIAG-SEARCH] API key present: ${!!apiKey}`);
 
   for (let page = 0; page < 3 && leads.length < MAX_RESULTS; page++) {
     const requestBody: Record<string, unknown> = {
@@ -161,25 +200,34 @@ async function textSearchPlaces(
     };
     if (pageToken) requestBody.pageToken = pageToken;
 
-    const res = await fetch('https://places.googleapis.com/v1/places:searchText', {
+    console.log(`[DIAG-SEARCH] Page ${page} request body: ${JSON.stringify(requestBody)}`);
+
+    const res = await fetch(ENDPOINT, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken',
+        'X-Goog-FieldMask': FIELD_MASK,
       },
       body: JSON.stringify(requestBody),
     });
 
+    debug.googleCallsMade.textSearchPages++;
+
+    const rawText = await res.text();
+    console.log(`[DIAG-SEARCH] Page ${page} response status: ${res.status}`);
+    console.log(`[DIAG-SEARCH] Page ${page} response body (first 2000 chars): ${rawText.substring(0, 2000)}`);
+
     if (!res.ok) {
-      const errText = await res.text();
-      console.error(`Text Search page ${page} failed: ${res.status}`, errText);
+      console.error(`[DIAG-SEARCH] Text Search page ${page} FAILED: ${res.status}`, rawText.substring(0, 2000));
       break;
     }
 
-    const data = await res.json();
+    const data = JSON.parse(rawText);
+    const placesOnPage = data.places || [];
+    console.log(`[DIAG-SEARCH] Page ${page} places returned by Google: ${placesOnPage.length}`);
 
-    for (const place of (data.places || [])) {
+    for (const place of placesOnPage) {
       if (leads.length >= MAX_RESULTS) break;
 
       const placeId = (place.id || '').replace(/^places\//, '');
@@ -200,10 +248,15 @@ async function textSearchPlaces(
     }
 
     pageToken = data.nextPageToken;
-    if (!pageToken) break;
+    if (!pageToken) {
+      console.log(`[DIAG-SEARCH] No nextPageToken after page ${page}, stopping pagination`);
+      break;
+    }
 
-    console.log(`Page ${page + 1}: ${leads.length} leads collected`);
+    console.log(`[DIAG-SEARCH] Page ${page + 1}: ${leads.length} leads collected so far`);
   }
+
+  console.log(`[DIAG-SEARCH] Total leads before sort: ${leads.length}`);
 
   // Sort: NO_WEBSITE first, then DIRECTORY_ONLY, then HAS_OWN_WEBSITE
   const order: Record<string, number> = { NO_WEBSITE: 0, DIRECTORY_ONLY: 1, HAS_OWN_WEBSITE: 2 };
@@ -239,9 +292,13 @@ function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, 
 // MAIN HANDLER
 // ═══════════════════════════════════════════════
 serve(async (req) => {
+  console.log(`[DIAG-HANDLER] Request received: ${req.method} ${req.url}`);
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const debug = createDebugMeta();
 
   try {
     // Request size guard
@@ -253,8 +310,13 @@ serve(async (req) => {
     const body = await req.json();
     const isDemo = body?.demo === true;
 
+    const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
+    debug.apiKeyPresent = !!GOOGLE_MAPS_API_KEY;
+    console.log(`[DIAG-HANDLER] API key present: ${debug.apiKeyPresent}`);
+
     // ─── DEMO MODE ───────────────────────────────
     if (isDemo) {
+      debug.authMethod = 'demo';
       const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
         || req.headers.get('cf-connecting-ip')
         || 'unknown';
@@ -262,24 +324,23 @@ serve(async (req) => {
 
       if (!globalThis.__demoSearches) globalThis.__demoSearches = new Set();
       if (globalThis.__demoSearches.has(demoKey)) {
-        return jsonResponse({ error: 'Demo search limit reached. Sign up for unlimited access.', code: 'DEMO_LIMIT' }, 402);
+        return jsonResponse({ error: 'Demo search limit reached. Sign up for unlimited access.', code: 'DEMO_LIMIT', _debug: debug }, 402);
       }
       globalThis.__demoSearches.add(demoKey);
 
       const validationResult = SearchRequestSchema.safeParse(body);
       if (!validationResult.success) {
-        return jsonResponse({ error: 'Invalid search parameters.' }, 400);
+        return jsonResponse({ error: 'Invalid search parameters.', _debug: debug }, 400);
       }
 
       const { keyword, location, radius } = validationResult.data;
-      const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
       if (!GOOGLE_MAPS_API_KEY) {
-        return jsonResponse({ error: 'Service temporarily unavailable.' }, 503);
+        return jsonResponse({ error: 'Service temporarily unavailable.', _debug: debug }, 503);
       }
 
       console.log(`[DEMO] Searching for "${keyword}" in "${location}" within ${radius}m`);
-      const { lat, lng } = await geocodeLocation(location, GOOGLE_MAPS_API_KEY);
-      const leads = await textSearchPlaces(keyword, lat, lng, radius, GOOGLE_MAPS_API_KEY);
+      const { lat, lng } = await geocodeLocation(location, GOOGLE_MAPS_API_KEY, debug);
+      const leads = await textSearchPlaces(keyword, lat, lng, radius, GOOGLE_MAPS_API_KEY, debug);
       console.log(`[DEMO] Found ${leads.length} leads`);
 
       return jsonResponse({
@@ -288,13 +349,15 @@ serve(async (req) => {
         searchId: crypto.randomUUID(),
         source: 'google',
         cached: false,
+        _debug: debug,
       });
     }
 
     // ─── AUTHENTICATED MODE ──────────────────────
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return jsonResponse({ error: 'Authentication required. Please sign in.' }, 401);
+      console.log('[DIAG-AUTH] No Bearer token found');
+      return jsonResponse({ error: 'Authentication required. Please sign in.', _debug: debug }, 401);
     }
 
     const supabaseClient = createClient(
@@ -304,15 +367,43 @@ serve(async (req) => {
     );
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    let userId: string | null = null;
 
-    if (claimsError || !claimsData?.claims) {
-      console.error('Auth error:', claimsError);
-      return jsonResponse({ error: 'Authentication required. Please sign in.' }, 401);
+    // Try getClaims first, fallback to getUser
+    try {
+      console.log('[DIAG-AUTH] Attempting getClaims...');
+      const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+      if (claimsError || !claimsData?.claims) {
+        console.warn('[DIAG-AUTH] getClaims failed:', claimsError?.message || 'no claims returned');
+        throw new Error('getClaims failed');
+      }
+      userId = claimsData.claims.sub as string;
+      debug.authMethod = 'getClaims';
+      console.log(`[DIAG-AUTH] getClaims SUCCESS — userId: ${userId}`);
+    } catch (claimsErr) {
+      console.warn(`[DIAG-AUTH] getClaims threw error: ${claimsErr}`);
+      console.log('[DIAG-AUTH] Falling back to getUser...');
+      try {
+        const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
+        if (userError || !userData?.user) {
+          console.error('[DIAG-AUTH] getUser also failed:', userError?.message || 'no user returned');
+          return jsonResponse({ error: 'Authentication required. Please sign in.', _debug: debug }, 401);
+        }
+        userId = userData.user.id;
+        debug.authMethod = 'getUser';
+        console.log(`[DIAG-AUTH] getUser SUCCESS — userId: ${userId}`);
+      } catch (userErr) {
+        console.error(`[DIAG-AUTH] getUser threw error: ${userErr}`);
+        return jsonResponse({ error: 'Authentication required. Please sign in.', _debug: debug }, 401);
+      }
     }
 
-    const userId = claimsData.claims.sub as string;
-    console.log(`Authenticated request from user: ${userId}`);
+    if (!userId) {
+      console.error('[DIAG-AUTH] userId is null after auth attempts');
+      return jsonResponse({ error: 'Authentication required. Please sign in.', _debug: debug }, 401);
+    }
+
+    console.log(`[DIAG-HANDLER] Authenticated user: ${userId}, authMethod: ${debug.authMethod}`);
 
     const serviceClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -393,6 +484,7 @@ serve(async (req) => {
             return jsonResponse({
               error: "You've used your free searches. Upgrade to continue.",
               code: 'FREE_SEARCH_EXHAUSTED',
+              _debug: debug,
             }, 402);
           }
         }
@@ -403,22 +495,21 @@ serve(async (req) => {
 
     // ─── RATE LIMIT ──────────────────────────────
     if (!checkRateLimit(userId)) {
-      return jsonResponse({ error: 'Too many requests. Please wait a moment.' }, 429);
+      return jsonResponse({ error: 'Too many requests. Please wait a moment.', _debug: debug }, 429);
     }
 
     // ─── VALIDATE INPUT ──────────────────────────
     const validationResult = SearchRequestSchema.safeParse(body);
     if (!validationResult.success) {
       console.error('Validation failed:', validationResult.error.errors);
-      return jsonResponse({ error: 'Invalid search parameters. Please check your input.' }, 400);
+      return jsonResponse({ error: 'Invalid search parameters. Please check your input.', _debug: debug }, 400);
     }
 
     const { keyword, location, radius } = validationResult.data;
 
-    const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
     if (!GOOGLE_MAPS_API_KEY) {
       console.error('GOOGLE_MAPS_API_KEY not configured');
-      return jsonResponse({ error: 'Service temporarily unavailable.' }, 503);
+      return jsonResponse({ error: 'Service temporarily unavailable.', _debug: debug }, 503);
     }
 
     // ─── CACHE CHECK ─────────────────────────────
@@ -433,6 +524,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (cached?.results) {
+      debug.cached = true;
       console.log(`Cache HIT for "${keyword}" in "${location}" (${(cached.results as SearchLead[]).length} results)`);
 
       // Log usage even for cached searches
@@ -449,14 +541,15 @@ serve(async (req) => {
         searchId: crypto.randomUUID(),
         source: 'google',
         cached: true,
+        _debug: debug,
       });
     }
 
     // ─── SEARCH ──────────────────────────────────
-    console.log(`Searching for "${keyword}" in "${location}" within ${radius}m`);
-    const { lat, lng } = await geocodeLocation(location, GOOGLE_MAPS_API_KEY);
-    const leads = await textSearchPlaces(keyword, lat, lng, radius, GOOGLE_MAPS_API_KEY);
-    console.log(`Found ${leads.length} leads (${leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length} without websites)`);
+    console.log(`[DIAG-HANDLER] Starting search for "${keyword}" in "${location}" within ${radius}m`);
+    const { lat, lng } = await geocodeLocation(location, GOOGLE_MAPS_API_KEY, debug);
+    const leads = await textSearchPlaces(keyword, lat, lng, radius, GOOGLE_MAPS_API_KEY, debug);
+    console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length} without websites)`);
 
     // ─── CACHE STORE ─────────────────────────────
     try {
@@ -484,10 +577,15 @@ serve(async (req) => {
       searchId: crypto.randomUUID(),
       source: 'google',
       cached: false,
+      _debug: debug,
     });
 
   } catch (error) {
+    console.error(`[DIAG-HANDLER] TOP-LEVEL CRASH:`, error);
+    console.error(`[DIAG-HANDLER] Error type: ${typeof error}, constructor: ${error?.constructor?.name}`);
+    console.error(`[DIAG-HANDLER] Error message: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[DIAG-HANDLER] Stack: ${error instanceof Error ? error.stack : 'no stack'}`);
     const { message, status } = sanitizeError(error);
-    return jsonResponse({ error: message }, status);
+    return jsonResponse({ error: message, _debug: debug }, status);
   }
 });
