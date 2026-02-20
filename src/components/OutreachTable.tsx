@@ -980,6 +980,9 @@ export function OutreachTable({
                       </TableCell>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
+                          {lead.country === 'Australia' && (
+                            <span className="text-xs" title="Australia">🇦🇺</span>
+                          )}
                           <span className="truncate max-w-[200px]">{lead.business_name}</span>
                           {lead.is_potential_work && (
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />

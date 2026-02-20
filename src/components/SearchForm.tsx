@@ -47,7 +47,7 @@ export function SearchForm({
   const [minReviews, setMinReviews] = useState(2);
   const [requirePhone, setRequirePhone] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<Country>('UK');
+  const [selectedCountry, setSelectedCountry] = useState<Country>('UK' as Country);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -116,7 +116,7 @@ export function SearchForm({
                   value={[radius]}
                   onValueChange={(value) => setRadius(value[0])}
                   min={1}
-                  max={25}
+                  max={100}
                   step={1}
                   className="flex-1"
                 />

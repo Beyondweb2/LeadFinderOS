@@ -1,56 +1,44 @@
 
-
-# Geoapify Fallback Search Strategy for Unsupported Trade Categories
-
-## Problem
-Searching for trades like "electrician" returns zero results because Geoapify's `service` category doesn't have a sub-category for electricians, and the `name=electrician` filter is too strict for how businesses list themselves on OpenStreetMap.
-
-## Solution
-Add a 3-attempt fallback strategy inside `searchPlacesGeoapify`, keeping the function signature unchanged so neither the demo nor authenticated code paths need modification.
-
-## How It Works
-
-1. **Normalize the keyword** into an ordered list of variants:
-   - Original (e.g. "electricians")
-   - Singular form if it ends in "s" (e.g. "electrician")
-   - For electrician-related terms, also try "electrical" and "electric"
-
-2. **Attempt A** -- current behavior: `categories=service`, try each variant with `&name=` until one returns results. Stop on first success.
-
-3. **Attempt B** (only if A returned 0): broaden categories to `service,office.company,office.association,office.consulting,office.financial,office.advertising_agency`. Try each variant with `&name=`.
-
-4. **Attempt C** (only if B returned 0 and keyword was provided): same broad categories but drop `&name=` entirely. Tag response with `fallbackUsed: true`.
-
-Maximum 3 Geoapify Places API calls per search.
+# Search Countdown and Upgrade Popup
 
 ## What Changes
 
-**Single file**: `supabase/functions/search-leads/index.ts`
+### 1. Search Countdown Notification (after searches 1 and 2)
+After each successful search, free users will see a brief, noticeable notification showing how many searches they have left:
+- After search 1: "2 searches remaining"
+- After search 2: "1 search remaining -- make it count!"
 
-No UI files are touched.
+This will appear as a small banner above the results, not a blocking popup, so it doesn't interrupt the flow.
 
-## Technical Details
+### 2. Convincing Upgrade Popup (after search 3)
+After the 3rd search completes, a dialog will appear with:
+- A bold headline: "You've found [X] businesses so far"
+- A summary of what they've discovered (businesses found, ones without websites)
+- Social proof messaging: "Users who upgrade close their first deal within 2 weeks"
+- Clear value proposition with benefits list
+- A prominent "Unlock Unlimited Searches" button
+- A subtle "Maybe later" dismiss option
 
-### New helper function: `generateKeywordVariants(keyword: string): string[]`
-- Trims and lowercases
-- Builds array: `[original, singular, ...electrician-specific]`
-- Deduplicates
+### Technical Details
 
-### Refactored `searchPlacesGeoapify`
-- Accepts keyword, lat, lng, radius, apiKey (same signature)
-- Returns `{ features: GeoapifyFeature[], fallbackUsed: boolean }`
-- Internally runs Attempts A, B, C with structured logging showing which attempt and variant succeeded
-- Each attempt is a single API call (tries variants sequentially but only makes a new HTTP request when the previous returned 0)
-- Cap: 3 total HTTP requests maximum
+**File: `src/pages/Index.tsx`**
+- Add a `searchCountdownBanner` state that shows after each search with remaining count
+- Add a `showUpgradeAfterLimit` dialog state triggered when `freeSearchCount` reaches 3
+- Track cumulative businesses found across searches for the upgrade popup messaging
+- The countdown banner auto-dismisses after 5 seconds or on next search
 
-### Response shape update
-- The `leads` response object will include `fallbackUsed: boolean` alongside existing fields
-- Both demo and authenticated paths will use the updated function
+**File: `src/components/TrialLimitDialog.tsx`**
+- Rework the dialog content to be more persuasive:
+  - Dynamic stats showing what the user has already found
+  - Benefit-oriented copy focused on ROI
+  - Urgency/social proof elements
+  - Keep the pricing and "Cancel anytime" reassurance
 
-### Logging
-Each attempt logs:
+**Flow:**
+```text
+Search 1 complete --> Banner: "2 searches remaining"
+Search 2 complete --> Banner: "1 search remaining"  
+Search 3 complete --> Results shown + Upgrade popup appears
 ```
-[SEARCH] Attempt A with variant "electrician" -> 0 results
-[SEARCH] Attempt B with variant "electrical" -> 12 results (success)
-```
 
+The popup won't block results -- users can dismiss it and still see their 3rd search results, but the search input will be locked after that.
