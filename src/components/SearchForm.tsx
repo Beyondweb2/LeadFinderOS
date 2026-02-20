@@ -114,8 +114,8 @@ export function SearchForm({
           </div>
 
           {/* Submit Button with Trial Indicator */}
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-            <div className={`flex flex-col items-center sm:items-end w-full ${isPaidSubscriber ? '' : 'sm:w-auto'}`}>
+          <div className="flex flex-col sm:flex-row items-center justify-end gap-3 sm:gap-4">
+            <div className="flex flex-col items-center sm:items-end w-full sm:w-auto">
               {freeSearchesExhausted && !isPaidSubscriber ? (
                 /* Exhausted state: disabled search + upgrade CTA */
                 <div className="w-full space-y-3">
