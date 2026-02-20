@@ -72,9 +72,6 @@ export function OutreachMobileCard({
         {/* Middle: Name + Status + Next Action */}
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-1.5">
-            {lead.country === 'Australia' && (
-              <span className="text-xs" title="Australia">🇦🇺</span>
-            )}
             <span className="font-semibold text-sm leading-tight">{lead.business_name}</span>
             {lead.is_potential_work && (
               <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />

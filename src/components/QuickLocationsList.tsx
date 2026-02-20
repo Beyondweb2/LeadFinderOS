@@ -25,26 +25,9 @@ const COUNTRY_DATA: Record<Country, { flag: string; locations: string[] }> = {
       'Milton Keynes', 'Aberdeen', 'Norwich', 'Oxford', 'Cambridge', 'York',
     ],
   },
-  Australia: {
-    flag: '🇦🇺',
-    locations: [
-      'Sydney', 'Melbourne', 'Brisbane', 'Perth', 'Adelaide', 'Gold Coast',
-      'Sunshine Coast', 'Canberra', 'Newcastle', 'Wollongong', 'Geelong',
-      'Hobart', 'Townsville', 'Cairns', 'Toowoomba', 'Darwin', 'Ballarat',
-      'Bendigo', 'Albury', 'Mackay', 'Rockhampton', 'Bundaberg', 'Launceston',
-    ],
-  },
-  Canada: {
-    flag: '🇨🇦',
-    locations: [
-      'Toronto', 'Montreal', 'Vancouver', 'Calgary', 'Edmonton', 'Ottawa',
-      'Winnipeg', 'Quebec City', 'Hamilton', 'Kitchener', 'London', 'Victoria',
-      'Halifax', 'Oshawa', 'Windsor', 'Saskatoon', 'Regina', 'Barrie',
-    ],
-  },
 };
 
-const COUNTRIES: Country[] = ['USA', 'UK', 'Australia', 'Canada'];
+const COUNTRIES: Country[] = ['UK', 'USA'];
 
 interface QuickLocationsListProps {
   onLocationSelect: (location: string, country: Country) => void;
@@ -69,7 +52,7 @@ export function QuickLocationsList({ onLocationSelect }: QuickLocationsListProps
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="pt-3">
-        <Tabs defaultValue="USA" className="w-full">
+        <Tabs defaultValue="UK" className="w-full">
           <TabsList className="inline-flex h-auto p-1 mb-3 gap-1">
             {COUNTRIES.map((country) => (
               <TabsTrigger

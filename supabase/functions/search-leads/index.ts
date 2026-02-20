@@ -18,15 +18,13 @@ const SearchRequestSchema = z.object({
   requirePhone: z.boolean().default(true),
   deepSearch: z.boolean().default(false),
   demo: z.boolean().default(false),
-  country: z.enum(['UK', 'Australia', 'USA', 'Canada']).optional().default('UK'),
+  country: z.enum(['UK', 'USA']).optional().default('UK'),
 });
 
 // ── Country code mapping ──
 const COUNTRY_CODES: Record<string, string> = {
   'UK': 'gb',
   'USA': 'us',
-  'Australia': 'au',
-  'Canada': 'ca',
 };
 
 // ── Directory / platform blacklist ──
@@ -259,13 +257,8 @@ function mapKeywordToCategories(keyword: string): string {
   if (/nursery|childcare|daycare/.test(kw)) return 'childcare';
   if (/car.?wash/.test(kw)) return 'service.vehicle.car_wash';
 
-  // Trade services — use broad categories
-  if (/plumb|electri|build|roof|paint|carpet|handyman|locksmith|clean|landscap|garden|fenc|pav|tiler|plas|joiner|decorator|damp|guttering|scaffold|demolition|skip|waste|drain|boiler|heating|hvac|air.?con/.test(kw)) {
-    return 'service,building';
-  }
-
-  // Default: broad search
-  return 'commercial,service,building,catering,healthcare';
+  // Default: use service as the primary category for trade/business searches
+  return 'service';
 }
 
 /**
@@ -319,8 +312,8 @@ async function searchPlacesGeoapify(
 ): Promise<GeoapifyFeature[]> {
   const categories = mapKeywordToCategories(keyword);
 
-  // Geoapify circle filter: circle:lon,lat,radius_in_meters
-  const url = `https://api.geoapify.com/v2/places?categories=${categories}&filter=circle:${lng},${lat},${radius}&conditions=named&limit=200&apiKey=${apiKey}`;
+  // Geoapify circle filter: circle:lon,lat,radius_in_meters — limit=50
+  const url = `https://api.geoapify.com/v2/places?categories=${categories}&filter=circle:${lng},${lat},${radius}&conditions=named&limit=50&apiKey=${apiKey}`;
 
   console.log(`Geoapify Places: categories=${categories}, circle=${lng},${lat},${radius}`);
 
@@ -360,13 +353,22 @@ async function processGeoapifyFeature(
   const p = feature.properties;
   if (!p.name) return null;
 
-  const phone = p.contact?.phone || null;
-  const websiteUrl = p.website || null;
+  const phone = p.contact?.phone || p.datasource?.raw?.phone || null;
+  const websiteUrl = p.website || p.datasource?.raw?.website || null;
   const address = p.formatted || [p.address_line1, p.address_line2].filter(Boolean).join(', ') || '';
   const category = geoapifyCategoryLabel(p.categories || []);
 
-  // Build a Google Maps search URL from name + coordinates
-  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + ' ' + address)}`;
+  // Build OSM link if osm_type and osm_id are available, otherwise fall back to Google Maps search
+  let mapUrl: string;
+  const osmType = p.datasource?.raw?.osm_type;
+  const osmId = p.datasource?.raw?.osm_id;
+  if (osmType && osmId) {
+    const osmTypeMap: Record<string, string> = { N: 'node', n: 'node', W: 'way', w: 'way', R: 'relation', r: 'relation' };
+    const mappedType = osmTypeMap[osmType] || osmType;
+    mapUrl = `https://www.openstreetmap.org/${mappedType}/${osmId}`;
+  } else {
+    mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(p.name + ' ' + address)}`;
+  }
 
   let websiteStatus: Lead['websiteStatus'];
   let confidence: number;
@@ -397,9 +399,9 @@ async function processGeoapifyFeature(
     category,
     address,
     phone: phone || undefined,
-    rating: undefined, // Geoapify does not provide ratings
+    rating: undefined,
     reviewCount: undefined,
-    googleMapsUrl,
+    googleMapsUrl: mapUrl,
     websiteUrl: websiteUrl || undefined,
     websiteStatus,
     confidence,

@@ -32,7 +32,7 @@ export type NextActionType =
   | 'send_follow_up'
   | 'check_3_day_removal';
 
-export type Country = 'UK' | 'Australia' | 'USA' | 'Canada' | 'Germany' | 'France' | 'Spain' | 'Italy' | 'Netherlands' | 'Belgium' | 'Ireland' | 'NewZealand' | 'SouthAfrica' | 'India' | 'Singapore' | 'UAE' | 'Brazil' | 'Mexico' | 'Japan' | 'Sweden';
+export type Country = 'UK' | 'USA';
 
 export type ListType = 'no_website' | 'broken_website';
 

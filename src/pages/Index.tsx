@@ -117,7 +117,7 @@ const Index = () => {
         <div className="text-center sm:text-left">
           <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Find Leads</h1>
           <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
-            Search businesses in the US, UK, Australia and Canada — find those without websites and add hot leads to your CRM.
+            Search businesses in the US and UK — find those without websites and add hot leads to your CRM.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">

@@ -20,7 +20,7 @@ export interface Lead {
   businessStatus?: string;
 }
 
-export type Country = 'UK' | 'Australia' | 'USA' | 'Canada';
+export type Country = 'UK' | 'USA';
 
 export interface SearchFilters {
   keyword: string;
