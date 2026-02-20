@@ -22,7 +22,7 @@ const SearchRequestSchema = z.object({
   radius: z.number()
     .int('Radius must be an integer')
     .min(100, 'Minimum radius is 100 meters')
-    .max(100000, 'Maximum radius is 100km')
+    .max(25000, 'Maximum radius is 25km')
     .default(5000),
   minRating: z.number()
     .min(0, 'Rating must be between 0 and 5')
@@ -41,9 +41,9 @@ const SearchRequestSchema = z.object({
     .default(false), // Enable grid-based multi-point search
   demo: z.boolean()
     .default(false), // Demo mode - unauthenticated, 1 search per IP
-  country: z.string()
-    .max(10)
-    .optional(), // Country code (passed through, not used server-side)
+  country: z.enum(['UK', 'Australia', 'USA', 'Canada'])
+    .optional()
+    .default('UK'),
 });
 
 // Directory / Platform Blacklist - URLs that don't count as having a website
@@ -852,9 +852,8 @@ serve(async (req) => {
           const now = new Date();
           const trialEnd = new Date(trial.trial_end_date);
           
-          // ─── 5-SEARCH FREE ACCESS MODEL ───
           const currentFreeCount = trial.free_search_count || 0;
-          const FREE_SEARCH_LIMIT = 5;
+          const FREE_SEARCH_LIMIT = 3;
           
           if (currentFreeCount < FREE_SEARCH_LIMIT) {
             console.log(`User ${userId} using free search (${currentFreeCount + 1} of ${FREE_SEARCH_LIMIT})`);
@@ -1039,10 +1038,13 @@ serve(async (req) => {
       console.error('Usage tracking failed (non-blocking):', trackingErr);
     }
 
+    // Cap results at 50
+    const cappedLeads = leads.slice(0, 50);
+
     return new Response(
       JSON.stringify({
-        leads,
-        totalFound: leads.length,
+        leads: cappedLeads,
+        totalFound: cappedLeads.length,
         searchId: crypto.randomUUID(),
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
