@@ -21,12 +21,15 @@ interface OutreachHistoryEntry {
    phone: string | null;
 }
 
+export type PhoneFetchStatus = 'pending' | 'success' | 'no_phone' | 'failed';
+
 export function useOutreach() {
   const [leads, setLeads] = useState<OutreachLead[]>([]);
   const [archivedLeads, setArchivedLeads] = useState<OutreachLead[]>([]);
   const [activities, setActivities] = useState<OutreachActivity[]>([]);
   const [outreachHistory, setOutreachHistory] = useState<OutreachHistoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [phoneFetchStatus, setPhoneFetchStatus] = useState<Record<string, PhoneFetchStatus>>({});
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -103,6 +106,69 @@ export function useOutreach() {
     fetchLeads();
     fetchOutreachHistory();
   }, [fetchLeads, fetchOutreachHistory]);
+
+  // Fetch phone for a single lead via Google Place Details (non-blocking)
+  const fetchPhoneForLead = useCallback(async (outreachLeadId: string, placeId: string, businessName: string) => {
+    setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'pending' }));
+    try {
+      const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
+        body: { placeId },
+      });
+
+      if (detailsError || !details) {
+        console.log('Phone enrichment returned no data for', businessName);
+        setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'failed' }));
+        return;
+      }
+
+      const updates: Record<string, string | null> = {};
+      if (details.phone) updates.phone = details.phone;
+      if (details.address) updates.address = details.address;
+      if (details.category) updates.category = details.category;
+
+      if (Object.keys(updates).length > 0) {
+        const { data: updated } = await supabase
+          .from('outreach_leads')
+          .update(updates)
+          .eq('id', outreachLeadId)
+          .select()
+          .single();
+
+        if (updated) {
+          setLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
+          setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
+          if (details.phone) {
+            toast({ title: 'Phone found', description: `${businessName}: ${details.phone}` });
+          }
+          return;
+        }
+      }
+
+      setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
+    } catch (e) {
+      console.error('Phone enrichment failed (non-blocking):', e);
+      setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'failed' }));
+    }
+  }, [toast]);
+
+  // Retry phone fetch for a lead that failed
+  const retryPhoneFetch = useCallback(async (outreachLeadId: string) => {
+    const lead = leads.find(l => l.id === outreachLeadId) || archivedLeads.find(l => l.id === outreachLeadId);
+    if (!lead) return;
+    
+    // Get place_id from the lead (stored as extra field)
+    const placeId = (lead as any).place_id;
+    if (!placeId) {
+      toast({
+        title: 'Retry not available',
+        description: 'No Place ID stored for this lead.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    await fetchPhoneForLead(outreachLeadId, placeId, lead.business_name);
+  }, [leads, archivedLeads, toast, fetchPhoneForLead]);
 
   const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website') => {
     if (!user) {
@@ -195,7 +261,8 @@ export function useOutreach() {
         next_action_date: null,
         country,
         list_type: listType,
-      })
+        place_id: lead.id || null,
+      } as any)
       .select()
       .single();
 
@@ -264,44 +331,7 @@ export function useOutreach() {
 
     // Enrich lead with phone/address from Google Place Details (background, non-blocking)
     if (lead.id) {
-      const enrichLeadId = newLead.id;
-      const enrichLeadName = lead.name;
-      const enrichPlaceId = lead.id;
-      (async () => {
-        try {
-          const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
-            body: { placeId: enrichPlaceId },
-          });
-
-          if (detailsError || !details) {
-            console.log('Phone enrichment returned no data for', enrichLeadName);
-            return;
-          }
-
-          const updates: Record<string, string | null> = {};
-          if (details.phone) updates.phone = details.phone;
-          if (details.address) updates.address = details.address;
-          if (details.category) updates.category = details.category;
-
-          if (Object.keys(updates).length > 0) {
-            const { data: updated } = await supabase
-              .from('outreach_leads')
-              .update(updates)
-              .eq('id', enrichLeadId)
-              .select()
-              .single();
-
-            if (updated) {
-              setLeads(prev => prev.map(l => l.id === enrichLeadId ? (updated as OutreachLead) : l));
-              if (details.phone) {
-                toast({ title: 'Phone found', description: `${enrichLeadName}: ${details.phone}` });
-              }
-            }
-          }
-        } catch (e) {
-          console.error('Phone enrichment failed (non-blocking):', e);
-        }
-      })();
+      fetchPhoneForLead(newLead.id, lead.id, lead.name);
     }
 
     return newLead;
@@ -977,5 +1007,7 @@ export function useOutreach() {
     bulkImportLeads,
     fetchLeads,
     refetch: fetchLeads,
+    phoneFetchStatus,
+    retryPhoneFetch,
   };
 }

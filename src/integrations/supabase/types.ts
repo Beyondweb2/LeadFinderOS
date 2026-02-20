@@ -283,6 +283,7 @@ export type Database = {
           paid_for: string | null
           payment_date: string | null
           phone: string | null
+          place_id: string | null
           project_duration: string | null
           status: string
           updated_at: string
@@ -315,6 +316,7 @@ export type Database = {
           paid_for?: string | null
           payment_date?: string | null
           phone?: string | null
+          place_id?: string | null
           project_duration?: string | null
           status?: string
           updated_at?: string
@@ -347,6 +349,7 @@ export type Database = {
           paid_for?: string | null
           payment_date?: string | null
           phone?: string | null
+          place_id?: string | null
           project_duration?: string | null
           status?: string
           updated_at?: string
