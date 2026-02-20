@@ -222,17 +222,31 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
             <Calendar
               mode="single"
               selected={selectedDate}
-              onSelect={setSelectedDate}
+              onSelect={(day) => {
+                setSelectedDate(day);
+                if (day) {
+                  const dateStr = format(day, 'yyyy-MM-dd');
+                  if (selectedAction.startsWith(CUSTOM_PREFIX)) {
+                    const label = selectedAction.slice(CUSTOM_PREFIX.length);
+                    if (leadId) setLeadCustomAction(leadId, label);
+                    onUpdate('follow_up' as NextActionType, dateStr);
+                  } else {
+                    if (leadId) setLeadCustomAction(leadId, null);
+                    onUpdate(selectedAction as NextActionType, dateStr);
+                  }
+                  setOpen(false);
+                  if (selectedAction && selectedAction !== 'none') {
+                    window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
+                  }
+                }
+              }}
               className={cn('p-3 pointer-events-auto rounded-md border')}
             />
           </div>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end">
             <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
               Cancel
-            </Button>
-            <Button size="sm" onClick={handleSave}>
-              Save
             </Button>
           </div>
         </div>
