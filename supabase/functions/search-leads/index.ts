@@ -242,8 +242,6 @@ async function geocodeLocation(
 // ══════════════════════════════════════════════════════════
 // ── Geoapify Places search with circle filter ──
 // ══════════════════════════════════════════════════════════
-// Keyword-to-category mapping removed: spec mandates categories=service always
-
 interface GeoapifyFeature {
   properties: {
     name?: string;
@@ -262,20 +260,45 @@ interface GeoapifyFeature {
   };
 }
 
-async function searchPlacesGeoapify(
-  keyword: string,
+// ── Keyword variant generator ──
+function generateKeywordVariants(keyword: string): string[] {
+  const trimmed = keyword.trim().toLowerCase();
+  if (!trimmed) return [];
+  const variants: string[] = [trimmed];
+
+  // Singular form
+  if (trimmed.endsWith('s') && trimmed.length > 3) {
+    const singular = trimmed.slice(0, -1);
+    if (!variants.includes(singular)) variants.push(singular);
+  }
+
+  // Electrician-specific expansions
+  const electricianTerms = ['electrician', 'electricians'];
+  if (electricianTerms.includes(trimmed) || trimmed === 'electrical' || trimmed === 'electric') {
+    for (const extra of ['electrical', 'electric']) {
+      if (!variants.includes(extra)) variants.push(extra);
+    }
+  }
+
+  return variants;
+}
+
+const BASE_CATEGORIES = 'service';
+const BROAD_CATEGORIES = 'service,office.company,office.association,office.consulting,office.financial,office.advertising_agency';
+
+// ── Single Geoapify Places API call (low-level) ──
+async function fetchGeoapifyPlaces(
+  categories: string,
   lat: number,
   lng: number,
   radius: number,
-  apiKey: string
+  apiKey: string,
+  nameFilter?: string
 ): Promise<GeoapifyFeature[]> {
-  // Always use categories=service per spec; optionally add name= for keyword filtering
-  let url = `https://api.geoapify.com/v2/places?categories=service&filter=circle:${lng},${lat},${radius}&conditions=named&limit=50&apiKey=${apiKey}`;
-  if (keyword && keyword.trim().length > 0) {
-    url += `&name=${encodeURIComponent(keyword.trim())}`;
+  let url = `https://api.geoapify.com/v2/places?categories=${categories}&filter=circle:${lng},${lat},${radius}&conditions=named&limit=50&apiKey=${apiKey}`;
+  if (nameFilter) {
+    url += `&name=${encodeURIComponent(nameFilter)}`;
   }
-
-  console.log(`Geoapify Places: circle=${lng},${lat},${radius}, keyword="${keyword}"`);
 
   const res = await fetch(url);
   if (res.status === 401) {
@@ -294,19 +317,68 @@ async function searchPlacesGeoapify(
 
   const data = await res.json();
   const features: GeoapifyFeature[] = data?.features || [];
-  console.log(`Geoapify returned ${features.length} features`);
 
   // Deduplicate by place_id
   const seen = new Set<string>();
-  const deduped = features.filter(f => {
+  return features.filter(f => {
     const pid = f.properties.place_id;
     if (!pid || seen.has(pid)) return false;
     seen.add(pid);
     return !!f.properties.name;
   });
-  console.log(`After dedup: ${deduped.length} unique places`);
+}
 
-  return deduped;
+// ── Geoapify Places search with fallback strategy ──
+async function searchPlacesGeoapify(
+  keyword: string,
+  lat: number,
+  lng: number,
+  radius: number,
+  apiKey: string
+): Promise<{ features: GeoapifyFeature[]; fallbackUsed: boolean }> {
+  const variants = generateKeywordVariants(keyword);
+  let apiCalls = 0;
+  const MAX_CALLS = 3;
+
+  console.log(`[SEARCH] Starting fallback search: keyword="${keyword}", variants=${JSON.stringify(variants)}`);
+
+  // ── Attempt A: categories=service with name= variants ──
+  for (const variant of variants) {
+    if (apiCalls >= MAX_CALLS) break;
+    apiCalls++;
+    const results = await fetchGeoapifyPlaces(BASE_CATEGORIES, lat, lng, radius, apiKey, variant);
+    console.log(`[SEARCH] Attempt A with variant "${variant}" -> ${results.length} results`);
+    if (results.length > 0) {
+      console.log(`[SEARCH] Success: Attempt A, variant "${variant}"`);
+      return { features: results, fallbackUsed: false };
+    }
+  }
+
+  // ── Attempt B: broad categories with name= variants ──
+  for (const variant of variants) {
+    if (apiCalls >= MAX_CALLS) break;
+    apiCalls++;
+    const results = await fetchGeoapifyPlaces(BROAD_CATEGORIES, lat, lng, radius, apiKey, variant);
+    console.log(`[SEARCH] Attempt B with variant "${variant}" -> ${results.length} results`);
+    if (results.length > 0) {
+      console.log(`[SEARCH] Success: Attempt B, variant "${variant}"`);
+      return { features: results, fallbackUsed: false };
+    }
+  }
+
+  // ── Attempt C: broad categories, no name filter ──
+  if (apiCalls < MAX_CALLS && variants.length > 0) {
+    apiCalls++;
+    const results = await fetchGeoapifyPlaces(BROAD_CATEGORIES, lat, lng, radius, apiKey);
+    console.log(`[SEARCH] Attempt C (no name filter) -> ${results.length} results`);
+    if (results.length > 0) {
+      console.log(`[SEARCH] Success: Attempt C (fallback, no name filter)`);
+      return { features: results, fallbackUsed: true };
+    }
+  }
+
+  console.log(`[SEARCH] All attempts exhausted. ${apiCalls} API calls made, 0 results.`);
+  return { features: [], fallbackUsed: false };
 }
 
 // ── Convert Geoapify feature to Lead ──
@@ -461,7 +533,7 @@ serve(async (req) => {
 
       console.log(`[DEMO] Searching "${keyword}" in "${location}" (${country}) radius=${radius}m`);
       const { lat, lng } = await geocodeLocation(location, country, GEOAPIFY_API_KEY);
-      const features = await searchPlacesGeoapify(keyword, lat, lng, radius, GEOAPIFY_API_KEY);
+      const { features, fallbackUsed } = await searchPlacesGeoapify(keyword, lat, lng, radius, GEOAPIFY_API_KEY);
 
       const leads: Lead[] = [];
       for (const feature of features) {
@@ -480,7 +552,7 @@ serve(async (req) => {
         return order[a.websiteStatus] - order[b.websiteStatus];
       });
 
-      return new Response(JSON.stringify({ leads }), {
+      return new Response(JSON.stringify({ leads, fallbackUsed }), {
         status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
@@ -605,7 +677,7 @@ serve(async (req) => {
 
     // ── Geocode + Search ──
     const { lat, lng } = await geocodeLocation(location, country, GEOAPIFY_API_KEY);
-    const features = await searchPlacesGeoapify(keyword, lat, lng, radius, GEOAPIFY_API_KEY);
+    const { features, fallbackUsed } = await searchPlacesGeoapify(keyword, lat, lng, radius, GEOAPIFY_API_KEY);
 
     // ── Process results ──
     const leads: Lead[] = [];
@@ -639,7 +711,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ leads, totalFound: leads.length, searchId: crypto.randomUUID() }),
+      JSON.stringify({ leads, totalFound: leads.length, searchId: crypto.randomUUID(), fallbackUsed }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
