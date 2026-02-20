@@ -137,9 +137,7 @@ export function useOutreach() {
         if (updated) {
           setLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
           setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
-          if (details.phone) {
-            toast({ title: 'Phone found', description: `${businessName}: ${details.phone}` });
-          }
+          // Phone found — no toast
           return;
         }
       }
@@ -324,10 +322,7 @@ export function useOutreach() {
       console.error('Usage tracking failed (non-blocking):', e);
     }
 
-    toast({
-      title: 'Lead added',
-      description: `${lead.name} added to your outreach list. Fetching phone...`,
-    });
+    // Lead added — no toast
 
     // Enrich lead with phone/address from Google Place Details (background, non-blocking)
     if (lead.id) {
@@ -391,12 +386,7 @@ export function useOutreach() {
     setLeads((prev) => prev.filter((l) => l.id !== leadId));
     setArchivedLeads((prev) => prev.filter((l) => l.id !== leadId));
     
-    if (!silent) {
-      toast({
-        title: 'Lead removed',
-        description: targetLead ? `${targetLead.business_name} removed from outreach.` : 'Lead removed.',
-      });
-    }
+    // Lead removed — no toast
 
     return true;
   }, [leads, archivedLeads, toast]);
@@ -518,10 +508,7 @@ export function useOutreach() {
    setArchivedLeads((prev) => [...leads.map(l => ({ ...l, is_archived: true })), ...prev]);
     setLeads([]);
     
-    toast({
-     title: 'All leads archived',
-     description: `${leads.length} leads moved to archive.`,
-    });
+    // All archived — no toast
 
     return true;
  }, [user, leads, toast]);
@@ -593,12 +580,7 @@ export function useOutreach() {
     setLeads((prev) => prev.filter((l) => l.id !== leadId));
     setArchivedLeads((prev) => [{ ...lead, is_archived: true }, ...prev]);
     
-    if (!silent) {
-      toast({
-        title: 'Lead archived',
-        description: `${lead.business_name} moved to archive.`,
-      });
-    }
+    // Lead archived — no toast
 
     return true;
   }, [toast]);
@@ -633,10 +615,7 @@ export function useOutreach() {
     setArchivedLeads((prev) => prev.filter((l) => l.id !== leadId));
     setLeads((prev) => [{ ...lead, is_archived: false }, ...prev]);
     
-    toast({
-      title: 'Lead restored',
-      description: `${lead.business_name} moved to active list.`,
-    });
+    // Lead restored — no toast
 
     return true;
   }, [archivedLeads, toast]);
@@ -664,10 +643,7 @@ export function useOutreach() {
     setLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
     setArchivedLeads((prev) => [...archivedItems.map(l => ({ ...l, is_archived: true })), ...prev]);
     
-    toast({
-      title: 'Leads archived',
-      description: `${leadIds.length} leads moved to archive.`,
-    });
+    // Leads archived — no toast
 
     return true;
   }, [leads, toast]);
@@ -693,10 +669,7 @@ export function useOutreach() {
     setLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
     setArchivedLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
     
-    toast({
-      title: 'Leads removed',
-      description: `${leadIds.length} leads removed from CRM.`,
-    });
+    // Leads removed — no toast
 
     return true;
   }, [toast]);
@@ -724,10 +697,7 @@ export function useOutreach() {
     setArchivedLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
     setLeads((prev) => [...unarchivedItems.map(l => ({ ...l, is_archived: false })), ...prev]);
     
-    toast({
-      title: 'Leads restored',
-      description: `${leadIds.length} leads moved to active list.`,
-    });
+    // Leads restored — no toast
 
     return true;
   }, [archivedLeads, toast]);
@@ -764,10 +734,7 @@ export function useOutreach() {
     window.dispatchEvent(new CustomEvent('demo-checklist-track-pressed'));
     window.dispatchEvent(new CustomEvent('demo-checklist-status-change'));
     
-    toast({
-      title: 'Added to Track Leads',
-      description: `${lead.business_name} added to Track Leads.`,
-    });
+    // Added to Track Leads — no toast
 
     // Log activity
     if (user) {
@@ -812,10 +779,7 @@ export function useOutreach() {
     window.dispatchEvent(new CustomEvent('track-lead-added'));
     window.dispatchEvent(new CustomEvent('demo-checklist-track-pressed'));
     
-    toast({
-      title: 'Added to Track Leads',
-      description: `${leadIds.length} leads added to Track Leads.`,
-    });
+    // Added to Track Leads — no toast
 
     return true;
   }, [toast]);
@@ -852,17 +816,11 @@ export function useOutreach() {
        .map(l => l.id);
  
      if (idsToLookup.length === 0) {
-       toast({
-         title: 'No leads to update',
-         description: 'All leads already have phone numbers.',
-       });
+        // No leads to update — no toast
        return { updated: 0, total: 0 };
      }
  
-     toast({
-       title: 'Looking up phone numbers',
-       description: `Searching for ${idsToLookup.length} businesses...`,
-     });
+      // Looking up phones — no toast
  
      try {
        const { data, error } = await supabase.functions.invoke('lookup-phones', {
@@ -874,10 +832,7 @@ export function useOutreach() {
        // Refresh leads to get updated phone numbers
        await fetchLeads();
  
-       toast({
-         title: 'Phone lookup complete',
-         description: `Found ${data.updated} of ${data.total} phone numbers.`,
-       });
+        // Phone lookup complete — no toast
  
        return { updated: data.updated, total: data.total };
      } catch (error) {
@@ -963,10 +918,7 @@ export function useOutreach() {
 
     await fetchLeads();
     
-    toast({
-      title: 'Import complete',
-      description: `Imported ${imported} leads. ${skipped > 0 ? `${skipped} skipped.` : ''}`,
-    });
+    // Import complete — no toast
 
     return { imported, skipped };
   }, [user, fetchLeads, toast]);

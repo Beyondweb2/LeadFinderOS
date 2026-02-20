@@ -118,10 +118,7 @@ export function useLeadSearch() {
       if (data) {
         setLeads(data.leads);
         await saveSearch(filters, data.leads.length);
-        toast({
-          title: 'Search complete',
-          description: `Found ${data.leads.length} businesses. ${data.leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length} without websites.`,
-        });
+        // Search complete — no toast
       }
     } catch (err) {
       console.error('Search error:', err);
@@ -189,10 +186,7 @@ export function useLeadSearch() {
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast({
-        title: 'Export complete',
-        description: `Exported ${leads.length} leads to CSV.`,
-      });
+      // Export complete — no toast
     } catch (err) {
       console.error('CSV export failed:', err);
       toast({
