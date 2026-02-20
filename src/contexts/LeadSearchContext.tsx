@@ -245,30 +245,16 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
 
     const headers = [
       'Business Name',
-      'Category',
-      'Address',
-      'Phone',
-      'Rating',
-      'Review Count',
       'Google Maps URL',
-      'Website URL',
       'Website Status',
-      'Confidence',
-      'Reason',
+      'Website URL',
     ];
 
     const rows = leads.map((lead) => [
       lead.name,
-      lead.category || '',
-      lead.address,
-      lead.phone || '',
-      lead.rating?.toString() || '',
-      lead.reviewCount?.toString() || '',
       lead.googleMapsUrl,
-      lead.websiteUrl || '',
       lead.websiteStatus,
-      `${Math.round(lead.confidence * 100)}%`,
-      lead.reason,
+      lead.websiteUrl || '',
     ]);
 
     const BOM = '\uFEFF';

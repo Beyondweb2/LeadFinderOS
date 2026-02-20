@@ -8,7 +8,7 @@ export interface Lead {
   id: string;
   name: string;
   category?: string;
-  address: string;
+  address?: string;
   phone?: string;
   rating?: number;
   reviewCount?: number;
@@ -36,4 +36,6 @@ export interface SearchResponse {
   leads: Lead[];
   totalFound: number;
   searchId: string;
+  source?: string;
+  cached?: boolean;
 }

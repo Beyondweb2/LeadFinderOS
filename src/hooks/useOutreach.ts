@@ -185,10 +185,10 @@ export function useOutreach() {
       .insert({
         user_id: user.id,
         business_name: lead.name,
-        phone: lead.phone || null,
+        phone: null,
         email: null,
         google_maps_url: lead.googleMapsUrl,
-        address: lead.address,
+        address: lead.address || null,
         category: lead.category || null,
         status: 'not_contacted' as LeadStatus,
         next_action: 'none' as NextActionType,
@@ -259,8 +259,50 @@ export function useOutreach() {
 
     toast({
       title: 'Lead added',
-      description: `${lead.name} added to your outreach list.`,
+      description: `${lead.name} added to your outreach list. Fetching phone...`,
     });
+
+    // Enrich lead with phone/address from Google Place Details (background, non-blocking)
+    if (lead.id) {
+      const enrichLeadId = newLead.id;
+      const enrichLeadName = lead.name;
+      const enrichPlaceId = lead.id;
+      (async () => {
+        try {
+          const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
+            body: { placeId: enrichPlaceId },
+          });
+
+          if (detailsError || !details) {
+            console.log('Phone enrichment returned no data for', enrichLeadName);
+            return;
+          }
+
+          const updates: Record<string, string | null> = {};
+          if (details.phone) updates.phone = details.phone;
+          if (details.address) updates.address = details.address;
+          if (details.category) updates.category = details.category;
+
+          if (Object.keys(updates).length > 0) {
+            const { data: updated } = await supabase
+              .from('outreach_leads')
+              .update(updates)
+              .eq('id', enrichLeadId)
+              .select()
+              .single();
+
+            if (updated) {
+              setLeads(prev => prev.map(l => l.id === enrichLeadId ? (updated as OutreachLead) : l));
+              if (details.phone) {
+                toast({ title: 'Phone found', description: `${enrichLeadName}: ${details.phone}` });
+              }
+            }
+          }
+        } catch (e) {
+          console.error('Phone enrichment failed (non-blocking):', e);
+        }
+      })();
+    }
 
     return newLead;
   }, [user, toast]);

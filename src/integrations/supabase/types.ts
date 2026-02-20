@@ -354,6 +354,54 @@ export type Database = {
         }
         Relationships: []
       }
+      phone_cache: {
+        Row: {
+          address: string | null
+          category: string | null
+          created_at: string
+          google_maps_uri: string | null
+          phone: string | null
+          place_id: string
+        }
+        Insert: {
+          address?: string | null
+          category?: string | null
+          created_at?: string
+          google_maps_uri?: string | null
+          phone?: string | null
+          place_id: string
+        }
+        Update: {
+          address?: string | null
+          category?: string | null
+          created_at?: string
+          google_maps_uri?: string | null
+          phone?: string | null
+          place_id?: string
+        }
+        Relationships: []
+      }
+      search_cache: {
+        Row: {
+          cache_key: string
+          created_at: string
+          id: string
+          results: Json
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          id?: string
+          results: Json
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          id?: string
+          results?: Json
+        }
+        Relationships: []
+      }
       search_history: {
         Row: {
           id: string
