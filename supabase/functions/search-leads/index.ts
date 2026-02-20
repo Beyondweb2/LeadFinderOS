@@ -213,6 +213,15 @@ async function geocodeLocation(
   const url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(location)}&filter=countrycode:${countryCode}&limit=1&apiKey=${apiKey}`;
 
   const res = await fetch(url);
+  if (res.status === 401) {
+    console.error('Geoapify geocoding 401: Invalid API key');
+    throw new Error('Search service authentication error. Please contact support.');
+  }
+  if (res.status === 400) {
+    const errBody = await res.text();
+    console.error('Geoapify geocoding 400:', errBody);
+    throw new Error('Invalid location. Please check and try again.');
+  }
   if (!res.ok) {
     console.error('Geoapify geocoding HTTP error:', res.status);
     throw new Error('Location not found');
@@ -233,57 +242,7 @@ async function geocodeLocation(
 // ══════════════════════════════════════════════════════════
 // ── Geoapify Places search with circle filter ──
 // ══════════════════════════════════════════════════════════
-function mapKeywordToCategories(keyword: string): string {
-  const kw = keyword.toLowerCase();
-
-  if (/restaurant|dining/.test(kw)) return 'catering.restaurant';
-  if (/cafe|coffee/.test(kw)) return 'catering.cafe';
-  if (/pub|bar/.test(kw)) return 'catering.pub,catering.bar';
-  if (/fast.?food|takeaway|takeout/.test(kw)) return 'catering.fast_food';
-  if (/bakery/.test(kw)) return 'catering.bakery';
-  if (/hotel|motel/.test(kw)) return 'accommodation.hotel,accommodation.motel';
-  if (/dentist/.test(kw)) return 'healthcare.dentist';
-  if (/doctor|gp|clinic/.test(kw)) return 'healthcare.doctor,healthcare.clinic';
-  if (/pharmacy|chemist/.test(kw)) return 'healthcare.pharmacy';
-  if (/gym|fitness/.test(kw)) return 'sport.fitness';
-  if (/hairdresser|salon|beauty/.test(kw)) return 'service.beauty';
-  if (/barber/.test(kw)) return 'service.beauty.barber';
-  if (/supermarket|grocery/.test(kw)) return 'commercial.supermarket';
-  if (/school/.test(kw)) return 'education.school';
-  if (/mechanic|garage|auto.?repair|car.?repair|mot/.test(kw)) return 'service.vehicle';
-  if (/florist/.test(kw)) return 'commercial.florist';
-  if (/pet|vet|veterinary/.test(kw)) return 'healthcare.veterinary,commercial.pet';
-  if (/accountant|solicitor|lawyer|legal/.test(kw)) return 'office';
-  if (/nursery|childcare|daycare/.test(kw)) return 'childcare';
-  if (/car.?wash/.test(kw)) return 'service.vehicle.car_wash';
-
-  // Default: use service as the primary category for trade/business searches
-  return 'service';
-}
-
-/**
- * Checks whether a Geoapify place feature matches the user's search keyword.
- * Matches against name + Geoapify categories.
- */
-function matchesKeyword(properties: any, keyword: string): boolean {
-  const kw = keyword.toLowerCase();
-  const kwWords = kw.split(/\s+/);
-
-  // Check name
-  const name = (properties.name || '').toLowerCase();
-  if (kwWords.some(w => w.length >= 3 && name.includes(w))) return true;
-
-  // Check Geoapify categories (e.g. ["service.vehicle.repair"])
-  const cats = (properties.categories || []) as string[];
-  const catStr = cats.join(' ').toLowerCase().replace(/[._]/g, ' ');
-  if (kwWords.some(w => w.length >= 3 && catStr.includes(w))) return true;
-
-  // Check address for keyword (sometimes trades are named generically)
-  const addr = (properties.formatted || '').toLowerCase();
-  if (kwWords.some(w => w.length >= 4 && addr.includes(w))) return true;
-
-  return false;
-}
+// Keyword-to-category mapping removed: spec mandates categories=service always
 
 interface GeoapifyFeature {
   properties: {
@@ -310,14 +269,24 @@ async function searchPlacesGeoapify(
   radius: number,
   apiKey: string
 ): Promise<GeoapifyFeature[]> {
-  const categories = mapKeywordToCategories(keyword);
+  // Always use categories=service per spec; optionally add name= for keyword filtering
+  let url = `https://api.geoapify.com/v2/places?categories=service&filter=circle:${lng},${lat},${radius}&conditions=named&limit=50&apiKey=${apiKey}`;
+  if (keyword && keyword.trim().length > 0) {
+    url += `&name=${encodeURIComponent(keyword.trim())}`;
+  }
 
-  // Geoapify circle filter: circle:lon,lat,radius_in_meters — limit=50
-  const url = `https://api.geoapify.com/v2/places?categories=${categories}&filter=circle:${lng},${lat},${radius}&conditions=named&limit=50&apiKey=${apiKey}`;
-
-  console.log(`Geoapify Places: categories=${categories}, circle=${lng},${lat},${radius}`);
+  console.log(`Geoapify Places: circle=${lng},${lat},${radius}, keyword="${keyword}"`);
 
   const res = await fetch(url);
+  if (res.status === 401) {
+    console.error('Geoapify 401: Invalid API key');
+    throw new Error('Search service authentication error. Please contact support.');
+  }
+  if (res.status === 400) {
+    const errBody = await res.text();
+    console.error('Geoapify 400:', errBody);
+    throw new Error('Invalid search parameters. Please adjust and try again.');
+  }
   if (!res.ok) {
     console.error('Geoapify Places HTTP error:', res.status);
     throw new Error('Search service temporarily unavailable');
@@ -325,13 +294,19 @@ async function searchPlacesGeoapify(
 
   const data = await res.json();
   const features: GeoapifyFeature[] = data?.features || [];
-  console.log(`Geoapify returned ${features.length} raw features`);
+  console.log(`Geoapify returned ${features.length} features`);
 
-  // Filter by keyword relevance
-  const matched = features.filter(f => f.properties.name && matchesKeyword(f.properties, keyword));
-  console.log(`After keyword filter: ${matched.length} matches`);
+  // Deduplicate by place_id
+  const seen = new Set<string>();
+  const deduped = features.filter(f => {
+    const pid = f.properties.place_id;
+    if (!pid || seen.has(pid)) return false;
+    seen.add(pid);
+    return !!f.properties.name;
+  });
+  console.log(`After dedup: ${deduped.length} unique places`);
 
-  return matched;
+  return deduped;
 }
 
 // ── Convert Geoapify feature to Lead ──
@@ -419,6 +394,12 @@ function sanitizeError(error: unknown): { message: string; status: number } {
     console.error('Detailed error:', error);
     if (error.message === 'Location not found') {
       return { message: 'Location not found. Please check the address and try again.', status: 400 };
+    }
+    if (error.message.includes('authentication error')) {
+      return { message: 'Search service is temporarily unavailable. Please try again later.', status: 503 };
+    }
+    if (error.message.includes('Invalid location') || error.message.includes('Invalid search parameters')) {
+      return { message: error.message, status: 400 };
     }
     if (error.message.includes('Search service')) {
       return { message: 'Search service temporarily unavailable. Please try again later.', status: 503 };
