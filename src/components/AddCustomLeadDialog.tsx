@@ -102,10 +102,7 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
         phone: form.phone.trim() || null,
       });
 
-      toast({
-        title: 'Lead added',
-        description: `${form.business_name} added to Track Leads.`,
-      });
+      // Lead added — no toast
 
       resetForm();
       setOpen(false);
