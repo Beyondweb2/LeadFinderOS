@@ -47,7 +47,7 @@ export function SearchForm({
   const [minReviews, setMinReviews] = useState(2);
   const [requirePhone, setRequirePhone] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedCountry, setSelectedCountry] = useState<Country>('UK' as Country);
+  const [selectedCountry, setSelectedCountry] = useState<Country>('UK');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
