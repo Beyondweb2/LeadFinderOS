@@ -1,44 +1,62 @@
 
-# Search Countdown and Upgrade Popup
+# Diagnose 0 Results from Google Places Search
 
-## What Changes
+## Problem
+Searches return 0 results after recent optimization. No edge function logs appear for `search-leads`, which means the function is likely crashing before reaching the Google API call.
 
-### 1. Search Countdown Notification (after searches 1 and 2)
-After each successful search, free users will see a brief, noticeable notification showing how many searches they have left:
-- After search 1: "2 searches remaining"
-- After search 2: "1 search remaining -- make it count!"
+## Root Cause Hypothesis
+The `search-leads` function uses `supabaseClient.auth.getClaims(token)` (line 307) to authenticate users. This method:
+- Was added recently to `@supabase/supabase-js` and may not be available in the version resolved by the floating `esm.sh` import
+- Unlike `admin-users/index.ts` which has a `getUser()` fallback when `getClaims` fails, `search-leads` has no fallback
+- If `getClaims` throws an unhandled error, the entire function crashes before any Google API call is made, which explains why there are zero logs
 
-This will appear as a small banner above the results, not a blocking popup, so it doesn't interrupt the flow.
+## Plan (Logging Only, No Refactoring)
 
-### 2. Convincing Upgrade Popup (after search 3)
-After the 3rd search completes, a dialog will appear with:
-- A bold headline: "You've found [X] businesses so far"
-- A summary of what they've discovered (businesses found, ones without websites)
-- Social proof messaging: "Users who upgrade close their first deal within 2 weeks"
-- Clear value proposition with benefits list
-- A prominent "Unlock Unlimited Searches" button
-- A subtle "Maybe later" dismiss option
+### 1. Add top-level crash logging
+Wrap the entire handler in a try/catch that logs any uncaught errors, so crashes are visible in edge function logs.
 
-### Technical Details
+### 2. Add auth method diagnostic logging
+Log whether `getClaims` succeeds or fails, and add a `getUser()` fallback (same pattern as `admin-users`) so authentication does not silently block the entire flow.
 
-**File: `src/pages/Index.tsx`**
-- Add a `searchCountdownBanner` state that shows after each search with remaining count
-- Add a `showUpgradeAfterLimit` dialog state triggered when `freeSearchCount` reaches 3
-- Track cumulative businesses found across searches for the upgrade popup messaging
-- The countdown banner auto-dismisses after 5 seconds or on next search
+### 3. Add Google API diagnostic logging inside `textSearchPlaces`
+Log these before and after each Google call:
+- The exact endpoint URL
+- The full request body (JSON)
+- The exact field mask header value
+- Whether the API key is present (not the key itself)
+- The response status code
+- The raw response body from Google (first 2000 chars)
+- The number of places returned per page
 
-**File: `src/components/TrialLimitDialog.tsx`**
-- Rework the dialog content to be more persuasive:
-  - Dynamic stats showing what the user has already found
-  - Benefit-oriented copy focused on ROI
-  - Urgency/social proof elements
-  - Keep the pricing and "Cancel anytime" reassurance
+### 4. Add geocode diagnostic logging
+Log the geocode request URL, response status, and whether coordinates were successfully extracted.
 
-**Flow:**
+### 5. Return diagnostic metadata in the response
+Add a temporary `_debug` field to the JSON response containing:
 ```text
-Search 1 complete --> Banner: "2 searches remaining"
-Search 2 complete --> Banner: "1 search remaining"  
-Search 3 complete --> Results shown + Upgrade popup appears
+{
+  googleCallsMade: { geocode: number, textSearchPages: number },
+  apiKeyPresent: boolean,
+  authMethod: "getClaims" | "getUser" | "failed",
+  cached: boolean
+}
 ```
 
-The popup won't block results -- users can dismiss it and still see their 3rd search results, but the search input will be locked after that.
+## Technical Details
+
+### Files modified
+- `supabase/functions/search-leads/index.ts` -- add logging only, no structural changes
+
+### What this will NOT do
+- No refactoring
+- No optimization changes
+- No frontend changes
+- No new files
+
+### After deployment
+1. Trigger a search in the preview (e.g. "electrician Leeds")
+2. Check edge function logs for `search-leads`
+3. The logs will reveal exactly where the failure occurs:
+   - If auth fails: `getClaims` error will be logged
+   - If Google returns 0 results: the raw response body will show why
+   - If Google returns results but they're filtered out: the pre-filter count vs post-filter count will show the gap
