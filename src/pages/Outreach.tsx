@@ -25,6 +25,8 @@ const Outreach = () => {
     markMultipleAsInterested,
     bulkImportLeads,
     fetchLeads,
+    phoneFetchStatus,
+    retryPhoneFetch,
   } = useOutreach();
 
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
@@ -81,6 +83,8 @@ const Outreach = () => {
         showArchiveButton={false}
         isArchiveView={false}
         readOnly={isReadOnly}
+        phoneFetchStatus={phoneFetchStatus}
+        onRetryPhoneFetch={retryPhoneFetch}
       />
 
       {/* Lead Detail Dialog */}

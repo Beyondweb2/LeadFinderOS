@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import type { PhoneFetchStatus } from '@/hooks/useOutreach';
 import {
   Select,
   SelectContent,
@@ -13,7 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
@@ -35,6 +36,8 @@ interface OutreachMobileCardProps {
   isHighlighted?: boolean;
   onAutoTrack?: () => void;
   onCompleteAction?: () => void;
+  phoneFetchStatus?: PhoneFetchStatus;
+  onRetryPhoneFetch?: () => void;
 }
 
 export function OutreachMobileCard({
@@ -52,6 +55,8 @@ export function OutreachMobileCard({
   isHighlighted = false,
   onAutoTrack,
   onCompleteAction,
+  phoneFetchStatus,
+  onRetryPhoneFetch,
 }: OutreachMobileCardProps) {
   return (
     <div 
@@ -139,7 +144,7 @@ export function OutreachMobileCard({
                 <Facebook className="h-3.5 w-3.5" />
               </a>
             </Button>
-            {lead.phone && (
+            {lead.phone ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10">
@@ -167,11 +172,17 @@ export function OutreachMobileCard({
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            )}
+            ) : phoneFetchStatus === 'pending' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground mx-1" />
+            ) : phoneFetchStatus === 'failed' ? (
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onRetryPhoneFetch}>
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
           </div>
           {/* Row 2: SMS, WhatsApp, Track */}
           <div className="flex items-center gap-0.5">
-            {lead.phone && (
+            {lead.phone ? (
               <>
                 <Button
                   variant="ghost"
@@ -190,7 +201,7 @@ export function OutreachMobileCard({
                   <MessageSquare className="h-3.5 w-3.5" />
                 </Button>
               </>
-            )}
+            ) : null}
             {!readOnly && showTrackButton && onTrack && (
               lead.is_potential_work ? (
                 <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 mx-1" />

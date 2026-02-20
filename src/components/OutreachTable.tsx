@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import type { PhoneFetchStatus } from '@/hooks/useOutreach';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
@@ -81,6 +82,8 @@ interface OutreachTableProps {
   isArchiveView?: boolean;
   /** When true, hides status and next action editing (for simplified Outreach CRM view) */
   readOnly?: boolean;
+  phoneFetchStatus?: Record<string, PhoneFetchStatus>;
+  onRetryPhoneFetch?: (leadId: string) => void;
 }
 
 const ITEMS_PER_PAGE_DESKTOP = 15;
@@ -106,6 +109,8 @@ export function OutreachTable({
   showArchiveButton = true,
   isArchiveView = false,
   readOnly = false,
+  phoneFetchStatus = {},
+  onRetryPhoneFetch,
 }: OutreachTableProps) {
   const { toast } = useToast();
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
@@ -914,6 +919,8 @@ export function OutreachTable({
                   showTrackButton={!!onMarkAsInterested}
                   isHighlighted={lastContactedLeadId === lead.id}
                   onCompleteAction={() => onNextActionChange(lead.id, 'none' as NextActionType)}
+                  phoneFetchStatus={phoneFetchStatus[lead.id]}
+                  onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
                 />
               ))
             )}
@@ -1006,6 +1013,23 @@ export function OutreachTable({
                               </span>
                             )}
                           </div>
+                        ) : phoneFetchStatus[lead.id] === 'pending' ? (
+                          <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Fetching…</span>
+                          </div>
+                        ) : phoneFetchStatus[lead.id] === 'failed' ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                            onClick={(e) => { e.stopPropagation(); onRetryPhoneFetch?.(lead.id); }}
+                          >
+                            <RefreshCw className="h-3 w-3 mr-1" />
+                            Retry
+                          </Button>
+                        ) : phoneFetchStatus[lead.id] === 'no_phone' ? (
+                          <span className="text-muted-foreground text-xs">No phone listed</span>
                         ) : (
                           <span className="text-muted-foreground">—</span>
                         )}
@@ -1066,7 +1090,7 @@ export function OutreachTable({
                           >
                             <Facebook className="h-4 w-4" />
                           </a>
-                          {lead.phone && (
+                          {lead.phone ? (
                             <>
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
@@ -1113,7 +1137,21 @@ export function OutreachTable({
                                     <MessageSquare className="h-4 w-4" />
                                   </button>
                             </>
-                          )}
+                          ) : phoneFetchStatus[lead.id] === 'pending' ? (
+                            <span className="text-muted-foreground text-xs flex items-center gap-1">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            </span>
+                          ) : phoneFetchStatus[lead.id] === 'failed' ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                              onClick={(e) => { e.stopPropagation(); onRetryPhoneFetch?.(lead.id); }}
+                            >
+                              <RefreshCw className="h-3 w-3 mr-1" />
+                              Retry
+                            </Button>
+                          ) : null}
                         </div>
                       </TableCell>
                       {!readOnly && onMarkAsInterested && (
