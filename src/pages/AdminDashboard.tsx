@@ -464,7 +464,7 @@ export default function AdminDashboard() {
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {u.free_search_count}/5
+                            {u.free_search_count}/3
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {u.walkthrough_completed ? '✅' : '—'}
@@ -569,7 +569,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="rounded-lg border border-border p-3">
                       <p className="text-xs text-muted-foreground">Free Searches</p>
-                      <p className="text-sm font-medium mt-1">{selectedUser.free_search_count}/5</p>
+                      <p className="text-sm font-medium mt-1">{selectedUser.free_search_count}/3</p>
                     </div>
                     <div className="rounded-lg border border-border p-3">
                       <p className="text-xs text-muted-foreground">Walkthrough</p>
