@@ -20,7 +20,7 @@ export interface Lead {
   businessStatus?: string;
 }
 
-export type Country = 'UK' | 'Australia' | 'USA' | 'Canada' | 'Germany' | 'France' | 'Spain' | 'Italy' | 'Netherlands' | 'Belgium' | 'Ireland' | 'NewZealand' | 'SouthAfrica' | 'India' | 'Singapore' | 'UAE' | 'Brazil' | 'Mexico' | 'Japan' | 'Sweden';
+export type Country = 'UK' | 'Australia' | 'USA' | 'Canada';
 
 export interface SearchFilters {
   keyword: string;
