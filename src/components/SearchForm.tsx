@@ -105,7 +105,7 @@ export function SearchForm({
                   value={[radius]}
                   onValueChange={(value) => setRadius(value[0])}
                   min={1}
-                  max={100}
+                  max={50}
                   step={1}
                   className="flex-1"
                 />

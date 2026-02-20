@@ -169,6 +169,14 @@ function classifyWebsite(websiteUri: string | null | undefined): { status: Searc
 // ═══════════════════════════════════════════════
 // TEXT SEARCH (New API) — with diagnostic logging
 // ═══════════════════════════════════════════════
+interface SelectionDebug {
+  pagesFetched: number;
+  totalPoolCount: number;
+  noWebsiteCount: number;
+  returnedNoWebsite: number;
+  returnedHasWebsite: number;
+}
+
 async function textSearchPlaces(
   keyword: string,
   lat: number,
@@ -176,24 +184,37 @@ async function textSearchPlaces(
   radius: number,
   apiKey: string,
   debug: DebugMeta
-): Promise<SearchLead[]> {
-  const leads: SearchLead[] = [];
+): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug }> {
+  const pool: SearchLead[] = [];
   const seenIds = new Set<string>();
   let pageToken: string | undefined;
+  const MAX_PAGES = 3;
   const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
   const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken';
+  // Google Places API (New) max radius is 50,000m
+  const clampedRadius = Math.min(radius, 50000);
+
+  let noWebsiteCount = 0;
+  let pagesFetched = 0;
 
   console.log(`[DIAG-SEARCH] Endpoint: ${ENDPOINT}`);
   console.log(`[DIAG-SEARCH] Field mask: ${FIELD_MASK}`);
   console.log(`[DIAG-SEARCH] API key present: ${!!apiKey}`);
+  console.log(`[DIAG-SEARCH] Radius requested: ${radius}, clamped: ${clampedRadius}`);
 
-  for (let page = 0; page < 3 && leads.length < MAX_RESULTS; page++) {
+  for (let page = 0; page < MAX_PAGES; page++) {
+    // Early stop: already have 50+ NO_WEBSITE leads
+    if (noWebsiteCount >= MAX_RESULTS) {
+      console.log(`[DIAG-SEARCH] Early stop: ${noWebsiteCount} NO_WEBSITE leads already collected`);
+      break;
+    }
+
     const requestBody: Record<string, unknown> = {
       textQuery: keyword,
       locationBias: {
         circle: {
           center: { latitude: lat, longitude: lng },
-          radius: Math.min(radius, 100000),
+          radius: clampedRadius,
         },
       },
       pageSize: 20,
@@ -213,6 +234,7 @@ async function textSearchPlaces(
     });
 
     debug.googleCallsMade.textSearchPages++;
+    pagesFetched++;
 
     const rawText = await res.text();
     console.log(`[DIAG-SEARCH] Page ${page} response status: ${res.status}`);
@@ -228,15 +250,13 @@ async function textSearchPlaces(
     console.log(`[DIAG-SEARCH] Page ${page} places returned by Google: ${placesOnPage.length}`);
 
     for (const place of placesOnPage) {
-      if (leads.length >= MAX_RESULTS) break;
-
       const placeId = (place.id || '').replace(/^places\//, '');
       if (!placeId || seenIds.has(placeId)) continue;
       seenIds.add(placeId);
 
       const { status, confidence, reason } = classifyWebsite(place.websiteUri);
 
-      leads.push({
+      pool.push({
         id: placeId,
         name: place.displayName?.text || 'Unknown',
         googleMapsUrl: place.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${placeId}`,
@@ -245,6 +265,10 @@ async function textSearchPlaces(
         confidence,
         reason,
       });
+
+      if (status === 'NO_WEBSITE' || status === 'DIRECTORY_ONLY') {
+        noWebsiteCount++;
+      }
     }
 
     pageToken = data.nextPageToken;
@@ -253,16 +277,36 @@ async function textSearchPlaces(
       break;
     }
 
-    console.log(`[DIAG-SEARCH] Page ${page + 1}: ${leads.length} leads collected so far`);
+    console.log(`[DIAG-SEARCH] After page ${page}: pool=${pool.length}, noWebsite=${noWebsiteCount}`);
   }
 
-  console.log(`[DIAG-SEARCH] Total leads before sort: ${leads.length}`);
+  // ── Selection: NO_WEBSITE/DIRECTORY_ONLY first, fill remainder with HAS_OWN_WEBSITE ──
+  const noWebsiteLeads = pool.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY');
+  const hasWebsiteLeads = pool.filter(l => l.websiteStatus === 'HAS_OWN_WEBSITE');
 
-  // Sort: NO_WEBSITE first, then DIRECTORY_ONLY, then HAS_OWN_WEBSITE
-  const order: Record<string, number> = { NO_WEBSITE: 0, DIRECTORY_ONLY: 1, HAS_OWN_WEBSITE: 2 };
-  leads.sort((a, b) => (order[a.websiteStatus] ?? 9) - (order[b.websiteStatus] ?? 9));
+  const finalLeads: SearchLead[] = [];
+  // Take NO_WEBSITE first (up to MAX_RESULTS)
+  for (const lead of noWebsiteLeads) {
+    if (finalLeads.length >= MAX_RESULTS) break;
+    finalLeads.push(lead);
+  }
+  // Fill remaining slots with HAS_WEBSITE
+  for (const lead of hasWebsiteLeads) {
+    if (finalLeads.length >= MAX_RESULTS) break;
+    finalLeads.push(lead);
+  }
 
-  return leads;
+  const selectionDebug: SelectionDebug = {
+    pagesFetched,
+    totalPoolCount: pool.length,
+    noWebsiteCount,
+    returnedNoWebsite: finalLeads.filter(l => l.websiteStatus !== 'HAS_OWN_WEBSITE').length,
+    returnedHasWebsite: finalLeads.filter(l => l.websiteStatus === 'HAS_OWN_WEBSITE').length,
+  };
+
+  console.log(`[DIAG-SEARCH] Selection: pool=${pool.length}, noWebsite=${noWebsiteCount}, returned=${finalLeads.length} (${selectionDebug.returnedNoWebsite} noWeb + ${selectionDebug.returnedHasWebsite} hasWeb)`);
+
+  return { leads: finalLeads, selectionDebug };
 }
 
 // ═══════════════════════════════════════════════
@@ -340,7 +384,7 @@ serve(async (req) => {
 
       console.log(`[DEMO] Searching for "${keyword}" in "${location}" within ${radius}m`);
       const { lat, lng } = await geocodeLocation(location, GOOGLE_MAPS_API_KEY, debug);
-      const leads = await textSearchPlaces(keyword, lat, lng, radius, GOOGLE_MAPS_API_KEY, debug);
+      const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, GOOGLE_MAPS_API_KEY, debug);
       console.log(`[DEMO] Found ${leads.length} leads`);
 
       return jsonResponse({
@@ -349,7 +393,7 @@ serve(async (req) => {
         searchId: crypto.randomUUID(),
         source: 'google',
         cached: false,
-        _debug: debug,
+        _debug: { ...debug, ...selectionDebug },
       });
     }
 
@@ -548,8 +592,8 @@ serve(async (req) => {
     // ─── SEARCH ──────────────────────────────────
     console.log(`[DIAG-HANDLER] Starting search for "${keyword}" in "${location}" within ${radius}m`);
     const { lat, lng } = await geocodeLocation(location, GOOGLE_MAPS_API_KEY, debug);
-    const leads = await textSearchPlaces(keyword, lat, lng, radius, GOOGLE_MAPS_API_KEY, debug);
-    console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length} without websites)`);
+    const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, GOOGLE_MAPS_API_KEY, debug);
+    console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb)`);
 
     // ─── CACHE STORE ─────────────────────────────
     try {
@@ -577,7 +621,7 @@ serve(async (req) => {
       searchId: crypto.randomUUID(),
       source: 'google',
       cached: false,
-      _debug: debug,
+      _debug: { ...debug, ...selectionDebug },
     });
 
   } catch (error) {
