@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -32,6 +32,69 @@ export function useOutreach() {
   const [phoneFetchStatus, setPhoneFetchStatus] = useState<Record<string, PhoneFetchStatus>>({});
   const { toast } = useToast();
   const { user } = useAuth();
+
+  // Sequential phone fetch queue to prevent race conditions when adding multiple leads quickly
+  const phoneQueueRef = useRef<Array<{ outreachLeadId: string; placeId: string; businessName: string }>>([]);
+  const isProcessingQueueRef = useRef(false);
+
+  const processPhoneQueue = useCallback(async () => {
+    if (isProcessingQueueRef.current) return;
+    isProcessingQueueRef.current = true;
+
+    while (phoneQueueRef.current.length > 0) {
+      const item = phoneQueueRef.current.shift()!;
+      setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'pending' }));
+      try {
+        const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
+          body: { placeId: item.placeId },
+        });
+
+        if (detailsError || !details) {
+          console.log('Phone enrichment returned no data for', item.businessName);
+          setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
+        } else {
+          const updates: Record<string, string | null> = {};
+          if (details.phone) updates.phone = details.phone;
+          if (details.address) updates.address = details.address;
+          if (details.category) updates.category = details.category;
+
+          if (Object.keys(updates).length > 0) {
+            const { data: updated } = await supabase
+              .from('outreach_leads')
+              .update(updates)
+              .eq('id', item.outreachLeadId)
+              .select()
+              .single();
+
+            if (updated) {
+              setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? (updated as OutreachLead) : l));
+              setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
+            } else {
+              setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
+            }
+          } else {
+            setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
+          }
+        }
+      } catch (e) {
+        console.error('Phone enrichment failed (non-blocking):', e);
+        setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
+      }
+
+      // Small delay between requests to avoid overwhelming the API
+      if (phoneQueueRef.current.length > 0) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+
+    isProcessingQueueRef.current = false;
+  }, []);
+
+  const enqueuePhoneFetch = useCallback((outreachLeadId: string, placeId: string, businessName: string) => {
+    setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'pending' }));
+    phoneQueueRef.current.push({ outreachLeadId, placeId, businessName });
+    processPhoneQueue();
+  }, [processPhoneQueue]);
 
   const fetchLeads = useCallback(async () => {
     if (!user) return;
@@ -107,54 +170,11 @@ export function useOutreach() {
     fetchOutreachHistory();
   }, [fetchLeads, fetchOutreachHistory]);
 
-  // Fetch phone for a single lead via Google Place Details (non-blocking)
-  const fetchPhoneForLead = useCallback(async (outreachLeadId: string, placeId: string, businessName: string) => {
-    setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'pending' }));
-    try {
-      const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
-        body: { placeId },
-      });
-
-      if (detailsError || !details) {
-        console.log('Phone enrichment returned no data for', businessName);
-        setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'failed' }));
-        return;
-      }
-
-      const updates: Record<string, string | null> = {};
-      if (details.phone) updates.phone = details.phone;
-      if (details.address) updates.address = details.address;
-      if (details.category) updates.category = details.category;
-
-      if (Object.keys(updates).length > 0) {
-        const { data: updated } = await supabase
-          .from('outreach_leads')
-          .update(updates)
-          .eq('id', outreachLeadId)
-          .select()
-          .single();
-
-        if (updated) {
-          setLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
-          setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
-          // Phone found — no toast
-          return;
-        }
-      }
-
-      setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
-    } catch (e) {
-      console.error('Phone enrichment failed (non-blocking):', e);
-      setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'failed' }));
-    }
-  }, [toast]);
-
   // Retry phone fetch for a lead that failed
   const retryPhoneFetch = useCallback(async (outreachLeadId: string) => {
     const lead = leads.find(l => l.id === outreachLeadId) || archivedLeads.find(l => l.id === outreachLeadId);
     if (!lead) return;
     
-    // Get place_id from the lead (stored as extra field)
     const placeId = (lead as any).place_id;
     if (!placeId) {
       toast({
@@ -165,8 +185,8 @@ export function useOutreach() {
       return;
     }
     
-    await fetchPhoneForLead(outreachLeadId, placeId, lead.business_name);
-  }, [leads, archivedLeads, toast, fetchPhoneForLead]);
+    enqueuePhoneFetch(outreachLeadId, placeId, lead.business_name);
+  }, [leads, archivedLeads, toast, enqueuePhoneFetch]);
 
   const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website') => {
     if (!user) {
@@ -324,9 +344,9 @@ export function useOutreach() {
 
     // Lead added — no toast
 
-    // Enrich lead with phone/address from Google Place Details (background, non-blocking)
+    // Enrich lead with phone/address from Google Place Details (queued, sequential)
     if (lead.id) {
-      fetchPhoneForLead(newLead.id, lead.id, lead.name);
+      enqueuePhoneFetch(newLead.id, lead.id, lead.name);
     }
 
     return newLead;
