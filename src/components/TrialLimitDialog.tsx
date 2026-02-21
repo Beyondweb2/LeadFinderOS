@@ -4,7 +4,8 @@ import {
   DialogContent,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Check, Sparkles, Loader2, Search } from 'lucide-react';
+import { Check, Sparkles, Loader2 } from 'lucide-react';
+import logoImg from '@/assets/logo.png';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -86,9 +87,7 @@ export function TrialLimitDialog({
         <div className="p-6 space-y-5">
           {/* Header */}
           <div className="text-center space-y-1.5">
-            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-              <Search className="h-5 w-5 text-primary" />
-            </div>
+            <img src={logoImg} alt="LeadFinder" className="mx-auto mb-3 h-11 w-11 rounded-full object-contain" />
             <h2 className="text-xl font-bold text-foreground">Unlock Unlimited Searches</h2>
             {displayNoWeb > 0 && (
               <p className="text-sm text-muted-foreground">
@@ -123,8 +122,8 @@ export function TrialLimitDialog({
               'Proven outreach templates',
             ].map((text) => (
               <div key={text} className="flex items-center gap-2 text-sm text-foreground">
-                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 shrink-0">
-                  <Check className="h-2.5 w-2.5 text-primary" />
+                <div className="flex h-4 w-4 items-center justify-center rounded-full bg-green-500/15 shrink-0">
+                  <Check className="h-2.5 w-2.5 text-green-500" />
                 </div>
                 <span>{text}</span>
               </div>
@@ -152,7 +151,7 @@ export function TrialLimitDialog({
               {isLoading ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />Opening checkout...</>
               ) : (
-                <><Sparkles className="h-4 w-4" />Start 3 Day Free Trial</>
+                <><Sparkles className="h-4 w-4" />Get Unlimited Free Searches</>
               )}
             </Button>
             <p className="text-xs text-muted-foreground text-center">Cancel anytime</p>
