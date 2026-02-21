@@ -87,7 +87,11 @@ export function DemoChecklistProvider({
   useEffect(() => {
     if (!isDemoUser) return;
 
-    const onSearch = () => completeStep('searchDone');
+    const onSearch = () => {
+      completeStep('searchDone');
+      // Collapse the panel after first search so it doesn't block results
+      setIsOpen(false);
+    };
     const onCrmAdd = () => {
       // Track count — mark complete at 1
       setState(prev => {
