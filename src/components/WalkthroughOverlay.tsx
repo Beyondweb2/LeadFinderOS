@@ -10,7 +10,7 @@ const STEP_CONFIG: {
   tooltip: string;
   allowTyping?: boolean;
   noDim?: boolean;
-  tooltipPosition?: 'top' | 'bottom';
+  tooltipPosition?: 'top' | 'bottom' | 'right';
 }[] = [
   {
     key: 'searchDone',
@@ -50,6 +50,7 @@ const STEP_CONFIG: {
     selector: '[data-walkthrough-step="status"]',
     tooltip: 'Update status to the contact method you used.',
     noDim: true,
+    tooltipPosition: 'right' as const,
   } as any,
   // Step 4 sub-step B: track star
   {
@@ -251,11 +252,18 @@ export function WalkthroughOverlay() {
     const maxLeft = window.innerWidth - tooltipWidth / 2 - 8;
     const clampedLeft = Math.max(minLeft, Math.min(maxLeft, rawLeft));
 
-    const preferTop = activeStep.tooltipPosition === 'top';
-    if (preferTop || spaceBelow <= tooltipHeight + padding) {
-      setTooltipPos({ top: rect.top - tooltipHeight - padding, left: clampedLeft });
+    if (activeStep.tooltipPosition === 'right') {
+      // Position tooltip to the right of the target element
+      const rightLeft = rect.right + padding;
+      const topCenter = rect.top + rect.height / 2;
+      setTooltipPos({ top: topCenter, left: rightLeft });
     } else {
-      setTooltipPos({ top: rect.bottom + padding, left: clampedLeft });
+      const preferTop = activeStep.tooltipPosition === 'top';
+      if (preferTop || spaceBelow <= tooltipHeight + padding) {
+        setTooltipPos({ top: rect.top - tooltipHeight - padding, left: clampedLeft });
+      } else {
+        setTooltipPos({ top: rect.bottom + padding, left: clampedLeft });
+      }
     }
 
     rafRef.current = requestAnimationFrame(updatePosition);
@@ -397,7 +405,7 @@ export function WalkthroughOverlay() {
           style={{
             top: tooltipPos.top,
             left: tooltipPos.left,
-            transform: 'translateX(-50%)',
+            transform: activeStep.tooltipPosition === 'right' ? 'translateY(-50%)' : 'translateX(-50%)',
             zIndex: 9999,
           }}
         >
