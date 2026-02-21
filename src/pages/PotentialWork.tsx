@@ -436,44 +436,44 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             )}
           </div>
 
-          {/* Row 3: Notes preview — 1 line, more readable */}
-          {lead.notes && !isExpanded && (
-            <div className="px-3 sm:px-4 pb-2">
-              <p className="text-[11px] sm:text-xs text-muted-foreground/60 leading-snug truncate">
-                {lead.notes}
+          {/* Row 3: Notes + Contact buttons side by side */}
+          {!isExpanded && (
+            <div className="flex items-center gap-2 px-3 sm:px-4 pb-2.5">
+              {/* Notes — readable, takes remaining space */}
+              <p className="flex-1 min-w-0 text-xs sm:text-[13px] text-foreground leading-snug truncate">
+                {lead.notes || ''}
               </p>
+              {/* Contact buttons — right-aligned, compact */}
+              {lead.phone && (
+                <div className="flex items-center gap-1 shrink-0" data-contact-zone>
+                  <a
+                    href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => handleContactMethodUpdate('whatsapp')}
+                    className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-green-500/60 hover:text-green-500 hover:bg-green-500/10 border border-green-500/15 transition-colors"
+                  >
+                    <MessageSquare className="h-2.5 w-2.5" /> WhatsApp
+                  </a>
+                  <a
+                    href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
+                    onClick={() => handleContactMethodUpdate('sms')}
+                    className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10 border border-blue-500/15 transition-colors"
+                  >
+                    <MessageCircle className="h-2.5 w-2.5" /> SMS
+                  </a>
+                  <a
+                    href={`tel:${lead.phone}`}
+                    onClick={() => handleContactMethodUpdate('contacted')}
+                    className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/10 border border-amber-500/15 transition-colors"
+                  >
+                    <PhoneCall className="h-2.5 w-2.5" /> Call
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </div>
-
-        {/* Row 4: Contact buttons — compact, secondary */}
-        {lead.phone && (
-          <div className="flex items-center gap-1 px-3 sm:px-4 pb-2.5 pt-0.5" data-contact-zone>
-            <a
-              href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => handleContactMethodUpdate('whatsapp')}
-              className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-green-500/60 hover:text-green-500 hover:bg-green-500/10 border border-green-500/15 transition-colors"
-            >
-              <MessageSquare className="h-2.5 w-2.5" /> WhatsApp
-            </a>
-            <a
-              href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
-              onClick={() => handleContactMethodUpdate('sms')}
-              className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10 border border-blue-500/15 transition-colors"
-            >
-              <MessageCircle className="h-2.5 w-2.5" /> SMS
-            </a>
-            <a
-              href={`tel:${lead.phone}`}
-              onClick={() => handleContactMethodUpdate('contacted')}
-              className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/10 border border-amber-500/15 transition-colors"
-            >
-              <PhoneCall className="h-2.5 w-2.5" /> Call
-            </a>
-          </div>
-        )}
 
         {/* ═══ EXPANDED PANEL ═══ */}
         <div
