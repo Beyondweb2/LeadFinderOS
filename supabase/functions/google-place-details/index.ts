@@ -49,7 +49,7 @@ serve(async (req) => {
     }
 
     // ─── INPUT ───────────────────────────────
-    const { placeId } = await req.json();
+    const { placeId, forceRefresh } = await req.json();
     if (!placeId || typeof placeId !== 'string' || placeId.length > 200) {
       return new Response(
         JSON.stringify({ error: 'Valid placeId required' }),
@@ -57,28 +57,41 @@ serve(async (req) => {
       );
     }
 
-    // ─── CACHE CHECK (30 days) ───────────────
-    const cutoff = new Date(Date.now() - CACHE_TTL_MS).toISOString();
-    const { data: cached } = await supabase
-      .from('phone_cache')
-      .select('*')
-      .eq('place_id', placeId)
-      .gte('created_at', cutoff)
-      .maybeSingle();
+    // ─── CACHE CHECK (30 days for phone, 1 hour for null-phone) ───
+    if (!forceRefresh) {
+      const cutoff = new Date(Date.now() - CACHE_TTL_MS).toISOString();
+      const { data: cached } = await supabase
+        .from('phone_cache')
+        .select('*')
+        .eq('place_id', placeId)
+        .gte('created_at', cutoff)
+        .maybeSingle();
 
-    if (cached) {
-      console.log(`Cache hit for place ${placeId}`);
-      return new Response(
-        JSON.stringify({
-          placeId,
-          phone: cached.phone,
-          address: cached.address,
-          category: cached.category,
-          googleMapsUri: cached.google_maps_uri,
-          cached: true,
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      // Only serve from cache if phone was found; null-phone entries expire after 1 hour
+      if (cached) {
+        const NULL_PHONE_TTL_MS = 60 * 60 * 1000; // 1 hour
+        const cacheAge = Date.now() - new Date(cached.created_at).getTime();
+        const isNullPhone = !cached.phone;
+
+        if (!isNullPhone || cacheAge < NULL_PHONE_TTL_MS) {
+          console.log(`Cache hit for place ${placeId} (phone=${cached.phone ? 'found' : 'none'}, age=${Math.round(cacheAge / 60000)}min)`);
+          return new Response(
+            JSON.stringify({
+              placeId,
+              phone: cached.phone,
+              address: cached.address,
+              category: cached.category,
+              googleMapsUri: cached.google_maps_uri,
+              cached: true,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        } else {
+          console.log(`Null-phone cache expired for ${placeId}, re-fetching`);
+        }
+      }
+    } else {
+      console.log(`Force refresh requested for ${placeId}, skipping cache`);
     }
 
     // ─── GOOGLE PLACE DETAILS (New API) ──────
