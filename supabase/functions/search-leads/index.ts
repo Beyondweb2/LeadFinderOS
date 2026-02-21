@@ -16,7 +16,7 @@ const corsHeaders = {
 // ═══════════════════════════════════════════════
 const MAX_RESULTS = 50;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const FREE_SEARCH_LIMIT = 3;
+const FREE_SEARCH_LIMIT = 1;
 
 // ═══════════════════════════════════════════════
 // INPUT VALIDATION
@@ -525,9 +525,23 @@ serve(async (req) => {
               .eq('user_id', userId);
             isOnAppTrial = true;
           } else {
-            return jsonResponse({
-              error: "You've used your free searches. Upgrade to continue.",
+          // Fetch last search summary for the trial modal
+          const { data: lastSearch } = await serviceClient
+            .from('search_history')
+            .select('results_count, no_website_count')
+            .eq('user_id', userId)
+            .order('searched_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          return jsonResponse({
+              error: "You've used your free search. Start your free trial to continue.",
               code: 'FREE_SEARCH_EXHAUSTED',
+              trial_required: true,
+              lastSearchSummary: lastSearch ? {
+                totalBusinessesFound: lastSearch.results_count || 0,
+                businessesWithoutWebsite: lastSearch.no_website_count || 0,
+              } : null,
               _debug: debug,
             }, 402);
           }

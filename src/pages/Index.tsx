@@ -18,12 +18,12 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, Country } from '@/types/lead';
 
-const FREE_SEARCH_LIMIT = 3;
+const FREE_SEARCH_LIMIT = 1;
 const PAYWALL_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const Index = () => {
   const location = useLocation();
-  const { leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted } = useLeadSearchContext();
+  const { leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed, freeSearchCount } = useTrial();
@@ -49,7 +49,7 @@ const Index = () => {
   const isFreeUser = !hasProAccess;
 
   // Free search exhausted at limit of 3
-  const freeSearchesExhausted = isFreeUser && (freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT;
+  const freeSearchesExhausted = isFreeUser && ((freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT || freeSearchExhausted);
 
   // Check if paywall was dismissed within cooldown period
   const isWithinCooldown = useCallback(() => {
