@@ -379,10 +379,21 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <ChevronDown className={cn(
-                'h-3.5 w-3.5 text-muted-foreground/40 transition-transform duration-200 ml-0.5',
-                isExpanded && 'rotate-180'
-              )} />
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+                className={cn(
+                  'inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9px] font-medium transition-colors ml-1',
+                  isExpanded
+                    ? 'text-primary bg-primary/10'
+                    : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/40'
+                )}
+              >
+                {isExpanded ? 'Close' : 'Expand'}
+                <ChevronDown className={cn(
+                  'h-2.5 w-2.5 transition-transform duration-200',
+                  isExpanded && 'rotate-180'
+                )} />
+              </button>
             </div>
           </div>
 
