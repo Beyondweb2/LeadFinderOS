@@ -211,6 +211,7 @@ export function OutreachMobileCard({
                   size="icon"
                   className="h-7 w-7 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
                   onClick={onTrack}
+                  data-walkthrough-step="track-star"
                 >
                   <Star className="h-3.5 w-3.5" />
                 </Button>
