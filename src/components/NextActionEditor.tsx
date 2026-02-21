@@ -235,16 +235,22 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
                 Add custom action
               </Button>
             ) : (
-              <div className="flex gap-1.5">
+              <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()} onPointerDown={(e) => e.stopPropagation()}>
                 <Input
                   value={customName}
                   onChange={(e) => setCustomName(e.target.value)}
                   placeholder="e.g. Send Proposal"
                   className="h-8 text-sm"
                   autoFocus
-                  onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddCustom();
+                    }
+                  }}
                 />
-                <Button size="sm" className="h-8 px-3" onClick={handleAddCustom}>
+                <Button size="sm" className="h-8 px-3" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); handleAddCustom(); }}>
                   Add
                 </Button>
               </div>
