@@ -22,6 +22,7 @@ const STEP_CONFIG: {
     selector: '[data-walkthrough-step="location"]',
     tooltip: 'Enter a city or postcode, or pick a Quick Location below.',
     allowTyping: true,
+    noDim: true,
   },
   {
     key: 'searchDone',
