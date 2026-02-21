@@ -237,14 +237,12 @@ export function OutreachTable({
   const handleWhatsAppClick = (lead: OutreachLead) => {
     highlightLead(lead.id);
     setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name });
-    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
   };
 
   // Handle SMS button click
   const handleSMSClick = (lead: OutreachLead) => {
     highlightLead(lead.id);
     setSmsLead({ phone: lead.phone || '', business_name: lead.business_name });
-    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
   };
 
   // Handle Call button click - highlight the lead
@@ -1166,6 +1164,7 @@ export function OutreachTable({
                                 size="sm"
                                 className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary"
                                 onClick={() => onMarkAsInterested([lead.id])}
+                                data-walkthrough-step="track-star"
                               >
                                 <Star className="h-3.5 w-3.5 mr-1" />
                                 Track

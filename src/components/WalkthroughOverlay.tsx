@@ -38,12 +38,24 @@ const STEP_CONFIG: {
     key: 'contactAttempted',
     selector: '[data-walkthrough-step="contact"]',
     tooltip: 'Tap WhatsApp or SMS to contact this lead.',
+    noDim: true,
   },
+  // Step 4 sub-step A: update status
   {
     key: 'statusUpdated',
+    subKey: 'statusChanged',
     selector: '[data-walkthrough-step="status"]',
-    tooltip: 'Update the status, then hit the ⭐ to track.',
-  },
+    tooltip: 'Update status to the contact method you used.',
+    noDim: true,
+  } as any,
+  // Step 4 sub-step B: track star
+  {
+    key: 'statusUpdated',
+    subKey: 'trackPressed',
+    selector: '[data-walkthrough-step="track-star"]',
+    tooltip: 'Track businesses that show interest.',
+    noDim: true,
+  } as any,
   {
     key: 'leadTracked',
     selector: '[data-walkthrough-step="track-leads"]',
@@ -65,7 +77,7 @@ export function WalkthroughOverlay() {
   const [paused, setPaused] = useState(false);
   const rafRef = useRef<number>();
 
-  // Find the current active step (with sub-step logic for searchDone)
+  // Find the current active step
   useEffect(() => {
     if (!isDemoUser || allDone || !walkthroughOpen) {
       setActiveStep(null);
@@ -81,16 +93,37 @@ export function WalkthroughOverlay() {
       const locationFilled = locationInput && locationInput.value.trim().length > 0;
 
       if (!businessFilled) {
-        setActiveStep(STEP_CONFIG[0]); // business-type
+        setActiveStep(STEP_CONFIG[0]);
       } else if (!locationFilled) {
-        setActiveStep(STEP_CONFIG[1]); // location
+        setActiveStep(STEP_CONFIG[1]);
       } else {
-        setActiveStep(STEP_CONFIG[2]); // search button
+        setActiveStep(STEP_CONFIG[2]);
       }
       return;
     }
 
-    const current = STEP_CONFIG.find(s => s.key !== 'searchDone' && !state[s.key as keyof typeof state]);
+    // For statusUpdated, handle sub-steps: statusChanged → trackPressed
+    if (!state.statusUpdated) {
+      // Check if we're at the statusUpdated step
+      const priorSteps = ['addedToCrm', 'contactAttempted'] as const;
+      const allPriorDone = priorSteps.every(k => state[k]);
+      if (allPriorDone) {
+        if (!state.statusChanged) {
+          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'statusChanged') || null);
+          return;
+        }
+        if (!state.trackPressed) {
+          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'trackPressed') || null);
+          return;
+        }
+      }
+    }
+
+    const current = STEP_CONFIG.find(s => {
+      if (s.key === 'searchDone') return false;
+      if ((s as any).subKey) return false; // Skip sub-steps, handled above
+      return !state[s.key as keyof typeof state];
+    });
     setActiveStep(current || null);
   }, [state, isDemoUser, allDone, walkthroughOpen]);
 
@@ -142,22 +175,27 @@ export function WalkthroughOverlay() {
 
     const rect = el.getBoundingClientRect();
     
-    // If element is not visible, scroll into view
     if (rect.top < 0 || rect.bottom > window.innerHeight) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
 
     setTargetRect(rect);
 
-    // Position tooltip below or above element
     const padding = 12;
     const tooltipHeight = 48;
     const spaceBelow = window.innerHeight - rect.bottom;
     
+    // Clamp left position so tooltip doesn't go off-screen
+    const tooltipWidth = 260;
+    const rawLeft = rect.left + rect.width / 2;
+    const minLeft = tooltipWidth / 2 + 8;
+    const maxLeft = window.innerWidth - tooltipWidth / 2 - 8;
+    const clampedLeft = Math.max(minLeft, Math.min(maxLeft, rawLeft));
+
     if (spaceBelow > tooltipHeight + padding) {
-      setTooltipPos({ top: rect.bottom + padding, left: rect.left + rect.width / 2 });
+      setTooltipPos({ top: rect.bottom + padding, left: clampedLeft });
     } else {
-      setTooltipPos({ top: rect.top - tooltipHeight - padding, left: rect.left + rect.width / 2 });
+      setTooltipPos({ top: rect.top - tooltipHeight - padding, left: clampedLeft });
     }
 
     rafRef.current = requestAnimationFrame(updatePosition);
@@ -211,7 +249,6 @@ export function WalkthroughOverlay() {
                 rx="8"
                 fill="black"
               />
-              {/* Also cut out quick locations area during location step */}
               {isLocationStep && (() => {
                 const qlEl = document.querySelector('[data-walkthrough-step="quick-locations"]');
                 if (!qlEl) return null;
@@ -241,7 +278,7 @@ export function WalkthroughOverlay() {
 
       {/* Pulse ring around target */}
       <div
-        className="absolute rounded-lg border-2 border-primary animate-pulse pointer-events-none"
+        className="absolute rounded-lg border-2 border-primary pointer-events-none"
         style={{
           ...spotlightStyle,
           boxShadow: '0 0 0 4px hsl(var(--primary) / 0.2)',
@@ -286,7 +323,6 @@ export function WalkthroughOverlay() {
               background: 'transparent',
             }}
             onClick={(e) => {
-              // Let click pass through to the actual quick locations
               const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement;
               if (target) target.click();
             }}

@@ -85,7 +85,10 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
   const hasPhone = Boolean(lead.phone);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => {
+      onOpenChange(v);
+      if (!v) window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+    }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
