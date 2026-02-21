@@ -1,62 +1,46 @@
 
-# Diagnose 0 Results from Google Places Search
+# Track Leads Card Redesign
 
 ## Problem
-Searches return 0 results after recent optimization. No edge function logs appear for `search-leads`, which means the function is likely crashing before reaching the Google API call.
+The previous card redesign was applied to the wrong component (`OutreachMobileCard.tsx`). The Track Leads page at `/potential-work` uses its own `LeadCard` component defined inline within `PotentialWork.tsx` (lines 127-493). This component was never updated, so the cards still look the same.
 
-## Root Cause Hypothesis
-The `search-leads` function uses `supabaseClient.auth.getClaims(token)` (line 307) to authenticate users. This method:
-- Was added recently to `@supabase/supabase-js` and may not be available in the version resolved by the floating `esm.sh` import
-- Unlike `admin-users/index.ts` which has a `getUser()` fallback when `getClaims` fails, `search-leads` has no fallback
-- If `getClaims` throws an unhandled error, the entire function crashes before any Google API call is made, which explains why there are zero logs
+## Changes to `src/pages/PotentialWork.tsx` (LeadCard section)
 
-## Plan (Logging Only, No Refactoring)
+### 1. Bigger Avatar / Initials Block
+- Increase from `w-10 h-10 / sm:w-12 sm:h-12` to `w-14 h-14 / sm:w-16 sm:h-16`
+- Larger initials text (from `text-xs` to `text-lg sm:text-xl`)
+- Stronger background contrast and border styling (`bg-primary/10 border-primary/20`)
+- `rounded-xl` for a more modern look
 
-### 1. Add top-level crash logging
-Wrap the entire handler in a try/catch that logs any uncaught errors, so crashes are visible in edge function logs.
+### 2. Business Name Hierarchy
+- Increase font size from `text-sm sm:text-base` to `text-base sm:text-lg`
+- Keep bold weight
+- Category label stays muted at `text-[10px] text-muted-foreground/60`
 
-### 2. Add auth method diagnostic logging
-Log whether `getClaims` succeeds or fails, and add a `getUser()` fallback (same pattern as `admin-users`) so authentication does not silently block the entire flow.
+### 3. Contact Buttons Redesign
+- Increase button height from `h-7` to `h-9`
+- Increase font size from `text-[11px]` to `text-xs font-medium`
+- Rounder corners (`rounded-lg`)
+- Full-width row with even spacing
+- Consistent color coding (green WhatsApp, blue SMS, amber Call)
 
-### 3. Add Google API diagnostic logging inside `textSearchPlaces`
-Log these before and after each Google call:
-- The exact endpoint URL
-- The full request body (JSON)
-- The exact field mask header value
-- Whether the API key is present (not the key itself)
-- The response status code
-- The raw response body from Google (first 2000 chars)
-- The number of places returned per page
+### 4. Next Action + Date Section
+- Add a "Next Action" label above the controls
+- Wrap in a styled container (`bg-muted/20 rounded-lg border border-border/50 p-2.5`)
+- Increase select height from `h-7` to `h-8` with better font sizing
+- Increase date picker button size to match
+- Keep the green checkmark for "mark as done"
 
-### 4. Add geocode diagnostic logging
-Log the geocode request URL, response status, and whether coordinates were successfully extracted.
+### 5. Overall Card Spacing
+- Increase padding from `p-3 sm:p-4` to `p-4 sm:p-5`
+- Add more vertical spacing between sections
+- Slightly stronger card border and hover state
 
-### 5. Return diagnostic metadata in the response
-Add a temporary `_debug` field to the JSON response containing:
-```text
-{
-  googleCallsMade: { geocode: number, textSearchPages: number },
-  apiKeyPresent: boolean,
-  authMethod: "getClaims" | "getUser" | "failed",
-  cached: boolean
-}
-```
+### 6. Custom Next Action Fix
+- Ensure the custom action input works properly with `stopPropagation` handlers (same fix applied to `NextActionEditor.tsx` previously but needs to be verified here since this page has its own inline action handling)
 
-## Technical Details
+## Files to Modify
+- `src/pages/PotentialWork.tsx` -- LeadCard component (lines ~235-493)
 
-### Files modified
-- `supabase/functions/search-leads/index.ts` -- add logging only, no structural changes
-
-### What this will NOT do
-- No refactoring
-- No optimization changes
-- No frontend changes
-- No new files
-
-### After deployment
-1. Trigger a search in the preview (e.g. "electrician Leeds")
-2. Check edge function logs for `search-leads`
-3. The logs will reveal exactly where the failure occurs:
-   - If auth fails: `getClaims` error will be logged
-   - If Google returns 0 results: the raw response body will show why
-   - If Google returns results but they're filtered out: the pre-filter count vs post-filter count will show the gap
+## No New Dependencies
+All changes use existing UI primitives and Tailwind classes.
