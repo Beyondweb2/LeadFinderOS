@@ -10,6 +10,7 @@ const STEP_CONFIG: {
   tooltip: string;
   allowTyping?: boolean;
   noDim?: boolean;
+  tooltipPosition?: 'top' | 'bottom';
 }[] = [
   {
     key: 'searchDone',
@@ -34,6 +35,7 @@ const STEP_CONFIG: {
     selector: '[data-walkthrough-step="add-to-crm"]',
     tooltip: 'Tap any blue 📋 button to add a lead to your CRM. Use the 👁 button to view more info about a business.',
     noDim: true,
+    tooltipPosition: 'top' as const,
   },
   {
     key: 'contactAttempted',
@@ -62,7 +64,7 @@ const STEP_CONFIG: {
     selector: '[data-walkthrough-step="track-leads"]',
     tooltip: 'Open the Track Leads page to see starred leads.',
   },
-  // Step 6 sub-steps: action → date → save
+  // Step 6 sub-steps: action → date (auto-completes when both filled)
   {
     key: 'followUpSet',
     subKey: 'followUpAction',
@@ -74,14 +76,7 @@ const STEP_CONFIG: {
     key: 'followUpSet',
     subKey: 'followUpDate',
     selector: '[data-walkthrough-step="follow-up-date"]',
-    tooltip: 'Pick a due date.',
-    noDim: true,
-  } as any,
-  {
-    key: 'followUpSet',
-    subKey: 'followUpSave',
-    selector: '[data-walkthrough-step="follow-up-save"]',
-    tooltip: 'Hit Save to finish!',
+    tooltip: 'Pick a due date — step completes automatically.',
     noDim: true,
   } as any,
 ];
@@ -137,34 +132,24 @@ export function WalkthroughOverlay() {
       }
     }
 
-    // For followUpSet, handle sub-steps: action → date → save
+    // For followUpSet, handle sub-steps: action → date (auto-completes)
     if (!state.followUpSet) {
       const priorSteps2 = ['addedToCrm', 'contactAttempted', 'statusUpdated', 'leadTracked'] as const;
       const allPrior2Done = priorSteps2.every(k => state[k]);
       if (allPrior2Done) {
-        const saveBtn = document.querySelector('[data-walkthrough-step="follow-up-save"]');
-        const dateEl = document.querySelector('[data-walkthrough-step="follow-up-date"]');
-        // If save button exists, highlight it (means action+date are set)
-        if (saveBtn) {
-          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpSave') || null);
-          return;
-        }
-        // Check if action is already selected (select has a non-default value)
         const actionEl = document.querySelector('[data-walkthrough-step="follow-up-action"]');
+        const dateEl = document.querySelector('[data-walkthrough-step="follow-up-date"]');
         if (actionEl) {
-          // Action selector is visible — check if a value was picked
           const actionSelected = actionEl.getAttribute('data-action-selected') === 'true';
           if (!actionSelected) {
             setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpAction') || null);
             return;
           }
-          // Action selected, highlight date
           if (dateEl) {
             setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpDate') || null);
             return;
           }
         }
-        // Fallback: highlight the action selector
         setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpAction') || null);
         return;
       }
@@ -213,19 +198,10 @@ export function WalkthroughOverlay() {
   // Poll for followUpSet sub-step advancement
   useEffect(() => {
     if (!isDemoUser || state.followUpSet || !walkthroughOpen) return;
-    // Only run when we're on the followUpSet step
     if (!activeStep || activeStep.key !== 'followUpSet') return;
     const interval = setInterval(() => {
-      const saveBtn = document.querySelector('[data-walkthrough-step="follow-up-save"]');
       const actionEl = document.querySelector('[data-walkthrough-step="follow-up-action"]');
       const dateEl = document.querySelector('[data-walkthrough-step="follow-up-date"]');
-      
-      if (saveBtn) {
-        if (activeStep?.selector !== '[data-walkthrough-step="follow-up-save"]') {
-          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpSave') || null);
-        }
-        return;
-      }
       if (actionEl) {
         const actionSelected = actionEl.getAttribute('data-action-selected') === 'true';
         if (actionSelected && dateEl) {
@@ -275,10 +251,11 @@ export function WalkthroughOverlay() {
     const maxLeft = window.innerWidth - tooltipWidth / 2 - 8;
     const clampedLeft = Math.max(minLeft, Math.min(maxLeft, rawLeft));
 
-    if (spaceBelow > tooltipHeight + padding) {
-      setTooltipPos({ top: rect.bottom + padding, left: clampedLeft });
-    } else {
+    const preferTop = activeStep.tooltipPosition === 'top';
+    if (preferTop || spaceBelow <= tooltipHeight + padding) {
       setTooltipPos({ top: rect.top - tooltipHeight - padding, left: clampedLeft });
+    } else {
+      setTooltipPos({ top: rect.bottom + padding, left: clampedLeft });
     }
 
     rafRef.current = requestAnimationFrame(updatePosition);

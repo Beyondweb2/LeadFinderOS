@@ -16,7 +16,7 @@ const corsHeaders = {
 // ═══════════════════════════════════════════════
 const MAX_RESULTS = 50;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const FREE_SEARCH_LIMIT = 1;
+const FREE_SEARCH_LIMIT = 2;
 
 // ═══════════════════════════════════════════════
 // INPUT VALIDATION
@@ -535,7 +535,7 @@ serve(async (req) => {
             .maybeSingle();
 
           return jsonResponse({
-              error: "You've used your free search. Start your free trial to continue.",
+              error: "You've used your free searches. Start your free trial to continue.",
               code: 'FREE_SEARCH_EXHAUSTED',
               trial_required: true,
               lastSearchSummary: lastSearch ? {
