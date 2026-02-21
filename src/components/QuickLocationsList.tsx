@@ -178,7 +178,7 @@ export function QuickLocationsList({ onLocationSelect }: QuickLocationsListProps
   const [isOpen, setIsOpen] = useState(false);
 
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+    <Collapsible open={isOpen} onOpenChange={setIsOpen} data-walkthrough-step="quick-locations">
       <CollapsibleTrigger asChild>
         <Button
           variant="ghost"
