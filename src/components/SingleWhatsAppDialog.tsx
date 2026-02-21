@@ -158,7 +158,10 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
         )}
 
         <DialogFooter className="gap-2 flex-row justify-end">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => {
+            onOpenChange(false);
+            window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+          }}>
             Cancel
           </Button>
           {hasPhone && (

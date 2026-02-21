@@ -14,7 +14,7 @@ const steps = [
   { key: 'contactAttempted' as const, label: 'Contact a lead via WhatsApp or SMS', cta: 'Open Outreach CRM', route: '/outreach', icon: Phone, helperText: 'Open a lead in Outreach CRM, then tap the WhatsApp or SMS button to contact them.' },
   { key: 'statusUpdated' as const, label: 'Update status & hit Track ⭐', cta: 'Update Status', route: '/outreach', icon: RefreshCw, helperText: 'Set the status to the contact method you used (e.g. WhatsApp, SMS), then hit the star (⭐) to track the lead.' },
   { key: 'leadTracked' as const, label: 'Open Track Leads page', cta: 'Go to Track Leads', route: '/potential-work', icon: Star, helperText: 'Your starred leads appear here. Open the page to continue.' },
-  { key: 'followUpSet' as const, label: 'Set up a next action & date', cta: '', route: '/potential-work', icon: CalendarClock, helperText: 'Select a next action, pick a date, then hit Save.' },
+  { key: 'followUpSet' as const, label: 'Set up a next action & date', cta: '', route: '/potential-work', icon: CalendarClock, helperText: 'Select a next action, then pick a date — it saves automatically.' },
 ];
 
 export function DemoChecklistPanel() {
@@ -137,9 +137,49 @@ export function DemoChecklistPanel() {
     );
   }
 
-  // All done — show tips modal only, dismiss panel
+  // All done — show completion state in panel
   if (allDone) {
-    return <PostWalkthroughTipsModal open={showTipsModal} onOpenChange={handleTipsModalClose} />;
+    return (
+      <>
+        <div className="fixed bottom-20 md:bottom-4 right-4 z-40 w-72 max-w-[calc(100vw-2rem)]">
+          <div className="bg-card border border-border rounded-lg shadow-lg p-4 space-y-3">
+            <div className="text-center space-y-2">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+                <Check className="h-5 w-5 text-primary" />
+              </div>
+              <h3 className="text-sm font-bold text-foreground">Walkthrough Complete! 🎉</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                You've got the basics down. Now run more searches, build your pipeline, and start closing deals.
+              </p>
+              <p className="text-xs text-primary font-medium">
+                Every search uncovers new businesses that need your services.
+              </p>
+            </div>
+            <div className="w-full bg-muted rounded-full h-1.5">
+              <div className="bg-primary h-1.5 rounded-full w-full" />
+            </div>
+            <Button
+              size="sm"
+              className="w-full"
+              onClick={() => {
+                handleDismiss();
+                navigate('/find-leads');
+              }}
+            >
+              <Search className="h-3.5 w-3.5 mr-1.5" />
+              Search for more leads
+            </Button>
+            <button
+              onClick={handleDismiss}
+              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full text-center"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+        <PostWalkthroughTipsModal open={showTipsModal} onOpenChange={handleTipsModalClose} />
+      </>
+    );
   }
 
   return (

@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, Country } from '@/types/lead';
 
-const FREE_SEARCH_LIMIT = 1;
+const FREE_SEARCH_LIMIT = 2;
 const PAYWALL_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 const Index = () => {

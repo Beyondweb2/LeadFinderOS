@@ -158,7 +158,10 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
         )}
 
         <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => {
+            onOpenChange(false);
+            window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+          }}>
             Cancel
           </Button>
           {hasPhone && (

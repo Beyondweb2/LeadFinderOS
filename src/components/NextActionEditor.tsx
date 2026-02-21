@@ -78,6 +78,7 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
 
   // Track whether user has actively selected an action (not just initial value)
   const [actionPicked, setActionPicked] = useState(false);
+  const [datePicked, setDatePicked] = useState(false);
 
   // Reset state when popover opens
   useEffect(() => {
@@ -85,8 +86,18 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
       setSelectedAction(action || '');
       setSelectedDate(date ? new Date(date) : undefined);
       setActionPicked(false);
+      setDatePicked(false);
     }
   }, [open, action, date]);
+
+  // Auto-save when both action and date are picked
+  useEffect(() => {
+    if (actionPicked && datePicked && selectedAction && selectedAction !== '' && selectedDate) {
+      // Small delay so the user sees the date selection
+      const t = setTimeout(() => handleSave(), 400);
+      return () => clearTimeout(t);
+    }
+  }, [actionPicked, datePicked, selectedAction, selectedDate]);
 
   const currentCustomLabel = leadId ? getLeadCustomAction(leadId) : null;
 
@@ -139,7 +150,7 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
 
   const showCompleteButton = action && action !== 'none';
   
-  // Show save button only when both action and date are selected
+  // canSave kept for manual save fallback but auto-save is primary
   const canSave = actionPicked && selectedAction && selectedAction !== '' && selectedDate;
 
   return (
@@ -262,6 +273,7 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
                   selected={selectedDate}
                   onSelect={(d) => {
                     setSelectedDate(d);
+                    setDatePicked(true);
                     setDateOpen(false);
                   }}
                   className="p-3 pointer-events-auto"
