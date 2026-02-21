@@ -32,6 +32,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { Lead, WebsiteStatus } from '@/types/lead';
+import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -45,6 +46,8 @@ interface LeadsTableProps {
 }
 
 export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked }: LeadsTableProps) {
+  const { state, isDemoUser } = useDemoChecklist();
+  const shouldPulseCrm = isDemoUser && !state.addedToCrm;
   const handleAddToOutreach = useCallback((lead: Lead) => {
     return onAddToOutreach?.(lead);
   }, [onAddToOutreach]);
@@ -101,21 +104,26 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   const MapsButton = ({ lead }: { lead: Lead }) => {
     const checked = isChecked?.(lead.name, lead.googleMapsUrl);
     return (
-      <Button
-        variant="ghost"
-        size="icon"
-        className={`h-8 w-8 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
-        asChild
-      >
-        <a
-          href={lead.googleMapsUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
-        >
-          {checked ? <Eye className="h-3.5 w-3.5" /> : <MapPin className="h-3.5 w-3.5 text-primary" />}
-        </a>
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={`h-8 w-8 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
+            asChild
+          >
+            <a
+              href={lead.googleMapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+            >
+              {checked ? <Eye className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5 text-blue-400" />}
+            </a>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{checked ? 'Already viewed' : 'View business info'}</TooltipContent>
+      </Tooltip>
     );
   };
 
@@ -130,8 +138,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
       <Button
         variant="default"
         size="icon"
-        className="h-8 w-8 bg-primary hover:bg-primary/90"
+        className={`h-8 w-8 bg-primary hover:bg-primary/90 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
         onClick={() => handleAddToOutreach(lead)}
+        data-walkthrough-step="add-to-crm"
       >
         <ClipboardList className="h-3.5 w-3.5" />
       </Button>
@@ -253,13 +262,13 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
                           >
                             {isChecked?.(lead.name, lead.googleMapsUrl)
-                              ? <><Eye className="h-4 w-4 mr-1.5" />Checked</>
-                              : <><MapPin className="h-4 w-4 mr-1.5 text-primary" />Open Maps</>}
+                              ? <><Eye className="h-4 w-4 mr-1.5" />Viewed</>
+                              : <><Eye className="h-4 w-4 mr-1.5 text-blue-400" />View Info</>}
                           </a>
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {isChecked?.(lead.name, lead.googleMapsUrl) ? 'Already checked' : 'View on Google Maps'}
+                        {isChecked?.(lead.name, lead.googleMapsUrl) ? 'Already viewed' : 'View business info'}
                       </TooltipContent>
                     </Tooltip>
                   </TableCell>
@@ -280,7 +289,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 text-green-500 hover:bg-muted hover:text-green-400"
+                              className={`h-8 w-8 text-green-500 hover:bg-muted hover:text-green-400 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
                               onClick={() => handleAddToOutreach(lead)}
                               data-walkthrough-step="add-to-crm"
                             >
