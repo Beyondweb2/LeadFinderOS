@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, MapPin, Radius, Loader2, CreditCard, Lock, Sparkles } from 'lucide-react';
+import { Search, MapPin, Radius, Loader2, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -121,29 +121,19 @@ export function SearchForm({
               {freeSearchesExhausted && !isPaidSubscriber ? (
                 /* Exhausted state: disabled search + upgrade CTA */
                 <div className="w-full space-y-3">
-                  <Button 
-                    type="submit"
-                    disabled
-                    className="w-full sm:w-auto bg-muted text-muted-foreground cursor-not-allowed font-semibold px-5 sm:px-8 h-9 sm:h-10 text-sm opacity-60"
+                  <Button
+                    type="button"
+                    size="lg"
+                    className="w-full sm:w-auto gap-2 font-semibold px-5 sm:px-8 h-9 sm:h-10 text-sm"
+                    disabled={isUpgradeLoading}
+                    onClick={onUpgrade}
                   >
-                    <Lock className="mr-1.5 h-3.5 w-3.5" />
-                    Find Leads
+                    {isUpgradeLoading ? (
+                      <><Loader2 className="h-3.5 w-3.5 animate-spin" />Starting...</>
+                    ) : (
+                      <><Sparkles className="h-3.5 w-3.5" />Get Unlimited Searches Free</>
+                    )}
                   </Button>
-                  <div className="text-center sm:text-right space-y-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="gap-1.5 animate-pulse hover:animate-none"
-                      disabled={isUpgradeLoading}
-                      onClick={onUpgrade}
-                    >
-                      {isUpgradeLoading ? (
-                        <><Loader2 className="h-3.5 w-3.5 animate-spin" />Starting...</>
-                      ) : (
-                        <><Sparkles className="h-3.5 w-3.5" />Start 3 Day Free Trial – Unlock Full Access</>
-                      )}
-                    </Button>
-                  </div>
                 </div>
               ) : (
                 <>
