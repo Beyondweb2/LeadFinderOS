@@ -33,62 +33,58 @@ export function useOutreach() {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Sequential phone fetch queue to prevent race conditions when adding multiple leads quickly
+  // Parallel phone fetch queue — processes up to 3 leads concurrently for speed
   const phoneQueueRef = useRef<Array<{ outreachLeadId: string; placeId: string; businessName: string }>>([]);
   const isProcessingQueueRef = useRef(false);
+  const CONCURRENCY = 3;
+
+  const fetchOnePhone = useCallback(async (item: { outreachLeadId: string; placeId: string; businessName: string }) => {
+    setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'pending' }));
+    try {
+      const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
+        body: { placeId: item.placeId },
+      });
+
+      if (detailsError || !details) {
+        console.log('Phone enrichment returned no data for', item.businessName);
+        setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
+      } else {
+        const updates: Record<string, string | null> = {};
+        if (details.phone) updates.phone = details.phone;
+        if (details.address) updates.address = details.address;
+        if (details.category) updates.category = details.category;
+
+        if (Object.keys(updates).length > 0) {
+          const { data: updated } = await supabase
+            .from('outreach_leads')
+            .update(updates)
+            .eq('id', item.outreachLeadId)
+            .select()
+            .single();
+
+          if (updated) {
+            setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? (updated as OutreachLead) : l));
+          }
+        }
+        setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
+      }
+    } catch (e) {
+      console.error('Phone enrichment failed (non-blocking):', e);
+      setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
+    }
+  }, []);
 
   const processPhoneQueue = useCallback(async () => {
     if (isProcessingQueueRef.current) return;
     isProcessingQueueRef.current = true;
 
     while (phoneQueueRef.current.length > 0) {
-      const item = phoneQueueRef.current.shift()!;
-      setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'pending' }));
-      try {
-        const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
-          body: { placeId: item.placeId },
-        });
-
-        if (detailsError || !details) {
-          console.log('Phone enrichment returned no data for', item.businessName);
-          setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
-        } else {
-          const updates: Record<string, string | null> = {};
-          if (details.phone) updates.phone = details.phone;
-          if (details.address) updates.address = details.address;
-          if (details.category) updates.category = details.category;
-
-          if (Object.keys(updates).length > 0) {
-            const { data: updated } = await supabase
-              .from('outreach_leads')
-              .update(updates)
-              .eq('id', item.outreachLeadId)
-              .select()
-              .single();
-
-            if (updated) {
-              setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? (updated as OutreachLead) : l));
-              setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
-            } else {
-              setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
-            }
-          } else {
-            setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
-          }
-        }
-      } catch (e) {
-        console.error('Phone enrichment failed (non-blocking):', e);
-        setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
-      }
-
-      // Small delay between requests to avoid overwhelming the API
-      if (phoneQueueRef.current.length > 0) {
-        await new Promise(resolve => setTimeout(resolve, 300));
-      }
+      const batch = phoneQueueRef.current.splice(0, CONCURRENCY);
+      await Promise.all(batch.map(fetchOnePhone));
     }
 
     isProcessingQueueRef.current = false;
-  }, []);
+  }, [fetchOnePhone]);
 
   const enqueuePhoneFetch = useCallback((outreachLeadId: string, placeId: string, businessName: string) => {
     setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'pending' }));
