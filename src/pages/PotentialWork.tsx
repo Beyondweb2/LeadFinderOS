@@ -308,52 +308,52 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   return (
     <>
       <Card className={cn(
-        'border border-border/60 border-l-[3px] transition-all bg-card overflow-hidden flex flex-col',
+        'border border-border/60 border-l-[3px] transition-all bg-card overflow-hidden',
         borderColor,
         isExpanded ? 'shadow-lg shadow-primary/5 border-primary/30' : 'hover:border-primary/20 hover:shadow-sm'
       )}>
-        {/* ═══ COMPACT SUMMARY (always visible, fixed structure) ═══ */}
+        {/* ═══ COLLAPSED (always visible) — fixed height structure ═══ */}
         <div
-          className="cursor-pointer flex-1 flex flex-col"
+          className="cursor-pointer"
           onClick={(e) => {
             if ((e.target as HTMLElement).closest('[data-contact-zone]')) return;
             if ((e.target as HTMLElement).closest('[data-no-expand]')) return;
             onToggleExpand();
           }}
         >
-          {/* Row 1: Avatar + Title Block + Controls */}
-          <div className="flex items-start gap-3 px-3 sm:px-4 pt-3 sm:pt-3.5">
-            {/* Avatar — larger and more prominent */}
+          {/* ZONE 1 — Identity Block */}
+          <div className="flex items-center gap-3 px-4 sm:px-5 pt-4 sm:pt-5">
+            {/* Avatar */}
             <div className="shrink-0">
               {lead.image_url ? (
-                <div className="w-11 h-11 sm:w-[52px] sm:h-[52px] rounded-xl overflow-hidden bg-muted/40 ring-1 ring-border/40 shadow-sm">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-muted/40 ring-1 ring-border/50 shadow-sm">
                   <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-11 h-11 sm:w-[52px] sm:h-[52px] rounded-xl bg-primary/8 border border-primary/15 flex items-center justify-center text-sm sm:text-base font-bold text-primary/60 shadow-sm">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-sm sm:text-lg font-bold text-primary/70 shadow-sm">
                   {getInitials(lead.business_name)}
                 </div>
               )}
             </div>
 
-            {/* Title block — name, category, contact method */}
-            <div className="flex-1 min-w-0 pt-0.5">
-              <h3 className="text-sm sm:text-[15px] font-bold leading-tight truncate text-foreground">
+            {/* Title block */}
+            <div className="flex-1 min-w-0">
+              <h3 className="text-[15px] sm:text-base font-bold leading-tight truncate text-foreground">
                 {lead.business_name}
               </h3>
               {lead.category && (
-                <span className="text-[10px] sm:text-[11px] text-muted-foreground/60 block leading-tight mt-0.5 truncate">
+                <span className="text-[11px] sm:text-xs text-muted-foreground/50 block leading-tight mt-0.5 truncate">
                   {lead.category}
                 </span>
               )}
               {contactMethodDisplay && (
-                <span className="text-[10px] sm:text-[11px] text-muted-foreground/40 block leading-tight mt-0.5">
+                <span className="text-[10px] sm:text-[11px] text-muted-foreground/35 block leading-tight mt-0.5">
                   Contacted via {contactMethodDisplay}
                 </span>
               )}
             </div>
 
-            {/* Controls — maps, menu, expand */}
+            {/* Controls */}
             <div className="flex items-center gap-0.5 shrink-0" data-no-expand>
               {lead.google_maps_url && (
                 <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500 hover:bg-blue-500/10 transition-colors">
@@ -389,44 +389,47 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
                 className={cn(
-                  'inline-flex items-center gap-0.5 h-6 px-2 rounded-md text-[10px] font-medium transition-colors ml-0.5',
+                  'inline-flex items-center gap-0.5 h-6 px-1.5 rounded-md text-[10px] font-medium transition-colors ml-0.5',
                   isExpanded
                     ? 'text-primary bg-primary/10'
-                    : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30'
+                    : 'text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/30'
                 )}
               >
                 <ChevronDown className={cn(
                   'h-3 w-3 transition-transform duration-200',
                   isExpanded && 'rotate-180'
                 )} />
-                {isExpanded ? 'Close' : 'Details'}
               </button>
             </div>
           </div>
 
-          {/* Row 2: Status + Next Action + Due — the visual core */}
-          <div className="flex items-center gap-1.5 flex-wrap px-3 sm:px-4 pt-2.5 pb-2">
-            <span className={cn('inline-flex items-center px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold border', statusColorCls)}>
+          {/* ZONE 2 — Workflow Row (visual core) */}
+          <div className="flex items-center gap-1.5 flex-wrap px-4 sm:px-5 pt-3 sm:pt-3.5">
+            <span className={cn('inline-flex items-center h-7 px-3 rounded-full text-[11px] sm:text-xs font-semibold border', statusColorCls)}>
               {statusLabel}
             </span>
             {nextActionLabel ? (
-              <span className={cn('inline-flex items-center px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold border', actionColorCls)}>
+              <span className={cn('inline-flex items-center h-7 px-3 rounded-full text-[11px] sm:text-xs font-semibold border', actionColorCls)}>
                 {nextActionLabel}
               </span>
             ) : (
-              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-medium border border-border/30 text-muted-foreground/40">
-                No next action
-              </span>
+              <button
+                className="inline-flex items-center h-7 px-3 rounded-full text-[11px] sm:text-xs font-medium border border-dashed border-border/40 text-muted-foreground/40 hover:text-muted-foreground/60 hover:border-border/60 transition-colors"
+                onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+                data-no-expand
+              >
+                + Set next action
+              </button>
             )}
             {dueLabel && (
-              <span className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold border', dueLabel.cls)}>
+              <span className={cn('inline-flex items-center gap-1 h-7 px-3 rounded-full text-[11px] sm:text-xs font-bold border', dueLabel.cls)}>
                 <Clock className="h-3 w-3" />
                 {dueLabel.text}
               </span>
             )}
             {lead.next_action && lead.next_action !== 'none' && !isExpanded && (
               <button
-                className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded-full text-[10px] font-medium text-green-500 bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
+                className="inline-flex items-center gap-0.5 h-6 px-2 rounded-full text-[10px] font-medium text-green-500 bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
                 onClick={(e) => { e.stopPropagation(); onNextActionChange(lead.id, 'none' as NextActionType); }}
                 title="Mark as done"
                 data-no-expand
@@ -436,44 +439,55 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             )}
           </div>
 
-          {/* Row 3: Notes + Contact buttons side by side */}
+          {/* ZONE 3 — Notes Preview */}
           {!isExpanded && (
-            <div className="flex items-center gap-2 px-3 sm:px-4 pb-2.5">
-              {/* Notes — readable, takes remaining space */}
-              <p className="flex-1 min-w-0 text-xs sm:text-[13px] text-foreground leading-snug truncate">
-                {lead.notes || ''}
-              </p>
-              {/* Contact buttons — right-aligned, compact */}
-              {lead.phone && (
-                <div className="flex items-center gap-1 shrink-0" data-contact-zone>
-                  <a
-                    href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => handleContactMethodUpdate('whatsapp')}
-                    className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-green-500/60 hover:text-green-500 hover:bg-green-500/10 border border-green-500/15 transition-colors"
-                  >
-                    <MessageSquare className="h-2.5 w-2.5" /> WhatsApp
-                  </a>
-                  <a
-                    href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
-                    onClick={() => handleContactMethodUpdate('sms')}
-                    className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10 border border-blue-500/15 transition-colors"
-                  >
-                    <MessageCircle className="h-2.5 w-2.5" /> SMS
-                  </a>
-                  <a
-                    href={`tel:${lead.phone}`}
-                    onClick={() => handleContactMethodUpdate('contacted')}
-                    className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/10 border border-amber-500/15 transition-colors"
-                  >
-                    <PhoneCall className="h-2.5 w-2.5" /> Call
-                  </a>
-                </div>
+            <div className="px-4 sm:px-5 pt-2.5 sm:pt-3">
+              {lead.notes ? (
+                <p className="text-xs sm:text-[13px] text-foreground/80 leading-relaxed line-clamp-2">
+                  {lead.notes}
+                </p>
+              ) : (
+                <p className="text-xs sm:text-[13px] text-muted-foreground/25 italic">
+                  Add note…
+                </p>
               )}
             </div>
           )}
         </div>
+
+        {/* ZONE 4 — Contact Actions (icon-only, secondary) */}
+        {!isExpanded && lead.phone && (
+          <div className="flex items-center gap-1 px-4 sm:px-5 pt-2.5 pb-4 sm:pb-5" data-contact-zone>
+            <a
+              href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => handleContactMethodUpdate('whatsapp')}
+              className="h-7 w-7 flex items-center justify-center rounded-md text-green-500/60 hover:text-green-500 hover:bg-green-500/10 transition-colors"
+              title="WhatsApp"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+            </a>
+            <a
+              href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
+              onClick={() => handleContactMethodUpdate('sms')}
+              className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+              title="SMS"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+            </a>
+            <a
+              href={`tel:${lead.phone}`}
+              onClick={() => handleContactMethodUpdate('contacted')}
+              className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
+              title="Call"
+            >
+              <PhoneCall className="h-3.5 w-3.5" />
+            </a>
+          </div>
+        )}
+        {/* Bottom padding when no phone or expanded */}
+        {!isExpanded && !lead.phone && <div className="pb-4 sm:pb-5" />}
 
         {/* ═══ EXPANDED PANEL ═══ */}
         <div
