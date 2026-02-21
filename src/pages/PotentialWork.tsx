@@ -243,6 +243,9 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
       const isCustom = nextAction.startsWith('custom::');
       const dbAction: NextActionType = isCustom ? 'follow_up' : nextAction as NextActionType;
       await onNextActionChange(lead.id, dbAction, format(d, 'yyyy-MM-dd'));
+      if (dbAction !== 'none') {
+        window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
+      }
     }
   };
 
@@ -413,6 +416,17 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 {dueLabel.text}
               </span>
             )}
+            {/* Mark as Done button — compact view */}
+            {lead.next_action && lead.next_action !== 'none' && !isExpanded && (
+              <button
+                className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded-full text-[10px] font-medium text-green-500 bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
+                onClick={(e) => { e.stopPropagation(); onNextActionChange(lead.id, 'none' as NextActionType); }}
+                title="Mark as done"
+                data-no-expand
+              >
+                <Check className="h-2.5 w-2.5" /> Done
+              </button>
+            )}
           </div>
 
           {/* Row 3: Notes preview (only if notes exist, compact) */}
@@ -541,15 +555,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 </PopoverContent>
               </Popover>
 
-              {lead.next_action && lead.next_action !== 'none' && (
-                <button
-                  className="h-7 w-7 flex items-center justify-center rounded text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors shrink-0"
-                  onClick={() => onNextActionChange(lead.id, 'none' as NextActionType)}
-                  title="Mark as done"
-                >
-                  <Check className="h-3.5 w-3.5" />
-                </button>
-              )}
             </div>
 
             {/* Notes */}

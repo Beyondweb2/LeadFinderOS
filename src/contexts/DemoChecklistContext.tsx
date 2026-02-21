@@ -96,6 +96,8 @@ export function DemoChecklistProvider({
         saveState(next, user?.id);
         return next;
       });
+      // Re-open walkthrough panel so user sees the next step
+      setIsOpen(true);
     };
     const onContact = () => completeStep('contactAttempted');
     const onStatus = () => {

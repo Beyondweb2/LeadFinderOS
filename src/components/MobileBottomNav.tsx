@@ -16,6 +16,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -111,6 +112,13 @@ export function MobileBottomNav() {
   const [crmGlow, setCrmGlow] = useState(false);
   const [trackGlow, setTrackGlow] = useState(false);
 
+  // Walkthrough step 1 pulse
+  let searchPulse = false;
+  try {
+    const { state, isDemoUser } = useDemoChecklist();
+    searchPulse = isDemoUser && !state.searchDone;
+  } catch {}
+
   useEffect(() => {
     const crmHandler = () => {
       setCrmGlow(true);
@@ -186,13 +194,15 @@ export function MobileBottomNav() {
                 data-walkthrough-step={item.url === '/potential-work' ? 'track-leads' : undefined}
                 className={cn(
                   'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[60px]',
-                  item.title === 'CRM' && crmGlow
-                    ? 'text-green-400 animate-pulse'
-                    : item.title === 'Track' && trackGlow
-                      ? 'text-yellow-400 animate-pulse'
-                      : isActive 
-                        ? 'text-primary' 
-                        : 'text-muted-foreground hover:text-foreground'
+                  item.title === 'Search' && searchPulse
+                    ? 'text-yellow-400 animate-pulse'
+                    : item.title === 'CRM' && crmGlow
+                      ? 'text-green-400 animate-pulse'
+                      : item.title === 'Track' && trackGlow
+                        ? 'text-yellow-400 animate-pulse'
+                        : isActive 
+                          ? 'text-primary' 
+                          : 'text-muted-foreground hover:text-foreground'
                 )}
               >
                 <item.icon className={cn(
