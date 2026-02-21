@@ -128,23 +128,23 @@ export function SearchForm({
                     Find Leads
                   </Button>
                   <div className="text-center sm:text-right space-y-2">
-                    <p className="text-xs text-muted-foreground">
-                      You've used your 3 free searches
+                     <p className="text-xs text-muted-foreground">
+                      You've used your free search
                     </p>
                     <p className="text-xs text-muted-foreground/70">
-                      Upgrade to unlock unlimited searches
+                      Start a free trial to unlock unlimited searches
                     </p>
                     <Button
                       type="button"
                       size="sm"
-                      className="gap-1.5"
+                      className="gap-1.5 animate-pulse hover:animate-none"
                       disabled={isUpgradeLoading}
                       onClick={onUpgrade}
                     >
                       {isUpgradeLoading ? (
                         <><Loader2 className="h-3.5 w-3.5 animate-spin" />Starting...</>
                       ) : (
-                        <><Sparkles className="h-3.5 w-3.5" />Unlock Unlimited</>
+                        <><Sparkles className="h-3.5 w-3.5" />Start 3 Day Free Trial – Unlock Full Access</>
                       )}
                     </Button>
                   </div>

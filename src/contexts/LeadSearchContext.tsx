@@ -22,6 +22,7 @@ interface LeadSearchContextType {
   trialLimitError: TrialLimitError | null;
   clearTrialLimitError: () => void;
   postAbandonExhausted: boolean;
+  freeSearchExhausted: boolean;
 }
 
 const LeadSearchContext = createContext<LeadSearchContextType | null>(null);
@@ -32,6 +33,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [excludedBusinesses, setExcludedBusinesses] = useState<ExcludedBusiness[]>([]);
   const [trialLimitError, setTrialLimitError] = useState<TrialLimitError | null>(null);
   const [postAbandonExhausted, setPostAbandonExhausted] = useState(false);
+  const [freeSearchExhausted, setFreeSearchExhausted] = useState(false);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -143,6 +145,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     setIsLoading(true);
     setTrialLimitError(null);
     setPostAbandonExhausted(false);
+    setFreeSearchExhausted(false);
     
     // Refresh excluded businesses before searching (skip for demo)
     if (!isDemo) await fetchExcludedBusinesses();
@@ -165,6 +168,12 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
               : errorContext;
             if (body?.code === 'POST_ABANDON_EXHAUSTED') {
               setPostAbandonExhausted(true);
+              return;
+            }
+            if (body?.code === 'FREE_SEARCH_EXHAUSTED') {
+              setFreeSearchExhausted(true);
+              // Log analytics
+              try { supabase.rpc('log_usage_event', { p_event_type: 'search_2_blocked' }); } catch {}
               return;
             }
             if (body?.code === 'TRIAL_LIMIT_REACHED') {
@@ -296,6 +305,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       trialLimitError,
       clearTrialLimitError,
       postAbandonExhausted,
+      freeSearchExhausted,
     }}>
       {children}
     </LeadSearchContext.Provider>
