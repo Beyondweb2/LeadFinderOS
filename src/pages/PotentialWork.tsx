@@ -213,6 +213,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     setNotesSaved(true);
     setIsEditingNotes(false);
     setTimeout(() => setNotesSaved(false), 2000);
+    window.dispatchEvent(new CustomEvent('demo-checklist-track-note-saved'));
   };
 
   const handleCancelNotes = () => {
@@ -232,7 +233,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     if (isCustom) setLeadCustomAction(lead.id, v.slice(8));
     else setLeadCustomAction(lead.id, null);
     await onNextActionChange(lead.id, dbAction, nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined);
-    if (dbAction !== 'none' && nextActionDate) {
+    if (dbAction !== 'none') {
       window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
     }
   };
@@ -246,6 +247,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
       if (dbAction !== 'none') {
         window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
       }
+      window.dispatchEvent(new CustomEvent('demo-checklist-next-date-set'));
     }
   };
 
@@ -508,8 +510,9 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               <Select value={lead.status} onValueChange={(v) => {
                 if (v === '__add_custom__') { onAddCustomStatus(); return; }
                 onStatusChange(lead.id, v as LeadStatus);
+                window.dispatchEvent(new CustomEvent('demo-checklist-track-status-changed'));
               }}>
-                <SelectTrigger className="h-8 text-xs border-border/50 flex-1">
+                <SelectTrigger className="h-8 text-xs border-border/50 flex-1" data-walkthrough-step="track-status-select">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -617,6 +620,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   <button
                     onClick={() => setIsEditingNotes(true)}
                     className="shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors border border-border/40"
+                    data-walkthrough-step="track-notes-edit"
                   >
                     <Pencil className="h-2.5 w-2.5" /> {notes ? 'Edit' : 'Add'}
                   </button>

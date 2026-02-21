@@ -14,7 +14,7 @@ const steps = [
   { key: 'contactAttempted' as const, label: 'Contact a lead via WhatsApp or SMS', cta: 'Open Outreach CRM', route: '/outreach', icon: Phone, helperText: 'Open a lead in Outreach CRM, then tap the WhatsApp or SMS button to contact them.' },
   { key: 'statusUpdated' as const, label: 'Update status & hit Track ⭐', cta: 'Update Status', route: '/outreach', icon: RefreshCw, helperText: 'Set the status to the contact method you used (e.g. WhatsApp, SMS), then hit the star (⭐) to track the lead.' },
   { key: 'leadTracked' as const, label: 'Open Track Leads page', cta: 'Go to Track Leads', route: '/potential-work', icon: Star, helperText: 'Your starred leads appear here. Open the page to continue.' },
-  { key: 'followUpSet' as const, label: 'Set up a next action & date', cta: '', route: '/potential-work', icon: CalendarClock, helperText: 'Select a next action, then pick a date — it saves automatically.' },
+  { key: 'followUpSet' as const, label: 'Set action, date, note & status', cta: '', route: '/potential-work', icon: CalendarClock, helperText: 'Select a next action, pick a date, add a note, and update the status.' },
 ];
 
 export function DemoChecklistPanel() {
@@ -225,6 +225,11 @@ export function DemoChecklistPanel() {
                   {nextStep.key === 'statusUpdated' && (state.statusChanged || state.trackPressed) && (
                     <span className="text-primary font-medium ml-1">
                       ({[state.statusChanged && 'status ✓', state.trackPressed && 'track ✓'].filter(Boolean).join(', ')})
+                    </span>
+                  )}
+                  {nextStep.key === 'followUpSet' && (state.followUpActionSet || state.followUpDateSet || state.followUpNoteAdded || state.followUpStatusChanged) && (
+                    <span className="text-primary font-medium ml-1">
+                      ({[state.followUpActionSet && 'action ✓', state.followUpDateSet && 'date ✓', state.followUpNoteAdded && 'note ✓', state.followUpStatusChanged && 'status ✓'].filter(Boolean).join(', ')})
                     </span>
                   )}
                 </span>
