@@ -65,7 +65,7 @@ const STEP_CONFIG: {
     selector: '[data-walkthrough-step="track-leads"]',
     tooltip: 'Open the Track Leads page to see starred leads.',
   },
-  // Step 6 sub-steps: action → date (auto-completes when both filled)
+  // Step 6 sub-steps: action → date → note → status (auto-completes when all filled)
   {
     key: 'followUpSet',
     subKey: 'followUpAction',
@@ -77,8 +77,24 @@ const STEP_CONFIG: {
     key: 'followUpSet',
     subKey: 'followUpDate',
     selector: '[data-walkthrough-step="follow-up-date"]',
-    tooltip: 'Pick a due date — step completes automatically.',
+    tooltip: 'Pick a due date for this action.',
     noDim: true,
+  } as any,
+  {
+    key: 'followUpSet',
+    subKey: 'followUpNote',
+    selector: '[data-walkthrough-step="track-notes-edit"]',
+    tooltip: 'Add a note about this lead.',
+    noDim: true,
+    tooltipPosition: 'right' as const,
+  } as any,
+  {
+    key: 'followUpSet',
+    subKey: 'followUpStatus',
+    selector: '[data-walkthrough-step="track-status-select"]',
+    tooltip: 'Update the status of this lead.',
+    noDim: true,
+    tooltipPosition: 'right' as const,
   } as any,
 ];
 
@@ -133,26 +149,27 @@ export function WalkthroughOverlay() {
       }
     }
 
-    // For followUpSet, handle sub-steps: action → date (auto-completes)
+    // For followUpSet, handle sub-steps: action → date → note → status
     if (!state.followUpSet) {
       const priorSteps2 = ['addedToCrm', 'contactAttempted', 'statusUpdated', 'leadTracked'] as const;
       const allPrior2Done = priorSteps2.every(k => state[k]);
       if (allPrior2Done) {
-        const actionEl = document.querySelector('[data-walkthrough-step="follow-up-action"]');
-        const dateEl = document.querySelector('[data-walkthrough-step="follow-up-date"]');
-        if (actionEl) {
-          const actionSelected = actionEl.getAttribute('data-action-selected') === 'true';
-          if (!actionSelected) {
-            setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpAction') || null);
-            return;
-          }
-          if (dateEl) {
-            setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpDate') || null);
-            return;
-          }
+        if (!state.followUpActionSet) {
+          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpAction') || null);
+          return;
         }
-        setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpAction') || null);
-        return;
+        if (!state.followUpDateSet) {
+          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpDate') || null);
+          return;
+        }
+        if (!state.followUpNoteAdded) {
+          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpNote') || null);
+          return;
+        }
+        if (!state.followUpStatusChanged) {
+          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpStatus') || null);
+          return;
+        }
       }
     }
 
@@ -196,27 +213,11 @@ export function WalkthroughOverlay() {
     return () => clearInterval(interval);
   }, [isDemoUser, state.searchDone, walkthroughOpen, activeStep?.selector]);
 
-  // Poll for followUpSet sub-step advancement
+  // Poll for followUpSet sub-step advancement (event-driven now, polling only for action/date visual state)
   useEffect(() => {
     if (!isDemoUser || state.followUpSet || !walkthroughOpen) return;
     if (!activeStep || activeStep.key !== 'followUpSet') return;
-    const interval = setInterval(() => {
-      const actionEl = document.querySelector('[data-walkthrough-step="follow-up-action"]');
-      const dateEl = document.querySelector('[data-walkthrough-step="follow-up-date"]');
-      if (actionEl) {
-        const actionSelected = actionEl.getAttribute('data-action-selected') === 'true';
-        if (actionSelected && dateEl) {
-          if (activeStep?.selector !== '[data-walkthrough-step="follow-up-date"]') {
-            setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpDate') || null);
-          }
-          return;
-        }
-        if (!actionSelected && activeStep?.selector !== '[data-walkthrough-step="follow-up-action"]') {
-          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpAction') || null);
-        }
-      }
-    }, 300);
-    return () => clearInterval(interval);
+    // No polling needed — advancement is event-driven via DemoChecklistContext
   }, [isDemoUser, state.followUpSet, walkthroughOpen, activeStep]);
 
   // Track element position

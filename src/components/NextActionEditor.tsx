@@ -114,8 +114,11 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
     }
     
     setOpen(false);
-    if (selectedAction && selectedAction !== 'none' && selectedDate) {
+    if (selectedAction && selectedAction !== 'none') {
       window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
+    }
+    if (selectedDate) {
+      window.dispatchEvent(new CustomEvent('demo-checklist-next-date-set'));
     }
   };
 

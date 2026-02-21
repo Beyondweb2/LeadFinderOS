@@ -11,7 +11,11 @@ export interface DemoChecklistState {
   trackPressed: boolean;
   statusUpdated: boolean; // derived: statusChanged && trackPressed
   leadTracked: boolean;
-  followUpSet: boolean;
+  followUpActionSet: boolean;
+  followUpDateSet: boolean;
+  followUpNoteAdded: boolean;
+  followUpStatusChanged: boolean;
+  followUpSet: boolean; // derived: all four sub-steps
 }
 
 interface DemoChecklistContextType {
@@ -38,7 +42,7 @@ function loadState(userId?: string): DemoChecklistState {
     const raw = localStorage.getItem(getKey(userId));
     if (raw) return JSON.parse(raw);
   } catch { /* ignore */ }
-  return { searchDone: false, addedToCrm: false, crmAddCount: 0, contactAttempted: false, statusChanged: false, trackPressed: false, statusUpdated: false, leadTracked: false, followUpSet: false };
+  return { searchDone: false, addedToCrm: false, crmAddCount: 0, contactAttempted: false, statusChanged: false, trackPressed: false, statusUpdated: false, leadTracked: false, followUpActionSet: false, followUpDateSet: false, followUpNoteAdded: false, followUpStatusChanged: false, followUpSet: false };
 }
 
 function saveState(state: DemoChecklistState, userId?: string) {
@@ -123,7 +127,38 @@ export function DemoChecklistProvider({
       });
     };
     const onOpenTrackLeads = () => completeStep('leadTracked');
-    const onFollowUp = () => completeStep('followUpSet');
+    const onFollowUpAction = () => {
+      setState(prev => {
+        if (prev.followUpActionSet) return prev;
+        const next = { ...prev, followUpActionSet: true, followUpSet: prev.followUpDateSet && prev.followUpNoteAdded && prev.followUpStatusChanged };
+        saveState(next, user?.id);
+        return next;
+      });
+    };
+    const onFollowUpDate = () => {
+      setState(prev => {
+        if (prev.followUpDateSet) return prev;
+        const next = { ...prev, followUpDateSet: true, followUpSet: prev.followUpActionSet && prev.followUpNoteAdded && prev.followUpStatusChanged };
+        saveState(next, user?.id);
+        return next;
+      });
+    };
+    const onFollowUpNote = () => {
+      setState(prev => {
+        if (prev.followUpNoteAdded) return prev;
+        const next = { ...prev, followUpNoteAdded: true, followUpSet: prev.followUpActionSet && prev.followUpDateSet && prev.followUpStatusChanged };
+        saveState(next, user?.id);
+        return next;
+      });
+    };
+    const onFollowUpStatus = () => {
+      setState(prev => {
+        if (prev.followUpStatusChanged) return prev;
+        const next = { ...prev, followUpStatusChanged: true, followUpSet: prev.followUpActionSet && prev.followUpDateSet && prev.followUpNoteAdded };
+        saveState(next, user?.id);
+        return next;
+      });
+    };
 
     // Also capture tel: link clicks as contact attempts
     const onTelClick = (e: MouseEvent) => {
@@ -137,8 +172,10 @@ export function DemoChecklistProvider({
     window.addEventListener('demo-checklist-contact', onContact);
     window.addEventListener('demo-checklist-status-change', onStatus);
     window.addEventListener('demo-checklist-track-pressed', onTrack);
-    window.addEventListener('demo-checklist-next-action-set', onFollowUp);
-    window.addEventListener('demo-checklist-next-action-set', onFollowUp);
+    window.addEventListener('demo-checklist-next-action-set', onFollowUpAction);
+    window.addEventListener('demo-checklist-next-date-set', onFollowUpDate);
+    window.addEventListener('demo-checklist-track-note-saved', onFollowUpNote);
+    window.addEventListener('demo-checklist-track-status-changed', onFollowUpStatus);
     document.addEventListener('click', onTelClick, true);
 
     return () => {
@@ -147,8 +184,10 @@ export function DemoChecklistProvider({
       window.removeEventListener('demo-checklist-contact', onContact);
       window.removeEventListener('demo-checklist-status-change', onStatus);
       window.removeEventListener('demo-checklist-track-pressed', onTrack);
-      window.removeEventListener('demo-checklist-next-action-set', onFollowUp);
-      window.removeEventListener('demo-checklist-next-action-set', onFollowUp);
+      window.removeEventListener('demo-checklist-next-action-set', onFollowUpAction);
+      window.removeEventListener('demo-checklist-next-date-set', onFollowUpDate);
+      window.removeEventListener('demo-checklist-track-note-saved', onFollowUpNote);
+      window.removeEventListener('demo-checklist-track-status-changed', onFollowUpStatus);
       document.removeEventListener('click', onTelClick, true);
     };
   }, [isDemoUser, completeStep]);
