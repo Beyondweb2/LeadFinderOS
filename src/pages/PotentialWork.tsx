@@ -737,6 +737,7 @@ const PotentialWorkPage = () => {
   const { user } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState<'action_date' | 'recent' | 'alpha'>('action_date');
   const [metricFilter, setMetricFilter] = useState<'overdue' | 'today' | 'upcoming' | 'no_action' | null>(null);
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
@@ -812,13 +813,19 @@ const PotentialWorkPage = () => {
           lead.phone?.toLowerCase().includes(query)
       );
     }
-    result.sort((a, b) => {
-      const dateA = a.next_action_date ? new Date(a.next_action_date).getTime() : Infinity;
-      const dateB = b.next_action_date ? new Date(b.next_action_date).getTime() : Infinity;
-      return dateA - dateB;
-    });
+    if (sortOrder === 'action_date') {
+      result.sort((a, b) => {
+        const dateA = a.next_action_date ? new Date(a.next_action_date).getTime() : Infinity;
+        const dateB = b.next_action_date ? new Date(b.next_action_date).getTime() : Infinity;
+        return dateA - dateB;
+      });
+    } else if (sortOrder === 'recent') {
+      result.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } else if (sortOrder === 'alpha') {
+      result.sort((a, b) => a.business_name.localeCompare(b.business_name));
+    }
     return result;
-  }, [leads, archivedLeads, searchQuery]);
+  }, [leads, archivedLeads, searchQuery, sortOrder]);
 
   const potentialWorkLeads = useMemo(() => {
     if (!metricFilter) return allPotentialLeads;
@@ -854,8 +861,8 @@ const PotentialWorkPage = () => {
         </p>
       </div>
 
-      {/* Search + Count */}
-      <div className="flex items-center justify-between gap-2">
+      {/* Search + Sort + Count */}
+      <div className="flex items-center gap-2">
         <div className="relative max-w-xs flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <Input
@@ -865,6 +872,18 @@ const PotentialWorkPage = () => {
             className="pl-8 h-8 text-sm"
           />
         </div>
+        {!metricFilter && (
+          <Select value={sortOrder} onValueChange={(v) => setSortOrder(v as typeof sortOrder)}>
+            <SelectTrigger className="h-8 w-auto min-w-[120px] text-xs border-border/50">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="action_date">Next Action</SelectItem>
+              <SelectItem value="recent">Recently Added</SelectItem>
+              <SelectItem value="alpha">A → Z</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         <span className="text-xs text-muted-foreground whitespace-nowrap">
           {potentialWorkLeads.length} leads
         </span>
