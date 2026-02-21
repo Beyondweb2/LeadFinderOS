@@ -1,9 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { Facebook } from 'lucide-react';
 import { useOutreach } from '@/hooks/useOutreach';
 import { AlertTriangle, Clock, CalendarCheck } from 'lucide-react';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
-import { AddCustomLeadDialog } from '@/components/AddCustomLeadDialog';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,15 +24,12 @@ import {
 } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { OutreachStatusBadge } from '@/components/OutreachStatusBadge';
 import { 
   Briefcase, 
-  Phone, 
   Search, 
   Calendar as CalendarIcon, 
   ExternalLink, 
   Trash2,
-  ChevronDown,
   StickyNote,
   Save,
   Pencil,
@@ -44,9 +39,9 @@ import {
   MessageCircle,
   PhoneCall,
   MoreVertical,
-  MapPin,
   Plus,
   Tag,
+  ChevronDown,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -60,6 +55,7 @@ import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { FacebookSection } from '@/components/FacebookSection';
+import { cn } from '@/lib/utils';
 
 /* ───────── constants ───────── */
 
@@ -93,6 +89,27 @@ const CONTACT_METHOD_LABELS: Record<string, string> = {
   facebook_msg: 'Facebook',
 };
 
+const NEXT_ACTION_COLORS: Record<string, string> = {
+  call: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
+  follow_up: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
+  '2nd_follow_up': 'bg-indigo-500/15 text-indigo-400 border-indigo-500/25',
+  send_draft: 'bg-orange-500/15 text-orange-400 border-orange-500/25',
+  send_initial_text: 'bg-green-500/15 text-green-400 border-green-500/25',
+  send_voice_note: 'bg-violet-500/15 text-violet-400 border-violet-500/25',
+  send_follow_up: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+  none: 'bg-muted text-muted-foreground border-border/50',
+};
+
+const STATUS_COLORS: Record<string, string> = {
+  interested: 'bg-green-500/15 text-green-400 border-green-500/25',
+  wants_draft: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
+  on_hold: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
+  reviewing_draft: 'bg-sky-500/15 text-sky-400 border-sky-500/25',
+  paid_for_draft: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
+  not_interested: 'bg-red-500/15 text-red-400 border-red-500/25',
+  completed: 'bg-green-600/15 text-green-500 border-green-600/25',
+};
+
 /* ───────── helpers ───────── */
 
 const getInitials = (name: string) =>
@@ -115,10 +132,10 @@ const getDueLabel = (nextActionDate: string | null, nextAction: NextActionType |
   const d = startOfDay(new Date(nextActionDate));
   const today = startOfDay(new Date());
   const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return { text: `Overdue by ${Math.abs(diffDays)}d`, cls: 'text-red-500 bg-red-500/10 border-red-500/25' };
-  if (diffDays === 0) return { text: 'Due today', cls: 'text-amber-500 bg-amber-500/10 border-amber-500/25' };
-  if (diffDays === 1) return { text: 'Due tomorrow', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
-  return { text: `Due in ${diffDays}d`, cls: 'text-muted-foreground bg-muted border-border/50' };
+  if (diffDays < 0) return { text: `Overdue ${Math.abs(diffDays)}d`, cls: 'text-red-500 bg-red-500/10 border-red-500/25' };
+  if (diffDays === 0) return { text: 'Today', cls: 'text-amber-500 bg-amber-500/10 border-amber-500/25' };
+  if (diffDays === 1) return { text: 'Tomorrow', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+  return { text: `${diffDays}d`, cls: 'text-muted-foreground bg-muted border-border/50' };
 };
 
 const getStatusLabel = (status: string, customStatuses: { value: string; label: string }[]) => {
@@ -126,10 +143,19 @@ const getStatusLabel = (status: string, customStatuses: { value: string; label: 
   return found?.label || status;
 };
 
+const getNextActionLabel = (action: NextActionType | null, leadId: string) => {
+  const customLabel = getLeadCustomAction(leadId);
+  if (customLabel) return customLabel;
+  if (!action || action === 'none') return null;
+  return NEXT_ACTION_OPTIONS.find(o => o.value === action)?.label || null;
+};
+
 /* ───────── LeadCard ───────── */
 
 interface LeadCardProps {
   lead: OutreachLead;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
   onStatusChange: (leadId: string, status: LeadStatus) => Promise<OutreachLead | null>;
   onNextActionChange: (leadId: string, action: NextActionType, date?: string) => Promise<OutreachLead | null>;
   onNotesChange: (leadId: string, notes: string) => Promise<OutreachLead | null>;
@@ -142,7 +168,7 @@ interface LeadCardProps {
   userId: string | undefined;
 }
 
-const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
+const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
@@ -163,6 +189,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const [showAddCustomAction, setShowAddCustomAction] = useState(false);
   const [newCustomAction, setNewCustomAction] = useState('');
+  const expandRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setNotes(lead.notes || '');
@@ -252,7 +279,6 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
     await onImageChange(lead.id, null);
   };
 
-  // Contact method update — does NOT change status
   const handleContactMethodUpdate = async (method: string) => {
     await onUpdateLead(lead.id, { contact_method: method } as Partial<OutreachLead>);
   };
@@ -263,298 +289,330 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
     addAction(trimmed);
     setNewCustomAction('');
     setShowAddCustomAction(false);
-    // Auto-select the newly added custom action
-    const newVal = `custom::${trimmed}`;
-    handleNextActionChange(newVal);
+    handleNextActionChange(`custom::${trimmed}`);
   };
 
   const borderColor = getDueBorderColor(lead.next_action_date, lead.next_action);
   const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
   const contactMethodDisplay = lead.contact_method ? CONTACT_METHOD_LABELS[lead.contact_method] || lead.contact_method : null;
-
-  // Next action display
-  const nextActionDisplay = (() => {
-    if (customLabel) return customLabel;
-    const opt = NEXT_ACTION_OPTIONS.find(o => o.value === (lead.next_action || 'none'));
-    return opt?.label || 'None';
-  })();
+  const nextActionLabel = getNextActionLabel(lead.next_action, lead.id);
+  const statusLabel = getStatusLabel(lead.status, customStatuses);
+  const statusColorCls = STATUS_COLORS[lead.status] || 'bg-muted text-muted-foreground border-border/50';
+  const actionColorCls = customLabel
+    ? 'bg-teal-500/15 text-teal-400 border-teal-500/25'
+    : NEXT_ACTION_COLORS[lead.next_action || 'none'] || NEXT_ACTION_COLORS.none;
 
   return (
     <>
-      <Card className={`border border-border/60 border-l-[4px] ${borderColor} hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 transition-all bg-card overflow-hidden`}>
-        
-        {/* ─── ROW 1: Identity ─── */}
-        <div className="flex items-start gap-3 p-4 pb-2">
-          {/* Avatar */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="shrink-0 relative group/img"
-            title={lead.image_url ? 'Change image' : 'Add image'}
-          >
-            {lead.image_url ? (
-              <div className="w-12 h-12 rounded-xl overflow-hidden bg-muted/30 ring-1 ring-border/30 group-hover/img:ring-primary/40 transition-all">
-                <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
-              </div>
-            ) : (
-              <div className="w-12 h-12 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-center text-sm font-bold text-primary/50 group-hover/img:border-primary/30 transition-all">
-                {getInitials(lead.business_name)}
-              </div>
-            )}
-            <div className="absolute inset-0 rounded-xl bg-black/0 group-hover/img:bg-black/20 flex items-center justify-center transition-all opacity-0 group-hover/img:opacity-100">
-              <Pencil className="h-3 w-3 text-white" />
+      <Card className={cn(
+        'border border-border/60 border-l-[4px] transition-all bg-card overflow-hidden',
+        borderColor,
+        isExpanded ? 'shadow-lg shadow-primary/5 border-primary/30' : 'hover:border-primary/20 hover:shadow-sm'
+      )}>
+        {/* ═══ COMPACT SUMMARY (always visible) ═══ */}
+        <div
+          className="cursor-pointer"
+          onClick={(e) => {
+            // Don't expand if clicking inside contact buttons area
+            if ((e.target as HTMLElement).closest('[data-contact-zone]')) return;
+            if ((e.target as HTMLElement).closest('[data-no-expand]')) return;
+            onToggleExpand();
+          }}
+        >
+          {/* Row 1: Identity */}
+          <div className="flex items-center gap-2.5 px-3 py-2.5">
+            {/* Avatar */}
+            <div className="shrink-0">
+              {lead.image_url ? (
+                <div className="w-9 h-9 rounded-lg overflow-hidden bg-muted/30 ring-1 ring-border/30">
+                  <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-9 h-9 rounded-lg bg-primary/5 border border-primary/10 flex items-center justify-center text-[11px] font-bold text-primary/50">
+                  {getInitials(lead.business_name)}
+                </div>
+              )}
             </div>
-          </button>
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
 
-          {/* Name + Meta lines */}
-          <div className="flex-1 min-w-0">
-            {editingName ? (
-              <div className="flex items-center gap-1">
-                <Input
-                  value={editedName}
-                  onChange={(e) => setEditedName(e.target.value)}
-                  className="h-7 text-sm font-bold px-1.5"
-                  autoFocus
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); } }}
-                />
-                <button onClick={handleSaveName} className="h-6 w-6 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded"><Check className="h-3.5 w-3.5" /></button>
-                <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><X className="h-3.5 w-3.5" /></button>
-              </div>
-            ) : (
-              <h3
-                className="text-base font-bold leading-tight truncate cursor-pointer hover:text-primary/80 transition-colors"
-                onClick={() => setEditingName(true)}
-                title="Click to edit"
-              >
+            {/* Name + Contact Method */}
+            <div className="flex-1 min-w-0">
+              <h3 className="text-sm font-bold leading-tight truncate">
                 {lead.business_name}
               </h3>
-            )}
-            {lead.category && (
-              <span className="text-[11px] text-muted-foreground/60 truncate block">{lead.category}</span>
-            )}
-            {/* Contact method (read-only) */}
-            {contactMethodDisplay && (
-              <span className="text-[11px] text-muted-foreground/50 block mt-0.5">
-                Contacted via {contactMethodDisplay}
-              </span>
-            )}
-            {/* Status label (read-only display) */}
-            <span className="text-[11px] text-muted-foreground/50 block">
-              Status: {getStatusLabel(lead.status, customStatuses)}
-            </span>
-          </div>
-
-          {/* Maps + Menu */}
-          <div className="flex items-center gap-0.5 shrink-0">
-            {lead.google_maps_url && (
-              <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500 hover:bg-blue-500/10 transition-colors" title="Google Maps">
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
-            )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
-                  <MoreVertical className="h-4 w-4" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-[140px]">
-                <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="text-xs" disabled={isUploadingImage}>
-                  <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
-                </DropdownMenuItem>
-                {lead.image_url && (
-                  <DropdownMenuItem onClick={handleRemoveImage} className="text-xs">
-                    <X className="h-3.5 w-3.5 mr-2" /> Remove Image
-                  </DropdownMenuItem>
-                )}
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setDetailOpen(true)} className="text-xs">
-                  <Pencil className="h-3.5 w-3.5 mr-2" /> Full Edit
-                </DropdownMenuItem>
-                <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
-                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        {/* ─── ROW 2: Workflow Block (Status + Next Action + Due Date) ─── */}
-        <div className="px-4 pb-3 pt-1 space-y-2.5">
-          {/* Status selector */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground w-14 shrink-0">Status</span>
-            <Select value={lead.status} onValueChange={(v) => {
-              if (v === '__add_custom__') { onAddCustomStatus(); return; }
-              onStatusChange(lead.id, v as LeadStatus);
-            }}>
-              <SelectTrigger className="h-9 text-sm border-border/50 flex-1">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-                {customStatuses.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-                <SelectItem value="__add_custom__" className="text-primary">+ Add Custom Status</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Next Action + Due Date row */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground w-14 shrink-0">Action</span>
-            <div className="flex-1">
-              <Select value={nextAction} onValueChange={handleNextActionChange}>
-                <SelectTrigger className="h-9 text-sm border-border/50">
-                  <SelectValue placeholder="Next action" />
-                </SelectTrigger>
-                <SelectContent>
-                  {NEXT_ACTION_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                  {customActions.length > 0 && (
-                    <>
-                      <div className="h-px bg-border my-1" />
-                      {customActions.map((ca) => (
-                        <SelectItem key={ca.id} value={`custom::${ca.label}`}>
-                          <div className="flex items-center gap-2">
-                            <Tag className="h-3 w-3 text-teal-400" />
-                            {ca.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-                  <div className="h-px bg-border my-1" />
-                  <SelectItem value="__add_custom_action__" className="text-primary">+ Add Custom Action</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={`h-9 px-3 text-sm shrink-0 gap-1.5 ${
-                    dueLabel
-                      ? dueLabel.cls
-                      : 'text-muted-foreground'
-                  }`}
-                >
-                  <CalendarIcon className="h-3.5 w-3.5" />
-                  {nextActionDate ? format(nextActionDate, 'MMM d') : 'Date'}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="end">
-                <Calendar
-                  mode="single"
-                  selected={nextActionDate}
-                  onSelect={handleDateChange}
-                  initialFocus
-                  className="p-3 pointer-events-auto"
-                />
-              </PopoverContent>
-            </Popover>
-
-            {lead.next_action && lead.next_action !== 'none' && (
-              <button
-                className="h-8 w-8 flex items-center justify-center rounded-md text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors shrink-0"
-                onClick={() => onNextActionChange(lead.id, 'none' as NextActionType)}
-                title="Mark as done"
-              >
-                <Check className="h-4 w-4" />
-              </button>
-            )}
-          </div>
-
-          {/* Due badge */}
-          {dueLabel && (
-            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border ${dueLabel.cls}`}>
-              <Clock className="h-3 w-3" />
-              {dueLabel.text}
-            </span>
-          )}
-        </div>
-
-        {/* ─── ROW 3: Notes (Primary importance) ─── */}
-        <div className="px-4 pb-3 pt-1 border-t border-border/30">
-          {isEditingNotes ? (
-            <div className="space-y-2 pt-2">
-              <Textarea
-                ref={notesRef}
-                value={notes}
-                onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
-                rows={4}
-                className="resize-none text-sm border-border/50 min-h-[100px]"
-                placeholder="Add notes about this lead..."
-                autoFocus
-              />
-              <div className="flex items-center justify-end gap-2">
-                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={handleCancelNotes}>
-                  Cancel
-                </Button>
-                <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveNotes}>
-                  <Save className="h-3 w-3" /> Save
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-start gap-2 pt-2">
-              <StickyNote className="h-4 w-4 text-muted-foreground/40 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                {notes ? (
-                  <p className="text-sm text-foreground/80 leading-relaxed line-clamp-3 whitespace-pre-wrap">{notes}</p>
-                ) : (
-                  <span className="text-sm text-muted-foreground/40 italic">No notes yet</span>
-                )}
-              </div>
-              <button
-                onClick={() => setIsEditingNotes(true)}
-                className="shrink-0 h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors border border-border/40"
-              >
-                <Pencil className="h-3 w-3" /> {notes ? 'Edit' : 'Add'}
-              </button>
-              {notesSaved && (
-                <span className="text-[10px] text-green-500 shrink-0 flex items-center gap-0.5">
-                  <Check className="h-2.5 w-2.5" /> Saved
+              {contactMethodDisplay && (
+                <span className="text-[10px] text-muted-foreground/50 block leading-tight">
+                  Contacted via {contactMethodDisplay}
                 </span>
               )}
             </div>
+
+            {/* Maps + Menu */}
+            <div className="flex items-center gap-0.5 shrink-0" data-no-expand>
+              {lead.google_maps_url && (
+                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="h-6 w-6 flex items-center justify-center rounded text-blue-500 hover:bg-blue-500/10 transition-colors">
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
+                    <MoreVertical className="h-3.5 w-3.5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[140px]">
+                  <DropdownMenuItem onClick={() => { fileInputRef.current?.click(); }} className="text-xs" disabled={isUploadingImage}>
+                    <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
+                  </DropdownMenuItem>
+                  {lead.image_url && (
+                    <DropdownMenuItem onClick={handleRemoveImage} className="text-xs">
+                      <X className="h-3.5 w-3.5 mr-2" /> Remove Image
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setDetailOpen(true)} className="text-xs">
+                    <Pencil className="h-3.5 w-3.5 mr-2" /> Full Edit
+                  </DropdownMenuItem>
+                  <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
+                    <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <ChevronDown className={cn(
+                'h-3.5 w-3.5 text-muted-foreground/40 transition-transform duration-200 ml-0.5',
+                isExpanded && 'rotate-180'
+              )} />
+            </div>
+          </div>
+
+          {/* Row 2: Inline badges — Status + Next Action + Due */}
+          <div className="flex items-center gap-1.5 flex-wrap px-3 pb-2">
+            <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', statusColorCls)}>
+              {statusLabel}
+            </span>
+            {nextActionLabel && (
+              <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', actionColorCls)}>
+                {nextActionLabel}
+              </span>
+            )}
+            {dueLabel && (
+              <span className={cn('inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold border', dueLabel.cls)}>
+                <Clock className="h-2.5 w-2.5" />
+                {dueLabel.text}
+              </span>
+            )}
+          </div>
+
+          {/* Row 3: Notes preview (only if notes exist, compact) */}
+          {lead.notes && !isExpanded && (
+            <div className="px-3 pb-2">
+              <p className="text-[11px] text-muted-foreground/60 leading-tight truncate">
+                {lead.notes}
+              </p>
+            </div>
           )}
         </div>
 
-        {/* ─── ROW 4: Contact Buttons (Secondary, compact) ─── */}
+        {/* Row 4: Contact buttons (always visible, compact) */}
         {lead.phone && (
-          <div className="flex items-center gap-1.5 px-4 pb-3 pt-1 border-t border-border/30">
+          <div className="flex items-center gap-1 px-3 pb-2" data-contact-zone>
             <a
               href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => handleContactMethodUpdate('whatsapp')}
-              className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-medium text-green-500 hover:bg-green-500/10 border border-green-500/20 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-1 h-6 rounded text-[10px] font-medium text-green-500 hover:bg-green-500/10 border border-green-500/20 transition-colors"
             >
-              <MessageSquare className="h-3 w-3" /> WhatsApp
+              <MessageSquare className="h-2.5 w-2.5" /> WhatsApp
             </a>
             <a
               href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
               onClick={() => handleContactMethodUpdate('sms')}
-              className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-medium text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-1 h-6 rounded text-[10px] font-medium text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 transition-colors"
             >
-              <MessageCircle className="h-3 w-3" /> SMS
+              <MessageCircle className="h-2.5 w-2.5" /> SMS
             </a>
             <a
               href={`tel:${lead.phone}`}
               onClick={() => handleContactMethodUpdate('contacted')}
-              className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-medium text-amber-500 hover:bg-amber-500/10 border border-amber-500/20 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-1 h-6 rounded text-[10px] font-medium text-amber-500 hover:bg-amber-500/10 border border-amber-500/20 transition-colors"
             >
-              <PhoneCall className="h-3 w-3" /> Call
+              <PhoneCall className="h-2.5 w-2.5" /> Call
             </a>
           </div>
         )}
+
+        {/* ═══ EXPANDED PANEL ═══ */}
+        <div
+          ref={expandRef}
+          className={cn(
+            'overflow-hidden transition-all duration-300 ease-out',
+            isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+          )}
+        >
+          <div className="border-t border-border/40 px-3 py-3 space-y-3 bg-muted/5">
+            {/* Status selector */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-muted-foreground w-12 shrink-0">Status</span>
+              <Select value={lead.status} onValueChange={(v) => {
+                if (v === '__add_custom__') { onAddCustomStatus(); return; }
+                onStatusChange(lead.id, v as LeadStatus);
+              }}>
+                <SelectTrigger className="h-8 text-xs border-border/50 flex-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                  {customStatuses.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                  <SelectItem value="__add_custom__" className="text-primary">+ Custom Status</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Next Action + Due Date */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-muted-foreground w-12 shrink-0">Action</span>
+              <div className="flex-1">
+                <Select value={nextAction} onValueChange={handleNextActionChange}>
+                  <SelectTrigger className="h-8 text-xs border-border/50">
+                    <SelectValue placeholder="Next action" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {NEXT_ACTION_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                    {customActions.length > 0 && (
+                      <>
+                        <div className="h-px bg-border my-1" />
+                        {customActions.map((ca) => (
+                          <SelectItem key={ca.id} value={`custom::${ca.label}`}>
+                            <div className="flex items-center gap-2">
+                              <Tag className="h-3 w-3 text-teal-400" />
+                              {ca.label}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </>
+                    )}
+                    <div className="h-px bg-border my-1" />
+                    <SelectItem value="__add_custom_action__" className="text-primary">+ Custom Action</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className={cn(
+                      'h-8 px-2.5 text-xs shrink-0 gap-1',
+                      dueLabel ? dueLabel.cls : 'text-muted-foreground'
+                    )}
+                  >
+                    <CalendarIcon className="h-3 w-3" />
+                    {nextActionDate ? format(nextActionDate, 'MMM d') : 'Date'}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="end">
+                  <Calendar
+                    mode="single"
+                    selected={nextActionDate}
+                    onSelect={handleDateChange}
+                    initialFocus
+                    className="p-3 pointer-events-auto"
+                  />
+                </PopoverContent>
+              </Popover>
+
+              {lead.next_action && lead.next_action !== 'none' && (
+                <button
+                  className="h-7 w-7 flex items-center justify-center rounded text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors shrink-0"
+                  onClick={() => onNextActionChange(lead.id, 'none' as NextActionType)}
+                  title="Mark as done"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+
+            {/* Notes */}
+            <div className="pt-1">
+              {isEditingNotes ? (
+                <div className="space-y-2">
+                  <Textarea
+                    ref={notesRef}
+                    value={notes}
+                    onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
+                    rows={4}
+                    className="resize-none text-sm border-border/50 min-h-[90px]"
+                    placeholder="Add notes about this lead..."
+                    autoFocus
+                  />
+                  <div className="flex items-center justify-end gap-1.5">
+                    <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onClick={handleCancelNotes}>
+                      Cancel
+                    </Button>
+                    <Button size="sm" className="h-6 text-[11px] gap-1" onClick={handleSaveNotes}>
+                      <Save className="h-2.5 w-2.5" /> Save
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start gap-2">
+                  <StickyNote className="h-3.5 w-3.5 text-muted-foreground/40 mt-0.5 shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    {notes ? (
+                      <p className="text-xs text-foreground/70 leading-relaxed whitespace-pre-wrap">{notes}</p>
+                    ) : (
+                      <span className="text-xs text-muted-foreground/30 italic">No notes</span>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setIsEditingNotes(true)}
+                    className="shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors border border-border/40"
+                  >
+                    <Pencil className="h-2.5 w-2.5" /> {notes ? 'Edit' : 'Add'}
+                  </button>
+                  {notesSaved && (
+                    <span className="text-[10px] text-green-500 shrink-0 flex items-center gap-0.5">
+                      <Check className="h-2.5 w-2.5" /> Saved
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Edit name inline */}
+            {editingName ? (
+              <div className="flex items-center gap-1 pt-1">
+                <Input
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  className="h-7 text-xs font-semibold px-1.5 flex-1"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); } }}
+                />
+                <button onClick={handleSaveName} className="h-6 w-6 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded"><Check className="h-3 w-3" /></button>
+                <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><X className="h-3 w-3" /></button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setEditingName(true)}
+                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 pt-1"
+              >
+                <Pencil className="h-2.5 w-2.5" /> Edit name
+              </button>
+            )}
+          </div>
+        </div>
+
+        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
       </Card>
 
       {/* Custom Action Dialog */}
@@ -661,6 +719,7 @@ const PotentialWorkPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [metricFilter, setMetricFilter] = useState<'overdue' | 'today' | 'upcoming' | 'no_action' | null>(null);
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
+  const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [customStatuses, setCustomStatuses] = useState<{ value: string; label: string }[]>([]);
   const [showCustomStatusDialog, setShowCustomStatusDialog] = useState(false);
   const [newStatusLabel, setNewStatusLabel] = useState('');
@@ -678,7 +737,6 @@ const PotentialWorkPage = () => {
     return data as OutreachLead;
   }, []);
 
-  // Load custom statuses from localStorage
   useEffect(() => {
     try {
       const saved = localStorage.getItem(CUSTOM_STATUSES_KEY);
@@ -722,12 +780,10 @@ const PotentialWorkPage = () => {
   const allPotentialLeads = useMemo(() => {
     const interestedStatuses: LeadStatus[] = ['interested', 'wants_draft', 'on_hold', 'reviewing_draft', 'paid_for_draft'];
     const allLeads = [...leads, ...archivedLeads];
-    
     let result = allLeads.filter((lead) => 
       (lead.is_potential_work || interestedStatuses.includes(lead.status)) && 
       lead.status !== 'completed'
     );
-    
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
@@ -736,13 +792,11 @@ const PotentialWorkPage = () => {
           lead.phone?.toLowerCase().includes(query)
       );
     }
-    
     result.sort((a, b) => {
       const dateA = a.next_action_date ? new Date(a.next_action_date).getTime() : Infinity;
       const dateB = b.next_action_date ? new Date(b.next_action_date).getTime() : Infinity;
       return dateA - dateB;
     });
-    
     return result;
   }, [leads, archivedLeads, searchQuery]);
 
@@ -798,7 +852,6 @@ const PotentialWorkPage = () => {
 
       {/* Metrics Summary */}
       {allPotentialLeads.length > 0 && (() => {
-        const now = new Date();
         let overdueCount = 0;
         let todayCount = 0;
         let upcomingCount = 0;
@@ -857,11 +910,13 @@ const PotentialWorkPage = () => {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 lg:gap-2">
           {potentialWorkLeads.map((lead) => (
             <LeadCard
               key={lead.id}
               lead={lead}
+              isExpanded={expandedCardId === lead.id}
+              onToggleExpand={() => setExpandedCardId(prev => prev === lead.id ? null : lead.id)}
               onStatusChange={updateStatus}
               onNextActionChange={updateNextAction}
               onNotesChange={updateNotes}
@@ -889,14 +944,13 @@ const PotentialWorkPage = () => {
         fetchActivities={fetchActivities}
       />
 
-      {/* Custom Status Dialog — with edit/delete */}
+      {/* Custom Status Dialog */}
       <Dialog open={showCustomStatusDialog} onOpenChange={setShowCustomStatusDialog}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Manage Custom Statuses</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            {/* Existing custom statuses */}
             {customStatuses.length > 0 && (
               <div className="space-y-1.5">
                 {customStatuses.map((s, idx) => (
@@ -924,7 +978,6 @@ const PotentialWorkPage = () => {
                 ))}
               </div>
             )}
-            {/* Add new */}
             <div className="flex gap-2">
               <Input
                 placeholder="e.g. Sent Quote"
