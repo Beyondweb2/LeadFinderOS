@@ -130,12 +130,6 @@ export function SearchForm({
                     Find Leads
                   </Button>
                   <div className="text-center sm:text-right space-y-2">
-                     <p className="text-xs text-muted-foreground">
-                      You've used your free search
-                    </p>
-                    <p className="text-xs text-muted-foreground/70">
-                      Start a free trial to unlock unlimited searches
-                    </p>
                     <Button
                       type="button"
                       size="sm"
