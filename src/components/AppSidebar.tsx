@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import appLogo from '@/assets/logo.png';
 
 const navItems = [
@@ -113,6 +114,13 @@ export function AppSidebar() {
   const { user } = useAuth();
   const isCollapsed = state === 'collapsed';
 
+  // Walkthrough step 1 pulse
+  let searchPulse = false;
+  try {
+    const { state: demoState, isDemoUser } = useDemoChecklist();
+    searchPulse = isDemoUser && !demoState.searchDone;
+  } catch {}
+
   // Flash state for sidebar icons (mirrors mobile bottom nav behavior)
   const [flashCRM, setFlashCRM] = useState(false);
   const [flashTrack, setFlashTrack] = useState(false);
@@ -176,8 +184,9 @@ export function AppSidebar() {
                 const isActive = location.pathname === item.url;
                 const isFlashing = 
                   (item.url === '/outreach' && flashCRM) || 
-                  (item.url === '/potential-work' && flashTrack);
-                const flashColor = item.url === '/outreach' ? 'text-green-400' : item.url === '/potential-work' ? 'text-yellow-400' : '';
+                  (item.url === '/potential-work' && flashTrack) ||
+                  (item.url === '/find-leads' && searchPulse);
+                const flashColor = item.url === '/outreach' ? 'text-green-400' : (item.url === '/potential-work' || item.url === '/find-leads') ? 'text-yellow-400' : '';
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
