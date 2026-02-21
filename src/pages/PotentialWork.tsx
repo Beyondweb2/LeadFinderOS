@@ -401,22 +401,22 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           </div>
 
           {/* Row 2: Inline badges — Status + Next Action + Due */}
-          <div className="flex items-center gap-1.5 flex-wrap px-3 pb-2">
-            <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', statusColorCls)}>
+          <div className="flex items-center gap-1.5 flex-wrap px-3 pb-2.5">
+            <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border', statusColorCls)}>
               {statusLabel}
             </span>
             {nextActionLabel ? (
-              <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', actionColorCls)}>
+              <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border', actionColorCls)}>
                 {nextActionLabel}
               </span>
             ) : (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border border-border/30 text-muted-foreground/50">
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border border-border/30 text-muted-foreground/50">
                 No next action
               </span>
             )}
             {dueLabel && (
-              <span className={cn('inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold border', dueLabel.cls)}>
-                <Clock className="h-2.5 w-2.5" />
+              <span className={cn('inline-flex items-center gap-0.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border', dueLabel.cls)}>
+                <Clock className="h-3 w-3" />
                 {dueLabel.text}
               </span>
             )}
@@ -435,37 +435,37 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
           {/* Row 3: Notes preview (only if notes exist, compact) */}
           {lead.notes && !isExpanded && (
-            <div className="px-3 pb-2">
-              <p className="text-[11px] text-muted-foreground/60 leading-tight truncate">
+            <div className="px-3 pb-2.5">
+              <p className="text-xs text-muted-foreground/70 leading-snug line-clamp-2">
                 {lead.notes}
               </p>
             </div>
           )}
         </div>
 
-        {/* Row 4: Contact buttons (always visible, compact) */}
+        {/* Row 4: Contact buttons (subdued, smaller) */}
         {lead.phone && (
-          <div className="flex items-center gap-1 px-3 pb-2" data-contact-zone>
+          <div className="flex items-center gap-1.5 px-3 pb-2 pt-0.5" data-contact-zone>
             <a
               href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => handleContactMethodUpdate('whatsapp')}
-              className="flex-1 inline-flex items-center justify-center gap-1 h-6 rounded text-[10px] font-medium text-green-500 hover:bg-green-500/10 border border-green-500/20 transition-colors"
+              className="inline-flex items-center gap-1 h-5 px-2 rounded text-[9px] font-medium text-green-500/70 hover:text-green-500 hover:bg-green-500/10 border border-green-500/15 transition-colors"
             >
               <MessageSquare className="h-2.5 w-2.5" /> WhatsApp
             </a>
             <a
               href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
               onClick={() => handleContactMethodUpdate('sms')}
-              className="flex-1 inline-flex items-center justify-center gap-1 h-6 rounded text-[10px] font-medium text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 transition-colors"
+              className="inline-flex items-center gap-1 h-5 px-2 rounded text-[9px] font-medium text-blue-400/70 hover:text-blue-400 hover:bg-blue-500/10 border border-blue-500/15 transition-colors"
             >
               <MessageCircle className="h-2.5 w-2.5" /> SMS
             </a>
             <a
               href={`tel:${lead.phone}`}
               onClick={() => handleContactMethodUpdate('contacted')}
-              className="flex-1 inline-flex items-center justify-center gap-1 h-6 rounded text-[10px] font-medium text-amber-500 hover:bg-amber-500/10 border border-amber-500/20 transition-colors"
+              className="inline-flex items-center gap-1 h-5 px-2 rounded text-[9px] font-medium text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10 border border-amber-500/15 transition-colors"
             >
               <PhoneCall className="h-2.5 w-2.5" /> Call
             </a>
