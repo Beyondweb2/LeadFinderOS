@@ -155,6 +155,7 @@ export function SearchForm({
                     type="submit" 
                     disabled={isLoading || !keyword.trim() || !location.trim() || disabled}
                     className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold px-5 sm:px-8 h-9 sm:h-10 w-full sm:w-auto text-sm"
+                    data-walkthrough-step="search"
                   >
                     {isLoading ? (
                       <>

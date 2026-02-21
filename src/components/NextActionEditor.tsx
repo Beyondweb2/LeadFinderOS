@@ -131,7 +131,7 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
   const showCompleteButton = action && action !== 'none';
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center gap-1" data-walkthrough-step="follow-up">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button

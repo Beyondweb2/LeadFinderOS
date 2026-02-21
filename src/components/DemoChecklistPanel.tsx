@@ -20,7 +20,7 @@ const steps = [
   { key: 'followUpSet' as const, label: 'Set a follow-up action & date', cta: '', route: '/potential-work', icon: CalendarClock, helperText: 'Open a lead, set "Follow Up" as the next action, pick a date, and hit Save.' },
 ];
 
-const FREE_SEARCH_LIMIT = 3;
+const FREE_SEARCH_LIMIT = 1;
 
 function TipsContent({ searchCount, onUpgrade, isUpgradeLoading }: { searchCount: number; onUpgrade: () => void; isUpgradeLoading: boolean }) {
   const { metrics } = useDashboardMetrics();

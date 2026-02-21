@@ -282,6 +282,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                               size="icon"
                               className="h-8 w-8 text-green-500 hover:bg-muted hover:text-green-400"
                               onClick={() => handleAddToOutreach(lead)}
+                              data-walkthrough-step="add-to-crm"
                             >
                               <ClipboardList className="h-4 w-4" />
                             </Button>

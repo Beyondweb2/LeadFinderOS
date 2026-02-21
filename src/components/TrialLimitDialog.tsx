@@ -37,10 +37,17 @@ export function TrialLimitDialog({
   useEffect(() => {
     if (!open || !user) return;
 
+    // Notify walkthrough overlay to pause
+    window.dispatchEvent(new CustomEvent('trial-modal-opened'));
+
     // Log analytics event
     try {
       supabase.rpc('log_usage_event', { p_event_type: 'trial_modal_opened' }).then(() => {});
     } catch {}
+
+    return () => {
+      window.dispatchEvent(new CustomEvent('trial-modal-closed'));
+    };
 
     (async () => {
       const [searchRes, leadsRes] = await Promise.all([

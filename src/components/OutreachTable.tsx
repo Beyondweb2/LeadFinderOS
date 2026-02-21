@@ -1046,7 +1046,7 @@ export function OutreachTable({
                                 }
                               }}
                             >
-                              <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+                              <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" data-walkthrough-step="status">
                                 <OutreachStatusBadge status={lead.status} />
                               </SelectTrigger>
                               <SelectContent>
@@ -1133,6 +1133,7 @@ export function OutreachTable({
                                     onClick={() => handleWhatsAppClick(lead)}
                                     className="p-1.5 rounded-md hover:bg-green-500/10 text-green-500 hover:text-green-400 transition-colors"
                                     title="Send WhatsApp message"
+                                    data-walkthrough-step="contact"
                                   >
                                     <MessageSquare className="h-4 w-4" />
                                   </button>
