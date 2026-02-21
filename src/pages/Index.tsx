@@ -48,8 +48,8 @@ const Index = () => {
   // Free user = not paid
   const isFreeUser = !hasProAccess;
 
-  // Free search exhausted at limit of 3
-  const freeSearchesExhausted = isFreeUser && ((freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT || freeSearchExhausted);
+  // Free search exhausted — only true when server has actually blocked a search attempt
+  const freeSearchesExhausted = isFreeUser && freeSearchExhausted;
 
   // Check if paywall was dismissed within cooldown period
   const isWithinCooldown = useCallback(() => {
@@ -75,6 +75,13 @@ const Index = () => {
     }
   }, [isLoading, leads.length, checkTrial, isFreeUser]);
 
+  // When server blocks a search (freeSearchExhausted), auto-show upgrade modal
+  useEffect(() => {
+    if (freeSearchExhausted) {
+      setShowUpgradeAfterLimit(true);
+    }
+  }, [freeSearchExhausted]);
+
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
 
@@ -83,21 +90,11 @@ const Index = () => {
     setShowUpgradeAfterLimit(true);
   }, []);
 
-  // Handle search attempt — show paywall if exhausted
+  // Handle search attempt — always let server decide whether to block
   const handleSearch = useCallback((filters: any) => {
-    if (isFreeUser && (freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT) {
-      // Only show modal if not dismissed this session and not within cooldown
-      if (!paywallDismissedThisSession && !isWithinCooldown()) {
-        setShowUpgradeAfterLimit(true);
-      } else {
-        // User already dismissed — show it again since they're actively trying to search
-        setShowUpgradeAfterLimit(true);
-      }
-      return;
-    }
     setLastSearchCountry(filters.country || 'UK');
     search(filters, false, false);
-  }, [isFreeUser, freeSearchCount, paywallDismissedThisSession, isWithinCooldown, search]);
+  }, [search]);
 
   // Handle paywall dismissal
   const handlePaywallDismiss = useCallback((open: boolean) => {

@@ -7,6 +7,7 @@ import { CheckoutActivationOverlay } from '@/components/CheckoutActivationOverla
 import { DemoChecklistProvider } from '@/contexts/DemoChecklistContext';
 import { DemoChecklistPanel } from '@/components/DemoChecklistPanel';
 import { PaymentFailureDialog } from '@/components/PaymentFailureDialog';
+import { WalkthroughOverlay } from '@/components/WalkthroughOverlay';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
 import { usePersistedScroll } from '@/hooks/usePersistedScroll';
@@ -76,6 +77,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <CheckoutActivationOverlay />
           <PaymentFailureDialog />
           <DemoChecklistPanel />
+          <WalkthroughOverlay />
 
         </div>
       </SidebarProvider>

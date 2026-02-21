@@ -99,7 +99,7 @@ export function OutreachMobileCard({
                   }
                 }}
               >
-                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" data-walkthrough-step="status">
                   <OutreachStatusBadge status={lead.status} compact />
                 </SelectTrigger>
                 <SelectContent>
