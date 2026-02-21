@@ -41,6 +41,9 @@ const Index = () => {
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   // Session-level dismissal tracking
   const [paywallDismissedThisSession, setPaywallDismissedThisSession] = useState(false);
+  // Client-side search click counter for button state transition
+  const [localSearchCount, setLocalSearchCount] = useState(0);
+  const [buttonExhausted, setButtonExhausted] = useState(false);
   
   // Determine if still loading access status
   const isAccessLoading = isTrialLoading || isSubscriptionLoading;
@@ -48,8 +51,8 @@ const Index = () => {
   // Free user = not paid
   const isFreeUser = !hasProAccess;
 
-  // Free search exhausted — only true when server has actually blocked a search attempt
-  const freeSearchesExhausted = isFreeUser && freeSearchExhausted;
+  // Free search exhausted — driven by client-side click counter, not server
+  const freeSearchesExhausted = isFreeUser && buttonExhausted;
 
   // Check if paywall was dismissed within cooldown period
   const isWithinCooldown = useCallback(() => {
@@ -92,9 +95,18 @@ const Index = () => {
 
   // Handle search attempt — always let server decide whether to block
   const handleSearch = useCallback((filters: any) => {
+    // If free user has already done 1 search, intercept second click
+    if (isFreeUser && localSearchCount >= 1) {
+      setButtonExhausted(true);
+      setShowUpgradeAfterLimit(true);
+      return; // Do NOT execute search
+    }
     setLastSearchCountry(filters.country || 'UK');
     search(filters, false, false);
-  }, [search]);
+    if (isFreeUser) {
+      setLocalSearchCount(prev => prev + 1);
+    }
+  }, [search, isFreeUser, localSearchCount]);
 
   // Handle paywall dismissal
   const handlePaywallDismiss = useCallback((open: boolean) => {
@@ -151,7 +163,7 @@ const Index = () => {
           onSearch={handleSearch} 
           isLoading={isLoading}
           isOnTrial={false}
-          searchesRemaining={hasProAccess ? Infinity : Math.max(0, FREE_SEARCH_LIMIT - (freeSearchCount ?? 0))}
+          searchesRemaining={hasProAccess ? Infinity : (buttonExhausted ? 0 : Math.max(0, FREE_SEARCH_LIMIT - localSearchCount))}
           dailyLimit={hasProAccess ? Infinity : FREE_SEARCH_LIMIT}
           isPaidSubscriber={isAccessLoading || hasProAccess}
           disabled={postAbandonExhausted && !hasProAccess}
