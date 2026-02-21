@@ -48,8 +48,8 @@ const Index = () => {
   // Free user = not paid
   const isFreeUser = !hasProAccess;
 
-  // Free search exhausted — only true when server has actually blocked a search attempt
-  const freeSearchesExhausted = isFreeUser && freeSearchExhausted;
+  // Free search exhausted — proactive client-side check OR server confirmation
+  const freeSearchesExhausted = isFreeUser && (freeSearchExhausted || (freeSearchCount ?? 0) >= FREE_SEARCH_LIMIT);
 
   // Check if paywall was dismissed within cooldown period
   const isWithinCooldown = useCallback(() => {
