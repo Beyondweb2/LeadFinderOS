@@ -324,7 +324,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           {/* ZONE 1 — Identity Block */}
           <div className="flex items-center gap-3 px-4 sm:px-5 pt-4 sm:pt-5">
             {/* Avatar */}
-            <div className="shrink-0">
+            <div className="shrink-0 relative group/avatar cursor-pointer" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
               {lead.image_url ? (
                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-muted/40 ring-1 ring-border/50 shadow-sm">
                   <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
@@ -334,6 +334,10 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   {getInitials(lead.business_name)}
                 </div>
               )}
+              {/* Edit overlay */}
+              <div className="absolute inset-0 rounded-xl bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
+                <Pencil className="h-3.5 w-3.5 text-white" />
+              </div>
             </div>
 
             {/* Title block */}
