@@ -1,62 +1,58 @@
 
-# Diagnose 0 Results from Google Places Search
+
+# Fix: Phone Numbers Not Fetching for All Businesses
 
 ## Problem
-Searches return 0 results after recent optimization. No edge function logs appear for `search-leads`, which means the function is likely crashing before reaching the Google API call.
+When a business is added to the CRM, the phone lookup runs but sometimes Google Places returns no phone number. The system then caches that "no phone" result for 30 days, making retries useless -- they just return the cached null.
 
-## Root Cause Hypothesis
-The `search-leads` function uses `supabaseClient.auth.getClaims(token)` (line 307) to authenticate users. This method:
-- Was added recently to `@supabase/supabase-js` and may not be available in the version resolved by the floating `esm.sh` import
-- Unlike `admin-users/index.ts` which has a `getUser()` fallback when `getClaims` fails, `search-leads` has no fallback
-- If `getClaims` throws an unhandled error, the entire function crashes before any Google API call is made, which explains why there are zero logs
+In this case, the business "T&D ELECTRICAL LLC" has a phone number visible on Google Maps, but the initial API call missed it. Now the cached null blocks all future attempts.
 
-## Plan (Logging Only, No Refactoring)
+## Root Cause
+The `google-place-details` edge function caches ALL results for 30 days, including results where the phone is null. This means a temporary API hiccup or incomplete response gets "locked in" for a month.
 
-### 1. Add top-level crash logging
-Wrap the entire handler in a try/catch that logs any uncaught errors, so crashes are visible in edge function logs.
+## Solution
 
-### 2. Add auth method diagnostic logging
-Log whether `getClaims` succeeds or fails, and add a `getUser()` fallback (same pattern as `admin-users`) so authentication does not silently block the entire flow.
+### 1. Don't cache null-phone results long-term
+In `supabase/functions/google-place-details/index.ts`:
+- Only cache results where a phone number was actually found for the full 30 days
+- For null-phone results, either skip caching entirely or cache for a much shorter window (e.g., 1 hour) so the system retries sooner
 
-### 3. Add Google API diagnostic logging inside `textSearchPlaces`
-Log these before and after each Google call:
-- The exact endpoint URL
-- The full request body (JSON)
-- The exact field mask header value
-- Whether the API key is present (not the key itself)
-- The response status code
-- The raw response body from Google (first 2000 chars)
-- The number of places returned per page
+### 2. Add a force-refresh option
+- Add support for a `forceRefresh` parameter in the edge function request body
+- When `forceRefresh: true` is passed, skip the cache check and go directly to Google Places API
+- This allows the frontend retry button to actually re-query Google
 
-### 4. Add geocode diagnostic logging
-Log the geocode request URL, response status, and whether coordinates were successfully extracted.
+### 3. Add a "Retry" button in the UI
+In `src/hooks/useOutreach.ts`:
+- Create a `retryPhoneFetch` function that calls the edge function with `forceRefresh: true`
+- Expose this function so the Track Leads and CRM pages can offer a retry option for leads with no phone
 
-### 5. Return diagnostic metadata in the response
-Add a temporary `_debug` field to the JSON response containing:
-```text
-{
-  googleCallsMade: { geocode: number, textSearchPages: number },
-  apiKeyPresent: boolean,
-  authMethod: "getClaims" | "getUser" | "failed",
-  cached: boolean
-}
-```
+### 4. Clear stale null-phone cache entry now
+- Delete the current cached null entry for `ChIJNZYK75oFdkgRO2IDdVyjIuw` so the next fetch actually hits Google
 
 ## Technical Details
 
 ### Files modified
-- `supabase/functions/search-leads/index.ts` -- add logging only, no structural changes
+- `supabase/functions/google-place-details/index.ts` -- add short TTL for null-phone results and `forceRefresh` support
+- `src/hooks/useOutreach.ts` -- add `retryPhoneFetch` function with `forceRefresh: true`
 
-### What this will NOT do
-- No refactoring
-- No optimization changes
-- No frontend changes
-- No new files
+### Edge function changes (google-place-details)
+```text
+1. Parse optional `forceRefresh` boolean from request body
+2. If forceRefresh is true, skip the cache lookup entirely
+3. After Google API call: only upsert into phone_cache if phone is not null
+   (or use a 1-hour TTL for null results by setting created_at to now minus 29 days)
+4. Return results as normal
+```
 
-### After deployment
-1. Trigger a search in the preview (e.g. "electrician Leeds")
-2. Check edge function logs for `search-leads`
-3. The logs will reveal exactly where the failure occurs:
-   - If auth fails: `getClaims` error will be logged
-   - If Google returns 0 results: the raw response body will show why
-   - If Google returns results but they're filtered out: the pre-filter count vs post-filter count will show the gap
+### Hook changes (useOutreach.ts)
+```text
+1. Add retryPhoneFetch(outreachLeadId, placeId, businessName) function
+2. It calls google-place-details with { placeId, forceRefresh: true }
+3. On success, updates the lead record and UI state
+4. Expose retryPhoneFetch from the hook
+```
+
+### Database cleanup
+- Run a one-time delete on phone_cache for the affected place_id so the fix takes effect immediately
+
