@@ -8,11 +8,24 @@ const STEP_CONFIG: {
   key: string;
   selector: string;
   tooltip: string;
+  allowTyping?: boolean;
 }[] = [
   {
     key: 'searchDone',
+    selector: '[data-walkthrough-step="business-type"]',
+    tooltip: 'Type the kind of business you want to find.',
+    allowTyping: true,
+  },
+  {
+    key: 'searchDone',
+    selector: '[data-walkthrough-step="location"]',
+    tooltip: 'Enter a city or postcode to search in.',
+    allowTyping: true,
+  },
+  {
+    key: 'searchDone',
     selector: '[data-walkthrough-step="search"]',
-    tooltip: 'Enter a business type and location, then click Find Leads.',
+    tooltip: 'Now click Find Leads to search!',
   },
   {
     key: 'addedToCrm',
@@ -50,13 +63,32 @@ export function WalkthroughOverlay() {
   const [paused, setPaused] = useState(false);
   const rafRef = useRef<number>();
 
-  // Find the current active step
+  // Find the current active step (with sub-step logic for searchDone)
   useEffect(() => {
     if (!isDemoUser || allDone || !walkthroughOpen) {
       setActiveStep(null);
       return;
     }
-    const current = STEP_CONFIG.find(s => !state[s.key as keyof typeof state]);
+
+    // For searchDone, we have 3 sub-steps: business-type → location → search
+    if (!state.searchDone) {
+      const businessInput = document.querySelector('[data-walkthrough-step="business-type"]') as HTMLInputElement;
+      const locationInput = document.querySelector('[data-walkthrough-step="location"]') as HTMLInputElement;
+      
+      const businessFilled = businessInput && businessInput.value.trim().length > 0;
+      const locationFilled = locationInput && locationInput.value.trim().length > 0;
+
+      if (!businessFilled) {
+        setActiveStep(STEP_CONFIG[0]); // business-type
+      } else if (!locationFilled) {
+        setActiveStep(STEP_CONFIG[1]); // location
+      } else {
+        setActiveStep(STEP_CONFIG[2]); // search button
+      }
+      return;
+    }
+
+    const current = STEP_CONFIG.find(s => s.key !== 'searchDone' && !state[s.key as keyof typeof state]);
     setActiveStep(current || null);
   }, [state, isDemoUser, allDone, walkthroughOpen]);
 
@@ -71,6 +103,26 @@ export function WalkthroughOverlay() {
       window.removeEventListener('trial-modal-closed', onModalClose);
     };
   }, []);
+
+  // Poll input values to advance sub-steps for searchDone
+  useEffect(() => {
+    if (!isDemoUser || state.searchDone || !walkthroughOpen) return;
+    const interval = setInterval(() => {
+      const businessInput = document.querySelector('[data-walkthrough-step="business-type"]') as HTMLInputElement;
+      const locationInput = document.querySelector('[data-walkthrough-step="location"]') as HTMLInputElement;
+      const businessFilled = businessInput && businessInput.value.trim().length > 0;
+      const locationFilled = locationInput && locationInput.value.trim().length > 0;
+
+      if (!businessFilled) {
+        if (activeStep?.selector !== '[data-walkthrough-step="business-type"]') setActiveStep(STEP_CONFIG[0]);
+      } else if (!locationFilled) {
+        if (activeStep?.selector !== '[data-walkthrough-step="location"]') setActiveStep(STEP_CONFIG[1]);
+      } else {
+        if (activeStep?.selector !== '[data-walkthrough-step="search"]') setActiveStep(STEP_CONFIG[2]);
+      }
+    }, 300);
+    return () => clearInterval(interval);
+  }, [isDemoUser, state.searchDone, walkthroughOpen, activeStep?.selector]);
 
   // Track element position
   const updatePosition = useCallback(() => {
@@ -174,10 +226,22 @@ export function WalkthroughOverlay() {
         }}
       />
 
-      {/* Make target element clickable through overlay */}
+      {/* Make target element clickable/typeable through overlay */}
       <div
-        className="absolute pointer-events-auto"
-        style={spotlightStyle}
+        className="absolute"
+        style={{ ...spotlightStyle, zIndex: 9999, pointerEvents: 'auto', background: 'transparent' }}
+        onClick={() => {
+          const el = document.querySelector(activeStep.selector) as HTMLElement;
+          if (el) el.click();
+        }}
+        onMouseDown={(e) => {
+          // For inputs, forward focus directly
+          const el = document.querySelector(activeStep.selector) as HTMLElement;
+          if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+            e.preventDefault();
+            el.focus();
+          }
+        }}
       />
 
       {/* Tooltip */}

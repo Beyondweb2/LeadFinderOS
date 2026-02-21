@@ -38,7 +38,7 @@ export function SearchForm({
 }: SearchFormProps) {
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
-  const [radius, setRadius] = useState(initialRadius ?? 5);
+  const [radius, setRadius] = useState(initialRadius ?? 50);
   const [selectedCountry, setSelectedCountry] = useState<Country>('UK' as Country);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -71,6 +71,7 @@ export function SearchForm({
                   value={keyword}
                   onChange={(e) => setKeyword(e.target.value)}
                   className="pl-8 sm:pl-10 h-9 sm:h-10 bg-input border-border focus:ring-primary text-sm"
+                  data-walkthrough-step="business-type"
                 />
               </div>
             </div>
@@ -87,6 +88,7 @@ export function SearchForm({
                   value={location}
                   onChange={(e) => setLocation(e.target.value)}
                   className="pl-8 sm:pl-10 h-9 sm:h-10 bg-input border-border focus:ring-primary text-sm"
+                  data-walkthrough-step="location"
                 />
               </div>
               <QuickLocationsList onLocationSelect={(loc, country) => {
