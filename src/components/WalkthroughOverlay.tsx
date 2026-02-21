@@ -9,6 +9,7 @@ const STEP_CONFIG: {
   selector: string;
   tooltip: string;
   allowTyping?: boolean;
+  noDim?: boolean;
 }[] = [
   {
     key: 'searchDone',
@@ -19,7 +20,7 @@ const STEP_CONFIG: {
   {
     key: 'searchDone',
     selector: '[data-walkthrough-step="location"]',
-    tooltip: 'Enter a city or postcode to search in.',
+    tooltip: 'Enter a city or postcode, or pick a Quick Location below.',
     allowTyping: true,
   },
   {
@@ -30,7 +31,8 @@ const STEP_CONFIG: {
   {
     key: 'addedToCrm',
     selector: '[data-walkthrough-step="add-to-crm"]',
-    tooltip: 'Click the clipboard icon to add a lead to your CRM.',
+    tooltip: 'Click the clipboard icon to add a lead to your Outreach CRM.',
+    noDim: true,
   },
   {
     key: 'contactAttempted',
@@ -190,31 +192,52 @@ export function WalkthroughOverlay() {
     height: targetRect.height + pad * 2,
   };
 
+  const isLocationStep = activeStep.selector === '[data-walkthrough-step="location"]';
+  const useNoDim = activeStep.noDim === true;
+
   return createPortal(
     <div className="fixed inset-0 z-[9998] pointer-events-none" aria-hidden="true">
-      {/* Dim overlay with cutout */}
-      <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'auto' }}>
-        <defs>
-          <mask id="walkthrough-mask">
-            <rect x="0" y="0" width="100%" height="100%" fill="white" />
-            <rect
-              x={spotlightStyle.left}
-              y={spotlightStyle.top}
-              width={spotlightStyle.width}
-              height={spotlightStyle.height}
-              rx="8"
-              fill="black"
-            />
-          </mask>
-        </defs>
-        <rect
-          x="0" y="0"
-          width="100%" height="100%"
-          fill="rgba(0,0,0,0.4)"
-          mask="url(#walkthrough-mask)"
-          onClick={(e) => e.stopPropagation()}
-        />
-      </svg>
+      {/* Dim overlay with cutout — skip if noDim */}
+      {!useNoDim && (
+        <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'auto' }}>
+          <defs>
+            <mask id="walkthrough-mask">
+              <rect x="0" y="0" width="100%" height="100%" fill="white" />
+              <rect
+                x={spotlightStyle.left}
+                y={spotlightStyle.top}
+                width={spotlightStyle.width}
+                height={spotlightStyle.height}
+                rx="8"
+                fill="black"
+              />
+              {/* Also cut out quick locations area during location step */}
+              {isLocationStep && (() => {
+                const qlEl = document.querySelector('[data-walkthrough-step="quick-locations"]');
+                if (!qlEl) return null;
+                const qlRect = qlEl.getBoundingClientRect();
+                return (
+                  <rect
+                    x={qlRect.left - 4}
+                    y={qlRect.top - 4}
+                    width={qlRect.width + 8}
+                    height={qlRect.height + 8}
+                    rx="8"
+                    fill="black"
+                  />
+                );
+              })()}
+            </mask>
+          </defs>
+          <rect
+            x="0" y="0"
+            width="100%" height="100%"
+            fill="rgba(0,0,0,0.4)"
+            mask="url(#walkthrough-mask)"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </svg>
+      )}
 
       {/* Pulse ring around target */}
       <div
@@ -226,23 +249,50 @@ export function WalkthroughOverlay() {
         }}
       />
 
-      {/* Make target element clickable/typeable through overlay */}
-      <div
-        className="absolute"
-        style={{ ...spotlightStyle, zIndex: 9999, pointerEvents: 'auto', background: 'transparent' }}
-        onClick={() => {
-          const el = document.querySelector(activeStep.selector) as HTMLElement;
-          if (el) el.click();
-        }}
-        onMouseDown={(e) => {
-          // For inputs, forward focus directly
-          const el = document.querySelector(activeStep.selector) as HTMLElement;
-          if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-            e.preventDefault();
-            el.focus();
-          }
-        }}
-      />
+      {/* Make target element clickable/typeable through overlay — only needed when dimmed */}
+      {!useNoDim && (
+        <div
+          className="absolute"
+          style={{ ...spotlightStyle, zIndex: 9999, pointerEvents: 'auto', background: 'transparent' }}
+          onClick={() => {
+            const el = document.querySelector(activeStep.selector) as HTMLElement;
+            if (el) el.click();
+          }}
+          onMouseDown={(e) => {
+            const el = document.querySelector(activeStep.selector) as HTMLElement;
+            if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+              e.preventDefault();
+              el.focus();
+            }
+          }}
+        />
+      )}
+
+      {/* Make quick locations clickable during location step */}
+      {isLocationStep && !useNoDim && (() => {
+        const qlEl = document.querySelector('[data-walkthrough-step="quick-locations"]');
+        if (!qlEl) return null;
+        const qlRect = qlEl.getBoundingClientRect();
+        return (
+          <div
+            className="absolute"
+            style={{
+              top: qlRect.top - 4,
+              left: qlRect.left - 4,
+              width: qlRect.width + 8,
+              height: qlRect.height + 8,
+              zIndex: 9999,
+              pointerEvents: 'auto',
+              background: 'transparent',
+            }}
+            onClick={(e) => {
+              // Let click pass through to the actual quick locations
+              const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement;
+              if (target) target.click();
+            }}
+          />
+        );
+      })()}
 
       {/* Tooltip */}
       {tooltipPos && (
