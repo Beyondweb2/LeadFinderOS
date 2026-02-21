@@ -14,10 +14,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, MoreHorizontal } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
-import { NextActionEditor } from './NextActionEditor';
+import { NextActionBadge } from './NextActionBadge';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
 import { STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS } from '@/types/outreach';
 
@@ -38,7 +38,6 @@ interface OutreachMobileCardProps {
   onCompleteAction?: () => void;
   phoneFetchStatus?: PhoneFetchStatus;
   onRetryPhoneFetch?: () => void;
-  onUpdateNextAction?: (action: NextActionType, date?: string) => void;
 }
 
 export function OutreachMobileCard({
@@ -58,27 +57,15 @@ export function OutreachMobileCard({
   onCompleteAction,
   phoneFetchStatus,
   onRetryPhoneFetch,
-  onUpdateNextAction,
 }: OutreachMobileCardProps) {
-  const initials = lead.business_name
-    .split(' ')
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join('')
-    .toUpperCase();
-
-  const categoryLabel = lead.category || '';
-
   return (
-    <div
-      className={`p-4 sm:px-5 sm:py-4 border-b border-border/50 space-y-3 ${
-        lead.is_potential_work ? 'bg-primary/5' : ''
-      } ${isHighlighted ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
+    <div 
+      className={`py-3 px-3 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
+      onClick={onLeadClick}
     >
-      {/* Row 1: Avatar + Name + Actions */}
-      <div className="flex items-start gap-3">
-        {/* Checkbox */}
-        <div className="pt-2" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-start gap-2.5">
+        {/* Left: Checkbox */}
+        <div className="pt-0.5" onClick={(e) => e.stopPropagation()}>
           <Checkbox
             checked={isSelected}
             onCheckedChange={onSelect}
@@ -87,33 +74,21 @@ export function OutreachMobileCard({
           />
         </div>
 
-        {/* Avatar */}
-        <div
-          className="flex-shrink-0 flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-primary/10 border border-primary/20 cursor-pointer"
-          onClick={onLeadClick}
-        >
-          <span className="text-lg sm:text-xl font-bold text-primary">{initials}</span>
-        </div>
-
-        {/* Name + Category + Status */}
-        <div className="flex-1 min-w-0 pt-0.5 cursor-pointer" onClick={onLeadClick}>
+        {/* Middle: Name + Status + Next Action */}
+        <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-1.5">
             {lead.country === 'Australia' && (
               <span className="text-xs" title="Australia">🇦🇺</span>
             )}
-            <h3 className="font-bold text-base sm:text-lg leading-tight truncate">
-              {lead.business_name}
-            </h3>
+            <span className="font-semibold text-sm leading-tight">{lead.business_name}</span>
             {lead.is_potential_work && (
-              <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+              <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />
             )}
           </div>
-          {categoryLabel && (
-            <p className="text-xs text-muted-foreground/60 mt-0.5 truncate">{categoryLabel}</p>
-          )}
-          {/* Status badge */}
-          {!readOnly && (
-            <div className="mt-1.5" onClick={(e) => e.stopPropagation()}>
+
+          {/* Status + Next Action under name */}
+          <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+            {!readOnly && (
               <Select
                 value={lead.status}
                 onValueChange={(v) => {
@@ -135,123 +110,116 @@ export function OutreachMobileCard({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          )}
-        </div>
+            )}
 
-        {/* Top-right: External links + menu */}
-        <div className="flex items-center gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          {lead.google_maps_url && (
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10" asChild>
-              <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4" />
-              </a>
-            </Button>
-          )}
-          <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-500 hover:bg-blue-500/10" asChild>
-            <a
-              href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Facebook className="h-4 w-4" />
-            </a>
-          </Button>
-          {!readOnly && showTrackButton && onTrack && !lead.is_potential_work && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
-              onClick={onTrack}
-              data-walkthrough-step="track-star"
-            >
-              <Star className="h-4 w-4" />
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Row 2: Contact Buttons */}
-      {lead.phone ? (
-        <div className="flex items-center gap-2 pl-8 sm:pl-9" onClick={(e) => e.stopPropagation()}>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 h-9 gap-1.5 text-green-500 border-green-500/20 hover:bg-green-500/10 hover:text-green-400 rounded-lg text-xs font-medium"
-            onClick={onWhatsAppClick}
-          >
-            <MessageSquare className="h-3.5 w-3.5" />
-            WhatsApp
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="flex-1 h-9 gap-1.5 text-blue-400 border-blue-400/20 hover:bg-blue-400/10 hover:text-blue-300 rounded-lg text-xs font-medium"
-            onClick={onSMSClick}
-          >
-            <MessageCircle className="h-3.5 w-3.5" />
-            SMS
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1 h-9 gap-1.5 text-amber-500 border-amber-500/20 hover:bg-amber-500/10 hover:text-amber-400 rounded-lg text-xs font-medium"
-              >
-                <Phone className="h-3.5 w-3.5" />
-                Call
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[160px]">
-              <DropdownMenuItem asChild>
-                <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => onCallClick?.()}>
-                  <PhoneCall className="h-4 w-4" />
-                  Normal Call
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a
-                  href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 cursor-pointer"
-                  onClick={() => onCallClick?.()}
-                >
-                  <Phone className="h-4 w-4 text-green-500" />
-                  WhatsApp Call
-                </a>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      ) : phoneFetchStatus === 'pending' ? (
-        <div className="flex items-center gap-2 pl-8 sm:pl-9 text-muted-foreground text-xs">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Fetching phone...
-        </div>
-      ) : phoneFetchStatus === 'failed' ? (
-        <div className="flex items-center gap-2 pl-8 sm:pl-9" onClick={(e) => e.stopPropagation()}>
-          <Button variant="ghost" size="sm" className="text-destructive text-xs gap-1" onClick={onRetryPhoneFetch}>
-            <RefreshCw className="h-3 w-3" />
-            Retry phone lookup
-          </Button>
-        </div>
-      ) : null}
-
-      {/* Row 3: Next Action */}
-      {!readOnly && onUpdateNextAction && (
-        <div className="pl-8 sm:pl-9" onClick={(e) => e.stopPropagation()}>
-          <div className="rounded-lg border border-border/50 bg-muted/20 px-3 py-2">
-            <NextActionEditor
-              action={lead.next_action}
-              date={lead.next_action_date}
-              onUpdate={onUpdateNextAction}
-              leadId={lead.id}
-            />
+            {!readOnly && lead.next_action && lead.next_action !== 'none' && (
+              <NextActionBadge 
+                action={lead.next_action} 
+                date={lead.next_action_date}
+                compact
+                leadId={lead.id}
+                onComplete={onCompleteAction}
+              />
+            )}
           </div>
         </div>
-      )}
+
+        {/* Right: Action buttons - 2 rows on mobile */}
+        <div className="flex flex-col gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+          {/* Row 1: Maps, Facebook, Call */}
+          <div className="flex items-center gap-0.5">
+            {lead.google_maps_url && (
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10" asChild>
+                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-500 hover:bg-blue-500/10" asChild>
+              <a
+                href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <Facebook className="h-3.5 w-3.5" />
+              </a>
+            </Button>
+            {lead.phone ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10">
+                    <Phone className="h-3.5 w-3.5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[160px]">
+                  <DropdownMenuItem asChild>
+                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => onCallClick?.()}>
+                      <PhoneCall className="h-4 w-4" />
+                      Normal Call
+                    </a>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <a
+                      href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 cursor-pointer"
+                      onClick={() => onCallClick?.()}
+                    >
+                      <Phone className="h-4 w-4 text-green-500" />
+                      WhatsApp Call
+                    </a>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : phoneFetchStatus === 'pending' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground mx-1" />
+            ) : phoneFetchStatus === 'failed' ? (
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onRetryPhoneFetch}>
+                <RefreshCw className="h-3.5 w-3.5" />
+              </Button>
+            ) : null}
+          </div>
+          {/* Row 2: SMS, WhatsApp, Track */}
+          <div className="flex items-center gap-0.5">
+            {lead.phone ? (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                  onClick={onSMSClick}
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                  onClick={onWhatsAppClick}
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            ) : null}
+            {!readOnly && showTrackButton && onTrack && (
+              lead.is_potential_work ? (
+                <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 mx-1" />
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
+                  onClick={onTrack}
+                  data-walkthrough-step="track-star"
+                >
+                  <Star className="h-3.5 w-3.5" />
+                </Button>
+              )
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

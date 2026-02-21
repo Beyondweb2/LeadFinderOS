@@ -919,7 +919,6 @@ export function OutreachTable({
                   onCompleteAction={() => onNextActionChange(lead.id, 'none' as NextActionType)}
                   phoneFetchStatus={phoneFetchStatus[lead.id]}
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
-                  onUpdateNextAction={(action, date) => onNextActionChange(lead.id, action, date)}
                 />
               ))
             )}
