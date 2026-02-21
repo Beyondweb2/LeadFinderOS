@@ -170,7 +170,7 @@ export function useOutreach() {
     fetchOutreachHistory();
   }, [fetchLeads, fetchOutreachHistory]);
 
-  // Retry phone fetch for a lead that failed
+  // Retry phone fetch for a lead that failed — uses forceRefresh to bypass cache
   const retryPhoneFetch = useCallback(async (outreachLeadId: string) => {
     const lead = leads.find(l => l.id === outreachLeadId) || archivedLeads.find(l => l.id === outreachLeadId);
     if (!lead) return;
@@ -185,8 +185,47 @@ export function useOutreach() {
       return;
     }
     
-    enqueuePhoneFetch(outreachLeadId, placeId, lead.business_name);
-  }, [leads, archivedLeads, toast, enqueuePhoneFetch]);
+    // Direct call with forceRefresh instead of queue (user-initiated retry)
+    setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'pending' }));
+    try {
+      const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
+        body: { placeId, forceRefresh: true },
+      });
+
+      if (detailsError || !details) {
+        setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'failed' }));
+        toast({ title: 'Retry failed', description: 'Could not fetch phone number.', variant: 'destructive' });
+        return;
+      }
+
+      const updates: Record<string, string | null> = {};
+      if (details.phone) updates.phone = details.phone;
+      if (details.address) updates.address = details.address;
+      if (details.category) updates.category = details.category;
+
+      if (Object.keys(updates).length > 0) {
+        const { data: updated } = await supabase
+          .from('outreach_leads')
+          .update(updates)
+          .eq('id', outreachLeadId)
+          .select()
+          .single();
+
+        if (updated) {
+          setLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
+          setArchivedLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
+        }
+      }
+
+      setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
+      if (details.phone) {
+        toast({ title: 'Phone found!', description: `${lead.business_name}: ${details.phone}` });
+      }
+    } catch (e) {
+      console.error('Retry phone fetch failed:', e);
+      setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'failed' }));
+    }
+  }, [leads, archivedLeads, toast]);
 
   const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website') => {
     if (!user) {
