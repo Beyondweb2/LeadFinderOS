@@ -4,7 +4,7 @@ import {
   DialogContent,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Check, Sparkles, Loader2, Search, Users, Target } from 'lucide-react';
+import { Check, Sparkles, Loader2, Search } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -31,10 +31,8 @@ export function TrialLimitDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [stats, setStats] = useState({ businesses: 0, noWebsite: 0 });
 
-  // Block modal during walkthrough
   const shouldShow = open && !walkthroughOpen;
 
-  // Fetch real stats
   useEffect(() => {
     if (!shouldShow) return;
     (async () => {
@@ -50,13 +48,11 @@ export function TrialLimitDialog({
         setStats({ businesses: biz, noWebsite: noWeb });
       }
     })();
-    // Log analytics
     try { supabase.rpc('log_usage_event', { p_event_type: 'trial_modal_opened' }); } catch {}
   }, [shouldShow]);
 
   const displayBiz = stats.businesses || totalBusinessesFound;
   const displayNoWeb = stats.noWebsite || noWebsiteCount;
-  const pct = displayBiz > 0 ? Math.round((displayNoWeb / displayBiz) * 100) : 0;
 
   const handleCheckout = async () => {
     setIsLoading(true);
@@ -109,11 +105,11 @@ export function TrialLimitDialog({
             </div>
             <div className="text-center p-3 rounded-lg bg-primary/5 border border-primary/15">
               <p className="text-xl font-bold text-primary">{displayNoWeb}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">No website</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">No Website</p>
             </div>
             <div className="text-center p-3 rounded-lg bg-muted/40 border border-border/50">
-              <p className="text-xl font-bold text-foreground">{pct}%</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Opportunity</p>
+              <p className="text-xl font-bold text-foreground">{displayNoWeb}</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Potential Clients</p>
             </div>
           </div>
 
@@ -137,7 +133,12 @@ export function TrialLimitDialog({
 
           {/* Motivating line */}
           <p className="text-center text-sm font-medium text-foreground">
-            Your next client is already in this list.
+            Start turning these into paying clients.
+          </p>
+
+          {/* Pricing */}
+          <p className="text-center text-xs text-muted-foreground">
+            After 3 day free trial → £19.99/month
           </p>
 
           {/* CTA */}
