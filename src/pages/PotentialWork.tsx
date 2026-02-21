@@ -308,57 +308,61 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   return (
     <>
       <Card className={cn(
-        'border border-border/60 border-l-[4px] transition-all bg-card overflow-hidden',
+        'border border-border/60 border-l-[3px] transition-all bg-card overflow-hidden flex flex-col',
         borderColor,
         isExpanded ? 'shadow-lg shadow-primary/5 border-primary/30' : 'hover:border-primary/20 hover:shadow-sm'
       )}>
-        {/* ═══ COMPACT SUMMARY (always visible) ═══ */}
+        {/* ═══ COMPACT SUMMARY (always visible, fixed structure) ═══ */}
         <div
-          className="cursor-pointer"
+          className="cursor-pointer flex-1 flex flex-col"
           onClick={(e) => {
-            // Don't expand if clicking inside contact buttons area
             if ((e.target as HTMLElement).closest('[data-contact-zone]')) return;
             if ((e.target as HTMLElement).closest('[data-no-expand]')) return;
             onToggleExpand();
           }}
         >
-          {/* Row 1: Identity */}
-          <div className="flex items-center gap-2.5 px-3 py-2.5">
-            {/* Avatar */}
+          {/* Row 1: Avatar + Title Block + Controls */}
+          <div className="flex items-start gap-3 px-3 sm:px-4 pt-3 sm:pt-3.5">
+            {/* Avatar — larger and more prominent */}
             <div className="shrink-0">
               {lead.image_url ? (
-                <div className="w-9 h-9 rounded-lg overflow-hidden bg-muted/30 ring-1 ring-border/30">
+                <div className="w-11 h-11 sm:w-[52px] sm:h-[52px] rounded-xl overflow-hidden bg-muted/40 ring-1 ring-border/40 shadow-sm">
                   <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-9 h-9 rounded-lg bg-primary/5 border border-primary/10 flex items-center justify-center text-[11px] font-bold text-primary/50">
+                <div className="w-11 h-11 sm:w-[52px] sm:h-[52px] rounded-xl bg-primary/8 border border-primary/15 flex items-center justify-center text-sm sm:text-base font-bold text-primary/60 shadow-sm">
                   {getInitials(lead.business_name)}
                 </div>
               )}
             </div>
 
-            {/* Name + Contact Method */}
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-bold leading-tight truncate">
+            {/* Title block — name, category, contact method */}
+            <div className="flex-1 min-w-0 pt-0.5">
+              <h3 className="text-sm sm:text-[15px] font-bold leading-tight truncate text-foreground">
                 {lead.business_name}
               </h3>
+              {lead.category && (
+                <span className="text-[10px] sm:text-[11px] text-muted-foreground/60 block leading-tight mt-0.5 truncate">
+                  {lead.category}
+                </span>
+              )}
               {contactMethodDisplay && (
-                <span className="text-[10px] text-muted-foreground/50 block leading-tight">
+                <span className="text-[10px] sm:text-[11px] text-muted-foreground/40 block leading-tight mt-0.5">
                   Contacted via {contactMethodDisplay}
                 </span>
               )}
             </div>
 
-            {/* Maps + Menu */}
+            {/* Controls — maps, menu, expand */}
             <div className="flex items-center gap-0.5 shrink-0" data-no-expand>
               {lead.google_maps_url && (
-                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="h-6 w-6 flex items-center justify-center rounded text-blue-500 hover:bg-blue-500/10 transition-colors">
-                  <ExternalLink className="h-3 w-3" />
+                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500 hover:bg-blue-500/10 transition-colors">
+                  <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
+                  <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
                     <MoreVertical className="h-3.5 w-3.5" />
                   </button>
                 </DropdownMenuTrigger>
@@ -385,42 +389,41 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
                 className={cn(
-                  'inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9px] font-medium transition-colors ml-1',
+                  'inline-flex items-center gap-0.5 h-6 px-2 rounded-md text-[10px] font-medium transition-colors ml-0.5',
                   isExpanded
                     ? 'text-primary bg-primary/10'
-                    : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/40'
+                    : 'text-muted-foreground/50 hover:text-muted-foreground hover:bg-muted/30'
                 )}
               >
-                {isExpanded ? 'Close' : 'Expand'}
                 <ChevronDown className={cn(
-                  'h-2.5 w-2.5 transition-transform duration-200',
+                  'h-3 w-3 transition-transform duration-200',
                   isExpanded && 'rotate-180'
                 )} />
+                {isExpanded ? 'Close' : 'Details'}
               </button>
             </div>
           </div>
 
-          {/* Row 2: Inline badges — Status + Next Action + Due */}
-          <div className="flex items-center gap-1.5 flex-wrap px-3 pb-2.5">
-            <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border', statusColorCls)}>
+          {/* Row 2: Status + Next Action + Due — the visual core */}
+          <div className="flex items-center gap-1.5 flex-wrap px-3 sm:px-4 pt-2.5 pb-2">
+            <span className={cn('inline-flex items-center px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold border', statusColorCls)}>
               {statusLabel}
             </span>
             {nextActionLabel ? (
-              <span className={cn('inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold border', actionColorCls)}>
+              <span className={cn('inline-flex items-center px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-semibold border', actionColorCls)}>
                 {nextActionLabel}
               </span>
             ) : (
-              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-medium border border-border/30 text-muted-foreground/50">
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-medium border border-border/30 text-muted-foreground/40">
                 No next action
               </span>
             )}
             {dueLabel && (
-              <span className={cn('inline-flex items-center gap-0.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border', dueLabel.cls)}>
+              <span className={cn('inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] sm:text-xs font-bold border', dueLabel.cls)}>
                 <Clock className="h-3 w-3" />
                 {dueLabel.text}
               </span>
             )}
-            {/* Mark as Done button — compact view */}
             {lead.next_action && lead.next_action !== 'none' && !isExpanded && (
               <button
                 className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded-full text-[10px] font-medium text-green-500 bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
@@ -433,39 +436,39 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             )}
           </div>
 
-          {/* Row 3: Notes preview (only if notes exist, compact) */}
+          {/* Row 3: Notes preview — 1 line, more readable */}
           {lead.notes && !isExpanded && (
-            <div className="px-3 pb-2.5">
-              <p className="text-xs text-muted-foreground/70 leading-snug line-clamp-2">
+            <div className="px-3 sm:px-4 pb-2">
+              <p className="text-[11px] sm:text-xs text-muted-foreground/60 leading-snug truncate">
                 {lead.notes}
               </p>
             </div>
           )}
         </div>
 
-        {/* Row 4: Contact buttons (subdued, smaller) */}
+        {/* Row 4: Contact buttons — compact, secondary */}
         {lead.phone && (
-          <div className="flex items-center gap-1.5 px-3 pb-2 pt-0.5" data-contact-zone>
+          <div className="flex items-center gap-1 px-3 sm:px-4 pb-2.5 pt-0.5" data-contact-zone>
             <a
               href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => handleContactMethodUpdate('whatsapp')}
-              className="inline-flex items-center gap-1 h-5 px-2 rounded text-[9px] font-medium text-green-500/70 hover:text-green-500 hover:bg-green-500/10 border border-green-500/15 transition-colors"
+              className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-green-500/60 hover:text-green-500 hover:bg-green-500/10 border border-green-500/15 transition-colors"
             >
               <MessageSquare className="h-2.5 w-2.5" /> WhatsApp
             </a>
             <a
               href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
               onClick={() => handleContactMethodUpdate('sms')}
-              className="inline-flex items-center gap-1 h-5 px-2 rounded text-[9px] font-medium text-blue-400/70 hover:text-blue-400 hover:bg-blue-500/10 border border-blue-500/15 transition-colors"
+              className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10 border border-blue-500/15 transition-colors"
             >
               <MessageCircle className="h-2.5 w-2.5" /> SMS
             </a>
             <a
               href={`tel:${lead.phone}`}
               onClick={() => handleContactMethodUpdate('contacted')}
-              className="inline-flex items-center gap-1 h-5 px-2 rounded text-[9px] font-medium text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10 border border-amber-500/15 transition-colors"
+              className="inline-flex items-center gap-1 h-6 min-w-[44px] justify-center px-2 rounded text-[9px] font-medium text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/10 border border-amber-500/15 transition-colors"
             >
               <PhoneCall className="h-2.5 w-2.5" /> Call
             </a>
@@ -949,7 +952,7 @@ const PotentialWorkPage = () => {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 lg:gap-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 lg:gap-3 items-start">
           {potentialWorkLeads.map((lead) => (
             <LeadCard
               key={lead.id}
