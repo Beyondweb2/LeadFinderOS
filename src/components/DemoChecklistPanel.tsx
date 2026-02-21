@@ -10,7 +10,7 @@ import { useTrial } from '@/hooks/useTrial';
 
 const steps = [
   { key: 'searchDone' as const, label: 'Search for leads', cta: 'Go to Find Leads', route: '/find-leads', icon: Search, helperText: 'Enter a business type (e.g. "Barbers"), enter an area (e.g. "Manchester"), then hit Search.' },
-  { key: 'addedToCrm' as const, label: 'Add a business to Outreach CRM', cta: 'Add a Business', route: '/find-leads', icon: UserPlus, helperText: 'Click the 📋 Add to CRM button next to any lead in your search results.' },
+  { key: 'addedToCrm' as const, label: 'Add a business to Outreach CRM', cta: '', route: '/find-leads', icon: UserPlus, helperText: 'Tap any blue 📋 button to add a lead to your CRM.' },
   { key: 'contactAttempted' as const, label: 'Contact a lead via WhatsApp or SMS', cta: 'Open Outreach CRM', route: '/outreach', icon: Phone, helperText: 'Open a lead in Outreach CRM, then tap the WhatsApp or SMS button to contact them.' },
   { key: 'statusUpdated' as const, label: 'Update status & hit Track ⭐', cta: 'Update Status', route: '/outreach', icon: RefreshCw, helperText: 'Set the status to the contact method you used (e.g. WhatsApp, SMS), then hit the star (⭐) to track the lead.' },
   { key: 'leadTracked' as const, label: 'Open Track Leads page', cta: 'Go to Track Leads', route: '/potential-work', icon: Star, helperText: 'Your starred leads appear here. Open the page to continue.' },
@@ -57,15 +57,15 @@ export function DemoChecklistPanel() {
     } catch { setDismissed(false); }
   }, [dismissKey]);
 
-  // Condition A: walkthrough just completed → show tips modal
+  // Condition A: walkthrough just completed → show tips modal only on CRM page
   useEffect(() => {
     if (!isFreeUser || tipsDismissed || tipsModalShownRef.current) return;
-    if (allDone && !prevAllDoneRef.current) {
+    if (allDone && !prevAllDoneRef.current && location.pathname === '/outreach') {
       tipsModalShownRef.current = true;
       setShowTipsModal(true);
     }
     prevAllDoneRef.current = allDone;
-  }, [allDone, isFreeUser, tipsDismissed]);
+  }, [allDone, isFreeUser, tipsDismissed, location.pathname]);
 
   // Listen for post-search tip trigger (Condition B: 2+ searches before walkthrough done)
   useEffect(() => {
@@ -74,8 +74,7 @@ export function DemoChecklistPanel() {
       if (!allDone && !tipsModalShownRef.current && !tipsDismissed) {
         setWalkthroughCollapsed(true);
         setIsOpen(false);
-        tipsModalShownRef.current = true;
-        setTimeout(() => setShowTipsModal(true), 200);
+        // Don't show tips modal here — it will show when user visits CRM page
       }
     };
     window.addEventListener('post-search-tip', handler);

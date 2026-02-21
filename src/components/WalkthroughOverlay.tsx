@@ -32,7 +32,7 @@ const STEP_CONFIG: {
   {
     key: 'addedToCrm',
     selector: '[data-walkthrough-step="add-to-crm"]',
-    tooltip: 'Click the clipboard icon to add a lead to your Outreach CRM.',
+    tooltip: 'Tap any blue 📋 button to add a lead to your CRM. Use the 👁 button to view more info about a business.',
     noDim: true,
   },
   {

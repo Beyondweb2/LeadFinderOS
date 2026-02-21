@@ -58,10 +58,10 @@ export function OutreachTipsDialog() {
         <div className="p-5 space-y-4">
           <div className="text-center space-y-1">
             <DialogTitle className="text-base font-bold">
-              Quick tips before you start 🚀
+              First contact tips 🎯
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              3 things that increase your reply rate
+              How to message leads for the best reply rate
             </DialogDescription>
           </div>
 

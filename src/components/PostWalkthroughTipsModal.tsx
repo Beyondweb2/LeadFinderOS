@@ -65,8 +65,8 @@ export function PostWalkthroughTipsModal({ open, onOpenChange }: PostWalkthrough
             >
               <X className="h-4 w-4 text-muted-foreground" />
             </button>
-            <h2 className="text-lg font-bold text-foreground">Quick tips that actually work</h2>
-            <p className="text-sm text-muted-foreground">These 3 things will massively increase your reply rate</p>
+            <h2 className="text-lg font-bold text-foreground">How to get replies 💬</h2>
+            <p className="text-sm text-muted-foreground">3 tips to nail your first message and get more responses</p>
           </div>
 
           {/* Tip Cards */}
