@@ -61,11 +61,28 @@ const STEP_CONFIG: {
     selector: '[data-walkthrough-step="track-leads"]',
     tooltip: 'Open the Track Leads page to see starred leads.',
   },
+  // Step 6 sub-steps: action → date → save
   {
     key: 'followUpSet',
-    selector: '[data-walkthrough-step="follow-up"]',
-    tooltip: 'Set a follow-up action and date, then save.',
-  },
+    subKey: 'followUpAction',
+    selector: '[data-walkthrough-step="follow-up-action"]',
+    tooltip: 'Select a next action for this lead.',
+    noDim: true,
+  } as any,
+  {
+    key: 'followUpSet',
+    subKey: 'followUpDate',
+    selector: '[data-walkthrough-step="follow-up-date"]',
+    tooltip: 'Pick a due date.',
+    noDim: true,
+  } as any,
+  {
+    key: 'followUpSet',
+    subKey: 'followUpSave',
+    selector: '[data-walkthrough-step="follow-up-save"]',
+    tooltip: 'Hit Save to finish!',
+    noDim: true,
+  } as any,
 ];
 
 export function WalkthroughOverlay() {
@@ -119,6 +136,39 @@ export function WalkthroughOverlay() {
       }
     }
 
+    // For followUpSet, handle sub-steps: action → date → save
+    if (!state.followUpSet) {
+      const priorSteps2 = ['addedToCrm', 'contactAttempted', 'statusUpdated', 'leadTracked'] as const;
+      const allPrior2Done = priorSteps2.every(k => state[k]);
+      if (allPrior2Done) {
+        const saveBtn = document.querySelector('[data-walkthrough-step="follow-up-save"]');
+        const dateEl = document.querySelector('[data-walkthrough-step="follow-up-date"]');
+        // If save button exists, highlight it (means action+date are set)
+        if (saveBtn) {
+          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpSave') || null);
+          return;
+        }
+        // Check if action is already selected (select has a non-default value)
+        const actionEl = document.querySelector('[data-walkthrough-step="follow-up-action"]');
+        if (actionEl) {
+          // Action selector is visible — check if a value was picked
+          const actionSelected = actionEl.getAttribute('data-action-selected') === 'true';
+          if (!actionSelected) {
+            setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpAction') || null);
+            return;
+          }
+          // Action selected, highlight date
+          if (dateEl) {
+            setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpDate') || null);
+            return;
+          }
+        }
+        // Fallback: highlight the action selector
+        setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpAction') || null);
+        return;
+      }
+    }
+
     const current = STEP_CONFIG.find(s => {
       if (s.key === 'searchDone') return false;
       if ((s as any).subKey) return false; // Skip sub-steps, handled above
@@ -158,6 +208,38 @@ export function WalkthroughOverlay() {
     }, 300);
     return () => clearInterval(interval);
   }, [isDemoUser, state.searchDone, walkthroughOpen, activeStep?.selector]);
+
+  // Poll for followUpSet sub-step advancement
+  useEffect(() => {
+    if (!isDemoUser || state.followUpSet || !walkthroughOpen) return;
+    // Only run when we're on the followUpSet step
+    if (!activeStep || activeStep.key !== 'followUpSet') return;
+    const interval = setInterval(() => {
+      const saveBtn = document.querySelector('[data-walkthrough-step="follow-up-save"]');
+      const actionEl = document.querySelector('[data-walkthrough-step="follow-up-action"]');
+      const dateEl = document.querySelector('[data-walkthrough-step="follow-up-date"]');
+      
+      if (saveBtn) {
+        if (activeStep?.selector !== '[data-walkthrough-step="follow-up-save"]') {
+          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpSave') || null);
+        }
+        return;
+      }
+      if (actionEl) {
+        const actionSelected = actionEl.getAttribute('data-action-selected') === 'true';
+        if (actionSelected && dateEl) {
+          if (activeStep?.selector !== '[data-walkthrough-step="follow-up-date"]') {
+            setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpDate') || null);
+          }
+          return;
+        }
+        if (!actionSelected && activeStep?.selector !== '[data-walkthrough-step="follow-up-action"]') {
+          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpAction') || null);
+        }
+      }
+    }, 300);
+    return () => clearInterval(interval);
+  }, [isDemoUser, state.followUpSet, walkthroughOpen, activeStep]);
 
   // Track element position
   const updatePosition = useCallback(() => {

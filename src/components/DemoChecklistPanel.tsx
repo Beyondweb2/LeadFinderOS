@@ -14,7 +14,7 @@ const steps = [
   { key: 'contactAttempted' as const, label: 'Contact a lead via WhatsApp or SMS', cta: 'Open Outreach CRM', route: '/outreach', icon: Phone, helperText: 'Open a lead in Outreach CRM, then tap the WhatsApp or SMS button to contact them.' },
   { key: 'statusUpdated' as const, label: 'Update status & hit Track ⭐', cta: 'Update Status', route: '/outreach', icon: RefreshCw, helperText: 'Set the status to the contact method you used (e.g. WhatsApp, SMS), then hit the star (⭐) to track the lead.' },
   { key: 'leadTracked' as const, label: 'Open Track Leads page', cta: 'Go to Track Leads', route: '/potential-work', icon: Star, helperText: 'Your starred leads appear here. Open the page to continue.' },
-  { key: 'followUpSet' as const, label: 'Set a follow-up action & date', cta: '', route: '/potential-work', icon: CalendarClock, helperText: 'Open a lead, set "Follow Up" as the next action, pick a date, and hit Save.' },
+  { key: 'followUpSet' as const, label: 'Set up a next action & date', cta: '', route: '/potential-work', icon: CalendarClock, helperText: 'Select a next action, pick a date, then hit Save.' },
 ];
 
 export function DemoChecklistPanel() {
