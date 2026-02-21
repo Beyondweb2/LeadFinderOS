@@ -234,26 +234,26 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
 
   return (
     <>
-      <Card className={`border border-border/60 border-l-[4px] ${borderColor} hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 transition-all bg-card overflow-hidden`}>
-        {/* === 1. IDENTITY: Name + Status + Due === */}
-        <div className="flex items-start gap-2.5 p-3 sm:p-4 pb-1.5 sm:pb-2">
-          {/* Image / Avatar */}
+      <Card className={`border border-border/80 border-l-[4px] ${borderColor} hover:border-primary/30 hover:shadow-lg hover:shadow-primary/5 transition-all bg-card overflow-hidden`}>
+        {/* === 1. IDENTITY: Avatar + Name + Actions === */}
+        <div className="flex items-start gap-3 p-4 sm:p-5 pb-2 sm:pb-3">
+          {/* Image / Avatar — bigger */}
           <button
             onClick={() => fileInputRef.current?.click()}
             className="shrink-0 relative group/img"
             title={lead.image_url ? 'Change image' : 'Add image'}
           >
             {lead.image_url ? (
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden bg-muted/30 ring-1 ring-border/30 group-hover/img:ring-primary/40 transition-all">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden bg-muted/30 ring-1 ring-border/40 group-hover/img:ring-primary/40 transition-all">
                 <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
               </div>
             ) : (
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/5 border border-primary/10 flex items-center justify-center text-xs font-bold text-primary/50 group-hover/img:border-primary/30 transition-all">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-lg sm:text-xl font-bold text-primary/60 group-hover/img:border-primary/30 transition-all">
                 {getInitials(lead.business_name)}
               </div>
             )}
-            <div className="absolute inset-0 rounded-lg bg-black/0 group-hover/img:bg-black/20 flex items-center justify-center transition-all opacity-0 group-hover/img:opacity-100">
-              <Pencil className="h-3 w-3 text-white" />
+            <div className="absolute inset-0 rounded-xl bg-black/0 group-hover/img:bg-black/20 flex items-center justify-center transition-all opacity-0 group-hover/img:opacity-100">
+              <Pencil className="h-3.5 w-3.5 text-white" />
             </div>
           </button>
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
@@ -265,16 +265,16 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
                 <Input
                   value={editedName}
                   onChange={(e) => setEditedName(e.target.value)}
-                  className="h-7 text-sm font-bold px-1.5"
+                  className="h-8 text-sm font-bold px-2"
                   autoFocus
                   onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); } }}
                 />
-                <button onClick={handleSaveName} className="h-6 w-6 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded"><Check className="h-3.5 w-3.5" /></button>
-                <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><X className="h-3.5 w-3.5" /></button>
+                <button onClick={handleSaveName} className="h-7 w-7 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded"><Check className="h-4 w-4" /></button>
+                <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><X className="h-4 w-4" /></button>
               </div>
             ) : (
               <h3
-                className="text-sm sm:text-base font-bold leading-tight truncate cursor-pointer hover:text-primary/80 transition-colors"
+                className="text-base sm:text-lg font-bold leading-tight truncate cursor-pointer hover:text-primary/80 transition-colors"
                 onClick={() => setEditingName(true)}
                 title="Click to edit"
               >
@@ -282,7 +282,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
               </h3>
             )}
             {lead.category && (
-              <span className="text-[10px] text-muted-foreground/60 truncate block">{lead.category}</span>
+              <span className="text-[10px] text-muted-foreground/50 truncate block mt-0.5">{lead.category}</span>
             )}
           </div>
 
@@ -322,14 +322,11 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
           </div>
         </div>
 
-        {/* === 2. CONTACT METHOD + STATUS + DUE BADGES (prominent) === */}
-        <div className="flex items-center gap-1.5 flex-wrap px-3 sm:px-4 pb-2">
-          {/* Contact Method — persistent, only show if different from current status */}
+        {/* === 2. CONTACT METHOD + STATUS + DUE BADGES === */}
+        <div className="flex items-center gap-1.5 flex-wrap px-4 sm:px-5 pb-3">
           {lead.contact_method && lead.contact_method !== lead.status && (
             <OutreachStatusBadge status={lead.contact_method as any} />
           )}
-
-          {/* Pipeline Status — clickable to change */}
           <Select value={lead.status} onValueChange={(v) => {
             if (v === '__add_custom__') { onAddCustomStatus(); return; }
             onStatusChange(lead.id, v as LeadStatus);
@@ -347,10 +344,8 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
               <SelectItem value="__add_custom__" className="text-primary">+ Custom</SelectItem>
             </SelectContent>
           </Select>
-
-          {/* Due badge — prominent */}
           {dueLabel && (
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${
+            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold ${
               dueLabel.cls === 'text-red-500' ? 'bg-red-500/15 text-red-500 border border-red-500/25' :
               dueLabel.cls === 'text-amber-500' ? 'bg-amber-500/15 text-amber-500 border border-amber-500/25' :
               dueLabel.cls === 'text-amber-400' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
@@ -362,91 +357,94 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
           )}
         </div>
 
-        {/* === 3. CONTACT BUTTONS (compact) === */}
+        {/* === 3. CONTACT BUTTONS (full-width row) === */}
         {lead.phone && (
-          <div className="flex items-center gap-1 px-3 sm:px-4 pb-2">
+          <div className="flex items-center gap-2 px-4 sm:px-5 pb-3">
             <a
               href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 inline-flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-medium bg-green-500/10 text-green-500 hover:bg-green-500/20 border border-green-500/20 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-medium bg-green-500/10 text-green-500 hover:bg-green-500/20 border border-green-500/20 transition-colors"
             >
-              <MessageSquare className="h-3 w-3" /> WhatsApp
+              <MessageSquare className="h-3.5 w-3.5" /> WhatsApp
             </a>
             <a
               href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
-              className="flex-1 inline-flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors"
             >
-              <MessageCircle className="h-3 w-3" /> SMS
+              <MessageCircle className="h-3.5 w-3.5" /> SMS
             </a>
             <a
               href={`tel:${lead.phone}`}
-              className="flex-1 inline-flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-medium bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20 transition-colors"
+              className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 rounded-lg text-xs font-medium bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20 transition-colors"
             >
-              <PhoneCall className="h-3 w-3" /> Call
+              <PhoneCall className="h-3.5 w-3.5" /> Call
             </a>
           </div>
         )}
 
         {/* === 4. NEXT ACTION CONTROLS === */}
-        <div className="flex items-center gap-1.5 px-3 sm:px-4 pb-2">
-          <div className="flex-1 min-w-0">
-            <Select value={nextAction} onValueChange={handleNextActionChange}>
-              <SelectTrigger className="h-7 text-[11px] sm:text-xs border-border/50 px-2">
-                <SelectValue placeholder="Next action" />
-              </SelectTrigger>
-              <SelectContent>
-                {NEXT_ACTION_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-                {customActions.length > 0 && (
-                  <>
-                    <div className="h-px bg-border my-1" />
-                    {customActions.map((ca) => (
-                      <SelectItem key={ca.id} value={`custom::${ca.label}`}>
-                        <div className="flex items-center gap-2">
-                          <Tag className="h-3 w-3 text-teal-400" />
-                          {ca.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="px-4 sm:px-5 pb-3">
+          <label className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wider mb-1.5 block">Next Action</label>
+          <div className="flex items-center gap-2 bg-muted/20 rounded-lg border border-border/50 p-2.5">
+            <div className="flex-1 min-w-0">
+              <Select value={nextAction} onValueChange={handleNextActionChange}>
+                <SelectTrigger className="h-8 text-xs sm:text-sm border-border/50 px-2.5">
+                  <SelectValue placeholder="Select action..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {NEXT_ACTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                  {customActions.length > 0 && (
+                    <>
+                      <div className="h-px bg-border my-1" />
+                      {customActions.map((ca) => (
+                        <SelectItem key={ca.id} value={`custom::${ca.label}`}>
+                          <div className="flex items-center gap-2">
+                            <Tag className="h-3 w-3 text-teal-400" />
+                            {ca.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="h-7 px-2 inline-flex items-center gap-1 rounded-md border border-border/50 text-[11px] sm:text-xs text-muted-foreground hover:text-foreground hover:border-border transition-colors shrink-0">
-                <CalendarIcon className="h-3 w-3" />
-                {nextActionDate ? format(nextActionDate, 'MMM d') : 'Date'}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-border/50 text-xs text-muted-foreground hover:text-foreground hover:border-border transition-colors shrink-0">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  {nextActionDate ? format(nextActionDate, 'MMM d') : 'Date'}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  selected={nextActionDate}
+                  onSelect={handleDateChange}
+                  initialFocus
+                  className="p-3 pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+
+            {hasFollowUp && (
+              <button
+                className="h-7 w-7 flex items-center justify-center rounded-lg text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors shrink-0"
+                onClick={() => onNextActionChange(lead.id, 'none' as NextActionType)}
+                title="Mark as done"
+              >
+                <Check className="h-4 w-4" />
               </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="single"
-                selected={nextActionDate}
-                onSelect={handleDateChange}
-                initialFocus
-                className="p-3 pointer-events-auto"
-              />
-            </PopoverContent>
-          </Popover>
-
-          {hasFollowUp && (
-            <button
-              className="h-6 w-6 flex items-center justify-center rounded-md text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors shrink-0"
-              onClick={() => onNextActionChange(lead.id, 'none' as NextActionType)}
-              title="Mark as done"
-            >
-              <Check className="h-3.5 w-3.5" />
-            </button>
-          )}
+            )}
+          </div>
         </div>
 
-        {/* === 5. NOTES SECTION (functional) === */}
-        <div className="px-3 sm:px-4 pb-3 sm:pb-3.5 border-t border-border/30 pt-2 mt-0.5">
+        {/* === 5. NOTES SECTION === */}
+        <div className="px-4 sm:px-5 pb-4 sm:pb-5 border-t border-border/30 pt-2.5 mt-0.5">
           {isEditingNotes ? (
             <div className="space-y-1.5">
               <Textarea
