@@ -405,9 +405,13 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', statusColorCls)}>
               {statusLabel}
             </span>
-            {nextActionLabel && (
+            {nextActionLabel ? (
               <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', actionColorCls)}>
                 {nextActionLabel}
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium border border-border/30 text-muted-foreground/50">
+                No next action
               </span>
             )}
             {dueLabel && (
