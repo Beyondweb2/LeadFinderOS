@@ -24,7 +24,6 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-// Collapsible removed — notes always visible
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { OutreachStatusBadge } from '@/components/OutreachStatusBadge';
@@ -46,6 +45,8 @@ import {
   PhoneCall,
   MoreVertical,
   MapPin,
+  Plus,
+  Tag,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -58,15 +59,17 @@ import { format, isToday, isPast, startOfDay } from 'date-fns';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
-import { Plus, Tag } from 'lucide-react';
 import { FacebookSection } from '@/components/FacebookSection';
 
-const DEFAULT_POTENTIAL_WORK_STATUSES: { value: LeadStatus; label: string }[] = [
+/* ───────── constants ───────── */
+
+const DEFAULT_POTENTIAL_WORK_STATUSES: { value: string; label: string }[] = [
   { value: 'interested', label: 'Interested' },
   { value: 'wants_draft', label: 'Wants a Draft' },
   { value: 'on_hold', label: 'Waiting' },
   { value: 'reviewing_draft', label: 'Reviewing Draft' },
   { value: 'paid_for_draft', label: 'Paid for Draft' },
+  { value: 'not_interested', label: 'Not Interested' },
   { value: 'completed', label: 'Completed → Paid Client' },
 ];
 
@@ -83,23 +86,17 @@ const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'send_follow_up', label: 'Send Follow-up' },
 ];
 
-interface LeadCardProps {
-  lead: OutreachLead;
-  onStatusChange: (leadId: string, status: LeadStatus) => Promise<OutreachLead | null>;
-  onNextActionChange: (leadId: string, action: NextActionType, date?: string) => Promise<OutreachLead | null>;
-  onNotesChange: (leadId: string, notes: string) => Promise<OutreachLead | null>;
-  onBusinessNameChange: (leadId: string, name: string) => Promise<OutreachLead | null>;
-  onImageChange: (leadId: string, imageUrl: string | null) => Promise<OutreachLead | null>;
-  onUpdateLead: (leadId: string, updates: Partial<OutreachLead>) => Promise<OutreachLead | null>;
-  onDelete: (leadId: string, silent?: boolean) => Promise<boolean>;
-  customStatuses: { value: string; label: string }[];
-  onAddCustomStatus: () => void;
-  userId: string | undefined;
-}
-
-const getInitials = (name: string) => {
-  return name.split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+const CONTACT_METHOD_LABELS: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  sms: 'SMS',
+  contacted: 'Call',
+  facebook_msg: 'Facebook',
 };
+
+/* ───────── helpers ───────── */
+
+const getInitials = (name: string) =>
+  name.split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
 
 const getDueBorderColor = (nextActionDate: string | null, nextAction: NextActionType | null) => {
   if (!nextActionDate || !nextAction || nextAction === 'none') return 'border-l-border/40';
@@ -118,11 +115,32 @@ const getDueLabel = (nextActionDate: string | null, nextAction: NextActionType |
   const d = startOfDay(new Date(nextActionDate));
   const today = startOfDay(new Date());
   const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return { text: `Overdue by ${Math.abs(diffDays)}d`, cls: 'text-red-500' };
-  if (diffDays === 0) return { text: 'Due today', cls: 'text-amber-500' };
-  if (diffDays === 1) return { text: 'Due tomorrow', cls: 'text-amber-400' };
-  return { text: `Due in ${diffDays}d`, cls: 'text-muted-foreground' };
+  if (diffDays < 0) return { text: `Overdue by ${Math.abs(diffDays)}d`, cls: 'text-red-500 bg-red-500/10 border-red-500/25' };
+  if (diffDays === 0) return { text: 'Due today', cls: 'text-amber-500 bg-amber-500/10 border-amber-500/25' };
+  if (diffDays === 1) return { text: 'Due tomorrow', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+  return { text: `Due in ${diffDays}d`, cls: 'text-muted-foreground bg-muted border-border/50' };
 };
+
+const getStatusLabel = (status: string, customStatuses: { value: string; label: string }[]) => {
+  const found = [...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses].find(s => s.value === status);
+  return found?.label || status;
+};
+
+/* ───────── LeadCard ───────── */
+
+interface LeadCardProps {
+  lead: OutreachLead;
+  onStatusChange: (leadId: string, status: LeadStatus) => Promise<OutreachLead | null>;
+  onNextActionChange: (leadId: string, action: NextActionType, date?: string) => Promise<OutreachLead | null>;
+  onNotesChange: (leadId: string, notes: string) => Promise<OutreachLead | null>;
+  onBusinessNameChange: (leadId: string, name: string) => Promise<OutreachLead | null>;
+  onImageChange: (leadId: string, imageUrl: string | null) => Promise<OutreachLead | null>;
+  onUpdateLead: (leadId: string, updates: Partial<OutreachLead>) => Promise<OutreachLead | null>;
+  onDelete: (leadId: string, silent?: boolean) => Promise<boolean>;
+  customStatuses: { value: string; label: string }[];
+  onAddCustomStatus: () => void;
+  userId: string | undefined;
+}
 
 const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
@@ -143,6 +161,8 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { customActions, addAction } = useCustomNextActions();
   const notesRef = useRef<HTMLTextAreaElement>(null);
+  const [showAddCustomAction, setShowAddCustomAction] = useState(false);
+  const [newCustomAction, setNewCustomAction] = useState('');
 
   useEffect(() => {
     setNotes(lead.notes || '');
@@ -175,6 +195,10 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
   };
 
   const handleNextActionChange = async (v: string) => {
+    if (v === '__add_custom_action__') {
+      setShowAddCustomAction(true);
+      return;
+    }
     setNextAction(v);
     const isCustom = v.startsWith('custom::');
     const dbAction: NextActionType = isCustom ? 'follow_up' : v as NextActionType;
@@ -228,37 +252,61 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
     await onImageChange(lead.id, null);
   };
 
-  const hasFollowUp = lead.next_action && lead.next_action !== 'none';
-  const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
+  // Contact method update — does NOT change status
+  const handleContactMethodUpdate = async (method: string) => {
+    await onUpdateLead(lead.id, { contact_method: method } as Partial<OutreachLead>);
+  };
+
+  const handleAddCustomActionSubmit = () => {
+    const trimmed = newCustomAction.trim();
+    if (!trimmed) return;
+    addAction(trimmed);
+    setNewCustomAction('');
+    setShowAddCustomAction(false);
+    // Auto-select the newly added custom action
+    const newVal = `custom::${trimmed}`;
+    handleNextActionChange(newVal);
+  };
+
   const borderColor = getDueBorderColor(lead.next_action_date, lead.next_action);
+  const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
+  const contactMethodDisplay = lead.contact_method ? CONTACT_METHOD_LABELS[lead.contact_method] || lead.contact_method : null;
+
+  // Next action display
+  const nextActionDisplay = (() => {
+    if (customLabel) return customLabel;
+    const opt = NEXT_ACTION_OPTIONS.find(o => o.value === (lead.next_action || 'none'));
+    return opt?.label || 'None';
+  })();
 
   return (
     <>
       <Card className={`border border-border/60 border-l-[4px] ${borderColor} hover:border-primary/30 hover:shadow-md hover:shadow-primary/5 transition-all bg-card overflow-hidden`}>
-        {/* === 1. IDENTITY: Name + Status + Due === */}
-        <div className="flex items-start gap-2.5 p-3 sm:p-4 pb-1.5 sm:pb-2">
-          {/* Image / Avatar */}
+        
+        {/* ─── ROW 1: Identity ─── */}
+        <div className="flex items-start gap-3 p-4 pb-2">
+          {/* Avatar */}
           <button
             onClick={() => fileInputRef.current?.click()}
             className="shrink-0 relative group/img"
             title={lead.image_url ? 'Change image' : 'Add image'}
           >
             {lead.image_url ? (
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden bg-muted/30 ring-1 ring-border/30 group-hover/img:ring-primary/40 transition-all">
+              <div className="w-12 h-12 rounded-xl overflow-hidden bg-muted/30 ring-1 ring-border/30 group-hover/img:ring-primary/40 transition-all">
                 <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
               </div>
             ) : (
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/5 border border-primary/10 flex items-center justify-center text-xs font-bold text-primary/50 group-hover/img:border-primary/30 transition-all">
+              <div className="w-12 h-12 rounded-xl bg-primary/5 border border-primary/10 flex items-center justify-center text-sm font-bold text-primary/50 group-hover/img:border-primary/30 transition-all">
                 {getInitials(lead.business_name)}
               </div>
             )}
-            <div className="absolute inset-0 rounded-lg bg-black/0 group-hover/img:bg-black/20 flex items-center justify-center transition-all opacity-0 group-hover/img:opacity-100">
+            <div className="absolute inset-0 rounded-xl bg-black/0 group-hover/img:bg-black/20 flex items-center justify-center transition-all opacity-0 group-hover/img:opacity-100">
               <Pencil className="h-3 w-3 text-white" />
             </div>
           </button>
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
 
-          {/* Name + Category */}
+          {/* Name + Meta lines */}
           <div className="flex-1 min-w-0">
             {editingName ? (
               <div className="flex items-center gap-1">
@@ -274,7 +322,7 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
               </div>
             ) : (
               <h3
-                className="text-sm sm:text-base font-bold leading-tight truncate cursor-pointer hover:text-primary/80 transition-colors"
+                className="text-base font-bold leading-tight truncate cursor-pointer hover:text-primary/80 transition-colors"
                 onClick={() => setEditingName(true)}
                 title="Click to edit"
               >
@@ -282,8 +330,18 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
               </h3>
             )}
             {lead.category && (
-              <span className="text-[10px] text-muted-foreground/60 truncate block">{lead.category}</span>
+              <span className="text-[11px] text-muted-foreground/60 truncate block">{lead.category}</span>
             )}
+            {/* Contact method (read-only) */}
+            {contactMethodDisplay && (
+              <span className="text-[11px] text-muted-foreground/50 block mt-0.5">
+                Contacted via {contactMethodDisplay}
+              </span>
+            )}
+            {/* Status label (read-only display) */}
+            <span className="text-[11px] text-muted-foreground/50 block">
+              Status: {getStatusLabel(lead.status, customStatuses)}
+            </span>
           </div>
 
           {/* Maps + Menu */}
@@ -322,165 +380,143 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
           </div>
         </div>
 
-        {/* === 2. CONTACT METHOD + STATUS + DUE BADGES (prominent) === */}
-        <div className="flex items-center gap-1.5 flex-wrap px-3 sm:px-4 pb-2">
-          {/* Contact Method — persistent, only show if different from current status */}
-          {lead.contact_method && lead.contact_method !== lead.status && (
-            <OutreachStatusBadge status={lead.contact_method as any} />
-          )}
+        {/* ─── ROW 2: Workflow Block (Status + Next Action + Due Date) ─── */}
+        <div className="px-4 pb-3 pt-1 space-y-2.5">
+          {/* Status selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-muted-foreground w-14 shrink-0">Status</span>
+            <Select value={lead.status} onValueChange={(v) => {
+              if (v === '__add_custom__') { onAddCustomStatus(); return; }
+              onStatusChange(lead.id, v as LeadStatus);
+            }}>
+              <SelectTrigger className="h-9 text-sm border-border/50 flex-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+                {customStatuses.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+                <SelectItem value="__add_custom__" className="text-primary">+ Add Custom Status</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          {/* Pipeline Status — clickable to change */}
-          <Select value={lead.status} onValueChange={(v) => {
-            if (v === '__add_custom__') { onAddCustomStatus(); return; }
-            onStatusChange(lead.id, v as LeadStatus);
-          }}>
-            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0 shadow-none">
-              <OutreachStatusBadge status={lead.status} />
-            </SelectTrigger>
-            <SelectContent>
-              {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-              ))}
-              {customStatuses.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-              ))}
-              <SelectItem value="__add_custom__" className="text-primary">+ Custom</SelectItem>
-            </SelectContent>
-          </Select>
+          {/* Next Action + Due Date row */}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] text-muted-foreground w-14 shrink-0">Action</span>
+            <div className="flex-1">
+              <Select value={nextAction} onValueChange={handleNextActionChange}>
+                <SelectTrigger className="h-9 text-sm border-border/50">
+                  <SelectValue placeholder="Next action" />
+                </SelectTrigger>
+                <SelectContent>
+                  {NEXT_ACTION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                  {customActions.length > 0 && (
+                    <>
+                      <div className="h-px bg-border my-1" />
+                      {customActions.map((ca) => (
+                        <SelectItem key={ca.id} value={`custom::${ca.label}`}>
+                          <div className="flex items-center gap-2">
+                            <Tag className="h-3 w-3 text-teal-400" />
+                            {ca.label}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                  <div className="h-px bg-border my-1" />
+                  <SelectItem value="__add_custom_action__" className="text-primary">+ Add Custom Action</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Due badge — prominent */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={`h-9 px-3 text-sm shrink-0 gap-1.5 ${
+                    dueLabel
+                      ? dueLabel.cls
+                      : 'text-muted-foreground'
+                  }`}
+                >
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  {nextActionDate ? format(nextActionDate, 'MMM d') : 'Date'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <Calendar
+                  mode="single"
+                  selected={nextActionDate}
+                  onSelect={handleDateChange}
+                  initialFocus
+                  className="p-3 pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
+
+            {lead.next_action && lead.next_action !== 'none' && (
+              <button
+                className="h-8 w-8 flex items-center justify-center rounded-md text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors shrink-0"
+                onClick={() => onNextActionChange(lead.id, 'none' as NextActionType)}
+                title="Mark as done"
+              >
+                <Check className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Due badge */}
           {dueLabel && (
-            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-bold ${
-              dueLabel.cls === 'text-red-500' ? 'bg-red-500/15 text-red-500 border border-red-500/25' :
-              dueLabel.cls === 'text-amber-500' ? 'bg-amber-500/15 text-amber-500 border border-amber-500/25' :
-              dueLabel.cls === 'text-amber-400' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-              'bg-muted text-muted-foreground border border-border/50'
-            }`}>
+            <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold border ${dueLabel.cls}`}>
               <Clock className="h-3 w-3" />
               {dueLabel.text}
             </span>
           )}
         </div>
 
-        {/* === 3. CONTACT BUTTONS (compact) === */}
-        {lead.phone && (
-          <div className="flex items-center gap-1 px-3 sm:px-4 pb-2">
-            <a
-              href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 inline-flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-medium bg-green-500/10 text-green-500 hover:bg-green-500/20 border border-green-500/20 transition-colors"
-            >
-              <MessageSquare className="h-3 w-3" /> WhatsApp
-            </a>
-            <a
-              href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
-              className="flex-1 inline-flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-medium bg-blue-500/10 text-blue-400 hover:bg-blue-500/20 border border-blue-500/20 transition-colors"
-            >
-              <MessageCircle className="h-3 w-3" /> SMS
-            </a>
-            <a
-              href={`tel:${lead.phone}`}
-              className="flex-1 inline-flex items-center justify-center gap-1 h-7 rounded-md text-[11px] font-medium bg-amber-500/10 text-amber-500 hover:bg-amber-500/20 border border-amber-500/20 transition-colors"
-            >
-              <PhoneCall className="h-3 w-3" /> Call
-            </a>
-          </div>
-        )}
-
-        {/* === 4. NEXT ACTION CONTROLS === */}
-        <div className="flex items-center gap-1.5 px-3 sm:px-4 pb-2">
-          <div className="flex-1 min-w-0">
-            <Select value={nextAction} onValueChange={handleNextActionChange}>
-              <SelectTrigger className="h-7 text-[11px] sm:text-xs border-border/50 px-2">
-                <SelectValue placeholder="Next action" />
-              </SelectTrigger>
-              <SelectContent>
-                {NEXT_ACTION_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                ))}
-                {customActions.length > 0 && (
-                  <>
-                    <div className="h-px bg-border my-1" />
-                    {customActions.map((ca) => (
-                      <SelectItem key={ca.id} value={`custom::${ca.label}`}>
-                        <div className="flex items-center gap-2">
-                          <Tag className="h-3 w-3 text-teal-400" />
-                          {ca.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className="h-7 px-2 inline-flex items-center gap-1 rounded-md border border-border/50 text-[11px] sm:text-xs text-muted-foreground hover:text-foreground hover:border-border transition-colors shrink-0">
-                <CalendarIcon className="h-3 w-3" />
-                {nextActionDate ? format(nextActionDate, 'MMM d') : 'Date'}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <Calendar
-                mode="single"
-                selected={nextActionDate}
-                onSelect={handleDateChange}
-                initialFocus
-                className="p-3 pointer-events-auto"
-              />
-            </PopoverContent>
-          </Popover>
-
-          {hasFollowUp && (
-            <button
-              className="h-6 w-6 flex items-center justify-center rounded-md text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors shrink-0"
-              onClick={() => onNextActionChange(lead.id, 'none' as NextActionType)}
-              title="Mark as done"
-            >
-              <Check className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-
-        {/* === 5. NOTES SECTION (functional) === */}
-        <div className="px-3 sm:px-4 pb-3 sm:pb-3.5 border-t border-border/30 pt-2 mt-0.5">
+        {/* ─── ROW 3: Notes (Primary importance) ─── */}
+        <div className="px-4 pb-3 pt-1 border-t border-border/30">
           {isEditingNotes ? (
-            <div className="space-y-1.5">
+            <div className="space-y-2 pt-2">
               <Textarea
                 ref={notesRef}
                 value={notes}
                 onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
-                rows={3}
-                className="resize-none text-xs sm:text-sm border-border/50"
+                rows={4}
+                className="resize-none text-sm border-border/50 min-h-[100px]"
                 placeholder="Add notes about this lead..."
                 autoFocus
               />
-              <div className="flex items-center justify-end gap-1.5">
-                <Button size="sm" variant="ghost" className="h-6 text-xs text-muted-foreground" onClick={handleCancelNotes}>
+              <div className="flex items-center justify-end gap-2">
+                <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={handleCancelNotes}>
                   Cancel
                 </Button>
-                <Button size="sm" className="h-6 text-xs gap-1" onClick={handleSaveNotes}>
+                <Button size="sm" className="h-7 text-xs gap-1" onClick={handleSaveNotes}>
                   <Save className="h-3 w-3" /> Save
                 </Button>
               </div>
             </div>
           ) : (
-            <div className="flex items-start gap-1.5">
+            <div className="flex items-start gap-2 pt-2">
+              <StickyNote className="h-4 w-4 text-muted-foreground/40 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 {notes ? (
-                  <p className="text-xs sm:text-sm text-foreground/70 leading-relaxed line-clamp-2">{notes}</p>
+                  <p className="text-sm text-foreground/80 leading-relaxed line-clamp-3 whitespace-pre-wrap">{notes}</p>
                 ) : (
-                  <span className="text-xs text-muted-foreground/40 italic">No notes</span>
+                  <span className="text-sm text-muted-foreground/40 italic">No notes yet</span>
                 )}
               </div>
               <button
                 onClick={() => setIsEditingNotes(true)}
-                className="shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors"
+                className="shrink-0 h-7 px-2 inline-flex items-center gap-1 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors border border-border/40"
               >
-                <Pencil className="h-2.5 w-2.5" /> {notes ? 'Edit' : 'Add'}
+                <Pencil className="h-3 w-3" /> {notes ? 'Edit' : 'Add'}
               </button>
               {notesSaved && (
                 <span className="text-[10px] text-green-500 shrink-0 flex items-center gap-0.5">
@@ -490,7 +526,56 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
             </div>
           )}
         </div>
+
+        {/* ─── ROW 4: Contact Buttons (Secondary, compact) ─── */}
+        {lead.phone && (
+          <div className="flex items-center gap-1.5 px-4 pb-3 pt-1 border-t border-border/30">
+            <a
+              href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => handleContactMethodUpdate('whatsapp')}
+              className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-medium text-green-500 hover:bg-green-500/10 border border-green-500/20 transition-colors"
+            >
+              <MessageSquare className="h-3 w-3" /> WhatsApp
+            </a>
+            <a
+              href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
+              onClick={() => handleContactMethodUpdate('sms')}
+              className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-medium text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 transition-colors"
+            >
+              <MessageCircle className="h-3 w-3" /> SMS
+            </a>
+            <a
+              href={`tel:${lead.phone}`}
+              onClick={() => handleContactMethodUpdate('contacted')}
+              className="inline-flex items-center justify-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-medium text-amber-500 hover:bg-amber-500/10 border border-amber-500/20 transition-colors"
+            >
+              <PhoneCall className="h-3 w-3" /> Call
+            </a>
+          </div>
+        )}
       </Card>
+
+      {/* Custom Action Dialog */}
+      <Dialog open={showAddCustomAction} onOpenChange={setShowAddCustomAction}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Custom Action</DialogTitle>
+          </DialogHeader>
+          <Input
+            placeholder="e.g. Send Proposal"
+            value={newCustomAction}
+            onChange={(e) => setNewCustomAction(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddCustomActionSubmit()}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowAddCustomAction(false)}>Cancel</Button>
+            <Button onClick={handleAddCustomActionSubmit} disabled={!newCustomAction.trim()}>Add</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Detail / Edit Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
@@ -553,6 +638,9 @@ const LeadCard = ({ lead, onStatusChange, onNextActionChange, onNotesChange, onB
     </>
   );
 };
+
+/* ───────── Page ───────── */
+
 const PotentialWorkPage = () => {
   const {
     leads,
@@ -576,6 +664,8 @@ const PotentialWorkPage = () => {
   const [customStatuses, setCustomStatuses] = useState<{ value: string; label: string }[]>([]);
   const [showCustomStatusDialog, setShowCustomStatusDialog] = useState(false);
   const [newStatusLabel, setNewStatusLabel] = useState('');
+  const [editingStatusIdx, setEditingStatusIdx] = useState<number | null>(null);
+  const [editStatusLabel, setEditStatusLabel] = useState('');
 
   const updateImageUrl = useCallback(async (leadId: string, imageUrl: string | null) => {
     const { data, error } = await supabase
@@ -596,17 +686,37 @@ const PotentialWorkPage = () => {
     } catch {}
   }, []);
 
+  const saveCustomStatuses = (updated: { value: string; label: string }[]) => {
+    setCustomStatuses(updated);
+    localStorage.setItem(CUSTOM_STATUSES_KEY, JSON.stringify(updated));
+  };
+
   const handleAddCustomStatus = () => {
     const label = newStatusLabel.trim();
     if (!label) return;
     const value = label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
     const allStatuses = [...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses];
-    if (allStatuses.some(s => s.value === value)) return;
-    const updated = [...customStatuses, { value, label }];
-    setCustomStatuses(updated);
-    localStorage.setItem(CUSTOM_STATUSES_KEY, JSON.stringify(updated));
+    if (allStatuses.some(s => s.label.toLowerCase() === label.toLowerCase())) return;
+    saveCustomStatuses([...customStatuses, { value, label }]);
     setNewStatusLabel('');
     setShowCustomStatusDialog(false);
+  };
+
+  const handleEditCustomStatus = (idx: number) => {
+    const label = editStatusLabel.trim();
+    if (!label) return;
+    const allDefault = DEFAULT_POTENTIAL_WORK_STATUSES.map(s => s.label.toLowerCase());
+    const otherCustom = customStatuses.filter((_, i) => i !== idx).map(s => s.label.toLowerCase());
+    if ([...allDefault, ...otherCustom].includes(label.toLowerCase())) return;
+    const value = label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    const updated = customStatuses.map((s, i) => i === idx ? { value, label } : s);
+    saveCustomStatuses(updated);
+    setEditingStatusIdx(null);
+    setEditStatusLabel('');
+  };
+
+  const handleDeleteCustomStatus = (idx: number) => {
+    saveCustomStatuses(customStatuses.filter((_, i) => i !== idx));
   };
 
   const allPotentialLeads = useMemo(() => {
@@ -670,7 +780,7 @@ const PotentialWorkPage = () => {
         </p>
       </div>
 
-      {/* Search + Add + Count */}
+      {/* Search + Count */}
       <div className="flex items-center justify-between gap-2">
         <div className="relative max-w-xs flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -681,7 +791,6 @@ const PotentialWorkPage = () => {
             className="pl-8 h-8 text-sm"
           />
         </div>
-        {/* AddCustomLeadDialog removed — leads should be added via Find Leads */}
         <span className="text-xs text-muted-foreground whitespace-nowrap">
           {potentialWorkLeads.length} leads
         </span>
@@ -690,7 +799,6 @@ const PotentialWorkPage = () => {
       {/* Metrics Summary */}
       {allPotentialLeads.length > 0 && (() => {
         const now = new Date();
-        const todayStart = startOfDay(now);
         let overdueCount = 0;
         let todayCount = 0;
         let upcomingCount = 0;
@@ -740,6 +848,7 @@ const PotentialWorkPage = () => {
           </div>
         );
       })()}
+
       {/* Cards */}
       {potentialWorkLeads.length === 0 ? (
         <Card className="border-border/50">
@@ -748,59 +857,94 @@ const PotentialWorkPage = () => {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 lg:gap-2.5">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 lg:gap-3">
           {potentialWorkLeads.map((lead) => (
-              <LeadCard
-                key={lead.id}
-                lead={lead}
-                onStatusChange={updateStatus}
-                onNextActionChange={updateNextAction}
-                onNotesChange={updateNotes}
-                onBusinessNameChange={updateBusinessName}
-                onImageChange={updateImageUrl}
-                onUpdateLead={updateLead}
-                onDelete={deleteLead}
-                customStatuses={customStatuses}
-                onAddCustomStatus={() => setShowCustomStatusDialog(true)}
-                userId={user?.id}
-              />
-            ))}
-          </div>
-        )}
-
-        <OutreachLeadDialog
-          lead={selectedLead}
-          open={!!selectedLead}
-          onOpenChange={(open) => !open && setSelectedLead(null)}
-          onUpdateStatus={updateStatus}
-          onUpdateNextAction={updateNextAction}
-          onUpdateNotes={updateNotes}
-          onUpdateLead={updateLead}
-          onDelete={deleteLead}
-          fetchActivities={fetchActivities}
-        />
-
-        {/* Custom Status Dialog */}
-        <Dialog open={showCustomStatusDialog} onOpenChange={setShowCustomStatusDialog}>
-          <DialogContent className="sm:max-w-sm">
-            <DialogHeader>
-              <DialogTitle>Add Custom Status</DialogTitle>
-            </DialogHeader>
-            <Input
-              placeholder="e.g. Sent Quote"
-              value={newStatusLabel}
-              onChange={(e) => setNewStatusLabel(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddCustomStatus()}
-              autoFocus
+            <LeadCard
+              key={lead.id}
+              lead={lead}
+              onStatusChange={updateStatus}
+              onNextActionChange={updateNextAction}
+              onNotesChange={updateNotes}
+              onBusinessNameChange={updateBusinessName}
+              onImageChange={updateImageUrl}
+              onUpdateLead={updateLead}
+              onDelete={deleteLead}
+              customStatuses={customStatuses}
+              onAddCustomStatus={() => setShowCustomStatusDialog(true)}
+              userId={user?.id}
             />
-            <DialogFooter>
-              <Button variant="ghost" onClick={() => setShowCustomStatusDialog(false)}>Cancel</Button>
-              <Button onClick={handleAddCustomStatus} disabled={!newStatusLabel.trim()}>Add</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </div>
-    );
-  };
+          ))}
+        </div>
+      )}
+
+      <OutreachLeadDialog
+        lead={selectedLead}
+        open={!!selectedLead}
+        onOpenChange={(open) => !open && setSelectedLead(null)}
+        onUpdateStatus={updateStatus}
+        onUpdateNextAction={updateNextAction}
+        onUpdateNotes={updateNotes}
+        onUpdateLead={updateLead}
+        onDelete={deleteLead}
+        fetchActivities={fetchActivities}
+      />
+
+      {/* Custom Status Dialog — with edit/delete */}
+      <Dialog open={showCustomStatusDialog} onOpenChange={setShowCustomStatusDialog}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Manage Custom Statuses</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {/* Existing custom statuses */}
+            {customStatuses.length > 0 && (
+              <div className="space-y-1.5">
+                {customStatuses.map((s, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    {editingStatusIdx === idx ? (
+                      <>
+                        <Input
+                          value={editStatusLabel}
+                          onChange={(e) => setEditStatusLabel(e.target.value)}
+                          className="h-8 text-sm flex-1"
+                          autoFocus
+                          onKeyDown={(e) => e.key === 'Enter' && handleEditCustomStatus(idx)}
+                        />
+                        <button onClick={() => handleEditCustomStatus(idx)} className="h-7 w-7 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded"><Check className="h-3.5 w-3.5" /></button>
+                        <button onClick={() => { setEditingStatusIdx(null); setEditStatusLabel(''); }} className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><X className="h-3.5 w-3.5" /></button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm flex-1">{s.label}</span>
+                        <button onClick={() => { setEditingStatusIdx(idx); setEditStatusLabel(s.label); }} className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><Pencil className="h-3 w-3" /></button>
+                        <button onClick={() => handleDeleteCustomStatus(idx)} className="h-7 w-7 flex items-center justify-center text-destructive hover:bg-destructive/10 rounded"><Trash2 className="h-3 w-3" /></button>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Add new */}
+            <div className="flex gap-2">
+              <Input
+                placeholder="e.g. Sent Quote"
+                value={newStatusLabel}
+                onChange={(e) => setNewStatusLabel(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleAddCustomStatus()}
+                className="flex-1"
+              />
+              <Button onClick={handleAddCustomStatus} disabled={!newStatusLabel.trim()} size="sm">
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setShowCustomStatusDialog(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
 
 export default PotentialWorkPage;
