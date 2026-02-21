@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import {
@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
-import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle, Plus, Tag, CheckCircle2 } from 'lucide-react';
+import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle, Plus, Tag, CheckCircle2, CalendarIcon, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import type { NextActionType } from '@/types/outreach';
@@ -58,7 +58,6 @@ const CUSTOM_PREFIX = 'custom::';
 
 export function getDisplayLabel(action: NextActionType | null, leadId?: string): string {
   if (!action || action === 'none') return 'None';
-  // Check for custom action label
   if (leadId) {
     const customLabel = getLeadCustomAction(leadId);
     if (customLabel) return customLabel;
@@ -68,15 +67,27 @@ export function getDisplayLabel(action: NextActionType | null, leadId?: string):
 
 export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionEditorProps) {
   const [open, setOpen] = useState(false);
-  const [selectedAction, setSelectedAction] = useState<string>(action || 'call');
+  const [selectedAction, setSelectedAction] = useState<string>(action || '');
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(
     date ? new Date(date) : undefined
   );
   const [showCustomInput, setShowCustomInput] = useState(false);
   const [customName, setCustomName] = useState('');
   const { customActions, addAction } = useCustomNextActions();
+  const [dateOpen, setDateOpen] = useState(false);
 
-  // Check if current lead has a custom action
+  // Track whether user has actively selected an action (not just initial value)
+  const [actionPicked, setActionPicked] = useState(false);
+
+  // Reset state when popover opens
+  useEffect(() => {
+    if (open) {
+      setSelectedAction(action || '');
+      setSelectedDate(date ? new Date(date) : undefined);
+      setActionPicked(false);
+    }
+  }, [open, action, date]);
+
   const currentCustomLabel = leadId ? getLeadCustomAction(leadId) : null;
 
   const handleSave = () => {
@@ -84,11 +95,9 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
     
     if (selectedAction.startsWith(CUSTOM_PREFIX)) {
       const label = selectedAction.slice(CUSTOM_PREFIX.length);
-      // Store custom label for this lead, save as 'follow_up' in DB
       if (leadId) setLeadCustomAction(leadId, label);
       onUpdate('follow_up' as NextActionType, dateStr);
     } else {
-      // Clear any custom label
       if (leadId) setLeadCustomAction(leadId, null);
       onUpdate(selectedAction as NextActionType, dateStr);
     }
@@ -104,6 +113,7 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
     if (!trimmed) return;
     addAction(trimmed);
     setSelectedAction(`${CUSTOM_PREFIX}${trimmed}`);
+    setActionPicked(true);
     setShowCustomInput(false);
     setCustomName('');
   };
@@ -123,12 +133,14 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
   const isOverdue = date && new Date(date) < new Date(new Date().setHours(0, 0, 0, 0));
   const isToday = date && new Date(date).toDateString() === new Date().toDateString();
 
-  // Determine selected value for Select component
   const selectValue = selectedAction.startsWith(CUSTOM_PREFIX) 
     ? selectedAction 
     : selectedAction;
 
   const showCompleteButton = action && action !== 'none';
+  
+  // Show save button only when both action and date are selected
+  const canSave = actionPicked && selectedAction && selectedAction !== '' && selectedDate;
 
   return (
     <div className="flex items-center gap-1" data-walkthrough-step="follow-up">
@@ -161,9 +173,20 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
         <div className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Next Action</label>
-            <Select value={selectValue} onValueChange={(v) => { setSelectedAction(v); setShowCustomInput(false); }}>
-              <SelectTrigger className="w-[220px]">
-                <SelectValue />
+            <Select
+              value={selectValue}
+              onValueChange={(v) => {
+                setSelectedAction(v);
+                setActionPicked(true);
+                setShowCustomInput(false);
+              }}
+            >
+              <SelectTrigger
+                className="w-[220px]"
+                data-walkthrough-step="follow-up-action"
+                data-action-selected={actionPicked ? 'true' : 'false'}
+              >
+                <SelectValue placeholder="Select action..." />
               </SelectTrigger>
               <SelectContent>
                 {NEXT_ACTION_OPTIONS.map((opt) => (
@@ -219,21 +242,44 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Due Date</label>
-            <Calendar
-              mode="single"
-              selected={selectedDate}
-              onSelect={setSelectedDate}
-              className={cn('p-3 pointer-events-auto rounded-md border')}
-            />
+            <Popover open={dateOpen} onOpenChange={setDateOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    'w-[220px] justify-start text-left font-normal',
+                    !selectedDate && 'text-muted-foreground'
+                  )}
+                  data-walkthrough-step="follow-up-date"
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedDate ? format(selectedDate, 'MMM d, yyyy') : 'Pick a date'}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={(d) => {
+                    setSelectedDate(d);
+                    setDateOpen(false);
+                  }}
+                  className="p-3 pointer-events-auto"
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button size="sm" onClick={handleSave}>
-              Save
-            </Button>
+            {canSave && (
+              <Button size="sm" onClick={handleSave} data-walkthrough-step="follow-up-save">
+                <Save className="h-3.5 w-3.5 mr-1.5" />
+                Save
+              </Button>
+            )}
           </div>
         </div>
       </PopoverContent>
