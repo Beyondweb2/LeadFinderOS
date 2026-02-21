@@ -149,9 +149,23 @@ export function DemoChecklistPanel() {
               </div>
               <h3 className="text-sm font-bold text-foreground">Walkthrough Complete! 🎉</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                You've got the basics down. Now run more searches, build your pipeline, and start closing deals.
+                You now know how to:
               </p>
-              <p className="text-xs text-primary font-medium">
+              <ul className="text-xs text-left space-y-1.5 mx-auto max-w-[220px]">
+                <li className="flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                  <span className="text-foreground/90">Find businesses without websites</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                  <span className="text-foreground/90">Contact them in 1 click</span>
+                </li>
+                <li className="flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                  <span className="text-foreground/90">Track next actions & follow-ups</span>
+                </li>
+              </ul>
+              <p className="text-xs text-primary font-medium pt-1">
                 Every search uncovers new businesses that need your services.
               </p>
             </div>

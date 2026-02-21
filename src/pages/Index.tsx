@@ -31,8 +31,8 @@ const Index = () => {
   const { session } = useAuth();
   const { toast } = useToast();
   
-  // Pro access = active, past_due, or admin (trialing kept for legacy)
-  const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
+  // Pro access = active, past_due, admin, or trialing (Stripe trial)
+  const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
   
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
