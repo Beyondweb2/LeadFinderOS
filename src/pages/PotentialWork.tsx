@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -38,10 +39,14 @@ import {
   MessageSquare,
   MessageCircle,
   PhoneCall,
+  Phone,
   MoreVertical,
   Plus,
   Tag,
   ChevronDown,
+  Star,
+  Facebook,
+  Camera,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -55,6 +60,7 @@ import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { FacebookSection } from '@/components/FacebookSection';
+import { NextActionBadge } from '@/components/NextActionBadge';
 import { cn } from '@/lib/utils';
 
 /* ───────── constants ───────── */
@@ -89,17 +95,6 @@ const CONTACT_METHOD_LABELS: Record<string, string> = {
   facebook_msg: 'Facebook',
 };
 
-const NEXT_ACTION_COLORS: Record<string, string> = {
-  call: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
-  follow_up: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
-  '2nd_follow_up': 'bg-indigo-500/15 text-indigo-400 border-indigo-500/25',
-  send_draft: 'bg-orange-500/15 text-orange-400 border-orange-500/25',
-  send_initial_text: 'bg-green-500/15 text-green-400 border-green-500/25',
-  send_voice_note: 'bg-violet-500/15 text-violet-400 border-violet-500/25',
-  send_follow_up: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
-  none: 'bg-muted text-muted-foreground border-border/50',
-};
-
 const STATUS_COLORS: Record<string, string> = {
   interested: 'bg-green-500/15 text-green-400 border-green-500/25',
   wants_draft: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
@@ -110,47 +105,21 @@ const STATUS_COLORS: Record<string, string> = {
   completed: 'bg-green-600/15 text-green-500 border-green-600/25',
 };
 
+const CONTACT_METHOD_COLORS: Record<string, string> = {
+  whatsapp: 'text-green-500',
+  sms: 'text-blue-400',
+  contacted: 'text-amber-500',
+  facebook_msg: 'text-blue-600',
+};
+
 /* ───────── helpers ───────── */
-
-const getInitials = (name: string) =>
-  name.split(/\s+/).map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
-
-const getDueBorderColor = (nextActionDate: string | null, nextAction: NextActionType | null) => {
-  if (!nextActionDate || !nextAction || nextAction === 'none') return 'border-l-border/40';
-  const d = startOfDay(new Date(nextActionDate));
-  const today = startOfDay(new Date());
-  const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return 'border-l-red-500';
-  if (diffDays === 0) return 'border-l-amber-500';
-  if (diffDays <= 2) return 'border-l-yellow-500';
-  if (diffDays <= 7) return 'border-l-blue-500';
-  return 'border-l-border/40';
-};
-
-const getDueLabel = (nextActionDate: string | null, nextAction: NextActionType | null) => {
-  if (!nextActionDate || !nextAction || nextAction === 'none') return null;
-  const d = startOfDay(new Date(nextActionDate));
-  const today = startOfDay(new Date());
-  const diffDays = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  if (diffDays < 0) return { text: `Overdue ${Math.abs(diffDays)}d`, cls: 'text-red-500 bg-red-500/10 border-red-500/25' };
-  if (diffDays === 0) return { text: 'Today', cls: 'text-amber-500 bg-amber-500/10 border-amber-500/25' };
-  if (diffDays === 1) return { text: 'Tomorrow', cls: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
-  return { text: `${diffDays}d`, cls: 'text-muted-foreground bg-muted border-border/50' };
-};
 
 const getStatusLabel = (status: string, customStatuses: { value: string; label: string }[]) => {
   const found = [...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses].find(s => s.value === status);
   return found?.label || status;
 };
 
-const getNextActionLabel = (action: NextActionType | null, leadId: string) => {
-  const customLabel = getLeadCustomAction(leadId);
-  if (customLabel) return customLabel;
-  if (!action || action === 'none') return null;
-  return NEXT_ACTION_OPTIONS.find(o => o.value === action)?.label || null;
-};
-
-/* ───────── LeadCard ───────── */
+/* ───────── LeadCard (CRM-style flat card) ───────── */
 
 interface LeadCardProps {
   lead: OutreachLead;
@@ -169,7 +138,6 @@ interface LeadCardProps {
 }
 
 const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
-  const [detailOpen, setDetailOpen] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -181,15 +149,15 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const [nextActionDate, setNextActionDate] = useState<Date | undefined>(
     lead.next_action_date ? new Date(lead.next_action_date) : undefined
   );
-  const [editingName, setEditingName] = useState(false);
   const [editedName, setEditedName] = useState(lead.business_name);
+  const [editingName, setEditingName] = useState(false);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { customActions, addAction } = useCustomNextActions();
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const [showAddCustomAction, setShowAddCustomAction] = useState(false);
   const [newCustomAction, setNewCustomAction] = useState('');
-  const expandRef = useRef<HTMLDivElement>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   useEffect(() => {
     setNotes(lead.notes || '');
@@ -295,76 +263,180 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     handleNextActionChange(`custom::${trimmed}`);
   };
 
-  const borderColor = getDueBorderColor(lead.next_action_date, lead.next_action);
-  const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
   const contactMethodDisplay = lead.contact_method ? CONTACT_METHOD_LABELS[lead.contact_method] || lead.contact_method : null;
-  const nextActionLabel = getNextActionLabel(lead.next_action, lead.id);
+  const contactMethodColor = lead.contact_method ? CONTACT_METHOD_COLORS[lead.contact_method] || 'text-muted-foreground' : '';
   const statusLabel = getStatusLabel(lead.status, customStatuses);
   const statusColorCls = STATUS_COLORS[lead.status] || 'bg-muted text-muted-foreground border-border/50';
-  const actionColorCls = customLabel
-    ? 'bg-teal-500/15 text-teal-400 border-teal-500/25'
-    : NEXT_ACTION_COLORS[lead.next_action || 'none'] || NEXT_ACTION_COLORS.none;
 
   return (
     <>
-      <Card className={cn(
-        'border border-border/60 border-l-[4px] transition-all bg-card overflow-hidden',
-        borderColor,
-        isExpanded ? 'shadow-lg shadow-primary/5 border-primary/30' : 'hover:border-primary/20 hover:shadow-sm'
+      {/* ═══ CRM-STYLE FLAT CARD ═══ */}
+      <div className={cn(
+        'py-3 px-3 border-b border-border/50 transition-colors',
+        isExpanded && 'bg-primary/5'
       )}>
-        {/* ═══ COMPACT SUMMARY (always visible) ═══ */}
-        <div
-          className="cursor-pointer"
-          onClick={(e) => {
-            // Don't expand if clicking inside contact buttons area
-            if ((e.target as HTMLElement).closest('[data-contact-zone]')) return;
-            if ((e.target as HTMLElement).closest('[data-no-expand]')) return;
-            onToggleExpand();
-          }}
-        >
-          {/* Row 1: Identity */}
-          <div className="flex items-center gap-2.5 px-3 py-2.5">
-            {/* Avatar */}
-            <div className="shrink-0">
-              {lead.image_url ? (
-                <div className="w-9 h-9 rounded-lg overflow-hidden bg-muted/30 ring-1 ring-border/30">
-                  <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
-                </div>
-              ) : (
-                <div className="w-9 h-9 rounded-lg bg-primary/5 border border-primary/10 flex items-center justify-center text-[11px] font-bold text-primary/50">
-                  {getInitials(lead.business_name)}
-                </div>
-              )}
+        <div className="flex items-start gap-2.5">
+          {/* Left: Image/Avatar */}
+          <div className="pt-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {lead.image_url ? (
+              <div 
+                className="w-9 h-9 rounded-lg overflow-hidden bg-muted/30 ring-1 ring-border/30 cursor-pointer"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                className="w-9 h-9 rounded-lg bg-muted/20 border border-dashed border-border/40 flex items-center justify-center text-muted-foreground/40 hover:border-primary/30 hover:text-primary/50 transition-colors"
+                title="Add image"
+              >
+                <Camera className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Middle: Name + Contact Method + Status + Action */}
+          <div 
+            className="flex-1 min-w-0 space-y-1 cursor-pointer"
+            onClick={onToggleExpand}
+          >
+            <div className="flex items-center gap-1.5">
+              <span className="font-semibold text-sm leading-tight truncate">{lead.business_name}</span>
+              <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />
             </div>
 
-            {/* Name + Contact Method */}
-            <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-bold leading-tight truncate">
-                {lead.business_name}
-              </h3>
-              {contactMethodDisplay && (
-                <span className="text-[10px] text-muted-foreground/50 block leading-tight">
-                  Contacted via {contactMethodDisplay}
-                </span>
+            {/* Contact Method indicator (separate from status) */}
+            {contactMethodDisplay && (
+              <span className={cn('text-[10px] leading-tight block', contactMethodColor)}>
+                Contacted via {contactMethodDisplay}
+              </span>
+            )}
+
+            {/* Status + Next Action badges inline */}
+            <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+              <Select value={lead.status} onValueChange={(v) => {
+                if (v === '__add_custom__') { onAddCustomStatus(); return; }
+                onStatusChange(lead.id, v as LeadStatus);
+              }}>
+                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+                  <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border cursor-pointer', statusColorCls)}>
+                    {statusLabel}
+                  </span>
+                </SelectTrigger>
+                <SelectContent>
+                  {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                  {customStatuses.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                  <SelectItem value="__add_custom__" className="text-primary">+ Custom Status</SelectItem>
+                </SelectContent>
+              </Select>
+
+              {lead.next_action && lead.next_action !== 'none' && (
+                <NextActionBadge 
+                  action={lead.next_action} 
+                  date={lead.next_action_date}
+                  compact
+                  leadId={lead.id}
+                  onComplete={() => onNextActionChange(lead.id, 'none' as NextActionType)}
+                />
               )}
             </div>
+          </div>
 
-            {/* Maps + Menu */}
-            <div className="flex items-center gap-0.5 shrink-0" data-no-expand>
+          {/* Right: Action buttons — matches CRM layout */}
+          <div className="flex flex-col gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            {/* Row 1: Maps, Facebook, Call */}
+            <div className="flex items-center gap-0.5">
               {lead.google_maps_url && (
-                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="h-6 w-6 flex items-center justify-center rounded text-blue-500 hover:bg-blue-500/10 transition-colors">
-                  <ExternalLink className="h-3 w-3" />
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10" asChild>
+                  <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-500 hover:bg-blue-500/10" asChild>
+                <a
+                  href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Facebook className="h-3.5 w-3.5" />
                 </a>
+              </Button>
+              {lead.phone && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10">
+                      <Phone className="h-3.5 w-3.5" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[160px]">
+                    <DropdownMenuItem asChild>
+                      <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
+                        <PhoneCall className="h-4 w-4" />
+                        Normal Call
+                      </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <a
+                        href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <Phone className="h-4 w-4 text-green-500" />
+                        WhatsApp Call
+                      </a>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+            </div>
+            {/* Row 2: SMS, WhatsApp, More */}
+            <div className="flex items-center gap-0.5">
+              {lead.phone && (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                    onClick={() => handleContactMethodUpdate('sms')}
+                    asChild
+                  >
+                    <a href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}>
+                      <MessageCircle className="h-3.5 w-3.5" />
+                    </a>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                    onClick={() => handleContactMethodUpdate('whatsapp')}
+                    asChild
+                  >
+                    <a
+                      href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                    </a>
+                  </Button>
+                </>
               )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="h-6 w-6 flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground">
                     <MoreVertical className="h-3.5 w-3.5" />
-                  </button>
+                  </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[140px]">
-                  <DropdownMenuItem onClick={() => { fileInputRef.current?.click(); }} className="text-xs" disabled={isUploadingImage}>
-                    <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
+                  <DropdownMenuItem onClick={() => fileInputRef.current?.click()} className="text-xs" disabled={isUploadingImage}>
+                    <Camera className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
                   </DropdownMenuItem>
                   {lead.image_url && (
                     <DropdownMenuItem onClick={handleRemoveImage} className="text-xs">
@@ -382,123 +454,25 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <button
-                onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-                className={cn(
-                  'inline-flex items-center gap-0.5 h-5 px-1.5 rounded text-[9px] font-medium transition-colors ml-1',
-                  isExpanded
-                    ? 'text-primary bg-primary/10'
-                    : 'text-muted-foreground/60 hover:text-muted-foreground hover:bg-muted/40'
-                )}
-              >
-                {isExpanded ? 'Close' : 'Expand'}
-                <ChevronDown className={cn(
-                  'h-2.5 w-2.5 transition-transform duration-200',
-                  isExpanded && 'rotate-180'
-                )} />
-              </button>
             </div>
           </div>
-
-          {/* Row 2: Inline badges — Status + Next Action + Due */}
-          <div className="flex items-center gap-1.5 flex-wrap px-3 pb-2">
-            <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', statusColorCls)}>
-              {statusLabel}
-            </span>
-            {nextActionLabel && (
-              <span className={cn('inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border', actionColorCls)}>
-                {nextActionLabel}
-              </span>
-            )}
-            {dueLabel && (
-              <span className={cn('inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[10px] font-bold border', dueLabel.cls)}>
-                <Clock className="h-2.5 w-2.5" />
-                {dueLabel.text}
-              </span>
-            )}
-            {/* Mark as Done button — compact view */}
-            {lead.next_action && lead.next_action !== 'none' && !isExpanded && (
-              <button
-                className="inline-flex items-center gap-0.5 h-5 px-1.5 rounded-full text-[10px] font-medium text-green-500 bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
-                onClick={(e) => { e.stopPropagation(); onNextActionChange(lead.id, 'none' as NextActionType); }}
-                title="Mark as done"
-                data-no-expand
-              >
-                <Check className="h-2.5 w-2.5" /> Done
-              </button>
-            )}
-          </div>
-
-          {/* Row 3: Notes preview (only if notes exist, compact) */}
-          {lead.notes && !isExpanded && (
-            <div className="px-3 pb-2">
-              <p className="text-[11px] text-muted-foreground/60 leading-tight truncate">
-                {lead.notes}
-              </p>
-            </div>
-          )}
         </div>
 
-        {/* Row 4: Contact buttons (always visible, compact) */}
-        {lead.phone && (
-          <div className="flex items-center gap-1 px-3 pb-2" data-contact-zone>
-            <a
-              href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => handleContactMethodUpdate('whatsapp')}
-              className="flex-1 inline-flex items-center justify-center gap-1 h-6 rounded text-[10px] font-medium text-green-500 hover:bg-green-500/10 border border-green-500/20 transition-colors"
-            >
-              <MessageSquare className="h-2.5 w-2.5" /> WhatsApp
-            </a>
-            <a
-              href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
-              onClick={() => handleContactMethodUpdate('sms')}
-              className="flex-1 inline-flex items-center justify-center gap-1 h-6 rounded text-[10px] font-medium text-blue-400 hover:bg-blue-500/10 border border-blue-500/20 transition-colors"
-            >
-              <MessageCircle className="h-2.5 w-2.5" /> SMS
-            </a>
-            <a
-              href={`tel:${lead.phone}`}
-              onClick={() => handleContactMethodUpdate('contacted')}
-              className="flex-1 inline-flex items-center justify-center gap-1 h-6 rounded text-[10px] font-medium text-amber-500 hover:bg-amber-500/10 border border-amber-500/20 transition-colors"
-            >
-              <PhoneCall className="h-2.5 w-2.5" /> Call
-            </a>
+        {/* Notes preview (compact, below main row) */}
+        {lead.notes && !isExpanded && (
+          <div className="mt-1 ml-[46px]">
+            <p className="text-[11px] text-muted-foreground/60 leading-tight truncate">
+              {lead.notes}
+            </p>
           </div>
         )}
 
         {/* ═══ EXPANDED PANEL ═══ */}
-        <div
-          ref={expandRef}
-          className={cn(
-            'overflow-hidden transition-all duration-300 ease-out',
-            isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
-          )}
-        >
-          <div className="border-t border-border/40 px-3 py-3 space-y-3 bg-muted/5">
-            {/* Status selector */}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-muted-foreground w-12 shrink-0">Status</span>
-              <Select value={lead.status} onValueChange={(v) => {
-                if (v === '__add_custom__') { onAddCustomStatus(); return; }
-                onStatusChange(lead.id, v as LeadStatus);
-              }}>
-                <SelectTrigger className="h-8 text-xs border-border/50 flex-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                  {customStatuses.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                  <SelectItem value="__add_custom__" className="text-primary">+ Custom Status</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
+        <div className={cn(
+          'overflow-hidden transition-all duration-300 ease-out',
+          isExpanded ? 'max-h-[600px] opacity-100 mt-3' : 'max-h-0 opacity-0'
+        )}>
+          <div className="border-t border-border/40 pt-3 space-y-3 ml-[46px]">
             {/* Next Action + Due Date */}
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground w-12 shrink-0">Action</span>
@@ -529,17 +503,9 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   </SelectContent>
                 </Select>
               </div>
-
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={cn(
-                      'h-8 px-2.5 text-xs shrink-0 gap-1',
-                      dueLabel ? dueLabel.cls : 'text-muted-foreground'
-                    )}
-                  >
+                  <Button variant="outline" size="sm" className="h-8 px-2.5 text-xs shrink-0 gap-1">
                     <CalendarIcon className="h-3 w-3" />
                     {nextActionDate ? format(nextActionDate, 'MMM d') : 'Date'}
                   </Button>
@@ -554,26 +520,23 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   />
                 </PopoverContent>
               </Popover>
-
             </div>
 
             {/* Notes */}
-            <div className="pt-1">
+            <div>
               {isEditingNotes ? (
                 <div className="space-y-2">
                   <Textarea
                     ref={notesRef}
                     value={notes}
                     onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
-                    rows={4}
-                    className="resize-none text-sm border-border/50 min-h-[90px]"
-                    placeholder="Add notes about this lead..."
+                    rows={3}
+                    className="resize-none text-sm border-border/50 min-h-[70px]"
+                    placeholder="Add notes..."
                     autoFocus
                   />
                   <div className="flex items-center justify-end gap-1.5">
-                    <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onClick={handleCancelNotes}>
-                      Cancel
-                    </Button>
+                    <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onClick={handleCancelNotes}>Cancel</Button>
                     <Button size="sm" className="h-6 text-[11px] gap-1" onClick={handleSaveNotes}>
                       <Save className="h-2.5 w-2.5" /> Save
                     </Button>
@@ -604,9 +567,9 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               )}
             </div>
 
-            {/* Edit name inline */}
+            {/* Edit name */}
             {editingName ? (
-              <div className="flex items-center gap-1 pt-1">
+              <div className="flex items-center gap-1">
                 <Input
                   value={editedName}
                   onChange={(e) => setEditedName(e.target.value)}
@@ -620,7 +583,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             ) : (
               <button
                 onClick={() => setEditingName(true)}
-                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 pt-1"
+                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
               >
                 <Pencil className="h-2.5 w-2.5" /> Edit name
               </button>
@@ -629,7 +592,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
         </div>
 
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-      </Card>
+      </div>
 
       {/* Custom Action Dialog */}
       <Dialog open={showAddCustomAction} onOpenChange={setShowAddCustomAction}>
@@ -671,7 +634,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 </div>
               ) : (
                 <div className="w-16 h-16 rounded-xl bg-primary/5 border-2 border-dashed border-primary/20 flex items-center justify-center text-lg font-bold text-primary/30">
-                  {getInitials(lead.business_name)}
+                  <Camera className="h-5 w-5" />
                 </div>
               )}
               <Button variant="outline" size="sm" className="text-xs border-primary/20 hover:border-primary/40 hover:bg-primary/5" onClick={() => fileInputRef.current?.click()} disabled={isUploadingImage}>
@@ -918,7 +881,7 @@ const PotentialWorkPage = () => {
         );
       })()}
 
-      {/* Cards */}
+      {/* Cards — CRM-style list */}
       {potentialWorkLeads.length === 0 ? (
         <Card className="border-border/50">
           <div className="py-10 text-center text-muted-foreground text-sm">
@@ -926,7 +889,7 @@ const PotentialWorkPage = () => {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 lg:gap-2">
+        <Card className="border-border/50 overflow-hidden">
           {potentialWorkLeads.map((lead) => (
             <LeadCard
               key={lead.id}
@@ -945,7 +908,7 @@ const PotentialWorkPage = () => {
               userId={user?.id}
             />
           ))}
-        </div>
+        </Card>
       )}
 
       <OutreachLeadDialog
