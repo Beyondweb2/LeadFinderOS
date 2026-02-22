@@ -973,7 +973,7 @@ export function OutreachTable({
                       key={lead.id}
                       className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
                         lead.is_potential_work ? 'bg-primary/5' : ''
-                      } ${lastContactedLeadId === lead.id ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
+                      } ${lastContactedLeadId === lead.id ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
                       onClick={() => onLeadClick(lead)}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
