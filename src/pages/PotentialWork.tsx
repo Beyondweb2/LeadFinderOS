@@ -312,7 +312,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
       <Card className={cn(
         'border border-border/60 border-l-[3px] transition-all bg-card overflow-hidden',
         borderColor,
-        isExpanded ? 'shadow-lg shadow-primary/5 border-primary/30' : 'hover:border-primary/20 hover:shadow-sm'
+        isExpanded ? 'shadow-lg shadow-primary/5 border-border' : 'hover:border-border hover:shadow-sm'
       )}>
         {/* ═══ COLLAPSED (always visible) — fixed height structure ═══ */}
         <div

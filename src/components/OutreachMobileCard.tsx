@@ -60,7 +60,7 @@ export function OutreachMobileCard({
 }: OutreachMobileCardProps) {
   return (
     <div 
-      className={`py-3 px-3 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-2 ring-primary ring-inset bg-primary/10' : ''}`}
+      className={`py-3 px-3 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
       onClick={onLeadClick}
     >
       <div className="flex items-start gap-2.5">
