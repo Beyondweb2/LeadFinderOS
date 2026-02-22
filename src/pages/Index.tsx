@@ -79,11 +79,12 @@ const Index = () => {
   }, [isLoading, leads.length, checkTrial, isFreeUser]);
 
   // When server blocks a search (freeSearchExhausted), auto-show upgrade modal
+  // Only show for free users after access status is resolved (prevents flash for admins/subscribers)
   useEffect(() => {
-    if (freeSearchExhausted) {
+    if (freeSearchExhausted && !isAccessLoading && isFreeUser) {
       setShowUpgradeAfterLimit(true);
     }
-  }, [freeSearchExhausted]);
+  }, [freeSearchExhausted, isAccessLoading, isFreeUser]);
 
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
