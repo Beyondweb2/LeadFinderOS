@@ -151,7 +151,7 @@ export function TrialLimitDialog({
               {isLoading ? (
                 <><Loader2 className="h-4 w-4 animate-spin" />Opening checkout...</>
               ) : (
-                <><Sparkles className="h-4 w-4" />Get Unlimited Free Searches</>
+                <><Sparkles className="h-4 w-4" />Start Free 3-Day Trial</>
               )}
             </Button>
             <p className="text-xs text-muted-foreground text-center">Cancel anytime</p>
