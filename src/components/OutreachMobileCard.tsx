@@ -111,7 +111,7 @@ export function OutreachMobileCard({
                   }
                 }}
               >
-                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" {...(isLastContacted ? { 'data-walkthrough-step': 'status' } : {})}>
+                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" {...(isLastContacted ? { 'data-walkthrough-step': 'status', 'data-walkthrough': 'status' } : {})}>
                   <OutreachStatusBadge status={lead.status} compact />
                 </SelectTrigger>
                 <SelectContent>
@@ -207,6 +207,7 @@ export function OutreachMobileCard({
                       size="icon"
                       className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                       onClick={onSMSClick}
+                      data-walkthrough="contact"
                     >
                       <MessageCircle className="h-3.5 w-3.5" />
                     </Button>
@@ -215,6 +216,7 @@ export function OutreachMobileCard({
                       size="icon"
                       className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
                       onClick={onWhatsAppClick}
+                      data-walkthrough="contact"
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                     </Button>
@@ -229,7 +231,7 @@ export function OutreachMobileCard({
                       size="icon"
                       className="h-7 w-7 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
                       onClick={onTrack}
-                      {...(isLastContacted ? { 'data-walkthrough-step': 'track-star' } : {})}
+                      {...(isLastContacted ? { 'data-walkthrough-step': 'track-star', 'data-walkthrough': 'track' } : {})}
                     >
                       <Star className="h-3.5 w-3.5" />
                     </Button>

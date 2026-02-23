@@ -141,6 +141,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         className={`h-8 w-8 bg-primary hover:bg-primary/90 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
         onClick={() => handleAddToOutreach(lead)}
         data-walkthrough-step="add-to-crm"
+        data-walkthrough="add-crm"
       >
         <ClipboardList className="h-3.5 w-3.5" />
       </Button>
@@ -292,6 +293,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                               className={`h-8 w-8 text-green-500 hover:bg-muted hover:text-green-400 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
                               onClick={() => handleAddToOutreach(lead)}
                               data-walkthrough-step="add-to-crm"
+                              data-walkthrough="add-crm"
                             >
                               <ClipboardList className="h-4 w-4" />
                             </Button>

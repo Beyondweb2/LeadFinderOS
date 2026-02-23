@@ -1,52 +1,39 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
-import { Check, ChevronDown, ChevronUp, Sparkles, Search, UserPlus, Phone, RefreshCw, CalendarClock, Star, X } from 'lucide-react';
-import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
+import { Check, Search, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PostWalkthroughTipsModal } from '@/components/PostWalkthroughTipsModal';
 import { useTrial } from '@/hooks/useTrial';
-
-const steps = [
-  { key: 'searchDone' as const, label: 'Search for leads', cta: 'Go to Find Leads', route: '/find-leads', icon: Search, helperText: 'Enter a business type (e.g. "Barbers"), enter an area (e.g. "Manchester"), then hit Search.' },
-  { key: 'addedToCrm' as const, label: 'Add 3 businesses to Outreach CRM', cta: '', route: '/find-leads', icon: UserPlus, helperText: 'Tap any blue 📋 button to add leads to your CRM. Add at least 3!' },
-  { key: 'contactAttempted' as const, label: 'Contact a lead via WhatsApp or SMS', cta: 'Open Outreach CRM', route: '/outreach', icon: Phone, helperText: 'Open a lead in Outreach CRM, then tap the WhatsApp or SMS button to contact them.' },
-  { key: 'statusUpdated' as const, label: 'Update status, set action & track ⭐', cta: 'Update Status', route: '/outreach', icon: RefreshCw, helperText: 'Set the status, select "Send Follow Up", pick a date, then hit the star (⭐).' },
-  { key: 'leadTracked' as const, label: 'Open Track Leads page', cta: 'Go to Track Leads', route: '/potential-work', icon: Star, helperText: 'Your starred leads appear here. Open the page to continue.' },
-  { key: 'followUpSet' as const, label: 'Set next action & date', cta: '', route: '/potential-work', icon: CalendarClock, helperText: 'Select a next action and pick a due date.' },
-];
+import { useSubscription } from '@/hooks/useSubscription';
+import {
+  Dialog,
+  DialogContent,
+} from '@/components/ui/dialog';
 
 export function DemoChecklistPanel() {
-  const { state, completedCount, totalSteps, allDone, isOpen, setIsOpen, isDemoUser } = useDemoChecklist();
+  const { state, allDone, isDemoUser } = useDemoChecklist();
   const { isStripeTrialing } = useTrial();
   const { isPaidSubscriber } = useSubscription();
   const { user } = useAuth();
   const navigate = useNavigate();
-  const location = useLocation();
 
   const dismissKey = user?.id ? `demo_walkthrough_dismissed_${user.id}` : null;
   const [dismissed, setDismissed] = useState(false);
 
-  // Walkthrough collapse state
-  const [walkthroughCollapsed, setWalkthroughCollapsed] = useState(false);
-
-  // Post-walkthrough tips modal state
   const [showTipsModal, setShowTipsModal] = useState(false);
   const tipsModalShownRef = useRef(false);
   const prevAllDoneRef = useRef(allDone);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
 
   const isFreeUser = !isPaidSubscriber && !isStripeTrialing;
-
-  // Check if tips were permanently dismissed
   const tipsDismissedKey = user?.id ? `post_walkthrough_tips_dismissed_${user.id}` : null;
   const [tipsDismissed, setTipsDismissed] = useState(false);
 
   useEffect(() => {
     if (!tipsDismissedKey) return;
-    try {
-      setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true');
-    } catch {}
+    try { setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true'); } catch {}
   }, [tipsDismissedKey]);
 
   useEffect(() => {
@@ -57,29 +44,22 @@ export function DemoChecklistPanel() {
     } catch { setDismissed(false); }
   }, [dismissKey]);
 
-  // Condition A: walkthrough just completed → show tips modal only on CRM page
+  // Show completion modal when walkthrough finishes
+  useEffect(() => {
+    if (allDone && !prevAllDoneRef.current) {
+      setShowCompletionModal(true);
+    }
+    prevAllDoneRef.current = allDone;
+  }, [allDone]);
+
+  // Show tips modal after completion modal is dismissed
   useEffect(() => {
     if (!isFreeUser || tipsDismissed || tipsModalShownRef.current) return;
-    if (allDone && !prevAllDoneRef.current && location.pathname === '/outreach') {
+    if (allDone && !showCompletionModal && !prevAllDoneRef.current) {
       tipsModalShownRef.current = true;
       setShowTipsModal(true);
     }
-    prevAllDoneRef.current = allDone;
-  }, [allDone, isFreeUser, tipsDismissed, location.pathname]);
-
-  // Listen for post-search tip trigger (Condition B: 2+ searches before walkthrough done)
-  useEffect(() => {
-    if (!isFreeUser) return;
-    const handler = () => {
-      if (!allDone && !tipsModalShownRef.current && !tipsDismissed) {
-        setWalkthroughCollapsed(true);
-        setIsOpen(false);
-        // Don't show tips modal here — it will show when user visits CRM page
-      }
-    };
-    window.addEventListener('post-search-tip', handler);
-    return () => window.removeEventListener('post-search-tip', handler);
-  }, [isFreeUser, setIsOpen, allDone, tipsDismissed]);
+  }, [allDone, isFreeUser, tipsDismissed, showCompletionModal]);
 
   const handleDismiss = () => {
     setDismissed(true);
@@ -89,15 +69,12 @@ export function DemoChecklistPanel() {
     if (user?.id) {
       try { localStorage.setItem(`walkthrough_completed_${user.id}`, 'true'); } catch {}
     }
+  };
+
+  const handleCompletionDismiss = () => {
+    setShowCompletionModal(false);
+    handleDismiss();
     navigate('/find-leads');
-    setTimeout(() => {
-      const searchInput = document.querySelector<HTMLInputElement>('input[placeholder*="Search"]') || document.querySelector<HTMLInputElement>('input[type="text"]');
-      if (searchInput) {
-        searchInput.focus();
-        searchInput.classList.add('ring-2', 'ring-primary');
-        setTimeout(() => searchInput.classList.remove('ring-2', 'ring-primary'), 2000);
-      }
-    }, 500);
   };
 
   const handleTipsModalClose = useCallback((open: boolean) => {
@@ -105,53 +82,29 @@ export function DemoChecklistPanel() {
     if (!open) {
       tipsModalShownRef.current = true;
       if (tipsDismissedKey) {
-        try {
-          setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true');
-        } catch {}
+        try { setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true'); } catch {}
       }
     }
   }, [tipsDismissedKey]);
 
   if (!isDemoUser || dismissed) return null;
 
-  const nextStep = steps.find(s => !state[s.key]);
-  const currentStepIndex = nextStep ? steps.findIndex(s => s.key === nextStep.key) : totalSteps;
-
-  // Collapsed pill mode (Condition B triggered)
-  if (walkthroughCollapsed && !allDone) {
-    return (
-      <>
-        <button
-          onClick={() => {
-            setWalkthroughCollapsed(false);
-            setIsOpen(true);
-          }}
-          className="fixed bottom-20 md:bottom-4 right-4 z-40 flex items-center gap-2 px-3 py-2 rounded-full bg-card border border-border shadow-lg text-xs font-medium hover:bg-muted/50 transition-colors"
-        >
-          <Sparkles className="h-3.5 w-3.5 text-primary" />
-          <span>Continue walkthrough</span>
-          <span className="text-muted-foreground">{completedCount}/{totalSteps}</span>
-        </button>
-        <PostWalkthroughTipsModal open={showTipsModal} onOpenChange={handleTipsModalClose} />
-      </>
-    );
-  }
-
-  // All done — show completion state in panel
-  if (allDone) {
-    return (
-      <>
-        <div className="fixed bottom-20 md:bottom-4 right-4 z-40 w-72 max-w-[calc(100vw-2rem)]">
-          <div className="bg-card border border-border rounded-lg shadow-lg p-4 space-y-3">
+  // Only render the completion modal — no heavy panel
+  return (
+    <>
+      {/* Walkthrough Completed Modal */}
+      <Dialog open={showCompletionModal} onOpenChange={(v) => { if (!v) handleCompletionDismiss(); }}>
+        <DialogContent hideClose className="max-w-sm mx-auto p-0 overflow-hidden border-border/50 bg-card shadow-2xl">
+          <div className="p-6 space-y-5">
             <div className="text-center space-y-2">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                <Check className="h-5 w-5 text-primary" />
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+                <Sparkles className="h-6 w-6 text-primary" />
               </div>
-              <h3 className="text-sm font-bold text-foreground">Walkthrough Complete! 🎉</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                You now know how to:
+              <h2 className="text-lg font-bold text-foreground">Walkthrough Complete! 🎉</h2>
+              <p className="text-sm text-muted-foreground">
+                You now know how to find, contact, and manage leads.
               </p>
-              <ul className="text-xs text-left space-y-1.5 mx-auto max-w-[220px]">
+              <ul className="text-xs text-left space-y-1.5 mx-auto max-w-[220px] pt-2">
                 <li className="flex items-center gap-1.5">
                   <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
                   <span className="text-foreground/90">Find businesses without websites</span>
@@ -167,105 +120,17 @@ export function DemoChecklistPanel() {
               </ul>
               <div className="bg-primary/10 rounded-md p-2 mt-2">
                 <p className="text-xs text-primary font-medium">
-                  💡 Now contact the other 2 businesses — they could be your next clients!
+                  💡 Find your next batch of leads!
                 </p>
               </div>
             </div>
-            <div className="w-full bg-muted rounded-full h-1.5">
-              <div className="bg-primary h-1.5 rounded-full w-full" />
-            </div>
-            <Button
-              size="sm"
-              className="w-full"
-              onClick={() => {
-                handleDismiss();
-                navigate('/find-leads');
-              }}
-            >
-              <Search className="h-3.5 w-3.5 mr-1.5" />
+            <Button size="lg" className="w-full" onClick={handleCompletionDismiss}>
+              <Search className="h-4 w-4 mr-2" />
               Search for more leads
             </Button>
-            <button
-              onClick={handleDismiss}
-              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full text-center"
-            >
-              Dismiss
-            </button>
           </div>
-        </div>
-        <PostWalkthroughTipsModal open={showTipsModal} onOpenChange={handleTipsModalClose} />
-      </>
-    );
-  }
-
-  return (
-    <>
-      <div className="fixed bottom-20 md:bottom-4 right-4 z-40 w-72 max-w-[calc(100vw-2rem)]">
-        {/* Collapsed header */}
-        <button
-          onClick={() => setIsOpen(!isOpen)}
-          className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-t-lg bg-card border border-border shadow-lg text-sm font-medium"
-        >
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary" />
-            <span>Walkthrough</span>
-            <span className="text-xs text-muted-foreground">{currentStepIndex + 1} of {totalSteps}</span>
-          </div>
-          {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
-        </button>
-
-        {/* Expanded body — only current step */}
-        {isOpen && nextStep && (
-          <div className="bg-card border border-t-0 border-border rounded-b-lg shadow-lg p-3 space-y-2">
-            <div className="flex items-start gap-2">
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold mt-0.5 bg-muted text-muted-foreground">
-                {currentStepIndex + 1}
-              </span>
-              <div className="flex-1 min-w-0">
-                <span className="text-xs leading-5">
-                  {nextStep.label}
-                  {nextStep.key === 'addedToCrm' && state.crmAddCount > 0 && !state.addedToCrm && (
-                    <span className="text-primary font-medium ml-1">
-                      ({state.crmAddCount}/3 added)
-                    </span>
-                  )}
-                  {nextStep.key === 'statusUpdated' && (state.statusChanged || state.step4ActionSet || state.step4DateSet || state.trackPressed) && (
-                    <span className="text-primary font-medium ml-1">
-                      ({[state.statusChanged && 'status ✓', state.step4ActionSet && 'action ✓', state.step4DateSet && 'date ✓', state.trackPressed && 'track ✓'].filter(Boolean).join(', ')})
-                    </span>
-                  )}
-                  {nextStep.key === 'followUpSet' && (state.followUpActionSet || state.followUpDateSet) && (
-                    <span className="text-primary font-medium ml-1">
-                      ({[state.followUpActionSet && 'action ✓', state.followUpDateSet && 'date ✓'].filter(Boolean).join(', ')})
-                    </span>
-                  )}
-                </span>
-                {nextStep.cta && (
-                  <Button variant="link" size="sm" className="h-auto p-0 text-xs text-primary ml-1" onClick={() => { if (location.pathname !== nextStep.route) navigate(nextStep.route); }}>
-                    → {nextStep.cta}
-                  </Button>
-                )}
-                {nextStep.helperText && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">{nextStep.helperText}</p>
-                )}
-              </div>
-            </div>
-
-            {/* Progress bar */}
-            <div className="w-full bg-muted rounded-full h-1.5 mt-2">
-              <div className="bg-primary h-1.5 rounded-full transition-all duration-300" style={{ width: `${(completedCount / totalSteps) * 100}%` }} />
-            </div>
-
-            {/* Dismiss */}
-            <button
-              onClick={handleDismiss}
-              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors w-full text-center"
-            >
-              Skip walkthrough
-            </button>
-          </div>
-        )}
-      </div>
+        </DialogContent>
+      </Dialog>
 
       <PostWalkthroughTipsModal open={showTipsModal} onOpenChange={handleTipsModalClose} />
     </>

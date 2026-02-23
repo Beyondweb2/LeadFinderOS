@@ -2,113 +2,86 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
 import { createPortal } from 'react-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { useLocation } from 'react-router-dom';
 
-const STEP_CONFIG: {
-  key: string;
+interface StepDef {
+  step: number;
   selector: string;
-  tooltip: string;
-  allowTyping?: boolean;
+  tooltip: string | ((state: any) => string);
   noDim?: boolean;
   tooltipPosition?: 'top' | 'bottom' | 'right';
-}[] = [
-  {
-    key: 'searchDone',
-    selector: '[data-walkthrough-step="business-type"]',
-    tooltip: 'Type the kind of business you want to find.',
-    allowTyping: true,
-  },
-  {
-    key: 'searchDone',
-    selector: '[data-walkthrough-step="quick-locations"]',
-    tooltip: 'Tap Quick Locations, pick a country, then select a city.',
-    noDim: true,
-  },
-  {
-    key: 'searchDone',
-    selector: '[data-walkthrough-step="search"]',
-    tooltip: 'Now click Find Leads to search!',
-  },
-  {
-    key: 'addedToCrm',
-    selector: '[data-walkthrough-step="add-to-crm"]',
-    tooltip: 'Tap any blue 📋 button to add a lead to your CRM. Add at least 3! Use the 👁 button to view more info about a business.',
-    noDim: true,
-    tooltipPosition: 'top' as const,
-  },
-  {
-    key: 'contactAttempted',
-    selector: '[data-walkthrough-step="outreach-crm"]',
-    tooltip: 'Open your CRM to contact and manage your leads.',
-  },
-  {
-    key: 'contactAttempted',
-    subKey: 'contactAction',
-    selector: '[data-walkthrough-step="contact"]',
-    tooltip: 'Tap WhatsApp or SMS to contact this lead.',
-    noDim: true,
-  } as any,
-  // Step 4 sub-step A: update status
-  {
-    key: 'statusUpdated',
-    subKey: 'statusChanged',
-    selector: '[data-walkthrough-step="status"]',
-    tooltip: 'Update status to the contact method you used.',
-    noDim: true,
-    tooltipPosition: 'right' as const,
-  } as any,
-  // Step 4 sub-step B: set next action to "Send Follow Up"
-  {
-    key: 'statusUpdated',
-    subKey: 'step4Action',
-    selector: '[data-walkthrough-step="follow-up-action"]',
-    tooltip: 'Select "Send Follow Up" as the next action.',
-    noDim: true,
-  } as any,
-  // Step 4 sub-step C: pick a date
-  {
-    key: 'statusUpdated',
-    subKey: 'step4Date',
-    selector: '[data-walkthrough-step="follow-up-date"]',
-    tooltip: 'Pick a follow-up date.',
-    noDim: true,
-  } as any,
-  // Step 4 sub-step D: track star
-  {
-    key: 'statusUpdated',
-    subKey: 'trackPressed',
-    selector: '[data-walkthrough-step="track-star"]',
-    tooltip: 'Track businesses that show interest.',
-    noDim: true,
-  } as any,
-  {
-    key: 'leadTracked',
-    selector: '[data-walkthrough-step="track-leads"]',
-    tooltip: 'Open the Track Leads page to see starred leads.',
-  },
-  // Step 6 sub-steps: action → date only
-  {
-    key: 'followUpSet',
-    subKey: 'followUpAction',
-    selector: '[data-walkthrough-step="follow-up-action"]',
-    tooltip: 'Select a next action for this lead.',
-    noDim: true,
-  } as any,
-  {
-    key: 'followUpSet',
-    subKey: 'followUpDate',
-    selector: '[data-walkthrough-step="follow-up-date"]',
-    tooltip: 'Pick a due date for this action.',
-    noDim: true,
-  } as any,
-];
+}
+
+const TOTAL_STEPS = 7;
+
+function getActiveStep(state: any, pathname: string): StepDef | null {
+  // Step 1 – Go to Search
+  if (!state.searchDone) {
+    if (pathname !== '/find-leads') {
+      return { step: 1, selector: '[data-walkthrough="search-nav"]', tooltip: 'Start by finding businesses.' };
+    }
+    // On search page, existing search form guidance takes over — no overlay needed
+    return null;
+  }
+
+  // Step 2 – Add 3 businesses to CRM
+  if (!state.addedToCrm) {
+    const remaining = Math.max(0, 3 - (state.crmAddCount || 0));
+    return {
+      step: 2,
+      selector: '[data-walkthrough="add-crm"]',
+      tooltip: remaining > 0 ? `Add ${remaining} more business${remaining !== 1 ? 'es' : ''} to your CRM.` : 'Add businesses to your CRM.',
+      noDim: true,
+      tooltipPosition: 'top',
+    };
+  }
+
+  // Step 3 – Go to CRM page
+  if (!state.crmPageOpened) {
+    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact and manage leads.' };
+  }
+
+  // Step 4 – Contact a lead
+  if (!state.contactAttempted) {
+    if (pathname === '/outreach') {
+      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Send your first outreach message.', noDim: true };
+    }
+    return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact a lead.' };
+  }
+
+  // Step 5 – Update Status, Set Next Action, Track ⭐
+  if (!state.statusUpdated) {
+    if (!state.statusChanged) {
+      return { step: 5, selector: '[data-walkthrough="status"]', tooltip: 'Update the contact status.', noDim: true, tooltipPosition: 'right' };
+    }
+    if (!state.step4ActionSet) {
+      return { step: 5, selector: '[data-walkthrough="next-action"]', tooltip: 'Set the next action.', noDim: true };
+    }
+    if (!state.trackPressed) {
+      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Track this lead.', noDim: true };
+    }
+  }
+
+  // Step 6 – Open Track page
+  if (!state.leadTracked) {
+    return { step: 6, selector: '[data-walkthrough="track-nav"]', tooltip: 'Open Track to manage your pipeline.' };
+  }
+
+  // Step 7 – Add note
+  if (!state.noteAdded) {
+    return { step: 7, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details.', noDim: true };
+  }
+
+  return null;
+}
 
 export function WalkthroughOverlay() {
   const { state, allDone, isDemoUser } = useDemoChecklist();
   const { walkthroughOpen } = useWalkthroughStatus();
+  const location = useLocation();
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
-  const [activeStep, setActiveStep] = useState<typeof STEP_CONFIG[0] | null>(null);
+  const [activeStep, setActiveStep] = useState<StepDef | null>(null);
   const [paused, setPaused] = useState(false);
   const rafRef = useRef<number>();
 
@@ -118,84 +91,8 @@ export function WalkthroughOverlay() {
       setActiveStep(null);
       return;
     }
-
-    // For searchDone, we have 3 sub-steps: business-type → quick-locations → search
-    if (!state.searchDone) {
-      const businessInput = document.querySelector('[data-walkthrough-step="business-type"]') as HTMLInputElement;
-      const locationInput = document.querySelector('[data-walkthrough-step="location"]') as HTMLInputElement;
-      
-      const businessFilled = businessInput && businessInput.value.trim().length > 0;
-      const locationFilled = locationInput && locationInput.value.trim().length > 0;
-
-      if (!businessFilled) {
-        setActiveStep(STEP_CONFIG[0]);
-      } else if (!locationFilled) {
-        setActiveStep(STEP_CONFIG[1]);
-      } else {
-        setActiveStep(STEP_CONFIG[2]);
-      }
-      return;
-    }
-
-    // For contactAttempted: first highlight CRM nav, then contact button on CRM page
-    if (!state.contactAttempted && state.addedToCrm) {
-      const isOnOutreachPage = window.location.pathname === '/outreach';
-      if (isOnOutreachPage) {
-        // User is on CRM page, show contact action
-        setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'contactAction') || null);
-      } else {
-        // User not on CRM page, show CRM nav link
-        setActiveStep(STEP_CONFIG.find(s => s.key === 'contactAttempted' && !(s as any).subKey) || null);
-      }
-      return;
-    }
-
-    if (!state.statusUpdated) {
-      const priorSteps = ['addedToCrm', 'contactAttempted'] as const;
-      const allPriorDone = priorSteps.every(k => state[k]);
-      if (allPriorDone) {
-        if (!state.statusChanged) {
-          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'statusChanged') || null);
-          return;
-        }
-        if (!state.step4ActionSet) {
-          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'step4Action') || null);
-          return;
-        }
-        if (!state.step4DateSet) {
-          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'step4Date') || null);
-          return;
-        }
-        if (!state.trackPressed) {
-          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'trackPressed') || null);
-          return;
-        }
-      }
-    }
-
-    // For followUpSet, handle sub-steps: action → date
-    if (!state.followUpSet) {
-      const priorSteps2 = ['addedToCrm', 'contactAttempted', 'statusUpdated', 'leadTracked'] as const;
-      const allPrior2Done = priorSteps2.every(k => state[k]);
-      if (allPrior2Done) {
-        if (!state.followUpActionSet) {
-          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpAction') || null);
-          return;
-        }
-        if (!state.followUpDateSet) {
-          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpDate') || null);
-          return;
-        }
-      }
-    }
-
-    const current = STEP_CONFIG.find(s => {
-      if (s.key === 'searchDone') return false;
-      if ((s as any).subKey) return false; // Skip sub-steps, handled above
-      return !state[s.key as keyof typeof state];
-    });
-    setActiveStep(current || null);
-  }, [state, isDemoUser, allDone, walkthroughOpen]);
+    setActiveStep(getActiveStep(state, location.pathname));
+  }, [state, isDemoUser, allDone, walkthroughOpen, location.pathname]);
 
   // Listen for trial modal to pause/resume overlay
   useEffect(() => {
@@ -208,33 +105,6 @@ export function WalkthroughOverlay() {
       window.removeEventListener('trial-modal-closed', onModalClose);
     };
   }, []);
-
-  // Poll input values to advance sub-steps for searchDone
-  useEffect(() => {
-    if (!isDemoUser || state.searchDone || !walkthroughOpen) return;
-    const interval = setInterval(() => {
-      const businessInput = document.querySelector('[data-walkthrough-step="business-type"]') as HTMLInputElement;
-      const locationInput = document.querySelector('[data-walkthrough-step="location"]') as HTMLInputElement;
-      const businessFilled = businessInput && businessInput.value.trim().length > 0;
-      const locationFilled = locationInput && locationInput.value.trim().length > 0;
-
-      if (!businessFilled) {
-        if (activeStep?.selector !== '[data-walkthrough-step="business-type"]') setActiveStep(STEP_CONFIG[0]);
-      } else if (!locationFilled) {
-        if (activeStep?.selector !== '[data-walkthrough-step="quick-locations"]') setActiveStep(STEP_CONFIG[1]);
-      } else {
-        if (activeStep?.selector !== '[data-walkthrough-step="search"]') setActiveStep(STEP_CONFIG[2]);
-      }
-    }, 300);
-    return () => clearInterval(interval);
-  }, [isDemoUser, state.searchDone, walkthroughOpen, activeStep?.selector]);
-
-  // Poll for followUpSet sub-step advancement (event-driven now, polling only for action/date visual state)
-  useEffect(() => {
-    if (!isDemoUser || state.followUpSet || !walkthroughOpen) return;
-    if (!activeStep || activeStep.key !== 'followUpSet') return;
-    // No polling needed — advancement is event-driven via DemoChecklistContext
-  }, [isDemoUser, state.followUpSet, walkthroughOpen, activeStep]);
 
   // Track element position
   const updatePosition = useCallback(() => {
@@ -251,7 +121,7 @@ export function WalkthroughOverlay() {
     }
 
     const rect = el.getBoundingClientRect();
-    
+
     if (rect.top < 0 || rect.bottom > window.innerHeight) {
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
@@ -259,10 +129,9 @@ export function WalkthroughOverlay() {
     setTargetRect(rect);
 
     const padding = 12;
-    const tooltipHeight = 48;
+    const tooltipHeight = 60;
     const spaceBelow = window.innerHeight - rect.bottom;
-    
-    // Clamp left position so tooltip doesn't go off-screen
+
     const tooltipWidth = 260;
     const rawLeft = rect.left + rect.width / 2;
     const minLeft = tooltipWidth / 2 + 8;
@@ -270,10 +139,8 @@ export function WalkthroughOverlay() {
     const clampedLeft = Math.max(minLeft, Math.min(maxLeft, rawLeft));
 
     if (activeStep.tooltipPosition === 'right') {
-      // On mobile (narrow screens), fall back to top/bottom positioning
       const isMobile = window.innerWidth < 640;
       if (isMobile) {
-        // Position above or below the element instead of to the right
         const preferTop = rect.top > tooltipHeight + padding;
         if (preferTop) {
           setTooltipPos({ top: rect.top - tooltipHeight - padding, left: clampedLeft });
@@ -281,9 +148,7 @@ export function WalkthroughOverlay() {
           setTooltipPos({ top: rect.bottom + padding, left: clampedLeft });
         }
       } else {
-        const rightLeft = rect.right + padding;
-        const topCenter = rect.top + rect.height / 2;
-        setTooltipPos({ top: topCenter, left: rightLeft });
+        setTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + padding });
       }
     } else {
       const preferTop = activeStep.tooltipPosition === 'top';
@@ -304,17 +169,6 @@ export function WalkthroughOverlay() {
     };
   }, [updatePosition]);
 
-  // Log analytics
-  useEffect(() => {
-    if (!activeStep) return;
-    try {
-      supabase.rpc('log_usage_event', {
-        p_event_type: 'walkthrough_step_viewed',
-        p_meta: { step: activeStep.key },
-      });
-    } catch {}
-  }, [activeStep?.key]);
-
   if (!activeStep || !walkthroughOpen || paused || allDone) return null;
   if (!targetRect) return null;
 
@@ -326,12 +180,12 @@ export function WalkthroughOverlay() {
     height: targetRect.height + pad * 2,
   };
 
-  const isLocationStep = false; // Quick locations is now the target, no special cutout needed
   const useNoDim = activeStep.noDim === true;
+  const tooltipText = typeof activeStep.tooltip === 'function' ? activeStep.tooltip(state) : activeStep.tooltip;
 
   return createPortal(
     <div className="fixed inset-0 z-[9998] pointer-events-none" aria-hidden="true">
-      {/* Dim overlay with cutout — skip if noDim */}
+      {/* Dim overlay with cutout */}
       {!useNoDim && (
         <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'auto' }}>
           <defs>
@@ -345,27 +199,12 @@ export function WalkthroughOverlay() {
                 rx="8"
                 fill="black"
               />
-              {isLocationStep && (() => {
-                const qlEl = document.querySelector('[data-walkthrough-step="quick-locations"]');
-                if (!qlEl) return null;
-                const qlRect = qlEl.getBoundingClientRect();
-                return (
-                  <rect
-                    x={qlRect.left - 4}
-                    y={qlRect.top - 4}
-                    width={qlRect.width + 8}
-                    height={qlRect.height + 8}
-                    rx="8"
-                    fill="black"
-                  />
-                );
-              })()}
             </mask>
           </defs>
           <rect
             x="0" y="0"
             width="100%" height="100%"
-            fill="rgba(0,0,0,0.4)"
+            fill="rgba(0,0,0,0.35)"
             mask="url(#walkthrough-mask)"
             onClick={(e) => e.stopPropagation()}
           />
@@ -377,12 +216,12 @@ export function WalkthroughOverlay() {
         className="absolute rounded-lg border-2 border-primary pointer-events-none"
         style={{
           ...spotlightStyle,
-          boxShadow: '0 0 0 4px hsl(var(--primary) / 0.2)',
-          animation: 'walkthrough-pulse 1.8s ease-in-out infinite',
+          boxShadow: '0 0 0 4px hsl(var(--primary) / 0.25), 0 0 20px 4px hsl(var(--primary) / 0.15)',
+          animation: 'walkthrough-pulse 1.5s ease-in-out infinite',
         }}
       />
 
-      {/* Make target element clickable/typeable through overlay — only needed when dimmed */}
+      {/* Make target element clickable through overlay — only when dimmed */}
       {!useNoDim && (
         <div
           className="absolute"
@@ -401,35 +240,10 @@ export function WalkthroughOverlay() {
         />
       )}
 
-      {/* Make quick locations clickable during location step */}
-      {isLocationStep && !useNoDim && (() => {
-        const qlEl = document.querySelector('[data-walkthrough-step="quick-locations"]');
-        if (!qlEl) return null;
-        const qlRect = qlEl.getBoundingClientRect();
-        return (
-          <div
-            className="absolute"
-            style={{
-              top: qlRect.top - 4,
-              left: qlRect.left - 4,
-              width: qlRect.width + 8,
-              height: qlRect.height + 8,
-              zIndex: 9999,
-              pointerEvents: 'auto',
-              background: 'transparent',
-            }}
-            onClick={(e) => {
-              const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement;
-              if (target) target.click();
-            }}
-          />
-        );
-      })()}
-
-      {/* Tooltip */}
+      {/* Tooltip with step counter */}
       {tooltipPos && (
         <div
-          className="absolute pointer-events-none px-3 py-2 rounded-lg bg-card border border-border shadow-lg text-xs text-foreground max-w-[260px] text-center"
+          className="absolute pointer-events-none px-3 py-2.5 rounded-lg bg-card border border-border shadow-lg max-w-[260px] text-center"
           style={{
             top: tooltipPos.top,
             left: tooltipPos.left,
@@ -437,14 +251,19 @@ export function WalkthroughOverlay() {
             zIndex: 9999,
           }}
         >
-          {activeStep.tooltip}
+          <div className="text-[10px] font-semibold text-primary mb-0.5">
+            Step {activeStep.step} of {TOTAL_STEPS}
+          </div>
+          <div className="text-xs text-foreground">
+            {tooltipText}
+          </div>
         </div>
       )}
 
       <style>{`
         @keyframes walkthrough-pulse {
           0%, 100% { transform: scale(1); opacity: 0.8; }
-          50% { transform: scale(1.03); opacity: 1; }
+          50% { transform: scale(1.04); opacity: 1; }
         }
       `}</style>
     </div>,
