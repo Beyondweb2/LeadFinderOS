@@ -15,13 +15,23 @@ interface StepDef {
 const TOTAL_STEPS = 7;
 
 function getActiveStep(state: any, pathname: string): StepDef | null {
-  // Step 1 – Go to Search
+  // Step 1 – Go to Search (with sub-steps on the search page)
   if (!state.searchDone) {
     if (pathname !== '/find-leads') {
-      return { step: 1, selector: '[data-walkthrough="search-nav"]', tooltip: 'Start by finding businesses.' };
+      return { step: 1, selector: '[data-walkthrough="search-nav"]', tooltip: 'Start by finding businesses.', noDim: true };
     }
-    // On search page, existing search form guidance takes over — no overlay needed
-    return null;
+    // Sub-step guidance on the search page
+    const bizInput = document.querySelector('[data-walkthrough-step="business-type"]');
+    const bizValue = (bizInput as HTMLInputElement)?.value?.trim();
+    if (!bizValue) {
+      return { step: 1, selector: '[data-walkthrough-step="business-type"]', tooltip: 'Type a business type (e.g. plumber).', noDim: true };
+    }
+    const locInput = document.querySelector('[data-walkthrough-step="location"]');
+    const locValue = (locInput as HTMLInputElement)?.value?.trim();
+    if (!locValue) {
+      return { step: 1, selector: '[data-walkthrough-step="location"]', tooltip: 'Pick a location using Quick Locations.', noDim: true };
+    }
+    return { step: 1, selector: '[data-walkthrough-step="search"]', tooltip: 'Press Find Leads to search.', noDim: true };
   }
 
   // Step 2 – Add 3 businesses to CRM
@@ -57,7 +67,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
       return { step: 5, selector: '[data-walkthrough="next-action"]', tooltip: 'Set the next action.', noDim: true };
     }
     if (!state.trackPressed) {
-      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Track this lead.', noDim: true };
+      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Track a business that shows interest.', noDim: true };
     }
   }
 
@@ -83,6 +93,14 @@ export function WalkthroughOverlay() {
   const [activeStep, setActiveStep] = useState<StepDef | null>(null);
   const [paused, setPaused] = useState(false);
   const rafRef = useRef<number>();
+  const [tick, setTick] = useState(0);
+
+  // Re-evaluate sub-steps periodically (for input value changes on search page)
+  useEffect(() => {
+    if (!isDemoUser || allDone || !walkthroughOpen) return;
+    const interval = setInterval(() => setTick(t => t + 1), 500);
+    return () => clearInterval(interval);
+  }, [isDemoUser, allDone, walkthroughOpen]);
 
   // Find the current active step
   useEffect(() => {
@@ -91,7 +109,7 @@ export function WalkthroughOverlay() {
       return;
     }
     setActiveStep(getActiveStep(state, location.pathname));
-  }, [state, isDemoUser, allDone, walkthroughOpen, location.pathname]);
+  }, [state, isDemoUser, allDone, walkthroughOpen, location.pathname, tick]);
 
   // Listen for trial modal to pause/resume overlay
   useEffect(() => {
@@ -212,10 +230,9 @@ export function WalkthroughOverlay() {
 
       {/* Pulse ring around target */}
       <div
-        className="absolute rounded-lg border-2 border-primary pointer-events-none"
+        className="absolute rounded-lg border-2 border-yellow-500/60 pointer-events-none"
         style={{
           ...spotlightStyle,
-          boxShadow: '0 0 0 4px hsl(var(--primary) / 0.25), 0 0 20px 4px hsl(var(--primary) / 0.15)',
           animation: 'walkthrough-pulse 1.5s ease-in-out infinite',
         }}
       />
