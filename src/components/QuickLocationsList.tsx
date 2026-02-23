@@ -230,7 +230,7 @@ export function QuickLocationsList({ onLocationSelect }: QuickLocationsListProps
           />
         </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="pt-3">
+      <CollapsibleContent className="pt-3 relative z-[9999]">
         <Tabs defaultValue="UK" className="w-full">
           <ScrollArea className="w-full">
             <TabsList className="inline-flex h-auto p-1 mb-3 flex-wrap gap-1">
