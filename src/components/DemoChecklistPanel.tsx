@@ -12,7 +12,7 @@ const steps = [
   { key: 'searchDone' as const, label: 'Search for leads', cta: 'Go to Find Leads', route: '/find-leads', icon: Search, helperText: 'Enter a business type (e.g. "Barbers"), enter an area (e.g. "Manchester"), then hit Search.' },
   { key: 'addedToCrm' as const, label: 'Add 3 businesses to Outreach CRM', cta: '', route: '/find-leads', icon: UserPlus, helperText: 'Tap any blue 📋 button to add leads to your CRM. Add at least 3!' },
   { key: 'contactAttempted' as const, label: 'Contact a lead via WhatsApp or SMS', cta: 'Open Outreach CRM', route: '/outreach', icon: Phone, helperText: 'Open a lead in Outreach CRM, then tap the WhatsApp or SMS button to contact them.' },
-  { key: 'statusUpdated' as const, label: 'Update status & hit Track ⭐', cta: 'Update Status', route: '/outreach', icon: RefreshCw, helperText: 'Set the status to the contact method you used (e.g. WhatsApp, SMS), then hit the star (⭐) to track the lead.' },
+  { key: 'statusUpdated' as const, label: 'Update status, set action & track ⭐', cta: 'Update Status', route: '/outreach', icon: RefreshCw, helperText: 'Set the status, select "Send Follow Up", pick a date, then hit the star (⭐).' },
   { key: 'leadTracked' as const, label: 'Open Track Leads page', cta: 'Go to Track Leads', route: '/potential-work', icon: Star, helperText: 'Your starred leads appear here. Open the page to continue.' },
   { key: 'followUpSet' as const, label: 'Set next action & date', cta: '', route: '/potential-work', icon: CalendarClock, helperText: 'Select a next action and pick a due date.' },
 ];
@@ -232,9 +232,9 @@ export function DemoChecklistPanel() {
                       ({state.crmAddCount}/3 added)
                     </span>
                   )}
-                  {nextStep.key === 'statusUpdated' && (state.statusChanged || state.trackPressed) && (
+                  {nextStep.key === 'statusUpdated' && (state.statusChanged || state.step4ActionSet || state.step4DateSet || state.trackPressed) && (
                     <span className="text-primary font-medium ml-1">
-                      ({[state.statusChanged && 'status ✓', state.trackPressed && 'track ✓'].filter(Boolean).join(', ')})
+                      ({[state.statusChanged && 'status ✓', state.step4ActionSet && 'action ✓', state.step4DateSet && 'date ✓', state.trackPressed && 'track ✓'].filter(Boolean).join(', ')})
                     </span>
                   )}
                   {nextStep.key === 'followUpSet' && (state.followUpActionSet || state.followUpDateSet) && (
