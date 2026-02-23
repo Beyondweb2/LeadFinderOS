@@ -20,10 +20,8 @@ const STEP_CONFIG: {
   },
   {
     key: 'searchDone',
-    selector: '[data-walkthrough-step="location"]',
-    tooltip: 'Enter a city or postcode, or pick a Quick Location below.',
-    allowTyping: true,
-    noDim: true,
+    selector: '[data-walkthrough-step="quick-locations"]',
+    tooltip: 'Tap Quick Locations, pick a country, then select a city.',
   },
   {
     key: 'searchDone',
@@ -65,7 +63,7 @@ const STEP_CONFIG: {
     selector: '[data-walkthrough-step="track-leads"]',
     tooltip: 'Open the Track Leads page to see starred leads.',
   },
-  // Step 6 sub-steps: action → date → note → status (auto-completes when all filled)
+  // Step 6 sub-steps: action → date only
   {
     key: 'followUpSet',
     subKey: 'followUpAction',
@@ -79,22 +77,6 @@ const STEP_CONFIG: {
     selector: '[data-walkthrough-step="follow-up-date"]',
     tooltip: 'Pick a due date for this action.',
     noDim: true,
-  } as any,
-  {
-    key: 'followUpSet',
-    subKey: 'followUpNote',
-    selector: '[data-walkthrough-step="track-notes-edit"]',
-    tooltip: 'Add a note about this lead.',
-    noDim: true,
-    tooltipPosition: 'right' as const,
-  } as any,
-  {
-    key: 'followUpSet',
-    subKey: 'followUpStatus',
-    selector: '[data-walkthrough-step="track-status-select"]',
-    tooltip: 'Update the status of this lead.',
-    noDim: true,
-    tooltipPosition: 'right' as const,
   } as any,
 ];
 
@@ -114,7 +96,7 @@ export function WalkthroughOverlay() {
       return;
     }
 
-    // For searchDone, we have 3 sub-steps: business-type → location → search
+    // For searchDone, we have 3 sub-steps: business-type → quick-locations → search
     if (!state.searchDone) {
       const businessInput = document.querySelector('[data-walkthrough-step="business-type"]') as HTMLInputElement;
       const locationInput = document.querySelector('[data-walkthrough-step="location"]') as HTMLInputElement;
@@ -149,7 +131,7 @@ export function WalkthroughOverlay() {
       }
     }
 
-    // For followUpSet, handle sub-steps: action → date → note → status
+    // For followUpSet, handle sub-steps: action → date
     if (!state.followUpSet) {
       const priorSteps2 = ['addedToCrm', 'contactAttempted', 'statusUpdated', 'leadTracked'] as const;
       const allPrior2Done = priorSteps2.every(k => state[k]);
@@ -160,14 +142,6 @@ export function WalkthroughOverlay() {
         }
         if (!state.followUpDateSet) {
           setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpDate') || null);
-          return;
-        }
-        if (!state.followUpNoteAdded) {
-          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpNote') || null);
-          return;
-        }
-        if (!state.followUpStatusChanged) {
-          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'followUpStatus') || null);
           return;
         }
       }
@@ -205,7 +179,7 @@ export function WalkthroughOverlay() {
       if (!businessFilled) {
         if (activeStep?.selector !== '[data-walkthrough-step="business-type"]') setActiveStep(STEP_CONFIG[0]);
       } else if (!locationFilled) {
-        if (activeStep?.selector !== '[data-walkthrough-step="location"]') setActiveStep(STEP_CONFIG[1]);
+        if (activeStep?.selector !== '[data-walkthrough-step="quick-locations"]') setActiveStep(STEP_CONFIG[1]);
       } else {
         if (activeStep?.selector !== '[data-walkthrough-step="search"]') setActiveStep(STEP_CONFIG[2]);
       }
@@ -310,7 +284,7 @@ export function WalkthroughOverlay() {
     height: targetRect.height + pad * 2,
   };
 
-  const isLocationStep = activeStep.selector === '[data-walkthrough-step="location"]';
+  const isLocationStep = false; // Quick locations is now the target, no special cutout needed
   const useNoDim = activeStep.noDim === true;
 
   return createPortal(

@@ -24,15 +24,26 @@ interface SimpleTemplate {
   template_type: string;
 }
 
+// Default pre-made templates shown when user has none
+const DEFAULT_PREMADE_TEMPLATES: SimpleTemplate[] = [
+  { id: 'default-1', title: 'First Text – Friendly Opener', content: `Hi! Is this {{business_name}}? I came across your business and wanted to reach out. I help businesses like yours get set up online with a simple, professional website. Would you be open to a quick chat about it?`, category: 'outreach', template_type: 'text' },
+  { id: 'default-2', title: 'First Text – Direct', content: `Hi, is this {{business_name}}? I noticed you don't have a website yet. I build affordable websites for local businesses — would you be interested in hearing more?`, category: 'outreach', template_type: 'text' },
+  { id: 'default-3', title: 'Follow Up – Check In', content: `Hi {{business_name}}, just following up on my earlier message. I'd love to help you get online with a simple website. Let me know if you're interested!`, category: 'follow_up', template_type: 'text' },
+  { id: 'default-4', title: 'Follow Up – Value Add', content: `Hey {{business_name}}, I help local businesses get found online with a clean, mobile-friendly website. It's a quick setup and very affordable. Happy to send you an example if you're curious!`, category: 'follow_up', template_type: 'text' },
+  { id: 'default-5', title: 'Second Follow Up – Gentle Nudge', content: `Hi {{business_name}}, just checking in one last time. I know you're busy — if now's not the right time, no worries at all. But if you'd like a quick, affordable website, I'm here to help!`, category: 'follow_up', template_type: 'text' },
+  { id: 'default-6', title: 'Intro – Social Proof', content: `Hi {{business_name}}! I've been helping local businesses in your area get online. A simple website can bring in new customers from Google. Would you like to see some examples?`, category: 'outreach', template_type: 'text' },
+];
+
 export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalkthrough = false, onWalkthroughTemplatesOpened }: TemplatePickerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [templates, setTemplates] = useState<SimpleTemplate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [fetched, setFetched] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
 
   useEffect(() => {
-    if (isOpen && user && templates.length === 0) {
+    if (isOpen && user && !fetched) {
       setIsLoading(true);
       supabase
         .from('templates')
@@ -41,14 +52,22 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
         .order('updated_at', { ascending: false })
         .then(({ data, error }) => {
           setIsLoading(false);
+          setFetched(true);
           if (error) {
             console.error('Error fetching templates:', error);
+            // Show defaults on error
+            setTemplates(DEFAULT_PREMADE_TEMPLATES.filter(t => t.template_type === templateType));
             return;
           }
-          setTemplates(data || []);
+          if (data && data.length > 0) {
+            setTemplates(data);
+          } else {
+            // No user templates — show pre-made defaults
+            setTemplates(DEFAULT_PREMADE_TEMPLATES.filter(t => t.template_type === templateType));
+          }
         });
     }
-  }, [isOpen, user, templateType, templates.length]);
+  }, [isOpen, user, templateType, fetched]);
 
   const handleSelect = (template: SimpleTemplate) => {
     onSelectTemplate(template.content);
@@ -99,11 +118,6 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
           )}
           {isLoading ? (
             <div className="p-3 text-xs text-muted-foreground text-center">Loading templates...</div>
-          ) : templates.length === 0 ? (
-            <div className="p-3 text-xs text-muted-foreground text-center">
-              No templates found. Create some on the{' '}
-              <a href="/templates" className="text-primary underline hover:text-primary/80">Templates page</a>.
-            </div>
           ) : (
             <ScrollArea className="max-h-48">
               <div className="divide-y divide-border/30">
@@ -113,17 +127,14 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
                     <button
                       key={t.id}
                       onClick={() => handleSelect(t)}
-                      className={`w-full text-left px-3 py-2 hover:bg-accent/50 transition-colors group ${
-                        isHighlighted ? 'bg-primary/10 ring-1 ring-primary/30' : ''
+                      className={`w-full text-left px-3 py-2.5 hover:bg-accent/50 transition-colors group ${
+                        isHighlighted ? 'bg-primary/10 ring-1 ring-primary/30 animate-[pulse-scale_1.5s_ease-in-out_infinite]' : ''
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className={`text-xs font-medium truncate ${isHighlighted ? 'text-primary' : ''}`}>{t.title}</span>
+                        <span className={`text-xs font-medium ${isHighlighted ? 'text-primary' : ''}`}>{t.title}</span>
                         <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                       </div>
-                      <p className="text-[11px] text-muted-foreground truncate mt-0.5">
-                        {t.content.slice(0, 80)}{t.content.length > 80 ? '…' : ''}
-                      </p>
                     </button>
                   );
                 })}
