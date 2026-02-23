@@ -120,7 +120,7 @@ export function MobileBottomNav() {
     const { state, isDemoUser } = useDemoChecklist();
     searchPulse = isDemoUser && !state.searchDone;
     crmPulseWalkthrough = isDemoUser && state.addedToCrm && !state.contactAttempted;
-    trackPulseWalkthrough = isDemoUser && state.leadTracked && !state.followUpSet;
+    trackPulseWalkthrough = isDemoUser && state.statusUpdated && !state.leadTracked;
   } catch {}
 
   useEffect(() => {
