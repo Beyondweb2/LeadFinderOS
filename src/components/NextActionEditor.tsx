@@ -159,7 +159,7 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
   const canSave = actionPicked && selectedAction && selectedAction !== '' && selectedDate;
 
   return (
-    <div className="flex items-center gap-1" data-walkthrough-step="follow-up">
+    <div className="flex items-center gap-1" data-walkthrough-step="follow-up" data-walkthrough="next-action">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button

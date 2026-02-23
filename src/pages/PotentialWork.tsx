@@ -440,7 +440,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
           {/* ROW 3 — Notes preview (collapsed) */}
           {!isExpanded && (
-            <div className="px-3 sm:px-4 pt-1.5" data-walkthrough-step="track-notes-edit">
+            <div className="px-3 sm:px-4 pt-1.5" data-walkthrough-step="track-notes-edit" data-walkthrough="notes">
               {lead.notes ? (
                 <p className="text-[11px] sm:text-xs text-foreground/60 leading-relaxed line-clamp-2">
                   {lead.notes}
@@ -591,7 +591,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             </div>
 
             {/* Notes */}
-            <div className="pt-1">
+            <div className="pt-1" data-walkthrough="notes">
               {isEditingNotes ? (
                 <div className="space-y-2">
                   <Textarea
