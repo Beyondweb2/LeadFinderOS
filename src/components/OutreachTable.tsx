@@ -1012,11 +1012,6 @@ export function OutreachTable({
                               </span>
                             )}
                           </div>
-                        ) : phoneFetchStatus[lead.id] === 'pending' ? (
-                          <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            <span>Fetching…</span>
-                          </div>
                         ) : phoneFetchStatus[lead.id] === 'failed' ? (
                           <Button
                             variant="ghost"
@@ -1030,7 +1025,10 @@ export function OutreachTable({
                         ) : phoneFetchStatus[lead.id] === 'no_phone' ? (
                           <span className="text-muted-foreground text-xs">No phone listed</span>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <span>Fetching…</span>
+                          </div>
                         )}
                       </TableCell>
                       {!readOnly && (
