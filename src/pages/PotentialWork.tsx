@@ -314,11 +314,10 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   return (
     <>
       <Card className={cn(
-        'border border-border/60 border-l-[3px] transition-all bg-card overflow-hidden',
-        borderColor,
-        isExpanded ? 'shadow-lg shadow-primary/5 border-border' : 'hover:border-border hover:shadow-sm'
+        'border border-border/50 transition-all bg-card overflow-hidden',
+        isExpanded ? 'ring-1 ring-primary/20 shadow-md' : 'hover:border-border hover:shadow-sm'
       )}>
-        {/* ═══ COLLAPSED (always visible) — fixed height structure ═══ */}
+        {/* ═══ COLLAPSED (always visible) ═══ */}
         <div
           className="cursor-pointer"
           onClick={(e) => {
@@ -327,52 +326,56 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             onToggleExpand();
           }}
         >
-          {/* ZONE 1 — Identity Block */}
-          <div className="flex items-center gap-3 px-4 sm:px-5 pt-4 sm:pt-5">
+          {/* ROW 1 — Identity + Controls (matches CRM) */}
+          <div className="flex items-center gap-2.5 px-3 sm:px-4 pt-3 sm:pt-3.5">
             {/* Avatar */}
             <div className="shrink-0 relative group/avatar cursor-pointer" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
               {lead.image_url ? (
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-muted/40 ring-1 ring-border/50 shadow-sm">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg overflow-hidden bg-muted/40 ring-1 ring-border/30">
                   <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-sm sm:text-lg font-bold text-primary/70 shadow-sm">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-xs sm:text-sm font-bold text-primary/70">
                   {getInitials(lead.business_name)}
                 </div>
               )}
-              {/* Edit overlay */}
-              <div className="absolute inset-0 rounded-xl bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
-                <Pencil className="h-3.5 w-3.5 text-white" />
+              <div className="absolute inset-0 rounded-lg bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
+                <Pencil className="h-3 w-3 text-white" />
               </div>
             </div>
 
-            {/* Title block */}
+            {/* Name + meta */}
             <div className="flex-1 min-w-0">
-              <h3 className="text-[15px] sm:text-base font-bold leading-tight truncate text-foreground">
+              <h3 className="text-sm font-semibold leading-tight truncate text-foreground">
                 {lead.business_name}
               </h3>
-              {lead.category && (
-                <span className="text-[11px] sm:text-xs text-muted-foreground/50 block leading-tight mt-0.5 truncate">
-                  {lead.category}
-                </span>
-              )}
-              {contactMethodDisplay && (
-                <span className="text-[10px] sm:text-[11px] text-muted-foreground/35 block leading-tight mt-0.5">
-                  Contacted via {contactMethodDisplay}
-                </span>
-              )}
+              <div className="flex items-center gap-1.5 mt-0.5">
+                {lead.category && (
+                  <span className="text-[10px] text-muted-foreground/50 truncate">
+                    {lead.category}
+                  </span>
+                )}
+                {contactMethodDisplay && (
+                  <>
+                    {lead.category && <span className="text-muted-foreground/20">·</span>}
+                    <span className="text-[10px] text-muted-foreground/40">
+                      via {contactMethodDisplay}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* Controls */}
+            {/* Right controls */}
             <div className="flex items-center gap-0.5 shrink-0" data-no-expand>
               {lead.google_maps_url && (
-                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500 hover:bg-blue-500/10 transition-colors">
+                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500/60 hover:text-blue-500 hover:bg-blue-500/10 transition-colors">
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors">
+                  <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors">
                     <MoreVertical className="h-3.5 w-3.5" />
                   </button>
                 </DropdownMenuTrigger>
@@ -396,68 +399,52 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <button
-                onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-                className={cn(
-                  'inline-flex items-center gap-0.5 h-6 px-1.5 rounded-md text-[10px] font-medium transition-colors ml-0.5',
-                  isExpanded
-                    ? 'text-primary bg-primary/10'
-                    : 'text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/30'
-                )}
-              >
-                <ChevronDown className={cn(
-                  'h-3 w-3 transition-transform duration-200',
-                  isExpanded && 'rotate-180'
-                )} />
-              </button>
             </div>
           </div>
 
-          {/* ZONE 2 — Workflow Row (visual core) */}
-          <div className="flex items-center gap-1.5 flex-wrap px-4 sm:px-5 pt-3 sm:pt-3.5">
-            <span className={cn('inline-flex items-center h-7 px-3 rounded-full text-[11px] sm:text-xs font-semibold border', statusColorCls)}>
+          {/* ROW 2 — Status + Action pills + Due (matches CRM badge row) */}
+          <div className="flex items-center gap-1.5 flex-wrap px-3 sm:px-4 pt-2 sm:pt-2.5" data-no-expand>
+            <span className={cn('inline-flex items-center h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-semibold border', statusColorCls)}>
               {statusLabel}
             </span>
             {nextActionLabel ? (
-              <span className={cn('inline-flex items-center h-7 px-3 rounded-full text-[11px] sm:text-xs font-semibold border', actionColorCls)}>
+              <span className={cn('inline-flex items-center h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-semibold border', actionColorCls)}>
                 {nextActionLabel}
               </span>
             ) : (
               <button
-                className="inline-flex items-center h-7 px-3 rounded-full text-[11px] sm:text-xs font-medium border border-dashed border-border/40 text-muted-foreground/40 hover:text-muted-foreground/60 hover:border-border/60 transition-colors"
+                className="inline-flex items-center h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-medium border border-dashed border-border/40 text-muted-foreground/40 hover:text-muted-foreground/60 hover:border-border/60 transition-colors"
                 onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-                data-no-expand
               >
-                + Set next action
+                + Set action
               </button>
             )}
             {dueLabel && (
-              <span className={cn('inline-flex items-center gap-1 h-7 px-3 rounded-full text-[11px] sm:text-xs font-bold border', dueLabel.cls)}>
-                <Clock className="h-3 w-3" />
+              <span className={cn('inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-bold border', dueLabel.cls)}>
+                <Clock className="h-2.5 w-2.5" />
                 {dueLabel.text}
               </span>
             )}
             {lead.next_action && lead.next_action !== 'none' && !isExpanded && (
               <button
-                className="inline-flex items-center gap-0.5 h-6 px-2 rounded-full text-[10px] font-medium text-green-500 bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
+                className="inline-flex items-center gap-0.5 h-5 px-2 rounded-full text-[10px] font-medium text-green-500 bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
                 onClick={(e) => { e.stopPropagation(); onNextActionChange(lead.id, 'none' as NextActionType); }}
                 title="Mark as done"
-                data-no-expand
               >
                 <Check className="h-2.5 w-2.5" /> Done
               </button>
             )}
           </div>
 
-          {/* ZONE 3 — Notes Preview */}
+          {/* ROW 3 — Notes preview (collapsed) */}
           {!isExpanded && (
-             <div className="px-4 sm:px-5 pt-2.5 sm:pt-3" data-walkthrough-step="track-notes-edit">
+            <div className="px-3 sm:px-4 pt-2" data-walkthrough-step="track-notes-edit">
               {lead.notes ? (
-                <p className="text-xs sm:text-[13px] text-foreground/80 leading-relaxed line-clamp-2">
+                <p className="text-[11px] sm:text-xs text-foreground/60 leading-relaxed line-clamp-2">
                   {lead.notes}
                 </p>
               ) : (
-                <p className="text-xs sm:text-[13px] text-muted-foreground/25 italic">
+                <p className="text-[11px] sm:text-xs text-muted-foreground/25 italic">
                   Add note…
                 </p>
               )}
@@ -465,39 +452,51 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           )}
         </div>
 
-        {/* ZONE 4 — Contact Actions (icon-only, secondary) */}
-        {!isExpanded && lead.phone && (
-          <div className="flex items-center gap-1 px-4 sm:px-5 pt-2.5 pb-4 sm:pb-5" data-contact-zone>
-            <a
-              href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => handleContactMethodUpdate('whatsapp')}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-green-500/60 hover:text-green-500 hover:bg-green-500/10 transition-colors"
-              title="WhatsApp"
+        {/* ROW 4 — Contact actions + expand toggle */}
+        {!isExpanded && (
+          <div className="flex items-center justify-between px-3 sm:px-4 pt-2 pb-3 sm:pb-3.5">
+            {lead.phone ? (
+              <div className="flex items-center gap-0.5" data-contact-zone>
+                <a
+                  href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => handleContactMethodUpdate('whatsapp')}
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-green-500/60 hover:text-green-500 hover:bg-green-500/10 transition-colors"
+                  title="WhatsApp"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </a>
+                <a
+                  href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
+                  onClick={() => handleContactMethodUpdate('sms')}
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                  title="SMS"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                </a>
+                <a
+                  href={`tel:${lead.phone}`}
+                  onClick={() => handleContactMethodUpdate('contacted')}
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
+                  title="Call"
+                >
+                  <PhoneCall className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            ) : (
+              <div />
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+              className="inline-flex items-center gap-0.5 h-6 px-2 rounded-md text-[10px] font-medium text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/30 transition-colors"
+              data-no-expand
             >
-              <MessageSquare className="h-3.5 w-3.5" />
-            </a>
-            <a
-              href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
-              onClick={() => handleContactMethodUpdate('sms')}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
-              title="SMS"
-            >
-              <MessageCircle className="h-3.5 w-3.5" />
-            </a>
-            <a
-              href={`tel:${lead.phone}`}
-              onClick={() => handleContactMethodUpdate('contacted')}
-              className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
-              title="Call"
-            >
-              <PhoneCall className="h-3.5 w-3.5" />
-            </a>
+              Details
+              <ChevronDown className="h-3 w-3" />
+            </button>
           </div>
         )}
-        {/* Bottom padding when no phone or expanded */}
-        {!isExpanded && !lead.phone && <div className="pb-4 sm:pb-5" />}
 
         {/* ═══ EXPANDED PANEL ═══ */}
         <div
@@ -507,7 +506,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
           )}
         >
-          <div className="border-t border-border/40 px-3 py-3 space-y-3 bg-muted/5">
+          <div className="border-t border-border/40 px-3 sm:px-4 py-3 space-y-3 bg-muted/5">
             {/* Status selector */}
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground w-12 shrink-0">Status</span>
@@ -536,7 +535,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               <span className="text-[11px] text-muted-foreground w-12 shrink-0">Action</span>
               <div className="flex-1">
                 <Select value={nextAction} onValueChange={handleNextActionChange}>
-                  <SelectTrigger className="h-8 text-xs border-border/50">
+                  <SelectTrigger className="h-8 text-xs border-border/50" data-walkthrough-step="follow-up-action">
                     <SelectValue placeholder="Next action" />
                   </SelectTrigger>
                   <SelectContent>
@@ -571,6 +570,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                       'h-8 px-2.5 text-xs shrink-0 gap-1',
                       dueLabel ? dueLabel.cls : 'text-muted-foreground'
                     )}
+                    data-walkthrough-step="follow-up-date"
                   >
                     <CalendarIcon className="h-3 w-3" />
                     {nextActionDate ? format(nextActionDate, 'MMM d') : 'Date'}
@@ -586,7 +586,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   />
                 </PopoverContent>
               </Popover>
-
             </div>
 
             {/* Notes */}
@@ -597,8 +596,8 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                     ref={notesRef}
                     value={notes}
                     onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
-                    rows={4}
-                    className="resize-none text-sm border-border/50 min-h-[90px]"
+                    rows={3}
+                    className="resize-none text-xs border-border/50 min-h-[72px]"
                     placeholder="Add notes about this lead..."
                     autoFocus
                   />
@@ -613,17 +612,17 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 </div>
               ) : (
                 <div className="flex items-start gap-2">
-                  <StickyNote className="h-3.5 w-3.5 text-muted-foreground/40 mt-0.5 shrink-0" />
+                  <StickyNote className="h-3.5 w-3.5 text-muted-foreground/30 mt-0.5 shrink-0" />
                   <div className="flex-1 min-w-0">
                     {notes ? (
-                      <p className="text-xs text-foreground/70 leading-relaxed whitespace-pre-wrap">{notes}</p>
+                      <p className="text-xs text-foreground/60 leading-relaxed whitespace-pre-wrap">{notes}</p>
                     ) : (
-                      <span className="text-xs text-muted-foreground/30 italic">No notes</span>
+                      <span className="text-xs text-muted-foreground/25 italic">No notes</span>
                     )}
                   </div>
                   <button
                     onClick={() => setIsEditingNotes(true)}
-                    className="shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors border border-border/40"
+                    className="shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded text-[11px] text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors"
                   >
                     <Pencil className="h-2.5 w-2.5" /> {notes ? 'Edit' : 'Add'}
                   </button>
@@ -652,12 +651,52 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             ) : (
               <button
                 onClick={() => setEditingName(true)}
-                className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1 pt-1"
+                className="text-[11px] text-muted-foreground/40 hover:text-foreground flex items-center gap-1 pt-1"
               >
                 <Pencil className="h-2.5 w-2.5" /> Edit name
               </button>
             )}
+
+            {/* Contact actions in expanded view */}
+            {lead.phone && (
+              <div className="flex items-center gap-1 pt-1 border-t border-border/30" data-contact-zone>
+                <a
+                  href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => handleContactMethodUpdate('whatsapp')}
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-green-500/60 hover:text-green-500 hover:bg-green-500/10 transition-colors"
+                  title="WhatsApp"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </a>
+                <a
+                  href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
+                  onClick={() => handleContactMethodUpdate('sms')}
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                  title="SMS"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                </a>
+                <a
+                  href={`tel:${lead.phone}`}
+                  onClick={() => handleContactMethodUpdate('contacted')}
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
+                  title="Call"
+                >
+                  <PhoneCall className="h-3.5 w-3.5" />
+                </a>
+              </div>
+            )}
           </div>
+
+          {/* Collapse button */}
+          <button
+            onClick={() => onToggleExpand()}
+            className="w-full flex items-center justify-center gap-1 py-2 text-[10px] text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/20 transition-colors border-t border-border/30"
+          >
+            <ChevronDown className="h-3 w-3 rotate-180" /> Collapse
+          </button>
         </div>
 
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
