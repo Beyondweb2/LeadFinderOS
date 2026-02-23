@@ -200,7 +200,7 @@ export function AppSidebar() {
                     >
                       <Link 
                           to={item.url}
-                          data-walkthrough-step={item.url === '/potential-work' ? 'track-leads' : undefined}
+                          data-walkthrough-step={item.url === '/potential-work' ? 'track-leads' : item.url === '/outreach' ? 'outreach-crm' : undefined}
                           className={cn(
                             'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
                             isActive
