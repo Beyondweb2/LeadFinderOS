@@ -114,11 +114,13 @@ export function AppSidebar() {
   const { user } = useAuth();
   const isCollapsed = state === 'collapsed';
 
-  // Walkthrough step 1 pulse
+  // Walkthrough step 1 pulse + step 6 track pulse
   let searchPulse = false;
+  let trackPulseWalkthrough = false;
   try {
     const { state: demoState, isDemoUser } = useDemoChecklist();
     searchPulse = isDemoUser && !demoState.searchDone;
+    trackPulseWalkthrough = isDemoUser && demoState.leadTracked && !demoState.followUpSet;
   } catch {}
 
   // Flash state for sidebar icons (mirrors mobile bottom nav behavior)
@@ -184,7 +186,7 @@ export function AppSidebar() {
                 const isActive = location.pathname === item.url;
                 const isFlashing = 
                   (item.url === '/outreach' && flashCRM) || 
-                  (item.url === '/potential-work' && flashTrack) ||
+                  (item.url === '/potential-work' && (flashTrack || trackPulseWalkthrough)) ||
                   (item.url === '/find-leads' && searchPulse);
                 const flashColor = item.url === '/outreach' ? 'text-green-400' : (item.url === '/potential-work' || item.url === '/find-leads') ? 'text-yellow-400' : '';
                 return (

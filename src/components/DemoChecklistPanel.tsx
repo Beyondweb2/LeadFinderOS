@@ -10,7 +10,7 @@ import { useTrial } from '@/hooks/useTrial';
 
 const steps = [
   { key: 'searchDone' as const, label: 'Search for leads', cta: 'Go to Find Leads', route: '/find-leads', icon: Search, helperText: 'Enter a business type (e.g. "Barbers"), enter an area (e.g. "Manchester"), then hit Search.' },
-  { key: 'addedToCrm' as const, label: 'Add a business to Outreach CRM', cta: '', route: '/find-leads', icon: UserPlus, helperText: 'Tap any blue 📋 button to add a lead to your CRM.' },
+  { key: 'addedToCrm' as const, label: 'Add 3 businesses to Outreach CRM', cta: '', route: '/find-leads', icon: UserPlus, helperText: 'Tap any blue 📋 button to add leads to your CRM. Add at least 3!' },
   { key: 'contactAttempted' as const, label: 'Contact a lead via WhatsApp or SMS', cta: 'Open Outreach CRM', route: '/outreach', icon: Phone, helperText: 'Open a lead in Outreach CRM, then tap the WhatsApp or SMS button to contact them.' },
   { key: 'statusUpdated' as const, label: 'Update status & hit Track ⭐', cta: 'Update Status', route: '/outreach', icon: RefreshCw, helperText: 'Set the status to the contact method you used (e.g. WhatsApp, SMS), then hit the star (⭐) to track the lead.' },
   { key: 'leadTracked' as const, label: 'Open Track Leads page', cta: 'Go to Track Leads', route: '/potential-work', icon: Star, helperText: 'Your starred leads appear here. Open the page to continue.' },
@@ -222,6 +222,11 @@ export function DemoChecklistPanel() {
               <div className="flex-1 min-w-0">
                 <span className="text-xs leading-5">
                   {nextStep.label}
+                  {nextStep.key === 'addedToCrm' && state.crmAddCount > 0 && !state.addedToCrm && (
+                    <span className="text-primary font-medium ml-1">
+                      ({state.crmAddCount}/3 added)
+                    </span>
+                  )}
                   {nextStep.key === 'statusUpdated' && (state.statusChanged || state.trackPressed) && (
                     <span className="text-primary font-medium ml-1">
                       ({[state.statusChanged && 'status ✓', state.trackPressed && 'track ✓'].filter(Boolean).join(', ')})

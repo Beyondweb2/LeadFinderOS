@@ -33,7 +33,7 @@ const STEP_CONFIG: {
   {
     key: 'addedToCrm',
     selector: '[data-walkthrough-step="add-to-crm"]',
-    tooltip: 'Tap any blue 📋 button to add a lead to your CRM. Use the 👁 button to view more info about a business.',
+    tooltip: 'Tap any blue 📋 button to add a lead to your CRM. Add at least 3! Use the 👁 button to view more info about a business.',
     noDim: true,
     tooltipPosition: 'top' as const,
   },
