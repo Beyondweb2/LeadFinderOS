@@ -118,14 +118,9 @@ export function DemoChecklistPanel() {
                   <span className="text-foreground/90">Track next actions & follow-ups</span>
                 </li>
               </ul>
-              <div className="bg-primary/10 rounded-md p-2 mt-2">
-                <p className="text-xs text-primary font-medium">
-                  Finish contacting the remaining businesses in your CRM.
-                </p>
-              </div>
             </div>
             <Button size="lg" className="w-full" onClick={handleCompletionDismiss}>
-              Continue in CRM
+              Contact potential leads
             </Button>
           </div>
         </DialogContent>

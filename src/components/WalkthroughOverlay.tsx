@@ -26,11 +26,10 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
 
   // Step 2 – Add 3 businesses to CRM
   if (!state.addedToCrm) {
-    const remaining = Math.max(0, 3 - (state.crmAddCount || 0));
     return {
       step: 2,
       selector: '[data-walkthrough="add-crm"]',
-      tooltip: remaining > 0 ? `Add ${remaining} more business${remaining !== 1 ? 'es' : ''} to your CRM.` : 'Add businesses to your CRM.',
+      tooltip: 'Add three businesses to your CRM.',
       noDim: true,
       tooltipPosition: 'top',
     };
@@ -52,7 +51,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 5 – Update Status, Set Next Action, Track ⭐
   if (!state.statusUpdated) {
     if (!state.statusChanged) {
-      return { step: 5, selector: '[data-walkthrough="status"]', tooltip: 'Update the contact status.', noDim: true, tooltipPosition: 'right' };
+      return { step: 5, selector: '[data-walkthrough="status"]', tooltip: 'Set the contact method.', noDim: true, tooltipPosition: 'right' };
     }
     if (!state.step4ActionSet) {
       return { step: 5, selector: '[data-walkthrough="next-action"]', tooltip: 'Set the next action.', noDim: true };
@@ -243,7 +242,7 @@ export function WalkthroughOverlay() {
       {/* Tooltip with step counter */}
       {tooltipPos && (
         <div
-          className="absolute pointer-events-none px-3 py-2.5 rounded-lg bg-card border border-border shadow-lg max-w-[260px] text-center"
+          className="absolute pointer-events-none px-3 py-2.5 rounded-lg bg-card border border-yellow-500/40 shadow-lg max-w-[260px] text-center"
           style={{
             top: tooltipPos.top,
             left: tooltipPos.left,

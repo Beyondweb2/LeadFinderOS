@@ -162,7 +162,7 @@ export function SearchForm({
                   )}
                   {isLoading && (
                     <p className="text-[10px] sm:text-xs text-muted-foreground/60 mt-1.5 text-center sm:text-right">
-                      This can take 20–30 seconds — hang tight!
+                      This can take 20-30 seconds - hang tight!
                     </p>
                   )}
                 </>

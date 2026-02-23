@@ -624,14 +624,14 @@ const Landing = () => {
               {
                 num: 3,
                 title: 'Start Outreach',
-                body: 'Choose from ready-made templates that auto-fill each business name — send personalised WhatsApp or SMS messages in seconds.',
+                body: 'Choose from ready-made templates that auto-fill each business name - send personalised WhatsApp or SMS messages in seconds.',
                 img: step3Outreach,
                 alt: 'Start outreach with templates',
               },
               {
                 num: 4,
                 title: 'Track & Close',
-                body: "Track every lead from first message to paid client — set follow-ups, log replies, and see your full pipeline at a glance.",
+                body: "Track every lead from first message to paid client - set follow-ups, log replies, and see your full pipeline at a glance.",
                 img: step4Dashboard,
                 alt: 'Dashboard analytics',
               },
@@ -745,22 +745,22 @@ const Landing = () => {
             const toolkitFeatures = [
               {
                 title: 'Templates',
-                description: 'Ready-to-send WhatsApp, SMS, and call scripts — just pick a template, personalise, and hit send.',
+                description: 'Ready-to-send WhatsApp, SMS, and call scripts - just pick a template, personalise, and hit send.',
                 img: featureTemplates,
               },
               {
                 title: 'Dashboard',
-                description: 'See your full pipeline at a glance — revenue, conversion rate, activity, and quick actions all in one place.',
+                description: 'See your full pipeline at a glance - revenue, conversion rate, activity, and quick actions all in one place.',
                 img: featureDashboard,
               },
               {
                 title: 'Customisation',
-                description: 'Make the app yours — accent colours, custom statuses, and personalised templates that match your workflow.',
+                description: 'Make the app yours - accent colours, custom statuses, and personalised templates that match your workflow.',
                 img: featureCustomization,
               },
               {
                 title: 'Export & Reports',
-                description: 'Download your leads and outreach data anytime — CSV exports for easy reporting and backup.',
+                description: 'Download your leads and outreach data anytime - CSV exports for easy reporting and backup.',
                 img: featureExport,
               },
             ];
@@ -944,7 +944,7 @@ const Landing = () => {
 
               <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">Lead<span className="text-gradient-primary">Finder</span> Pro</h3>
               <p className="text-sm sm:text-base text-foreground/65 leading-relaxed mb-8 max-w-sm mx-auto font-medium">
-                Everything you need to find, contact and close clients — in one system.
+                Everything you need to find, contact and close clients - in one system.
               </p>
 
               <ul className="space-y-2.5 sm:space-y-2.5 mb-10 sm:mb-12 text-left max-w-sm mx-auto">
@@ -991,7 +991,7 @@ const Landing = () => {
               Got Any <span className="text-gradient-primary">Questions?</span>
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground/70 mb-1.5 leading-[1.6]">
-              Fast responses from a real person — no bots, no waiting.
+              Fast responses from a real person - no bots, no waiting.
             </p>
             <p className="text-xs text-muted-foreground/50 mb-5">
               We typically reply within minutes.

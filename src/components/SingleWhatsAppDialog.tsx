@@ -125,11 +125,11 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
             </AlertDescription>
           </Alert>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-5">
             {/* Template Editor */}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <Label htmlFor="template">Message Template</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="template" className="text-sm font-semibold">Message Template</Label>
                 {isModified && (
                   <Button
                     variant="ghost"
@@ -144,8 +144,8 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
               </div>
               {/* Walkthrough Step 3A: Template awareness nudge */}
               {showTemplateNudge && !templatesOpened && (
-                <div className="mb-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                  <p className="text-sm font-medium text-foreground mb-0.5">Choose your message</p>
+                <div className="mb-3 p-3 rounded-lg border border-yellow-500/40 bg-card shadow-sm">
+                  <p className="text-sm font-semibold text-foreground mb-0.5">Choose your message</p>
                   <p className="text-xs text-muted-foreground">
                     Tap <span className="inline-flex items-center gap-0.5 text-primary font-medium"><FileText className="h-3 w-3" />Templates</span> to use a ready-made message. It makes first outreach easier.
                   </p>
@@ -164,8 +164,8 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
                 id="template"
                 value={template}
                 onChange={(e) => handleTemplateChange(e.target.value)}
-                rows={5}
-                className="font-mono text-sm"
+                rows={4}
+                className="font-mono text-sm mt-2"
               />
               {!hasBusinessNamePlaceholder && (
                 <p className="text-xs text-amber-500 mt-1.5 flex items-center gap-1">
@@ -177,7 +177,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
 
             {/* Live Preview */}
             <div>
-              <Label className="flex items-center gap-1.5 mb-2">
+              <Label className="flex items-center gap-1.5 mb-2 text-sm font-semibold">
                 <span>📝</span>
                 Preview
               </Label>
@@ -185,6 +185,11 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
                 {previewMessage}
               </div>
             </div>
+
+            {/* Compliance note */}
+            <p className="text-[10px] text-muted-foreground/50 text-center">
+              Ensure outreach complies with platform and local regulations.
+            </p>
           </div>
         )}
 

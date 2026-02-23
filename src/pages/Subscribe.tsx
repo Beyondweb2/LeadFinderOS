@@ -169,7 +169,7 @@ const Subscribe = () => {
                   ) : (
                     <>
                       <CreditCard className="mr-2 h-4 w-4" />
-                      Unlock unlimited — £19.99/month
+                      Unlock unlimited - £19.99/month
                     </>
                   )}
                 </Button>
