@@ -47,9 +47,9 @@
     --status-hot-foreground: 0 0% 0%;
     --status-directory: 32 95% 55%;
     --status-directory-foreground: 0 0% 0%;
-    --status-has-website: 217 91% 60%;
+    --status-has-website: 217 55% 48%;
     --status-has-website-foreground: 0 0% 100%;
-    --status-uncertain: 215 20% 45%;
+    --status-uncertain: 215 20% 40%;
     --status-uncertain-foreground: 0 0% 100%;
 
     /* Subtle gradients */

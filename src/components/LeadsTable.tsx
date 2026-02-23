@@ -118,7 +118,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
               rel="noopener noreferrer"
               onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
             >
-              {checked ? <Eye className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5 text-blue-400" />}
+              {checked ? <Eye className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
             </a>
           </Button>
         </TooltipTrigger>
@@ -263,7 +263,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                           >
                             {isChecked?.(lead.name, lead.googleMapsUrl)
                               ? <><Eye className="h-4 w-4 mr-1.5" />Viewed</>
-                              : <><Eye className="h-4 w-4 mr-1.5 text-blue-400" />View Info</>}
+                              : <><Eye className="h-4 w-4 mr-1.5 text-muted-foreground" />View Info</>}
                           </a>
                         </Button>
                       </TooltipTrigger>
