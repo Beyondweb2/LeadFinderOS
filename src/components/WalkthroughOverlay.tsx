@@ -22,6 +22,7 @@ const STEP_CONFIG: {
     key: 'searchDone',
     selector: '[data-walkthrough-step="quick-locations"]',
     tooltip: 'Tap Quick Locations, pick a country, then select a city.',
+    noDim: true,
   },
   {
     key: 'searchDone',
