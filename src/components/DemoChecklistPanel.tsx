@@ -165,6 +165,11 @@ export function DemoChecklistPanel() {
                   <span className="text-foreground/90">Track next actions & follow-ups</span>
                 </li>
               </ul>
+              <div className="bg-primary/10 rounded-md p-2 mt-2">
+                <p className="text-xs text-primary font-medium">
+                  💡 Now contact the other 2 businesses — they could be your next clients!
+                </p>
+              </div>
               <p className="text-xs text-primary font-medium pt-1">
                 Every search uncovers new businesses that need your services.
               </p>
