@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +10,23 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
+
+function useCountUp(target: number, shouldRun: boolean, duration = 500) {
+  const [value, setValue] = useState(0);
+  const hasRun = useRef(false);
+  useEffect(() => {
+    if (!shouldRun || hasRun.current || target <= 0) return;
+    hasRun.current = true;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const t = Math.min((now - start) / duration, 1);
+      setValue(Math.round(t * target));
+      if (t < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, [shouldRun, target, duration]);
+  return value;
+}
 
 interface TrialLimitDialogProps {
   open: boolean;
@@ -55,6 +72,10 @@ export function TrialLimitDialog({
   const displayBiz = stats.businesses || totalBusinessesFound;
   const displayNoWeb = stats.noWebsite || noWebsiteCount;
 
+  const animBiz = useCountUp(displayBiz, shouldShow);
+  const animNoWeb = useCountUp(displayNoWeb, shouldShow);
+  const animPotential = useCountUp(displayNoWeb, shouldShow);
+
   const handleCheckout = async () => {
     setIsLoading(true);
     try { supabase.rpc('log_usage_event', { p_event_type: 'trial_checkout_started' }); } catch {}
@@ -88,7 +109,7 @@ export function TrialLimitDialog({
           {/* Header */}
           <div className="text-center space-y-1.5">
             <img src={logoImg} alt="LeadFinder" className="mx-auto mb-3 h-11 w-11 rounded-full object-contain" />
-            <h2 className="text-xl font-bold text-foreground">Start turning these into paying clients</h2>
+            <h2 className="text-xl font-bold text-foreground">Start turning these into <span className="text-primary">paying clients</span></h2>
             {displayNoWeb > 0 && (
               <p className="text-sm text-muted-foreground">
                 You found <span className="font-semibold text-primary">{displayNoWeb}</span> businesses without websites.
@@ -99,15 +120,15 @@ export function TrialLimitDialog({
           {/* Stats */}
           <div className="grid grid-cols-3 gap-2">
             <div className="text-center p-3 rounded-lg bg-muted/40 border border-border/50">
-              <p className="text-xl font-bold text-foreground">{displayBiz}</p>
+              <p className="text-xl font-bold text-foreground">{animBiz}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">Found</p>
             </div>
             <div className="text-center p-3 rounded-lg bg-primary/5 border border-primary/15">
-              <p className="text-xl font-bold text-primary">{displayNoWeb}</p>
+              <p className="text-xl font-bold text-primary">{animNoWeb}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">No Website</p>
             </div>
             <div className="text-center p-3 rounded-lg bg-muted/40 border border-border/50">
-              <p className="text-xl font-bold text-foreground">{displayNoWeb}</p>
+              <p className="text-xl font-bold text-foreground">{animPotential}</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">Potential Clients</p>
             </div>
           </div>
