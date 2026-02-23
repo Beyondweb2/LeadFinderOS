@@ -171,7 +171,7 @@ export function DemoChecklistPanel() {
                 </p>
               </div>
               <p className="text-xs text-primary font-medium pt-1">
-                Every search uncovers new businesses that need your services.
+                Keep the momentum going. Find your next batch of leads.
               </p>
             </div>
             <div className="w-full bg-muted rounded-full h-1.5">
