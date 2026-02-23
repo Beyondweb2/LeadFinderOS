@@ -184,7 +184,7 @@ export function WalkthroughOverlay() {
   const tooltipText = typeof activeStep.tooltip === 'function' ? activeStep.tooltip(state) : activeStep.tooltip;
 
   return createPortal(
-    <div className="fixed inset-0 z-[9998] pointer-events-none" aria-hidden="true">
+    <div className="fixed inset-0 z-[40] pointer-events-none" aria-hidden="true">
       {/* Dim overlay with cutout */}
       {!useNoDim && (
         <svg className="absolute inset-0 w-full h-full" style={{ pointerEvents: 'auto' }}>
@@ -225,7 +225,7 @@ export function WalkthroughOverlay() {
       {!useNoDim && (
         <div
           className="absolute"
-          style={{ ...spotlightStyle, zIndex: 9999, pointerEvents: 'auto', background: 'transparent' }}
+          style={{ ...spotlightStyle, zIndex: 41, pointerEvents: 'auto', background: 'transparent' }}
           onClick={() => {
             const el = document.querySelector(activeStep.selector) as HTMLElement;
             if (el) el.click();
@@ -248,7 +248,7 @@ export function WalkthroughOverlay() {
             top: tooltipPos.top,
             left: tooltipPos.left,
             transform: (activeStep.tooltipPosition === 'right' && window.innerWidth >= 640) ? 'translateY(-50%)' : 'translateX(-50%)',
-            zIndex: 9999,
+            zIndex: 41,
           }}
         >
           <div className="text-[10px] font-semibold text-primary mb-0.5">
