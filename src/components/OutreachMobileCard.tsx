@@ -64,9 +64,10 @@ export function OutreachMobileCard({
 }: OutreachMobileCardProps) {
   const isPhoneFetching = phoneFetchStatus === 'pending';
   const isPhoneFailed = phoneFetchStatus === 'failed';
+  const isPhoneResolved = phoneFetchStatus === 'success' || phoneFetchStatus === 'no_phone' || isPhoneFailed;
   const hasPhone = !!lead.phone;
-  // Show loading state when no phone and still fetching
-  const showFetchingState = !hasPhone && isPhoneFetching;
+  // Show loading state when no phone and fetch hasn't resolved yet (pending or not started)
+  const showFetchingState = !hasPhone && !isPhoneResolved;
 
   return (
     <div 
