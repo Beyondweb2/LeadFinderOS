@@ -917,6 +917,7 @@ export function OutreachTable({
                   readOnly={readOnly}
                   showTrackButton={!!onMarkAsInterested}
                   isHighlighted={lastContactedLeadId === lead.id}
+                  isLastContacted={lastContactedLeadId === lead.id}
                   onCompleteAction={() => onNextActionChange(lead.id, 'none' as NextActionType)}
                   phoneFetchStatus={phoneFetchStatus[lead.id]}
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
@@ -1043,7 +1044,7 @@ export function OutreachTable({
                                 }
                               }}
                             >
-                              <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" data-walkthrough-step="status">
+                              <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" {...(lastContactedLeadId === lead.id ? { 'data-walkthrough-step': 'status' } : {})}>
                                 <OutreachStatusBadge status={lead.status} />
                               </SelectTrigger>
                               <SelectContent>
@@ -1163,7 +1164,7 @@ export function OutreachTable({
                                 size="sm"
                                 className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary"
                                 onClick={() => onMarkAsInterested([lead.id])}
-                                data-walkthrough-step="track-star"
+                                {...(lastContactedLeadId === lead.id ? { 'data-walkthrough-step': 'track-star' } : {})}
                               >
                                 <Star className="h-3.5 w-3.5 mr-1" />
                                 Track

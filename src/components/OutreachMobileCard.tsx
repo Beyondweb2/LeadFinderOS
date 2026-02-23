@@ -37,6 +37,7 @@ interface OutreachMobileCardProps {
   readOnly?: boolean;
   showTrackButton?: boolean;
   isHighlighted?: boolean;
+  isLastContacted?: boolean;
   onAutoTrack?: () => void;
   onCompleteAction?: () => void;
   phoneFetchStatus?: PhoneFetchStatus;
@@ -57,6 +58,7 @@ export function OutreachMobileCard({
   readOnly = false,
   showTrackButton = true,
   isHighlighted = false,
+  isLastContacted = false,
   onAutoTrack,
   onCompleteAction,
   phoneFetchStatus,
@@ -110,7 +112,7 @@ export function OutreachMobileCard({
                   }
                 }}
               >
-                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" data-walkthrough-step="status">
+                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" {...(isLastContacted ? { 'data-walkthrough-step': 'status' } : {})}>
                   <OutreachStatusBadge status={lead.status} compact />
                 </SelectTrigger>
                 <SelectContent>
@@ -228,7 +230,7 @@ export function OutreachMobileCard({
                       size="icon"
                       className="h-7 w-7 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
                       onClick={onTrack}
-                      data-walkthrough-step="track-star"
+                      {...(isLastContacted ? { 'data-walkthrough-step': 'track-star' } : {})}
                     >
                       <Star className="h-3.5 w-3.5" />
                     </Button>
