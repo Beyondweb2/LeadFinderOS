@@ -207,10 +207,6 @@ const Index = () => {
           <h2 className="text-xl font-semibold text-foreground/80 mb-2">
             Ready to find leads
           </h2>
-          <p className="text-muted-foreground max-w-md mx-auto">
-            Enter a business type and location above to discover businesses 
-            without websites — your ideal prospects for web development services.
-          </p>
         </section>
       )}
 

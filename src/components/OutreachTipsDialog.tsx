@@ -14,7 +14,7 @@ const TIPS = [
   {
     icon: MessageSquare,
     title: 'Confirm the number first',
-    description: '"Hi, is this [business name]?" — get a reply before anything else.',
+    description: '"Hi, is this [business name]?" - get a reply before anything else.',
   },
   {
     icon: Ban,
@@ -71,10 +71,10 @@ export function OutreachTipsDialog() {
       <DialogContent className="sm:max-w-sm p-0 overflow-hidden">
         <div className="p-5 space-y-4">
           <div className="text-center space-y-1">
-            <DialogTitle className="text-base font-bold">
+            <DialogTitle className="text-lg font-bold">
               First contact tips 🎯
             </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
+            <DialogDescription className="text-sm text-muted-foreground">
               How to message leads for the best reply rate
             </DialogDescription>
           </div>
@@ -86,8 +86,8 @@ export function OutreachTipsDialog() {
                   <Icon className="h-3.5 w-3.5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-xs font-semibold text-foreground">{title}</p>
-                  <p className="text-[11px] text-muted-foreground">{description}</p>
+                  <p className="text-sm font-semibold text-foreground">{title}</p>
+                  <p className="text-xs text-muted-foreground">{description}</p>
                 </div>
               </div>
             ))}

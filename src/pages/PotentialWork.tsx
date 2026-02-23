@@ -477,14 +477,18 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           {/* Notes row — prominent, below header like CRM detail text */}
           {!isExpanded && (
             <div className="flex items-end gap-2 mt-1.5">
-              <div className="flex-1 min-w-0 ml-[50px]" data-walkthrough-step="track-notes-edit" data-walkthrough="notes">
+              <div
+                className="flex-1 min-w-0 ml-[50px] cursor-pointer rounded-md p-1 -m-1 hover:bg-muted/20 transition-colors"
+                data-walkthrough-step="track-notes-edit" data-walkthrough="notes"
+                onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+              >
                 {lead.notes ? (
                   <p className="text-xs text-foreground/60 leading-relaxed line-clamp-2">
                     {lead.notes}
                   </p>
                 ) : (
                   <p className="text-[11px] text-muted-foreground/25 italic">
-                    Add note…
+                    Click to add notes...
                   </p>
                 )}
               </div>
@@ -614,21 +618,18 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   </div>
                 </div>
               ) : (
-                <div className="flex items-start gap-2">
+                <div
+                  className="flex items-start gap-2 cursor-pointer rounded-md p-1.5 -mx-1.5 hover:bg-muted/30 transition-colors"
+                  onClick={() => setIsEditingNotes(true)}
+                >
                   <StickyNote className="h-3.5 w-3.5 text-muted-foreground/30 mt-0.5 shrink-0" />
                   <div className="flex-1 min-w-0">
                     {notes ? (
                       <p className="text-xs text-foreground/60 leading-relaxed whitespace-pre-wrap">{notes}</p>
                     ) : (
-                      <span className="text-xs text-muted-foreground/25 italic">No notes</span>
+                      <span className="text-xs text-muted-foreground/25 italic">Click to add notes...</span>
                     )}
                   </div>
-                  <button
-                    onClick={() => setIsEditingNotes(true)}
-                    className="shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded text-[11px] text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors"
-                  >
-                    <Pencil className="h-2.5 w-2.5" /> {notes ? 'Edit' : 'Add'}
-                  </button>
                   {notesSaved && (
                     <span className="text-[10px] text-green-500 shrink-0 flex items-center gap-0.5">
                       <Check className="h-2.5 w-2.5" /> Saved

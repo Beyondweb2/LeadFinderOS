@@ -15,7 +15,7 @@ const tips = [
   {
     icon: MessageCircle,
     title: 'Start casual',
-    description: "Ask if it's the right number — keep it friendly, not salesy.",
+    description: "Ask if it's the right number - keep it friendly, not salesy.",
   },
   {
     icon: Link2Off,
@@ -92,7 +92,7 @@ export function PostWalkthroughTipsModal({ open, onOpenChange }: PostWalkthrough
 
           {/* Motivational line */}
           <p className="text-center text-xs text-muted-foreground italic">
-            Consistency is everything — the people who send 10+ messages a day land clients within weeks, not months.
+            Consistency is everything - the people who send 10+ messages a day land clients within weeks, not months.
           </p>
 
           {/* Actions */}

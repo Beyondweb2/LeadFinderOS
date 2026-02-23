@@ -35,7 +35,7 @@ export function TrialBanner() {
                Full access active
              </span>
             <span className="text-muted-foreground hidden sm:inline truncate">
-              — £19.99/mo, cancel anytime
+               - £19.99/mo, cancel anytime
             </span>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -75,7 +75,7 @@ export function TrialBanner() {
                 Free access
               </span>
               <span className="text-muted-foreground hidden sm:inline truncate">
-                — Unlock unlimited searches
+                - Unlock unlimited searches
               </span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
