@@ -64,7 +64,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
 
   // Step 6 – Open Track page
   if (!state.leadTracked) {
-    return { step: 6, selector: '[data-walkthrough="track-nav"]', tooltip: 'Open Track to manage your pipeline.' };
+    return { step: 6, selector: '[data-walkthrough="track-nav"]', tooltip: 'Open Track to manage your pipeline.', tooltipPosition: 'top' };
   }
 
   // Step 7 – Add note
