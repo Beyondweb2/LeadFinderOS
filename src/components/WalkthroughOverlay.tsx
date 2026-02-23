@@ -38,10 +38,16 @@ const STEP_CONFIG: {
   },
   {
     key: 'contactAttempted',
+    selector: '[data-walkthrough-step="outreach-crm"]',
+    tooltip: 'Open your CRM to contact and manage your leads.',
+  },
+  {
+    key: 'contactAttempted',
+    subKey: 'contactAction',
     selector: '[data-walkthrough-step="contact"]',
     tooltip: 'Tap WhatsApp or SMS to contact this lead.',
     noDim: true,
-  },
+  } as any,
   // Step 4 sub-step A: update status
   {
     key: 'statusUpdated',
@@ -131,7 +137,19 @@ export function WalkthroughOverlay() {
       return;
     }
 
-    // For statusUpdated, handle sub-steps: statusChanged → step4Action → step4Date → trackPressed
+    // For contactAttempted: first highlight CRM nav, then contact button on CRM page
+    if (!state.contactAttempted && state.addedToCrm) {
+      const contactEl = document.querySelector('[data-walkthrough-step="contact"]');
+      if (contactEl) {
+        // User is on CRM page, show contact action
+        setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'contactAction') || null);
+      } else {
+        // User not on CRM page, show CRM nav link
+        setActiveStep(STEP_CONFIG.find(s => s.key === 'contactAttempted' && !(s as any).subKey) || null);
+      }
+      return;
+    }
+
     if (!state.statusUpdated) {
       const priorSteps = ['addedToCrm', 'contactAttempted'] as const;
       const allPriorDone = priorSteps.every(k => state[k]);
