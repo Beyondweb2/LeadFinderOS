@@ -17,25 +17,25 @@ const statusConfig: Record<WebsiteStatus, {
   NO_WEBSITE: {
     label: 'No Website',
     shortLabel: 'No Site',
-    className: 'bg-green-500/20 text-green-400 border-green-500/30',
+    className: 'bg-[hsl(var(--status-hot))] text-[hsl(var(--status-hot-foreground))] border-transparent font-semibold',
     icon: Flame,
   },
   DIRECTORY_ONLY: {
     label: 'Directory Only',
     shortLabel: 'Directory',
-    className: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+    className: 'bg-[hsl(var(--status-directory))] text-[hsl(var(--status-directory-foreground))] border-transparent font-semibold',
     icon: Building,
   },
   HAS_OWN_WEBSITE: {
     label: 'Has Website',
     shortLabel: 'Has Site',
-    className: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+    className: 'bg-[hsl(var(--status-has-website))] text-[hsl(var(--status-has-website-foreground))] border-transparent font-semibold',
     icon: Globe,
   },
   UNCERTAIN: {
     label: 'Uncertain',
     shortLabel: 'Uncertain',
-    className: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+    className: 'bg-[hsl(var(--status-uncertain))] text-[hsl(var(--status-uncertain-foreground))] border-transparent font-semibold',
     icon: HelpCircle,
   },
 };
