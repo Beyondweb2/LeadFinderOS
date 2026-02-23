@@ -8,14 +8,16 @@ export interface DemoChecklistState {
   crmAddCount: number;
   contactAttempted: boolean;
   statusChanged: boolean;
+  step4ActionSet: boolean;
+  step4DateSet: boolean;
   trackPressed: boolean;
-  statusUpdated: boolean; // derived: statusChanged && trackPressed
+  statusUpdated: boolean; // derived: statusChanged && step4ActionSet && step4DateSet && trackPressed
   leadTracked: boolean;
   followUpActionSet: boolean;
   followUpDateSet: boolean;
   followUpNoteAdded: boolean;
   followUpStatusChanged: boolean;
-  followUpSet: boolean; // derived: all four sub-steps
+  followUpSet: boolean; // derived: action + date
 }
 
 interface DemoChecklistContextType {
@@ -42,7 +44,7 @@ function loadState(userId?: string): DemoChecklistState {
     const raw = localStorage.getItem(getKey(userId));
     if (raw) return JSON.parse(raw);
   } catch { /* ignore */ }
-  return { searchDone: false, addedToCrm: false, crmAddCount: 0, contactAttempted: false, statusChanged: false, trackPressed: false, statusUpdated: false, leadTracked: false, followUpActionSet: false, followUpDateSet: false, followUpNoteAdded: false, followUpStatusChanged: false, followUpSet: false };
+  return { searchDone: false, addedToCrm: false, crmAddCount: 0, contactAttempted: false, statusChanged: false, step4ActionSet: false, step4DateSet: false, trackPressed: false, statusUpdated: false, leadTracked: false, followUpActionSet: false, followUpDateSet: false, followUpNoteAdded: false, followUpStatusChanged: false, followUpSet: false };
 }
 
 function saveState(state: DemoChecklistState, userId?: string) {
@@ -109,19 +111,33 @@ export function DemoChecklistProvider({
     };
     const onContact = () => completeStep('contactAttempted');
     const onStatus = () => {
-      // Mark statusChanged, then derive statusUpdated if both conditions met
       setState(prev => {
         if (prev.statusChanged) return prev;
-        const next = { ...prev, statusChanged: true, statusUpdated: prev.trackPressed };
+        const next = { ...prev, statusChanged: true, statusUpdated: prev.step4ActionSet && prev.step4DateSet && prev.trackPressed };
+        saveState(next, user?.id);
+        return next;
+      });
+    };
+    const onStep4Action = () => {
+      setState(prev => {
+        if (prev.step4ActionSet) return prev;
+        const next = { ...prev, step4ActionSet: true, statusUpdated: prev.statusChanged && prev.step4DateSet && prev.trackPressed };
+        saveState(next, user?.id);
+        return next;
+      });
+    };
+    const onStep4Date = () => {
+      setState(prev => {
+        if (prev.step4DateSet) return prev;
+        const next = { ...prev, step4DateSet: true, statusUpdated: prev.statusChanged && prev.step4ActionSet && prev.trackPressed };
         saveState(next, user?.id);
         return next;
       });
     };
     const onTrack = () => {
-      // Mark trackPressed, then derive statusUpdated if both conditions met
       setState(prev => {
         if (prev.trackPressed) return prev;
-        const next = { ...prev, trackPressed: true, statusUpdated: prev.statusChanged };
+        const next = { ...prev, trackPressed: true, statusUpdated: prev.statusChanged && prev.step4ActionSet && prev.step4DateSet };
         saveState(next, user?.id);
         return next;
       });
@@ -172,6 +188,8 @@ export function DemoChecklistProvider({
     window.addEventListener('crm-lead-added', onCrmAdd);
     window.addEventListener('demo-checklist-contact', onContact);
     window.addEventListener('demo-checklist-status-change', onStatus);
+    window.addEventListener('demo-checklist-step4-action-set', onStep4Action);
+    window.addEventListener('demo-checklist-step4-date-set', onStep4Date);
     window.addEventListener('demo-checklist-track-pressed', onTrack);
     window.addEventListener('demo-checklist-next-action-set', onFollowUpAction);
     window.addEventListener('demo-checklist-next-date-set', onFollowUpDate);
@@ -184,6 +202,8 @@ export function DemoChecklistProvider({
       window.removeEventListener('crm-lead-added', onCrmAdd);
       window.removeEventListener('demo-checklist-contact', onContact);
       window.removeEventListener('demo-checklist-status-change', onStatus);
+      window.removeEventListener('demo-checklist-step4-action-set', onStep4Action);
+      window.removeEventListener('demo-checklist-step4-date-set', onStep4Date);
       window.removeEventListener('demo-checklist-track-pressed', onTrack);
       window.removeEventListener('demo-checklist-next-action-set', onFollowUpAction);
       window.removeEventListener('demo-checklist-next-date-set', onFollowUpDate);

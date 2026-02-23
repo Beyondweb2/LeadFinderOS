@@ -50,7 +50,23 @@ const STEP_CONFIG: {
     noDim: true,
     tooltipPosition: 'right' as const,
   } as any,
-  // Step 4 sub-step B: track star
+  // Step 4 sub-step B: set next action to "Send Follow Up"
+  {
+    key: 'statusUpdated',
+    subKey: 'step4Action',
+    selector: '[data-walkthrough-step="follow-up-action"]',
+    tooltip: 'Select "Send Follow Up" as the next action.',
+    noDim: true,
+  } as any,
+  // Step 4 sub-step C: pick a date
+  {
+    key: 'statusUpdated',
+    subKey: 'step4Date',
+    selector: '[data-walkthrough-step="follow-up-date"]',
+    tooltip: 'Pick a follow-up date.',
+    noDim: true,
+  } as any,
+  // Step 4 sub-step D: track star
   {
     key: 'statusUpdated',
     subKey: 'trackPressed',
@@ -114,14 +130,21 @@ export function WalkthroughOverlay() {
       return;
     }
 
-    // For statusUpdated, handle sub-steps: statusChanged → trackPressed
+    // For statusUpdated, handle sub-steps: statusChanged → step4Action → step4Date → trackPressed
     if (!state.statusUpdated) {
-      // Check if we're at the statusUpdated step
       const priorSteps = ['addedToCrm', 'contactAttempted'] as const;
       const allPriorDone = priorSteps.every(k => state[k]);
       if (allPriorDone) {
         if (!state.statusChanged) {
           setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'statusChanged') || null);
+          return;
+        }
+        if (!state.step4ActionSet) {
+          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'step4Action') || null);
+          return;
+        }
+        if (!state.step4DateSet) {
+          setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'step4Date') || null);
           return;
         }
         if (!state.trackPressed) {

@@ -236,6 +236,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     await onNextActionChange(lead.id, dbAction, nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined);
     if (dbAction !== 'none') {
       window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
+      window.dispatchEvent(new CustomEvent('demo-checklist-step4-action-set'));
     }
   };
 
@@ -247,8 +248,10 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
       await onNextActionChange(lead.id, dbAction, format(d, 'yyyy-MM-dd'));
       if (dbAction !== 'none') {
         window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
+        window.dispatchEvent(new CustomEvent('demo-checklist-step4-action-set'));
       }
       window.dispatchEvent(new CustomEvent('demo-checklist-next-date-set'));
+      window.dispatchEvent(new CustomEvent('demo-checklist-step4-date-set'));
     }
   };
 
