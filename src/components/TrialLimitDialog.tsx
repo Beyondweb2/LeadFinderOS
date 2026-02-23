@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogTitle,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Check, Sparkles, Loader2 } from 'lucide-react';
@@ -105,6 +107,8 @@ export function TrialLimitDialog({
   return (
     <Dialog open={shouldShow} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md p-0 overflow-hidden border-border/50 backdrop-blur-sm animate-in fade-in-0 zoom-in-95 duration-200">
+        <DialogTitle className="sr-only">Start your free trial</DialogTitle>
+        <DialogDescription className="sr-only">Trial upgrade prompt</DialogDescription>
         <div className="p-6 space-y-5">
           {/* Header */}
           <div className="text-center space-y-1.5">
