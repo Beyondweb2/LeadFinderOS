@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useOutreach } from '@/hooks/useOutreach';
 import { AlertTriangle, Clock, CalendarCheck } from 'lucide-react';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
@@ -765,6 +766,13 @@ const PotentialWorkPage = () => {
   const [metricFilter, setMetricFilter] = useState<'overdue' | 'today' | 'upcoming' | 'no_action' | null>(null);
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
+
+  // Auto-expand first card during walkthrough step 6
+  let isWalkthroughStep6 = false;
+  try {
+    const { state: demoState, isDemoUser } = useDemoChecklist();
+    isWalkthroughStep6 = isDemoUser && demoState.leadTracked && !demoState.followUpSet;
+  } catch {}
   const [customStatuses, setCustomStatuses] = useState<{ value: string; label: string }[]>([]);
   const [showCustomStatusDialog, setShowCustomStatusDialog] = useState(false);
   const [newStatusLabel, setNewStatusLabel] = useState('');
@@ -863,6 +871,13 @@ const PotentialWorkPage = () => {
       return metricFilter === 'upcoming';
     });
   }, [allPotentialLeads, metricFilter]);
+
+  // Auto-expand first card during walkthrough step 6
+  useEffect(() => {
+    if (isWalkthroughStep6 && potentialWorkLeads.length > 0 && !expandedCardId) {
+      setExpandedCardId(potentialWorkLeads[0].id);
+    }
+  }, [isWalkthroughStep6, potentialWorkLeads, expandedCardId]);
 
   if (isLoading) {
     return (

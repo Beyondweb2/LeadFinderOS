@@ -254,10 +254,21 @@ export function WalkthroughOverlay() {
     const clampedLeft = Math.max(minLeft, Math.min(maxLeft, rawLeft));
 
     if (activeStep.tooltipPosition === 'right') {
-      // Position tooltip to the right of the target element
-      const rightLeft = rect.right + padding;
-      const topCenter = rect.top + rect.height / 2;
-      setTooltipPos({ top: topCenter, left: rightLeft });
+      // On mobile (narrow screens), fall back to top/bottom positioning
+      const isMobile = window.innerWidth < 640;
+      if (isMobile) {
+        // Position above or below the element instead of to the right
+        const preferTop = rect.top > tooltipHeight + padding;
+        if (preferTop) {
+          setTooltipPos({ top: rect.top - tooltipHeight - padding, left: clampedLeft });
+        } else {
+          setTooltipPos({ top: rect.bottom + padding, left: clampedLeft });
+        }
+      } else {
+        const rightLeft = rect.right + padding;
+        const topCenter = rect.top + rect.height / 2;
+        setTooltipPos({ top: topCenter, left: rightLeft });
+      }
     } else {
       const preferTop = activeStep.tooltipPosition === 'top';
       if (preferTop || spaceBelow <= tooltipHeight + padding) {
@@ -406,7 +417,7 @@ export function WalkthroughOverlay() {
           style={{
             top: tooltipPos.top,
             left: tooltipPos.left,
-            transform: activeStep.tooltipPosition === 'right' ? 'translateY(-50%)' : 'translateX(-50%)',
+            transform: (activeStep.tooltipPosition === 'right' && window.innerWidth >= 640) ? 'translateY(-50%)' : 'translateX(-50%)',
             zIndex: 9999,
           }}
         >

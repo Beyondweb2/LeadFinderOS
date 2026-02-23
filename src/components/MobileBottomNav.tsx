@@ -112,12 +112,14 @@ export function MobileBottomNav() {
   const [crmGlow, setCrmGlow] = useState(false);
   const [trackGlow, setTrackGlow] = useState(false);
 
-  // Walkthrough step 1 pulse + step 6 track pulse
+  // Walkthrough step 1 pulse + step 3 CRM pulse + step 6 track pulse
   let searchPulse = false;
+  let crmPulseWalkthrough = false;
   let trackPulseWalkthrough = false;
   try {
     const { state, isDemoUser } = useDemoChecklist();
     searchPulse = isDemoUser && !state.searchDone;
+    crmPulseWalkthrough = isDemoUser && state.addedToCrm && !state.contactAttempted;
     trackPulseWalkthrough = isDemoUser && state.leadTracked && !state.followUpSet;
   } catch {}
 
@@ -198,7 +200,7 @@ export function MobileBottomNav() {
                   'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[60px]',
                   item.title === 'Search' && searchPulse
                     ? 'text-yellow-400 animate-pulse'
-                    : item.title === 'CRM' && crmGlow
+                    : item.title === 'CRM' && (crmGlow || crmPulseWalkthrough)
                       ? 'text-green-400 animate-pulse'
                       : item.title === 'Track' && (trackGlow || trackPulseWalkthrough)
                         ? 'text-yellow-400 animate-pulse'
@@ -209,7 +211,7 @@ export function MobileBottomNav() {
               >
                 <item.icon className={cn(
                   'h-5 w-5 transition-all',
-                  item.title === 'CRM' && crmGlow && 'scale-110',
+                  item.title === 'CRM' && (crmGlow || crmPulseWalkthrough) && 'scale-110',
                   item.title === 'Track' && (trackGlow || trackPulseWalkthrough) && 'scale-110'
                 )} />
                 <span className={cn(
