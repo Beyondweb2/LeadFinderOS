@@ -12,9 +12,10 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { MessageSquare, Send, AlertTriangle, RotateCcw } from 'lucide-react';
+import { MessageSquare, Send, AlertTriangle, RotateCcw, FileText } from 'lucide-react';
 import { generateWhatsAppUrl } from '@/lib/leadUtils';
 import { TemplatePicker } from '@/components/TemplatePicker';
+import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 
 interface SingleWhatsAppDialogProps {
   open: boolean;
@@ -28,6 +29,22 @@ const STORAGE_KEY = 'leadfinder_whatsapp_template';
 export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAppDialogProps) {
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
   const [isModified, setIsModified] = useState(false);
+  const [showTemplateNudge, setShowTemplateNudge] = useState(false);
+  const [templatesOpened, setTemplatesOpened] = useState(false);
+
+  // Walkthrough awareness
+  const { isDemoUser, state } = useDemoChecklist();
+  const isWalkthroughStep3 = isDemoUser && state.addedToCrm && !state.contactAttempted;
+
+  // Show template nudge when dialog opens during walkthrough
+  useEffect(() => {
+    if (open && isWalkthroughStep3) {
+      setShowTemplateNudge(true);
+      setTemplatesOpened(false);
+    } else {
+      setShowTemplateNudge(false);
+    }
+  }, [open, isWalkthroughStep3]);
 
   // Load saved template from localStorage on mount
   useEffect(() => {
@@ -128,7 +145,24 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
               <p className="text-xs text-muted-foreground mb-2">
                 Use <code className="bg-muted px-1 rounded">{`{{business_name}}`}</code> to personalize
               </p>
-              <TemplatePicker onSelectTemplate={handleTemplateChange} templateType="text" />
+              {/* Walkthrough Step 3A: Template awareness nudge */}
+              {showTemplateNudge && !templatesOpened && (
+                <div className="mb-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <p className="text-sm font-medium text-foreground mb-0.5">Choose your message</p>
+                  <p className="text-xs text-muted-foreground">
+                    Tap <span className="inline-flex items-center gap-0.5 text-primary font-medium"><FileText className="h-3 w-3" />Templates</span> to use a ready-made message. It makes first outreach easier.
+                  </p>
+                </div>
+              )}
+              <TemplatePicker 
+                onSelectTemplate={(content) => {
+                  handleTemplateChange(content);
+                  setShowTemplateNudge(false);
+                }} 
+                templateType="text" 
+                isWalkthrough={showTemplateNudge}
+                onWalkthroughTemplatesOpened={() => setTemplatesOpened(true)}
+              />
               <Textarea
                 id="template"
                 value={template}
