@@ -130,7 +130,7 @@ export function DemoChecklistProvider({
     const onFollowUpAction = () => {
       setState(prev => {
         if (prev.followUpActionSet) return prev;
-        const next = { ...prev, followUpActionSet: true, followUpSet: prev.followUpDateSet && prev.followUpNoteAdded && prev.followUpStatusChanged };
+        const next = { ...prev, followUpActionSet: true, followUpSet: prev.followUpDateSet };
         saveState(next, user?.id);
         return next;
       });
@@ -138,15 +138,16 @@ export function DemoChecklistProvider({
     const onFollowUpDate = () => {
       setState(prev => {
         if (prev.followUpDateSet) return prev;
-        const next = { ...prev, followUpDateSet: true, followUpSet: prev.followUpActionSet && prev.followUpNoteAdded && prev.followUpStatusChanged };
+        const next = { ...prev, followUpDateSet: true, followUpSet: prev.followUpActionSet };
         saveState(next, user?.id);
         return next;
       });
     };
+    // followUpNote and followUpStatus no longer needed for walkthrough completion
     const onFollowUpNote = () => {
       setState(prev => {
         if (prev.followUpNoteAdded) return prev;
-        const next = { ...prev, followUpNoteAdded: true, followUpSet: prev.followUpActionSet && prev.followUpDateSet && prev.followUpStatusChanged };
+        const next = { ...prev, followUpNoteAdded: true };
         saveState(next, user?.id);
         return next;
       });
@@ -154,7 +155,7 @@ export function DemoChecklistProvider({
     const onFollowUpStatus = () => {
       setState(prev => {
         if (prev.followUpStatusChanged) return prev;
-        const next = { ...prev, followUpStatusChanged: true, followUpSet: prev.followUpActionSet && prev.followUpDateSet && prev.followUpNoteAdded };
+        const next = { ...prev, followUpStatusChanged: true };
         saveState(next, user?.id);
         return next;
       });

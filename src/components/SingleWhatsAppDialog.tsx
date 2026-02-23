@@ -142,9 +142,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
                   </Button>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground mb-2">
-                Use <code className="bg-muted px-1 rounded">{`{{business_name}}`}</code> to personalize
-              </p>
               {/* Walkthrough Step 3A: Template awareness nudge */}
               {showTemplateNudge && !templatesOpened && (
                 <div className="mb-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
