@@ -170,9 +170,6 @@ export function DemoChecklistPanel() {
                   💡 Now contact the other 2 businesses — they could be your next clients!
                 </p>
               </div>
-              <p className="text-xs text-primary font-medium pt-1">
-                Keep the momentum going. Find your next batch of leads.
-              </p>
             </div>
             <div className="w-full bg-muted rounded-full h-1.5">
               <div className="bg-primary h-1.5 rounded-full w-full" />
