@@ -206,7 +206,7 @@ export function OutreachMobileCard({
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                      onClick={onSMSClick}
+                      onClick={() => { window.dispatchEvent(new Event('outreach-first-contact-click')); onSMSClick?.(); }}
                       data-walkthrough="contact"
                     >
                       <MessageCircle className="h-3.5 w-3.5" />
@@ -215,7 +215,7 @@ export function OutreachMobileCard({
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
-                      onClick={onWhatsAppClick}
+                      onClick={() => { window.dispatchEvent(new Event('outreach-first-contact-click')); onWhatsAppClick?.(); }}
                       data-walkthrough="contact"
                     >
                       <MessageSquare className="h-3.5 w-3.5" />

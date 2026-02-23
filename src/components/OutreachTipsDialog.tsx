@@ -35,15 +35,29 @@ export function OutreachTipsDialog() {
 
   const storageKey = user?.id ? `outreach_tips_dismissed_${user.id}` : null;
 
+  // Listen for first contact click event instead of auto-showing on page load
   useEffect(() => {
     if (!storageKey) return;
     const dismissed = localStorage.getItem(storageKey);
-    if (!dismissed) {
-      // Small delay so the page renders first
-      const timer = setTimeout(() => setOpen(true), 600);
-      return () => clearTimeout(timer);
-    }
+    if (dismissed) return;
+
+    const onContactClick = () => {
+      if (!localStorage.getItem(storageKey)) {
+        setOpen(true);
+      }
+    };
+    window.addEventListener('outreach-first-contact-click', onContactClick);
+    return () => window.removeEventListener('outreach-first-contact-click', onContactClick);
   }, [storageKey]);
+
+  // Pause walkthrough overlay while tips dialog is open
+  useEffect(() => {
+    if (open) {
+      window.dispatchEvent(new Event('trial-modal-opened'));
+    } else {
+      window.dispatchEvent(new Event('trial-modal-closed'));
+    }
+  }, [open]);
 
   const handleClose = () => {
     setOpen(false);
