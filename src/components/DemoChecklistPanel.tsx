@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
-import { Check, Search, Sparkles } from 'lucide-react';
+import { Check, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PostWalkthroughTipsModal } from '@/components/PostWalkthroughTipsModal';
 import { useTrial } from '@/hooks/useTrial';
@@ -74,7 +74,7 @@ export function DemoChecklistPanel() {
   const handleCompletionDismiss = () => {
     setShowCompletionModal(false);
     handleDismiss();
-    navigate('/find-leads');
+    navigate('/outreach');
   };
 
   const handleTipsModalClose = useCallback((open: boolean) => {
@@ -120,13 +120,12 @@ export function DemoChecklistPanel() {
               </ul>
               <div className="bg-primary/10 rounded-md p-2 mt-2">
                 <p className="text-xs text-primary font-medium">
-                  💡 Find your next batch of leads!
+                  Finish contacting the remaining businesses in your CRM.
                 </p>
               </div>
             </div>
             <Button size="lg" className="w-full" onClick={handleCompletionDismiss}>
-              <Search className="h-4 w-4 mr-2" />
-              Search for more leads
+              Continue in CRM
             </Button>
           </div>
         </DialogContent>
