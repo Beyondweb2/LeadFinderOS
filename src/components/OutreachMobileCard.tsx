@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { PhoneFetchStatus } from '@/hooks/useOutreach';
@@ -14,12 +15,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, CalendarClock } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
+import { NextActionEditor } from './NextActionEditor';
 import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
-import { STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS } from '@/types/outreach';
+import { OUTREACH_STATUS_OPTIONS } from '@/types/outreach';
 
 interface OutreachMobileCardProps {
   lead: OutreachLead;
@@ -27,6 +29,7 @@ interface OutreachMobileCardProps {
   onSelect: (checked: boolean) => void;
   onLeadClick: () => void;
   onStatusChange: (status: LeadStatus) => void;
+  onNextActionChange?: (action: NextActionType, date?: string) => void;
   onWhatsAppClick: () => void;
   onSMSClick?: () => void;
   onCallClick?: () => void;
@@ -46,6 +49,7 @@ export function OutreachMobileCard({
   onSelect,
   onLeadClick,
   onStatusChange,
+  onNextActionChange,
   onWhatsAppClick,
   onSMSClick,
   onCallClick,
@@ -58,6 +62,12 @@ export function OutreachMobileCard({
   phoneFetchStatus,
   onRetryPhoneFetch,
 }: OutreachMobileCardProps) {
+  const isPhoneFetching = phoneFetchStatus === 'pending';
+  const isPhoneFailed = phoneFetchStatus === 'failed';
+  const hasPhone = !!lead.phone;
+  // Show loading state when no phone and still fetching
+  const showFetchingState = !hasPhone && isPhoneFetching;
+
   return (
     <div 
       className={`py-3 px-3 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
@@ -86,7 +96,7 @@ export function OutreachMobileCard({
             )}
           </div>
 
-          {/* Status + Next Action under name */}
+          {/* Status + Next Action button under name */}
           <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
             {!readOnly && (
               <Select
@@ -112,112 +122,120 @@ export function OutreachMobileCard({
               </Select>
             )}
 
-            {!readOnly && lead.next_action && lead.next_action !== 'none' && (
-              <NextActionBadge 
-                action={lead.next_action} 
+            {/* Next Action Editor - visible button on mobile */}
+            {!readOnly && onNextActionChange && (
+              <NextActionEditor
+                action={lead.next_action as NextActionType | null}
                 date={lead.next_action_date}
-                compact
+                onUpdate={(action, date) => onNextActionChange(action, date)}
                 leadId={lead.id}
-                onComplete={onCompleteAction}
               />
             )}
           </div>
         </div>
 
-        {/* Right: Action buttons - 2 rows on mobile */}
+        {/* Right: Action buttons */}
         <div className="flex flex-col gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-          {/* Row 1: Maps, Facebook, Call */}
-          <div className="flex items-center gap-0.5">
-            {lead.google_maps_url && (
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10" asChild>
-                <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
-              </Button>
-            )}
-            <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-500 hover:bg-blue-500/10" asChild>
-              <a
-                href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <Facebook className="h-3.5 w-3.5" />
-              </a>
-            </Button>
-            {lead.phone ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10">
-                    <Phone className="h-3.5 w-3.5" />
+          {showFetchingState ? (
+            /* Loading state while phone info is being fetched */
+            <div className="flex items-center gap-1.5 px-2 py-2">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              <span className="text-[10px] text-muted-foreground">Fetching...</span>
+            </div>
+          ) : (
+            <>
+              {/* Row 1: Maps, Facebook, Call */}
+              <div className="flex items-center gap-0.5">
+                {lead.google_maps_url && (
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10" asChild>
+                    <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
                   </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[160px]">
-                  <DropdownMenuItem asChild>
-                    <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => onCallClick?.()}>
-                      <PhoneCall className="h-4 w-4" />
-                      Normal Call
-                    </a>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <a
-                      href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 cursor-pointer"
-                      onClick={() => onCallClick?.()}
+                )}
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-500 hover:bg-blue-500/10" asChild>
+                  <a
+                    href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Facebook className="h-3.5 w-3.5" />
+                  </a>
+                </Button>
+                {hasPhone ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-amber-500 hover:text-amber-400 hover:bg-amber-500/10">
+                        <Phone className="h-3.5 w-3.5" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-[160px]">
+                      <DropdownMenuItem asChild>
+                        <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => onCallClick?.()}>
+                          <PhoneCall className="h-4 w-4" />
+                          Normal Call
+                        </a>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <a
+                          href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone!)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 cursor-pointer"
+                          onClick={() => onCallClick?.()}
+                        >
+                          <Phone className="h-4 w-4 text-green-500" />
+                          WhatsApp Call
+                        </a>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : isPhoneFailed ? (
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onRetryPhoneFetch}>
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  </Button>
+                ) : null}
+              </div>
+              {/* Row 2: SMS, WhatsApp, Track */}
+              <div className="flex items-center gap-0.5">
+                {hasPhone ? (
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
+                      onClick={onSMSClick}
                     >
-                      <Phone className="h-4 w-4 text-green-500" />
-                      WhatsApp Call
-                    </a>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : phoneFetchStatus === 'pending' ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground mx-1" />
-            ) : phoneFetchStatus === 'failed' ? (
-              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={onRetryPhoneFetch}>
-                <RefreshCw className="h-3.5 w-3.5" />
-              </Button>
-            ) : null}
-          </div>
-          {/* Row 2: SMS, WhatsApp, Track */}
-          <div className="flex items-center gap-0.5">
-            {lead.phone ? (
-              <>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
-                  onClick={onSMSClick}
-                >
-                  <MessageCircle className="h-3.5 w-3.5" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
-                  onClick={onWhatsAppClick}
-                >
-                  <MessageSquare className="h-3.5 w-3.5" />
-                </Button>
-              </>
-            ) : null}
-            {!readOnly && showTrackButton && onTrack && (
-              lead.is_potential_work ? (
-                <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 mx-1" />
-              ) : (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
-                  onClick={onTrack}
-                  data-walkthrough-step="track-star"
-                >
-                  <Star className="h-3.5 w-3.5" />
-                </Button>
-              )
-            )}
-          </div>
+                      <MessageCircle className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
+                      onClick={onWhatsAppClick}
+                    >
+                      <MessageSquare className="h-3.5 w-3.5" />
+                    </Button>
+                  </>
+                ) : null}
+                {!readOnly && showTrackButton && onTrack && (
+                  lead.is_potential_work ? (
+                    <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 mx-1" />
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-500/10"
+                      onClick={onTrack}
+                      data-walkthrough-step="track-star"
+                    >
+                      <Star className="h-3.5 w-3.5" />
+                    </Button>
+                  )
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

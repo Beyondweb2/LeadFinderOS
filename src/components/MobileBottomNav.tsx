@@ -112,11 +112,13 @@ export function MobileBottomNav() {
   const [crmGlow, setCrmGlow] = useState(false);
   const [trackGlow, setTrackGlow] = useState(false);
 
-  // Walkthrough step 1 pulse
+  // Walkthrough step 1 pulse + step 6 track pulse
   let searchPulse = false;
+  let trackPulseWalkthrough = false;
   try {
     const { state, isDemoUser } = useDemoChecklist();
     searchPulse = isDemoUser && !state.searchDone;
+    trackPulseWalkthrough = isDemoUser && state.leadTracked && !state.followUpSet;
   } catch {}
 
   useEffect(() => {
@@ -198,7 +200,7 @@ export function MobileBottomNav() {
                     ? 'text-yellow-400 animate-pulse'
                     : item.title === 'CRM' && crmGlow
                       ? 'text-green-400 animate-pulse'
-                      : item.title === 'Track' && trackGlow
+                      : item.title === 'Track' && (trackGlow || trackPulseWalkthrough)
                         ? 'text-yellow-400 animate-pulse'
                         : isActive 
                           ? 'text-primary' 
@@ -208,7 +210,7 @@ export function MobileBottomNav() {
                 <item.icon className={cn(
                   'h-5 w-5 transition-all',
                   item.title === 'CRM' && crmGlow && 'scale-110',
-                  item.title === 'Track' && trackGlow && 'scale-110'
+                  item.title === 'Track' && (trackGlow || trackPulseWalkthrough) && 'scale-110'
                 )} />
                 <span className={cn(
                   "text-[10px] font-medium",

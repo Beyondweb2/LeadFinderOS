@@ -908,6 +908,7 @@ export function OutreachTable({
                   onSelect={(checked) => handleSelectOne(lead.id, checked as boolean)}
                   onLeadClick={() => onLeadClick(lead)}
                   onStatusChange={(status) => onStatusChange(lead.id, status)}
+                  onNextActionChange={(action, date) => onNextActionChange(lead.id, action, date)}
                   onWhatsAppClick={() => handleWhatsAppClick(lead)}
                   onSMSClick={() => handleSMSClick(lead)}
                   onCallClick={() => handleCallClick(lead)}

@@ -216,7 +216,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
               <TableRow className="border-border hover:bg-transparent">
                 <TableHead className="w-[40%]">Business Name</TableHead>
                 <TableHead className="w-[25%]">Website Status</TableHead>
-                <TableHead className="w-[20%]">Google Maps</TableHead>
+                <TableHead className="w-[20%]">Business Info</TableHead>
                 <TableHead className="w-[15%]">Actions</TableHead>
               </TableRow>
             </TableHeader>
