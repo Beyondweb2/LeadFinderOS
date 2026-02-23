@@ -313,97 +313,56 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
   return (
     <>
-      <Card className={cn(
-        'border transition-all overflow-hidden',
-        isExpanded
-          ? 'ring-1 ring-primary/30 shadow-lg border-border/60 bg-card'
-          : 'border-border/50 hover:border-border/80 bg-card shadow-[0_2px_8px_0_hsl(0_0%_0%/0.25),inset_0_1px_0_0_hsl(0_0%_100%/0.04)] hover:shadow-[0_4px_12px_0_hsl(0_0%_0%/0.3),inset_0_1px_0_0_hsl(0_0%_100%/0.05)]'
+      <div className={cn(
+        'border-b border-border/50 transition-all',
+        isExpanded ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''
       )}>
         {/* ═══ COLLAPSED (always visible) ═══ */}
         <div
-          className="cursor-pointer"
+          className="py-3 px-3 cursor-pointer"
           onClick={(e) => {
             if ((e.target as HTMLElement).closest('[data-contact-zone]')) return;
             if ((e.target as HTMLElement).closest('[data-no-expand]')) return;
             onToggleExpand();
           }}
         >
-          {/* ROW 1 — Identity + Controls */}
-          <div className="flex items-start gap-3 px-3.5 sm:px-5 pt-3.5 sm:pt-4">
-            {/* Avatar — larger */}
-            <div className="shrink-0 relative group/avatar cursor-pointer" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
+          <div className="flex items-start gap-2.5">
+            {/* Left: Avatar */}
+            <div className="shrink-0 relative group/avatar cursor-pointer pt-0.5" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
               {lead.image_url ? (
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden bg-muted/40 ring-1 ring-border/40 shadow-sm">
+                <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted/40 ring-1 ring-border/40">
                   <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center text-sm sm:text-base font-bold text-primary shadow-sm">
+                <div className="w-10 h-10 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-xs font-bold text-primary">
                   {getInitials(lead.business_name)}
                 </div>
               )}
-              <div className="absolute inset-0 rounded-xl bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
-                <Pencil className="h-3 w-3 text-white" />
+              <div className="absolute inset-0 rounded-lg bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
+                <Pencil className="h-2.5 w-2.5 text-white" />
               </div>
             </div>
 
-            {/* Name + meta + status/action info */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm sm:text-[15px] font-bold leading-tight truncate text-foreground">
-                  {lead.business_name}
-                </h3>
-                {/* Right controls */}
-                <div className="flex items-center gap-0.5 shrink-0 ml-auto" data-no-expand>
-                  {lead.google_maps_url && (
-                    <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500/60 hover:text-blue-500 hover:bg-blue-500/10 transition-colors">
-                      <ExternalLink className="h-3.5 w-3.5" />
-                    </a>
-                  )}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors">
-                        <MoreVertical className="h-3.5 w-3.5" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-[140px]">
-                      <DropdownMenuItem onClick={() => { fileInputRef.current?.click(); }} className="text-xs" disabled={isUploadingImage}>
-                        <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
-                      </DropdownMenuItem>
-                      {lead.image_url && (
-                        <DropdownMenuItem onClick={handleRemoveImage} className="text-xs">
-                          <X className="h-3.5 w-3.5 mr-2" /> Remove Image
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => setDetailOpen(true)} className="text-xs">
-                        <Pencil className="h-3.5 w-3.5 mr-2" /> Full Edit
-                      </DropdownMenuItem>
-                      <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
-                        <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+            {/* Middle: Name + Status + Action */}
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-sm leading-tight truncate">{lead.business_name}</span>
               </div>
 
               {/* Meta line */}
-              <div className="flex items-center gap-1.5 mt-0.5">
-                {lead.category && (
-                  <span className="text-[10px] text-muted-foreground/60 truncate">{lead.category}</span>
-                )}
+              <div className="flex items-center gap-1 text-[10px] text-muted-foreground/60">
+                {lead.category && <span className="truncate">{lead.category}</span>}
                 {contactMethodDisplay && (
                   <>
                     {lead.category && <span className="text-muted-foreground/20">·</span>}
-                    <span className="text-[10px] text-muted-foreground/50">via {contactMethodDisplay}</span>
+                    <span className="text-muted-foreground/50">via {contactMethodDisplay}</span>
                   </>
                 )}
               </div>
 
-              {/* Status pill + action text + due text */}
-              <div className="flex items-center gap-2 flex-wrap mt-1.5" data-no-expand>
-                <span className={cn('inline-flex items-center h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-bold border', statusColorCls)}>
+              {/* Status pill + action + due + done — same row like CRM */}
+              <div className="flex items-center gap-1.5 flex-wrap" data-no-expand>
+                <span className={cn('inline-flex items-center h-5 px-2 rounded-full text-[10px] font-bold border', statusColorCls)} data-walkthrough="status">
                   {statusLabel}
                 </span>
                 {nextActionLabel && (
@@ -413,14 +372,15 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 )}
                 {!nextActionLabel && (
                   <button
-                    className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+                    className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
                     onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+                    data-walkthrough="next-action"
                   >
                     + Set action
                   </button>
                 )}
                 {dueLabel && (
-                  <span className={cn('inline-flex items-center gap-0.5 text-[11px] font-semibold', dueLabel.cls.replace(/bg-\S+/g, '').replace(/border-\S+/g, '').trim())}>
+                  <span className={cn('inline-flex items-center gap-0.5 text-[10px] font-semibold', dueLabel.cls.replace(/bg-\S+/g, '').replace(/border-\S+/g, '').trim())}>
                     <Clock className="h-2.5 w-2.5" />
                     {dueLabel.text}
                   </span>
@@ -434,88 +394,101 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                     <Check className="h-3 w-3" /> Done
                   </button>
                 )}
-            </div>
-          </div>
-            </div>
-          </div>
-
-          {/* ROW 2 — Notes + Contact buttons side by side */}
-          {!isExpanded && (
-            <div className="flex items-end gap-3 px-3.5 sm:px-5 pt-2 pb-3 sm:pb-3.5">
-              {/* Notes — takes up remaining space, bigger */}
-              <div className="flex-1 min-w-0" data-walkthrough-step="track-notes-edit" data-walkthrough="notes">
-                {lead.notes ? (
-                  <p className="text-xs sm:text-sm text-foreground/70 leading-relaxed line-clamp-3">
-                    {lead.notes}
-                  </p>
-                ) : (
-                  <p className="text-xs sm:text-sm text-muted-foreground/30 italic">
-                    Add note…
-                  </p>
-                )}
               </div>
+            </div>
 
-              {/* Contact buttons — 2x2 grid, right side, no outlines */}
-              <div className="shrink-0 grid grid-cols-2 gap-1" data-contact-zone>
+            {/* Right: Action buttons — matching CRM 2-row layout */}
+            <div className="flex flex-col gap-0.5 flex-shrink-0" data-no-expand onClick={(e) => e.stopPropagation()}>
+              {/* Row 1: Maps, Facebook, Call */}
+              <div className="flex items-center gap-0.5">
+                {lead.google_maps_url && (
+                  <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500 hover:text-blue-400 hover:bg-blue-500/10 transition-colors">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
+                <a href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`} target="_blank" rel="noopener noreferrer" className="h-7 w-7 flex items-center justify-center rounded-md text-blue-600 hover:text-blue-500 hover:bg-blue-500/10 transition-colors">
+                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+                </a>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors">
+                      <MoreVertical className="h-3.5 w-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[140px]">
+                    <DropdownMenuItem onClick={() => { fileInputRef.current?.click(); }} className="text-xs" disabled={isUploadingImage}>
+                      <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
+                    </DropdownMenuItem>
+                    {lead.image_url && (
+                      <DropdownMenuItem onClick={handleRemoveImage} className="text-xs">
+                        <X className="h-3.5 w-3.5 mr-2" /> Remove Image
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => setDetailOpen(true)} className="text-xs">
+                      <Pencil className="h-3.5 w-3.5 mr-2" /> Full Edit
+                    </DropdownMenuItem>
+                    <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
+                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              {/* Row 2: SMS, WhatsApp, Call */}
+              <div className="flex items-center gap-0.5" data-contact-zone>
                 {lead.phone ? (
                   <>
+                    <a
+                      href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
+                      onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('sms'); }}
+                      className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 transition-colors"
+                      title="SMS"
+                      data-walkthrough="contact"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" />
+                    </a>
                     <a
                       href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('whatsapp'); }}
-                      className="h-8 w-8 flex items-center justify-center rounded-lg text-green-500 hover:bg-green-500/15 transition-colors"
+                      className="h-7 w-7 flex items-center justify-center rounded-md text-green-500 hover:text-green-400 hover:bg-green-500/10 transition-colors"
                       title="WhatsApp"
+                      data-walkthrough="contact"
                     >
-                      <MessageSquare className="h-4 w-4" />
-                    </a>
-                    <a
-                      href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
-                      onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('sms'); }}
-                      className="h-8 w-8 flex items-center justify-center rounded-lg text-blue-400 hover:bg-blue-500/15 transition-colors"
-                      title="SMS"
-                    >
-                      <MessageCircle className="h-4 w-4" />
+                      <MessageSquare className="h-3.5 w-3.5" />
                     </a>
                     <a
                       href={`tel:${lead.phone}`}
                       onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('contacted'); }}
-                      className="h-8 w-8 flex items-center justify-center rounded-lg text-amber-500 hover:bg-amber-500/15 transition-colors"
+                      className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
                       title="Call"
                     >
-                      <PhoneCall className="h-4 w-4" />
+                      <PhoneCall className="h-3.5 w-3.5" />
                     </a>
                   </>
-                ) : (
-                  <>
-                    <div className="h-8 w-8" />
-                    <div className="h-8 w-8" />
-                    <div className="h-8 w-8" />
-                  </>
-                )}
-                <a
-                  href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg text-blue-600 hover:bg-blue-500/15 transition-colors"
-                  title="Facebook"
-                >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                </a>
+                ) : null}
               </div>
+            </div>
+          </div>
 
-              {/* Expand toggle */}
-              <button
-                onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-                className="shrink-0 inline-flex items-center gap-0.5 h-7 px-2 rounded-md text-[11px] font-medium text-muted-foreground/40 hover:text-foreground hover:bg-muted/40 transition-colors"
-                data-no-expand
-              >
-                Details
-                <ChevronDown className="h-3 w-3" />
-              </button>
+          {/* Notes row — prominent, below header like CRM detail text */}
+          {!isExpanded && (
+            <div className="mt-1.5 ml-[50px]" data-walkthrough-step="track-notes-edit" data-walkthrough="notes">
+              {lead.notes ? (
+                <p className="text-xs text-foreground/60 leading-relaxed line-clamp-2">
+                  {lead.notes}
+                </p>
+              ) : (
+                <p className="text-[11px] text-muted-foreground/25 italic">
+                  Add note…
+                </p>
+              )}
             </div>
           )}
+        </div>
 
         {/* ═══ EXPANDED PANEL ═══ */}
         <div
@@ -707,7 +680,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
         </div>
 
         <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-      </Card>
+      </div>
 
       {/* Custom Action Dialog */}
       <Dialog open={showAddCustomAction} onOpenChange={setShowAddCustomAction}>
@@ -1037,7 +1010,7 @@ const PotentialWorkPage = () => {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2.5 lg:gap-3 items-start">
+        <div className="rounded-lg border border-border/50 bg-card overflow-hidden divide-y-0">
           {potentialWorkLeads.map((lead) => (
             <LeadCard
               key={lead.id}
