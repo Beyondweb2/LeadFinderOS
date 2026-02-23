@@ -215,8 +215,13 @@ interface QuickLocationsListProps {
 export function QuickLocationsList({ onLocationSelect }: QuickLocationsListProps) {
   const [isOpen, setIsOpen] = useState(false);
 
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    window.dispatchEvent(new CustomEvent('quick-locations-toggle', { detail: { open } }));
+  };
+
   return (
-    <Collapsible open={isOpen} onOpenChange={setIsOpen} data-walkthrough-step="quick-locations">
+    <Collapsible open={isOpen} onOpenChange={handleOpenChange} data-walkthrough-step="quick-locations">
       <CollapsibleTrigger asChild>
         <Button
           variant="ghost"

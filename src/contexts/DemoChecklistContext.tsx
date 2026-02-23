@@ -197,6 +197,22 @@ export function DemoChecklistProvider({
     window.addEventListener('demo-checklist-track-status-changed', onFollowUpStatus);
     document.addEventListener('click', onTelClick, true);
 
+    // Hide walkthrough panel while Quick Locations dropdown is open
+    let panelWasOpen = false;
+    const onQuickLocToggle = (e: Event) => {
+      const open = (e as CustomEvent).detail?.open;
+      if (open) {
+        panelWasOpen = isOpen;
+        setIsOpen(false);
+      } else {
+        // Re-open panel after city selected / dropdown closed
+        if (panelWasOpen) {
+          setTimeout(() => setIsOpen(true), 150);
+        }
+      }
+    };
+    window.addEventListener('quick-locations-toggle', onQuickLocToggle);
+
     return () => {
       window.removeEventListener('demo-checklist-search', onSearch);
       window.removeEventListener('crm-lead-added', onCrmAdd);
@@ -210,8 +226,9 @@ export function DemoChecklistProvider({
       window.removeEventListener('demo-checklist-track-note-saved', onFollowUpNote);
       window.removeEventListener('demo-checklist-track-status-changed', onFollowUpStatus);
       document.removeEventListener('click', onTelClick, true);
+      window.removeEventListener('quick-locations-toggle', onQuickLocToggle);
     };
-  }, [isDemoUser, completeStep]);
+  }, [isDemoUser, completeStep, isOpen]);
 
   // Complete "Open Track Leads page" when user visits /potential-work
   useEffect(() => {
