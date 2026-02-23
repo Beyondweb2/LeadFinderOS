@@ -95,17 +95,17 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
     <div>
       <Button
         type="button"
-        variant="ghost"
+        variant={isWalkthrough && !isOpen ? 'default' : 'ghost'}
         size="sm"
         onClick={() => setIsOpen(!isOpen)}
-        className={`h-7 text-xs gap-1 ${
+        className={`h-8 text-xs gap-1.5 ${
           isWalkthrough && !isOpen 
-            ? 'text-primary font-medium animate-[pulse-scale_2s_ease-in-out_infinite] shadow-[0_0_8px_hsl(var(--primary)/0.3)]' 
+            ? 'relative animate-bounce shadow-[0_0_16px_hsl(var(--primary)/0.5),0_0_4px_hsl(var(--primary)/0.3)] ring-2 ring-primary/60 font-semibold' 
             : 'text-muted-foreground hover:text-foreground'
         }`}
       >
-        <FileText className="h-3 w-3" />
-        My Templates
+        <FileText className="h-3.5 w-3.5" />
+        {isWalkthrough && !isOpen ? '👉 Select a Template' : 'My Templates'}
         {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
       </Button>
 
