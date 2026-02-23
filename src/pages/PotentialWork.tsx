@@ -314,8 +314,10 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   return (
     <>
       <Card className={cn(
-        'border border-border/50 transition-all bg-card overflow-hidden',
-        isExpanded ? 'ring-1 ring-primary/20 shadow-md' : 'hover:border-border hover:shadow-sm'
+        'border transition-all bg-card overflow-hidden',
+        isExpanded
+          ? 'ring-1 ring-primary/20 shadow-md border-border/60'
+          : 'border-border/40 hover:border-border/70 hover:shadow-sm shadow-[0_1px_3px_0_hsl(0_0%_0%/0.2),inset_0_1px_0_0_hsl(0_0%_100%/0.03)]'
       )}>
         {/* ═══ COLLAPSED (always visible) ═══ */}
         <div
@@ -346,19 +348,19 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
             {/* Name + meta */}
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-semibold leading-tight truncate text-foreground">
+              <h3 className="text-sm font-bold leading-tight truncate text-foreground/95">
                 {lead.business_name}
               </h3>
               <div className="flex items-center gap-1.5 mt-0.5">
                 {lead.category && (
-                  <span className="text-[10px] text-muted-foreground/50 truncate">
+                  <span className="text-[10px] text-muted-foreground/60 truncate">
                     {lead.category}
                   </span>
                 )}
                 {contactMethodDisplay && (
                   <>
                     {lead.category && <span className="text-muted-foreground/20">·</span>}
-                    <span className="text-[10px] text-muted-foreground/40">
+                    <span className="text-[10px] text-muted-foreground/50">
                       via {contactMethodDisplay}
                     </span>
                   </>
@@ -403,12 +405,12 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           </div>
 
           {/* ROW 2 — Status + Action pills + Due (matches CRM badge row) */}
-          <div className="flex items-center gap-1.5 flex-wrap px-3 sm:px-4 pt-2 sm:pt-2.5" data-no-expand>
-            <span className={cn('inline-flex items-center h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-semibold border', statusColorCls)}>
+          <div className="flex items-center gap-1.5 flex-wrap px-3 sm:px-4 pt-1.5 sm:pt-2" data-no-expand>
+            <span className={cn('inline-flex items-center h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-bold border shadow-sm', statusColorCls)}>
               {statusLabel}
             </span>
             {nextActionLabel ? (
-              <span className={cn('inline-flex items-center h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-semibold border', actionColorCls)}>
+              <span className={cn('inline-flex items-center h-6 px-3 rounded-full text-[10px] sm:text-[11px] font-bold border shadow-sm', actionColorCls)}>
                 {nextActionLabel}
               </span>
             ) : (
@@ -420,14 +422,14 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </button>
             )}
             {dueLabel && (
-              <span className={cn('inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-bold border', dueLabel.cls)}>
+              <span className={cn('inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-bold border shadow-sm', dueLabel.cls)}>
                 <Clock className="h-2.5 w-2.5" />
                 {dueLabel.text}
               </span>
             )}
             {lead.next_action && lead.next_action !== 'none' && !isExpanded && (
               <button
-                className="inline-flex items-center gap-0.5 h-5 px-2 rounded-full text-[10px] font-medium text-green-500 bg-green-500/10 border border-green-500/20 hover:bg-green-500/20 transition-colors"
+                className="inline-flex items-center gap-0.5 h-5 px-2 rounded-full text-[10px] font-semibold text-green-500 bg-green-500/10 border border-green-500/25 hover:bg-green-500/20 transition-colors"
                 onClick={(e) => { e.stopPropagation(); onNextActionChange(lead.id, 'none' as NextActionType); }}
                 title="Mark as done"
               >
@@ -438,7 +440,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
           {/* ROW 3 — Notes preview (collapsed) */}
           {!isExpanded && (
-            <div className="px-3 sm:px-4 pt-2" data-walkthrough-step="track-notes-edit">
+            <div className="px-3 sm:px-4 pt-1.5" data-walkthrough-step="track-notes-edit">
               {lead.notes ? (
                 <p className="text-[11px] sm:text-xs text-foreground/60 leading-relaxed line-clamp-2">
                   {lead.notes}
@@ -454,7 +456,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
         {/* ROW 4 — Contact actions + expand toggle */}
         {!isExpanded && (
-          <div className="flex items-center justify-between px-3 sm:px-4 pt-2 pb-3 sm:pb-3.5">
+          <div className="flex items-center justify-between px-3 sm:px-4 pt-1.5 pb-2.5 sm:pb-3">
             {lead.phone ? (
               <div className="flex items-center gap-0.5" data-contact-zone>
                 <a
