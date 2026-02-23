@@ -88,7 +88,7 @@ export function TrialLimitDialog({
           {/* Header */}
           <div className="text-center space-y-1.5">
             <img src={logoImg} alt="LeadFinder" className="mx-auto mb-3 h-11 w-11 rounded-full object-contain" />
-            <h2 className="text-xl font-bold text-foreground">Unlock Unlimited Searches</h2>
+            <h2 className="text-xl font-bold text-foreground">Start turning these into paying clients</h2>
             {displayNoWeb > 0 && (
               <p className="text-sm text-muted-foreground">
                 You found <span className="font-semibold text-primary">{displayNoWeb}</span> businesses without websites.
@@ -112,6 +112,11 @@ export function TrialLimitDialog({
             </div>
           </div>
 
+          {/* Subheading */}
+          <p className="text-center text-sm font-medium text-foreground">
+            Unlock unlimited searches and contact them instantly.
+          </p>
+
           {/* Benefits */}
           <div className="space-y-1.5">
             {[
@@ -129,11 +134,6 @@ export function TrialLimitDialog({
               </div>
             ))}
           </div>
-
-          {/* Motivating line */}
-          <p className="text-center text-sm font-medium text-foreground">
-            Start turning these into paying clients.
-          </p>
 
           {/* Pricing */}
           <p className="text-center text-xs text-muted-foreground">
