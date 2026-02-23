@@ -91,24 +91,24 @@ const CONTACT_METHOD_LABELS: Record<string, string> = {
 };
 
 const NEXT_ACTION_COLORS: Record<string, string> = {
-  call: 'bg-blue-500/15 text-blue-400 border-blue-500/25',
-  follow_up: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
-  '2nd_follow_up': 'bg-indigo-500/15 text-indigo-400 border-indigo-500/25',
-  send_draft: 'bg-orange-500/15 text-orange-400 border-orange-500/25',
-  send_initial_text: 'bg-green-500/15 text-green-400 border-green-500/25',
-  send_voice_note: 'bg-violet-500/15 text-violet-400 border-violet-500/25',
-  send_follow_up: 'bg-amber-500/15 text-amber-400 border-amber-500/25',
+  call: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+  follow_up: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+  '2nd_follow_up': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
+  send_draft: 'bg-orange-500/20 text-orange-400 border-orange-500/40',
+  send_initial_text: 'bg-green-500/20 text-green-400 border-green-500/40',
+  send_voice_note: 'bg-violet-500/20 text-violet-400 border-violet-500/40',
+  send_follow_up: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
   none: 'bg-muted text-muted-foreground border-border/50',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  interested: 'bg-green-500/15 text-green-400 border-green-500/25',
-  wants_draft: 'bg-cyan-500/15 text-cyan-400 border-cyan-500/25',
-  on_hold: 'bg-purple-500/15 text-purple-400 border-purple-500/25',
-  reviewing_draft: 'bg-sky-500/15 text-sky-400 border-sky-500/25',
-  paid_for_draft: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/25',
-  not_interested: 'bg-red-500/15 text-red-400 border-red-500/25',
-  completed: 'bg-green-600/15 text-green-500 border-green-600/25',
+  interested: 'bg-green-500/20 text-green-400 border-green-500/40',
+  wants_draft: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40',
+  on_hold: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+  reviewing_draft: 'bg-sky-500/20 text-sky-400 border-sky-500/40',
+  paid_for_draft: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+  not_interested: 'bg-red-500/20 text-red-400 border-red-500/40',
+  completed: 'bg-green-600/20 text-green-500 border-green-600/40',
 };
 
 /* ───────── helpers ───────── */
@@ -314,10 +314,10 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   return (
     <>
       <Card className={cn(
-        'border transition-all bg-card overflow-hidden',
+        'border transition-all overflow-hidden',
         isExpanded
-          ? 'ring-1 ring-primary/20 shadow-md border-border/60'
-          : 'border-border/40 hover:border-border/70 hover:shadow-sm shadow-[0_1px_3px_0_hsl(0_0%_0%/0.2),inset_0_1px_0_0_hsl(0_0%_100%/0.03)]'
+          ? 'ring-1 ring-primary/30 shadow-lg border-border/60 bg-card'
+          : 'border-border/50 hover:border-border/80 bg-card shadow-[0_2px_8px_0_hsl(0_0%_0%/0.25),inset_0_1px_0_0_hsl(0_0%_100%/0.04)] hover:shadow-[0_4px_12px_0_hsl(0_0%_0%/0.3),inset_0_1px_0_0_hsl(0_0%_100%/0.05)]'
       )}>
         {/* ═══ COLLAPSED (always visible) ═══ */}
         <div
@@ -329,15 +329,15 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           }}
         >
           {/* ROW 1 — Identity + Controls (matches CRM) */}
-          <div className="flex items-center gap-2.5 px-3 sm:px-4 pt-3 sm:pt-3.5">
+          <div className="flex items-center gap-3 px-3.5 sm:px-5 pt-3.5 sm:pt-4">
             {/* Avatar */}
             <div className="shrink-0 relative group/avatar cursor-pointer" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
-              {lead.image_url ? (
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg overflow-hidden bg-muted/40 ring-1 ring-border/30">
+               {lead.image_url ? (
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg overflow-hidden bg-muted/40 ring-1 ring-border/40 shadow-sm">
                   <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-xs sm:text-sm font-bold text-primary/70">
+                <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-xs sm:text-sm font-bold text-primary shadow-sm">
                   {getInitials(lead.business_name)}
                 </div>
               )}
@@ -348,7 +348,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
             {/* Name + meta */}
             <div className="flex-1 min-w-0">
-              <h3 className="text-sm font-bold leading-tight truncate text-foreground/95">
+              <h3 className="text-sm sm:text-[15px] font-bold leading-tight truncate text-foreground">
                 {lead.business_name}
               </h3>
               <div className="flex items-center gap-1.5 mt-0.5">
@@ -405,48 +405,48 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           </div>
 
           {/* ROW 2 — Status + Action pills + Due (matches CRM badge row) */}
-          <div className="flex items-center gap-1.5 flex-wrap px-3 sm:px-4 pt-1.5 sm:pt-2" data-no-expand>
-            <span className={cn('inline-flex items-center h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-bold border shadow-sm', statusColorCls)}>
+          <div className="flex items-center gap-2 flex-wrap px-3.5 sm:px-5 pt-2 sm:pt-2.5 pb-0.5" data-no-expand>
+            <span className={cn('inline-flex items-center h-7 px-3 rounded-full text-[11px] sm:text-xs font-bold border shadow-sm', statusColorCls)}>
               {statusLabel}
             </span>
             {nextActionLabel ? (
-              <span className={cn('inline-flex items-center h-6 px-3 rounded-full text-[10px] sm:text-[11px] font-bold border shadow-sm', actionColorCls)}>
+              <span className={cn('inline-flex items-center h-7 px-3 rounded-full text-[11px] sm:text-xs font-bold border shadow-sm', actionColorCls)}>
                 {nextActionLabel}
               </span>
             ) : (
               <button
-                className="inline-flex items-center h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-medium border border-dashed border-border/40 text-muted-foreground/40 hover:text-muted-foreground/60 hover:border-border/60 transition-colors"
+                className="inline-flex items-center h-7 px-3 rounded-full text-[11px] sm:text-xs font-medium border border-dashed border-border/50 text-muted-foreground/50 hover:text-muted-foreground/80 hover:border-primary/30 hover:bg-primary/5 transition-colors"
                 onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
               >
                 + Set action
               </button>
             )}
             {dueLabel && (
-              <span className={cn('inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[10px] sm:text-[11px] font-bold border shadow-sm', dueLabel.cls)}>
-                <Clock className="h-2.5 w-2.5" />
+              <span className={cn('inline-flex items-center gap-1 h-7 px-3 rounded-full text-[11px] sm:text-xs font-bold border shadow-sm', dueLabel.cls)}>
+                <Clock className="h-3 w-3" />
                 {dueLabel.text}
               </span>
             )}
             {lead.next_action && lead.next_action !== 'none' && !isExpanded && (
               <button
-                className="inline-flex items-center gap-0.5 h-5 px-2 rounded-full text-[10px] font-semibold text-green-500 bg-green-500/10 border border-green-500/25 hover:bg-green-500/20 transition-colors"
+                className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-bold text-green-400 bg-green-500/15 border border-green-500/30 hover:bg-green-500/25 transition-colors shadow-sm"
                 onClick={(e) => { e.stopPropagation(); onNextActionChange(lead.id, 'none' as NextActionType); }}
                 title="Mark as done"
               >
-                <Check className="h-2.5 w-2.5" /> Done
+                <Check className="h-3 w-3" /> Done
               </button>
             )}
           </div>
 
           {/* ROW 3 — Notes preview (collapsed) */}
           {!isExpanded && (
-            <div className="px-3 sm:px-4 pt-1.5" data-walkthrough-step="track-notes-edit" data-walkthrough="notes">
+            <div className="px-3.5 sm:px-5 pt-2" data-walkthrough-step="track-notes-edit" data-walkthrough="notes">
               {lead.notes ? (
-                <p className="text-[11px] sm:text-xs text-foreground/60 leading-relaxed line-clamp-2">
+                <p className="text-xs text-foreground/70 leading-relaxed line-clamp-2">
                   {lead.notes}
                 </p>
               ) : (
-                <p className="text-[11px] sm:text-xs text-muted-foreground/25 italic">
+                <p className="text-xs text-muted-foreground/35 italic">
                   Add note…
                 </p>
               )}
@@ -456,34 +456,34 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
         {/* ROW 4 — Contact actions + expand toggle */}
         {!isExpanded && (
-          <div className="flex items-center justify-between px-3 sm:px-4 pt-1.5 pb-2.5 sm:pb-3">
+          <div className="flex items-center justify-between px-3.5 sm:px-5 pt-2 pb-3 sm:pb-3.5">
             {lead.phone ? (
-              <div className="flex items-center gap-0.5" data-contact-zone>
+              <div className="flex items-center gap-1" data-contact-zone>
                 <a
                   href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => handleContactMethodUpdate('whatsapp')}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-green-500/60 hover:text-green-500 hover:bg-green-500/10 transition-colors"
+                  className="h-8 w-8 flex items-center justify-center rounded-lg text-green-500 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 transition-colors shadow-sm"
                   title="WhatsApp"
                 >
-                  <MessageSquare className="h-3.5 w-3.5" />
+                  <MessageSquare className="h-4 w-4" />
                 </a>
                 <a
                   href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
                   onClick={() => handleContactMethodUpdate('sms')}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                  className="h-8 w-8 flex items-center justify-center rounded-lg text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-colors shadow-sm"
                   title="SMS"
                 >
-                  <MessageCircle className="h-3.5 w-3.5" />
+                  <MessageCircle className="h-4 w-4" />
                 </a>
                 <a
                   href={`tel:${lead.phone}`}
                   onClick={() => handleContactMethodUpdate('contacted')}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
+                  className="h-8 w-8 flex items-center justify-center rounded-lg text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-colors shadow-sm"
                   title="Call"
                 >
-                  <PhoneCall className="h-3.5 w-3.5" />
+                  <PhoneCall className="h-4 w-4" />
                 </a>
               </div>
             ) : (
@@ -491,7 +491,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             )}
             <button
               onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-              className="inline-flex items-center gap-0.5 h-6 px-2 rounded-md text-[10px] font-medium text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/30 transition-colors"
+              className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md text-[11px] font-medium text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors"
               data-no-expand
             >
               Details
@@ -508,7 +508,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
           )}
         >
-          <div className="border-t border-border/40 px-3 sm:px-4 py-3 space-y-3 bg-muted/5">
+          <div className="border-t border-border/50 px-3.5 sm:px-5 py-3.5 space-y-3 bg-muted/5">
             {/* Status selector */}
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground w-12 shrink-0">Status</span>
@@ -661,32 +661,32 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
             {/* Contact actions in expanded view */}
             {lead.phone && (
-              <div className="flex items-center gap-1 pt-1 border-t border-border/30" data-contact-zone>
+              <div className="flex items-center gap-1.5 pt-2 border-t border-border/40" data-contact-zone>
                 <a
                   href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => handleContactMethodUpdate('whatsapp')}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-green-500/60 hover:text-green-500 hover:bg-green-500/10 transition-colors"
+                  className="h-8 w-8 flex items-center justify-center rounded-lg text-green-500 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 transition-colors shadow-sm"
                   title="WhatsApp"
                 >
-                  <MessageSquare className="h-3.5 w-3.5" />
+                  <MessageSquare className="h-4 w-4" />
                 </a>
                 <a
                   href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
                   onClick={() => handleContactMethodUpdate('sms')}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400/60 hover:text-blue-400 hover:bg-blue-500/10 transition-colors"
+                  className="h-8 w-8 flex items-center justify-center rounded-lg text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-colors shadow-sm"
                   title="SMS"
                 >
-                  <MessageCircle className="h-3.5 w-3.5" />
+                  <MessageCircle className="h-4 w-4" />
                 </a>
                 <a
                   href={`tel:${lead.phone}`}
                   onClick={() => handleContactMethodUpdate('contacted')}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500/60 hover:text-amber-500 hover:bg-amber-500/10 transition-colors"
+                  className="h-8 w-8 flex items-center justify-center rounded-lg text-amber-500 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-colors shadow-sm"
                   title="Call"
                 >
-                  <PhoneCall className="h-3.5 w-3.5" />
+                  <PhoneCall className="h-4 w-4" />
                 </a>
               </div>
             )}
