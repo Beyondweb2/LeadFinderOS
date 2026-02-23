@@ -139,8 +139,8 @@ export function WalkthroughOverlay() {
 
     // For contactAttempted: first highlight CRM nav, then contact button on CRM page
     if (!state.contactAttempted && state.addedToCrm) {
-      const contactEl = document.querySelector('[data-walkthrough-step="contact"]');
-      if (contactEl) {
+      const isOnOutreachPage = window.location.pathname === '/outreach';
+      if (isOnOutreachPage) {
         // User is on CRM page, show contact action
         setActiveStep(STEP_CONFIG.find(s => (s as any).subKey === 'contactAction') || null);
       } else {
