@@ -315,7 +315,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     <>
       <div className={cn(
         'border-b border-border/50 transition-all',
-        isExpanded ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''
+        isExpanded ? 'ring-1 ring-primary/30 ring-inset' : ''
       )}>
         {/* ═══ COLLAPSED (always visible) ═══ */}
         <div
@@ -476,16 +476,27 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
           {/* Notes row — prominent, below header like CRM detail text */}
           {!isExpanded && (
-            <div className="mt-1.5 ml-[50px]" data-walkthrough-step="track-notes-edit" data-walkthrough="notes">
-              {lead.notes ? (
-                <p className="text-xs text-foreground/60 leading-relaxed line-clamp-2">
-                  {lead.notes}
-                </p>
-              ) : (
-                <p className="text-[11px] text-muted-foreground/25 italic">
-                  Add note…
-                </p>
-              )}
+            <div className="flex items-end gap-2 mt-1.5">
+              <div className="flex-1 min-w-0 ml-[50px]" data-walkthrough-step="track-notes-edit" data-walkthrough="notes">
+                {lead.notes ? (
+                  <p className="text-xs text-foreground/60 leading-relaxed line-clamp-2">
+                    {lead.notes}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground/25 italic">
+                    Add note…
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
+                className="shrink-0 inline-flex items-center gap-0.5 h-6 px-2 rounded-md text-[10px] font-medium text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors"
+                data-no-expand
+                data-walkthrough="details"
+              >
+                Details
+                <ChevronDown className="h-3 w-3" />
+              </button>
             </div>
           )}
         </div>
