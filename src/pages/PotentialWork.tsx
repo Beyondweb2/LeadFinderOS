@@ -498,7 +498,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
           )}
         >
-          <div className="border-t border-border/50 px-3.5 sm:px-5 py-3.5 space-y-3 bg-muted/5">
+          <div className="border-t border-border/50 px-3.5 sm:px-5 py-3.5 space-y-3">
             {/* Status selector */}
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground w-12 shrink-0">Status</span>
