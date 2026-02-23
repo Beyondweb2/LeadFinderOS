@@ -447,7 +447,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
           {/* ZONE 3 — Notes Preview */}
           {!isExpanded && (
-            <div className="px-4 sm:px-5 pt-2.5 sm:pt-3">
+             <div className="px-4 sm:px-5 pt-2.5 sm:pt-3" data-walkthrough-step="track-notes-edit">
               {lead.notes ? (
                 <p className="text-xs sm:text-[13px] text-foreground/80 leading-relaxed line-clamp-2">
                   {lead.notes}
@@ -620,7 +620,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   <button
                     onClick={() => setIsEditingNotes(true)}
                     className="shrink-0 h-6 px-1.5 inline-flex items-center gap-1 rounded text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors border border-border/40"
-                    data-walkthrough-step="track-notes-edit"
                   >
                     <Pencil className="h-2.5 w-2.5" /> {notes ? 'Edit' : 'Add'}
                   </button>
