@@ -94,7 +94,7 @@ export function DemoChecklistPanel() {
     <>
       {/* Walkthrough Completed Modal */}
       <Dialog open={showCompletionModal} onOpenChange={(v) => { if (!v) handleCompletionDismiss(); }}>
-        <DialogContent hideClose className="max-w-sm mx-auto p-0 overflow-hidden border-border/50 bg-card shadow-2xl">
+        <DialogContent hideClose className="max-w-sm sm:max-w-md mx-auto p-0 overflow-hidden border-border/50 bg-card shadow-2xl">
           <div className="p-6 space-y-5">
             <div className="text-center space-y-2">
               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">

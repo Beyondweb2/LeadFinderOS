@@ -314,7 +314,8 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   return (
     <>
       <div className={cn(
-        'border-b border-border/50 transition-all',
+        'border-b border-border/50 border-l-4 transition-all',
+        borderColor,
         isExpanded ? 'ring-1 ring-primary/30 ring-inset' : ''
       )}>
         {/* ═══ COLLAPSED (always visible) ═══ */}
@@ -1022,7 +1023,7 @@ const PotentialWorkPage = () => {
           </div>
         </Card>
       ) : (
-        <div className="rounded-lg border border-border/50 bg-card overflow-hidden divide-y-0">
+        <div className="rounded-lg border border-border/50 bg-card overflow-hidden divide-y-0 sm:max-w-2xl">
           {potentialWorkLeads.map((lead) => (
             <LeadCard
               key={lead.id}
