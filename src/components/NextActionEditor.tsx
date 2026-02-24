@@ -171,7 +171,8 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
           >
             <div className="flex items-center gap-1.5">
               {iconEl}
-              <span className="text-sm">{displayLabel}</span>
+              <span className="text-sm hidden sm:inline">{displayLabel}</span>
+              <span className="text-xs sm:hidden">Next Action</span>
             </div>
             {formattedDate && (
               <span
