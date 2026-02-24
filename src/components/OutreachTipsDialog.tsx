@@ -2,15 +2,12 @@ import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Heart } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-
-// Tips array removed to support new paragraph-based content structure
+import logoIcon from '@/assets/leadfinder-logo-icon.png';
 
 export function OutreachTipsDialog() {
   const { user } = useAuth();
@@ -19,7 +16,6 @@ export function OutreachTipsDialog() {
 
   const storageKey = user?.id ? `outreach_tips_dismissed_${user.id}` : null;
 
-  // Listen for first contact click event instead of auto-showing on page load
   useEffect(() => {
     if (!storageKey) return;
     const dismissed = localStorage.getItem(storageKey);
@@ -34,7 +30,6 @@ export function OutreachTipsDialog() {
     return () => window.removeEventListener('outreach-first-contact-click', onContactClick);
   }, [storageKey]);
 
-  // Pause walkthrough overlay while tips dialog is open
   useEffect(() => {
     if (open) {
       window.dispatchEvent(new Event('trial-modal-opened'));
@@ -52,50 +47,61 @@ export function OutreachTipsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else setOpen(true); }}>
-      <DialogContent className="sm:max-w-sm p-0 overflow-hidden">
-        <div className="p-6 space-y-5">
-          <div className="text-center space-y-2">
-            <DialogTitle className="text-lg font-bold leading-tight">
-              You’re about to contact a real business without a website.
+      <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden border-border/50 bg-card">
+        <div className="p-6 sm:p-7 space-y-6">
+          {/* Logo */}
+          <div className="flex justify-center">
+            <img src={logoIcon} alt="" className="h-8 w-8 opacity-60" />
+          </div>
+
+          {/* Headline */}
+          <div className="text-center space-y-1">
+            <DialogTitle className="text-[17px] sm:text-lg font-bold leading-snug tracking-tight">
+              You're about to contact a real business{' '}
+              <span className="text-primary">without a website.</span>
             </DialogTitle>
           </div>
 
-          <div className="space-y-4 text-sm leading-relaxed">
+          {/* Body */}
+          <div className="space-y-3 text-[13px] leading-relaxed">
             <p className="font-semibold text-foreground">
               Most developers never take this step.
             </p>
-            
             <p className="text-muted-foreground">
-              Keep your first message short and casual. Avoid sending links or long pitches in the first contact.
-            </p>
-            
-            <div className="p-3.5 rounded-lg bg-primary/5 border border-primary/10">
-              <p className="text-primary font-bold text-center">
-                If just 1 in 20 replies and converts, this single search could generate £1,000+ in project revenue.
-              </p>
-            </div>
-            
-            <p className="text-muted-foreground italic text-center text-xs">
-              You’re not just sending a message - you’re starting a potential client conversation.
+              Keep your first message short and casual. Avoid links and long pitches in the first contact.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Insight strip */}
+          <div className="px-3.5 py-3 rounded-lg border border-primary/15 bg-primary/[0.04]">
+            <p className="text-[12px] sm:text-[13px] text-foreground/80 text-center leading-relaxed">
+              If 1 in 20 replies converts, this single search could generate{' '}
+              <span className="font-bold text-foreground">£1,000+</span> in project revenue.
+            </p>
+          </div>
+
+          {/* Closing line */}
+          <p className="text-[12px] text-muted-foreground text-center">
+            This is how consistent client flow starts.
+          </p>
+
+          {/* CTA */}
+          <Button onClick={handleClose} className="w-full" size="default">
+            Start conversation
+          </Button>
+
+          {/* Don't show again */}
+          <div className="flex items-center justify-center gap-2">
             <Checkbox
               id="dont-show-again"
               checked={dontShowAgain}
               onCheckedChange={(checked) => setDontShowAgain(checked === true)}
               className="h-3.5 w-3.5"
             />
-            <label htmlFor="dont-show-again" className="text-[11px] text-muted-foreground cursor-pointer">
+            <label htmlFor="dont-show-again" className="text-[11px] text-muted-foreground/60 cursor-pointer">
               Don't show this again
             </label>
           </div>
-
-          <Button onClick={handleClose} className="w-full" size="sm">
-            <Heart className="mr-1.5 h-3.5 w-3.5" />
-            Got it, let's go!
-          </Button>
         </div>
       </DialogContent>
     </Dialog>

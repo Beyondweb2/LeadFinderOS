@@ -93,6 +93,7 @@ export function WalkthroughOverlay() {
   const [activeStep, setActiveStep] = useState<StepDef | null>(null);
   const [paused, setPaused] = useState(false);
   const rafRef = useRef<number>();
+  const lastScrolledStepRef = useRef<number | null>(null);
   const [tick, setTick] = useState(0);
 
   // Re-evaluate sub-steps periodically (for input value changes on search page)
@@ -108,7 +109,22 @@ export function WalkthroughOverlay() {
       setActiveStep(null);
       return;
     }
-    setActiveStep(getActiveStep(state, location.pathname));
+    const next = getActiveStep(state, location.pathname);
+    setActiveStep(next);
+
+    // Auto-scroll to the target element once per step change
+    if (next && next.step !== lastScrolledStepRef.current) {
+      lastScrolledStepRef.current = next.step;
+      requestAnimationFrame(() => {
+        const el = document.querySelector(next.selector);
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          if (rect.top < 0 || rect.bottom > window.innerHeight) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      });
+    }
   }, [state, isDemoUser, allDone, walkthroughOpen, location.pathname, tick]);
 
   // Listen for trial modal to pause/resume overlay
@@ -139,9 +155,8 @@ export function WalkthroughOverlay() {
 
     const rect = el.getBoundingClientRect();
 
-    if (rect.top < 0 || rect.bottom > window.innerHeight) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
+    // Only auto-scroll once per step change, not every frame
+    // This prevents hijacking user scroll on mobile
 
     setTargetRect(rect);
 
