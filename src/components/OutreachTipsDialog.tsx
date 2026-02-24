@@ -7,26 +7,10 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { MessageSquare, Heart, Repeat, Rocket, Ban } from 'lucide-react';
+import { Heart } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 
-const TIPS = [
-  {
-    icon: MessageSquare,
-    title: 'Confirm the number first',
-    description: '"Hi, is this [business name]?" - get a reply before anything else.',
-  },
-  {
-    icon: Ban,
-    title: 'No links or media',
-    description: "Skip links, images & portfolios in your first message. Keep it conversational.",
-  },
-  {
-    icon: Repeat,
-    title: 'Follow up consistently',
-    description: "Most deals close after the 2nd or 3rd message. Don't stop at one.",
-  },
-];
+// Tips array removed to support new paragraph-based content structure
 
 export function OutreachTipsDialog() {
   const { user } = useAuth();
@@ -69,28 +53,31 @@ export function OutreachTipsDialog() {
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else setOpen(true); }}>
       <DialogContent className="sm:max-w-sm p-0 overflow-hidden">
-        <div className="p-5 space-y-4">
-          <div className="text-center space-y-1">
-            <DialogTitle className="text-lg font-bold">
-              First contact tips 🎯
+        <div className="p-6 space-y-5">
+          <div className="text-center space-y-2">
+            <DialogTitle className="text-lg font-bold leading-tight">
+              You’re about to contact a real business without a website.
             </DialogTitle>
-            <DialogDescription className="text-sm text-muted-foreground">
-              How to message leads for the best reply rate
-            </DialogDescription>
           </div>
 
-          <div className="space-y-2">
-            {TIPS.map(({ icon: Icon, title, description }) => (
-              <div key={title} className="flex gap-2.5 p-2.5 rounded-lg bg-muted/40 border border-border/30">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                  <Icon className="h-3.5 w-3.5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">{title}</p>
-                  <p className="text-xs text-muted-foreground">{description}</p>
-                </div>
-              </div>
-            ))}
+          <div className="space-y-4 text-sm leading-relaxed">
+            <p className="font-semibold text-foreground">
+              Most developers never take this step.
+            </p>
+            
+            <p className="text-muted-foreground">
+              Keep your first message short and casual. Avoid sending links or long pitches in the first contact.
+            </p>
+            
+            <div className="p-3.5 rounded-lg bg-primary/5 border border-primary/10">
+              <p className="text-primary font-bold text-center">
+                If just 1 in 20 replies and converts, this single search could generate £1,000+ in project revenue.
+              </p>
+            </div>
+            
+            <p className="text-muted-foreground italic text-center text-xs">
+              You’re not just sending a message - you’re starting a potential client conversation.
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
