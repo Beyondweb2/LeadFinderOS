@@ -761,7 +761,7 @@ const Landing = () => {
                 img: featureTemplates,
               },
               {
-                title: 'Dashboard',
+                title: 'Smart Dashboard',
                 description: 'See your full pipeline at a glance - revenue, conversion rate, activity, and quick actions all in one place.',
                 img: featureDashboard,
               },
@@ -781,7 +781,7 @@ const Landing = () => {
               <ToolkitCarousel features={toolkitFeatures} onExpand={(src, title) => setExpandedImage({ src, title })} />
             ) : (
               <ScrollReveal>
-                <div className="grid grid-cols-4 gap-6">
+                <div className="grid grid-cols-4 gap-8 max-w-6xl mx-auto">
                   {toolkitFeatures.map((feature, i) => (
                     <div key={i} className="text-center">
                       <div 
@@ -789,7 +789,7 @@ const Landing = () => {
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.02]"
+                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[4/3] transition-transform duration-300 group-hover:scale-[1.02]"
                           style={{ 
                             border: '1px solid hsl(210 100% 50% / 0.2)',
                             boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
