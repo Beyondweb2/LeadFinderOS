@@ -74,7 +74,7 @@ export function DemoChecklistPanel() {
   const handleCompletionDismiss = () => {
     setShowCompletionModal(false);
     handleDismiss();
-    navigate('/outreach');
+    navigate('/find-leads');
   };
 
   const handleTipsModalClose = useCallback((open: boolean) => {
@@ -120,7 +120,7 @@ export function DemoChecklistPanel() {
               </ul>
             </div>
             <Button size="lg" className="w-full" onClick={handleCompletionDismiss}>
-              Contact potential leads
+              Contact more leads
             </Button>
           </div>
         </DialogContent>
