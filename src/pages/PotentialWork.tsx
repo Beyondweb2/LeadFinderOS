@@ -331,11 +331,11 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             {/* Left: Avatar */}
             <div className="shrink-0 relative group/avatar cursor-pointer pt-0.5" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
               {lead.image_url ? (
-                <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted/40 ring-1 ring-border/40">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg overflow-hidden bg-muted/40 ring-1 ring-border/40">
                   <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <div className="w-10 h-10 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-xs font-bold text-primary">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-xs sm:text-sm font-bold text-primary">
                   {getInitials(lead.business_name)}
                 </div>
               )}
@@ -347,7 +347,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             {/* Middle: Name + Status + Action */}
             <div className="flex-1 min-w-0 space-y-1">
               <div className="flex items-center gap-1.5">
-                <span className="font-semibold text-sm leading-tight truncate">{lead.business_name}</span>
+                <span className="font-semibold text-sm sm:text-base leading-tight truncate">{lead.business_name}</span>
               </div>
 
               {/* Meta line */}
@@ -1023,24 +1023,25 @@ const PotentialWorkPage = () => {
           </div>
         </Card>
       ) : (
-        <div className="rounded-lg border border-border/50 bg-card overflow-hidden divide-y-0 sm:max-w-2xl">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {potentialWorkLeads.map((lead) => (
-            <LeadCard
-              key={lead.id}
-              lead={lead}
-              isExpanded={expandedCardId === lead.id}
-              onToggleExpand={() => setExpandedCardId(prev => prev === lead.id ? null : lead.id)}
-              onStatusChange={updateStatus}
-              onNextActionChange={updateNextAction}
-              onNotesChange={updateNotes}
-              onBusinessNameChange={updateBusinessName}
-              onImageChange={updateImageUrl}
-              onUpdateLead={updateLead}
-              onDelete={deleteLead}
-              customStatuses={customStatuses}
-              onAddCustomStatus={() => setShowCustomStatusDialog(true)}
-              userId={user?.id}
-            />
+            <div key={lead.id} className="rounded-lg border border-border/50 bg-card overflow-hidden">
+              <LeadCard
+                lead={lead}
+                isExpanded={expandedCardId === lead.id}
+                onToggleExpand={() => setExpandedCardId(prev => prev === lead.id ? null : lead.id)}
+                onStatusChange={updateStatus}
+                onNextActionChange={updateNextAction}
+                onNotesChange={updateNotes}
+                onBusinessNameChange={updateBusinessName}
+                onImageChange={updateImageUrl}
+                onUpdateLead={updateLead}
+                onDelete={deleteLead}
+                customStatuses={customStatuses}
+                onAddCustomStatus={() => setShowCustomStatusDialog(true)}
+                userId={user?.id}
+              />
+            </div>
           ))}
         </div>
       )}
