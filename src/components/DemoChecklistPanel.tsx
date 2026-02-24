@@ -2,11 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
-import { Check, Sparkles } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { PostWalkthroughTipsModal } from '@/components/PostWalkthroughTipsModal';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
+import logoIcon from '@/assets/leadfinder-logo-icon.png';
 import {
   Dialog,
   DialogContent,
@@ -95,32 +96,44 @@ export function DemoChecklistPanel() {
       {/* Walkthrough Completed Modal */}
       <Dialog open={showCompletionModal} onOpenChange={(v) => { if (!v) handleCompletionDismiss(); }}>
         <DialogContent hideClose className="max-w-sm sm:max-w-md mx-auto p-0 overflow-hidden border-border/50 bg-card shadow-2xl">
-          <div className="p-6 space-y-5">
-            <div className="text-center space-y-2">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                <Sparkles className="h-6 w-6 text-primary" />
+          <div className="p-6 sm:p-7 space-y-6">
+            {/* Logo */}
+            <div className="flex justify-center">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
+                <img src={logoIcon} alt="" className="h-6 w-6" />
               </div>
-              <h2 className="text-lg font-bold text-foreground">Walkthrough Complete! 🎉</h2>
-              <p className="text-sm text-muted-foreground">
-                You now know how to find, contact, and manage leads.
-              </p>
-              <ul className="text-xs text-left space-y-1.5 mx-auto max-w-[220px] pt-2">
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                  <span className="text-foreground/90">Find businesses without websites</span>
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                  <span className="text-foreground/90">Contact them in 1 click</span>
-                </li>
-                <li className="flex items-center gap-1.5">
-                  <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                  <span className="text-foreground/90">Track next actions & follow-ups</span>
-                </li>
-              </ul>
             </div>
+
+            <div className="text-center space-y-3">
+              <h2 className="text-[17px] sm:text-lg font-bold text-foreground tracking-tight leading-snug">
+                You Now Have a Client Acquisition System
+              </h2>
+              <p className="text-[13px] text-muted-foreground leading-relaxed">
+                You've seen how to identify, contact, and track real businesses that need websites.
+              </p>
+            </div>
+
+            <ul className="text-[13px] space-y-2.5 mx-auto max-w-[260px]">
+              <li className="flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="text-foreground/90">Find businesses without websites</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="text-foreground/90">Reach out in seconds</span>
+              </li>
+              <li className="flex items-center gap-2">
+                <Check className="h-3.5 w-3.5 text-primary shrink-0" />
+                <span className="text-foreground/90">Never lose a follow-up again</span>
+              </li>
+            </ul>
+
+            <p className="text-[12px] text-muted-foreground text-center">
+              Most developers never build a predictable pipeline. You just did.
+            </p>
+
             <Button size="lg" className="w-full" onClick={handleCompletionDismiss}>
-              Contact more leads
+              Run Your Next Search
             </Button>
           </div>
         </DialogContent>
