@@ -7,7 +7,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Rate limit: 20 requests per minute for admin operations
 const RATE_LIMIT = 20;
 const RATE_WINDOW_MS = 60000;
 
@@ -30,7 +29,55 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Authenticate user
+    const { action, ...params } = await req.json();
+
+    // record_click is public (no auth needed)
+    if (action === 'record_click') {
+      const { code } = params;
+      if (!code || typeof code !== 'string') {
+        return new Response(JSON.stringify({ error: "Invalid code" }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 400,
+        });
+      }
+
+      // Rate limit by code to prevent abuse
+      const rl = checkRateLimit(`click:${code}`, 30, RATE_WINDOW_MS);
+      if (!rl.allowed) {
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+          status: 200,
+        });
+      }
+
+      await supabaseAdmin
+        .from('affiliates')
+        .update({ click_count: supabaseAdmin.rpc ? undefined : undefined })
+        .eq('code', code.toLowerCase().trim());
+
+      // Use raw SQL increment via rpc is not available, so do read-then-write
+      const { data: aff } = await supabaseAdmin
+        .from('affiliates')
+        .select('click_count')
+        .eq('code', code.toLowerCase().trim())
+        .eq('is_active', true)
+        .single();
+
+      if (aff) {
+        await supabaseAdmin
+          .from('affiliates')
+          .update({ click_count: (aff.click_count || 0) + 1 })
+          .eq('code', code.toLowerCase().trim());
+      }
+
+      logStep("Click recorded", { code });
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // All other actions require admin auth
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header");
 
@@ -41,7 +88,6 @@ serve(async (req) => {
     const userId = userData.user.id;
     logStep("User authenticated", { userId });
 
-    // Check if user is admin
     const { data: roleData } = await supabaseAdmin
       .from('user_roles')
       .select('role')
@@ -56,30 +102,19 @@ serve(async (req) => {
       });
     }
 
-    logStep("Admin access confirmed");
-
-    // Apply rate limiting for admin operations
     const rateLimitResult = checkRateLimit(`admin:${userId}`, RATE_LIMIT, RATE_WINDOW_MS);
     if (!rateLimitResult.allowed) {
-      logStep("Rate limit exceeded", { userId });
       return new Response(
         JSON.stringify({ error: "Too many requests. Please slow down." }),
         {
-          headers: { 
-            ...corsHeaders, 
-            "Content-Type": "application/json",
-            ...rateLimitHeaders(rateLimitResult, RATE_LIMIT)
-          },
+          headers: { ...corsHeaders, "Content-Type": "application/json", ...rateLimitHeaders(rateLimitResult, RATE_LIMIT) },
           status: 429,
         }
       );
     }
 
-    const { action, ...params } = await req.json();
-
     switch (action) {
       case 'list': {
-        // Get all affiliates with their stats
         const { data: affiliates, error } = await supabaseAdmin
           .from('affiliates')
           .select('*')
@@ -87,30 +122,38 @@ serve(async (req) => {
 
         if (error) throw error;
 
-        // Get conversion stats and trial signups for each affiliate
         const affiliateStats = await Promise.all(
           (affiliates || []).map(async (affiliate) => {
             const [conversionsResult, trialsResult] = await Promise.all([
               supabaseAdmin
                 .from('affiliate_conversions')
-                .select('commission_amount, status')
+                .select('commission_amount, status, first_payment_amount')
                 .eq('affiliate_id', affiliate.id),
               supabaseAdmin
                 .from('user_trials')
-                .select('id')
+                .select('id, plan_status')
                 .eq('affiliate_code', affiliate.code),
             ]);
 
-            const conversions = conversionsResult.data;
-            const totalConversions = conversions?.length || 0;
-            const pendingCommission = conversions
-              ?.filter(c => c.status === 'pending')
-              .reduce((sum, c) => sum + c.commission_amount, 0) || 0;
-            const paidCommission = conversions
-              ?.filter(c => c.status === 'paid')
-              .reduce((sum, c) => sum + c.commission_amount, 0) || 0;
+            const conversions = conversionsResult.data || [];
+            const trials = trialsResult.data || [];
 
-            const trialSignups = trialsResult.data?.length || 0;
+            const totalConversions = conversions.length;
+            const pendingCommission = conversions
+              .filter(c => c.status === 'pending')
+              .reduce((sum, c) => sum + c.commission_amount, 0);
+            const paidCommission = conversions
+              .filter(c => c.status === 'paid')
+              .reduce((sum, c) => sum + c.commission_amount, 0);
+            const totalRevenue = conversions
+              .reduce((sum, c) => sum + c.first_payment_amount, 0);
+
+            const trialSignups = trials.length;
+            const paidSubscriptions = conversions.length; // each conversion = a paid sub
+
+            const clickCount = affiliate.click_count || 0;
+            const clickToSignup = clickCount > 0 ? ((trialSignups / clickCount) * 100).toFixed(1) : '0.0';
+            const signupToPaid = trialSignups > 0 ? ((paidSubscriptions / trialSignups) * 100).toFixed(1) : '0.0';
 
             return {
               ...affiliate,
@@ -118,6 +161,10 @@ serve(async (req) => {
               pending_commission: pendingCommission,
               paid_commission: paidCommission,
               trial_signups: trialSignups,
+              total_revenue: totalRevenue,
+              paid_subscriptions: paidSubscriptions,
+              click_to_signup: clickToSignup,
+              signup_to_paid: signupToPaid,
             };
           })
         );
@@ -130,9 +177,7 @@ serve(async (req) => {
 
       case 'create': {
         const { code, name, email, commission_rate } = params;
-        if (!code || !name || !email) {
-          throw new Error("code, name, and email are required");
-        }
+        if (!code || !name || !email) throw new Error("code, name, and email are required");
 
         const { data, error } = await supabaseAdmin
           .from('affiliates')
@@ -146,8 +191,6 @@ serve(async (req) => {
           .single();
 
         if (error) throw error;
-        logStep("Affiliate created", { id: data.id, code: data.code });
-
         return new Response(JSON.stringify({ affiliate: data }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
@@ -166,8 +209,6 @@ serve(async (req) => {
           .single();
 
         if (error) throw error;
-        logStep("Affiliate updated", { id });
-
         return new Response(JSON.stringify({ affiliate: data }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
@@ -176,15 +217,12 @@ serve(async (req) => {
 
       case 'list_conversions': {
         const { affiliate_id } = params;
-        
         let query = supabaseAdmin
           .from('affiliate_conversions')
           .select('*')
           .order('created_at', { ascending: false });
 
-        if (affiliate_id) {
-          query = query.eq('affiliate_id', affiliate_id);
-        }
+        if (affiliate_id) query = query.eq('affiliate_id', affiliate_id);
 
         const { data: conversions, error } = await query;
         if (error) throw error;
@@ -197,9 +235,7 @@ serve(async (req) => {
 
       case 'mark_paid': {
         const { conversion_ids } = params;
-        if (!conversion_ids || !Array.isArray(conversion_ids)) {
-          throw new Error("conversion_ids array is required");
-        }
+        if (!conversion_ids || !Array.isArray(conversion_ids)) throw new Error("conversion_ids array is required");
 
         const { error } = await supabaseAdmin
           .from('affiliate_conversions')
@@ -208,8 +244,6 @@ serve(async (req) => {
           .eq('status', 'pending');
 
         if (error) throw error;
-        logStep("Conversions marked as paid", { count: conversion_ids.length });
-
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
@@ -220,15 +254,12 @@ serve(async (req) => {
         const { id } = params;
         if (!id) throw new Error("id is required");
 
-        // Only delete the affiliate, keep conversions for record-keeping
         const { error } = await supabaseAdmin
           .from('affiliates')
           .delete()
           .eq('id', id);
 
         if (error) throw error;
-        logStep("Affiliate deleted", { id });
-
         return new Response(JSON.stringify({ success: true }), {
           headers: { ...corsHeaders, "Content-Type": "application/json" },
           status: 200,
@@ -239,10 +270,8 @@ serve(async (req) => {
         throw new Error(`Unknown action: ${action}`);
     }
   } catch (error) {
-    // Log detailed error server-side only
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    // Return generic error to client - don't expose internal details
     return new Response(JSON.stringify({ error: "Unable to process request. Please try again." }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
