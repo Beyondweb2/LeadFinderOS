@@ -79,6 +79,7 @@
 @layer base {
   * {
     @apply border-border;
+    --tw-ring-offset-color: hsl(var(--background));
   }
 
   body {

@@ -302,10 +302,7 @@ export function OutreachTable({
         }
       }
 
-      toast({
-        title: 'Phone recovery complete',
-        description: `Recovered ${totalUpdated} phone numbers from ${totalProcessed} leads.`,
-      });
+      // Phone recovery complete — no toast
 
       // Refresh leads to show updated data
       if (onRefreshLeads) {
@@ -367,10 +364,7 @@ export function OutreachTable({
     const leadIds = leadsWithPhones.map(l => l.id);
     await markMultipleAsCopied(leadIds);
     
-    toast({
-      title: 'Copied!',
-      description: `${phones.length} phone numbers copied in bulk format.`,
-    });
+    // Copied — no toast
   };
 
   // Mark selected leads as contacted
@@ -380,10 +374,7 @@ export function OutreachTable({
     // Update each lead's status to 'contacted'
     ids.forEach(id => onStatusChange(id, 'contacted'));
     setSelectedIds(new Set());
-    toast({
-      title: 'Status updated',
-      description: `${ids.length} lead${ids.length > 1 ? 's' : ''} marked as Contacted.`,
-    });
+    // Status updated — no toast
   };
 
   // Mark selected leads as interested
@@ -504,10 +495,7 @@ export function OutreachTable({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast({
-        title: 'Export complete',
-        description: `Exported ${leadsToExport.length} leads to CSV.`,
-      });
+      // Export complete — no toast
     } catch (err) {
       console.error('CSV export failed:', err);
       toast({
@@ -708,10 +696,7 @@ export function OutreachTable({
                           if (untracked.length > 0) onMarkAsInterested(untracked);
                         }
                         setSelectedIds(new Set());
-                        toast({
-                          title: 'Status updated',
-                          description: `${ids.length} lead${ids.length > 1 ? 's' : ''} updated.`,
-                        });
+                        // Status updated — no toast
                       }}
                     >
                       <SelectTrigger className="w-[130px] h-8 text-xs bg-background">
@@ -732,10 +717,7 @@ export function OutreachTable({
                         const ids = Array.from(selectedIds);
                         ids.forEach(id => onNextActionChange(id, v as NextActionType));
                         setSelectedIds(new Set());
-                        toast({
-                          title: 'Next action updated',
-                          description: `${ids.length} lead${ids.length > 1 ? 's' : ''} updated.`,
-                        });
+                        // Next action updated — no toast
                       }}
                     >
                       <SelectTrigger className="w-[140px] h-8 text-xs bg-background">

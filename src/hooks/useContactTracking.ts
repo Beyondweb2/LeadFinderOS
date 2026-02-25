@@ -87,10 +87,7 @@ export function useContactTracking() {
 
     setContacts((prev) => [data as LeadContact, ...prev]);
     
-    toast({
-      title: 'Contact recorded',
-      description: `Marked ${leadName} as ${outcome.replace('_', ' ')}.`,
-    });
+    // Contact recorded — no toast
 
     return data as LeadContact;
   }, [toast, user]);

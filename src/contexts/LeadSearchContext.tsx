@@ -225,10 +225,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
         // Notify demo checklist that a search completed
         window.dispatchEvent(new CustomEvent('demo-checklist-search'));
 
-        toast({
-          title: 'Search complete',
-          description: `Found ${filteredLeads.length} new businesses. ${noWebsiteCount} without websites.${excludedMsg}`,
-        });
+        // Search complete — no toast (reduces UI noise)
       }
     } catch (err) {
       console.error('Search error:', err);
@@ -282,10 +279,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      toast({
-        title: 'Export complete',
-        description: `Exported ${leads.length} leads to CSV.`,
-      });
+      // Export complete — no toast
     } catch (err) {
       console.error('CSV export failed:', err);
       toast({

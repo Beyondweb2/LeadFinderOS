@@ -134,10 +134,7 @@ const ArchivePage = () => {
     const leadIds = leadsWithPhones.map(l => l.id);
     await markMultipleAsCopied(leadIds);
     
-    toast({
-      title: 'Copied!',
-      description: `${phones.length} phone numbers copied in bulk format.`,
-    });
+    // Copied — no toast
   };
 
   // Copy all filtered phones
@@ -163,10 +160,7 @@ const ArchivePage = () => {
     const leadIds = leadsWithPhones.map(l => l.id);
     await markMultipleAsCopied(leadIds);
     
-    toast({
-      title: 'Copied!',
-      description: `${phones.length} phone numbers copied in bulk format.`,
-    });
+    // Copied — no toast
   };
 
   // Copy single phone
@@ -180,10 +174,7 @@ const ArchivePage = () => {
     
     await markAsCopied(lead.id);
     
-    toast({
-      title: 'Copied!',
-      description: `Phone number copied.`,
-    });
+    // Copied — no toast
   };
 
   const handleMarkInterested = async (lead: OutreachLead) => {

@@ -214,9 +214,7 @@ export function useOutreach() {
       }
 
       setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
-      if (details.phone) {
-        toast({ title: 'Phone found!', description: `${lead.business_name}: ${details.phone}` });
-      }
+      // Phone found — no toast
     } catch (e) {
       console.error('Retry phone fetch failed:', e);
       setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'failed' }));
