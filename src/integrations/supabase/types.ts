@@ -63,6 +63,7 @@ export type Database = {
       }
       affiliates: {
         Row: {
+          click_count: number
           code: string
           commission_rate: number
           created_at: string
@@ -72,6 +73,7 @@ export type Database = {
           name: string
         }
         Insert: {
+          click_count?: number
           code: string
           commission_rate?: number
           created_at?: string
@@ -81,6 +83,7 @@ export type Database = {
           name: string
         }
         Update: {
+          click_count?: number
           code?: string
           commission_rate?: number
           created_at?: string

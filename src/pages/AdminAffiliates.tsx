@@ -63,6 +63,11 @@ interface Affiliate {
   pending_commission: number;
   paid_commission: number;
   trial_signups: number;
+  click_count: number;
+  total_revenue: number;
+  paid_subscriptions: number;
+  click_to_signup: string;
+  signup_to_paid: string;
 }
 
 interface Conversion {
@@ -324,7 +329,8 @@ export default function AdminAffiliates() {
   const totalPaid = affiliates.reduce((sum, a) => sum + a.paid_commission, 0);
   const totalConversions = affiliates.reduce((sum, a) => sum + a.total_conversions, 0);
   const totalTrialSignups = affiliates.reduce((sum, a) => sum + a.trial_signups, 0);
-  const totalRevenue = affiliates.reduce((sum, a) => sum + a.pending_commission + a.paid_commission, 0);
+  const totalClicks = affiliates.reduce((sum, a) => sum + (a.click_count || 0), 0);
+  const totalRevenue = affiliates.reduce((sum, a) => sum + (a.total_revenue || 0), 0);
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -347,26 +353,22 @@ export default function AdminAffiliates() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Affiliates
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Clicks</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-primary" />
-                <span className="text-2xl font-bold">{affiliates.length}</span>
+                <Link2 className="h-5 w-5 text-primary" />
+                <span className="text-2xl font-bold">{totalClicks}</span>
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Trial Signups
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Signups</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
@@ -378,9 +380,7 @@ export default function AdminAffiliates() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Paid Conversions
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Paid</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
@@ -392,9 +392,19 @@ export default function AdminAffiliates() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Pending Payouts
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Revenue</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5 text-emerald-500" />
+                <span className="text-2xl font-bold">{formatCurrency(totalRevenue)}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
@@ -406,9 +416,7 @@ export default function AdminAffiliates() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Paid Out
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Paid Out</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
@@ -420,14 +428,14 @@ export default function AdminAffiliates() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Commission
-              </CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Click→Paid</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <Percent className="h-5 w-5 text-primary" />
-                <span className="text-2xl font-bold">{formatCurrency(totalRevenue)}</span>
+                <span className="text-2xl font-bold">
+                  {totalClicks > 0 ? ((totalConversions / totalClicks) * 100).toFixed(1) : '0.0'}%
+                </span>
               </div>
             </CardContent>
           </Card>
@@ -515,11 +523,13 @@ export default function AdminAffiliates() {
                      <TableRow>
                       <TableHead>Affiliate</TableHead>
                       <TableHead>Link</TableHead>
-                      <TableHead>Rate</TableHead>
+                      <TableHead>Clicks</TableHead>
                       <TableHead>Signups</TableHead>
-                      <TableHead>Conversions</TableHead>
-                      <TableHead>Pending</TableHead>
                       <TableHead>Paid</TableHead>
+                      <TableHead>Revenue</TableHead>
+                      <TableHead>Click→Sign</TableHead>
+                      <TableHead>Sign→Paid</TableHead>
+                      <TableHead>Commission</TableHead>
                       <TableHead>Active</TableHead>
                       <TableHead></TableHead>
                     </TableRow>
@@ -553,24 +563,28 @@ export default function AdminAffiliates() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">
-                            {(affiliate.commission_rate * 100).toFixed(0)}%
-                          </Badge>
+                          <span className="font-medium">{affiliate.click_count || 0}</span>
                         </TableCell>
                         <TableCell>
                           <span className="text-muted-foreground">{affiliate.trial_signups}</span>
                         </TableCell>
                         <TableCell>
-                          <span className="font-medium">{affiliate.total_conversions}</span>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-amber-600 dark:text-amber-400 font-medium">
-                            {formatCurrency(affiliate.pending_commission)}
-                          </span>
+                          <span className="font-medium">{affiliate.paid_subscriptions || 0}</span>
                         </TableCell>
                         <TableCell>
                           <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                            {formatCurrency(affiliate.paid_commission)}
+                            {formatCurrency(affiliate.total_revenue || 0)}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{affiliate.click_to_signup}%</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{affiliate.signup_to_paid}%</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-amber-600 dark:text-amber-400 font-medium">
+                            {formatCurrency(affiliate.pending_commission + affiliate.paid_commission)}
                           </span>
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()}>
