@@ -400,82 +400,95 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </div>
             </div>
 
-            {/* Right: Simplified actions — primary message + overflow */}
-            <div className="flex items-center gap-0.5 flex-shrink-0" data-no-expand onClick={(e) => e.stopPropagation()}>
-              {/* Primary: WhatsApp or SMS */}
-              {lead.phone && (
+            {/* Right: Contact icons + overflow */}
+            <div className="flex flex-col items-end gap-1 flex-shrink-0" data-no-expand onClick={(e) => e.stopPropagation()}>
+              {/* Row 1: Maps / Facebook / Menu */}
+              <div className="flex items-center gap-0.5">
+                {lead.google_maps_url && (
+                  <a
+                    href={lead.google_maps_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500 hover:bg-blue-500/10 transition-colors"
+                    title="Google Maps"
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
                 <a
-                  href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                  href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('whatsapp'); }}
-                  className="h-8 w-8 flex items-center justify-center rounded-lg text-green-500 hover:bg-green-500/10 transition-colors"
-                  title="WhatsApp"
-                  data-walkthrough="contact"
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-blue-600 hover:bg-blue-500/10 transition-colors"
+                  title="Facebook"
                 >
-                  <MessageSquare className="h-4 w-4" />
+                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                 </a>
-              )}
-              {/* Overflow menu — all other actions */}
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="h-8 w-8 flex items-center justify-center rounded-lg text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors">
-                    <MoreVertical className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-[160px]">
-                  {lead.phone && (
-                    <>
-                      <DropdownMenuItem asChild>
-                        <a href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`} className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('sms')}>
-                          <MessageCircle className="h-4 w-4 text-blue-400" /> SMS
-                        </a>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
-                          <PhoneCall className="h-4 w-4 text-amber-500" /> Call
-                        </a>
-                      </DropdownMenuItem>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors">
+                      <MoreVertical className="h-3.5 w-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[160px]">
+                    {lead.phone && (
                       <DropdownMenuItem asChild>
                         <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
                           <Phone className="h-4 w-4 text-green-500" /> WhatsApp Call
                         </a>
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  {lead.google_maps_url && (
-                    <DropdownMenuItem asChild>
-                      <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer">
-                        <ExternalLink className="h-4 w-4 text-blue-500" /> Google Maps
-                      </a>
+                    )}
+                    <DropdownMenuItem onClick={() => { fileInputRef.current?.click(); }} className="text-xs" disabled={isUploadingImage}>
+                      <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
                     </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem asChild>
-                    <a href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer">
-                      <svg className="h-4 w-4 text-blue-600" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                      Facebook
-                    </a>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => { fileInputRef.current?.click(); }} className="text-xs" disabled={isUploadingImage}>
-                    <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
-                  </DropdownMenuItem>
-                  {lead.image_url && (
-                    <DropdownMenuItem onClick={handleRemoveImage} className="text-xs">
-                      <X className="h-3.5 w-3.5 mr-2" /> Remove Image
+                    {lead.image_url && (
+                      <DropdownMenuItem onClick={handleRemoveImage} className="text-xs">
+                        <X className="h-3.5 w-3.5 mr-2" /> Remove Image
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={() => setDetailOpen(true)} className="text-xs">
+                      <Pencil className="h-3.5 w-3.5 mr-2" /> Full Edit
                     </DropdownMenuItem>
-                  )}
-                  <DropdownMenuItem onClick={() => setDetailOpen(true)} className="text-xs">
-                    <Pencil className="h-3.5 w-3.5 mr-2" /> Full Edit
-                  </DropdownMenuItem>
-                  <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
-                    <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
+                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              {/* Row 2: SMS / WhatsApp / Call */}
+              {lead.phone && (
+                <div className="flex items-center gap-0.5">
+                  <a
+                    href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
+                    onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('sms'); }}
+                    className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400 hover:bg-blue-500/10 transition-colors"
+                    title="SMS"
+                  >
+                    <MessageCircle className="h-3.5 w-3.5" />
+                  </a>
+                  <a
+                    href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('whatsapp'); }}
+                    className="h-7 w-7 flex items-center justify-center rounded-md text-green-500 hover:bg-green-500/10 transition-colors"
+                    title="WhatsApp"
+                    data-walkthrough="contact"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" />
+                  </a>
+                  <a
+                    href={`tel:${lead.phone}`}
+                    onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('contacted'); }}
+                    className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500 hover:bg-amber-500/10 transition-colors"
+                    title="Call"
+                  >
+                    <PhoneCall className="h-3.5 w-3.5" />
+                  </a>
+                </div>
+              )}
             </div>
           </div>
 
