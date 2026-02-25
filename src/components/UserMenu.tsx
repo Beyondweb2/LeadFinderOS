@@ -46,7 +46,7 @@ export function UserMenu() {
     }
     try {
       await uploadAvatar(file);
-      toast({ title: 'Profile picture updated' });
+      // Profile picture updated — no toast
     } catch {
       toast({ title: 'Upload failed', variant: 'destructive' });
     }
@@ -55,10 +55,7 @@ export function UserMenu() {
 
   const handleSignOut = async () => {
     await signOut();
-    toast({
-      title: 'Signed out',
-      description: 'You have been signed out successfully.',
-    });
+    // Signed out — no toast
   };
 
   const handleManageSubscription = async () => {
@@ -99,10 +96,7 @@ export function UserMenu() {
       
       if (error) throw error;
       
-      toast({
-        title: 'Password updated',
-        description: 'Your password has been changed successfully.',
-      });
+      // Password updated — no toast
       setShowPasswordDialog(false);
       setNewPassword('');
       setConfirmPassword('');

@@ -100,10 +100,7 @@ const Auth = () => {
             });
           }
         } else {
-          toast({
-            title: 'Welcome back!',
-            description: 'You have successfully logged in.',
-          });
+          // Login success — no toast
         }
       } else {
         const { error } = await signUp(email, password);

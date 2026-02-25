@@ -19,31 +19,19 @@ export function useCallList() {
 
     addedHistoryRef.current.add(lead.id);
     setCallList((prev) => [...prev, lead]);
-    toast({
-      title: 'Added to call list',
-      description: `${lead.name} added to your call list.`,
-    });
+    // Added — no toast
   }, [toast]);
 
   const removeFromCallList = useCallback((leadId: string) => {
     setCallList((prev) => {
-      const lead = prev.find((l) => l.id === leadId);
-      if (lead) {
-        toast({
-          title: 'Removed from call list',
-          description: `${lead.name} removed from your call list.`,
-        });
-      }
+      return prev.filter((l) => l.id !== leadId);
       return prev.filter((l) => l.id !== leadId);
     });
   }, [toast]);
 
   const clearCallList = useCallback(() => {
     setCallList([]);
-    toast({
-      title: 'Call list cleared',
-      description: 'All businesses removed from your call list.',
-    });
+    // Cleared — no toast
   }, [toast]);
 
   const isInCallList = useCallback((leadId: string) => {
@@ -100,10 +88,7 @@ export function useCallList() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    toast({
-      title: 'Export complete',
-      description: `Exported ${callList.length} businesses to CSV.`,
-    });
+    // Export complete — no toast
   }, [callList, toast]);
 
   const importCallListFromCsv = useCallback((file: File) => {
@@ -190,10 +175,7 @@ export function useCallList() {
       setCallList((prev) => [...prev, ...importedLeads]);
       importedLeads.forEach((lead) => addedHistoryRef.current.add(lead.id));
 
-      toast({
-        title: 'Import complete',
-        description: `Imported ${importedLeads.length} businesses.`,
-      });
+      // Import complete — no toast
     };
 
     reader.onerror = () => {

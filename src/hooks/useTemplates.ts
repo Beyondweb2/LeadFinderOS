@@ -206,10 +206,7 @@ export function useTemplates() {
     } as Template;
 
     setTemplates((prev) => [...prev, newTemplate]);
-    toast({
-      title: 'Template created',
-      description: `"${template.title}" has been saved.`,
-    });
+    // Template created — no toast
 
     return newTemplate;
   }, [user, toast]);
@@ -241,10 +238,7 @@ export function useTemplates() {
     } as Template;
 
     setTemplates((prev) => prev.map((t) => (t.id === id ? updatedTemplate : t)));
-    toast({
-      title: 'Template updated',
-      description: 'Your changes have been saved.',
-    });
+    // Template updated — no toast
 
     return updatedTemplate;
   }, [toast]);
@@ -267,20 +261,14 @@ export function useTemplates() {
     }
 
     setTemplates((prev) => prev.filter((t) => t.id !== id));
-    toast({
-      title: 'Template deleted',
-      description: template ? `"${template.title}" has been removed.` : 'Template removed.',
-    });
+    // Template deleted — no toast
 
     return true;
   }, [templates, toast]);
 
   const copyToClipboard = useCallback((content: string, title?: string) => {
     navigator.clipboard.writeText(content);
-    toast({
-      title: 'Copied!',
-      description: title ? `"${title}" copied to clipboard.` : 'Template copied to clipboard.',
-    });
+    // Copied — no toast
   }, [toast]);
 
   const getTemplatesByType = useCallback((type: TemplateType) => {

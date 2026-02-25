@@ -77,7 +77,7 @@ const Dashboard = () => {
         console.error('Full reset errors:', errors.map(e => e.error));
       }
       
-      toast({ title: 'Full reset complete', description: 'Everything has been wiped. Your subscription is unchanged.' });
+      // Full reset complete — no toast
       refetch();
     } catch (err) {
       console.error('Full reset failed:', err);
