@@ -163,6 +163,7 @@ export function WalkthroughOverlay() {
     const padding = 12;
     const tooltipHeight = 60;
     const spaceBelow = window.innerHeight - rect.bottom;
+    const mobileNavHeight = window.innerWidth < 640 ? 72 : 0;
 
     const tooltipWidth = 260;
     const rawLeft = rect.left + rect.width / 2;
@@ -184,7 +185,9 @@ export function WalkthroughOverlay() {
       }
     } else {
       const preferTop = activeStep.tooltipPosition === 'top';
-      if (preferTop || spaceBelow <= tooltipHeight + padding) {
+      // On mobile, ensure tooltip doesn't go behind bottom nav
+      const effectiveSpaceBelow = spaceBelow - mobileNavHeight;
+      if (preferTop || effectiveSpaceBelow <= tooltipHeight + padding) {
         setTooltipPos({ top: rect.top - tooltipHeight - padding, left: clampedLeft });
       } else {
         setTooltipPos({ top: rect.bottom + padding, left: clampedLeft });

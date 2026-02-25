@@ -128,6 +128,7 @@ export function AppSidebar() {
   // Flash state for sidebar icons (mirrors mobile bottom nav behavior)
   const [flashCRM, setFlashCRM] = useState(false);
   const [flashTrack, setFlashTrack] = useState(false);
+  const [flashSearch, setFlashSearch] = useState(false);
 
   useEffect(() => {
     const onCRMAdded = () => {
@@ -138,11 +139,17 @@ export function AppSidebar() {
       setFlashTrack(true);
       setTimeout(() => setFlashTrack(false), 2000);
     };
+    const onSearchPulse = () => {
+      setFlashSearch(true);
+      setTimeout(() => setFlashSearch(false), 4000);
+    };
     window.addEventListener('crm-lead-added', onCRMAdded);
     window.addEventListener('track-lead-added', onTrackAdded);
+    window.addEventListener('pulse-search-nav', onSearchPulse);
     return () => {
       window.removeEventListener('crm-lead-added', onCRMAdded);
       window.removeEventListener('track-lead-added', onTrackAdded);
+      window.removeEventListener('pulse-search-nav', onSearchPulse);
     };
   }, []);
   
@@ -189,7 +196,7 @@ export function AppSidebar() {
                 const isFlashing = 
                   (item.url === '/outreach' && (flashCRM || crmPulseWalkthrough)) || 
                   (item.url === '/potential-work' && (flashTrack || trackPulseWalkthrough)) ||
-                  (item.url === '/find-leads' && searchPulse);
+                  (item.url === '/find-leads' && (searchPulse || flashSearch));
                 const flashColor = item.url === '/outreach' ? 'text-green-400' : (item.url === '/potential-work' || item.url === '/find-leads') ? 'text-yellow-400' : '';
                 return (
                   <SidebarMenuItem key={item.title}>
