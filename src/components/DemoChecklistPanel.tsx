@@ -4,8 +4,9 @@ import { useAuth } from '@/hooks/useAuth';
 import { PostWalkthroughTipsModal } from '@/components/PostWalkthroughTipsModal';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
-import logoIcon from '@/assets/leadfinder-logo-icon.png';
+import appLogo from '@/assets/logo.png';
 import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -104,74 +105,59 @@ export function DemoChecklistPanel() {
       <Dialog open={showCompletionModal} onOpenChange={(v) => { if (!v) handleCompletionDismiss(); }}>
         <DialogContent
           hideClose
-          className="max-w-sm sm:max-w-md mx-auto p-0 overflow-hidden border-primary/15 bg-card rounded-2xl"
-          style={{
-            boxShadow: '0 0 60px hsl(var(--primary) / 0.06), 0 25px 50px -12px rgba(0,0,0,0.5)',
-          }}
+          className="max-w-sm sm:max-w-md mx-auto p-0 overflow-hidden border-border/40 bg-card rounded-2xl"
         >
-          <div className="px-8 pt-10 pb-8 sm:px-9 sm:pt-11 sm:pb-9 flex flex-col items-center">
-            {/* Logo with subtle glow */}
-            <div className="relative mb-3">
-              <div
-                className="absolute inset-0 rounded-full"
-                style={{
-                  background: 'radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%)',
-                  transform: 'scale(2.2)',
-                }}
-              />
-              <img src={logoIcon} alt="" className="h-14 w-14 relative z-10" />
+          <div className="px-8 pt-8 pb-7 sm:px-9 sm:pt-9 sm:pb-8 flex flex-col items-center">
+            {/* Brand — matches header exactly */}
+            <div className="flex items-center gap-3 mb-8">
+              <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
+              <h2 className="text-lg font-bold tracking-tight text-foreground">
+                Lead<span className="text-primary">Finder</span> Pro
+              </h2>
             </div>
 
-            {/* Brand label */}
-            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-foreground/50 mb-7">
-              LeadFinder Pro
-            </span>
-
             {/* Headline */}
-            <h2 className="text-center text-xl sm:text-[22px] font-bold leading-[1.25] tracking-tight mb-6 text-foreground">
-              You've Started Your Client Pipeline.
-            </h2>
+            <h3 className="text-center text-xl sm:text-[22px] font-bold leading-[1.25] tracking-tight mb-6 text-foreground">
+              You're 1 Reply Away From a New Client.
+            </h3>
 
-            {/* Stacked progress lines */}
+            {/* Progress lines */}
             <div className="text-center text-[13px] leading-relaxed mb-6 space-y-0.5">
-              <p className="text-muted-foreground">You've identified real businesses.</p>
-              <p className="text-muted-foreground">You've added leads.</p>
-              <p className="text-muted-foreground">You've sent your first message.</p>
-              <p className="text-foreground/80 mt-3 font-medium">Now build momentum.</p>
+              <p className="text-muted-foreground">You've already contacted a real business.</p>
+              <p className="text-foreground/80 mt-3 font-medium">Now multiply it.</p>
             </div>
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-2.5 w-full mb-6">
-              <div className="text-center p-3 rounded-xl bg-muted/20 border border-primary/15">
+              <div className="text-center p-3 rounded-xl bg-muted/20 border border-border/40">
                 <div className="text-xl font-bold text-primary">{metrics.noWebsite}</div>
-                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Businesses without websites</div>
+                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Businesses Found</div>
               </div>
-              <div className="text-center p-3 rounded-xl bg-muted/20 border border-primary/15">
+              <div className="text-center p-3 rounded-xl bg-muted/20 border border-border/40">
                 <div className="text-xl font-bold text-primary">{metrics.added}</div>
-                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Leads added</div>
+                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Leads Added</div>
               </div>
-              <div className="text-center p-3 rounded-xl bg-muted/20 border border-primary/15">
+              <div className="text-center p-3 rounded-xl bg-muted/20 border border-border/40">
                 <div className="text-xl font-bold text-primary">{metrics.messages}</div>
-                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Conversation started</div>
+                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Conversation Started</div>
               </div>
             </div>
 
             {/* Forward trigger */}
-            <p className="text-center text-[11px] text-muted-foreground/70 mb-7">
-              Every consistent pipeline starts exactly like this.
-            </p>
+            <div className="text-center text-[11px] text-muted-foreground/70 mb-7 space-y-0.5">
+              <p>Most freelancers stop here.</p>
+              <p className="text-foreground/60 font-medium">The difference is volume.</p>
+            </div>
 
             {/* CTA */}
-            <button
-              onClick={handleCompletionDismiss}
-              className="w-full h-12 rounded-lg text-[15px] font-semibold text-primary-foreground transition-all hover:brightness-110"
-              style={{
-                background: 'linear-gradient(180deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.85) 100%)',
-                boxShadow: '0 4px 14px hsl(var(--primary) / 0.25), 0 1px 3px rgba(0,0,0,0.2)',
-              }}
-            >
-              Keep Building
-            </button>
+            <Button size="lg" className="w-full" onClick={handleCompletionDismiss}>
+              Find 10 More
+            </Button>
+
+            {/* Subtle subtext */}
+            <p className="text-center text-[10px] text-muted-foreground/50 mt-4">
+              Consistency creates clients.
+            </p>
           </div>
         </DialogContent>
       </Dialog>

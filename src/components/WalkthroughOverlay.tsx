@@ -64,7 +64,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
       return { step: 5, selector: '[data-walkthrough="status"]', tooltip: 'Set the contact method.', noDim: true, tooltipPosition: 'right' };
     }
     if (!state.step4ActionSet) {
-      return { step: 5, selector: '[data-walkthrough="next-action"]', tooltip: 'Set the next action.', noDim: true };
+      return { step: 5, selector: '[data-walkthrough="next-action"]', tooltip: 'Set next action if needed.', noDim: true };
     }
     if (!state.trackPressed) {
       return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Track a business that shows interest.', noDim: true };
