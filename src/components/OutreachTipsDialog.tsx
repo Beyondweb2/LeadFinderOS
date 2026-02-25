@@ -64,6 +64,11 @@ export function OutreachTipsDialog() {
             Keep it short. No links. No pitch.
           </p>
 
+          {/* Auto-rotate hint */}
+          <p className="text-center text-xs text-muted-foreground/80 leading-relaxed">
+            Each contact automatically cycles through 6 proven opening messages — so you don't have to think about what to say.
+          </p>
+
           {/* Revenue hint */}
           <p className="text-center text-xs text-muted-foreground/70">
             If 1 in 20 replies converts, this search could generate £1,000+.
