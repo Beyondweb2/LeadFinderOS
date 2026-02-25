@@ -39,6 +39,7 @@ import {
   MessageSquare,
   MessageCircle,
   PhoneCall,
+  Phone,
   MoreVertical,
   Plus,
   Tag,
@@ -461,14 +462,36 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                     </a>
-                    <a
-                      href={`tel:${lead.phone}`}
-                      onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('contacted'); }}
-                      className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
-                      title="Call"
-                    >
-                      <PhoneCall className="h-3.5 w-3.5" />
-                    </a>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500 hover:text-amber-400 hover:bg-amber-500/10 transition-colors"
+                          title="Call options"
+                        >
+                          <Phone className="h-3.5 w-3.5" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="min-w-[160px]">
+                        <DropdownMenuItem asChild>
+                          <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
+                            <PhoneCall className="h-4 w-4" />
+                            Normal Call
+                          </a>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                          <a
+                            href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 cursor-pointer"
+                            onClick={() => handleContactMethodUpdate('contacted')}
+                          >
+                            <Phone className="h-4 w-4 text-green-500" />
+                            WhatsApp Call
+                          </a>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </>
                 ) : null}
               </div>
@@ -672,9 +695,33 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   <a href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`} onClick={() => handleContactMethodUpdate('sms')} className="h-8 w-8 flex items-center justify-center rounded-lg text-blue-400 hover:bg-blue-500/15 transition-colors" title="SMS">
                     <MessageCircle className="h-4 w-4" />
                   </a>
-                  <a href={`tel:${lead.phone}`} onClick={() => handleContactMethodUpdate('contacted')} className="h-8 w-8 flex items-center justify-center rounded-lg text-amber-500 hover:bg-amber-500/15 transition-colors" title="Call">
-                    <PhoneCall className="h-4 w-4" />
-                  </a>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="h-8 w-8 flex items-center justify-center rounded-lg text-amber-500 hover:bg-amber-500/15 transition-colors" title="Call options">
+                        <Phone className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="center" className="min-w-[160px]">
+                      <DropdownMenuItem asChild>
+                        <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
+                          <PhoneCall className="h-4 w-4" />
+                          Normal Call
+                        </a>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <a
+                          href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 cursor-pointer"
+                          onClick={() => handleContactMethodUpdate('contacted')}
+                        >
+                          <Phone className="h-4 w-4 text-green-500" />
+                          WhatsApp Call
+                        </a>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
               )}
               <a href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`} target="_blank" rel="noopener noreferrer" className="h-8 w-8 flex items-center justify-center rounded-lg text-blue-600 hover:bg-blue-500/15 transition-colors" title="Facebook">
