@@ -158,38 +158,55 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       if (error) {
         console.error('Search error:', error);
         
-        // Try to parse the error for trial limit
+        // Try to parse the error for trial limit / paywall codes
+        let body: any = null;
         try {
           const errorContext = error.context;
           if (errorContext && typeof errorContext === 'object') {
-            // Handle FunctionsHttpError which has a json() method
-            const body = typeof errorContext.json === 'function' 
-              ? await errorContext.json() 
-              : errorContext;
-            if (body?.code === 'POST_ABANDON_EXHAUSTED') {
-              setPostAbandonExhausted(true);
-              return;
+            if (typeof errorContext.json === 'function') {
+              body = await errorContext.json().catch(() => null);
             }
-            if (body?.code === 'FREE_SEARCH_EXHAUSTED') {
-              setFreeSearchExhausted(true);
-              // Log analytics
-              try { supabase.rpc('log_usage_event', { p_event_type: 'search_2_blocked' }); } catch {}
-              return;
+            if (!body && typeof errorContext.text === 'function') {
+              const txt = await errorContext.text().catch(() => '');
+              try { body = JSON.parse(txt); } catch {}
             }
-            if (body?.code === 'TRIAL_LIMIT_REACHED') {
-              setTrialLimitError({
-                searchesToday: body.searches_today || 3,
-                limit: body.limit || 3,
-              });
-              return;
+            if (!body) body = errorContext;
+          }
+        } catch {}
+        
+        // Also try parsing the error message itself as JSON (some versions embed it)
+        if (!body?.code && error.message) {
+          try {
+            const parsed = JSON.parse(error.message);
+            if (parsed?.code) body = parsed;
+          } catch {}
+          // Check for known string patterns as last resort
+          if (!body?.code) {
+            if (error.message.includes('FREE_SEARCH_EXHAUSTED') || error.message.includes('free trial to unlock')) {
+              body = { code: 'FREE_SEARCH_EXHAUSTED' };
+            } else if (error.message.includes('POST_ABANDON_EXHAUSTED')) {
+              body = { code: 'POST_ABANDON_EXHAUSTED' };
+            } else if (error.message.includes('Trial limit reached') || error.message.includes('TRIAL_LIMIT_REACHED')) {
+              body = { code: 'TRIAL_LIMIT_REACHED' };
             }
           }
-        } catch {
-          // Check if error message indicates trial limit
-          if (error.message?.includes('Trial limit reached')) {
-            setTrialLimitError({ searchesToday: 3, limit: 3 });
-            return;
-          }
+        }
+        
+        if (body?.code === 'POST_ABANDON_EXHAUSTED') {
+          setPostAbandonExhausted(true);
+          return;
+        }
+        if (body?.code === 'FREE_SEARCH_EXHAUSTED') {
+          setFreeSearchExhausted(true);
+          try { supabase.rpc('log_usage_event', { p_event_type: 'search_2_blocked' }); } catch {}
+          return;
+        }
+        if (body?.code === 'TRIAL_LIMIT_REACHED') {
+          setTrialLimitError({
+            searchesToday: body.searches_today || 3,
+            limit: body.limit || 3,
+          });
+          return;
         }
         
         toast({
