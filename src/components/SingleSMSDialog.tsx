@@ -184,12 +184,6 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
                   Rotating between 6 proven opening messages to reduce repetition and improve reply rates.
                 </p>
               )}
-              {!hasBusinessNamePlaceholder && (
-                <p className="text-xs text-amber-500 mt-1.5 flex items-center gap-1">
-                  <AlertTriangle className="h-3 w-3" />
-                  Tip: Add {`{{business_name}}`} to personalize your message
-                </p>
-              )}
             </div>
 
             {/* Live Preview */}
