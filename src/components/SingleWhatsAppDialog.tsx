@@ -16,6 +16,8 @@ import { MessageSquare, Send, AlertTriangle, RotateCcw, FileText } from 'lucide-
 import { generateWhatsAppUrl } from '@/lib/leadUtils';
 import { TemplatePicker } from '@/components/TemplatePicker';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
+import { useAutoRotateTemplate } from '@/hooks/useAutoRotateTemplate';
+import { AutoRotateToggle } from '@/components/AutoRotateToggle';
 
 interface SingleWhatsAppDialogProps {
   open: boolean;
@@ -32,6 +34,8 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
   const [showTemplateNudge, setShowTemplateNudge] = useState(false);
   const [templatesOpened, setTemplatesOpened] = useState(false);
 
+  const { autoOn, toggleAuto, getNextTemplate } = useAutoRotateTemplate();
+
   // Walkthrough awareness
   const { isDemoUser, state } = useDemoChecklist();
   const isWalkthroughStep3 = isDemoUser && state.addedToCrm && !state.contactAttempted;
@@ -46,14 +50,22 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
     }
   }, [open, isWalkthroughStep3]);
 
-  // Load saved template from localStorage on mount
+  // Auto-rotate on dialog open
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      setTemplate(saved);
-      setIsModified(saved !== DEFAULT_TEMPLATE);
+    if (open && autoOn) {
+      const next = getNextTemplate(template);
+      setTemplate(next);
+      setIsModified(next !== DEFAULT_TEMPLATE);
+      localStorage.setItem(STORAGE_KEY, next);
+    } else if (open && !autoOn) {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        setTemplate(saved);
+        setIsModified(saved !== DEFAULT_TEMPLATE);
+      }
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // Save template to localStorage whenever it changes
   const handleTemplateChange = (value: string) => {
@@ -69,10 +81,8 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
     localStorage.setItem(STORAGE_KEY, DEFAULT_TEMPLATE);
   };
 
-  // Check if {{business_name}} placeholder is present
   const hasBusinessNamePlaceholder = template.includes('{{business_name}}');
 
-  // Live preview with business name replaced
   const previewMessage = useMemo(() => {
     if (!lead) return template;
     return template.replace(/\{\{business_name\}\}/g, lead.business_name);
@@ -86,7 +96,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
     window.open(url, '_blank');
     onOpenChange(false);
 
-    // Usage tracking (non-blocking, fire-and-forget)
     supabase.rpc('log_usage_event', {
       p_event_type: 'message_sent',
       p_meta: {
@@ -129,20 +138,23 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
             {/* Template Editor */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <Label htmlFor="template" className="text-sm font-semibold">Message Template</Label>
-                {isModified && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleReset}
-                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
-                  >
-                    <RotateCcw className="h-3 w-3 mr-1" />
-                    Reset to default
-                  </Button>
-                )}
+                <Label htmlFor="template" className="text-sm font-semibold">Initial Message</Label>
+                <div className="flex items-center gap-2">
+                  {isModified && !autoOn && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleReset}
+                      className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset
+                    </Button>
+                  )}
+                  <AutoRotateToggle autoOn={autoOn} onToggle={toggleAuto} />
+                </div>
               </div>
-              {/* Walkthrough Step 3A: Template awareness nudge */}
+              {/* Walkthrough nudge */}
               {showTemplateNudge && !templatesOpened && (
                 <div className="mb-3 p-3 rounded-lg border border-yellow-500/40 bg-card shadow-sm">
                   <p className="text-sm font-semibold text-foreground mb-0.5">Choose your message</p>
@@ -155,6 +167,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
                 onSelectTemplate={(content) => {
                   handleTemplateChange(content);
                   setShowTemplateNudge(false);
+                  if (autoOn) toggleAuto(false);
                 }} 
                 templateType="text" 
                 isWalkthrough={showTemplateNudge}
@@ -163,10 +176,18 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
               <Textarea
                 id="template"
                 value={template}
-                onChange={(e) => handleTemplateChange(e.target.value)}
+                onChange={(e) => {
+                  handleTemplateChange(e.target.value);
+                  if (autoOn) toggleAuto(false);
+                }}
                 rows={4}
                 className="font-mono text-sm mt-2"
               />
+              {autoOn && (
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  Rotating between 6 proven opening messages to reduce repetition and improve reply rates.
+                </p>
+              )}
               {!hasBusinessNamePlaceholder && (
                 <p className="text-xs text-amber-500 mt-1.5 flex items-center gap-1">
                   <AlertTriangle className="h-3 w-3" />
