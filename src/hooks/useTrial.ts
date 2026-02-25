@@ -31,7 +31,7 @@ export function useTrial() {
   // Pro access includes trialing users and admins — they get unlimited searches
   const isStripeTrialing = stripeStatus === 'trialing';
   const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
-  console.log('[useTrial] access', { stripeStatus, hasProAccess, isStripeTrialing, isPaidSubscriber });
+  // Pro access includes trialing users and admins — they get unlimited searches
   
   const [state, setState] = useState<TrialState>({
     planStatus: null,

@@ -28,17 +28,21 @@ export function useContactTracking() {
   const { user } = useAuth();
 
   const fetchContacts = useCallback(async () => {
-    const { data, error } = await supabase
-      .from('lead_contacts')
-      .select('*')
-      .order('contacted_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('lead_contacts')
+        .select('*')
+        .order('contacted_at', { ascending: false });
 
-    if (error) {
-      console.error('Error fetching contacts:', error);
-      return;
+      if (error) {
+        console.error('Error fetching contacts:', error);
+        return;
+      }
+
+      setContacts(data as LeadContact[]);
+    } catch (err) {
+      console.error('Failed to fetch contacts:', err);
     }
-
-    setContacts(data as LeadContact[]);
   }, []);
 
   useEffect(() => {
