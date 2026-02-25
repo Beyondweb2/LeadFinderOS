@@ -76,7 +76,7 @@ export function SearchForm({
               </div>
             </div>
 
-            <div className="space-y-1.5 sm:space-y-2">
+            <div className="space-y-1.5 sm:space-y-2" data-walkthrough-step="location-area">
               <Label htmlFor="location" className="text-xs font-medium text-foreground/80">
                 Location
               </Label>
