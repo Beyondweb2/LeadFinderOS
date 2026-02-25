@@ -512,7 +512,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </div>
               <button
                 onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-                className="shrink-0 inline-flex items-center gap-0.5 h-6 px-2 rounded-md text-[10px] font-medium text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors"
+                className="shrink-0 inline-flex items-center gap-0.5 h-7 px-2.5 rounded-md text-xs font-medium text-foreground/70 hover:text-foreground hover:bg-muted/40 transition-colors"
                 data-no-expand
                 data-walkthrough="details"
               >
@@ -539,6 +539,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 if (v === '__add_custom__') { onAddCustomStatus(); return; }
                 onStatusChange(lead.id, v as LeadStatus);
                 window.dispatchEvent(new CustomEvent('demo-checklist-track-status-changed'));
+                window.dispatchEvent(new CustomEvent('demo-checklist-track-status-update'));
               }}>
                 <SelectTrigger className="h-8 text-xs border-border/50 flex-1" data-walkthrough-step="track-status-select">
                   <SelectValue />
@@ -727,9 +728,9 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           {/* Collapse button */}
           <button
             onClick={() => onToggleExpand()}
-            className="w-full flex items-center justify-center gap-1 py-2 text-[10px] text-muted-foreground/40 hover:text-muted-foreground hover:bg-muted/20 transition-colors border-t border-border/30"
+            className="w-full flex items-center justify-center gap-1 py-2.5 text-xs font-medium text-foreground/70 hover:text-foreground hover:bg-muted/20 transition-colors border-t border-border/30"
           >
-            <ChevronDown className="h-3 w-3 rotate-180" /> Collapse
+            <ChevronDown className="h-3.5 w-3.5 rotate-180" /> Collapse
           </button>
         </div>
 
