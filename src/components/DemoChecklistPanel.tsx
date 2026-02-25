@@ -6,7 +6,7 @@ import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import appLogo from '@/assets/logo.png';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
+import { ArrowRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -105,57 +105,65 @@ export function DemoChecklistPanel() {
       <Dialog open={showCompletionModal} onOpenChange={(v) => { if (!v) handleCompletionDismiss(); }}>
         <DialogContent
           hideClose
-          className="max-w-sm sm:max-w-md mx-auto p-0 overflow-hidden border-border/40 bg-card rounded-2xl"
+          className="max-w-sm sm:max-w-[400px] mx-auto p-0 overflow-hidden border-border/40 bg-[hsl(220_50%_5%)] rounded-2xl"
         >
-          <div className="px-8 pt-8 pb-7 sm:px-9 sm:pt-9 sm:pb-8 flex flex-col items-center">
-            {/* Brand — matches header exactly */}
-            <div className="flex items-center gap-3 mb-8">
-              <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
-              <h2 className="text-lg font-bold tracking-tight text-foreground">
+          <div className="px-7 pt-7 pb-6 sm:px-8 sm:pt-8 sm:pb-7 flex flex-col items-center">
+            {/* Brand — 3-column centered layout */}
+            <div className="grid grid-cols-[40px_1fr_40px] items-center w-full mb-6">
+              <div className="flex justify-start">
+                <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
+              </div>
+              <h2 className="text-lg font-bold tracking-tight text-center">
                 Lead<span className="text-primary">Finder</span> Pro
               </h2>
+              <div />
             </div>
 
             {/* Headline */}
-            <h3 className="text-center text-xl sm:text-[22px] font-bold leading-[1.25] tracking-tight mb-6 text-foreground">
-              You're 1 Reply Away From a New Client.
+            <h3 className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4 text-foreground">
+              You're <span className="text-primary">1 reply</span> away from a new client.
             </h3>
 
-            {/* Progress lines */}
-            <div className="text-center text-[13px] leading-relaxed mb-6 space-y-0.5">
-              <p className="text-muted-foreground">You've already contacted a real business.</p>
-              <p className="text-foreground/80 mt-3 font-medium">Now multiply it.</p>
+            {/* Supporting text */}
+            <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5 space-y-0.5">
+              <p>You've already started the pipeline.</p>
+              <p>Do one more search and send a few more messages.</p>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-2.5 w-full mb-6">
-              <div className="text-center p-3 rounded-xl bg-muted/20 border border-border/40">
-                <div className="text-xl font-bold text-primary">{metrics.noWebsite}</div>
-                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Businesses Found</div>
-              </div>
-              <div className="text-center p-3 rounded-xl bg-muted/20 border border-border/40">
-                <div className="text-xl font-bold text-primary">{metrics.added}</div>
-                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Leads Added</div>
-              </div>
-              <div className="text-center p-3 rounded-xl bg-muted/20 border border-border/40">
-                <div className="text-xl font-bold text-primary">{metrics.messages}</div>
-                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Conversation Started</div>
+            {/* Stats highlight card — matches contact tips value card */}
+            <div className="w-full rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] px-5 py-4 mb-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
+              <div className="flex items-center justify-around">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-primary">{metrics.noWebsite}</div>
+                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Businesses Found</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-primary">{metrics.added}</div>
+                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Leads Added</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-primary">{metrics.messages}</div>
+                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Conversations</div>
+                </div>
               </div>
             </div>
 
-            {/* Forward trigger */}
-            <div className="text-center text-[11px] text-muted-foreground/70 mb-7 space-y-0.5">
-              <p>Most freelancers stop here.</p>
-              <p className="text-foreground/60 font-medium">The difference is volume.</p>
-            </div>
+            {/* Micro-pressure */}
+            <p className="text-center text-[11px] text-muted-foreground/50 mb-5">
+              Most people stop after the first message.
+            </p>
 
             {/* CTA */}
-            <Button size="lg" className="w-full" onClick={handleCompletionDismiss}>
-              Find 10 More
-            </Button>
+            <button
+              onClick={handleCompletionDismiss}
+              className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all"
+            >
+              Find 10 More Leads
+              <ArrowRight className="h-4 w-4" />
+            </button>
 
-            {/* Subtle subtext */}
-            <p className="text-center text-[10px] text-muted-foreground/50 mt-4">
+            {/* Subtext */}
+            <p className="text-center text-[10px] text-muted-foreground/40 mt-3">
               Consistency creates clients.
             </p>
           </div>

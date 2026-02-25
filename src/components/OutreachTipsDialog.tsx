@@ -64,12 +64,15 @@ export function OutreachTipsDialog() {
         className="sm:max-w-[400px] p-0 overflow-hidden rounded-2xl border-border/40 bg-[hsl(220_50%_5%)]"
       >
         <div className="px-7 pt-7 pb-6 sm:px-8 sm:pt-8 sm:pb-7 flex flex-col items-center">
-          {/* Brand — exact match to app header */}
-          <div className="flex items-center gap-3 mb-6">
-            <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
-            <h2 className="text-lg font-bold tracking-tight">
+          {/* Brand — 3-column centered layout */}
+          <div className="grid grid-cols-[40px_1fr_40px] items-center w-full mb-6">
+            <div className="flex justify-start">
+              <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
+            </div>
+            <h2 className="text-lg font-bold tracking-tight text-center">
               Lead<span className="text-primary">Finder</span> Pro
             </h2>
+            <div />
           </div>
 
           {/* Headline */}
