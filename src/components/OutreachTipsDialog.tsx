@@ -6,7 +6,8 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
-import logoIcon from '@/assets/leadfinder-logo-icon.png';
+import { Button } from '@/components/ui/button';
+import appLogo from '@/assets/logo.png';
 
 export function OutreachTipsDialog() {
   const { user } = useAuth();
@@ -47,28 +48,16 @@ export function OutreachTipsDialog() {
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else setOpen(true); }}>
       <DialogContent
-        className="sm:max-w-[400px] p-0 overflow-hidden border-primary/15 bg-card rounded-2xl"
-        style={{
-          boxShadow: '0 0 60px hsl(var(--primary) / 0.06), 0 25px 50px -12px rgba(0,0,0,0.5)',
-        }}
+        className="sm:max-w-[400px] p-0 overflow-hidden border-border/40 bg-card rounded-2xl"
       >
-        <div className="px-8 pt-10 pb-8 sm:px-9 sm:pt-11 sm:pb-9 flex flex-col items-center">
-          {/* Logo with subtle glow */}
-          <div className="relative mb-3">
-            <div
-              className="absolute inset-0 rounded-full"
-              style={{
-                background: 'radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%)',
-                transform: 'scale(2.2)',
-              }}
-            />
-            <img src={logoIcon} alt="" className="h-12 w-12 relative z-10" />
+        <div className="px-8 pt-8 pb-7 sm:px-9 sm:pt-9 sm:pb-8 flex flex-col items-center">
+          {/* Brand — matches header exactly */}
+          <div className="flex items-center gap-3 mb-8">
+            <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
+            <h2 className="text-lg font-bold tracking-tight">
+              Lead<span className="text-primary">Finder</span> Pro
+            </h2>
           </div>
-
-          {/* Brand label */}
-          <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-foreground/50 mb-7">
-            LeadFinder Pro
-          </span>
 
           {/* Headline */}
           <DialogTitle className="text-center text-xl sm:text-[22px] font-bold leading-[1.25] tracking-tight mb-5">
@@ -89,7 +78,7 @@ export function OutreachTipsDialog() {
           </p>
 
           {/* Revenue highlight card */}
-          <div className="w-full rounded-xl border border-primary/15 bg-muted/20 px-5 py-4 mb-7">
+          <div className="w-full rounded-xl border border-border/40 bg-muted/20 px-5 py-4 mb-7">
             <p className="text-center text-[12px] text-muted-foreground leading-relaxed">
               If 1 in 20 replies converts,
               <br />
@@ -99,16 +88,9 @@ export function OutreachTipsDialog() {
           </div>
 
           {/* CTA */}
-          <button
-            onClick={handleClose}
-            className="w-full h-12 rounded-lg text-[15px] font-semibold text-primary-foreground transition-all hover:brightness-110"
-            style={{
-              background: 'linear-gradient(180deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.85) 100%)',
-              boxShadow: '0 4px 14px hsl(var(--primary) / 0.25), 0 1px 3px rgba(0,0,0,0.2)',
-            }}
-          >
+          <Button size="lg" className="w-full" onClick={handleClose}>
             Send first message
-          </button>
+          </Button>
 
           {/* Don't show again */}
           <div className="flex items-center justify-center gap-1.5 mt-5">
