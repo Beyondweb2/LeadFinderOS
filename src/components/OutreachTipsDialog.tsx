@@ -48,46 +48,30 @@ export function OutreachTipsDialog() {
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else setOpen(true); }}>
       <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden border-border/50 bg-card">
-        <div className="p-6 sm:p-7 space-y-6">
-          {/* Logo */}
+        <div className="p-7 sm:p-8 space-y-5">
+          {/* Icon */}
           <div className="flex justify-center">
-            <img src={logoIcon} alt="" className="h-8 w-8 opacity-60" />
+            <img src={logoIcon} alt="" className="h-12 w-12 opacity-40" />
           </div>
 
           {/* Headline */}
-          <div className="text-center space-y-1">
-            <DialogTitle className="text-[17px] sm:text-lg font-bold leading-snug tracking-tight">
-              You're about to contact a real business{' '}
-              <span className="text-primary">without a website.</span>
-            </DialogTitle>
-          </div>
+          <DialogTitle className="text-center text-[18px] sm:text-xl font-bold leading-snug tracking-tight">
+            You're contacting a real business without a website.
+          </DialogTitle>
 
-          {/* Body */}
-          <div className="space-y-3 text-[13px] leading-relaxed">
-            <p className="font-semibold text-foreground">
-              Most developers never take this step.
-            </p>
-            <p className="text-muted-foreground">
-              Keep your first message short and casual. Avoid links and long pitches in the first contact.
-            </p>
-          </div>
+          {/* Instruction */}
+          <p className="text-center text-sm font-medium text-muted-foreground">
+            Keep it short. No links. No pitch.
+          </p>
 
-          {/* Insight strip */}
-          <div className="px-3.5 py-3 rounded-lg border border-primary/15 bg-primary/[0.04]">
-            <p className="text-[12px] sm:text-[13px] text-foreground/80 text-center leading-relaxed">
-              If 1 in 20 replies converts, this single search could generate{' '}
-              <span className="font-bold text-foreground">£1,000+</span> in project revenue.
-            </p>
-          </div>
-
-          {/* Closing line */}
-          <p className="text-[12px] text-muted-foreground text-center">
-            This is how consistent client flow starts.
+          {/* Revenue hint */}
+          <p className="text-center text-xs text-muted-foreground/70">
+            If 1 in 20 replies converts, this search could generate £1,000+.
           </p>
 
           {/* CTA */}
-          <Button onClick={handleClose} className="w-full" size="default">
-            Start conversation
+          <Button onClick={handleClose} className="w-full font-semibold" size="lg">
+            Send first message
           </Button>
 
           {/* Don't show again */}
