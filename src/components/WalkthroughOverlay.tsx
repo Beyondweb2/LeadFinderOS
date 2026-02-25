@@ -12,7 +12,7 @@ interface StepDef {
   tooltipPosition?: 'top' | 'bottom' | 'right';
 }
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 1 – Go to Search (with sub-steps on the search page)
@@ -79,6 +79,11 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 7 – Add note
   if (!state.noteAdded) {
     return { step: 7, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details.', noDim: true };
+  }
+
+  // Step 8 – Update status on Track Leads
+  if (!state.trackStatusChanged) {
+    return { step: 8, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the lead status.', noDim: true };
   }
 
   return null;
