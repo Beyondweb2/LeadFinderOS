@@ -1105,7 +1105,7 @@ export function OutreachTable({
                                 </DropdownMenuContent>
                               </DropdownMenu>
                               <button
-                                    onClick={() => { window.dispatchEvent(new Event('outreach-first-contact-click')); handleSMSClick(lead); }}
+                                    onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'sms' } })); handleSMSClick(lead); }}
                                     className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-colors"
                                     title="Send SMS"
                                     data-walkthrough="contact"
@@ -1113,7 +1113,7 @@ export function OutreachTable({
                                     <MessageCircle className="h-4 w-4" />
                                   </button>
                                   <button
-                                    onClick={() => { window.dispatchEvent(new Event('outreach-first-contact-click')); handleWhatsAppClick(lead); }}
+                                    onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'whatsapp' } })); handleWhatsAppClick(lead); }}
                                     className="p-1.5 rounded-md hover:bg-green-500/10 text-green-500 hover:text-green-400 transition-colors"
                                     title="Send WhatsApp message"
                                     data-walkthrough-step="contact"

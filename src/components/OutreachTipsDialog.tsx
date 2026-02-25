@@ -6,13 +6,22 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
-import { Button } from '@/components/ui/button';
 import appLogo from '@/assets/logo.png';
+import { MessageSquare, Phone, Send } from 'lucide-react';
+
+type ContactMethod = 'whatsapp' | 'sms' | 'call' | null;
+
+const ctaConfig: Record<string, { label: string; icon: React.ReactNode }> = {
+  whatsapp: { label: 'Open WhatsApp & Send', icon: <Send className="h-4 w-4" /> },
+  sms: { label: 'Send SMS Now', icon: <MessageSquare className="h-4 w-4" /> },
+  call: { label: 'Start Call', icon: <Phone className="h-4 w-4" /> },
+};
 
 export function OutreachTipsDialog() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [dontShowAgain, setDontShowAgain] = useState(false);
+  const [contactMethod, setContactMethod] = useState<ContactMethod>(null);
 
   const storageKey = user?.id ? `outreach_tips_dismissed_${user.id}` : null;
 
@@ -21,8 +30,10 @@ export function OutreachTipsDialog() {
     const dismissed = localStorage.getItem(storageKey);
     if (dismissed) return;
 
-    const onContactClick = () => {
+    const onContactClick = (e: Event) => {
       if (!localStorage.getItem(storageKey)) {
+        const method = (e as CustomEvent)?.detail?.method || 'whatsapp';
+        setContactMethod(method);
         setOpen(true);
       }
     };
@@ -45,14 +56,16 @@ export function OutreachTipsDialog() {
     }
   };
 
+  const cta = ctaConfig[contactMethod || 'whatsapp'];
+
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else setOpen(true); }}>
       <DialogContent
-        className="sm:max-w-[400px] p-0 overflow-hidden border-border/40 bg-card rounded-2xl"
+        className="sm:max-w-[400px] p-0 overflow-hidden rounded-2xl border-border/40 bg-[hsl(220_50%_5%)]"
       >
-        <div className="px-8 pt-8 pb-7 sm:px-9 sm:pt-9 sm:pb-8 flex flex-col items-center">
-          {/* Brand — matches header exactly */}
-          <div className="flex items-center gap-3 mb-8">
+        <div className="px-7 pt-7 pb-6 sm:px-8 sm:pt-8 sm:pb-7 flex flex-col items-center">
+          {/* Brand — exact match to app header */}
+          <div className="flex items-center gap-3 mb-6">
             <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
             <h2 className="text-lg font-bold tracking-tight">
               Lead<span className="text-primary">Finder</span> Pro
@@ -60,26 +73,25 @@ export function OutreachTipsDialog() {
           </div>
 
           {/* Headline */}
-          <DialogTitle className="text-center text-xl sm:text-[22px] font-bold leading-[1.25] tracking-tight mb-5">
+          <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4">
             <span className="text-foreground">You're contacting a real business</span>
             <br />
             <span className="text-primary">without a website.</span>
           </DialogTitle>
 
-          {/* Instruction */}
-          <div className="text-center text-[13px] text-muted-foreground leading-relaxed mb-5">
+          {/* Guidance */}
+          <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-3 space-y-0.5">
             <p>Keep it short.</p>
             <p>No links. No pitch.</p>
           </div>
 
-          {/* Auto-rotation line */}
-          <p className="text-center text-[11px] text-muted-foreground/70 mb-6">
+          <p className="text-center text-[11px] text-muted-foreground/50 mb-5">
             Each contact rotates between 6 proven openers.
           </p>
 
-          {/* Revenue highlight card */}
-          <div className="w-full rounded-xl border border-border/40 bg-muted/20 px-5 py-4 mb-7">
-            <p className="text-center text-[12px] text-muted-foreground leading-relaxed">
+          {/* Value highlight card */}
+          <div className="w-full rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] px-5 py-4 mb-6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
+            <p className="text-center text-[12.5px] text-muted-foreground leading-relaxed">
               If 1 in 20 replies converts,
               <br />
               this search could generate{' '}
@@ -88,19 +100,23 @@ export function OutreachTipsDialog() {
           </div>
 
           {/* CTA */}
-          <Button size="lg" className="w-full" onClick={handleClose}>
-            Send first message
-          </Button>
+          <button
+            onClick={handleClose}
+            className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all"
+          >
+            {cta.icon}
+            {cta.label}
+          </button>
 
           {/* Don't show again */}
-          <div className="flex items-center justify-center gap-1.5 mt-5">
+          <div className="flex items-center justify-center gap-1.5 mt-4">
             <Checkbox
               id="dont-show-again"
               checked={dontShowAgain}
               onCheckedChange={(checked) => setDontShowAgain(checked === true)}
               className="h-3 w-3"
             />
-            <label htmlFor="dont-show-again" className="text-[10px] text-muted-foreground/50 cursor-pointer">
+            <label htmlFor="dont-show-again" className="text-[10px] text-muted-foreground/40 cursor-pointer">
               Don't show this again
             </label>
           </div>
