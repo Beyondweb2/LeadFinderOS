@@ -124,14 +124,14 @@ export function SearchForm({
                   <Button
                     type="button"
                     size="lg"
-                    className="w-full sm:w-auto gap-2 font-semibold px-5 sm:px-8 h-9 sm:h-10 text-sm"
+                    className="btn-premium w-full sm:w-auto gap-2 font-semibold px-5 sm:px-8 h-[44px] sm:h-[44px] text-sm text-white"
                     disabled={isUpgradeLoading}
                     onClick={onUpgrade}
                   >
                     {isUpgradeLoading ? (
                       <><Loader2 className="h-3.5 w-3.5 animate-spin" />Starting...</>
                     ) : (
-                      <><Sparkles className="h-3.5 w-3.5" />Get Unlimited Searches Free</>
+                      <><Sparkles className="h-3.5 w-3.5" />Start Free 3-Day Trial</>
                     )}
                   </Button>
                 </div>
