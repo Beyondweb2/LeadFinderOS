@@ -49,13 +49,6 @@ const Outreach = () => {
 
   return (
     <div className="space-y-3 sm:space-y-6">
-      {/* Pro Tip */}
-      <Alert className="border-primary/20 bg-primary/5">
-        <Lightbulb className="h-4 w-4 text-primary" />
-        <AlertDescription className="text-xs sm:text-sm text-muted-foreground">
-          <strong className="text-foreground">Pro Tip:</strong> Spread outreach across WhatsApp, SMS and calls, and rotate templates for better response rates.
-        </AlertDescription>
-      </Alert>
       {/* Page Header - Compact on mobile */}
       <div className="text-center sm:text-left">
         <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
