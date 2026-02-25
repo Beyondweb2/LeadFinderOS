@@ -160,10 +160,14 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
                 </div>
               )}
               <TemplatePicker 
-                onSelectTemplate={(content) => {
+                onSelectTemplate={(content, templateId) => {
                   handleTemplateChange(content);
                   setShowTemplateNudge(false);
-                  if (autoOn) toggleAuto(false);
+                  if (templateId === 'default-0') {
+                    toggleAuto(true);
+                  } else {
+                    if (autoOn) toggleAuto(false);
+                  }
                 }} 
                 templateType="text" 
                 isWalkthrough={showTemplateNudge}

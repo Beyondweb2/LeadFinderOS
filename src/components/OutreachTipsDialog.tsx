@@ -7,7 +7,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useAuth } from '@/hooks/useAuth';
-import logoIcon from '@/assets/leadfinder-logo-icon.png';
+import { MessageCircle } from 'lucide-react';
 
 export function OutreachTipsDialog() {
   const { user } = useAuth();
@@ -47,35 +47,42 @@ export function OutreachTipsDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else setOpen(true); }}>
-      <DialogContent className="sm:max-w-[380px] p-0 overflow-hidden border-border/50 bg-card">
-        <div className="p-7 sm:p-8 space-y-5">
+      <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden border-primary/20 bg-card shadow-[0_0_40px_hsl(var(--primary)/0.08)]">
+        <div className="p-8 sm:p-9 space-y-6">
           {/* Icon */}
           <div className="flex justify-center">
-            <img src={logoIcon} alt="" className="h-12 w-12 opacity-40" />
+            <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+              <MessageCircle className="h-7 w-7 text-primary" />
+            </div>
           </div>
 
           {/* Headline */}
-          <DialogTitle className="text-center text-[18px] sm:text-xl font-bold leading-snug tracking-tight">
+          <DialogTitle className="text-center text-xl sm:text-[22px] font-bold leading-snug tracking-tight">
             You're contacting a real business without a website.
           </DialogTitle>
 
           {/* Instruction */}
-          <p className="text-center text-sm font-medium text-muted-foreground">
+          <p className="text-center text-sm font-semibold text-foreground/80">
             Keep it short. No links. No pitch.
           </p>
 
+          {/* Divider */}
+          <div className="border-t border-border/40" />
+
           {/* Auto-rotate hint */}
-          <p className="text-center text-xs text-muted-foreground/80 leading-relaxed">
-            Each contact automatically cycles through 6 proven opening messages — so you don't have to think about what to say.
+          <p className="text-center text-xs text-muted-foreground leading-relaxed">
+            Each contact automatically cycles through 6 proven opening messages - so you don't have to think about what to say.
           </p>
 
           {/* Revenue hint */}
-          <p className="text-center text-xs text-muted-foreground/70">
-            If 1 in 20 replies converts, this search could generate £1,000+.
-          </p>
+          <div className="text-center">
+            <span className="inline-block text-xs font-medium text-primary/80 bg-primary/5 border border-primary/10 rounded-full px-3 py-1">
+              If 1 in 20 replies converts, this search could generate £1,000+
+            </span>
+          </div>
 
           {/* CTA */}
-          <Button onClick={handleClose} className="w-full font-semibold" size="lg">
+          <Button onClick={handleClose} className="w-full font-semibold text-base h-12 shadow-[0_0_20px_hsl(var(--primary)/0.3)]" size="lg">
             Send first message
           </Button>
 

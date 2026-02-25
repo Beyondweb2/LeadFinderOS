@@ -7,7 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 
 interface TemplatePickerProps {
-  onSelectTemplate: (content: string) => void;
+  onSelectTemplate: (content: string, templateId?: string) => void;
   /** Filter to only show text templates (not voice scripts) */
   templateType?: 'text' | 'voice_script';
   /** When true, show walkthrough guidance to highlight first template */
@@ -26,7 +26,7 @@ interface SimpleTemplate {
 
 // Default pre-made templates shown when user has none
 const DEFAULT_PREMADE_TEMPLATES: SimpleTemplate[] = [
-  { id: 'default-0', title: 'Quick Check – Right Number?', content: `Hi, is this the right number for {{business_name}}?`, category: 'outreach', template_type: 'text' },
+  { id: 'default-0', title: 'Initial Contact Cycle', content: `Hi, is this the right number for {{business_name}}?`, category: 'outreach', template_type: 'text' },
   { id: 'default-1', title: 'First Text – Friendly Opener', content: `Hi! Is this {{business_name}}? I came across your business and wanted to reach out. I help businesses like yours get set up online with a simple, professional website. Would you be open to a quick chat about it?`, category: 'outreach', template_type: 'text' },
   { id: 'default-2', title: 'First Text – Direct', content: `Hi, is this {{business_name}}? I noticed you don't have a website yet. I build affordable websites for local businesses — would you be interested in hearing more?`, category: 'outreach', template_type: 'text' },
   { id: 'default-3', title: 'Follow Up – Check In', content: `Hi {{business_name}}, just following up on my earlier message. I'd love to help you get online with a simple website. Let me know if you're interested!`, category: 'follow_up', template_type: 'text' },
@@ -71,7 +71,7 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
   }, [isOpen, user, templateType, fetched]);
 
   const handleSelect = (template: SimpleTemplate) => {
-    onSelectTemplate(template.content);
+    onSelectTemplate(template.content, template.id);
     toast({
       title: 'Template applied',
       description: `"${template.title}" loaded into message.`,
@@ -86,9 +86,9 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
     }
   }, [isOpen, isWalkthrough, onWalkthroughTemplatesOpened]);
 
-  // Highlight the "Quick Check – Right Number?" template during walkthrough
+  // Highlight the "Initial Contact Cycle" template during walkthrough
   const firstTextTemplate = isWalkthrough ? templates.find(t => 
-    t.title.toLowerCase().includes('right number') || t.id === 'default-0'
+    t.title.toLowerCase().includes('initial contact cycle') || t.id === 'default-0'
   ) || templates[0] : null;
 
   return (
@@ -113,7 +113,7 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
         <div className="mt-2 border border-border/50 rounded-lg bg-card/80 backdrop-blur-sm overflow-hidden">
           {isWalkthrough && templates.length > 0 && (
             <div className="px-3 pt-2.5 pb-1.5 bg-primary/5 border-b border-primary/10">
-              <p className="text-[11px] text-primary font-medium">Select "Quick Check – Right Number?" to get started.</p>
+              <p className="text-[11px] text-primary font-medium">Select "Initial Contact Cycle" to get started.</p>
               <p className="text-[10px] text-muted-foreground mt-0.5">You can explore other templates anytime.</p>
             </div>
           )}
