@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -40,11 +41,46 @@ const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       refetchOnReconnect: false,
       staleTime: 5 * 60 * 1000, // 5 minutes
+      retry: 1,
     },
   },
 });
 
-const App = () => (
+/**
+ * Global error boundary — catches unhandled promise rejections and errors
+ * that would otherwise crash the React tree and cause a blank/refresh.
+ */
+function useGlobalErrorGuard() {
+  useEffect(() => {
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      console.error('[Global] Unhandled promise rejection caught:', event.reason);
+      // Prevent the browser from treating this as a fatal error
+      event.preventDefault();
+    };
+
+    const handleError = (event: ErrorEvent) => {
+      // ChunkLoadError = Vite HMR / lazy chunk failure — triggers page reload
+      if (event.message?.includes('ChunkLoadError') || event.message?.includes('Failed to fetch dynamically imported module')) {
+        console.warn('[Global] Chunk load error — reloading page');
+        window.location.reload();
+        return;
+      }
+      console.error('[Global] Uncaught error:', event.error);
+    };
+
+    window.addEventListener('unhandledrejection', handleRejection);
+    window.addEventListener('error', handleError);
+    return () => {
+      window.removeEventListener('unhandledrejection', handleRejection);
+      window.removeEventListener('error', handleError);
+    };
+  }, []);
+}
+
+const App = () => {
+  useGlobalErrorGuard();
+  
+  return (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <AccentInitializer>
@@ -218,6 +254,7 @@ const App = () => (
       </AccentInitializer>
     </AuthProvider>
   </QueryClientProvider>
-);
+  );
+};
 
 export default App;
