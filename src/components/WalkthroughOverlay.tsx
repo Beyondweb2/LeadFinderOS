@@ -161,9 +161,10 @@ export function WalkthroughOverlay() {
     setTargetRect(rect);
 
     const padding = 12;
-    const tooltipHeight = 60;
+    const tooltipHeight = 70;
     const spaceBelow = window.innerHeight - rect.bottom;
-    const mobileNavHeight = window.innerWidth < 640 ? 72 : 0;
+    const isMobile = window.innerWidth < 640;
+    const mobileNavHeight = isMobile ? 90 : 0;
 
     const tooltipWidth = 260;
     const rawLeft = rect.left + rect.width / 2;
@@ -172,14 +173,9 @@ export function WalkthroughOverlay() {
     const clampedLeft = Math.max(minLeft, Math.min(maxLeft, rawLeft));
 
     if (activeStep.tooltipPosition === 'right') {
-      const isMobile = window.innerWidth < 640;
       if (isMobile) {
-        const preferTop = rect.top > tooltipHeight + padding;
-        if (preferTop) {
-          setTooltipPos({ top: rect.top - tooltipHeight - padding, left: clampedLeft });
-        } else {
-          setTooltipPos({ top: rect.bottom + padding, left: clampedLeft });
-        }
+        // On mobile, always place tooltip above elements near bottom nav
+        setTooltipPos({ top: rect.top - tooltipHeight - padding, left: clampedLeft });
       } else {
         setTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + padding });
       }

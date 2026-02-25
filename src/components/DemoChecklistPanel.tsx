@@ -1,8 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
-import { Check } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { PostWalkthroughTipsModal } from '@/components/PostWalkthroughTipsModal';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -27,7 +25,6 @@ export function DemoChecklistPanel() {
   const prevAllDoneRef = useRef(allDone);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
 
-  // Metrics for completion modal
   const [metrics, setMetrics] = useState({ noWebsite: 0, added: 0, messages: 0 });
 
   const isFreeUser = !isPaidSubscriber && !isStripeTrialing;
@@ -47,7 +44,6 @@ export function DemoChecklistPanel() {
     } catch { setDismissed(false); }
   }, [dismissKey]);
 
-  // Show completion modal when walkthrough finishes
   useEffect(() => {
     if (allDone && !prevAllDoneRef.current) {
       setShowCompletionModal(true);
@@ -67,7 +63,6 @@ export function DemoChecklistPanel() {
     prevAllDoneRef.current = allDone;
   }, [allDone, user?.id]);
 
-  // Show tips modal after completion modal is dismissed
   useEffect(() => {
     if (!isFreeUser || tipsDismissed || tipsModalShownRef.current) return;
     if (allDone && !showCompletionModal && !prevAllDoneRef.current) {
@@ -89,7 +84,6 @@ export function DemoChecklistPanel() {
   const handleCompletionDismiss = () => {
     setShowCompletionModal(false);
     handleDismiss();
-    // Pulse the search nav button yellow instead of navigating
     window.dispatchEvent(new CustomEvent('pulse-search-nav'));
   };
 
@@ -107,58 +101,77 @@ export function DemoChecklistPanel() {
 
   return (
     <>
-      {/* Walkthrough Completed Modal */}
       <Dialog open={showCompletionModal} onOpenChange={(v) => { if (!v) handleCompletionDismiss(); }}>
-        <DialogContent hideClose className="max-w-sm sm:max-w-md mx-auto p-0 overflow-hidden border-border/50 bg-card shadow-2xl">
-          <div className="p-6 sm:p-7 space-y-6">
-            {/* Logo */}
-            <div className="flex justify-center">
-              <img src={logoIcon} alt="" className="h-14 w-14" />
+        <DialogContent
+          hideClose
+          className="max-w-sm sm:max-w-md mx-auto p-0 overflow-hidden border-primary/15 bg-card rounded-2xl"
+          style={{
+            boxShadow: '0 0 60px hsl(var(--primary) / 0.06), 0 25px 50px -12px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div className="px-8 pt-10 pb-8 sm:px-9 sm:pt-11 sm:pb-9 flex flex-col items-center">
+            {/* Logo with subtle glow */}
+            <div className="relative mb-3">
+              <div
+                className="absolute inset-0 rounded-full"
+                style={{
+                  background: 'radial-gradient(circle, hsl(var(--primary) / 0.15) 0%, transparent 70%)',
+                  transform: 'scale(2.2)',
+                }}
+              />
+              <img src={logoIcon} alt="" className="h-14 w-14 relative z-10" />
             </div>
 
-            <div className="text-center space-y-3">
-              <h2 className="text-[17px] sm:text-lg font-bold text-foreground tracking-tight leading-snug">
-                Your Pipeline Is Ready
-              </h2>
-              <p className="text-[13px] text-muted-foreground leading-relaxed">
-                You've seen how to identify, contact, and track real businesses that need websites.
-              </p>
+            {/* Brand label */}
+            <span className="text-[10px] font-semibold tracking-[0.2em] uppercase text-foreground/50 mb-7">
+              LeadFinder Pro
+            </span>
+
+            {/* Headline */}
+            <h2 className="text-center text-xl sm:text-[22px] font-bold leading-[1.25] tracking-tight mb-6 text-foreground">
+              You've Started Your Client Pipeline.
+            </h2>
+
+            {/* Stacked progress lines */}
+            <div className="text-center text-[13px] leading-relaxed mb-6 space-y-0.5">
+              <p className="text-muted-foreground">You've identified real businesses.</p>
+              <p className="text-muted-foreground">You've added leads.</p>
+              <p className="text-muted-foreground">You've sent your first message.</p>
+              <p className="text-foreground/80 mt-3 font-medium">Now build momentum.</p>
             </div>
 
-            {/* Metrics */}
-            <div className="grid grid-cols-3 gap-2">
-              <div className="text-center p-2.5 rounded-lg bg-muted/30 border border-border/30">
-                <div className="text-lg font-bold text-foreground">{metrics.noWebsite}</div>
-                <div className="text-[10px] text-muted-foreground leading-tight">No Website</div>
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-2.5 w-full mb-6">
+              <div className="text-center p-3 rounded-xl bg-muted/20 border border-primary/15">
+                <div className="text-xl font-bold text-primary">{metrics.noWebsite}</div>
+                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Businesses without websites</div>
               </div>
-              <div className="text-center p-2.5 rounded-lg bg-muted/30 border border-border/30">
-                <div className="text-lg font-bold text-foreground">{metrics.added}</div>
-                <div className="text-[10px] text-muted-foreground leading-tight">Leads Added</div>
+              <div className="text-center p-3 rounded-xl bg-muted/20 border border-primary/15">
+                <div className="text-xl font-bold text-primary">{metrics.added}</div>
+                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Leads added</div>
               </div>
-              <div className="text-center p-2.5 rounded-lg bg-muted/30 border border-border/30">
-                <div className="text-lg font-bold text-foreground">{metrics.messages}</div>
-                <div className="text-[10px] text-muted-foreground leading-tight">Messages Sent</div>
+              <div className="text-center p-3 rounded-xl bg-muted/20 border border-primary/15">
+                <div className="text-xl font-bold text-primary">{metrics.messages}</div>
+                <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">Conversation started</div>
               </div>
             </div>
 
-            <ul className="text-[13px] space-y-2.5 mx-auto max-w-[260px]">
-              <li className="flex items-center gap-2">
-                <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                <span className="text-foreground/90">Find businesses without websites</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                <span className="text-foreground/90">Reach out in seconds</span>
-              </li>
-              <li className="flex items-center gap-2">
-                <Check className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                <span className="text-foreground/90">Never lose a follow-up again</span>
-              </li>
-            </ul>
+            {/* Forward trigger */}
+            <p className="text-center text-[11px] text-muted-foreground/70 mb-7">
+              Every consistent pipeline starts exactly like this.
+            </p>
 
-            <Button size="lg" className="w-full" onClick={handleCompletionDismiss}>
-              Build Your Pipeline
-            </Button>
+            {/* CTA */}
+            <button
+              onClick={handleCompletionDismiss}
+              className="w-full h-12 rounded-lg text-[15px] font-semibold text-primary-foreground transition-all hover:brightness-110"
+              style={{
+                background: 'linear-gradient(180deg, hsl(var(--primary)) 0%, hsl(var(--primary) / 0.85) 100%)',
+                boxShadow: '0 4px 14px hsl(var(--primary) / 0.25), 0 1px 3px rgba(0,0,0,0.2)',
+              }}
+            >
+              Keep Building
+            </button>
           </div>
         </DialogContent>
       </Dialog>
