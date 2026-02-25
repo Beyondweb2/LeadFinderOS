@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { FileText, Copy, ChevronDown, ChevronUp } from 'lucide-react';
@@ -40,6 +40,19 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
   const [fetched, setFetched] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen && user && !fetched) {
@@ -54,14 +67,12 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
           setFetched(true);
           if (error) {
             console.error('Error fetching templates:', error);
-            // Show defaults on error
             setTemplates(DEFAULT_PREMADE_TEMPLATES.filter(t => t.template_type === templateType));
             return;
           }
           if (data && data.length > 0) {
             setTemplates(data);
           } else {
-            // No user templates — show pre-made defaults
             setTemplates(DEFAULT_PREMADE_TEMPLATES.filter(t => t.template_type === templateType));
           }
         });
@@ -90,7 +101,7 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
   ) || templates[0] : null;
 
   return (
-    <div>
+    <div className="relative" ref={containerRef}>
       <Button
         type="button"
         variant={isWalkthrough && !isOpen ? 'default' : 'ghost'}
@@ -108,17 +119,17 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
       </Button>
 
       {isOpen && (
-        <div className="mt-2 border border-border/50 rounded-lg bg-card/80 backdrop-blur-sm overflow-hidden">
+        <div className="absolute left-0 right-0 top-full mt-1 z-[100] border border-border/50 rounded-lg bg-card shadow-lg overflow-hidden min-w-[280px]">
           {isWalkthrough && templates.length > 0 && (
             <div className="px-3 pt-2.5 pb-1.5 bg-primary/5 border-b border-primary/10">
-              <p className="text-[11px] text-primary font-medium">Select "Initial Contact Cycle" to get started.</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">You can explore other templates anytime.</p>
+              <p className="text-[11px] text-primary font-medium">👉 Tap <strong>Initial Contact Cycle</strong> to get started</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">This automatically rotates 6 proven openers.</p>
             </div>
           )}
           {isLoading ? (
             <div className="p-3 text-xs text-muted-foreground text-center">Loading templates...</div>
           ) : (
-            <ScrollArea className="max-h-48">
+            <ScrollArea className="max-h-[280px]">
               <div className="divide-y divide-border/30">
                 {templates.map((t) => {
                   const isHighlighted = isWalkthrough && firstTextTemplate?.id === t.id;
@@ -127,11 +138,13 @@ export function TemplatePicker({ onSelectTemplate, templateType = 'text', isWalk
                       key={t.id}
                       onClick={() => handleSelect(t)}
                       className={`w-full text-left px-3 py-2.5 hover:bg-accent/50 transition-colors group ${
-                        isHighlighted ? 'bg-primary/10 ring-1 ring-primary/30 animate-[pulse-scale_1.5s_ease-in-out_infinite]' : ''
+                        isHighlighted ? 'bg-primary/10 ring-1 ring-primary/30' : ''
                       }`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className={`text-xs font-medium ${isHighlighted ? 'text-primary' : ''}`}>{t.title}</span>
+                        <span className={`text-xs font-medium ${isHighlighted ? 'text-primary' : ''}`}>
+                          {isHighlighted && '👉 '}{t.title}
+                        </span>
                         <Copy className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                       </div>
                     </button>
