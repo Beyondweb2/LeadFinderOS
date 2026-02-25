@@ -29,7 +29,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     const locInput = document.querySelector('[data-walkthrough-step="location"]');
     const locValue = (locInput as HTMLInputElement)?.value?.trim();
     if (!locValue) {
-      return { step: 1, selector: '[data-walkthrough-step="location"]', tooltip: 'Pick a location using Quick Locations.', noDim: true };
+      return { step: 1, selector: '[data-walkthrough-step="location-area"]', tooltip: 'Type a location or pick one from Quick Locations.', noDim: true };
     }
     return { step: 1, selector: '[data-walkthrough-step="search"]', tooltip: 'Press Find Leads to search.', noDim: true };
   }
