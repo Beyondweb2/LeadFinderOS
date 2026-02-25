@@ -111,6 +111,7 @@ export function MobileBottomNav() {
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
   const [crmGlow, setCrmGlow] = useState(false);
   const [trackGlow, setTrackGlow] = useState(false);
+  const [searchGlow, setSearchGlow] = useState(false);
 
   // Walkthrough step 1 pulse + step 3 CRM pulse + step 6 track pulse
   let searchPulse = false;
@@ -132,11 +133,17 @@ export function MobileBottomNav() {
       setTrackGlow(true);
       setTimeout(() => setTrackGlow(false), 2000);
     };
+    const searchHandler = () => {
+      setSearchGlow(true);
+      setTimeout(() => setSearchGlow(false), 4000);
+    };
     window.addEventListener('crm-lead-added', crmHandler);
     window.addEventListener('track-lead-added', trackHandler);
+    window.addEventListener('pulse-search-nav', searchHandler);
     return () => {
       window.removeEventListener('crm-lead-added', crmHandler);
       window.removeEventListener('track-lead-added', trackHandler);
+      window.removeEventListener('pulse-search-nav', searchHandler);
     };
   }, []);
   const allMoreItems = isAdmin 
@@ -199,7 +206,7 @@ export function MobileBottomNav() {
                 data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : item.url === '/potential-work' ? 'track-nav' : undefined}
                 className={cn(
                   'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[60px]',
-                  item.title === 'Search' && searchPulse
+                  item.title === 'Search' && (searchPulse || searchGlow)
                     ? 'text-yellow-400 animate-pulse'
                     : item.title === 'CRM' && (crmGlow || crmPulseWalkthrough)
                       ? 'text-green-400 animate-pulse'
