@@ -53,7 +53,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 4 – Contact a lead
   if (!state.contactAttempted) {
     if (pathname === '/outreach') {
-      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Send initial message. Auto mode rotates between 6 proven variations.', noDim: true };
+      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Send initial message.', noDim: true };
     }
     return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact a lead.' };
   }

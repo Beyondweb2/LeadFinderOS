@@ -156,10 +156,10 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
               </div>
               {/* Walkthrough nudge */}
               {showTemplateNudge && !templatesOpened && (
-                <div className="mb-3 p-3 rounded-lg border border-yellow-500/40 bg-card shadow-sm">
-                  <p className="text-sm font-semibold text-foreground mb-0.5">Choose your message</p>
-                  <p className="text-xs text-muted-foreground">
-                    Tap <span className="inline-flex items-center gap-0.5 text-primary font-medium"><FileText className="h-3 w-3" />Templates</span> to use a ready-made message. It makes first outreach easier.
+                <div className="mb-3 p-3 rounded-lg border border-yellow-500/40 bg-card shadow-lg">
+                  <div className="text-[10px] font-semibold text-primary mb-0.5">Step 4 of 7</div>
+                  <p className="text-xs text-foreground">
+                    Select <span className="font-semibold text-primary">"Initial Contact Cycle"</span> to auto-rotate between 6 proven messages.
                   </p>
                 </div>
               )}
