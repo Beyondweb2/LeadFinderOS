@@ -134,7 +134,16 @@ function dispatch(action: Action) {
 
 type Toast = Omit<ToasterToast, "id">;
 
+function isMobileViewport() {
+  return typeof window !== 'undefined' && window.innerWidth < 640;
+}
+
 function toast({ ...props }: Toast) {
+  // On mobile, suppress all non-destructive toasts to save screen space
+  if (isMobileViewport() && props.variant !== 'destructive') {
+    return { id: '', dismiss: () => {}, update: () => {} };
+  }
+
   const id = genId();
 
   const update = (props: ToasterToast) =>
