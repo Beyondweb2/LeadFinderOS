@@ -12,7 +12,7 @@ interface StepDef {
   tooltipPosition?: 'top' | 'bottom' | 'right';
 }
 
-const TOTAL_STEPS = 4;
+const TOTAL_STEPS = 7;
 
 function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 1 – Search for businesses
@@ -33,7 +33,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 1, selector: '[data-walkthrough-step="search"]', tooltip: 'Press Find Leads to search.', noDim: true };
   }
 
-  // Step 2 – Find a "No Website" lead & highlight why it matters
+  // Step 2 – Find a "No Website" lead & add to CRM
   if (!state.addedToCrm) {
     return {
       step: 2,
@@ -44,7 +44,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     };
   }
 
-  // Step 3 – Go to CRM & open it
+  // Step 3 – Go to CRM
   if (!state.crmPageOpened) {
     return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to message this lead.' };
   }
@@ -55,6 +55,24 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
       return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Send a message now!', noDim: true };
     }
     return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to send a message.' };
+  }
+
+  // Step 5 – Press Track (star) when a business responds positively
+  if (!state.trackPressed) {
+    if (pathname === '/outreach') {
+      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'When they respond positively, press ⭐ to track them.', noDim: true, tooltipPosition: 'top' };
+    }
+    return { step: 5, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to track a lead.' };
+  }
+
+  // Step 6 – Open Track Leads page
+  if (!state.leadTracked) {
+    return { step: 6, selector: '[data-walkthrough="track-nav"]', tooltip: 'Open Track Leads to manage your pipeline.', tooltipPosition: 'top' };
+  }
+
+  // Step 7 – Add a note on the tracked lead
+  if (!state.noteAdded) {
+    return { step: 7, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details about this lead.', noDim: true };
   }
 
   return null;
