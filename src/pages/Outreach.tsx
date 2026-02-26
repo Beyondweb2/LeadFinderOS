@@ -46,9 +46,6 @@ const Outreach = () => {
   const handlePipelineStatusChange = useCallback(async (leadId: string, status: PipelineStatus) => {
     await updateStatus(leadId, status as any);
     window.dispatchEvent(new CustomEvent('demo-checklist-pipeline-status-set'));
-    if (status === 'interested') {
-      window.dispatchEvent(new CustomEvent('demo-checklist-marked-interested'));
-    }
   }, [updateStatus]);
 
   if (isLoading) {

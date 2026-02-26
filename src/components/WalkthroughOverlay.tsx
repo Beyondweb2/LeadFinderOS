@@ -12,7 +12,7 @@ interface StepDef {
   tooltipPosition?: 'top' | 'bottom' | 'right';
 }
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 8;
 
 function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 1 – Go to Search (with sub-steps on the search page)
@@ -50,10 +50,10 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact and manage leads.' };
   }
 
-  // Step 4 – Contact a lead (SMS/WhatsApp spotlight)
+  // Step 4 – Contact a lead
   if (!state.contactAttempted) {
     if (pathname === '/outreach') {
-      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Send initial message.\n\nChoose a contact method like SMS or WhatsApp.\n\nIf you\'re on desktop, WhatsApp requires the WhatsApp Desktop app or your phone.\nYou can also send the message directly from your phone while using desktop.\n\nThis is just an example and can be skipped by closing this popup.', noDim: true };
+      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Send initial message.', noDim: true };
     }
     return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact a lead.' };
   }
@@ -71,27 +71,19 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     }
   }
 
-  // Step 6 – Mark as Interested (Track interested leads)
-  if (!state.markedInterested) {
-    if (pathname === '/outreach') {
-      return { step: 6, selector: '[data-walkthrough="pipeline-status"]', tooltip: 'Track interested leads\n\nIf a business is interested, mark it as Interested to track it properly.', noDim: true, tooltipPosition: 'right' };
-    }
-    return { step: 6, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to mark a lead as Interested.' };
-  }
-
-  // Step 7 – Open Track page
+  // Step 6 – Open Track page
   if (!state.leadTracked) {
-    return { step: 7, selector: '[data-walkthrough="track-nav"]', tooltip: 'Open Track to manage your pipeline.', tooltipPosition: 'top' };
+    return { step: 6, selector: '[data-walkthrough="track-nav"]', tooltip: 'Open Track to manage your pipeline.', tooltipPosition: 'top' };
   }
 
-  // Step 8 – Add note
+  // Step 7 – Add note
   if (!state.noteAdded) {
-    return { step: 8, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details.', noDim: true };
+    return { step: 7, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details.', noDim: true };
   }
 
-  // Step 9 – Update status on Track Leads
+  // Step 8 – Update status on Track Leads
   if (!state.trackStatusChanged) {
-    return { step: 9, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the lead status.', noDim: true };
+    return { step: 8, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the lead status.', noDim: true };
   }
 
   return null;

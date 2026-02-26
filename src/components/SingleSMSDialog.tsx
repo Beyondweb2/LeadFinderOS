@@ -110,10 +110,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
   return (
     <Dialog open={open} onOpenChange={(v) => {
       onOpenChange(v);
-      if (!v) {
-        window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
-        window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
-      }
+      if (!v) window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -213,6 +210,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => {
             onOpenChange(false);
+            window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
           }}>
             Cancel
           </Button>
