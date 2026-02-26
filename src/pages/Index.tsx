@@ -22,6 +22,38 @@ import type { Lead, Country } from '@/types/lead';
 
 const FREE_SEARCH_LIMIT = 2;
 const PAYWALL_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
+const SEARCH_COUNT_KEY = 'leadfinder_free_search_count';
+const BLUR_KEY = 'leadfinder_blur_active';
+
+function getPersistedSearchCount(userId?: string): number {
+  try {
+    const key = userId ? `${SEARCH_COUNT_KEY}_${userId}` : SEARCH_COUNT_KEY;
+    const val = localStorage.getItem(key);
+    return val ? parseInt(val, 10) : 0;
+  } catch { return 0; }
+}
+
+function persistSearchCount(count: number, userId?: string) {
+  try {
+    const key = userId ? `${SEARCH_COUNT_KEY}_${userId}` : SEARCH_COUNT_KEY;
+    localStorage.setItem(key, count.toString());
+  } catch {}
+}
+
+function isBlurPersisted(userId?: string): boolean {
+  try {
+    const key = userId ? `${BLUR_KEY}_${userId}` : BLUR_KEY;
+    return localStorage.getItem(key) === 'true';
+  } catch { return false; }
+}
+
+function persistBlur(active: boolean, userId?: string) {
+  try {
+    const key = userId ? `${BLUR_KEY}_${userId}` : BLUR_KEY;
+    if (active) localStorage.setItem(key, 'true');
+    else localStorage.removeItem(key);
+  } catch {}
+}
 
 const Index = () => {
   const location = useLocation();
@@ -30,7 +62,7 @@ const Index = () => {
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed, freeSearchCount } = useTrial();
   const { subscribed, isLoading: isSubscriptionLoading, status: subStatus, isPaidSubscriber } = useSubscription();
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const { walkthroughCompleted } = useWalkthroughStatus();
   const { toast } = useToast();
   
@@ -44,9 +76,10 @@ const Index = () => {
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   // Session-level dismissal tracking
   const [paywallDismissedThisSession, setPaywallDismissedThisSession] = useState(false);
-  // Client-side search click counter — start at 1 if walkthrough was completed (that search counts)
-  const [localSearchCount, setLocalSearchCount] = useState(0);
-  const [buttonExhausted, setButtonExhausted] = useState(false);
+  
+  // Persisted search count and blur state
+  const [localSearchCount, setLocalSearchCount] = useState(() => getPersistedSearchCount(user?.id));
+  const [buttonExhausted, setButtonExhausted] = useState(() => isBlurPersisted(user?.id));
   
   // Determine if still loading access status
   const isAccessLoading = isTrialLoading || isSubscriptionLoading;
@@ -54,12 +87,29 @@ const Index = () => {
   // Free user = not paid
   const isFreeUser = !hasProAccess;
 
-  // Initialize search count based on walkthrough completion
+  // Re-initialize from localStorage when user changes (sign-in/sign-out)
   useEffect(() => {
-    if (walkthroughCompleted && isFreeUser) {
+    const count = getPersistedSearchCount(user?.id);
+    const blur = isBlurPersisted(user?.id);
+    setLocalSearchCount(count);
+    setButtonExhausted(blur);
+  }, [user?.id]);
+
+  // Initialize search count based on walkthrough completion (if not already set)
+  useEffect(() => {
+    if (walkthroughCompleted && isFreeUser && localSearchCount < 1) {
       setLocalSearchCount(1);
+      persistSearchCount(1, user?.id);
     }
-  }, [walkthroughCompleted, isFreeUser]);
+  }, [walkthroughCompleted, isFreeUser, localSearchCount, user?.id]);
+
+  // Clear blur when user becomes a subscriber
+  useEffect(() => {
+    if (hasProAccess) {
+      setButtonExhausted(false);
+      persistBlur(false, user?.id);
+    }
+  }, [hasProAccess, user?.id]);
 
   // Free search exhausted — after 2nd search completes, block further searches
   const freeSearchesExhausted = isFreeUser && localSearchCount >= 2;
@@ -121,12 +171,14 @@ const Index = () => {
     if (isFreeUser) {
       const newCount = localSearchCount + 1;
       setLocalSearchCount(newCount);
+      persistSearchCount(newCount, user?.id);
       // Flag 2nd search for blur
       if (newCount >= 2) {
         setButtonExhausted(true);
+        persistBlur(true, user?.id);
       }
     }
-  }, [search, isFreeUser, localSearchCount]);
+  }, [search, isFreeUser, localSearchCount, user?.id]);
 
   // Handle paywall dismissal
   const handlePaywallDismiss = useCallback((open: boolean) => {

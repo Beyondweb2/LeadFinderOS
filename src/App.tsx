@@ -89,10 +89,20 @@ function useGlobalErrorGuard() {
     };
 
     const handleError = (event: ErrorEvent) => {
-      // ChunkLoadError = Vite HMR / lazy chunk failure — triggers page reload
+      // ChunkLoadError = Vite HMR / lazy chunk failure — only reload once to avoid loops
       if (event.message?.includes('ChunkLoadError') || event.message?.includes('Failed to fetch dynamically imported module')) {
-        console.warn('[Global] Chunk load error — reloading page');
-        window.location.reload();
+        const lastReload = sessionStorage.getItem('chunk_reload_at');
+        const now = Date.now();
+        // Only reload if we haven't reloaded in the last 30 seconds
+        if (!lastReload || now - parseInt(lastReload, 10) > 30000) {
+          console.warn('[Global] Chunk load error — reloading page (once)');
+          sessionStorage.setItem('chunk_reload_at', now.toString());
+          window.location.reload();
+          return;
+        }
+        // Already reloaded recently — suppress instead of infinite loop
+        console.warn('[Global] Chunk load error suppressed (already reloaded recently)');
+        event.preventDefault();
         return;
       }
       console.error('[Global] Uncaught error:', event.error);
