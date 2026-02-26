@@ -252,7 +252,7 @@ export function WalkthroughOverlay() {
 
       {/* Pulse ring around target */}
       <div
-        className="absolute rounded-lg border-2 border-yellow-500/60 pointer-events-none"
+        className="absolute rounded-lg border-2 border-amber-500/50 pointer-events-none"
         style={{
           ...spotlightStyle,
           animation: 'walkthrough-pulse 1.5s ease-in-out infinite',
@@ -281,7 +281,7 @@ export function WalkthroughOverlay() {
       {/* Tooltip with step counter */}
       {tooltipPos && (
         <div
-          className="absolute pointer-events-none px-3 py-2.5 rounded-lg bg-[hsl(220,60%,15%)] border border-yellow-400/60 shadow-lg max-w-[260px] text-center"
+          className="absolute pointer-events-none px-3.5 py-3 rounded-xl bg-[hsl(220,50%,7%)] border border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.15)] max-w-[260px] text-center"
           style={{
             top: tooltipPos.top,
             left: tooltipPos.left,
@@ -289,10 +289,10 @@ export function WalkthroughOverlay() {
             zIndex: 41,
           }}
         >
-          <div className="text-[10px] font-semibold text-yellow-300 mb-0.5">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400/90 mb-1">
             Step {activeStep.step} of {TOTAL_STEPS}
           </div>
-          <div className="text-sm text-white font-medium" style={{ lineHeight: 1.6, letterSpacing: '0.02em' }}>
+          <div className="text-[13px] text-foreground font-medium leading-relaxed">
             {tooltipText}
           </div>
         </div>
