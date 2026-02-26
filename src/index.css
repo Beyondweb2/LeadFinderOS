@@ -310,3 +310,11 @@
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.05); }
 }
+
+/* Dyslexia-friendly readability for notes, descriptions, and textareas */
+textarea,
+.lead-notes,
+.lead-description {
+  line-height: 1.6;
+  letter-spacing: 0.02em;
+}
