@@ -50,10 +50,12 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact and manage leads.' };
   }
 
-  // Step 4 – Contact a lead (SMS/WhatsApp spotlight)
+  // Step 4 – Contact a lead (SMS/WhatsApp spotlight — both highlighted)
   if (!state.contactAttempted) {
     if (pathname === '/outreach') {
-      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Send initial message.\n\nChoose a contact method like SMS or WhatsApp.\n\nIf you\'re on desktop, WhatsApp requires the WhatsApp Desktop app or your phone.\nYou can also send the message directly from your phone while using desktop.\n\nThis is just an example and can be skipped by closing this popup.', noDim: true };
+      // Fire the Step 4 modal once when we reach this step
+      window.dispatchEvent(new CustomEvent('step4-contact-modal-trigger'));
+      return { step: 4, selector: '[data-walkthrough="contact-group"]', tooltip: 'Choose SMS or WhatsApp to send a message.', noDim: true };
     }
     return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact a lead.' };
   }

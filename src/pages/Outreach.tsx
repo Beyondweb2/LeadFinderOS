@@ -3,6 +3,7 @@ import { OutreachTable } from '@/components/OutreachTable';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
 import { PostContactModal } from '@/components/PostContactModal';
+import { Step4ContactModal } from '@/components/Step4ContactModal';
 import { useOutreach } from '@/hooks/useOutreach';
 import { Loader2 } from 'lucide-react';
 import type { OutreachLead, ContactMethod, PipelineStatus } from '@/types/outreach';
@@ -113,6 +114,9 @@ const Outreach = () => {
 
       {/* Post-contact guidance modal */}
       <PostContactModal />
+
+      {/* Step 4 contact guidance modal */}
+      <Step4ContactModal />
     </div>
   );
 };

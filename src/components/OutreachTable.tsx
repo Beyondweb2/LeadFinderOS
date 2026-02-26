@@ -1143,6 +1143,7 @@ export function OutreachTable({
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
+                              <div className="flex items-center gap-0.5" data-walkthrough="contact-group">
                               <button
                                     onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'sms' } })); handleSMSClick(lead); }}
                                     className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-colors"
@@ -1155,11 +1156,11 @@ export function OutreachTable({
                                     onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'whatsapp' } })); handleWhatsAppClick(lead); }}
                                     className="p-1.5 rounded-md hover:bg-green-500/10 text-green-500 hover:text-green-400 transition-colors"
                                     title="Send WhatsApp message"
-                                    data-walkthrough-step="contact"
                                     data-walkthrough="contact"
                                   >
                                     <MessageSquare className="h-4 w-4" />
                                   </button>
+                              </div>
                             </>
                           ) : phoneFetchStatus[lead.id] === 'pending' ? (
                             <span className="text-muted-foreground text-xs flex items-center gap-1">
