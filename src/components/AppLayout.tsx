@@ -8,6 +8,7 @@ import { DemoChecklistProvider } from '@/contexts/DemoChecklistContext';
 import { DemoChecklistPanel } from '@/components/DemoChecklistPanel';
 import { PaymentFailureDialog } from '@/components/PaymentFailureDialog';
 import { WalkthroughOverlay } from '@/components/WalkthroughOverlay';
+import { SkipWalkthroughButton } from '@/components/SkipWalkthroughButton';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
 import { usePersistedScroll } from '@/hooks/usePersistedScroll';
@@ -65,6 +66,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* Main content area */}
           <div className="flex-1 flex flex-col min-w-0 relative z-10">
+            {/* Skip walkthrough link — top-right, outside modals */}
+            <div className="flex justify-end px-4 sm:px-6 lg:px-8 pt-2">
+              <SkipWalkthroughButton />
+            </div>
             <main ref={mainRef} className="flex-1 overflow-auto pb-20 md:pb-0">
               <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
                 {children}
