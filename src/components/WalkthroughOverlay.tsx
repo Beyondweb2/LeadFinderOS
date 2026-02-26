@@ -71,12 +71,12 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     }
   }
 
-  // Step 6 – Mark as Interested (Track interested leads)
+  // Step 6 – Track a lead (press gold star)
   if (!state.markedInterested) {
     if (pathname === '/outreach') {
-      return { step: 6, selector: '[data-walkthrough="pipeline-status"]', tooltip: 'Track interested leads\n\nIf a business is interested, mark it as Interested to track it properly.', noDim: true, tooltipPosition: 'right' };
+      return { step: 6, selector: '[data-walkthrough="track"]', tooltip: 'Track interested leads\n\nPress the gold star to track this business in your pipeline.', noDim: true, tooltipPosition: 'top' };
     }
-    return { step: 6, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to mark a lead as Interested.' };
+    return { step: 6, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to track a lead.' };
   }
 
   // Step 7 – Open Track page
