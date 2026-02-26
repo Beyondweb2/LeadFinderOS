@@ -279,13 +279,14 @@ export function DemoChecklistProvider({
     }
   }, [isDemoUser, location.pathname, completeStep]);
 
-  // 8 steps: searchDone, addedToCrm, crmPageOpened, contactAttempted, statusUpdated, leadTracked, noteAdded, trackStatusChanged
+  // 9 steps: searchDone, addedToCrm, crmPageOpened, contactAttempted, statusUpdated, trackPressed, leadTracked, noteAdded, trackStatusChanged
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
     state.crmPageOpened,
     state.contactAttempted,
     state.statusUpdated,
+    state.trackPressed,
     state.leadTracked,
     state.noteAdded,
     state.trackStatusChanged,
@@ -295,8 +296,8 @@ export function DemoChecklistProvider({
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
-      totalSteps: 8,
-      allDone: completedCount === 8,
+      totalSteps: 9,
+      allDone: completedCount === 9,
       completeStep,
       isOpen,
       setIsOpen,
