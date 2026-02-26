@@ -12,7 +12,7 @@ interface StepDef {
   tooltipPosition?: 'top' | 'bottom' | 'right';
 }
 
-const TOTAL_STEPS = 7;
+const TOTAL_STEPS = 8;
 
 function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 1 – Search for businesses
@@ -73,6 +73,11 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 7 – Add a note on the tracked lead
   if (!state.noteAdded) {
     return { step: 7, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details about this lead.', noDim: true };
+  }
+
+  // Step 8 – Collapse the card to finish
+  if (!state.cardCollapsed) {
+    return { step: 8, selector: '[data-walkthrough="collapse-card"]', tooltip: 'Collapse the card to finish. You\'re all set!', noDim: true, tooltipPosition: 'top' };
   }
 
   return null;

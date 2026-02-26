@@ -18,7 +18,7 @@ export interface DemoChecklistState {
   leadTracked: boolean;
   noteAdded: boolean;
   trackStatusChanged: boolean;
-  // Legacy fields kept for backwards compat
+  cardCollapsed: boolean;
   followUpActionSet: boolean;
   followUpDateSet: boolean;
   followUpNoteAdded: boolean;
@@ -50,7 +50,8 @@ const defaultState: DemoChecklistState = {
   contactAttempted: false, contactMethodSet: false, pipelineStatusSet: false,
   statusChanged: false, step4ActionSet: false, step4DateSet: false,
   trackPressed: false, statusUpdated: false, leadTracked: false, noteAdded: false,
-  trackStatusChanged: false,
+  trackStatusChanged: false, cardCollapsed: false,
+  // Legacy fields kept for backwards compat
   followUpActionSet: false, followUpDateSet: false, followUpNoteAdded: false,
   followUpStatusChanged: false, followUpSet: false,
 };
@@ -226,6 +227,8 @@ export function DemoChecklistProvider({
     window.addEventListener('demo-checklist-track-note-saved', onNoteSaved);
     window.addEventListener('demo-checklist-track-status-changed', onFollowUpStatus);
     window.addEventListener('demo-checklist-track-status-update', onTrackStatusChanged);
+    const onCardCollapsed = () => completeStep('cardCollapsed');
+    window.addEventListener('demo-checklist-card-collapsed', onCardCollapsed);
     document.addEventListener('click', onTelClick, true);
 
     // Hide walkthrough panel while Quick Locations dropdown is open
@@ -258,6 +261,7 @@ export function DemoChecklistProvider({
       window.removeEventListener('demo-checklist-track-note-saved', onNoteSaved);
       window.removeEventListener('demo-checklist-track-status-changed', onFollowUpStatus);
       window.removeEventListener('demo-checklist-track-status-update', onTrackStatusChanged);
+      window.removeEventListener('demo-checklist-card-collapsed', onCardCollapsed);
       document.removeEventListener('click', onTelClick, true);
       window.removeEventListener('quick-locations-toggle', onQuickLocToggle);
     };
@@ -279,7 +283,7 @@ export function DemoChecklistProvider({
     }
   }, [isDemoUser, location.pathname, completeStep]);
 
-  // 7 steps: searchDone, addedToCrm, crmPageOpened, contactAttempted, trackPressed, leadTracked, noteAdded
+  // 8 steps: searchDone, addedToCrm, crmPageOpened, contactAttempted, trackPressed, leadTracked, noteAdded, cardCollapsed
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
@@ -288,14 +292,15 @@ export function DemoChecklistProvider({
     state.trackPressed,
     state.leadTracked,
     state.noteAdded,
+    state.cardCollapsed,
   ].filter(Boolean).length;
 
   return (
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
-      totalSteps: 7,
-      allDone: completedCount === 7,
+      totalSteps: 8,
+      allDone: completedCount === 8,
       completeStep,
       isOpen,
       setIsOpen,
