@@ -251,9 +251,10 @@ export function OutreachTable({
     setSmsLead({ phone: lead.phone || '', business_name: lead.business_name });
   };
 
-  // Handle Call button click - highlight the lead
+  // Handle Call button click - highlight the lead and trigger CRM automation
   const handleCallClick = (lead: OutreachLead) => {
     highlightLead(lead.id);
+    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id } }));
   };
 
   // Count leads missing phone numbers
@@ -1260,8 +1261,10 @@ export function OutreachTable({
         open={!!whatsAppLead}
         onOpenChange={(open) => {
           if (!open) {
+            const lid = whatsAppLead?.business_name && leads.find(l => l.business_name === whatsAppLead.business_name)?.id;
             setWhatsAppLead(null);
             window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
+            if (lid) window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lid } }));
           }
         }}
         lead={whatsAppLead}
@@ -1272,8 +1275,10 @@ export function OutreachTable({
         open={!!smsLead}
         onOpenChange={(open) => {
           if (!open) {
+            const lid = smsLead?.business_name && leads.find(l => l.business_name === smsLead.business_name)?.id;
             setSmsLead(null);
             window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
+            if (lid) window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lid } }));
           }
         }}
         lead={smsLead}

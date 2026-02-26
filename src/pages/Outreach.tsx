@@ -1,10 +1,11 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { OutreachTable } from '@/components/OutreachTable';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
 import { PostContactModal } from '@/components/PostContactModal';
 import { useOutreach } from '@/hooks/useOutreach';
 import { Loader2 } from 'lucide-react';
+import { addDays, format } from 'date-fns';
 import type { OutreachLead, ContactMethod, PipelineStatus } from '@/types/outreach';
 
 const Outreach = () => {
@@ -37,6 +38,22 @@ const Outreach = () => {
   }, [leads, archivedLeads]);
 
   const isReadOnly = false;
+
+  // CRM Automation: auto-set "waiting" status + follow-up date on contact
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const leadId = (e as CustomEvent).detail?.leadId;
+      if (!leadId) return;
+      const followUpDate = format(addDays(new Date(), 2), 'yyyy-MM-dd');
+      updateLead(leadId, {
+        status: 'waiting',
+        next_action: 'follow_up',
+        next_action_date: followUpDate,
+      });
+    };
+    window.addEventListener('crm-contact-action', handler);
+    return () => window.removeEventListener('crm-contact-action', handler);
+  }, [updateLead]);
 
   const handleContactMethodChange = useCallback(async (leadId: string, method: ContactMethod) => {
     await updateLead(leadId, { contact_method: method });
