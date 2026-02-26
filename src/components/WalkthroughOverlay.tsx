@@ -295,7 +295,7 @@ export function WalkthroughOverlay() {
       {/* Tooltip with step counter */}
       {tooltipPos && (
         <div
-          className="absolute pointer-events-none px-3 py-2.5 rounded-lg bg-card border border-yellow-500/40 shadow-lg max-w-[260px] text-center"
+          className="absolute pointer-events-none px-3 py-2.5 rounded-lg bg-[hsl(220,60%,15%)] border border-yellow-400/60 shadow-lg max-w-[260px] text-center"
           style={{
             top: tooltipPos.top,
             left: tooltipPos.left,
@@ -303,10 +303,10 @@ export function WalkthroughOverlay() {
             zIndex: 41,
           }}
         >
-          <div className="text-[10px] font-semibold text-primary mb-0.5">
+          <div className="text-[10px] font-semibold text-yellow-300 mb-0.5">
             Step {activeStep.step} of {TOTAL_STEPS}
           </div>
-          <div className="text-xs text-foreground">
+          <div className="text-sm text-white font-medium" style={{ lineHeight: 1.6, letterSpacing: '0.02em' }}>
             {tooltipText}
           </div>
         </div>

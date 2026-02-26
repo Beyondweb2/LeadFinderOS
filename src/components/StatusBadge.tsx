@@ -16,7 +16,7 @@ const statusConfig: Record<WebsiteStatus, {
 }> = {
   NO_WEBSITE: {
     label: 'No Website',
-    shortLabel: 'No Site',
+    shortLabel: 'No Website',
     className: 'bg-[hsl(var(--status-hot))] text-[hsl(var(--status-hot-foreground))] border-transparent font-semibold',
     icon: Flame,
   },
@@ -28,7 +28,7 @@ const statusConfig: Record<WebsiteStatus, {
   },
   HAS_OWN_WEBSITE: {
     label: 'Has Website',
-    shortLabel: 'Has Site',
+    shortLabel: 'Has Website',
     className: 'bg-[hsl(var(--status-has-website))] text-[hsl(var(--status-has-website-foreground))] border-transparent font-semibold',
     icon: Globe,
   },
