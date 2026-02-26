@@ -53,17 +53,24 @@ export function PostContactModal() {
 
           {/* Title */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-5">
-            <span className="text-foreground">Your outreach is </span>
-            <span className="text-primary">now live</span>
+            <span className="text-foreground">What happens </span>
+            <span className="text-primary">next</span>
           </DialogTitle>
 
-          {/* Body */}
-          <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-6 space-y-4">
-            <p>Once you contact a business, you can expect up to a <span className="text-foreground font-medium">50% reply rate</span></p>
-            <p>Update the status as conversations progress</p>
-            <p>Set next actions so you never miss a follow-up</p>
-            <p>If a business becomes interested, mark them as <span className="text-foreground font-medium">Interested</span> to track them in detail</p>
-            <p>You can add notes and images inside the Track page</p>
+          {/* Body — 1 2 3 steps */}
+          <div className="text-[13px] text-muted-foreground/80 leading-relaxed mb-6 space-y-4 w-full">
+            <div className="flex items-start gap-3">
+              <span className="text-emerald-500 font-bold text-base leading-5 shrink-0">1</span>
+              <p>Update the contact method you used</p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="text-emerald-500 font-bold text-base leading-5 shrink-0">2</span>
+              <p>Set the status so you always know where things stand</p>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="text-emerald-500 font-bold text-base leading-5 shrink-0">3</span>
+              <p>Add a next action so you never miss a follow up</p>
+            </div>
           </div>
 
           {/* CTA */}
