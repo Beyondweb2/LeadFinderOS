@@ -234,10 +234,7 @@ export function OutreachMobileCard({
               {/* Row 2: SMS, WhatsApp, Track */}
               <div className="flex items-center gap-0.5">
                 {hasPhone ? (
-                  <div 
-                    className="flex items-center gap-0.5"
-                    {...(isLastContacted ? { 'data-walkthrough': 'contact-group' } : {})}
-                  >
+                  <>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -256,7 +253,7 @@ export function OutreachMobileCard({
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                     </Button>
-                  </div>
+                  </>
                 ) : null}
                 {!readOnly && showTrackButton && onTrack && (
                   lead.is_potential_work ? (

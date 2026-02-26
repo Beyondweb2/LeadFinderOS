@@ -80,25 +80,15 @@
   * {
     @apply border-border;
     --tw-ring-offset-color: hsl(var(--background));
-    outline: none !important;
-    outline-color: transparent !important;
+    outline-color: transparent;
   }
 
-  *:focus,
-  *:focus-visible,
-  *:focus-within {
-    outline: none !important;
-    outline-color: transparent !important;
-  }
-
+  /* Remove any white outline/border from root layout containers */
   #root,
   #root > div,
-  [data-radix-scroll-area-viewport],
-  [data-radix-dialog-content],
-  [data-radix-popover-content],
-  [data-radix-select-content] {
+  [data-radix-scroll-area-viewport] {
     outline: none !important;
-    border-color: hsl(var(--border));
+    border: none;
   }
 
   body {

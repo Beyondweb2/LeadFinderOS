@@ -4,7 +4,7 @@ import {
   DialogContent,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Eye, ClipboardList, ArrowRight, MessageCircle, Star } from 'lucide-react';
+import { Eye, ClipboardList, ArrowRight } from 'lucide-react';
 import appLogo from '@/assets/logo.png';
 
 export function PostFirstSearchModal() {
@@ -12,14 +12,6 @@ export function PostFirstSearchModal() {
 
   useEffect(() => {
     const storageKey = 'post_first_search_modal_shown';
-
-    // Check if the event already fired before this component mounted
-    const alreadyFired = (window as any).__postFirstSearchFired === true;
-    if (alreadyFired && !localStorage.getItem(storageKey)) {
-      localStorage.setItem(storageKey, 'true');
-      setOpen(true);
-      return;
-    }
 
     const onSearchComplete = () => {
       if (localStorage.getItem(storageKey)) return;
@@ -67,33 +59,17 @@ export function PostFirstSearchModal() {
           </DialogTitle>
 
           {/* Body copy */}
-          <div className="text-[13px] text-muted-foreground/80 leading-relaxed mb-6 space-y-4 w-full">
-            <p>
-              You've just found businesses that may need your services. From here you can:
-            </p>
-
-            <div className="flex items-center gap-2 pl-1">
+          <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-6 space-y-4">
+            <p>You've just found businesses that may need your services</p>
+            <p>Viewing details helps you choose the best prospects</p>
+            <p>Saving a few leads keeps everything organised in your CRM</p>
+            <div className="flex items-center justify-center gap-2">
               <Eye className="h-4 w-4 text-emerald-500 shrink-0" />
-              <p>View full details to choose the best prospects</p>
+              <p>Click the green eye icon to view full details</p>
             </div>
-            <div className="flex items-center gap-2 pl-1">
+            <div className="flex items-center justify-center gap-2">
               <ClipboardList className="h-4 w-4 text-emerald-500 shrink-0" />
-              <p>Add businesses to your CRM to start outreach</p>
-            </div>
-
-            <p className="text-muted-foreground/60 text-xs pt-1">Once they're in your CRM, you can:</p>
-
-            <div className="flex items-start gap-3 pl-1">
-              <span className="text-emerald-500 font-bold text-base leading-5 shrink-0">1</span>
-              <p>Contact any business directly via SMS, WhatsApp or call</p>
-            </div>
-            <div className="flex items-start gap-3 pl-1">
-              <span className="text-emerald-500 font-bold text-base leading-5 shrink-0">2</span>
-              <p>Update contact method, status and next action</p>
-            </div>
-            <div className="flex items-start gap-3 pl-1">
-              <span className="text-emerald-500 font-bold text-base leading-5 shrink-0">3</span>
-              <p>Track businesses that respond positively and seem interested</p>
+              <p>When you find one you want to contact, tap the green clipboard to add it to your CRM</p>
             </div>
           </div>
 

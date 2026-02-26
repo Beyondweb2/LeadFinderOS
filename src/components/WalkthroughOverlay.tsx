@@ -50,12 +50,10 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact and manage leads.' };
   }
 
-  // Step 4 – Contact a lead (SMS/WhatsApp spotlight — both highlighted)
+  // Step 4 – Contact a lead (SMS/WhatsApp spotlight)
   if (!state.contactAttempted) {
     if (pathname === '/outreach') {
-      // Fire the Step 4 modal once when we reach this step
-      window.dispatchEvent(new CustomEvent('step4-contact-modal-trigger'));
-      return { step: 4, selector: '[data-walkthrough="contact-group"]', tooltip: 'Choose SMS or WhatsApp to send a message.', noDim: true };
+      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Send initial message.\n\nChoose a contact method like SMS or WhatsApp.\n\nIf you\'re on desktop, WhatsApp requires the WhatsApp Desktop app or your phone.\nYou can also send the message directly from your phone while using desktop.\n\nThis is just an example and can be skipped by closing this popup.', noDim: true };
     }
     return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact a lead.' };
   }
@@ -73,12 +71,12 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     }
   }
 
-  // Step 6 – Track a lead (press gold star)
+  // Step 6 – Mark as Interested (Track interested leads)
   if (!state.markedInterested) {
     if (pathname === '/outreach') {
-      return { step: 6, selector: '[data-walkthrough="track"]', tooltip: 'If interested, track them ⭐', noDim: true, tooltipPosition: 'top' };
+      return { step: 6, selector: '[data-walkthrough="pipeline-status"]', tooltip: 'Track interested leads\n\nIf a business is interested, mark it as Interested to track it properly.', noDim: true, tooltipPosition: 'right' };
     }
-    return { step: 6, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to track a lead.' };
+    return { step: 6, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to mark a lead as Interested.' };
   }
 
   // Step 7 – Open Track page
