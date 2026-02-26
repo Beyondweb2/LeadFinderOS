@@ -52,8 +52,8 @@ const Index = () => {
   // Free user = not paid
   const isFreeUser = !hasProAccess;
 
-  // Free search exhausted — driven by client-side click counter, not server
-  const freeSearchesExhausted = isFreeUser && buttonExhausted;
+  // Free search exhausted — after 2nd search completes, block further searches
+  const freeSearchesExhausted = isFreeUser && localSearchCount >= 2;
 
   // Check if paywall was dismissed within cooldown period
   const isWithinCooldown = useCallback(() => {
@@ -75,9 +75,14 @@ const Index = () => {
         
         // Track cumulative businesses found
         setTotalBusinessesFound(prev => prev + leads.length);
+
+        // On 2nd+ search, show paywall after results load
+        if (buttonExhausted) {
+          setTimeout(() => setShowUpgradeAfterLimit(true), 600);
+        }
       }
     }
-  }, [isLoading, leads.length, checkTrial, isFreeUser]);
+  }, [isLoading, leads.length, checkTrial, isFreeUser, buttonExhausted]);
 
   // When server blocks a search (freeSearchExhausted), auto-show upgrade modal
   // Only show for free users after access status is resolved (prevents flash for admins/subscribers)
@@ -97,16 +102,15 @@ const Index = () => {
 
   // Handle search attempt — always let server decide whether to block
   const handleSearch = useCallback((filters: any) => {
-    // If free user has already done 1 search, intercept second click
-    if (isFreeUser && localSearchCount >= 1) {
-      setButtonExhausted(true);
-      setShowUpgradeAfterLimit(true);
-      return; // Do NOT execute search
-    }
     setLastSearchCountry(filters.country || 'UK');
     search(filters, false, false);
     if (isFreeUser) {
-      setLocalSearchCount(prev => prev + 1);
+      const newCount = localSearchCount + 1;
+      setLocalSearchCount(newCount);
+      // On 2nd search: let it run, but flag for blur + paywall
+      if (newCount >= 2) {
+        setButtonExhausted(true);
+      }
     }
   }, [search, isFreeUser, localSearchCount]);
 
@@ -165,8 +169,8 @@ const Index = () => {
           onSearch={handleSearch} 
           isLoading={isLoading}
           isOnTrial={false}
-          searchesRemaining={hasProAccess ? Infinity : (buttonExhausted ? 0 : Math.max(0, FREE_SEARCH_LIMIT - localSearchCount))}
-          dailyLimit={hasProAccess ? Infinity : FREE_SEARCH_LIMIT}
+          searchesRemaining={hasProAccess ? Infinity : Math.max(0, 2 - localSearchCount)}
+          dailyLimit={hasProAccess ? Infinity : 2}
           isPaidSubscriber={isAccessLoading || hasProAccess}
           disabled={postAbandonExhausted && !hasProAccess}
           isUpgradeLoading={isCheckoutLoading}
@@ -187,7 +191,19 @@ const Index = () => {
 
       {/* Results Section */}
       {leads.length > 0 && (
-        <section className="animate-fade-in">
+        <section className={`animate-fade-in relative ${buttonExhausted && isFreeUser ? 'select-none' : ''}`}>
+          {/* Blur overlay for paywall teaser */}
+          {buttonExhausted && isFreeUser && (
+            <div className="absolute inset-0 z-10 backdrop-blur-md bg-background/30 rounded-lg flex items-center justify-center">
+              <div className="flex flex-col items-center gap-3 text-center px-4">
+                <Lock className="h-8 w-8 text-primary" />
+                <p className="text-sm font-semibold text-foreground">Start your free trial to unlock these leads</p>
+                <Button size="sm" onClick={() => setShowUpgradeAfterLimit(true)} className="gap-2">
+                  <Sparkles className="h-4 w-4" /> Unlock Access
+                </Button>
+              </div>
+            </div>
+          )}
           <LeadsTable 
             leads={leads} 
             onExport={exportToCsv}
