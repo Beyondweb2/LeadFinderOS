@@ -845,12 +845,13 @@ const PotentialWorkPage = () => {
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
-  // Auto-expand first card during walkthrough step 6
-  let isWalkthroughStep6 = false;
+  // Auto-expand first card during walkthrough (only once)
+  let isWalkthroughNeedsExpand = false;
   try {
     const { state: demoState, isDemoUser } = useDemoChecklist();
-    isWalkthroughStep6 = isDemoUser && demoState.leadTracked && !demoState.followUpSet;
+    isWalkthroughNeedsExpand = isDemoUser && demoState.leadTracked && !demoState.noteAdded;
   } catch {}
+  const autoExpandedRef = useRef(false);
   const [customStatuses, setCustomStatuses] = useState<{ value: string; label: string }[]>([]);
   const [showCustomStatusDialog, setShowCustomStatusDialog] = useState(false);
   const [newStatusLabel, setNewStatusLabel] = useState('');
@@ -950,12 +951,13 @@ const PotentialWorkPage = () => {
     });
   }, [allPotentialLeads, metricFilter]);
 
-  // Auto-expand first card during walkthrough step 6
+  // Auto-expand first card during walkthrough (only once, not re-triggered on collapse)
   useEffect(() => {
-    if (isWalkthroughStep6 && potentialWorkLeads.length > 0 && !expandedCardId) {
+    if (isWalkthroughNeedsExpand && potentialWorkLeads.length > 0 && !autoExpandedRef.current) {
+      autoExpandedRef.current = true;
       setExpandedCardId(potentialWorkLeads[0].id);
     }
-  }, [isWalkthroughStep6, potentialWorkLeads, expandedCardId]);
+  }, [isWalkthroughNeedsExpand, potentialWorkLeads]);
 
   if (isLoading) {
     return (
