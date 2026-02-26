@@ -56,18 +56,22 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
+import { ContactMethodBadge } from './ContactMethodBadge';
+import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
 import { SingleWhatsAppDialog } from './SingleWhatsAppDialog';
 import { SingleSMSDialog } from './SingleSMSDialog';
 import { CSVImportDialog } from './CSVImportDialog';
 import { OutreachMobileCard } from './OutreachMobileCard';
-import type { OutreachLead, LeadStatus, NextActionType, Country } from '@/types/outreach';
-import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS } from '@/types/outreach';
+import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
+import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS } from '@/types/outreach';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
   onLeadClick: (lead: OutreachLead) => void;
   onStatusChange: (leadId: string, status: LeadStatus) => void;
+  onContactMethodChange?: (leadId: string, method: ContactMethod) => void;
+  onPipelineStatusChange?: (leadId: string, status: PipelineStatus) => void;
   onNextActionChange: (leadId: string, action: NextActionType, date?: string) => void;
   onRemoveAll: () => void;
   onArchive?: (leadId: string) => void;
@@ -95,7 +99,9 @@ type SortDirection = 'asc' | 'desc';
 export function OutreachTable({ 
   leads, 
   onLeadClick, 
-  onStatusChange, 
+  onStatusChange,
+  onContactMethodChange,
+  onPipelineStatusChange,
   onNextActionChange, 
   onRemoveAll,
   onArchive,
@@ -891,6 +897,8 @@ export function OutreachTable({
                   onLeadClick={() => onLeadClick(lead)}
                   onStatusChange={(status) => onStatusChange(lead.id, status)}
                   onNextActionChange={(action, date) => onNextActionChange(lead.id, action, date)}
+                  onContactMethodChange={onContactMethodChange ? (method) => onContactMethodChange(lead.id, method) : undefined}
+                  onPipelineStatusChange={onPipelineStatusChange ? (status) => onPipelineStatusChange(lead.id, status) : undefined}
                   onWhatsAppClick={() => handleWhatsAppClick(lead)}
                   onSMSClick={() => handleSMSClick(lead)}
                   onCallClick={() => handleCallClick(lead)}
@@ -926,6 +934,7 @@ export function OutreachTable({
                   <TableHead className="min-w-[120px] sm:w-[150px]">Phone</TableHead>
                   {!readOnly && (
                     <>
+                      <TableHead className="min-w-[100px] sm:w-[120px]">Contact</TableHead>
                       <TableHead className="min-w-[100px] sm:w-[140px]">
                         <SortButton field="status">Status</SortButton>
                       </TableHead>
@@ -943,7 +952,7 @@ export function OutreachTable({
               <TableBody>
                 {paginatedLeads.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={readOnly ? 4 : (onMarkAsInterested ? 7 : 6)} className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
+                    <TableCell colSpan={readOnly ? 4 : (onMarkAsInterested ? 8 : 7)} className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
                       {leads.length === 0
                         ? isArchiveView 
                           ? 'No archived leads yet.'
@@ -1018,27 +1027,57 @@ export function OutreachTable({
                       </TableCell>
                       {!readOnly && (
                         <>
+                          {/* Contact Method column */}
                           <TableCell onClick={(e) => e.stopPropagation()}>
-                            <Select
-                              value={lead.status}
-                              onValueChange={(v) => {
-                                onStatusChange(lead.id, v as LeadStatus);
-                                if (v === 'interested' && onMarkAsInterested && !lead.is_potential_work) {
-                                  onMarkAsInterested([lead.id]);
-                                }
-                              }}
-                            >
-                              <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" {...(lastContactedLeadId === lead.id ? { 'data-walkthrough-step': 'status', 'data-walkthrough': 'status' } : {})}>
-                                <OutreachStatusBadge status={lead.status} />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {OUTREACH_STATUS_OPTIONS.map((opt) => (
-                                  <SelectItem key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            {onContactMethodChange ? (
+                              <Select
+                                value={lead.contact_method || ''}
+                                onValueChange={(v) => {
+                                  onContactMethodChange(lead.id, v as ContactMethod);
+                                }}
+                              >
+                                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" {...(lastContactedLeadId === lead.id ? { 'data-walkthrough-step': 'contact-method', 'data-walkthrough': 'contact-method' } : {})}>
+                                  <ContactMethodBadge method={lead.contact_method as ContactMethod} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {CONTACT_METHOD_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <ContactMethodBadge method={lead.contact_method as ContactMethod} />
+                            )}
+                          </TableCell>
+                          {/* Pipeline Status column */}
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            {onPipelineStatusChange ? (
+                              <Select
+                                value={lead.status}
+                                onValueChange={(v) => {
+                                  const status = v as PipelineStatus;
+                                  onPipelineStatusChange(lead.id, status);
+                                  if (status === 'interested' && onMarkAsInterested && !lead.is_potential_work) {
+                                    onMarkAsInterested([lead.id]);
+                                  }
+                                }}
+                              >
+                                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" {...(lastContactedLeadId === lead.id ? { 'data-walkthrough-step': 'pipeline-status', 'data-walkthrough': 'pipeline-status' } : {})}>
+                                  <PipelineStatusBadge status={lead.status as PipelineStatus} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {PIPELINE_STATUS_OPTIONS.map((opt) => (
+                                    <SelectItem key={opt.value} value={opt.value}>
+                                      {opt.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <PipelineStatusBadge status={lead.status as PipelineStatus} />
+                            )}
                           </TableCell>
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             <NextActionEditor
@@ -1219,14 +1258,24 @@ export function OutreachTable({
       {/* WhatsApp Dialog */}
       <SingleWhatsAppDialog
         open={!!whatsAppLead}
-        onOpenChange={(open) => !open && setWhatsAppLead(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWhatsAppLead(null);
+            window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
+          }
+        }}
         lead={whatsAppLead}
       />
 
       {/* SMS Dialog */}
       <SingleSMSDialog
         open={!!smsLead}
-        onOpenChange={(open) => !open && setSmsLead(null)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSmsLead(null);
+            window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
+          }
+        }}
         lead={smsLead}
       />
 

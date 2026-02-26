@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { OutreachTable } from '@/components/OutreachTable';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
+import { PostContactModal } from '@/components/PostContactModal';
 import { useOutreach } from '@/hooks/useOutreach';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Loader2, Lightbulb } from 'lucide-react';
-import type { OutreachLead } from '@/types/outreach';
+import { Loader2 } from 'lucide-react';
+import type { OutreachLead, ContactMethod, PipelineStatus } from '@/types/outreach';
 
 const Outreach = () => {
   const {
@@ -36,8 +36,17 @@ const Outreach = () => {
     return [...leads, ...archivedLeads];
   }, [leads, archivedLeads]);
 
-  // All users get full CRM access — search limits are enforced at the search level
   const isReadOnly = false;
+
+  const handleContactMethodChange = useCallback(async (leadId: string, method: ContactMethod) => {
+    await updateLead(leadId, { contact_method: method });
+    window.dispatchEvent(new CustomEvent('demo-checklist-contact-method-set'));
+  }, [updateLead]);
+
+  const handlePipelineStatusChange = useCallback(async (leadId: string, status: PipelineStatus) => {
+    await updateStatus(leadId, status as any);
+    window.dispatchEvent(new CustomEvent('demo-checklist-pipeline-status-set'));
+  }, [updateStatus]);
 
   if (isLoading) {
     return (
@@ -49,7 +58,7 @@ const Outreach = () => {
 
   return (
     <div className="space-y-3 sm:space-y-6">
-      {/* Page Header - Compact on mobile */}
+      {/* Page Header */}
       <div className="text-center sm:text-left">
         <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
         <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
@@ -57,12 +66,12 @@ const Outreach = () => {
         </p>
       </div>
 
-
-      {/* Lead Table - now shows all leads with status management */}
       <OutreachTable
         leads={allLeads}
         onLeadClick={isReadOnly ? () => {} : setSelectedLead}
         onStatusChange={updateStatus}
+        onContactMethodChange={handleContactMethodChange}
+        onPipelineStatusChange={handlePipelineStatusChange}
         onNextActionChange={updateNextAction}
         onRemoveAll={deleteAllLeads}
         onArchive={archiveLead}
@@ -98,6 +107,9 @@ const Outreach = () => {
 
       {/* First-time outreach tips */}
       <OutreachTipsDialog />
+
+      {/* Post-contact guidance modal */}
+      <PostContactModal />
     </div>
   );
 };
