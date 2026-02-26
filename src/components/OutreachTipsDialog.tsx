@@ -86,21 +86,11 @@ export function OutreachTipsDialog() {
             <span className="text-primary">without a website.</span>
           </DialogTitle>
 
-          {/* Guidance */}
-          <div className="text-center text-[13px] text-muted-foreground leading-relaxed mb-3 space-y-0.5">
-            <p>Keep it short.</p>
-            <p>No links. No pitch.</p>
-          </div>
-
-
-          {/* Value highlight card */}
-          <div className="w-full rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] px-5 py-4 mb-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
-            <p className="text-center text-[12.5px] text-muted-foreground leading-relaxed">
-              If 1 in 20 replies converts,
-              <br />
-              this search could generate{' '}
-              <span className="font-bold text-primary">£1,000+</span>
-            </p>
+          {/* Instructions */}
+          <div className="text-center text-[13px] text-muted-foreground leading-relaxed mb-4 space-y-1">
+            <p>If you're on desktop, download WhatsApp Desktop to send directly</p>
+            <p>Or open LeadFinder on your phone and message them there</p>
+            <p>You can also dial the number manually if preferred</p>
           </div>
 
           {/* Skip line */}
