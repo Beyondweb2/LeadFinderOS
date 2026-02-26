@@ -242,8 +242,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
         // Notify demo checklist that a search completed
         window.dispatchEvent(new CustomEvent('demo-checklist-search'));
 
-        // Notify post-first-search modal
-        window.dispatchEvent(new CustomEvent('post-first-search-complete'));
+        // Notify post-first-search modal (slight delay to ensure listener is mounted)
+        setTimeout(() => window.dispatchEvent(new CustomEvent('post-first-search-complete')), 300);
 
         // Search complete — no toast (reduces UI noise)
       }
