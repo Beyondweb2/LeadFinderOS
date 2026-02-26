@@ -36,6 +36,8 @@ interface TrialLimitDialogProps {
   dailyLimit?: number;
   totalBusinessesFound?: number;
   noWebsiteCount?: number;
+  lastSearchResultCount?: number;
+  lastSearchLocation?: string;
 }
 
 export function TrialLimitDialog({
@@ -43,6 +45,8 @@ export function TrialLimitDialog({
   onOpenChange,
   totalBusinessesFound = 0,
   noWebsiteCount = 0,
+  lastSearchResultCount = 0,
+  lastSearchLocation = '',
 }: TrialLimitDialogProps) {
   const { session } = useAuth();
   const { toast } = useToast();
@@ -147,11 +151,16 @@ export function TrialLimitDialog({
             <p>Keep building your pipeline.</p>
           </div>
 
-          {/* Highlight card — unified style */}
+          {/* Highlight card — real-time stats from this search */}
           <div className="w-full rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] px-5 py-4 mb-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
+            {lastSearchResultCount > 0 && (
+              <p className="text-[11px] text-muted-foreground/60 text-center mb-3">
+                From your latest search{lastSearchLocation ? ` in ${lastSearchLocation}` : ''}
+              </p>
+            )}
             <div className="flex items-center justify-around">
               <div className="text-center">
-                <div className="text-2xl font-bold text-primary">{animBiz}</div>
+                <div className="text-2xl font-bold text-primary">{lastSearchResultCount > 0 ? lastSearchResultCount : animBiz}</div>
                 <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Businesses Found</div>
               </div>
               <div className="text-center">

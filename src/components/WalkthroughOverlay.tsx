@@ -12,7 +12,7 @@ interface StepDef {
   tooltipPosition?: 'top' | 'bottom' | 'right';
 }
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 8; // Display as "Step X of 8"
 
 function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 1 – Search for businesses
@@ -252,7 +252,7 @@ export function WalkthroughOverlay() {
 
       {/* Pulse ring around target */}
       <div
-        className="absolute rounded-lg border-2 border-amber-500/50 pointer-events-none"
+        className="absolute rounded-lg border-2 border-amber-400/60 pointer-events-none"
         style={{
           ...spotlightStyle,
           animation: 'walkthrough-pulse 1.5s ease-in-out infinite',
@@ -281,7 +281,7 @@ export function WalkthroughOverlay() {
       {/* Tooltip with step counter */}
       {tooltipPos && (
         <div
-          className="absolute pointer-events-none px-3.5 py-3 rounded-xl bg-[hsl(220,50%,7%)] border border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.15)] max-w-[260px] text-center"
+          className="absolute pointer-events-none px-3.5 py-3 rounded-xl bg-amber-50 border border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.2)] max-w-[260px] text-center"
           style={{
             top: tooltipPos.top,
             left: tooltipPos.left,
@@ -289,10 +289,10 @@ export function WalkthroughOverlay() {
             zIndex: 41,
           }}
         >
-          <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400/90 mb-1">
+          <div className="text-[10px] font-bold uppercase tracking-widest text-amber-700 mb-1">
             Step {activeStep.step} of {TOTAL_STEPS}
           </div>
-          <div className="text-[13px] text-foreground font-medium leading-relaxed">
+          <div className="text-[13px] text-gray-900 font-medium" style={{ lineHeight: 1.5, letterSpacing: '0.02em' }}>
             {tooltipText}
           </div>
         </div>
