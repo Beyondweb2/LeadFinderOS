@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
@@ -13,6 +13,7 @@ import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
+import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
 import { supabase } from '@/integrations/supabase/client';
 import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,7 @@ const Index = () => {
   const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed, freeSearchCount } = useTrial();
   const { subscribed, isLoading: isSubscriptionLoading, status: subStatus, isPaidSubscriber } = useSubscription();
   const { session } = useAuth();
+  const { walkthroughCompleted } = useWalkthroughStatus();
   const { toast } = useToast();
   
   // Pro access = active, past_due, admin, or trialing (Stripe trial)
@@ -42,7 +44,7 @@ const Index = () => {
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   // Session-level dismissal tracking
   const [paywallDismissedThisSession, setPaywallDismissedThisSession] = useState(false);
-  // Client-side search click counter for button state transition
+  // Client-side search click counter — start at 1 if walkthrough was completed (that search counts)
   const [localSearchCount, setLocalSearchCount] = useState(0);
   const [buttonExhausted, setButtonExhausted] = useState(false);
   
@@ -51,6 +53,13 @@ const Index = () => {
 
   // Free user = not paid
   const isFreeUser = !hasProAccess;
+
+  // Initialize search count based on walkthrough completion
+  useEffect(() => {
+    if (walkthroughCompleted && isFreeUser) {
+      setLocalSearchCount(1);
+    }
+  }, [walkthroughCompleted, isFreeUser]);
 
   // Free search exhausted — after 2nd search completes, block further searches
   const freeSearchesExhausted = isFreeUser && localSearchCount >= 2;

@@ -33,12 +33,13 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 1, selector: '[data-walkthrough-step="search"]', tooltip: 'Press Find Leads to search.', noDim: true };
   }
 
-  // Step 2 – Find a "No Website" lead & add to CRM
+  // Step 2 – Find "No Website" leads & add 3 to CRM
   if (!state.addedToCrm) {
+    const remaining = 3 - (state.crmAddCount || 0);
     return {
       step: 2,
       selector: '[data-walkthrough="add-crm"]',
-      tooltip: '"No Website" = they need YOU. Add this lead to your CRM.',
+      tooltip: `"No Website" = they need YOU. Add ${remaining} more lead${remaining !== 1 ? 's' : ''} to your CRM.`,
       noDim: true,
       tooltipPosition: 'top',
     };
@@ -52,15 +53,15 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 4 – Send a message (WhatsApp/SMS/Call)
   if (!state.contactAttempted) {
     if (pathname === '/outreach') {
-      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Send a message now!', noDim: true };
+      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Contact via SMS or WhatsApp. (This can be skipped next screen)', noDim: true };
     }
-    return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to send a message.' };
+    return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact via SMS or WhatsApp.' };
   }
 
   // Step 5 – Press Track (star) when a business responds positively
   if (!state.trackPressed) {
     if (pathname === '/outreach') {
-      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'When they respond positively, press ⭐ to track them.', noDim: true, tooltipPosition: 'top' };
+      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Track any business that shows interest.', noDim: true, tooltipPosition: 'bottom' };
     }
     return { step: 5, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to track a lead.' };
   }

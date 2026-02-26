@@ -94,6 +94,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
     const message = template.replace(/\{\{business_name\}\}/g, lead.business_name);
     const url = generateWhatsAppUrl(lead.phone, message);
     window.open(url, '_blank');
+    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     onOpenChange(false);
 
     supabase.rpc('log_usage_event', {

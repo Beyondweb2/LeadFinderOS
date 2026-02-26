@@ -91,6 +91,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
     const message = template.replace(/\{\{business_name\}\}/g, lead.business_name);
     const url = generateSMSUrl(lead.phone, message);
     window.open(url, '_self');
+    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     onOpenChange(false);
 
     supabase.rpc('log_usage_event', {
