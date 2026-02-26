@@ -159,7 +159,16 @@ export function WalkthroughOverlay() {
       return;
     }
 
-    const el = document.querySelector(activeStep.selector);
+    // Find the first *visible* matching element (non-zero dimensions)
+    const allMatches = document.querySelectorAll(activeStep.selector);
+    let el: Element | null = null;
+    for (const candidate of allMatches) {
+      const r = candidate.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        el = candidate;
+        break;
+      }
+    }
     if (!el) {
       setTargetRect(null);
       rafRef.current = requestAnimationFrame(updatePosition);

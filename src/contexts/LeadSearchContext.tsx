@@ -222,6 +222,15 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
         const filteredLeads = data.leads.filter(lead => !isExcluded(lead));
         const excludedCount = data.leads.length - filteredLeads.length;
 
+        // Sort: NO_WEBSITE first, then DIRECTORY_ONLY, then others
+        const statusOrder: Record<string, number> = {
+          'NO_WEBSITE': 0,
+          'UNCERTAIN': 1,
+          'DIRECTORY_ONLY': 2,
+          'HAS_OWN_WEBSITE': 3,
+        };
+        filteredLeads.sort((a, b) => (statusOrder[a.websiteStatus] ?? 9) - (statusOrder[b.websiteStatus] ?? 9));
+
         setLeads(filteredLeads);
 
         // Persist demo leads to localStorage so they survive navigation
