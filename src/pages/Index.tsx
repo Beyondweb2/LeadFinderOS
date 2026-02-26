@@ -100,14 +100,19 @@ const Index = () => {
     setShowUpgradeAfterLimit(true);
   }, []);
 
-  // Handle search attempt — always let server decide whether to block
+  // Handle search attempt
   const handleSearch = useCallback((filters: any) => {
+    // If already exhausted (3rd+ search), just show paywall
+    if (isFreeUser && localSearchCount >= 2) {
+      setShowUpgradeAfterLimit(true);
+      return;
+    }
     setLastSearchCountry(filters.country || 'UK');
     search(filters, false, false);
     if (isFreeUser) {
       const newCount = localSearchCount + 1;
       setLocalSearchCount(newCount);
-      // On 2nd search: let it run, but flag for blur + paywall
+      // Flag 2nd search for blur
       if (newCount >= 2) {
         setButtonExhausted(true);
       }
