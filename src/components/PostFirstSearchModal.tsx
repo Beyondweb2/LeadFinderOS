@@ -61,16 +61,15 @@ export function PostFirstSearchModal() {
           {/* Body copy */}
           <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-6 space-y-4">
             <p>You've just found businesses that may need your services</p>
-            <p>Viewing details helps you choose the best prospects</p>
-            <p>Saving a few leads keeps everything organised in your CRM</p>
             <div className="flex items-center justify-center gap-2">
               <Eye className="h-4 w-4 text-emerald-500 shrink-0" />
               <p>Click the green eye icon to view full details</p>
             </div>
             <div className="flex items-center justify-center gap-2">
               <ClipboardList className="h-4 w-4 text-emerald-500 shrink-0" />
-              <p>When you find one you want to contact, tap the green clipboard to add it to your CRM</p>
+              <p>When you're ready to reach out, tap the green clipboard to add the business to your Outreach CRM</p>
             </div>
+            <p>Save a few strong leads and begin your outreach</p>
           </div>
 
           {/* CTA */}
