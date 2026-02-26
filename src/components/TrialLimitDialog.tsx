@@ -137,8 +137,8 @@ export function TrialLimitDialog({
 
           {/* Headline */}
           <h3 className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4 text-foreground">
-            You've built a list of{' '}
-            <span className="text-primary">website opportunities.</span>
+            Ready to land your next{' '}
+            <span className="text-primary">client?</span>
           </h3>
 
           {/* Supporting lines */}
