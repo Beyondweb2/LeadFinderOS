@@ -49,17 +49,21 @@ export function OutreachTipsDialog() {
     }
   }, [open]);
 
-  const handleClose = () => {
+  const handleClose = (skipped = false) => {
     setOpen(false);
     if (dontShowAgain && storageKey) {
       localStorage.setItem(storageKey, 'true');
+    }
+    if (skipped) {
+      // Mark contact step as done so walkthrough can continue
+      window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     }
   };
 
   const cta = ctaConfig[contactMethod || 'whatsapp'];
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else setOpen(true); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(true); else setOpen(true); }}>
       <DialogContent
         className="sm:max-w-[400px] p-0 overflow-hidden rounded-2xl border-border/40 bg-[hsl(220_50%_5%)]"
       >
@@ -88,8 +92,12 @@ export function OutreachTipsDialog() {
             <p>No links. No pitch.</p>
           </div>
 
-          <p className="text-center text-[11px] text-muted-foreground/50 mb-5">
+          <p className="text-center text-[11px] text-muted-foreground/50 mb-3">
             Each contact rotates between 6 proven openers.
+          </p>
+
+          <p className="text-center text-[11px] text-muted-foreground/40 mb-5">
+            Not ready to send yet? You can skip this step for now.
           </p>
 
           {/* Value highlight card */}
@@ -104,15 +112,21 @@ export function OutreachTipsDialog() {
 
           {/* CTA */}
           <button
-            onClick={handleClose}
+            onClick={() => handleClose(false)}
             className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all"
           >
             {cta.icon}
             {cta.label}
           </button>
 
-          {/* Don't show again */}
-          <div className="flex items-center justify-center gap-1.5 mt-4">
+          {/* Skip / Don't show again */}
+          <button
+            onClick={() => handleClose(true)}
+            className="mt-3 text-[11px] text-muted-foreground/50 hover:text-muted-foreground/70 transition-colors"
+          >
+            Skip this step for now
+          </button>
+          <div className="flex items-center justify-center gap-1.5 mt-2">
             <Checkbox
               id="dont-show-again"
               checked={dontShowAgain}
