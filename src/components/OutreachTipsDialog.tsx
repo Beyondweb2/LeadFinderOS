@@ -92,9 +92,6 @@ export function OutreachTipsDialog() {
             <p>No links. No pitch.</p>
           </div>
 
-          <p className="text-center text-[12px] text-muted-foreground mb-5">
-            Each contact rotates between 6 proven openers.
-          </p>
 
           {/* Value highlight card */}
           <div className="w-full rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] px-5 py-4 mb-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
