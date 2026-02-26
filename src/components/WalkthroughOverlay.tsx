@@ -170,10 +170,11 @@ export function WalkthroughOverlay() {
     setTargetRect(rect);
 
     const padding = 12;
-    const tooltipHeight = 70;
+    const tooltipHeight = 80;
     const spaceBelow = window.innerHeight - rect.bottom;
     const isMobile = window.innerWidth < 640;
     const mobileNavHeight = isMobile ? 90 : 0;
+    const isInBottomNav = isMobile && rect.top > window.innerHeight - 120;
 
     const tooltipWidth = 260;
     const rawLeft = rect.left + rect.width / 2;
@@ -193,7 +194,9 @@ export function WalkthroughOverlay() {
       // On mobile, ensure tooltip doesn't go behind bottom nav
       const effectiveSpaceBelow = spaceBelow - mobileNavHeight;
       if (preferTop || effectiveSpaceBelow <= tooltipHeight + padding) {
-        setTooltipPos({ top: rect.top - tooltipHeight - padding, left: clampedLeft });
+        // If element is inside the bottom nav, add extra offset so tooltip is fully visible
+        const extraOffset = isInBottomNav ? 20 : 0;
+        setTooltipPos({ top: rect.top - tooltipHeight - padding - extraOffset, left: clampedLeft });
       } else {
         setTooltipPos({ top: rect.bottom + padding, left: clampedLeft });
       }

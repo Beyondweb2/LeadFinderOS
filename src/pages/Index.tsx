@@ -87,7 +87,7 @@ const Index = () => {
 
         // On 2nd+ search, show paywall after results load
         if (buttonExhausted) {
-          setTimeout(() => setShowUpgradeAfterLimit(true), 600);
+          setTimeout(() => setShowUpgradeAfterLimit(true), 100);
         }
       }
     }
