@@ -87,21 +87,17 @@ export function OutreachTipsDialog() {
           </DialogTitle>
 
           {/* Guidance */}
-          <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-3 space-y-0.5">
+          <div className="text-center text-[13px] text-muted-foreground leading-relaxed mb-3 space-y-0.5">
             <p>Keep it short.</p>
             <p>No links. No pitch.</p>
           </div>
 
-          <p className="text-center text-[11px] text-muted-foreground/50 mb-3">
+          <p className="text-center text-[12px] text-muted-foreground mb-5">
             Each contact rotates between 6 proven openers.
           </p>
 
-          <p className="text-center text-[11px] text-muted-foreground/40 mb-5">
-            Not ready to send yet? You can skip this step for now.
-          </p>
-
           {/* Value highlight card */}
-          <div className="w-full rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] px-5 py-4 mb-6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
+          <div className="w-full rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] px-5 py-4 mb-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
             <p className="text-center text-[12.5px] text-muted-foreground leading-relaxed">
               If 1 in 20 replies converts,
               <br />
@@ -109,6 +105,17 @@ export function OutreachTipsDialog() {
               <span className="font-bold text-primary">£1,000+</span>
             </p>
           </div>
+
+          {/* Skip line */}
+          <p className="text-center text-[12px] text-muted-foreground mb-5">
+            Not ready to send yet?{' '}
+            <button
+              onClick={() => handleClose(true)}
+              className="text-[13px] font-medium text-primary hover:text-primary/80 cursor-pointer transition-colors underline-offset-2 hover:underline"
+            >
+              Skip
+            </button>
+          </p>
 
           {/* CTA */}
           <button
@@ -119,21 +126,15 @@ export function OutreachTipsDialog() {
             {cta.label}
           </button>
 
-          {/* Skip / Don't show again */}
-          <button
-            onClick={() => handleClose(true)}
-            className="mt-3 text-[11px] text-muted-foreground/50 hover:text-muted-foreground/70 transition-colors"
-          >
-            Skip this step for now
-          </button>
-          <div className="flex items-center justify-center gap-1.5 mt-2">
+          {/* Don't show again */}
+          <div className="flex items-center justify-center gap-1.5 mt-3">
             <Checkbox
               id="dont-show-again"
               checked={dontShowAgain}
               onCheckedChange={(checked) => setDontShowAgain(checked === true)}
               className="h-3 w-3"
             />
-            <label htmlFor="dont-show-again" className="text-[10px] text-muted-foreground/40 cursor-pointer">
+            <label htmlFor="dont-show-again" className="text-[10px] text-muted-foreground/60 cursor-pointer">
               Don't show this again
             </label>
           </div>
