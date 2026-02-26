@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,20 +7,29 @@ import {
 import { Eye, UserPlus, ArrowRight } from 'lucide-react';
 import appLogo from '@/assets/logo.png';
 
+const STORAGE_KEY = 'post_first_search_modal_shown';
+
 export function PostFirstSearchModal() {
   const [open, setOpen] = useState(false);
+  const shownRef = useRef(false);
 
   useEffect(() => {
-    const storageKey = 'post_first_search_modal_shown';
+    // Already shown this session or previously
+    if (localStorage.getItem(STORAGE_KEY)) {
+      shownRef.current = true;
+      return;
+    }
 
-    const onSearchComplete = () => {
-      if (localStorage.getItem(storageKey)) return;
-      localStorage.setItem(storageKey, 'true');
+    const show = () => {
+      if (shownRef.current) return;
+      if (localStorage.getItem(STORAGE_KEY)) return;
+      shownRef.current = true;
+      localStorage.setItem(STORAGE_KEY, 'true');
       setOpen(true);
     };
 
-    window.addEventListener('post-first-search-complete', onSearchComplete);
-    return () => window.removeEventListener('post-first-search-complete', onSearchComplete);
+    window.addEventListener('post-first-search-complete', show);
+    return () => window.removeEventListener('post-first-search-complete', show);
   }, []);
 
   useEffect(() => {
