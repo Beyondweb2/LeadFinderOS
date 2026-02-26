@@ -17,11 +17,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, CalendarClock } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
-import { OutreachStatusBadge } from './OutreachStatusBadge';
+import { ContactMethodBadge } from './ContactMethodBadge';
+import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
 import { NextActionEditor } from './NextActionEditor';
-import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
-import { OUTREACH_STATUS_OPTIONS } from '@/types/outreach';
+import type { OutreachLead, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS } from '@/types/outreach';
 
 interface OutreachMobileCardProps {
   lead: OutreachLead;
@@ -30,6 +31,8 @@ interface OutreachMobileCardProps {
   onLeadClick: () => void;
   onStatusChange: (status: LeadStatus) => void;
   onNextActionChange?: (action: NextActionType, date?: string) => void;
+  onContactMethodChange?: (method: ContactMethod) => void;
+  onPipelineStatusChange?: (status: PipelineStatus) => void;
   onWhatsAppClick: () => void;
   onSMSClick?: () => void;
   onCallClick?: () => void;
@@ -51,6 +54,8 @@ export function OutreachMobileCard({
   onLeadClick,
   onStatusChange,
   onNextActionChange,
+  onContactMethodChange,
+  onPipelineStatusChange,
   onWhatsAppClick,
   onSMSClick,
   onCallClick,
@@ -67,7 +72,6 @@ export function OutreachMobileCard({
   const isPhoneFetching = phoneFetchStatus === 'pending';
   const isPhoneFailed = phoneFetchStatus === 'failed';
   const hasPhone = !!lead.phone;
-  // Only show loading state when fetch is explicitly in progress (pending)
   const showFetchingState = !hasPhone && isPhoneFetching;
 
   return (
@@ -86,7 +90,7 @@ export function OutreachMobileCard({
           />
         </div>
 
-        {/* Middle: Name + Status + Next Action */}
+        {/* Middle: Name + 3 Buttons */}
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex items-center gap-1.5">
             {lead.country === 'Australia' && (
@@ -98,48 +102,77 @@ export function OutreachMobileCard({
             )}
           </div>
 
-          {/* Status + Next Action button under name */}
-          <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
-            {!readOnly && (
-              <Select
-                value={lead.status}
-                onValueChange={(v) => {
-                  const status = v as LeadStatus;
-                  onStatusChange(status);
-                  if (status === 'interested' && onAutoTrack && !lead.is_potential_work) {
-                    onAutoTrack();
-                  }
-                }}
-              >
-                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" {...(isLastContacted ? { 'data-walkthrough-step': 'status', 'data-walkthrough': 'status' } : {})}>
-                  <OutreachStatusBadge status={lead.status} compact />
-                </SelectTrigger>
-                <SelectContent>
-                  {OUTREACH_STATUS_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
+          {/* Three dropdowns: Contact Method, Status, Next Action */}
+          {!readOnly && (
+            <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
+              {/* Contact Method */}
+              {onContactMethodChange && (
+                <Select
+                  value={lead.contact_method || ''}
+                  onValueChange={(v) => {
+                    onContactMethodChange(v as ContactMethod);
+                  }}
+                >
+                  <SelectTrigger 
+                    className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0"
+                    {...(isLastContacted ? { 'data-walkthrough-step': 'contact-method', 'data-walkthrough': 'contact-method' } : {})}
+                  >
+                    <ContactMethodBadge method={lead.contact_method as ContactMethod} compact />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONTACT_METHOD_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
 
-            {/* Next Action Editor - visible button on mobile */}
-            {!readOnly && onNextActionChange && (
-              <NextActionEditor
-                action={lead.next_action as NextActionType | null}
-                date={lead.next_action_date}
-                onUpdate={(action, date) => onNextActionChange(action, date)}
-                leadId={lead.id}
-              />
-            )}
-          </div>
+              {/* Pipeline Status */}
+              {onPipelineStatusChange && (
+                <Select
+                  value={lead.status || 'not_contacted'}
+                  onValueChange={(v) => {
+                    const status = v as PipelineStatus;
+                    onPipelineStatusChange(status);
+                    if (status === 'interested' && onAutoTrack && !lead.is_potential_work) {
+                      onAutoTrack();
+                    }
+                  }}
+                >
+                  <SelectTrigger 
+                    className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0"
+                    {...(isLastContacted ? { 'data-walkthrough-step': 'pipeline-status', 'data-walkthrough': 'pipeline-status' } : {})}
+                  >
+                    <PipelineStatusBadge status={lead.status as PipelineStatus} compact />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PIPELINE_STATUS_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* Next Action Editor */}
+              {onNextActionChange && (
+                <NextActionEditor
+                  action={lead.next_action as NextActionType | null}
+                  date={lead.next_action_date}
+                  onUpdate={(action, date) => onNextActionChange(action, date)}
+                  leadId={lead.id}
+                />
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right: Action buttons */}
         <div className="flex flex-col gap-0.5 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
           {showFetchingState ? (
-            /* Loading state while phone info is being fetched */
             <div className="flex items-center gap-1.5 px-2 py-2">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
               <span className="text-[10px] text-muted-foreground">Fetching...</span>

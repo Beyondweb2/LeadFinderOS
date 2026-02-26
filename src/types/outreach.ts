@@ -150,6 +150,38 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'no_whatsapp', label: 'No WhatsApp' },
 ];
 
+// Contact method options (how the business was contacted)
+export type ContactMethod = 'call' | 'sms' | 'whatsapp' | 'facebook_msg';
+
+export const CONTACT_METHOD_OPTIONS: { value: ContactMethod; label: string }[] = [
+  { value: 'call', label: 'Call' },
+  { value: 'sms', label: 'SMS' },
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'facebook_msg', label: 'Messenger' },
+];
+
+// Pipeline status options (where the lead is in the pipeline)
+export type PipelineStatus = 
+  | 'not_contacted'
+  | 'waiting'
+  | 'no_reply'
+  | 'sent_follow_up'
+  | 'sent_voice_note'
+  | 'interested'
+  | 'not_interested'
+  | 'completed';
+
+export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [
+  { value: 'not_contacted', label: 'Not Contacted' },
+  { value: 'waiting', label: 'Waiting for Reply' },
+  { value: 'no_reply', label: 'No Reply' },
+  { value: 'sent_follow_up', label: 'Sent Follow-up' },
+  { value: 'sent_voice_note', label: 'Sent Voice Message' },
+  { value: 'interested', label: 'Interested' },
+  { value: 'not_interested', label: 'Not Interested' },
+  { value: 'completed', label: 'Closed' },
+];
+
 export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'send_initial_text', label: 'Send Initial Text' },
   { value: 'send_voice_note', label: 'Send Voice Note' },

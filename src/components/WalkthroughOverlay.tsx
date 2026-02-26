@@ -58,16 +58,16 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact a lead.' };
   }
 
-  // Step 5 – Update Status, Set Next Action, Track ⭐
+  // Step 5 – Set Contact Method, Pipeline Status, Next Action
   if (!state.statusUpdated) {
-    if (!state.statusChanged) {
-      return { step: 5, selector: '[data-walkthrough="status"]', tooltip: 'Set the contact method.', noDim: true, tooltipPosition: 'right' };
+    if (!state.contactMethodSet) {
+      return { step: 5, selector: '[data-walkthrough="contact-method"]', tooltip: 'Set the contact method used.', noDim: true, tooltipPosition: 'right' };
+    }
+    if (!state.pipelineStatusSet) {
+      return { step: 5, selector: '[data-walkthrough="pipeline-status"]', tooltip: 'Set the pipeline status.', noDim: true, tooltipPosition: 'right' };
     }
     if (!state.step4ActionSet) {
       return { step: 5, selector: '[data-walkthrough="next-action"]', tooltip: 'Set next action if needed.', noDim: true };
-    }
-    if (!state.trackPressed) {
-      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Track a business that shows interest.', noDim: true };
     }
   }
 
