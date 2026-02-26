@@ -35,10 +35,13 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
 
   // Step 2 – Find a "No Website" lead & add to CRM
   if (!state.addedToCrm) {
+    const remaining = 3 - (state.crmAddCount || 0);
     return {
       step: 2,
       selector: '[data-walkthrough="add-crm"]',
-      tooltip: '"No Website" = they need YOU. Add this lead to your CRM.',
+      tooltip: remaining > 1
+        ? `"No Website" = they need YOU. Add ${remaining} businesses to your CRM.`
+        : `One more! Add 1 more business to your CRM.`,
       noDim: true,
       tooltipPosition: 'top',
     };
