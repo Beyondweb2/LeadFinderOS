@@ -307,8 +307,18 @@ export function DemoChecklistProvider({
   );
 }
 
+const fallback: DemoChecklistContextType = {
+  state: defaultState,
+  completedCount: 0,
+  totalSteps: 8,
+  allDone: false,
+  completeStep: () => {},
+  isOpen: false,
+  setIsOpen: () => {},
+  isDemoUser: false,
+};
+
 export function useDemoChecklist() {
   const ctx = useContext(DemoChecklistContext);
-  if (!ctx) throw new Error('useDemoChecklist must be used within DemoChecklistProvider');
-  return ctx;
+  return ctx ?? fallback;
 }
