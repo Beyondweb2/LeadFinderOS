@@ -121,13 +121,13 @@ export function DemoChecklistPanel() {
 
             {/* Headline */}
             <h3 className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4 text-foreground">
-              You're <span className="text-primary">1 reply</span> away from a new client.
+              Keep the <span className="text-primary">pipeline</span> moving.
             </h3>
 
             {/* Supporting text */}
             <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5 space-y-0.5">
               <p>You've already started the pipeline.</p>
-              <p>Do one more search and send a few more messages.</p>
+              <p>Keep searching and sending messages to build momentum.</p>
             </div>
 
             {/* Stats highlight card — matches contact tips value card */}
@@ -158,7 +158,7 @@ export function DemoChecklistPanel() {
               onClick={handleCompletionDismiss}
               className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all"
             >
-              Find 10 More Leads
+              Find More Leads
               <ArrowRight className="h-4 w-4" />
             </button>
 
