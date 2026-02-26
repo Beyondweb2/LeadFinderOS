@@ -169,9 +169,9 @@ const Index = () => {
           onSearch={handleSearch} 
           isLoading={isLoading}
           isOnTrial={false}
-          searchesRemaining={hasProAccess ? Infinity : Math.max(0, 2 - localSearchCount)}
-          dailyLimit={hasProAccess ? Infinity : 2}
-          isPaidSubscriber={isAccessLoading || hasProAccess}
+          searchesRemaining={Infinity}
+          dailyLimit={Infinity}
+          isPaidSubscriber={isAccessLoading || hasProAccess || localSearchCount < 2}
           disabled={postAbandonExhausted && !hasProAccess}
           isUpgradeLoading={isCheckoutLoading}
           onUpgrade={handleUnlockClick}
