@@ -80,6 +80,15 @@
   * {
     @apply border-border;
     --tw-ring-offset-color: hsl(var(--background));
+    outline-color: transparent;
+  }
+
+  /* Remove any white outline/border from root layout containers */
+  #root,
+  #root > div,
+  [data-radix-scroll-area-viewport] {
+    outline: none !important;
+    border: none;
   }
 
   body {

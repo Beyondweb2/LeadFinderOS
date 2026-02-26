@@ -113,7 +113,11 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
   return (
     <Dialog open={open} onOpenChange={(v) => {
       onOpenChange(v);
-      if (!v) window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+      if (!v) {
+        // Mark step 4 complete even if user closes without sending (skip logic)
+        window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+        window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
+      }
     }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -215,7 +219,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
         <DialogFooter className="gap-2 flex-row justify-end">
           <Button variant="outline" onClick={() => {
             onOpenChange(false);
-            window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
           }}>
             Cancel
           </Button>

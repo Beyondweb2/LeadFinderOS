@@ -4,7 +4,7 @@ import {
   DialogContent,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Eye, UserPlus, ArrowRight } from 'lucide-react';
+import { Eye, ClipboardList, ArrowRight } from 'lucide-react';
 import appLogo from '@/assets/logo.png';
 
 export function PostFirstSearchModal() {
@@ -61,23 +61,16 @@ export function PostFirstSearchModal() {
           {/* Body copy */}
           <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-6 space-y-4">
             <p>You've just found businesses that may need your services</p>
+            <p>Viewing details helps you choose the best prospects</p>
+            <p>Saving a few leads keeps everything organised in your CRM</p>
             <div className="flex items-center justify-center gap-2">
-              <Eye className="h-4 w-4 text-primary shrink-0" />
-              <p>Click the eye icon to view full details</p>
+              <Eye className="h-4 w-4 text-emerald-500 shrink-0" />
+              <p>Click the green eye icon to view full details</p>
             </div>
             <div className="flex items-center justify-center gap-2">
-              <UserPlus className="h-4 w-4 text-primary shrink-0" />
-              <p>When you find one you want to contact, add it to your CRM</p>
+              <ClipboardList className="h-4 w-4 text-emerald-500 shrink-0" />
+              <p>When you find one you want to contact, tap the green clipboard to add it to your CRM</p>
             </div>
-          </div>
-
-          {/* Value highlight card */}
-          <div className="w-full rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] px-5 py-4 mb-6 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
-            <p className="text-center text-[12.5px] text-muted-foreground leading-relaxed">
-              Save <span className="font-bold text-primary">3 leads</span> to unlock outreach
-              <br />
-              and continue the walkthrough
-            </p>
           </div>
 
           {/* CTA */}

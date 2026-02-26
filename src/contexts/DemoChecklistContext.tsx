@@ -15,6 +15,7 @@ export interface DemoChecklistState {
   step4DateSet: boolean;
   trackPressed: boolean;
   statusUpdated: boolean; // derived: contactMethodSet && pipelineStatusSet && step4ActionSet
+  markedInterested: boolean;
   leadTracked: boolean;
   noteAdded: boolean;
   trackStatusChanged: boolean;
@@ -49,7 +50,8 @@ const defaultState: DemoChecklistState = {
   searchDone: false, addedToCrm: false, crmAddCount: 0, crmPageOpened: false,
   contactAttempted: false, contactMethodSet: false, pipelineStatusSet: false,
   statusChanged: false, step4ActionSet: false, step4DateSet: false,
-  trackPressed: false, statusUpdated: false, leadTracked: false, noteAdded: false,
+  trackPressed: false, statusUpdated: false, markedInterested: false,
+  leadTracked: false, noteAdded: false,
   trackStatusChanged: false,
   followUpActionSet: false, followUpDateSet: false, followUpNoteAdded: false,
   followUpStatusChanged: false, followUpSet: false,
@@ -166,6 +168,7 @@ export function DemoChecklistProvider({
         return next;
       });
     };
+    const onMarkedInterested = () => completeStep('markedInterested');
     const onOpenTrackLeads = () => completeStep('leadTracked');
     const onFollowUpAction = () => {
       setState(prev => {
@@ -221,6 +224,7 @@ export function DemoChecklistProvider({
     window.addEventListener('demo-checklist-step4-action-set', onStep4Action);
     window.addEventListener('demo-checklist-step4-date-set', onStep4Date);
     window.addEventListener('demo-checklist-track-pressed', onTrack);
+    window.addEventListener('demo-checklist-marked-interested', onMarkedInterested);
     window.addEventListener('demo-checklist-next-action-set', onFollowUpAction);
     window.addEventListener('demo-checklist-next-date-set', onFollowUpDate);
     window.addEventListener('demo-checklist-track-note-saved', onNoteSaved);
@@ -253,6 +257,7 @@ export function DemoChecklistProvider({
       window.removeEventListener('demo-checklist-step4-action-set', onStep4Action);
       window.removeEventListener('demo-checklist-step4-date-set', onStep4Date);
       window.removeEventListener('demo-checklist-track-pressed', onTrack);
+      window.removeEventListener('demo-checklist-marked-interested', onMarkedInterested);
       window.removeEventListener('demo-checklist-next-action-set', onFollowUpAction);
       window.removeEventListener('demo-checklist-next-date-set', onFollowUpDate);
       window.removeEventListener('demo-checklist-track-note-saved', onNoteSaved);
@@ -279,13 +284,14 @@ export function DemoChecklistProvider({
     }
   }, [isDemoUser, location.pathname, completeStep]);
 
-  // 8 steps: searchDone, addedToCrm, crmPageOpened, contactAttempted, statusUpdated, leadTracked, noteAdded, trackStatusChanged
+  // 9 steps: searchDone, addedToCrm, crmPageOpened, contactAttempted, statusUpdated, markedInterested, leadTracked, noteAdded, trackStatusChanged
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
     state.crmPageOpened,
     state.contactAttempted,
     state.statusUpdated,
+    state.markedInterested,
     state.leadTracked,
     state.noteAdded,
     state.trackStatusChanged,
@@ -295,8 +301,8 @@ export function DemoChecklistProvider({
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
-      totalSteps: 8,
-      allDone: completedCount === 8,
+      totalSteps: 9,
+      allDone: completedCount === 9,
       completeStep,
       isOpen,
       setIsOpen,
