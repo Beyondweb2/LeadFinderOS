@@ -36,7 +36,6 @@ const Index = () => {
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
   
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
-  const [lastSearchLocation, setLastSearchLocation] = useState('');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [isCheckoutLoading] = useState(false);
   const [showUpgradeAfterLimit, setShowUpgradeAfterLimit] = useState(false);
@@ -77,9 +76,9 @@ const Index = () => {
         // Track cumulative businesses found
         setTotalBusinessesFound(prev => prev + leads.length);
 
-        // On 2nd search, immediately show paywall (no flicker)
+        // On 2nd+ search, show paywall after results load
         if (buttonExhausted) {
-          setShowUpgradeAfterLimit(true);
+          setTimeout(() => setShowUpgradeAfterLimit(true), 600);
         }
       }
     }
@@ -109,7 +108,6 @@ const Index = () => {
       return;
     }
     setLastSearchCountry(filters.country || 'UK');
-    setLastSearchLocation(filters.location || '');
     search(filters, false, false);
     if (isFreeUser) {
       const newCount = localSearchCount + 1;
@@ -199,9 +197,9 @@ const Index = () => {
       {/* Results Section */}
       {leads.length > 0 && (
         <section className={`animate-fade-in relative ${buttonExhausted && isFreeUser ? 'select-none' : ''}`}>
-          {/* Blur overlay for paywall teaser — blur(12px) so badges visible but names unreadable */}
+          {/* Blur overlay for paywall teaser */}
           {buttonExhausted && isFreeUser && (
-            <div className="absolute inset-0 z-10 rounded-lg flex items-center justify-center" style={{ backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', backgroundColor: 'hsl(var(--background) / 0.25)' }}>
+            <div className="absolute inset-0 z-10 backdrop-blur-md bg-background/30 rounded-lg flex items-center justify-center">
               <div className="flex flex-col items-center gap-3 text-center px-4">
                 <Lock className="h-8 w-8 text-primary" />
                 <p className="text-sm font-semibold text-foreground">Start your free trial to unlock these leads</p>
@@ -252,8 +250,6 @@ const Index = () => {
         dailyLimit={FREE_SEARCH_LIMIT}
         totalBusinessesFound={totalBusinessesFound}
         noWebsiteCount={noWebsiteCount}
-        lastSearchResultCount={leads.length}
-        lastSearchLocation={lastSearchLocation}
       />
 
       {/* Post-first-search guidance modal */}
