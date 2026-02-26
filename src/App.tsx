@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, Component, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -47,6 +47,36 @@ const queryClient = new QueryClient({
 });
 
 /**
+ * React Error Boundary — catches render crashes and shows a fallback
+ * instead of a blank screen or infinite refresh loop.
+ */
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[ErrorBoundary] Render crash caught:', error, info.componentStack);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', fontFamily: 'system-ui', gap: 12 }}>
+          <p style={{ fontSize: 16, color: '#888' }}>Something went wrong.</p>
+          <button onClick={() => { this.setState({ hasError: false }); }} style={{ padding: '8px 16px', borderRadius: 6, border: '1px solid #ccc', cursor: 'pointer' }}>
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/**
  * Global error boundary — catches unhandled promise rejections and errors
  * that would otherwise crash the React tree and cause a blank/refresh.
  */
@@ -66,6 +96,8 @@ function useGlobalErrorGuard() {
         return;
       }
       console.error('[Global] Uncaught error:', event.error);
+      // Prevent the default browser behaviour (which can cause page crashes)
+      event.preventDefault();
     };
 
     window.addEventListener('unhandledrejection', handleRejection);
@@ -81,6 +113,7 @@ const App = () => {
   useGlobalErrorGuard();
   
   return (
+  <ErrorBoundary>
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <AccentInitializer>
@@ -254,6 +287,7 @@ const App = () => {
       </AccentInitializer>
     </AuthProvider>
   </QueryClientProvider>
+  </ErrorBoundary>
   );
 };
 
