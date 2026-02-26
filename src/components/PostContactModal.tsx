@@ -53,17 +53,16 @@ export function PostContactModal() {
 
           {/* Title */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-5">
-            <span className="text-foreground">Your outreach is </span>
-            <span className="text-primary">now live</span>
+            <span className="text-foreground">Outreach </span>
+            <span className="text-primary">in progress</span>
           </DialogTitle>
 
           {/* Body */}
           <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-6 space-y-4">
-            <p>Once you contact a business, you can expect up to a <span className="text-foreground font-medium">50% reply rate</span></p>
-            <p>Update the status as conversations progress</p>
-            <p>Set next actions so you never miss a follow-up</p>
-            <p>If a business becomes interested, mark them as <span className="text-foreground font-medium">Interested</span> to track them in detail</p>
-            <p>You can add notes and images inside the Track page</p>
+            <p>You've contacted a business and started your pipeline</p>
+            <p>Next, update how the interaction went</p>
+            <p>Set the contact method, update the status, and add a next action</p>
+            <p>This keeps your outreach organised and moving forward</p>
           </div>
 
           {/* CTA */}
