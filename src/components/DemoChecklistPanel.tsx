@@ -126,7 +126,6 @@ export function DemoChecklistPanel() {
 
             {/* Supporting text */}
             <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5 space-y-0.5">
-              <p>You've already started the pipeline.</p>
               <p>Keep searching and sending messages to build momentum.</p>
             </div>
 
