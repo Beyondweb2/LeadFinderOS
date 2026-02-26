@@ -6,6 +6,7 @@ import { LeadsTable } from '@/components/LeadsTable';
 import { UpgradePromptDialog } from '@/components/UpgradePromptDialog';
 import { TrialLimitDialog } from '@/components/TrialLimitDialog';
 import { PostFirstSearchModal } from '@/components/PostFirstSearchModal';
+import { PostCrmAddModal } from '@/components/PostCrmAddModal';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 
 import { useOutreach } from '@/hooks/useOutreach';
@@ -233,6 +234,9 @@ const Index = () => {
 
       {/* Post-first-search guidance modal */}
       <PostFirstSearchModal />
+
+      {/* Post-CRM-add explanation modal */}
+      <PostCrmAddModal />
     </div>
   );
 };
