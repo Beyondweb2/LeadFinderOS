@@ -53,15 +53,15 @@ export function PostContactModal() {
 
           {/* Title */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-5">
-            <span className="text-foreground">✨ Magic! </span>
-            <span className="text-primary">All done automatically</span>
+            <span className="text-foreground">Automation </span>
+            <span className="text-primary">Active</span>
           </DialogTitle>
 
           {/* Body */}
           <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-6 space-y-4">
-            <p>We've automatically moved this lead to <span className="font-semibold text-foreground">"Waiting for Reply"</span> and set a follow-up date for you.</p>
-            <p>Check your CRM to see it in action!</p>
-            <p>No manual updates needed - LeadFinder handles your pipeline so you can focus on closing deals.</p>
+            <p>Lead moved to <span className="font-semibold text-foreground">"Waiting for Reply"</span> and a 48-hour follow-up set.</p>
+            <p>One less task for you.</p>
+            <p>Check your CRM to see it in action - LeadFinder handles your pipeline so you can focus on closing deals.</p>
           </div>
 
           {/* CTA */}
