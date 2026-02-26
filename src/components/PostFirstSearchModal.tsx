@@ -62,14 +62,13 @@ export function PostFirstSearchModal() {
 
           {/* Headline */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-5">
-            <span className="text-foreground">Turn these into</span>
+            <span className="text-foreground">You've just found businesses</span>
             <br />
-            <span className="text-primary">paying clients</span>
+            <span className="text-primary">that may need your services</span>
           </DialogTitle>
 
           {/* Body copy */}
           <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-6 space-y-4">
-            <p>You've just found businesses that may need your services</p>
             <div className="flex items-center justify-center gap-2">
               <Eye className="h-4 w-4 text-primary shrink-0" />
               <p>Click the eye icon to view full details</p>
