@@ -12,7 +12,7 @@ interface StepDef {
   tooltipPosition?: 'top' | 'bottom' | 'right';
 }
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 9;
 
 function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 1 – Go to Search (with sub-steps on the search page)
@@ -71,19 +71,27 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     }
   }
 
-  // Step 6 – Open Track page
+  // Step 6 – Press the star/track button on a lead
+  if (!state.trackPressed) {
+    if (pathname === '/outreach') {
+      return { step: 6, selector: '[data-walkthrough="track-button"]', tooltip: 'If interested, track them ⭐', noDim: true, tooltipPosition: 'top' };
+    }
+    return { step: 6, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to track a lead.' };
+  }
+
+  // Step 7 – Open Track page
   if (!state.leadTracked) {
-    return { step: 6, selector: '[data-walkthrough="track-nav"]', tooltip: 'Open Track to manage your pipeline.', tooltipPosition: 'top' };
+    return { step: 7, selector: '[data-walkthrough="track-nav"]', tooltip: 'Open Track to manage your pipeline.', tooltipPosition: 'top' };
   }
 
-  // Step 7 – Add note
+  // Step 8 – Add note
   if (!state.noteAdded) {
-    return { step: 7, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details.', noDim: true };
+    return { step: 8, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details.', noDim: true };
   }
 
-  // Step 8 – Update status on Track Leads
+  // Step 9 – Update status on Track Leads
   if (!state.trackStatusChanged) {
-    return { step: 8, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the lead status.', noDim: true };
+    return { step: 9, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the lead status.', noDim: true };
   }
 
   return null;
