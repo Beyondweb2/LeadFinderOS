@@ -5,6 +5,7 @@ import { LeadsTable } from '@/components/LeadsTable';
 
 import { UpgradePromptDialog } from '@/components/UpgradePromptDialog';
 import { TrialLimitDialog } from '@/components/TrialLimitDialog';
+import { PostFirstSearchModal } from '@/components/PostFirstSearchModal';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 
 import { useOutreach } from '@/hooks/useOutreach';
@@ -229,6 +230,9 @@ const Index = () => {
         totalBusinessesFound={totalBusinessesFound}
         noWebsiteCount={noWebsiteCount}
       />
+
+      {/* Post-first-search guidance modal */}
+      <PostFirstSearchModal />
     </div>
   );
 };

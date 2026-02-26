@@ -530,22 +530,34 @@ const Landing = () => {
             
             {/* CTA */}
             <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-8">
-              <Button 
-                size="lg" 
-                className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto sm:min-w-[280px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
-                asChild
-              >
-                <Link to="/auth?intent=upgrade">
-                  Try it free
-                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
-                </Link>
-              </Button>
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                <Button 
+                  size="lg" 
+                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto sm:min-w-[280px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                  asChild
+                >
+                  <Link to="/auth?intent=upgrade">
+                    Try it free
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
+                  </Link>
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  className="hidden sm:inline-flex text-[14px] font-medium text-foreground/40 hover:text-foreground/70 h-[52px] px-5 rounded-xl transition-all duration-200" 
+                  asChild
+                >
+                  <Link to="/auth">
+                    Sign in
+                  </Link>
+                </Button>
+              </div>
               <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
                 No card required · Instant access · Cancel anytime
               </p>
+              {/* Mobile-only sign in below */}
               <Button 
                 variant="ghost" 
-                className="text-[12px] sm:text-[14px] font-medium text-foreground/40 hover:text-foreground/70 h-[36px] sm:h-[40px] px-5 rounded-xl transition-all duration-200 mt-1 sm:mt-2" 
+                className="sm:hidden text-[12px] font-medium text-foreground/40 hover:text-foreground/70 h-[36px] px-5 rounded-xl transition-all duration-200 mt-1" 
                 asChild
               >
                 <Link to="/auth">
