@@ -12,15 +12,14 @@ interface StepDef {
   tooltipPosition?: 'top' | 'bottom' | 'right';
 }
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 4;
 
 function getActiveStep(state: any, pathname: string): StepDef | null {
-  // Step 1 – Go to Search (with sub-steps on the search page)
+  // Step 1 – Search for businesses
   if (!state.searchDone) {
     if (pathname !== '/find-leads') {
-      return { step: 1, selector: '[data-walkthrough="search-nav"]', tooltip: 'Start by finding businesses.', noDim: true };
+      return { step: 1, selector: '[data-walkthrough="search-nav"]', tooltip: 'Search for a business category & location.', noDim: true };
     }
-    // Sub-step guidance on the search page
     const bizInput = document.querySelector('[data-walkthrough-step="business-type"]');
     const bizValue = (bizInput as HTMLInputElement)?.value?.trim();
     if (!bizValue) {
@@ -34,64 +33,28 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 1, selector: '[data-walkthrough-step="search"]', tooltip: 'Press Find Leads to search.', noDim: true };
   }
 
-  // Step 2 – Add 3 businesses to CRM
+  // Step 2 – Find a "No Website" lead & highlight why it matters
   if (!state.addedToCrm) {
     return {
       step: 2,
       selector: '[data-walkthrough="add-crm"]',
-      tooltip: 'Add three businesses to your CRM.',
+      tooltip: '"No Website" = they need YOU. Add this lead to your CRM.',
       noDim: true,
       tooltipPosition: 'top',
     };
   }
 
-  // Step 3 – Go to CRM page
+  // Step 3 – Go to CRM & open it
   if (!state.crmPageOpened) {
-    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact and manage leads.' };
+    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to message this lead.' };
   }
 
-  // Step 4 – Contact a lead
+  // Step 4 – Send a message (WhatsApp/SMS/Call)
   if (!state.contactAttempted) {
     if (pathname === '/outreach') {
-      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Send initial message.', noDim: true };
+      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Send a message now!', noDim: true };
     }
-    return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact a lead.' };
-  }
-
-  // Step 5 – Set Contact Method, Pipeline Status, Next Action
-  if (!state.statusUpdated) {
-    if (!state.contactMethodSet) {
-      return { step: 5, selector: '[data-walkthrough="contact-method"]', tooltip: 'Set the contact method used.', noDim: true, tooltipPosition: 'right' };
-    }
-    if (!state.pipelineStatusSet) {
-      return { step: 5, selector: '[data-walkthrough="pipeline-status"]', tooltip: 'Set the pipeline status.', noDim: true, tooltipPosition: 'right' };
-    }
-    if (!state.step4ActionSet) {
-      return { step: 5, selector: '[data-walkthrough="next-action"]', tooltip: 'Set next action if needed.', noDim: true };
-    }
-  }
-
-  // Step 6 – Press the star/track button on a lead
-  if (!state.trackPressed) {
-    if (pathname === '/outreach') {
-      return { step: 6, selector: '[data-walkthrough="track"]', tooltip: 'If interested, track them ⭐', noDim: true, tooltipPosition: 'top' };
-    }
-    return { step: 6, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to track a lead.' };
-  }
-
-  // Step 7 – Open Track page
-  if (!state.leadTracked) {
-    return { step: 7, selector: '[data-walkthrough="track-nav"]', tooltip: 'Open Track to manage your pipeline.', tooltipPosition: 'top' };
-  }
-
-  // Step 8 – Add note
-  if (!state.noteAdded) {
-    return { step: 8, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details.', noDim: true };
-  }
-
-  // Step 9 – Update status on Track Leads
-  if (!state.trackStatusChanged) {
-    return { step: 9, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the lead status.', noDim: true };
+    return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to send a message.' };
   }
 
   return null;

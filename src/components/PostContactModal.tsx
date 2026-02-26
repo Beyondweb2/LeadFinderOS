@@ -53,16 +53,15 @@ export function PostContactModal() {
 
           {/* Title */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-5">
-            <span className="text-foreground">Outreach </span>
-            <span className="text-primary">in progress</span>
+            <span className="text-foreground">✨ Magic! </span>
+            <span className="text-primary">All done automatically</span>
           </DialogTitle>
 
           {/* Body */}
           <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-6 space-y-4">
-            <p>You've contacted a business and started your pipeline</p>
-            <p>Next, update how the interaction went</p>
-            <p>Set the contact method, update the status, and add a next action</p>
-            <p>This keeps your outreach organised and moving forward</p>
+            <p>We've automatically moved this lead to <span className="font-semibold text-foreground">"Waiting for Reply"</span> and set a follow-up date for you.</p>
+            <p>Check your CRM to see it in action!</p>
+            <p>No manual updates needed - LeadFinder handles your pipeline so you can focus on closing deals.</p>
           </div>
 
           {/* CTA */}
