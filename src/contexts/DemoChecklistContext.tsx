@@ -113,7 +113,7 @@ export function DemoChecklistProvider({
     const onCrmAdd = () => {
       setState(prev => {
         const newCount = prev.crmAddCount + 1;
-        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 1 };
+        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 3 };
         saveState(next, user?.id);
         return next;
       });
