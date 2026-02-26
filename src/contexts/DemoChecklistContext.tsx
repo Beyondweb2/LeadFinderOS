@@ -112,7 +112,7 @@ export function DemoChecklistProvider({
     const onCrmAdd = () => {
       setState(prev => {
         const newCount = prev.crmAddCount + 1;
-        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 3 };
+        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 1 };
         saveState(next, user?.id);
         return next;
       });
@@ -279,25 +279,20 @@ export function DemoChecklistProvider({
     }
   }, [isDemoUser, location.pathname, completeStep]);
 
-  // 9 steps: searchDone, addedToCrm, crmPageOpened, contactAttempted, statusUpdated, trackPressed, leadTracked, noteAdded, trackStatusChanged
+  // 4 steps: searchDone, addedToCrm, crmPageOpened, contactAttempted
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
     state.crmPageOpened,
     state.contactAttempted,
-    state.statusUpdated,
-    state.trackPressed,
-    state.leadTracked,
-    state.noteAdded,
-    state.trackStatusChanged,
   ].filter(Boolean).length;
 
   return (
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
-      totalSteps: 9,
-      allDone: completedCount === 9,
+      totalSteps: 4,
+      allDone: completedCount === 4,
       completeStep,
       isOpen,
       setIsOpen,
