@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, memo } from 'react';
 import {
   Table,
   TableBody,
@@ -11,7 +11,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from './StatusBadge';
 import {
-  MapPin,
   Download,
   Filter,
   ChevronLeft,
@@ -35,6 +34,12 @@ import type { Lead, WebsiteStatus } from '@/types/lead';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 
 const ITEMS_PER_PAGE = 25;
+
+// Memoized icon to prevent re-render flicker
+const EyeIcon = memo(({ checked, small }: { checked: boolean; small?: boolean }) => (
+  <Eye className={`${small ? 'h-3.5 w-3.5' : 'h-4 w-4'} ${checked ? '' : 'text-muted-foreground'}`} />
+));
+EyeIcon.displayName = 'EyeIcon';
 
 interface LeadsTableProps {
   leads: Lead[];
@@ -80,7 +85,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     setStatusFilters(prev => checked ? [...prev, status] : prev.filter(s => s !== status));
   }, []);
 
-  const StatusFilterMenu = ({ align = 'start' as 'start' | 'end' }) => (
+  const statusFilterOptions: WebsiteStatus[] = useMemo(() => ['NO_WEBSITE', 'DIRECTORY_ONLY', 'HAS_OWN_WEBSITE', 'UNCERTAIN'], []);
+
+  const renderFilterMenu = useCallback((align: 'start' | 'end' = 'start') => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="outline" size="sm" className="border-border">
@@ -88,7 +95,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="bg-popover border-border">
-        {(['NO_WEBSITE', 'DIRECTORY_ONLY', 'HAS_OWN_WEBSITE', 'UNCERTAIN'] as WebsiteStatus[]).map((status) => (
+        {statusFilterOptions.map((status) => (
           <DropdownMenuCheckboxItem
             key={status}
             checked={statusFilters.includes(status)}
@@ -99,54 +106,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
-  );
-
-  const MapsButton = ({ lead }: { lead: Lead }) => {
-    const checked = isChecked?.(lead.name, lead.googleMapsUrl);
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={`h-8 w-8 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
-            asChild
-          >
-            <a
-              href={lead.googleMapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
-            >
-              {checked ? <Eye className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5 text-muted-foreground" />}
-            </a>
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{checked ? 'Already viewed' : 'View business info'}</TooltipContent>
-      </Tooltip>
-    );
-  };
-
-  const CrmButton = ({ lead }: { lead: Lead }) => {
-    if (!onAddToOutreach) return null;
-    const inOutreach = checkIsInOutreach(lead.name, lead.googleMapsUrl);
-    return inOutreach ? (
-      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
-        <Check className="h-3.5 w-3.5" />
-      </Button>
-    ) : (
-      <Button
-        variant="default"
-        size="icon"
-        className={`h-8 w-8 bg-primary hover:bg-primary/90 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
-        onClick={() => handleAddToOutreach(lead)}
-        data-walkthrough-step="add-to-crm"
-        data-walkthrough="add-crm"
-      >
-        <ClipboardList className="h-3.5 w-3.5" />
-      </Button>
-    );
-  };
+  ), [statusFilters, toggleFilter, statusFilterOptions]);
 
   return (
     <Card className="border-border/50 bg-card shadow-sm">
@@ -161,7 +121,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <StatusFilterMenu />
+            {renderFilterMenu('start')}
             <Button onClick={onExport} size="sm" className="h-8 px-2.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground">
               <Download className="h-3.5 w-3.5 mr-1.5" />Export
             </Button>
@@ -179,7 +139,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <StatusFilterMenu align="end" />
+            {renderFilterMenu('end')}
             <Button onClick={onExport} className="bg-primary hover:bg-primary/90 text-primary-foreground">
               <Download className="mr-2 h-4 w-4" />Export CSV
             </Button>
@@ -192,22 +152,61 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         <div className="md:hidden space-y-1.5">
           {paginatedLeads.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground text-sm">No leads match your current filters.</div>
-          ) : paginatedLeads.map((lead, i) => (
-            <div
-              key={lead.id}
-              className="flex items-center justify-between py-2.5 px-3 rounded-md border border-border bg-background/80 animate-fade-in"
-              style={{ animationDelay: `${i * 15}ms` }}
-            >
-              <div className="flex-1 min-w-0 mr-2">
-                <p className="font-medium text-sm truncate leading-tight">{lead.name}</p>
-                <div className="mt-1"><StatusBadge status={lead.websiteStatus} compact /></div>
+          ) : paginatedLeads.map((lead) => {
+            const checked = isChecked?.(lead.name, lead.googleMapsUrl);
+            const inOutreach = checkIsInOutreach(lead.name, lead.googleMapsUrl);
+            return (
+              <div
+                key={lead.id}
+                className="flex items-center justify-between py-2.5 px-3 rounded-md border border-border bg-background/80"
+              >
+                <div className="flex-1 min-w-0 mr-2">
+                  <p className="font-medium text-sm truncate leading-tight">{lead.name}</p>
+                  <div className="mt-1"><StatusBadge status={lead.websiteStatus} compact /></div>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={`h-8 w-8 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
+                        asChild
+                      >
+                        <a
+                          href={lead.googleMapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                        >
+                          <EyeIcon checked={!!checked} small />
+                        </a>
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>{checked ? 'Already viewed' : 'View business info'}</TooltipContent>
+                  </Tooltip>
+                  {onAddToOutreach && (
+                    inOutreach ? (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
+                        <Check className="h-3.5 w-3.5" />
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="default"
+                        size="icon"
+                        className={`h-8 w-8 bg-primary hover:bg-primary/90 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
+                        onClick={() => handleAddToOutreach(lead)}
+                        data-walkthrough-step="add-to-crm"
+                        data-walkthrough="add-crm"
+                      >
+                        <ClipboardList className="h-3.5 w-3.5" />
+                      </Button>
+                    )
+                  )}
+                </div>
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <MapsButton lead={lead} />
-                <CrmButton lead={lead} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {/* Desktop View */}
@@ -228,11 +227,10 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     No leads match your current filters.
                   </TableCell>
                 </TableRow>
-              ) : paginatedLeads.map((lead, i) => (
+              ) : paginatedLeads.map((lead) => (
                 <TableRow
                   key={lead.id}
-                  className="border-border hover:bg-muted/30 animate-fade-in"
-                  style={{ animationDelay: `${i * 20}ms` }}
+                  className="border-border hover:bg-muted/30"
                 >
                   <TableCell className="font-medium">
                     <span className="truncate block">{lead.name}</span>

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,11 +18,13 @@ interface LeadSearchContextType {
   leads: Lead[];
   isLoading: boolean;
   search: (filters: SearchFilters, skipTrialCount?: boolean, isDemo?: boolean) => Promise<void>;
+  retryLastSearch: () => void;
   exportToCsv: () => void;
   trialLimitError: TrialLimitError | null;
   clearTrialLimitError: () => void;
   postAbandonExhausted: boolean;
   freeSearchExhausted: boolean;
+  searchError: string | null;
 }
 
 const LeadSearchContext = createContext<LeadSearchContextType | null>(null);
@@ -34,6 +36,9 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [trialLimitError, setTrialLimitError] = useState<TrialLimitError | null>(null);
   const [postAbandonExhausted, setPostAbandonExhausted] = useState(false);
   const [freeSearchExhausted, setFreeSearchExhausted] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const lastSearchRef = useRef<{ filters: SearchFilters; skipTrialCount: boolean; isDemo: boolean } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -142,131 +147,201 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   };
 
   const search = useCallback(async (filters: SearchFilters, skipTrialCount: boolean = false, isDemo: boolean = false) => {
+    // Cancel any in-flight search
+    if (abortRef.current) {
+      abortRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    // Store for retry
+    lastSearchRef.current = { filters, skipTrialCount, isDemo };
+
     setIsLoading(true);
     setTrialLimitError(null);
     setPostAbandonExhausted(false);
     setFreeSearchExhausted(false);
+    setSearchError(null);
     
     // Refresh excluded businesses before searching (skip for demo)
     if (!isDemo) await fetchExcludedBusinesses();
-    
-    try {
-      const { data, error } = await supabase.functions.invoke<SearchResponse>('search-leads', {
-        body: { ...filters, skipTrialCount, ...(isDemo ? { demo: true } : {}) },
-      });
 
-      if (error) {
-        console.error('Search error:', error);
-        
-        // Try to parse the error for trial limit / paywall codes
-        let body: any = null;
-        try {
-          const errorContext = error.context;
-          if (errorContext && typeof errorContext === 'object') {
-            if (typeof errorContext.json === 'function') {
-              body = await errorContext.json().catch(() => null);
-            }
-            if (!body && typeof errorContext.text === 'function') {
-              const txt = await errorContext.text().catch(() => '');
-              try { body = JSON.parse(txt); } catch {}
-            }
-            if (!body) body = errorContext;
-          }
-        } catch {}
-        
-        // Also try parsing the error message itself as JSON (some versions embed it)
-        if (!body?.code && error.message) {
-          try {
-            const parsed = JSON.parse(error.message);
-            if (parsed?.code) body = parsed;
-          } catch {}
-          // Check for known string patterns as last resort
-          if (!body?.code) {
-            if (error.message.includes('FREE_SEARCH_EXHAUSTED') || error.message.includes('free trial to unlock')) {
-              body = { code: 'FREE_SEARCH_EXHAUSTED' };
-            } else if (error.message.includes('POST_ABANDON_EXHAUSTED')) {
-              body = { code: 'POST_ABANDON_EXHAUSTED' };
-            } else if (error.message.includes('Trial limit reached') || error.message.includes('TRIAL_LIMIT_REACHED')) {
-              body = { code: 'TRIAL_LIMIT_REACHED' };
-            }
-          }
-        }
-        
-        if (body?.code === 'POST_ABANDON_EXHAUSTED') {
-          setPostAbandonExhausted(true);
-          return;
-        }
-        if (body?.code === 'FREE_SEARCH_EXHAUSTED') {
-          setFreeSearchExhausted(true);
-          try { supabase.rpc('log_usage_event', { p_event_type: 'search_2_blocked' }); } catch {}
-          return;
-        }
-        if (body?.code === 'TRIAL_LIMIT_REACHED') {
-          setTrialLimitError({
-            searchesToday: body.searches_today || 3,
-            limit: body.limit || 3,
-          });
-          return;
-        }
-        
-        toast({
-          title: 'Search failed',
-          description: error.message || 'Failed to search for businesses. Please try again.',
-          variant: 'destructive',
-        });
+    // Helper to determine if an error is retryable (network / 5xx / 429)
+    const isRetryable = (err: any): boolean => {
+      const msg = (err?.message || '').toLowerCase();
+      return msg.includes('failed to send') || msg.includes('network') || msg.includes('fetch') || msg.includes('timeout') || msg.includes('aborted');
+    };
+
+    const MAX_RETRIES = 2;
+    const TIMEOUT_MS = 30_000; // 30s timeout
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      // Check if aborted between retries
+      if (controller.signal.aborted) {
+        setIsLoading(false);
         return;
       }
 
-      if (data) {
-        // Filter out excluded businesses
-        const filteredLeads = data.leads.filter(lead => !isExcluded(lead));
-        const excludedCount = data.leads.length - filteredLeads.length;
+      try {
+        // Race the invoke against a timeout
+        const invokePromise = supabase.functions.invoke<SearchResponse>('search-leads', {
+          body: { ...filters, skipTrialCount, ...(isDemo ? { demo: true } : {}) },
+        });
 
-        // Sort: NO_WEBSITE first, then DIRECTORY_ONLY, then others
-        const statusOrder: Record<string, number> = {
-          'NO_WEBSITE': 0,
-          'UNCERTAIN': 1,
-          'DIRECTORY_ONLY': 2,
-          'HAS_OWN_WEBSITE': 3,
-        };
-        filteredLeads.sort((a, b) => (statusOrder[a.websiteStatus] ?? 9) - (statusOrder[b.websiteStatus] ?? 9));
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          const id = setTimeout(() => {
+            reject(new Error('Search timed out — please try again.'));
+          }, TIMEOUT_MS);
+          controller.signal.addEventListener('abort', () => clearTimeout(id));
+        });
 
-        setLeads(filteredLeads);
+        const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
 
-        // Persist demo leads to localStorage so they survive navigation
-        if (storageKeys) {
-          try {
-            localStorage.setItem(storageKeys.demoLeads, JSON.stringify({ leads: filteredLeads }));
-            sessionStorage.setItem(storageKeys.filters, JSON.stringify({ filters }));
-          } catch {
-            // ignore
-          }
+        if (controller.signal.aborted) {
+          setIsLoading(false);
+          return;
         }
 
-        const noWebsiteCount = filteredLeads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
-        
-        await saveSearch(filters, filteredLeads.length, noWebsiteCount);
-        const excludedMsg = excludedCount > 0 ? ` (${excludedCount} previously seen filtered out)` : '';
+        if (error) {
+          console.error(`Search error (attempt ${attempt + 1}):`, error);
 
-        // Notify demo checklist that a search completed
-        window.dispatchEvent(new CustomEvent('demo-checklist-search'));
+          // Check for retryable errors before parsing business logic codes
+          if (isRetryable(error) && attempt < MAX_RETRIES) {
+            await new Promise(r => setTimeout(r, 1000 * (attempt + 1))); // exponential backoff
+            continue;
+          }
+          
+          // Try to parse the error for trial limit / paywall codes
+          let body: any = null;
+          try {
+            const errorContext = error.context;
+            if (errorContext && typeof errorContext === 'object') {
+              if (typeof errorContext.json === 'function') {
+                body = await errorContext.json().catch(() => null);
+              }
+              if (!body && typeof errorContext.text === 'function') {
+                const txt = await errorContext.text().catch(() => '');
+                try { body = JSON.parse(txt); } catch {}
+              }
+              if (!body) body = errorContext;
+            }
+          } catch {}
+          
+          // Also try parsing the error message itself as JSON
+          if (!body?.code && error.message) {
+            try {
+              const parsed = JSON.parse(error.message);
+              if (parsed?.code) body = parsed;
+            } catch {}
+            if (!body?.code) {
+              if (error.message.includes('FREE_SEARCH_EXHAUSTED') || error.message.includes('free trial to unlock')) {
+                body = { code: 'FREE_SEARCH_EXHAUSTED' };
+              } else if (error.message.includes('POST_ABANDON_EXHAUSTED')) {
+                body = { code: 'POST_ABANDON_EXHAUSTED' };
+              } else if (error.message.includes('Trial limit reached') || error.message.includes('TRIAL_LIMIT_REACHED')) {
+                body = { code: 'TRIAL_LIMIT_REACHED' };
+              }
+            }
+          }
+          
+          if (body?.code === 'POST_ABANDON_EXHAUSTED') {
+            setPostAbandonExhausted(true);
+            setIsLoading(false);
+            return;
+          }
+          if (body?.code === 'FREE_SEARCH_EXHAUSTED') {
+            setFreeSearchExhausted(true);
+            try { supabase.rpc('log_usage_event', { p_event_type: 'search_2_blocked' }); } catch {}
+            setIsLoading(false);
+            return;
+          }
+          if (body?.code === 'TRIAL_LIMIT_REACHED') {
+            setTrialLimitError({
+              searchesToday: body.searches_today || 3,
+              limit: body.limit || 3,
+            });
+            setIsLoading(false);
+            return;
+          }
+          
+          // Non-retryable error — show to user, keep last results visible
+          const errMsg = error.message || 'Search failed. Tap retry to try again.';
+          setSearchError(errMsg);
+          toast({
+            title: 'Search failed',
+            description: errMsg,
+            variant: 'destructive',
+          });
+          setIsLoading(false);
+          return;
+        }
 
-        // Notify post-first-search modal (delay ensures listener is mounted)
-        setTimeout(() => window.dispatchEvent(new CustomEvent('post-first-search-complete')), 500);
+        if (data) {
+          // Filter out excluded businesses
+          const filteredLeads = data.leads.filter(lead => !isExcluded(lead));
 
-        // Search complete — no toast (reduces UI noise)
+          // Sort: NO_WEBSITE first, then DIRECTORY_ONLY, then others
+          const statusOrder: Record<string, number> = {
+            'NO_WEBSITE': 0,
+            'UNCERTAIN': 1,
+            'DIRECTORY_ONLY': 2,
+            'HAS_OWN_WEBSITE': 3,
+          };
+          filteredLeads.sort((a, b) => (statusOrder[a.websiteStatus] ?? 9) - (statusOrder[b.websiteStatus] ?? 9));
+
+          setLeads(filteredLeads);
+          setSearchError(null);
+
+          // Persist demo leads to localStorage so they survive navigation
+          if (storageKeys) {
+            try {
+              localStorage.setItem(storageKeys.demoLeads, JSON.stringify({ leads: filteredLeads }));
+              sessionStorage.setItem(storageKeys.filters, JSON.stringify({ filters }));
+            } catch {}
+          }
+
+          const noWebsiteCount = filteredLeads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
+          await saveSearch(filters, filteredLeads.length, noWebsiteCount);
+
+          // Notify demo checklist that a search completed
+          window.dispatchEvent(new CustomEvent('demo-checklist-search'));
+          setTimeout(() => window.dispatchEvent(new CustomEvent('post-first-search-complete')), 500);
+        }
+
+        setIsLoading(false);
+        return; // success — exit retry loop
+      } catch (err: any) {
+        if (controller.signal.aborted) {
+          setIsLoading(false);
+          return;
+        }
+        console.error(`Search error (attempt ${attempt + 1}):`, err);
+        if (attempt < MAX_RETRIES) {
+          await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+          continue;
+        }
+        // All retries exhausted — keep last results visible, show error
+        const errMsg = err?.message?.includes('timed out')
+          ? 'Search timed out — please try again.'
+          : 'Connection error — please check your internet and try again.';
+        setSearchError(errMsg);
+        toast({
+          title: 'Search failed',
+          description: errMsg,
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
       }
-    } catch (err) {
-      console.error('Search error:', err);
-      toast({
-        title: 'Search failed',
-        description: 'An unexpected error occurred. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsLoading(false);
     }
   }, [toast, fetchExcludedBusinesses, isExcluded, storageKeys]);
+
+  const retryLastSearch = useCallback(() => {
+    if (lastSearchRef.current) {
+      const { filters, skipTrialCount, isDemo } = lastSearchRef.current;
+      search(filters, skipTrialCount, isDemo);
+    }
+  }, [search]);
 
   const exportToCsv = useCallback(() => {
     if (leads.length === 0) {
@@ -323,12 +398,14 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     leads, 
     isLoading, 
     search, 
+    retryLastSearch,
     exportToCsv,
     trialLimitError,
     clearTrialLimitError,
     postAbandonExhausted,
     freeSearchExhausted,
-  }), [leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted]);
+    searchError,
+  }), [leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>
