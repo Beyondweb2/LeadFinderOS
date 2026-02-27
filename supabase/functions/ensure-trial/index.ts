@@ -36,16 +36,36 @@ serve(async (req) => {
     if (!user?.id) throw new Error("User not authenticated");
     logStep("User authenticated", { userId: user.id });
 
-    // Parse optional body for affiliate code and ref source
+    // Parse optional body for affiliate code, ref source, or action
     let affiliateCode: string | null = null;
     let refSource: string | null = null;
+    let action: string | null = null;
     try {
       const body = await req.json();
       affiliateCode = body?.affiliate_code || null;
       refSource = body?.ref_source || null;
+      action = body?.action || null;
     } catch {
       // No body or invalid JSON - that's fine
     }
+
+    // Handle mark_walkthrough_prompt_seen action
+    if (action === 'mark_walkthrough_prompt_seen') {
+      const { error: updateErr } = await supabaseClient
+        .from('user_trials')
+        .update({ has_seen_walkthrough_prompt: true })
+        .eq('user_id', user.id);
+      if (updateErr) {
+        logStep("Error marking walkthrough prompt seen", { error: updateErr.message });
+        throw new Error(`Failed to update: ${updateErr.message}`);
+      }
+      logStep("Walkthrough prompt marked as seen", { userId: user.id });
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
     logStep("Tracking params", { affiliateCode, refSource });
 
     // Check if trial record exists
