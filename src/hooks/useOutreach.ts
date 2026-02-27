@@ -39,6 +39,23 @@ export function useOutreach() {
   const isProcessingQueueRef = useRef(false);
   const CONCURRENCY = 3;
 
+  const removeLeadNoPhone = useCallback(async (outreachLeadId: string, businessName: string) => {
+    // Delete the lead from the database
+    await supabase.from('outreach_leads').delete().eq('id', outreachLeadId);
+    // Remove from local state
+    setLeads(prev => prev.filter(l => l.id !== outreachLeadId));
+    setArchivedLeads(prev => prev.filter(l => l.id !== outreachLeadId));
+    // Clean up outreach_history so business can be re-added later
+    await supabase.from('outreach_history').delete().eq('business_name', businessName);
+    setOutreachHistory(prev => prev.filter(h => h.business_name !== businessName));
+    // Notify user
+    toast({
+      title: `${businessName}`,
+      description: 'No phone number found — not added.',
+      variant: 'destructive',
+    });
+  }, [toast]);
+
   const fetchOnePhone = useCallback(async (item: { outreachLeadId: string; placeId: string; businessName: string }) => {
     setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'pending' }));
     try {
@@ -48,32 +65,40 @@ export function useOutreach() {
 
       if (detailsError || !details) {
         console.log('Phone enrichment returned no data for', item.businessName);
-        setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
+        // No data at all — remove the lead
+        await removeLeadNoPhone(item.outreachLeadId, item.businessName);
+        setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'no_phone' }));
       } else {
-        const updates: Record<string, string | null> = {};
-        if (details.phone) updates.phone = details.phone;
-        if (details.address) updates.address = details.address;
-        if (details.category) updates.category = details.category;
+        if (!details.phone) {
+          // Enrichment succeeded but no phone — auto-remove
+          await removeLeadNoPhone(item.outreachLeadId, item.businessName);
+          setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'no_phone' }));
+        } else {
+          const updates: Record<string, string | null> = {};
+          if (details.phone) updates.phone = details.phone;
+          if (details.address) updates.address = details.address;
+          if (details.category) updates.category = details.category;
 
-        if (Object.keys(updates).length > 0) {
-          const { data: updated } = await supabase
-            .from('outreach_leads')
-            .update(updates)
-            .eq('id', item.outreachLeadId)
-            .select()
-            .single();
+          if (Object.keys(updates).length > 0) {
+            const { data: updated } = await supabase
+              .from('outreach_leads')
+              .update(updates)
+              .eq('id', item.outreachLeadId)
+              .select()
+              .single();
 
-          if (updated) {
-            setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? (updated as OutreachLead) : l));
+            if (updated) {
+              setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? (updated as OutreachLead) : l));
+            }
           }
+          setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'success' }));
         }
-        setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
       }
     } catch (e) {
       console.error('Phone enrichment failed (non-blocking):', e);
       setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
     }
-  }, []);
+  }, [removeLeadNoPhone]);
 
   const processPhoneQueue = useCallback(async () => {
     if (isProcessingQueueRef.current) return;
@@ -215,6 +240,13 @@ export function useOutreach() {
         return;
       }
 
+      if (!details.phone) {
+        // Still no phone after retry — auto-remove
+        await removeLeadNoPhone(outreachLeadId, lead.business_name);
+        setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'no_phone' }));
+        return;
+      }
+
       const updates: Record<string, string | null> = {};
       if (details.phone) updates.phone = details.phone;
       if (details.address) updates.address = details.address;
@@ -234,13 +266,12 @@ export function useOutreach() {
         }
       }
 
-      setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: details.phone ? 'success' : 'no_phone' }));
-      // Phone found — no toast
+      setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'success' }));
     } catch (e) {
       console.error('Retry phone fetch failed:', e);
       setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'failed' }));
     }
-  }, [leads, archivedLeads, toast]);
+  }, [leads, archivedLeads, toast, removeLeadNoPhone]);
 
   const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website') => {
     if (!user) {
