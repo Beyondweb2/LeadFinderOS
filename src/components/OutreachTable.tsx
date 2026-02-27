@@ -1116,11 +1116,14 @@ export function OutreachTable({
                             </a>
                           )}
                           <a
-                            href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
+                            href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name + (lead.address ? ' ' + (lead.address.split(',').map(p => p.trim()).filter(Boolean)[1] || lead.address.split(',')[0] || '') : ''))}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-600 hover:text-blue-500 transition-colors"
                             title="Search Facebook"
+                            onClick={() => {
+                              window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'facebook_msg' } }));
+                            }}
                           >
                             <Facebook className="h-4 w-4" />
                           </a>
