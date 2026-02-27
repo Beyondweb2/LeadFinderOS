@@ -603,6 +603,7 @@ export type Database = {
           created_at: string
           demo_search_used: boolean
           free_search_count: number
+          has_seen_walkthrough_prompt: boolean
           id: string
           last_search_date: string | null
           paid_at: string | null
@@ -626,6 +627,7 @@ export type Database = {
           created_at?: string
           demo_search_used?: boolean
           free_search_count?: number
+          has_seen_walkthrough_prompt?: boolean
           id?: string
           last_search_date?: string | null
           paid_at?: string | null
@@ -649,6 +651,7 @@ export type Database = {
           created_at?: string
           demo_search_used?: boolean
           free_search_count?: number
+          has_seen_walkthrough_prompt?: boolean
           id?: string
           last_search_date?: string | null
           paid_at?: string | null

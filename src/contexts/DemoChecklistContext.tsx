@@ -87,13 +87,34 @@ export function DemoChecklistProvider({
     setState(loadState(user?.id));
   }, [user?.id]);
 
-  // Auto-open walkthrough when isDemoUser
+  // Auto-open walkthrough when isDemoUser — but defer if welcome modal might show
+  // Listen for explicit 'start-walkthrough' event from welcome modal
   useEffect(() => {
     if (!isDemoUser) return;
-    if (initializedRef.current) return;
-    initializedRef.current = true;
-    const timer = setTimeout(() => setIsOpen(true), 1500);
-    return () => clearTimeout(timer);
+
+    const onStart = () => {
+      initializedRef.current = true;
+      setIsOpen(true);
+    };
+    window.addEventListener('start-walkthrough', onStart);
+
+    // For returning users who already saw the prompt, auto-open after delay
+    // (the welcome modal won't render for them)
+    if (!initializedRef.current) {
+      const timer = setTimeout(() => {
+        // Don't auto-open if welcome modal is active
+        if (!initializedRef.current && !(window as any).__welcomeModalActive) {
+          initializedRef.current = true;
+          setIsOpen(true);
+        }
+      }, 2500); // slightly longer to let welcome modal check DB first
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener('start-walkthrough', onStart);
+      };
+    }
+
+    return () => window.removeEventListener('start-walkthrough', onStart);
   }, [isDemoUser]);
 
   const completeStep = useCallback((step: keyof DemoChecklistState) => {
