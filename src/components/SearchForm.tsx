@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Card, CardContent } from '@/components/ui/card';
 import { QuickLocationsList } from '@/components/QuickLocationsList';
+import { QuickBusinessTypes } from '@/components/QuickBusinessTypes';
 import type { Country } from '@/types/lead';
 import type { SearchFilters } from '@/types/lead';
 
@@ -74,6 +75,7 @@ export function SearchForm({
                   data-walkthrough-step="business-type"
                 />
               </div>
+              <QuickBusinessTypes onSelect={setKeyword} selected={keyword} />
             </div>
 
             <div className="space-y-1.5 sm:space-y-2" data-walkthrough-step="location-area">
