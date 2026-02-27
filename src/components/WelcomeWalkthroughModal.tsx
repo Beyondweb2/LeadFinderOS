@@ -79,7 +79,7 @@ export function WelcomeWalkthroughModal() {
     <Dialog open={show} onOpenChange={(v) => { if (!v) dismiss(false); }}>
       <DialogContent
         hideClose
-        className="max-w-sm sm:max-w-[400px] mx-auto p-0 overflow-hidden border-border/40 bg-[hsl(220_50%_5%)] rounded-2xl"
+        className="max-w-sm sm:max-w-[400px] mx-auto p-0 overflow-hidden border-border/40 bg-[hsl(220_50%_5%)] rounded-2xl outline-none focus:outline-none focus-visible:outline-none [&:focus]:outline-none [&:focus-visible]:ring-0"
       >
         <div className="px-7 pt-7 pb-6 sm:px-8 sm:pt-8 sm:pb-7 flex flex-col items-center">
           {/* Brand — 3-column centered layout */}
@@ -109,7 +109,7 @@ export function WelcomeWalkthroughModal() {
           {/* Primary CTA */}
           <button
             onClick={() => dismiss(true)}
-            className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all mb-3"
+            className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all mb-3 outline-none focus:outline-none focus-visible:outline-none border-none ring-0 focus:ring-0 focus-visible:ring-0"
           >
             Start Walkthrough
             <ArrowRight className="h-4 w-4" />
