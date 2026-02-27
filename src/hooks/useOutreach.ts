@@ -252,30 +252,11 @@ export function useOutreach() {
       return null;
     }
 
-    // Check if lead was EVER added before (even if deleted) using outreach_history
-    // Use separate parameterized queries to prevent PostgREST injection
-    const { data: nameMatch } = await supabase
-      .from('outreach_history')
-      .select('id')
-      .eq('business_name', lead.name)
-      .limit(1)
-      .maybeSingle();
-    
-    let historyMatch = nameMatch;
-    
-    // If no match by name and we have a URL, check by URL
-    if (!historyMatch && lead.googleMapsUrl) {
-      const { data: urlMatch } = await supabase
-        .from('outreach_history')
-        .select('id')
-        .eq('google_maps_url', lead.googleMapsUrl)
-        .limit(1)
-        .maybeSingle();
-      
-      historyMatch = urlMatch;
-    }
-
-    if (historyMatch) {
+    // Fast local-only duplicate check (no DB round-trips)
+    const inHistory = outreachHistory.some(
+      (h) => h.business_name === lead.name || (lead.googleMapsUrl && h.google_maps_url === lead.googleMapsUrl)
+    );
+    if (inHistory) {
       toast({
         title: 'Previously added',
         description: `${lead.name} was already added to your outreach list before.`,
@@ -284,30 +265,14 @@ export function useOutreach() {
       return null;
     }
 
-    // Also check outreach_leads table directly (including archived) to catch edge cases
-    const { data: existingLead } = await supabase
-      .from('outreach_leads')
-      .select('id, is_archived')
-      .eq('business_name', lead.name)
-      .limit(1)
-      .maybeSingle();
-
-    let leadMatch = existingLead;
-
-    // If no match by name and we have a URL, check by URL
-    if (!leadMatch && lead.googleMapsUrl) {
-      const { data: urlLead } = await supabase
-        .from('outreach_leads')
-        .select('id, is_archived')
-        .eq('google_maps_url', lead.googleMapsUrl)
-        .limit(1)
-        .maybeSingle();
-      
-      leadMatch = urlLead;
-    }
-
-    if (leadMatch) {
-      const message = leadMatch.is_archived 
+    const inActive = leads.some(
+      (l) => l.business_name === lead.name || (lead.googleMapsUrl && l.google_maps_url === lead.googleMapsUrl)
+    );
+    const inArchived = archivedLeads.some(
+      (l) => l.business_name === lead.name || (lead.googleMapsUrl && l.google_maps_url === lead.googleMapsUrl)
+    );
+    if (inActive || inArchived) {
+      const message = inArchived
         ? `${lead.name} is in your archive.`
         : `${lead.name} is already in your outreach list.`;
       toast({
@@ -362,39 +327,33 @@ export function useOutreach() {
       // ignore
     }
 
-    // Track in history (so we remember even if deleted later)
-    await supabase.from('outreach_history').insert({
-      user_id: user.id,
-      business_name: lead.name,
-      google_maps_url: lead.googleMapsUrl || null,
-      country,
-       phone: lead.phone || null,
-    });
-
-    // Update local history cache
+    // Update local history cache immediately
     setOutreachHistory((prev) => [...prev, { 
       business_name: lead.name, 
        google_maps_url: lead.googleMapsUrl || null,
        phone: lead.phone || null,
     }]);
 
-    // Log activity
-    await logActivity(newLead.id, 'added', `Added ${lead.name} to outreach list`);
+    // Fire-and-forget: history insert, activity log, usage tracking (non-blocking)
+    supabase.from('outreach_history').insert({
+      user_id: user.id,
+      business_name: lead.name,
+      google_maps_url: lead.googleMapsUrl || null,
+      country,
+       phone: lead.phone || null,
+    }).then(() => {});
 
-    // Usage tracking (non-blocking)
-    try {
-      await supabase.rpc('log_usage_event', {
-        p_event_type: 'business_added',
-        p_meta: {
-          place_id: lead.id || null,
-          business_name: lead.name,
-          country,
-          source: 'add-business',
-        },
-      });
-    } catch (e) {
-      console.error('Usage tracking failed (non-blocking):', e);
-    }
+    logActivity(newLead.id, 'added', `Added ${lead.name} to outreach list`).then(() => {}).catch(() => {});
+
+    Promise.resolve(supabase.rpc('log_usage_event', {
+      p_event_type: 'business_added',
+      p_meta: {
+        place_id: lead.id || null,
+        business_name: lead.name,
+        country,
+        source: 'add-business',
+      },
+    })).catch(() => {});
 
     // Lead added — no toast
 
