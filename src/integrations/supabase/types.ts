@@ -540,6 +540,60 @@ export type Database = {
         }
         Relationships: []
       }
+      user_challenge_10_outreach_contacts: {
+        Row: {
+          first_contacted_at: string
+          lead_id: string
+          user_id: string
+        }
+        Insert: {
+          first_contacted_at?: string
+          lead_id: string
+          user_id: string
+        }
+        Update: {
+          first_contacted_at?: string
+          lead_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_challenges_10_outreach: {
+        Row: {
+          completed: boolean
+          completed_at: string | null
+          count: number
+          enabled: boolean
+          modal_shown: boolean
+          skipped: boolean
+          started_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          completed_at?: string | null
+          count?: number
+          enabled?: boolean
+          modal_shown?: boolean
+          skipped?: boolean
+          started_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          completed_at?: string | null
+          count?: number
+          enabled?: boolean
+          modal_shown?: boolean
+          skipped?: boolean
+          started_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_metrics: {
         Row: {
           businesses_added_count: number
@@ -700,6 +754,10 @@ export type Database = {
       }
     }
     Functions: {
+      challenge_10_record_contact: {
+        Args: { p_lead_id: string }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

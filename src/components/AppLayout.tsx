@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
@@ -10,11 +10,13 @@ import { PaymentFailureDialog } from '@/components/PaymentFailureDialog';
 import { WalkthroughOverlay } from '@/components/WalkthroughOverlay';
 import { SkipWalkthroughButton } from '@/components/SkipWalkthroughButton';
 import { WelcomeWalkthroughModal } from '@/components/WelcomeWalkthroughModal';
+import { Challenge10Modal } from '@/components/Challenge10Modal';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
 import { usePersistedScroll } from '@/hooks/usePersistedScroll';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useChallenge10 } from '@/hooks/useChallenge10';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -31,6 +33,28 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isDemoUser = isLoaded && !hasProAccess && !isStripeTrialing;
   const isTrialingUser = isLoaded && subStatus === 'trialing';
   const showWalkthrough = isDemoUser || isTrialingUser;
+  const challenge = useChallenge10();
+
+  // Listen for walkthrough completion events to trigger the 10 Business Challenge modal
+  // Only triggers once — for users completing the walkthrough for the first time after this feature ships
+  useEffect(() => {
+    if (challenge.isLoading || challenge.modalShown) return;
+
+    const handleWalkthroughDone = () => {
+      // Small delay to let walkthrough UI dismiss first
+      setTimeout(() => {
+        challenge.triggerModal();
+      }, 1500);
+    };
+
+    // Listen for both skip and natural completion
+    window.addEventListener('walkthrough-all-done', handleWalkthroughDone);
+    window.addEventListener('skip-walkthrough', handleWalkthroughDone);
+    return () => {
+      window.removeEventListener('walkthrough-all-done', handleWalkthroughDone);
+      window.removeEventListener('skip-walkthrough', handleWalkthroughDone);
+    };
+  }, [challenge.isLoading, challenge.modalShown, challenge.triggerModal]);
 
 
 
@@ -85,6 +109,11 @@ export function AppLayout({ children }: AppLayoutProps) {
           <DemoChecklistPanel />
           <WalkthroughOverlay />
           <WelcomeWalkthroughModal />
+          <Challenge10Modal
+            open={challenge.showModal}
+            onStart={challenge.startChallenge}
+            onSkip={challenge.skipChallenge}
+          />
 
         </div>
       </SidebarProvider>
