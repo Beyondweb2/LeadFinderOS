@@ -136,7 +136,7 @@ export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
 
 // Simplified status options for the Outreach page (initial contact only)
 export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
-  { value: 'not_contacted', label: 'Not Contacted' },
+  { value: 'not_contacted', label: 'Not contacted' },
   { value: 'sms', label: 'SMS' },
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'facebook_msg', label: 'FB Messenger' },
@@ -146,7 +146,7 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'sent_voice_note', label: 'Sent Voice Note' },
   { value: 'replied', label: 'Replied' },
   { value: 'interested', label: 'Interested ⭐' },
-  { value: 'not_interested', label: 'Not Interested' },
+  { value: 'not_interested', label: 'Not interested' },
   { value: 'no_whatsapp', label: 'No WhatsApp' },
 ];
 
@@ -172,24 +172,24 @@ export type PipelineStatus =
   | 'completed';
 
 export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [
-  { value: 'not_contacted', label: 'Not Contacted' },
-  { value: 'waiting', label: 'Waiting for Reply' },
+  { value: 'not_contacted', label: 'Not contacted' },
+  { value: 'waiting', label: 'Awaiting reply' },
   { value: 'no_reply', label: 'No Reply' },
-  { value: 'sent_follow_up', label: 'Sent Follow-up' },
+  { value: 'sent_follow_up', label: 'Sent follow up' },
   { value: 'sent_voice_note', label: 'Sent Voice Message' },
   { value: 'interested', label: 'Interested' },
-  { value: 'not_interested', label: 'Not Interested' },
+  { value: 'not_interested', label: 'Not interested' },
   { value: 'completed', label: 'Closed' },
 ];
 
 export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'send_initial_text', label: 'Send Initial Text' },
   { value: 'send_voice_note', label: 'Send Voice Note' },
-  { value: 'send_follow_up', label: 'Send Follow-up' },
-  { value: '2nd_follow_up', label: '2nd Follow-up' },
-  { value: 'check_3_day_removal', label: 'Check 3-Day Removal' },
+  { value: 'send_follow_up', label: 'Send follow up' },
+  { value: '2nd_follow_up', label: '2nd follow up' },
+  { value: 'check_3_day_removal', label: '3-Day Removal' },
   { value: 'call', label: 'Call' },
-  { value: 'follow_up', label: 'Follow-up' },
+  { value: 'follow_up', label: 'Follow up' },
   { value: 'send_draft', label: 'Send Draft' },
   { value: 'remove_if_no_reply', label: 'Remove if no reply' },
   { value: 'none', label: 'None' },

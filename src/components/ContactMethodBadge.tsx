@@ -1,4 +1,4 @@
-import { Badge } from '@/components/ui/badge';
+import { Pill } from '@/components/ui/pill';
 import type { ContactMethod } from '@/types/outreach';
 
 interface ContactMethodBadgeProps {
@@ -38,12 +38,17 @@ const defaultConfig = {
 export function ContactMethodBadge({ method, compact }: ContactMethodBadgeProps) {
   const config = method ? (methodConfig[method] ?? defaultConfig) : defaultConfig;
 
+  if (compact) {
+    return (
+      <span className={`text-[10px] font-semibold px-1.5 py-0 rounded-md border inline-flex items-center ${config.className}`}>
+        {config.shortLabel}
+      </span>
+    );
+  }
+
   return (
-    <Badge
-      variant="outline"
-      className={`${config.className} ${compact ? 'text-[10px] px-1.5 py-0 rounded-md' : ''}`}
-    >
-      {compact ? config.shortLabel : config.label}
-    </Badge>
+    <Pill variant={config.className}>
+      {config.label}
+    </Pill>
   );
 }
