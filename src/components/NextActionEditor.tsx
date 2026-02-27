@@ -16,7 +16,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Phone, Clock, FileText, Trash2, Circle, MessageSquare, Mic, RefreshCw, AlertTriangle, Plus, Tag, CheckCircle2, CalendarIcon, Save } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Pill } from '@/components/ui/pill';
 import { format } from 'date-fns';
 import type { NextActionType } from '@/types/outreach';
 import { NEXT_ACTION_OPTIONS } from '@/types/outreach';
@@ -53,19 +52,6 @@ const actionColors: Record<NextActionType, string> = {
   send_draft: 'text-cyan-400',
   remove_if_no_reply: 'text-red-400',
   none: 'text-muted-foreground',
-};
-
-const actionPillColors: Record<NextActionType, string> = {
-  send_initial_text: 'bg-green-500/20 text-green-400 border-green-500/40',
-  send_voice_note: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
-  send_follow_up: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
-  '2nd_follow_up': 'bg-amber-600/20 text-amber-500 border-amber-600/40',
-  check_3_day_removal: 'bg-red-500/20 text-red-400 border-red-500/40',
-  call: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
-  follow_up: 'bg-orange-500/20 text-orange-400 border-orange-500/40',
-  send_draft: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40',
-  remove_if_no_reply: 'bg-red-500/20 text-red-400 border-red-500/40',
-  none: 'bg-muted text-muted-foreground border-border/50',
 };
 
 const CUSTOM_PREFIX = 'custom::';
@@ -178,30 +164,26 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
         <PopoverTrigger asChild>
           <Button
             variant="ghost"
-            className="h-auto p-0 hover:bg-transparent"
+            className={cn(
+              'h-auto p-1 hover:bg-muted/50 flex flex-col items-start gap-0.5',
+              colorClass
+            )}
           >
-            <Pill
-              variant={cn(
-                currentAction === 'none' || !currentAction
-                  ? 'bg-muted text-muted-foreground border-border/50'
-                  : currentCustomLabel
-                    ? 'bg-teal-500/20 text-teal-400 border-teal-500/40'
-                    : actionPillColors[currentAction as NextActionType] || 'bg-muted text-muted-foreground border-border/50'
-              )}
-            >
+            <div className="flex items-center gap-1.5">
               {iconEl}
-              <span className="truncate">{displayLabel}</span>
-              {formattedDate && (
-                <span
-                  className={cn(
-                    'text-[11px] font-medium ml-0.5',
-                    isOverdue ? 'text-red-400' : isToday ? 'text-yellow-400' : 'opacity-70'
-                  )}
-                >
-                  · {isToday ? 'Today' : formattedDate}
-                </span>
-              )}
-            </Pill>
+              <span className="text-sm hidden sm:inline">{displayLabel}</span>
+              <span className="text-xs sm:hidden">{displayLabel}</span>
+            </div>
+            {formattedDate && (
+              <span
+                className={cn(
+                  'text-xs',
+                  isOverdue ? 'text-red-400' : isToday ? 'text-yellow-400' : 'text-muted-foreground'
+                )}
+              >
+                {isToday ? 'Today' : formattedDate}
+              </span>
+            )}
           </Button>
         </PopoverTrigger>
       <PopoverContent className="w-auto p-4" align="start">

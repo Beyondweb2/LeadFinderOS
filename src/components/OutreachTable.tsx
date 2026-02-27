@@ -977,7 +977,7 @@ export function OutreachTable({
                   paginatedLeads.map((lead) => (
                     <TableRow
                       key={lead.id}
-                      className={`border-border/50 cursor-pointer hover:bg-muted/30 h-[56px] ${
+                      className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
                         lead.is_potential_work ? 'bg-primary/5' : ''
                       } ${lastContactedLeadId === lead.id ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
                       onClick={() => onLeadClick(lead)}
@@ -1041,7 +1041,7 @@ export function OutreachTable({
                       {!readOnly && (
                         <>
                           {/* Contact Method column */}
-                          <TableCell onClick={(e) => e.stopPropagation()} className="align-middle">
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             {onContactMethodChange ? (
                               <Select
                                 value={lead.contact_method || ''}
@@ -1065,7 +1065,7 @@ export function OutreachTable({
                             )}
                           </TableCell>
                           {/* Pipeline Status column */}
-                          <TableCell onClick={(e) => e.stopPropagation()} className="align-middle">
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             {onPipelineStatusChange ? (
                               <Select
                                 value={lead.status}
@@ -1092,7 +1092,7 @@ export function OutreachTable({
                               <PipelineStatusBadge status={lead.status as PipelineStatus} />
                             )}
                           </TableCell>
-                          <TableCell onClick={(e) => e.stopPropagation()} className="align-middle">
+                          <TableCell onClick={(e) => e.stopPropagation()}>
                             <NextActionEditor
                               action={lead.next_action}
                               date={lead.next_action_date}

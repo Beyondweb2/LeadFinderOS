@@ -1,4 +1,4 @@
-import { Pill } from '@/components/ui/pill';
+import { Badge } from '@/components/ui/badge';
 import type { LeadStatus } from '@/types/outreach';
 
 interface OutreachStatusBadgeProps {
@@ -8,12 +8,12 @@ interface OutreachStatusBadgeProps {
 
 const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; className: string }> = {
   not_contacted: {
-    label: 'Not contacted',
+    label: 'Not Contacted',
     shortLabel: 'Contact Method',
     className: 'bg-muted text-muted-foreground border-border/50',
   },
   sent_initial_text: {
-    label: 'Sent Text / WA',
+    label: 'Sent Text / WhatsApp',
     shortLabel: 'Texted',
     className: 'bg-green-500/20 text-green-400 border-green-500/40',
   },
@@ -28,7 +28,7 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     className: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
   },
   awaiting_decision: {
-    label: 'Awaiting decision',
+    label: 'Awaiting Decision',
     shortLabel: 'Awaiting',
     className: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
   },
@@ -43,17 +43,17 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     className: 'bg-orange-500/20 text-orange-400 border-orange-500/40',
   },
   not_answered: {
-    label: 'No Answer',
+    label: 'Not Answered',
     shortLabel: 'No Answer',
     className: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
   },
   on_hold: {
-    label: 'On Hold',
+    label: 'On Hold / Waiting',
     shortLabel: 'On Hold',
     className: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
   },
   wants_draft: {
-    label: 'Wants Draft',
+    label: 'Wants a Draft',
     shortLabel: 'Wants Draft',
     className: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40',
   },
@@ -63,8 +63,8 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     className: 'bg-green-500/20 text-green-400 border-green-500/40',
   },
   not_interested: {
-    label: 'Not interested',
-    shortLabel: 'Not int.',
+    label: 'Not Interested',
+    shortLabel: 'Not Int.',
     className: 'bg-red-500/20 text-red-400 border-red-500/40',
   },
   no_whatsapp: {
@@ -73,8 +73,8 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     className: 'bg-gray-500/20 text-gray-400 border-gray-500/40',
   },
   waiting: {
-    label: 'Awaiting reply',
-    shortLabel: 'Awaiting',
+    label: 'Waiting',
+    shortLabel: 'Waiting',
     className: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
   },
   reviewing_draft: {
@@ -88,7 +88,7 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
   },
   completed: {
-    label: 'Completed',
+    label: 'Completed (Client)',
     shortLabel: 'Completed',
     className: 'bg-green-600/20 text-green-500 border-green-600/40',
   },
@@ -116,17 +116,12 @@ export function OutreachStatusBadge({ status, compact }: OutreachStatusBadgeProp
     className: 'bg-muted text-muted-foreground border-muted',
   };
 
-  if (compact) {
-    return (
-      <span className={`text-[10px] font-semibold px-1.5 py-0 rounded-md border inline-flex items-center ${config.className}`}>
-        {config.shortLabel}
-      </span>
-    );
-  }
-
   return (
-    <Pill variant={config.className}>
-      {config.label}
-    </Pill>
+    <Badge 
+      variant="outline" 
+      className={`${config.className} ${compact ? 'text-[10px] px-1.5 py-0 rounded-md' : ''}`}
+    >
+      {compact ? config.shortLabel : config.label}
+    </Badge>
   );
 }
