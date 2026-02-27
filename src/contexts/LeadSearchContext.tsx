@@ -319,17 +319,19 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     }
   }, [leads, toast]);
 
+  const contextValue = useMemo(() => ({ 
+    leads, 
+    isLoading, 
+    search, 
+    exportToCsv,
+    trialLimitError,
+    clearTrialLimitError,
+    postAbandonExhausted,
+    freeSearchExhausted,
+  }), [leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted]);
+
   return (
-    <LeadSearchContext.Provider value={{ 
-      leads, 
-      isLoading, 
-      search, 
-      exportToCsv,
-      trialLimitError,
-      clearTrialLimitError,
-      postAbandonExhausted,
-      freeSearchExhausted,
-    }}>
+    <LeadSearchContext.Provider value={contextValue}>
       {children}
     </LeadSearchContext.Provider>
   );

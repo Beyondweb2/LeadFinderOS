@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, memo } from 'react';
 import type { PhoneFetchStatus } from '@/hooks/useOutreach';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -50,6 +50,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
+import { useDebouncedCallback } from 'use-debounce';
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -137,6 +138,17 @@ export function OutreachTable({
   const [smsLead, setSmsLead] = useState<{ phone: string; business_name: string } | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
+
+  // Debounced search handlers (200ms)
+  const debouncedSearch = useDebouncedCallback((value: string) => {
+    setSearchQuery(value);
+    setCurrentPage(1);
+  }, 200);
+
+  const debouncedLocation = useDebouncedCallback((value: string) => {
+    setLocationFilter(value);
+    setCurrentPage(1);
+  }, 200);
 
   // When a new lead arrives, always bring the user back to page 1 so it's visible immediately.
   const prevNewestLeadIdRef = useRef<string | null>(null);
@@ -240,22 +252,22 @@ export function OutreachTable({
   }, [tableStateKey, searchQuery, statusFilter, countryFilter, sortField, sortDirection, currentPage]);
 
   // Handle WhatsApp button click - store lead ID for highlighting
-  const handleWhatsAppClick = (lead: OutreachLead) => {
+  const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
     setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name });
-  };
+  }, []);
 
   // Handle SMS button click
-  const handleSMSClick = (lead: OutreachLead) => {
+  const handleSMSClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
     setSmsLead({ phone: lead.phone || '', business_name: lead.business_name });
-  };
+  }, []);
 
   // Handle Call button click - highlight the lead and trigger CRM automation
-  const handleCallClick = (lead: OutreachLead) => {
+  const handleCallClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
     window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id } }));
-  };
+  }, []);
 
   // Count leads missing phone numbers
   const leadsWithMissingPhones = useMemo(() => {
@@ -337,15 +349,17 @@ export function OutreachTable({
     }
   };
 
-  const handleSelectOne = (leadId: string, checked: boolean) => {
-    const newSet = new Set(selectedIds);
-    if (checked) {
-      newSet.add(leadId);
-    } else {
-      newSet.delete(leadId);
-    }
-    setSelectedIds(newSet);
-  };
+  const handleSelectOne = useCallback((leadId: string, checked: boolean) => {
+    setSelectedIds(prev => {
+      const newSet = new Set(prev);
+      if (checked) {
+        newSet.add(leadId);
+      } else {
+        newSet.delete(leadId);
+      }
+      return newSet;
+    });
+  }, []);
 
   // Copy selected phones in bulk format: "447477932564, 447477932565"
   const copySelectedPhones = async () => {
@@ -653,7 +667,7 @@ export function OutreachTable({
   ).length;
 
   return (
-    <Card className="bg-card/50 border-border/50 backdrop-blur-sm">
+    <Card className="bg-card/50 border-border/50">
       <CardHeader className="border-b border-border/50 px-4 sm:px-6">
         <div className="flex flex-col gap-3 sm:gap-4">
           {/* Title row */}
@@ -811,10 +825,9 @@ export function OutreachTable({
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search..."
-                value={searchQuery}
+                defaultValue={searchQuery}
                 onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
+                  debouncedSearch(e.target.value);
                 }}
                 className="pl-8 h-8 text-xs bg-background"
               />
@@ -822,10 +835,9 @@ export function OutreachTable({
             <div className="relative flex-1 min-w-[120px] max-w-[200px]">
               <Input
                 placeholder="City, postcode, area..."
-                value={locationFilter}
+                defaultValue={locationFilter}
                 onChange={(e) => {
-                  setLocationFilter(e.target.value);
-                  setCurrentPage(1);
+                  debouncedLocation(e.target.value);
                 }}
                 className="h-8 text-xs bg-background pr-7"
               />
