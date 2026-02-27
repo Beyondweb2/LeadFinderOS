@@ -61,13 +61,15 @@ export function WelcomeWalkthroughModal() {
       // Dispatch event so DemoChecklistContext opens the walkthrough panel
       window.dispatchEvent(new CustomEvent('start-walkthrough'));
     } else {
-      // Skip — dismiss walkthrough entirely for this user
+      // Skip — dismiss walkthrough entirely and immediately
       if (user?.id) {
         try {
           localStorage.setItem(`demo_walkthrough_dismissed_${user.id}`, 'true');
           localStorage.setItem(`walkthrough_completed_${user.id}`, 'true');
         } catch {}
       }
+      // Tell DemoChecklistContext to close & never auto-open
+      window.dispatchEvent(new CustomEvent('skip-walkthrough'));
     }
   };
 
