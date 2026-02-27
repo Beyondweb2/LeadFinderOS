@@ -79,6 +79,7 @@ export function useTemplates() {
   // Track the user ID to prevent refetches on auth token refreshes
   const userIdRef = useRef<string | null>(null);
   const hasCreatedDefaults = useRef(false);
+  const hasLoadedTemplatesOnce = useRef(false);
 
   const createDefaultTemplates = useCallback(async () => {
     if (!user || hasCreatedDefaults.current) return;
@@ -107,7 +108,9 @@ export function useTemplates() {
   const fetchTemplates = useCallback(async () => {
     if (!user) return;
 
-    setIsLoading(true);
+    if (!hasLoadedTemplatesOnce.current) {
+      setIsLoading(true);
+    }
     const { data, error } = await supabase
       .from('templates')
       .select('*')
@@ -153,6 +156,7 @@ export function useTemplates() {
       setTemplates(typedData);
     }
     
+    hasLoadedTemplatesOnce.current = true;
     setIsLoading(false);
     setHasFetched(true);
   }, [user, toast, createDefaultTemplates]);

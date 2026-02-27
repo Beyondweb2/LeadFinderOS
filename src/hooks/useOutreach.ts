@@ -28,7 +28,8 @@ export function useOutreach() {
   const [archivedLeads, setArchivedLeads] = useState<OutreachLead[]>([]);
   const [activities, setActivities] = useState<OutreachActivity[]>([]);
   const [outreachHistory, setOutreachHistory] = useState<OutreachHistoryEntry[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const hasLoadedOnceRef = useRef(false);
   const [phoneFetchStatus, setPhoneFetchStatus] = useState<Record<string, PhoneFetchStatus>>({});
   const { toast } = useToast();
   const { user } = useAuth();
@@ -95,7 +96,10 @@ export function useOutreach() {
   const fetchLeads = useCallback(async () => {
     if (!user) return;
     
-    setIsLoading(true);
+    // Only show loading spinner on initial load
+    if (!hasLoadedOnceRef.current) {
+      setIsLoading(true);
+    }
     
     // Fetch active leads
     const { data: activeData, error: activeError } = await supabase
@@ -111,6 +115,7 @@ export function useOutreach() {
       .eq('is_archived', true)
       .order('updated_at', { ascending: false });
 
+    hasLoadedOnceRef.current = true;
     setIsLoading(false);
 
     if (activeError) {
