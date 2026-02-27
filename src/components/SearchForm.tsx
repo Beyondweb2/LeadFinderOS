@@ -60,7 +60,7 @@ export function SearchForm({
         <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-6">
           {/* Main Search Fields */}
           <div className="grid gap-3 sm:gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <div className="space-y-1.5 sm:space-y-2">
+            <div className="space-y-1.5 sm:space-y-2" data-walkthrough-step="business-type-area">
               <Label htmlFor="keyword" className="text-xs font-medium text-foreground/80">
                 Business Type
               </Label>

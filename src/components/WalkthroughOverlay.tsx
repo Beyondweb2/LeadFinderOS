@@ -23,7 +23,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     const bizInput = document.querySelector('[data-walkthrough-step="business-type"]');
     const bizValue = (bizInput as HTMLInputElement)?.value?.trim();
     if (!bizValue) {
-      return { step: 1, selector: '[data-walkthrough-step="business-type"], [data-walkthrough-step="quick-business-types"]', tooltip: 'Type a business type or tap a quick option.', noDim: true };
+      return { step: 1, selector: '[data-walkthrough-step="business-type-area"]', tooltip: 'Type a business type or tap a quick option.', noDim: true };
     }
     const locInput = document.querySelector('[data-walkthrough-step="location"]');
     const locValue = (locInput as HTMLInputElement)?.value?.trim();
