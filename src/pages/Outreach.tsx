@@ -42,14 +42,18 @@ const Outreach = () => {
   // CRM Automation: auto-set "waiting" status + follow-up date on contact
   useEffect(() => {
     const handler = (e: Event) => {
-      const leadId = (e as CustomEvent).detail?.leadId;
+      const { leadId, method } = (e as CustomEvent).detail || {};
       if (!leadId) return;
       const followUpDate = format(addDays(new Date(), 2), 'yyyy-MM-dd');
-      updateLead(leadId, {
+      const updates: Record<string, any> = {
         status: 'waiting',
         next_action: 'follow_up',
         next_action_date: followUpDate,
-      });
+      };
+      if (method) {
+        updates.contact_method = method;
+      }
+      updateLead(leadId, updates);
     };
     window.addEventListener('crm-contact-action', handler);
     return () => window.removeEventListener('crm-contact-action', handler);
