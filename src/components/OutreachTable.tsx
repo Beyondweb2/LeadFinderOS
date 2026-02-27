@@ -266,7 +266,7 @@ export function OutreachTable({
   // Handle Call button click - highlight the lead and trigger CRM automation
   const handleCallClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
-    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id } }));
+    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'call' } }));
   }, []);
 
   // Count leads missing phone numbers
@@ -1276,7 +1276,7 @@ export function OutreachTable({
             const lid = whatsAppLead?.business_name && leads.find(l => l.business_name === whatsAppLead.business_name)?.id;
             setWhatsAppLead(null);
             window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
-            if (lid) window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lid } }));
+            if (lid) window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lid, method: 'whatsapp' } }));
           }
         }}
         lead={whatsAppLead}
@@ -1290,7 +1290,7 @@ export function OutreachTable({
             const lid = smsLead?.business_name && leads.find(l => l.business_name === smsLead.business_name)?.id;
             setSmsLead(null);
             window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
-            if (lid) window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lid } }));
+            if (lid) window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lid, method: 'sms' } }));
           }
         }}
         lead={smsLead}
