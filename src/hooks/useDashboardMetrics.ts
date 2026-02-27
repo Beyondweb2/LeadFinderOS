@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead } from '@/types/outreach';
@@ -115,12 +115,15 @@ export function useDashboardMetrics() {
     totalLeadsContacted: 0,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const hasLoadedOnceRef = useRef(false);
   const { user } = useAuth();
 
   const fetchAllData = useCallback(async () => {
     if (!user) return;
     
-    setIsLoading(true);
+    if (!hasLoadedOnceRef.current) {
+      setIsLoading(true);
+    }
     
     const dates = getDateRanges();
     
@@ -157,6 +160,7 @@ export function useDashboardMetrics() {
         .eq('user_id', user.id),
     ]);
 
+    hasLoadedOnceRef.current = true;
     setIsLoading(false);
 
     if (leadsResult.error) {
