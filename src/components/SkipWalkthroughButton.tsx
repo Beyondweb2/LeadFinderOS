@@ -28,7 +28,8 @@ export function SkipWalkthroughButton() {
       localStorage.setItem(`walkthrough_completed_${user.id}`, 'true');
     } catch {}
     setConfirmOpen(false);
-    // Force re-check in useWalkthroughStatus (polls every 1s, but we can also reload state)
+    // Immediately kill walkthrough overlay everywhere
+    window.dispatchEvent(new CustomEvent('skip-walkthrough'));
     window.dispatchEvent(new CustomEvent('pulse-search-nav'));
   };
 
