@@ -95,13 +95,15 @@ const Index = () => {
     setButtonExhausted(blur);
   }, [user?.id]);
 
-  // Initialize search count based on walkthrough completion (if not already set)
+  // Initialize search count based on walkthrough completion — only if the user
+  // actually performed a search during the walkthrough (freeSearchCount > 0 from DB).
+  // If they skipped the walkthrough they should still get their 1 free search.
   useEffect(() => {
-    if (walkthroughCompleted && isFreeUser && localSearchCount < 1) {
+    if (walkthroughCompleted && isFreeUser && localSearchCount < 1 && freeSearchCount >= 1) {
       setLocalSearchCount(1);
       persistSearchCount(1, user?.id);
     }
-  }, [walkthroughCompleted, isFreeUser, localSearchCount, user?.id]);
+  }, [walkthroughCompleted, isFreeUser, localSearchCount, freeSearchCount, user?.id]);
 
   // Clear blur when user becomes a subscriber
   useEffect(() => {
