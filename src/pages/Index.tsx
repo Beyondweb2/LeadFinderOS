@@ -15,7 +15,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
 import { supabase } from '@/integrations/supabase/client';
-import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock, Loader2 } from 'lucide-react';
+import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, Country } from '@/types/lead';
@@ -57,7 +57,7 @@ function persistBlur(active: boolean, userId?: string) {
 
 const Index = () => {
   const location = useLocation();
-  const { leads, isLoading, search, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted } = useLeadSearchContext();
+  const { leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed, freeSearchCount } = useTrial();
@@ -247,6 +247,16 @@ const Index = () => {
         />
       </section>
 
+      {/* Search Error + Retry */}
+      {searchError && !isLoading && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+          <p className="text-sm text-destructive font-medium">{searchError}</p>
+          <Button size="sm" variant="outline" onClick={retryLastSearch} className="shrink-0 gap-2">
+            <RefreshCw className="h-4 w-4" /> Retry Search
+          </Button>
+        </div>
+      )}
+
       {/* Outcome-focused Results Header */}
       {leads.length > 0 && noWebsiteCount > 0 && (
         <div className="flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-3 px-3 sm:px-4 bg-primary/5 border border-primary/10 rounded-lg">
@@ -259,7 +269,7 @@ const Index = () => {
 
       {/* Results Section */}
       {leads.length > 0 && (
-        <section className={`animate-fade-in relative ${buttonExhausted && isFreeUser ? 'select-none' : ''}`}>
+        <section className={`relative ${buttonExhausted && isFreeUser ? 'select-none' : ''}`}>
           {/* Blur overlay for paywall teaser */}
           {buttonExhausted && isFreeUser && (
             <div className="absolute inset-0 z-10 backdrop-blur-md bg-background/30 rounded-lg flex items-center justify-center">
