@@ -96,7 +96,12 @@ export function DemoChecklistProvider({
       initializedRef.current = true;
       setIsOpen(true);
     };
+    const onSkip = () => {
+      initializedRef.current = true;
+      setIsOpen(false);
+    };
     window.addEventListener('start-walkthrough', onStart);
+    window.addEventListener('skip-walkthrough', onSkip);
 
     // For returning users who already saw the prompt, auto-open after delay
     // (the welcome modal won't render for them)
@@ -107,14 +112,18 @@ export function DemoChecklistProvider({
           initializedRef.current = true;
           setIsOpen(true);
         }
-      }, 2500); // slightly longer to let welcome modal check DB first
+      }, 2500);
       return () => {
         clearTimeout(timer);
         window.removeEventListener('start-walkthrough', onStart);
+        window.removeEventListener('skip-walkthrough', onSkip);
       };
     }
 
-    return () => window.removeEventListener('start-walkthrough', onStart);
+    return () => {
+      window.removeEventListener('start-walkthrough', onStart);
+      window.removeEventListener('skip-walkthrough', onSkip);
+    };
   }, [isDemoUser]);
 
   const completeStep = useCallback((step: keyof DemoChecklistState) => {
