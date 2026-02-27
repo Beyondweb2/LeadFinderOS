@@ -190,9 +190,12 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                 )}
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600 hover:text-blue-500 hover:bg-blue-500/10" asChild>
                   <a
-                    href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
+                    href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name + (lead.address ? ' ' + (lead.address.split(',').map(p => p.trim()).filter(Boolean)[1] || lead.address.split(',')[0] || '') : ''))}`}
                     target="_blank"
                     rel="noopener noreferrer"
+                    onClick={() => {
+                      window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'facebook_msg' } }));
+                    }}
                   >
                     <Facebook className="h-3.5 w-3.5" />
                   </a>
