@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { memo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { PhoneFetchStatus } from '@/hooks/useOutreach';
@@ -47,7 +47,7 @@ interface OutreachMobileCardProps {
   onRetryPhoneFetch?: () => void;
 }
 
-export function OutreachMobileCard({
+export const OutreachMobileCard = memo(function OutreachMobileCard({
   lead,
   isSelected,
   onSelect,
@@ -277,4 +277,4 @@ export function OutreachMobileCard({
       </div>
     </div>
   );
-}
+});
