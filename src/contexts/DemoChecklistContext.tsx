@@ -325,12 +325,23 @@ export function DemoChecklistProvider({
     state.cardCollapsed,
   ].filter(Boolean).length;
 
+  const allDone = completedCount === 8;
+
+  // Dispatch event when all steps are completed for the first time
+  const allDoneRef = useRef(false);
+  useEffect(() => {
+    if (allDone && !allDoneRef.current) {
+      allDoneRef.current = true;
+      window.dispatchEvent(new CustomEvent('walkthrough-all-done'));
+    }
+  }, [allDone]);
+
   return (
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
       totalSteps: 8,
-      allDone: completedCount === 8,
+      allDone,
       completeStep,
       isOpen,
       setIsOpen,

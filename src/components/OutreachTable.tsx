@@ -255,12 +255,14 @@ export function OutreachTable({
   const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
     setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name });
+    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'whatsapp' } }));
   }, []);
 
   // Handle SMS button click
   const handleSMSClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
     setSmsLead({ phone: lead.phone || '', business_name: lead.business_name });
+    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'sms' } }));
   }, []);
 
   // Handle Call button click - highlight the lead and trigger CRM automation

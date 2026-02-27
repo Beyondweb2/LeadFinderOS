@@ -3,7 +3,11 @@ import { OutreachTable } from '@/components/OutreachTable';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
 import { PostContactModal } from '@/components/PostContactModal';
+import { Challenge10Widget } from '@/components/Challenge10Widget';
+import { Challenge10Modal } from '@/components/Challenge10Modal';
 import { useOutreach } from '@/hooks/useOutreach';
+import { useChallenge10 } from '@/hooks/useChallenge10';
+import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { addDays, format } from 'date-fns';
 import type { OutreachLead, ContactMethod, PipelineStatus } from '@/types/outreach';
@@ -31,7 +35,8 @@ const Outreach = () => {
   } = useOutreach();
 
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
-
+  const { toast } = useToast();
+  const challenge = useChallenge10();
   // Combine active and archived leads into one unified list
   const allLeads = useMemo(() => {
     return [...leads, ...archivedLeads];
@@ -40,6 +45,7 @@ const Outreach = () => {
   const isReadOnly = false;
 
   // CRM Automation: auto-set "waiting" status + follow-up date on contact
+  // Also record the contact for the 10 Business Challenge
   useEffect(() => {
     const handler = (e: Event) => {
       const { leadId, method } = (e as CustomEvent).detail || {};
@@ -54,10 +60,24 @@ const Outreach = () => {
         updates.contact_method = method;
       }
       updateLead(leadId, updates);
+
+      // Record for challenge (dedupe handled server-side)
+      challenge.recordContact(leadId);
     };
     window.addEventListener('crm-contact-action', handler);
     return () => window.removeEventListener('crm-contact-action', handler);
-  }, [updateLead]);
+  }, [updateLead, challenge.recordContact]);
+
+  // Show challenge completion toast
+  useEffect(() => {
+    if (challenge.justCompleted) {
+      toast({
+        title: 'Challenge Complete ✅',
+        description: 'You contacted 10 businesses! Consistency is the hardest part — keep going.',
+      });
+      challenge.dismissCompletion();
+    }
+  }, [challenge.justCompleted, toast, challenge.dismissCompletion]);
 
   const handleContactMethodChange = useCallback(async (leadId: string, method: ContactMethod) => {
     await updateLead(leadId, { contact_method: method });
@@ -79,6 +99,16 @@ const Outreach = () => {
 
   return (
     <div className="space-y-3 sm:space-y-6">
+      {/* Challenge Widget */}
+      <Challenge10Widget
+        isActive={challenge.isActive}
+        isCompleted={challenge.isCompleted}
+        isSkipped={challenge.isSkipped}
+        count={challenge.count}
+        featureEnabled={challenge.featureEnabled}
+        onStart={challenge.startChallenge}
+      />
+
       {/* Page Header */}
       <div className="text-center sm:text-left">
         <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
@@ -131,6 +161,13 @@ const Outreach = () => {
 
       {/* Post-contact guidance modal */}
       <PostContactModal />
+
+      {/* Challenge Modal */}
+      <Challenge10Modal
+        open={challenge.showModal}
+        onStart={challenge.startChallenge}
+        onSkip={challenge.skipChallenge}
+      />
     </div>
   );
 };
