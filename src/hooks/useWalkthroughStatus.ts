@@ -21,7 +21,7 @@ export function useWalkthroughStatus() {
     setWalkthroughCompleted(dismissed || completed);
   }, [user?.id]);
 
-  // Listen for storage changes (walkthrough dismiss happens in DemoChecklistPanel)
+  // Listen for storage changes and skip-walkthrough events
   useEffect(() => {
     if (!user?.id) return;
     const check = () => {
@@ -29,9 +29,16 @@ export function useWalkthroughStatus() {
       const completed = localStorage.getItem(`walkthrough_completed_${user.id}`) === 'true';
       setWalkthroughCompleted(dismissed || completed);
     };
+    const onSkip = () => {
+      setWalkthroughCompleted(true);
+    };
+    window.addEventListener('skip-walkthrough', onSkip);
     // Poll briefly since localStorage events don't fire in same tab
     const interval = setInterval(check, 1000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('skip-walkthrough', onSkip);
+    };
   }, [user?.id]);
 
   // walkthroughOpen = walkthrough UI is visible OR not yet completed
