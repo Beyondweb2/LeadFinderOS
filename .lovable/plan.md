@@ -1,23 +1,22 @@
 
 
-## Problem
+## Two Changes
 
-When a lead is added to the CRM, the phone number is fetched asynchronously via Google Place Details. If no phone is found, the lead remains in the CRM with only a Facebook option — which the user finds useless.
+### 1. Reduce CRM pulse duration from 2 seconds to 800ms
 
-## Root Cause
+Both `AppSidebar.tsx` (line 136) and `MobileBottomNav.tsx` (line 130) currently set the CRM green pulse to 2000ms. Reduce to 800ms so it flashes briefly then stops.
 
-In `useOutreach.ts`, `addLead` inserts the lead immediately with `phone: null`, then fires off `enqueuePhoneFetch` as a background task. When `fetchOnePhone` resolves with no phone (`no_phone` status), the lead simply stays.
+**Files:**
+- `src/components/AppSidebar.tsx` — line 136: change `setTimeout(() => setFlashCRM(false), 2000)` → `800`
+- `src/components/MobileBottomNav.tsx` — line 130: change `setTimeout(() => setCrmGlow(false), 2000)` → `800`
 
-## Plan
+### 2. Rewrite OutreachTipsDialog content to practical tips
 
-**Auto-remove leads that have no phone after enrichment** — in the `fetchOnePhone` callback (`useOutreach.ts` ~line 42-76):
+Replace the current instructional body in `OutreachTipsDialog.tsx` with 3 concise outreach tips:
 
-1. When enrichment completes and no phone is found (status would be `no_phone`), automatically delete the lead from the database and remove it from local state.
-2. Show a brief toast: `"[Business Name] — no phone number found, not added."` so the user knows why it disappeared.
-3. Also clean up the `outreach_history` entry so the business isn't flagged as "previously added" and can be re-attempted later if desired.
+1. **Keep it casual** — No links, images, or videos in your first message. Just be friendly and try to get a casual reply first.
+2. **Try WhatsApp first** — If they don't have WhatsApp, try SMS. But the best option is to call — have a pitch ready using a pre-made script template.
+3. **Make conversation** — Don't sell straight away. Ask a question, reference their business, and keep it natural.
 
-**Same logic for `retryPhoneFetch`** (~line 191-243): if a retry still yields no phone, auto-remove the lead with a toast.
-
-**Files to edit:**
-- `src/hooks/useOutreach.ts` — modify `fetchOnePhone` and `retryPhoneFetch` to delete leads with no phone result
+Update the headline to something like "3 Tips Before You Reach Out". Remove the channel-specific desktop/phone instructions. Keep the Skip link, CTA button, and "Don't show again" checkbox unchanged.
 
