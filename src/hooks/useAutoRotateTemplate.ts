@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef } from 'react';
 
 const INITIAL_MESSAGE_TEMPLATES = [
-  "Hi, just checking — is this the correct number for {{business_name}}?",
-  "Hello, am I speaking with {{business_name}}?",
-  "Hi there, is this the best contact number for {{business_name}}?",
-  "Quick one — does this number belong to {{business_name}}?",
-  "Hi, can I confirm this is {{business_name}}?",
-  "Hello, just wanted to make sure I've reached {{business_name}} — is that right?",
+  "Hi is this {{business_name}}?",
+  "Hey is this {{business_name}}?",
+  "Hi just checking is this {{business_name}}",
+  "Hello is this the right number for {{business_name}}?",
+  "Hi am I speaking with {{business_name}}?",
+  "Hi this {{business_name}}?",
 ];
 
 const AUTO_KEY = 'leadfinder_auto_rotate';
