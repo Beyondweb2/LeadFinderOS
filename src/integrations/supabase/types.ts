@@ -654,12 +654,15 @@ export type Database = {
           affiliate_code: string | null
           avatar_url: string | null
           checkout_abandoned: boolean
+          checkout_started_at: string | null
           created_at: string
           demo_search_used: boolean
           free_search_count: number
           has_seen_walkthrough_prompt: boolean
           id: string
+          last_lifecycle_email_sent_at: string | null
           last_search_date: string | null
+          lifecycle_stage: number
           paid_at: string | null
           plan_status: string
           post_abandon_search_used: boolean
@@ -678,12 +681,15 @@ export type Database = {
           affiliate_code?: string | null
           avatar_url?: string | null
           checkout_abandoned?: boolean
+          checkout_started_at?: string | null
           created_at?: string
           demo_search_used?: boolean
           free_search_count?: number
           has_seen_walkthrough_prompt?: boolean
           id?: string
+          last_lifecycle_email_sent_at?: string | null
           last_search_date?: string | null
+          lifecycle_stage?: number
           paid_at?: string | null
           plan_status?: string
           post_abandon_search_used?: boolean
@@ -702,12 +708,15 @@ export type Database = {
           affiliate_code?: string | null
           avatar_url?: string | null
           checkout_abandoned?: boolean
+          checkout_started_at?: string | null
           created_at?: string
           demo_search_used?: boolean
           free_search_count?: number
           has_seen_walkthrough_prompt?: boolean
           id?: string
+          last_lifecycle_email_sent_at?: string | null
           last_search_date?: string | null
+          lifecycle_stage?: number
           paid_at?: string | null
           plan_status?: string
           post_abandon_search_used?: boolean
