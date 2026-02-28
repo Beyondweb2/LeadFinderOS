@@ -367,10 +367,13 @@
                               (status === 'canceled' ? 'cancelled' : 'expired');
          
          // Build update payload — always set trial_used = true when trialing or active
-         const trialUpdate: Record<string, unknown> = { plan_status: newPlanStatus };
-         if (['active', 'trialing'].includes(status)) {
-           trialUpdate.trial_used = true;
-         }
+          const trialUpdate: Record<string, unknown> = { plan_status: newPlanStatus };
+          if (['active', 'trialing'].includes(status)) {
+            trialUpdate.trial_used = true;
+            // Protect from lifecycle emails: mark stage 99 and clear checkout timestamp
+            trialUpdate.lifecycle_stage = 99;
+            trialUpdate.checkout_started_at = null;
+          }
 
          const { error: trialUpdateError } = await supabaseAdmin
            .from("user_trials")
