@@ -80,17 +80,26 @@ export function OutreachTipsDialog() {
           </div>
 
           {/* Headline */}
-          <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4">
-            <span className="text-foreground">You're contacting a real business</span>
+          <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-5">
+            <span className="text-foreground">3 Tips Before</span>
             <br />
-            <span className="text-primary">without a website.</span>
+            <span className="text-primary">You Reach Out</span>
           </DialogTitle>
 
-          {/* Instructions */}
-          <div className="text-center text-[13px] text-muted-foreground leading-relaxed mb-4 space-y-1">
-            <p>If you're on desktop, download WhatsApp Desktop to send directly</p>
-            <p>Or open LeadFinder on your phone and message them there</p>
-            <p>You can also dial the number manually if preferred</p>
+          {/* Tips */}
+          <div className="text-left text-[13px] text-muted-foreground leading-relaxed mb-4 space-y-3 w-full">
+            <div className="flex gap-2.5">
+              <span className="text-primary font-bold text-sm shrink-0">1.</span>
+              <p><span className="text-foreground font-medium">Keep it casual</span> — No links, images, or videos in your first message. Just be friendly and try to get a casual reply first.</p>
+            </div>
+            <div className="flex gap-2.5">
+              <span className="text-primary font-bold text-sm shrink-0">2.</span>
+              <p><span className="text-foreground font-medium">Try WhatsApp first</span> — If they don't have WhatsApp, try SMS. But the best option is to call — have a pitch ready using a pre-made script template.</p>
+            </div>
+            <div className="flex gap-2.5">
+              <span className="text-primary font-bold text-sm shrink-0">3.</span>
+              <p><span className="text-foreground font-medium">Make conversation</span> — Don't sell straight away. Ask a question, reference their business, and keep it natural.</p>
+            </div>
           </div>
 
           {/* Skip line */}

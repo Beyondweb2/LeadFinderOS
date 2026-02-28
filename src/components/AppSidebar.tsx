@@ -133,7 +133,7 @@ export function AppSidebar() {
   useEffect(() => {
     const onCRMAdded = () => {
       setFlashCRM(true);
-      setTimeout(() => setFlashCRM(false), 2000);
+      setTimeout(() => setFlashCRM(false), 800);
     };
     const onTrackAdded = () => {
       setFlashTrack(true);

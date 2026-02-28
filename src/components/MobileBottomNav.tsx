@@ -127,7 +127,7 @@ export function MobileBottomNav() {
   useEffect(() => {
     const crmHandler = () => {
       setCrmGlow(true);
-      setTimeout(() => setCrmGlow(false), 2000);
+      setTimeout(() => setCrmGlow(false), 800);
     };
     const trackHandler = () => {
       setTrackGlow(true);
