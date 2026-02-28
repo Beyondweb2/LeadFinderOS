@@ -118,10 +118,10 @@ export function MobileBottomNav() {
   let crmPulseWalkthrough = false;
   let trackPulseWalkthrough = false;
   try {
-    const { state, isDemoUser } = useDemoChecklist();
-    searchPulse = isDemoUser && !state.searchDone;
-    crmPulseWalkthrough = isDemoUser && state.addedToCrm && !state.contactAttempted;
-    trackPulseWalkthrough = isDemoUser && state.statusUpdated && !state.leadTracked;
+    const { state, isDemoUser, isOpen: walkthroughActive } = useDemoChecklist();
+    searchPulse = isDemoUser && walkthroughActive && !state.searchDone;
+    crmPulseWalkthrough = isDemoUser && walkthroughActive && state.addedToCrm && !state.contactAttempted;
+    trackPulseWalkthrough = isDemoUser && walkthroughActive && state.statusUpdated && !state.leadTracked;
   } catch {}
 
   useEffect(() => {

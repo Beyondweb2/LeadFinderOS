@@ -119,10 +119,10 @@ export function AppSidebar() {
   let crmPulseWalkthrough = false;
   let trackPulseWalkthrough = false;
   try {
-    const { state: demoState, isDemoUser } = useDemoChecklist();
-    searchPulse = isDemoUser && !demoState.searchDone;
-    crmPulseWalkthrough = isDemoUser && demoState.addedToCrm && !demoState.contactAttempted;
-    trackPulseWalkthrough = isDemoUser && demoState.leadTracked && !demoState.followUpSet;
+    const { state: demoState, isDemoUser, isOpen: walkthroughActive } = useDemoChecklist();
+    searchPulse = isDemoUser && walkthroughActive && !demoState.searchDone;
+    crmPulseWalkthrough = isDemoUser && walkthroughActive && demoState.addedToCrm && !demoState.contactAttempted;
+    trackPulseWalkthrough = isDemoUser && walkthroughActive && demoState.leadTracked && !demoState.followUpSet;
   } catch {}
 
   // Flash state for sidebar icons (mirrors mobile bottom nav behavior)
