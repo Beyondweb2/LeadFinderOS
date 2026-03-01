@@ -20,7 +20,6 @@ import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAutoRotateTemplate } from '@/hooks/useAutoRotateTemplate';
 import { AutoRotateToggle } from '@/components/AutoRotateToggle';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 
 interface SingleWhatsAppDialogProps {
   open: boolean;
@@ -42,7 +41,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
 
   const { autoOn, toggleAuto, getNextTemplate } = useAutoRotateTemplate();
   const { toast } = useToast();
-  const { user } = useAuth();
 
   // Walkthrough awareness
   const { isDemoUser, state } = useDemoChecklist();
@@ -130,15 +128,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
         source: 'single-whatsapp-dialog',
       },
     }).then(({ error }) => { if (error) console.error('Usage tracking failed:', error); });
-
-    // Log to outreach_logs for dashboard metrics
-    if (user) {
-      supabase.from('outreach_logs').insert({
-        user_id: user.id,
-        lead_id: lead.id || null,
-        outreach_type: 'whatsapp',
-      }).then(({ error }) => { if (error) console.error('outreach_logs insert failed:', error); });
-    }
   };
 
   const handleStatusConfirm = async (hasWhatsApp: boolean) => {

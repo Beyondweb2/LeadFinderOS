@@ -85,7 +85,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
     return template.replace(/\{\{business_name\}\}/g, lead.business_name);
   }, [template, lead]);
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!lead || !lead.phone) return;
     
     const message = template.replace(/\{\{business_name\}\}/g, lead.business_name);
@@ -103,16 +103,6 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
         source: 'single-sms-dialog',
       },
     }).then(({ error }) => { if (error) console.error('Usage tracking failed:', error); });
-
-    // Log to outreach_logs for dashboard metrics
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (authUser) {
-      supabase.from('outreach_logs').insert({
-        user_id: authUser.id,
-        lead_id: null,
-        outreach_type: 'sms',
-      }).then(({ error }) => { if (error) console.error('outreach_logs insert failed:', error); });
-    }
   };
 
   if (!lead) return null;
