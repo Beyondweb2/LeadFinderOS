@@ -126,7 +126,7 @@ serve(async (req) => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            from: "Paul <paul@mail.lead-finder-app.com>",
+            from: "Paul <paul@lead-finder-app.com>",
             to: [email],
             subject: "Quick question",
             html: `<p>Hey ${capitalizedName},</p>
