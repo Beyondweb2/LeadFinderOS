@@ -8,7 +8,7 @@ import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
  */
 export function useWalkthroughStatus() {
   const { user } = useAuth();
-  const { isDemoUser, isOpen: walkthroughPanelOpen, allDone } = useDemoChecklist();
+  const { isDemoUser, isOpen: walkthroughPanelOpen, allDone, isReplay } = useDemoChecklist();
   const [walkthroughCompleted, setWalkthroughCompleted] = useState(false);
 
   useEffect(() => {
@@ -32,17 +32,22 @@ export function useWalkthroughStatus() {
     const onSkip = () => {
       setWalkthroughCompleted(true);
     };
+    const onStart = () => {
+      setWalkthroughCompleted(false);
+    };
     window.addEventListener('skip-walkthrough', onSkip);
+    window.addEventListener('start-walkthrough', onStart);
     // Poll briefly since localStorage events don't fire in same tab
     const interval = setInterval(check, 1000);
     return () => {
       clearInterval(interval);
       window.removeEventListener('skip-walkthrough', onSkip);
+      window.removeEventListener('start-walkthrough', onStart);
     };
   }, [user?.id]);
 
   // walkthroughOpen = walkthrough UI is visible OR not yet completed
-  const walkthroughOpen = isDemoUser && !walkthroughCompleted;
+  const walkthroughOpen = (isDemoUser || isReplay) && !walkthroughCompleted;
 
   return { walkthroughOpen, walkthroughCompleted };
 }

@@ -35,6 +35,8 @@ interface DemoChecklistContextType {
   isOpen: boolean;
   setIsOpen: (v: boolean) => void;
   isDemoUser: boolean;
+  isReplay: boolean;
+  resetWalkthrough: () => void;
 }
 
 const DemoChecklistContext = createContext<DemoChecklistContextType | null>(null);
@@ -81,6 +83,7 @@ export function DemoChecklistProvider({
   const location = useLocation();
   const [state, setState] = useState<DemoChecklistState>(() => loadState(user?.id));
   const [isOpen, setIsOpen] = useState(false);
+  const [isReplay, setIsReplay] = useState(false);
   const initializedRef = useRef(false);
 
   useEffect(() => {
@@ -135,9 +138,25 @@ export function DemoChecklistProvider({
     });
   }, [user?.id]);
 
+  const resetWalkthrough = useCallback(() => {
+    const fresh = { ...defaultState };
+    setState(fresh);
+    saveState(fresh, user?.id);
+    setIsReplay(true);
+    setIsOpen(true);
+    allDoneRef.current = false;
+    // Remove walkthrough-completed flags so the overlay renders again
+    if (user?.id) {
+      localStorage.removeItem(`demo_walkthrough_dismissed_${user.id}`);
+      localStorage.removeItem(`walkthrough_completed_${user.id}`);
+    }
+    // Notify walkthrough status hook
+    window.dispatchEvent(new CustomEvent('start-walkthrough'));
+  }, [user?.id]);
+
   // Event listeners
   useEffect(() => {
-    if (!isDemoUser) return;
+    if (!isDemoUser && !isReplay) return;
 
     const onSearch = () => completeStep('searchDone');
     const onCrmAdd = () => {
@@ -295,23 +314,23 @@ export function DemoChecklistProvider({
       document.removeEventListener('click', onTelClick, true);
       window.removeEventListener('quick-locations-toggle', onQuickLocToggle);
     };
-  }, [isDemoUser, completeStep, isOpen]);
+  }, [isDemoUser, isReplay, completeStep, isOpen]);
 
   // Complete "CRM page opened" when user visits /outreach
   useEffect(() => {
-    if (!isDemoUser) return;
+    if (!isDemoUser && !isReplay) return;
     if (state.addedToCrm && location.pathname === '/outreach') {
       completeStep('crmPageOpened');
     }
-  }, [isDemoUser, location.pathname, state.addedToCrm, completeStep]);
+  }, [isDemoUser, isReplay, location.pathname, state.addedToCrm, completeStep]);
 
   // Complete "Open Track Leads page" when user visits /potential-work
   useEffect(() => {
-    if (!isDemoUser) return;
+    if (!isDemoUser && !isReplay) return;
     if (location.pathname === '/potential-work') {
       completeStep('leadTracked');
     }
-  }, [isDemoUser, location.pathname, completeStep]);
+  }, [isDemoUser, isReplay, location.pathname, completeStep]);
 
   // 8 steps: searchDone, addedToCrm, crmPageOpened, contactAttempted, trackPressed, leadTracked, noteAdded, cardCollapsed
   const completedCount = [
@@ -332,9 +351,15 @@ export function DemoChecklistProvider({
   useEffect(() => {
     if (allDone && !allDoneRef.current) {
       allDoneRef.current = true;
-      window.dispatchEvent(new CustomEvent('walkthrough-all-done'));
+      if (isReplay) {
+        // Replay mode: just close walkthrough silently, no popups
+        setIsOpen(false);
+        setIsReplay(false);
+      } else {
+        window.dispatchEvent(new CustomEvent('walkthrough-all-done'));
+      }
     }
-  }, [allDone]);
+  }, [allDone, isReplay]);
 
   return (
     <DemoChecklistContext.Provider value={{
@@ -346,6 +371,8 @@ export function DemoChecklistProvider({
       isOpen,
       setIsOpen,
       isDemoUser,
+      isReplay,
+      resetWalkthrough,
     }}>
       {children}
     </DemoChecklistContext.Provider>
@@ -361,6 +388,8 @@ const fallback: DemoChecklistContextType = {
   isOpen: false,
   setIsOpen: () => {},
   isDemoUser: false,
+  isReplay: false,
+  resetWalkthrough: () => {},
 };
 
 export function useDemoChecklist() {

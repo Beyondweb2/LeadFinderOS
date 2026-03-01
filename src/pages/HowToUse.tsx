@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -15,6 +16,7 @@ import {
   ArrowDown,
   ArrowLeft,
   ZoomIn,
+  Play,
 } from 'lucide-react';
 import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
@@ -58,9 +60,16 @@ const STEPS = [
 
 const HowToUse = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
+  const { resetWalkthrough } = useDemoChecklist();
   // If accessed via /guide (public route), show sign-up CTA
   const isPublicGuide = location.pathname === '/guide';
+
+  const handleRestartWalkthrough = () => {
+    resetWalkthrough();
+    navigate('/find-leads');
+  };
   
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 max-w-5xl">
@@ -82,10 +91,16 @@ const HowToUse = () => {
         <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
           How to Use Lead<span className="text-primary">Finder</span> Pro
         </h1>
-        <p className="text-muted-foreground text-sm md:text-base max-w-2xl mx-auto sm:mx-0">
+        <p className="text-muted-foreground text-sm md:text-base max-w-2xl mx-auto sm:mx-0 mb-4">
           Follow this step-by-step guide to find businesses without websites, 
           reach out via cold calls or texts, and convert leads into paying clients.
         </p>
+        {!isPublicGuide && (
+          <Button onClick={handleRestartWalkthrough} variant="outline" size="sm" className="gap-1.5">
+            <Play className="h-3.5 w-3.5" />
+            Run Interactive Walkthrough
+          </Button>
+        )}
       </div>
 
       {/* Steps */}

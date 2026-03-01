@@ -85,7 +85,8 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
 }
 
 export function WalkthroughOverlay() {
-  const { state, allDone, isDemoUser } = useDemoChecklist();
+  const { state, allDone, isDemoUser, isReplay } = useDemoChecklist();
+  const isActive = isDemoUser || isReplay;
   const { walkthroughOpen } = useWalkthroughStatus();
   const location = useLocation();
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
@@ -98,14 +99,14 @@ export function WalkthroughOverlay() {
 
   // Re-evaluate sub-steps periodically (for input value changes on search page)
   useEffect(() => {
-    if (!isDemoUser || allDone || !walkthroughOpen) return;
+    if (!isActive || allDone || !walkthroughOpen) return;
     const interval = setInterval(() => setTick(t => t + 1), 500);
     return () => clearInterval(interval);
-  }, [isDemoUser, allDone, walkthroughOpen]);
+  }, [isActive, allDone, walkthroughOpen]);
 
   // Find the current active step
   useEffect(() => {
-    if (!isDemoUser || allDone || !walkthroughOpen) {
+    if (!isActive || allDone || !walkthroughOpen) {
       setActiveStep(null);
       return;
     }
@@ -125,7 +126,7 @@ export function WalkthroughOverlay() {
         }
       });
     }
-  }, [state, isDemoUser, allDone, walkthroughOpen, location.pathname, tick]);
+  }, [state, isActive, allDone, walkthroughOpen, location.pathname, tick]);
 
   // Listen for trial modal to pause/resume overlay
   useEffect(() => {
