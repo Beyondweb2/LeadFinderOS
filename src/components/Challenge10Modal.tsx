@@ -20,8 +20,8 @@ export function Challenge10Modal({ open, onStart, onSkip }: Challenge10ModalProp
         <div className="px-5 pt-5 pb-4 flex flex-col">
           {/* Header row with icon + title */}
           <div className="flex items-center gap-2.5 mb-2">
-            <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
-            <h3 className="text-[15px] font-bold text-emerald-500 tracking-tight">
+            <CheckCircle2 className="h-5 w-5 text-primary shrink-0" />
+            <h3 className="text-[15px] font-bold text-primary tracking-tight">
               Daily Challenge
             </h3>
           </div>
@@ -35,7 +35,7 @@ export function Challenge10Modal({ open, onStart, onSkip }: Challenge10ModalProp
           <div className="flex items-center gap-2 pl-[30px]">
             <button
               onClick={onStart}
-              className="h-8 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-[13px] font-semibold text-white flex items-center gap-1.5 transition-colors"
+              className="h-8 px-4 rounded-lg bg-primary hover:bg-primary/90 text-[13px] font-semibold text-primary-foreground flex items-center gap-1.5 transition-colors"
             >
               Start
               <ArrowRight className="h-3.5 w-3.5" />
