@@ -58,6 +58,18 @@ const Outreach = () => {
     return () => window.removeEventListener('crm-contact-action', handler);
   }, [updateLead]);
 
+  // Listen for WhatsApp status updates from the prompt dialog
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { leadId, status, checkedAt } = (e as CustomEvent).detail || {};
+      if (!leadId) return;
+      // Update local lead state immediately (DB already updated by the dialog)
+      updateLead(leadId, { whatsapp_status: status, whatsapp_checked_at: checkedAt });
+    };
+    window.addEventListener('whatsapp-status-updated', handler);
+    return () => window.removeEventListener('whatsapp-status-updated', handler);
+  }, [updateLead]);
+
   // Challenge 10: only count when user actually opens SMS/WhatsApp app
   useEffect(() => {
     const handler = (e: Event) => {

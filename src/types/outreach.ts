@@ -103,6 +103,8 @@ export interface OutreachLead {
   facebook_method?: string | null;
   facebook_last_checked_at?: string | null;
   contact_method?: string | null;
+  whatsapp_status?: string | null;
+  whatsapp_checked_at?: string | null;
 }
 
 export interface OutreachActivity {
