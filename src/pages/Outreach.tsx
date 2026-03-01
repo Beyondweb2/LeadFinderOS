@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { OutreachTable } from '@/components/OutreachTable';
-import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
+
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
 import { PostContactModal } from '@/components/PostContactModal';
 import { Challenge10Widget } from '@/components/Challenge10Widget';
@@ -33,7 +33,7 @@ const Outreach = () => {
     retryPhoneFetch,
   } = useOutreach();
 
-  const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
+  
   const { toast } = useToast();
   const challenge = useChallenge10();
   // Combine active and archived leads into one unified list
@@ -136,7 +136,7 @@ const Outreach = () => {
 
       <OutreachTable
         leads={allLeads}
-        onLeadClick={isReadOnly ? () => {} : setSelectedLead}
+        onLeadClick={() => {}}
         onStatusChange={updateStatus}
         onContactMethodChange={handleContactMethodChange}
         onPipelineStatusChange={handlePipelineStatusChange}
@@ -157,21 +157,8 @@ const Outreach = () => {
         onRetryPhoneFetch={retryPhoneFetch}
       />
 
-      {/* Lead Detail Dialog */}
-      {!isReadOnly && (
-        <OutreachLeadDialog
-          lead={selectedLead}
-          open={!!selectedLead}
-          onOpenChange={(open) => !open && setSelectedLead(null)}
-          onUpdateStatus={updateStatus}
-          onUpdateNextAction={updateNextAction}
-          onUpdateNotes={updateNotes}
-          onUpdateLead={updateLead}
-          onDelete={deleteLead}
-          fetchActivities={fetchActivities}
-          readOnly={false}
-        />
-      )}
+
+
 
       {/* First-time outreach tips */}
       <OutreachTipsDialog />
