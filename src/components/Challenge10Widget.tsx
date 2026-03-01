@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Target, ChevronDown, ChevronUp, Check, Search } from 'lucide-react';
+import { Target, ChevronDown, ChevronUp, Check, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Link } from 'react-router-dom';
@@ -15,19 +15,30 @@ interface Challenge10WidgetProps {
 
 export function Challenge10Widget({ isActive, isCompleted, isSkipped, count, featureEnabled, onStart }: Challenge10WidgetProps) {
   const [collapsed, setCollapsed] = useState(false);
+  const [completedDismissed, setCompletedDismissed] = useState(false);
 
   if (!featureEnabled) return null;
 
   // Completed state
   if (isCompleted) {
+    if (completedDismissed) return null;
     return (
       <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 sm:p-4 mb-4">
-        <div className="flex items-center gap-2">
-          <Check className="h-5 w-5 text-primary" />
-          <span className="text-sm font-semibold text-foreground">Challenge Complete ✅</span>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Check className="h-5 w-5 text-primary" />
+            <span className="text-sm font-semibold text-foreground">Challenge Complete ✅</span>
+          </div>
+          <button
+            onClick={() => setCompletedDismissed(true)}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Dismiss"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
         <p className="text-xs text-muted-foreground mt-1.5">
-          Nice — you've done the hard part: consistency. Keep contacting businesses to build your pipeline.
+          Nice - you've done the hard part: consistency. Keep contacting businesses to build your pipeline.
         </p>
         <div className="flex gap-2 mt-3">
           <Button asChild size="sm" variant="outline" className="text-xs h-8">

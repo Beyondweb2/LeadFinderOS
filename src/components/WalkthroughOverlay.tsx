@@ -53,9 +53,9 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 4 – Send a message (WhatsApp/SMS/Call)
   if (!state.contactAttempted) {
     if (pathname === '/outreach') {
-      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Contact via SMS or WhatsApp. (This can be skipped next screen)', noDim: true };
+      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Contact via call, SMS or WhatsApp. (This can be skipped next screen)', noDim: true };
     }
-    return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact via SMS or WhatsApp.' };
+    return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact via call, SMS or WhatsApp.' };
   }
 
   // Step 5 – Press Track (star) when a business responds positively
