@@ -38,7 +38,7 @@ const actionIcons: Record<NextActionType, React.ReactNode> = {
   follow_up: <Clock className="h-3 w-3" />,
   send_draft: <FileText className="h-3 w-3" />,
   remove_if_no_reply: <Trash2 className="h-3 w-3" />,
-  none: <Circle className="h-3 w-3" />,
+  none: <Plus className="h-3 w-3" />,
 };
 
 const actionColors: Record<NextActionType, string> = {
@@ -137,7 +137,7 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
   const currentAction = action || 'none';
   const displayLabel = currentCustomLabel || NEXT_ACTION_OPTIONS.find((o) => o.value === currentAction)?.label || 'Set Action';
   const colorClass = currentCustomLabel ? 'text-teal-400' : actionColors[currentAction as NextActionType] || 'text-muted-foreground';
-  const iconEl = currentCustomLabel ? <Tag className="h-3 w-3" /> : actionIcons[currentAction as NextActionType] || <Circle className="h-3 w-3" />;
+  const iconEl = currentCustomLabel ? <Tag className="h-3 w-3" /> : actionIcons[currentAction as NextActionType] || <Plus className="h-3 w-3" />;
 
   const formattedDate = date
     ? new Date(date).toLocaleDateString('en-GB', {
