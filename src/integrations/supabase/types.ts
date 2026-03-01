@@ -399,41 +399,6 @@ export type Database = {
         }
         Relationships: []
       }
-      outreach_logs: {
-        Row: {
-          contacted_at: string
-          created_at: string
-          id: string
-          lead_id: string | null
-          outreach_type: string
-          user_id: string
-        }
-        Insert: {
-          contacted_at?: string
-          created_at?: string
-          id?: string
-          lead_id?: string | null
-          outreach_type: string
-          user_id: string
-        }
-        Update: {
-          contacted_at?: string
-          created_at?: string
-          id?: string
-          lead_id?: string | null
-          outreach_type?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "outreach_logs_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "outreach_leads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       phone_cache: {
         Row: {
           address: string | null
