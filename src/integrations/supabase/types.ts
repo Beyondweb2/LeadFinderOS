@@ -139,6 +139,36 @@ export type Database = {
         }
         Relationships: []
       }
+      email_job_runs: {
+        Row: {
+          checked_count: number
+          eligible_count: number
+          errors: string | null
+          id: string
+          ran_at: string
+          sample_user_ids: Json | null
+          sent_count: number
+        }
+        Insert: {
+          checked_count?: number
+          eligible_count?: number
+          errors?: string | null
+          id?: string
+          ran_at?: string
+          sample_user_ids?: Json | null
+          sent_count?: number
+        }
+        Update: {
+          checked_count?: number
+          eligible_count?: number
+          errors?: string | null
+          id?: string
+          ran_at?: string
+          sample_user_ids?: Json | null
+          sent_count?: number
+        }
+        Relationships: []
+      }
       funnel_events: {
         Row: {
           created_at: string

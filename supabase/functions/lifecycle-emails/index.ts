@@ -16,6 +16,13 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Job-run tracking variables
+  let checkedCount = 0;
+  let eligibleCount = 0;
+  let sentCount = 0;
+  const errors: string[] = [];
+  const sampleUserIds: string[] = [];
+
   try {
     logStep("Function started");
 
@@ -50,16 +57,33 @@ serve(async (req) => {
       throw new Error(queryError.message);
     }
 
-    logStep("Eligible users found", { count: eligibleUsers?.length ?? 0 });
+    checkedCount = eligibleUsers?.length ?? 0;
+    eligibleCount = checkedCount;
+
+    // Collect sample user IDs (up to 5)
+    if (eligibleUsers) {
+      for (let i = 0; i < Math.min(eligibleUsers.length, 5); i++) {
+        sampleUserIds.push(eligibleUsers[i].user_id);
+      }
+    }
+
+    logStep("Eligible users found", { count: eligibleCount, samples: sampleUserIds });
 
     if (!eligibleUsers || eligibleUsers.length === 0) {
+      // Log job run even when no users found
+      await supabaseAdmin.from('email_job_runs').insert({
+        checked_count: checkedCount,
+        eligible_count: eligibleCount,
+        sent_count: 0,
+        errors: errors.length > 0 ? errors.join('\n') : null,
+        sample_user_ids: sampleUserIds,
+      });
+
       return new Response(JSON.stringify({ sent: 0 }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
     }
-
-    let sentCount = 0;
 
     for (const trial of eligibleUsers) {
       try {
@@ -86,6 +110,7 @@ serve(async (req) => {
         const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(trial.user_id);
         if (userError || !userData?.user?.email) {
           logStep("Cannot get user email", { userId: trial.user_id });
+          errors.push(`No email for ${trial.user_id}`);
           continue;
         }
 
@@ -115,6 +140,7 @@ serve(async (req) => {
         if (!emailRes.ok) {
           const errBody = await emailRes.text();
           logStep("Resend API error", { userId: trial.user_id, status: emailRes.status, body: errBody });
+          errors.push(`Resend error for ${trial.user_id}: ${emailRes.status} ${errBody}`);
           continue;
         }
 
@@ -130,11 +156,22 @@ serve(async (req) => {
         sentCount++;
         logStep("Email sent", { userId: trial.user_id, email });
       } catch (userErr) {
-        logStep("Error processing user", { userId: trial.user_id, error: userErr instanceof Error ? userErr.message : String(userErr) });
+        const errMsg = userErr instanceof Error ? userErr.message : String(userErr);
+        logStep("Error processing user", { userId: trial.user_id, error: errMsg });
+        errors.push(`Error for ${trial.user_id}: ${errMsg}`);
       }
     }
 
     logStep("Completed", { sent: sentCount });
+
+    // Log job run
+    await supabaseAdmin.from('email_job_runs').insert({
+      checked_count: checkedCount,
+      eligible_count: eligibleCount,
+      sent_count: sentCount,
+      errors: errors.length > 0 ? errors.join('\n') : null,
+      sample_user_ids: sampleUserIds,
+    });
 
     return new Response(JSON.stringify({ sent: sentCount }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -143,6 +180,24 @@ serve(async (req) => {
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: msg });
+    errors.push(msg);
+
+    // Attempt to log even on top-level failure
+    try {
+      const supabaseAdmin = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+        { auth: { persistSession: false } }
+      );
+      await supabaseAdmin.from('email_job_runs').insert({
+        checked_count: checkedCount,
+        eligible_count: eligibleCount,
+        sent_count: sentCount,
+        errors: errors.join('\n'),
+        sample_user_ids: sampleUserIds,
+      });
+    } catch { /* best effort */ }
+
     return new Response(JSON.stringify({ error: msg }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
