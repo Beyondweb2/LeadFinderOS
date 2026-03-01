@@ -680,49 +680,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </button>
             )}
 
-            {/* Contact actions in expanded view */}
-            <div className="flex items-center gap-1.5 pt-2 border-t border-border/40" data-contact-zone>
-              {lead.phone && (
-                <>
-                  <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" onClick={() => handleContactMethodUpdate('whatsapp')} className="h-8 w-8 flex items-center justify-center rounded-lg text-green-500 hover:bg-green-500/15 transition-colors" title="WhatsApp">
-                    <MessageSquare className="h-4 w-4" />
-                  </a>
-                  <a href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`} onClick={() => handleContactMethodUpdate('sms')} className="h-8 w-8 flex items-center justify-center rounded-lg text-blue-400 hover:bg-blue-500/15 transition-colors" title="SMS">
-                    <MessageCircle className="h-4 w-4" />
-                  </a>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="h-8 w-8 flex items-center justify-center rounded-lg text-amber-500 hover:bg-amber-500/15 transition-colors" title="Call options">
-                        <Phone className="h-4 w-4" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="center" className="min-w-[160px]">
-                      <DropdownMenuItem asChild>
-                        <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
-                          <PhoneCall className="h-4 w-4" />
-                          Normal Call
-                        </a>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <a
-                          href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 cursor-pointer"
-                          onClick={() => handleContactMethodUpdate('contacted')}
-                        >
-                          <Phone className="h-4 w-4 text-green-500" />
-                          WhatsApp Call
-                        </a>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              )}
-              <a href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`} target="_blank" rel="noopener noreferrer" className="h-8 w-8 flex items-center justify-center rounded-lg text-blue-600 hover:bg-blue-500/15 transition-colors" title="Facebook">
-                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-              </a>
-            </div>
           </div>
 
           {/* Collapse button */}
