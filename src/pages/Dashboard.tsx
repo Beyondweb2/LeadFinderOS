@@ -30,6 +30,7 @@ import {
   FileText,
   Users,
   Trash2,
+  Mail,
 } from 'lucide-react';
 
 const Dashboard = () => {
@@ -38,7 +39,9 @@ const Dashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isFullResetting, setIsFullResetting] = useState(false);
+  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
   
+  const isAdmin = user?.email === 'pauljsales455@outlook.com';
   // Show trial progress only for Stripe trialing users (not paid subscribers)
   const showTrialProgress = !isSubscriptionLoading && isStripeTrialing && !isPaidSubscriber;
 
@@ -189,7 +192,34 @@ const Dashboard = () => {
             <ArrowRight className="h-4 w-4" />
           </Link>
         </Button>
-        
+
+        {isAdmin && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            disabled={isSendingTestEmail}
+            onClick={async () => {
+              setIsSendingTestEmail(true);
+              try {
+                const { data, error } = await supabase.functions.invoke('test-abandoned-email', {
+                  body: { email: 'pauljsales455@outlook.com' },
+                });
+                console.log('Test abandoned email response:', data);
+                if (error) throw error;
+                toast({ title: 'Test email sent', description: 'Check your inbox.' });
+              } catch (err: any) {
+                console.error('Test email error:', err);
+                toast({ title: 'Failed to send test email', description: err.message || 'Unknown error', variant: 'destructive' });
+              } finally {
+                setIsSendingTestEmail(false);
+              }
+            }}
+          >
+            {isSendingTestEmail ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
+            Test Abandoned Email
+          </Button>
+        )}
 
 
         <AlertDialog>
