@@ -301,7 +301,15 @@ export default function AdminDashboard() {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!error && data && !data.error) {
-        setWalkthroughStats(data as WalkthroughStats);
+        setWalkthroughStats({
+          totalStarted: data.totalStarted ?? 0,
+          totalCompleted: data.totalCompleted ?? 0,
+          completionRate: data.completionRate ?? 0,
+          stepCounts: Array.isArray(data.stepCounts) ? data.stepCounts : [],
+          topDropoffStep: data.topDropoffStep ?? 1,
+          maxDrop: data.maxDrop ?? 0,
+          userTable: Array.isArray(data.userTable) ? data.userTable : [],
+        });
       }
     } catch (e) {
       console.error('[AdminDashboard] walkthrough stats error:', e);
