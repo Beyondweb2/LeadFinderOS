@@ -3,12 +3,9 @@ import { Link } from 'react-router-dom';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
-import { OutreachActivityCard } from '@/components/dashboard/OutreachActivityCard';
-import { ResponseEngagementCard } from '@/components/dashboard/ResponseEngagementCard';
-import { PipelineSnapshotCard } from '@/components/dashboard/PipelineSnapshotCard';
-import { DailyDisciplineCard } from '@/components/dashboard/DailyDisciplineCard';
-import { ConversionMetricsCard } from '@/components/dashboard/ConversionMetricsCard';
 import { RevenueCard } from '@/components/dashboard/RevenueCard';
+import { ConversionCard } from '@/components/dashboard/ConversionCard';
+import { OutreachCard } from '@/components/dashboard/OutreachCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
 import { TrialProgressCard } from '@/components/dashboard/TrialProgressCard';
 import { Card } from '@/components/ui/card';
@@ -45,8 +42,10 @@ const Dashboard = () => {
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
   
   const isAdmin = user?.email === 'pauljsales455@outlook.com';
+  // Show trial progress only for Stripe trialing users (not paid subscribers)
   const showTrialProgress = !isSubscriptionLoading && isStripeTrialing && !isPaidSubscriber;
 
+  // Wait for all data to load before rendering
   if (isLoading || isSubscriptionLoading) {
     return (
       <div className="flex items-center justify-center h-full py-16">
@@ -58,18 +57,30 @@ const Dashboard = () => {
   const handleFullReset = async () => {
     if (!user) return;
     setIsFullResetting(true);
+    
     try {
-      await Promise.all([
+      const results = await Promise.all([
+        // Activity data
         supabase.from('copied_phones').delete().eq('user_id', user.id),
         supabase.from('outreach_activities').delete().eq('user_id', user.id),
         supabase.from('lead_contacts').delete().eq('user_id', user.id),
         supabase.from('search_history').delete().eq('user_id', user.id),
         supabase.from('checked_businesses').delete().eq('user_id', user.id),
+        // CRM data
         supabase.from('outreach_leads').delete().eq('user_id', user.id),
         supabase.from('outreach_history').delete().eq('user_id', user.id),
+        // Templates (non-default)
         supabase.from('templates').delete().eq('user_id', user.id),
+        // Metrics
         supabase.rpc('reset_my_metrics'),
       ]);
+      
+      const errors = results.filter(r => r.error);
+      if (errors.length > 0) {
+        console.error('Full reset errors:', errors.map(e => e.error));
+      }
+      
+      // Full reset complete — no toast
       refetch();
     } catch (err) {
       console.error('Full reset failed:', err);
@@ -87,12 +98,12 @@ const Dashboard = () => {
         <p className="text-sm sm:text-base text-muted-foreground">
           {showTrialProgress 
             ? 'Full access is active — everything unlocked'
-            : 'Track your outreach performance'
+            : 'Track your performance and revenue'
           }
         </p>
       </div>
 
-      {/* Trial Progress Card */}
+      {/* Trial Progress Card - Only for Stripe trialing users */}
       {showTrialProgress && (
         <section>
           <TrialProgressCard
@@ -105,63 +116,10 @@ const Dashboard = () => {
         </section>
       )}
 
-      {/* Primary: Outreach Activity (full width) */}
+      {/* Primary Metrics - Revenue & Conversion */}
       <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Activity</h2>
-        <OutreachActivityCard
-          totalContacted={metrics.totalContacted}
-          contactedToday={metrics.contactedToday}
-          callsMade={metrics.callsMade}
-          whatsappSent={metrics.whatsappSent}
-          smsSent={metrics.smsSent}
-          emailsSent={metrics.emailsSent}
-          facebookSent={metrics.facebookSent}
-          manualContacted={metrics.manualContacted}
-        />
-      </section>
-
-      {/* Row 2: Response + Pipeline */}
-      <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Engagement & Pipeline</h2>
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-2">
-          <ResponseEngagementCard
-            repliesReceived={metrics.repliesReceived}
-            positiveReplies={metrics.positiveReplies}
-            callsBooked={metrics.callsBooked}
-            followUpsScheduled={metrics.followUpsScheduled}
-            responseRate={metrics.responseRate}
-            bookingRate={metrics.bookingRate}
-            totalContacted={metrics.totalContacted}
-          />
-          <PipelineSnapshotCard pipeline={metrics.pipeline} />
-        </div>
-      </section>
-
-      {/* Row 3: Daily Discipline + Conversion */}
-      <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Discipline & Conversion</h2>
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-2">
-          <DailyDisciplineCard
-            contactsToday={metrics.contactsToday}
-            avg7Day={metrics.avg7Day}
-            currentStreak={metrics.currentStreak}
-            bestDay={metrics.bestDay}
-          />
-          <ConversionMetricsCard
-            contactToReply={metrics.contactToReply}
-            replyToCall={metrics.replyToCall}
-            callToClosed={metrics.callToClosed}
-            overallContactToClosed={metrics.overallContactToClosed}
-            totalContacted={metrics.totalContacted}
-          />
-        </div>
-      </section>
-
-      {/* Row 4: Next Actions + Revenue */}
-      <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Actions & Revenue</h2>
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-2">
-          <NextActionsCard trackedLeads={metrics.trackedLeads} />
+        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Performance</h2>
+        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
           <RevenueCard
             totalRevenue={metrics.totalRevenue}
             draftRevenue={metrics.draftRevenue}
@@ -169,6 +127,20 @@ const Dashboard = () => {
             fullyPaidClients={metrics.fullyPaidClients}
             paidForDraftCount={metrics.paidForDraftCount}
           />
+          <ConversionCard
+            interestRate={metrics.interestRate}
+            responseToInterestRate={metrics.responseToInterestRate}
+            interestedCount={metrics.interestedCount}
+            contactedCount={metrics.contactedCount}
+            totalBusinessesAdded={metrics.totalBusinessesAdded}
+          />
+          <OutreachCard
+            totalBusinessesAdded={metrics.totalBusinessesAdded}
+            addedToday={metrics.addedToday}
+            addedYesterday={metrics.addedYesterday}
+            avgPerDay={metrics.avgPerDayAllTime}
+          />
+          <NextActionsCard trackedLeads={metrics.trackedLeads} />
         </div>
       </section>
 
@@ -212,7 +184,7 @@ const Dashboard = () => {
         </div>
       </section>
        
-      {/* Reset & Actions */}
+      {/* Reset Counters & CTA */}
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
         <Button variant="outline" asChild>
           <Link to="/outreach" className="flex items-center gap-2">
@@ -233,9 +205,11 @@ const Dashboard = () => {
                 const { data, error } = await supabase.functions.invoke('test-abandoned-email', {
                   body: { email: 'pauljsales455@outlook.com' },
                 });
+                console.log('Test abandoned email response:', data);
                 if (error) throw error;
                 toast({ title: 'Test email sent', description: 'Check your inbox.' });
               } catch (err: any) {
+                console.error('Test email error:', err);
                 toast({ title: 'Failed to send test email', description: err.message || 'Unknown error', variant: 'destructive' });
               } finally {
                 setIsSendingTestEmail(false);
@@ -246,6 +220,7 @@ const Dashboard = () => {
             Test Abandoned Email
           </Button>
         )}
+
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
