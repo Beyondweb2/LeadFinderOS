@@ -50,6 +50,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
+import { openFacebookSearch } from '@/lib/facebookSearch';
 import { useDebouncedCallback } from 'use-debounce';
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
@@ -1119,18 +1120,18 @@ export function OutreachTable({
                               <ExternalLink className="h-4 w-4" />
                             </a>
                           )}
-                          <a
-                            href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name + (lead.address ? ' ' + (lead.address.split(',').map(p => p.trim()).filter(Boolean)[1] || lead.address.split(',')[0] || '') : ''))}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                          <button
                             className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-600 hover:text-blue-500 transition-colors"
                             title="Search Facebook"
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
                               window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'facebook_msg' } }));
+                              openFacebookSearch(lead.business_name);
                             }}
                           >
                             <Facebook className="h-4 w-4" />
-                          </a>
+                          </button>
                           {lead.phone ? (
                             <>
                               <DropdownMenu>
