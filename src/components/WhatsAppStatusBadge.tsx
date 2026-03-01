@@ -1,4 +1,4 @@
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, X } from 'lucide-react';
 
 interface WhatsAppStatusBadgeProps {
   status: string | null | undefined;
@@ -10,7 +10,7 @@ export function WhatsAppStatusBadge({ status, compact }: WhatsAppStatusBadgeProp
 
   if (status === 'yes') {
     return (
-      <span className={`inline-flex items-center gap-0.5 text-green-500 ${compact ? 'text-[9px]' : 'text-[10px]'}`}>
+      <span className={`inline-flex items-center gap-0.5 text-green-500 ${compact ? 'text-[9px]' : 'text-[10px]'}`} title="Has WhatsApp">
         <MessageSquare className={compact ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
         <span className="font-medium">WA</span>
       </span>
@@ -18,8 +18,12 @@ export function WhatsAppStatusBadge({ status, compact }: WhatsAppStatusBadgeProp
   }
 
   return (
-    <span className={`inline-flex items-center gap-0.5 text-muted-foreground ${compact ? 'text-[9px]' : 'text-[10px]'}`}>
-      <span className="font-medium">No WA</span>
+    <span
+      className={`inline-flex items-center gap-0.5 text-destructive/70 ${compact ? 'text-[9px]' : 'text-[10px]'}`}
+      title="Not on WhatsApp"
+    >
+      <MessageSquare className={compact ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
+      <X className={compact ? 'h-2 w-2 -ml-1' : 'h-2.5 w-2.5 -ml-1'} strokeWidth={3} />
     </span>
   );
 }
