@@ -54,7 +54,7 @@ export function useOutreach() {
       description: 'No phone number found — not added.',
       variant: 'destructive',
     });
-  }, [toast]);
+  }, []);
 
   const fetchOnePhone = useCallback(async (item: { outreachLeadId: string; placeId: string; businessName: string }) => {
     setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'pending' }));
@@ -159,7 +159,7 @@ export function useOutreach() {
 
     setLeads((activeData || []) as OutreachLead[]);
     setArchivedLeads((archivedData || []) as OutreachLead[]);
-  }, [user, toast]);
+  }, [user]);
 
   const fetchOutreachHistory = useCallback(async () => {
     if (!user) return;
@@ -271,7 +271,7 @@ export function useOutreach() {
       console.error('Retry phone fetch failed:', e);
       setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'failed' }));
     }
-  }, [leads, archivedLeads, toast, removeLeadNoPhone]);
+  }, [leads, archivedLeads, removeLeadNoPhone]);
 
   const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website') => {
     if (!user) {
@@ -394,7 +394,7 @@ export function useOutreach() {
     }
 
     return newLead;
-  }, [user, toast]);
+  }, [user]);
 
   const updateLead = useCallback(async (
     leadId: string,
@@ -426,7 +426,7 @@ export function useOutreach() {
     }
 
     return updatedLead;
-  }, [toast]);
+  }, []);
 
   const deleteLead = useCallback(async (leadId: string, silent = false) => {
     const lead = leads.find((l) => l.id === leadId);
@@ -453,7 +453,7 @@ export function useOutreach() {
     // Lead removed — no toast
 
     return true;
-  }, [leads, archivedLeads, toast]);
+  }, [leads, archivedLeads]);
 
   const updateStatus = useCallback(async (leadId: string, status: LeadStatus) => {
     const lead = leads.find((l) => l.id === leadId);
@@ -575,7 +575,7 @@ export function useOutreach() {
     // All archived — no toast
 
     return true;
- }, [user, leads, toast]);
+ }, [user, leads]);
 
   const logActivity = useCallback(async (
     leadId: string,
@@ -647,7 +647,7 @@ export function useOutreach() {
     // Lead archived — no toast
 
     return true;
-  }, [toast]);
+  }, []);
 
   // Archive a single lead (public API)
   const archiveLead = useCallback(async (leadId: string) => {
@@ -682,7 +682,7 @@ export function useOutreach() {
     // Lead restored — no toast
 
     return true;
-  }, [archivedLeads, toast]);
+  }, [archivedLeads]);
 
   // Archive multiple leads
   const archiveMultiple = useCallback(async (leadIds: string[]) => {
@@ -710,7 +710,7 @@ export function useOutreach() {
     // Leads archived — no toast
 
     return true;
-  }, [leads, toast]);
+  }, [leads]);
 
   // Delete multiple leads
   const deleteMultiple = useCallback(async (leadIds: string[]) => {
@@ -736,7 +736,7 @@ export function useOutreach() {
     // Leads removed — no toast
 
     return true;
-  }, [toast]);
+  }, []);
 
   // Unarchive multiple leads
   const unarchiveMultiple = useCallback(async (leadIds: string[]) => {
@@ -764,7 +764,7 @@ export function useOutreach() {
     // Leads restored — no toast
 
     return true;
-  }, [archivedLeads, toast]);
+  }, [archivedLeads]);
 
   // Mark a lead as interested (adds to Interested page while keeping in CRM)
   const markAsInterested = useCallback(async (leadId: string) => {
@@ -811,7 +811,7 @@ export function useOutreach() {
     }
 
     return true;
-  }, [leads, archivedLeads, user, toast]);
+  }, [leads, archivedLeads, user]);
 
   // Mark multiple leads as interested
   const markMultipleAsInterested = useCallback(async (leadIds: string[]) => {
@@ -846,7 +846,7 @@ export function useOutreach() {
     // Added to Track Leads — no toast
 
     return true;
-  }, [toast]);
+  }, []);
 
   // Search archived leads by phone number
   const searchArchivedByPhone = useCallback(async (phoneQuery: string): Promise<OutreachLead[]> => {
@@ -908,7 +908,7 @@ export function useOutreach() {
        });
        return { updated: 0, total: 0 };
      }
-   }, [user, leads, archivedLeads, fetchLeads, toast]);
+   }, [user, leads, archivedLeads, fetchLeads]);
 
   // Bulk import leads from CSV
   const bulkImportLeads = useCallback(async (
@@ -985,7 +985,7 @@ export function useOutreach() {
     // Import complete — no toast
 
     return { imported, skipped };
-  }, [user, fetchLeads, toast]);
+  }, [user, fetchLeads]);
  
   const updateClientDetails = useCallback(async (
     leadId: string,
