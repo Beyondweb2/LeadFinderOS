@@ -526,7 +526,9 @@ export function useOutreach() {
     nextActionDate?: string
   ) => {
     const updates: Partial<OutreachLead> = { next_action: nextAction };
-    if (nextActionDate) {
+    if (nextAction === 'none') {
+      updates.next_action_date = null;
+    } else if (nextActionDate) {
       updates.next_action_date = nextActionDate;
     }
     

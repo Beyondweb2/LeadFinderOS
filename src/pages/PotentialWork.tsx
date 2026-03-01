@@ -234,7 +234,10 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     const dbAction: NextActionType = isCustom ? 'follow_up' : v as NextActionType;
     if (isCustom) setLeadCustomAction(lead.id, v.slice(8));
     else setLeadCustomAction(lead.id, null);
-    await onNextActionChange(lead.id, dbAction, nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined);
+    if (dbAction === 'none') {
+      setNextActionDate(undefined);
+    }
+    await onNextActionChange(lead.id, dbAction, dbAction === 'none' ? undefined : (nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined));
     if (dbAction !== 'none') {
       window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
       window.dispatchEvent(new CustomEvent('demo-checklist-step4-action-set'));
@@ -391,7 +394,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 {lead.next_action && lead.next_action !== 'none' && !isExpanded && (
                   <button
                     className="inline-flex items-center gap-0.5 text-[10px] font-bold text-green-400 hover:text-green-300 transition-colors"
-                    onClick={(e) => { e.stopPropagation(); onNextActionChange(lead.id, 'none' as NextActionType); }}
+                    onClick={(e) => { e.stopPropagation(); setNextAction('none'); setNextActionDate(undefined); onNextActionChange(lead.id, 'none' as NextActionType); }}
                     title="Mark as done"
                   >
                     <Check className="h-3 w-3" /> Done
