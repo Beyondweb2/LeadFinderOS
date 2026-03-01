@@ -4,6 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
 import type { Lead } from '@/types/lead';
+import { logOutreachAction, type OutreachType } from '@/lib/outreachLogger';
 
 // Statuses that represent an outreach attempt (message/call sent)
 const OUTREACH_STATUSES: LeadStatus[] = [
@@ -488,6 +489,14 @@ export function useOutreach() {
       const isNowOutreach = OUTREACH_STATUSES.includes(status);
       
       if (!wasOutreach && isNowOutreach) {
+        // Determine outreach type from status
+        const statusToType: Record<string, OutreachType> = {
+          sms: 'sms', whatsapp: 'whatsapp', facebook_msg: 'facebook',
+          contacted: 'call', sent_initial_text: 'sms', sent_voice_note: 'whatsapp',
+        };
+        const outreachType = statusToType[status] || 'manual';
+        logOutreachAction(user.id, leadId, outreachType);
+
         try {
           await supabase.rpc('log_usage_event', {
             p_event_type: 'message_sent',
@@ -498,7 +507,6 @@ export function useOutreach() {
               source: 'status_change',
             },
           });
-          // Emit event so dashboard/progress panels can update in real time
           window.dispatchEvent(new CustomEvent('outreach-message-sent'));
         } catch (e) {
           console.error('Failed to log message_sent (non-blocking):', e);
