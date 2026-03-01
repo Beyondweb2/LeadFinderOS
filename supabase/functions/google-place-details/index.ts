@@ -31,16 +31,18 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims?.sub) {
+      console.error('JWT validation error:', claimsError);
       return new Response(
         JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    const userId = claimsData.claims.sub;
 
     // ─── RATE LIMIT ──────────────────────────
-    const rl = checkRateLimit(`details:${user.id}`, RATE_LIMIT, RATE_WINDOW_MS);
+    const rl = checkRateLimit(`details:${userId}`, RATE_LIMIT, RATE_WINDOW_MS);
     if (!rl.allowed) {
       return new Response(
         JSON.stringify({ error: 'Too many requests. Please slow down.' }),
