@@ -77,6 +77,65 @@ serve(async (req) => {
     const capitalizedName =
       firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
 
+    // Subject line rotation (same as lifecycle-emails)
+    const subjects = [
+      "Still looking for clients?",
+      "10–20 businesses per day",
+      "You were close",
+      "Want more web clients this week?",
+      "Quick question about your trial",
+    ];
+    const subject = subjects[Math.floor(Math.random() * subjects.length)];
+
+    const displayName = capitalizedName || "there";
+
+    const htmlBody = `<div style="font-family: sans-serif; font-size: 15px; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto;">
+<p>Hey ${displayName},</p>
+<p>You were about to activate your trial but didn't finish.</p>
+<p>If you're trying to land more web projects, here's the simple strategy most freelancers miss:</p>
+<p><strong>Contact 10–20 businesses per day.</strong></p>
+<p>Not 3. Not 5.<br/>10–20.</p>
+<p>That's where momentum starts.</p>
+<p>LeadFinder makes that easy by showing businesses without websites that you can contact immediately.</p>
+<p>Most users start seeing replies within days once they stay consistent.</p>
+<p>If something stopped you from activating, just reply and tell me what it was.</p>
+<p>Or jump back in here:</p>
+<p>👉 <a href="https://lead-finder-app.com/" style="color: #2563eb;">https://lead-finder-app.com/</a></p>
+<p>– Paul<br/>LeadFinder</p>
+<hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0 12px;" />
+<p style="font-size: 12px; color: #6b7280;">LeadFinder · <a href="https://lead-finder-app.com/" style="color: #6b7280;">https://lead-finder-app.com</a><br/>You're receiving this email because you started activating a trial on LeadFinder.<br/>If you don't want reminders, reply and let me know.</p>
+</div>`;
+
+    const textBody = `Hey ${displayName},
+
+You were about to activate your trial but didn't finish.
+
+If you're trying to land more web projects, here's the simple strategy most freelancers miss:
+
+Contact 10–20 businesses per day.
+
+Not 3. Not 5.
+10–20.
+
+That's where momentum starts.
+
+LeadFinder makes that easy by showing businesses without websites that you can contact immediately.
+
+Most users start seeing replies within days once they stay consistent.
+
+If something stopped you from activating, just reply and tell me what it was.
+
+Or jump back in here:
+https://lead-finder-app.com/
+
+– Paul
+LeadFinder
+
+---
+LeadFinder · https://lead-finder-app.com
+You're receiving this email because you started activating a trial on LeadFinder.
+If you don't want reminders, reply and let me know.`;
+
     // Send the same template — NO user data modification
     const emailRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -85,14 +144,11 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "Paul <paul@lead-finder-app.com>",
+        from: "Paul from LeadFinder <paul@lead-finder-app.com>",
         to: [email],
-        subject: "Quick question",
-        html: `<p>Hey ${capitalizedName},</p>
-<p>I noticed you were about to activate your trial but didn't finish.</p>
-<p>Was anything unclear or holding you back?</p>
-<p>Happy to help.</p>
-<p>– Paul</p>`,
+        subject,
+        html: htmlBody,
+        text: textBody,
       }),
     });
 
