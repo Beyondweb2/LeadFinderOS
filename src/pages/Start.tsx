@@ -188,7 +188,7 @@ const Start = () => {
             style={{ background: 'hsl(142 70% 45%)', color: '#fff' }}
             asChild
           >
-            <a href="https://wa.me/447000000000" target="_blank" rel="noopener noreferrer">
+            <a href="https://wa.me/66645468692" target="_blank" rel="noopener noreferrer">
               <MessageCircle className="mr-2 h-4 w-4" />
               Chat on WhatsApp
             </a>

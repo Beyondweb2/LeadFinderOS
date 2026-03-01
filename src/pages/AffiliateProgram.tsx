@@ -298,7 +298,7 @@ const AffiliateProgram = () => {
                     asChild
                   >
                     <a
-                      href={`https://wa.me/447477932564?text=${whatsappText}`}
+                      href={`https://wa.me/66645468692?text=${whatsappText}`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >
