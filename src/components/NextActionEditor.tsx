@@ -57,7 +57,7 @@ const actionColors: Record<NextActionType, string> = {
 const CUSTOM_PREFIX = 'custom::';
 
 export function getDisplayLabel(action: NextActionType | null, leadId?: string): string {
-  if (!action || action === 'none') return 'None';
+  if (!action || action === 'none') return 'Next Action';
   if (leadId) {
     const customLabel = getLeadCustomAction(leadId);
     if (customLabel) return customLabel;
