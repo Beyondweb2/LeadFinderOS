@@ -4,8 +4,9 @@ import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { RevenueCard } from '@/components/dashboard/RevenueCard';
-import { ConversionCard } from '@/components/dashboard/ConversionCard';
-import { OutreachCard } from '@/components/dashboard/OutreachCard';
+import { OutreachActivityCard } from '@/components/dashboard/OutreachActivityCard';
+import { PipelineCard } from '@/components/dashboard/PipelineCard';
+import { DailyDisciplineCard } from '@/components/dashboard/DailyDisciplineCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
 import { TrialProgressCard } from '@/components/dashboard/TrialProgressCard';
 import { Card } from '@/components/ui/card';
@@ -42,10 +43,8 @@ const Dashboard = () => {
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
   
   const isAdmin = user?.email === 'pauljsales455@outlook.com';
-  // Show trial progress only for Stripe trialing users (not paid subscribers)
   const showTrialProgress = !isSubscriptionLoading && isStripeTrialing && !isPaidSubscriber;
 
-  // Wait for all data to load before rendering
   if (isLoading || isSubscriptionLoading) {
     return (
       <div className="flex items-center justify-center h-full py-16">
@@ -60,18 +59,15 @@ const Dashboard = () => {
     
     try {
       const results = await Promise.all([
-        // Activity data
         supabase.from('copied_phones').delete().eq('user_id', user.id),
         supabase.from('outreach_activities').delete().eq('user_id', user.id),
         supabase.from('lead_contacts').delete().eq('user_id', user.id),
         supabase.from('search_history').delete().eq('user_id', user.id),
         supabase.from('checked_businesses').delete().eq('user_id', user.id),
-        // CRM data
         supabase.from('outreach_leads').delete().eq('user_id', user.id),
         supabase.from('outreach_history').delete().eq('user_id', user.id),
-        // Templates (non-default)
         supabase.from('templates').delete().eq('user_id', user.id),
-        // Metrics
+        supabase.from('outreach_logs').delete().eq('user_id', user.id),
         supabase.rpc('reset_my_metrics'),
       ]);
       
@@ -80,7 +76,6 @@ const Dashboard = () => {
         console.error('Full reset errors:', errors.map(e => e.error));
       }
       
-      // Full reset complete — no toast
       refetch();
     } catch (err) {
       console.error('Full reset failed:', err);
@@ -103,44 +98,60 @@ const Dashboard = () => {
         </p>
       </div>
 
-      {/* Trial Progress Card - Only for Stripe trialing users */}
+      {/* Trial Progress Card */}
       {showTrialProgress && (
         <section>
           <TrialProgressCard
             trialEnd={trialEnd}
             noWebsiteBusinesses={metrics.noWebsiteBusinesses}
             addedToCRM={metrics.totalBusinessesAdded}
-            searchesToday={metrics.activity.activitiesToday}
+            searchesToday={metrics.contactedToday}
             totalLeadsAdded={metrics.totalBusinessesAdded}
           />
         </section>
       )}
 
-      {/* Primary Metrics - Revenue & Conversion */}
+      {/* Primary Metrics - 4 Cards */}
       <section>
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Performance</h2>
         <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
           <RevenueCard
             totalRevenue={metrics.totalRevenue}
-            draftRevenue={metrics.draftRevenue}
-            completionRevenue={metrics.completionRevenue}
             fullyPaidClients={metrics.fullyPaidClients}
-            paidForDraftCount={metrics.paidForDraftCount}
+            revenueThisMonth={metrics.revenueThisMonth}
+            revenueLastMonth={metrics.revenueLastMonth}
           />
-          <ConversionCard
-            interestRate={metrics.interestRate}
-            responseToInterestRate={metrics.responseToInterestRate}
-            interestedCount={metrics.interestedCount}
-            contactedCount={metrics.contactedCount}
-            totalBusinessesAdded={metrics.totalBusinessesAdded}
+          <OutreachActivityCard
+            totalContacted={metrics.totalContacted}
+            contactedToday={metrics.contactedToday}
+            contactedYesterday={metrics.contactedYesterday}
+            avg7Day={metrics.avg7Day}
+            callsTotal={metrics.callsTotal}
+            whatsappTotal={metrics.whatsappTotal}
+            smsTotal={metrics.smsTotal}
+            emailTotal={metrics.emailTotal}
           />
-          <OutreachCard
-            totalBusinessesAdded={metrics.totalBusinessesAdded}
-            addedToday={metrics.addedToday}
-            addedYesterday={metrics.addedYesterday}
-            avgPerDay={metrics.avgPerDayAllTime}
+          <PipelineCard
+            trackedLeads={metrics.trackedLeads}
+            contacted={metrics.pipelineContacted}
+            interested={metrics.pipelineInterested}
+            callBooked={metrics.pipelineCallBooked}
+            closedWon={metrics.pipelineClosedWon}
           />
-          <NextActionsCard trackedLeads={metrics.trackedLeads} />
+          <DailyDisciplineCard
+            contactsToday={metrics.contactedToday}
+            contactsYesterday={metrics.contactedYesterday}
+            avg7Day={metrics.avg7Day}
+            currentStreak={metrics.currentStreak}
+          />
+        </div>
+      </section>
+
+      {/* Next Actions */}
+      <section>
+        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Next Actions</h2>
+        <div className="max-w-sm">
+          <NextActionsCard trackedLeads={metrics.trackedLeadsList} />
         </div>
       </section>
 
@@ -220,7 +231,6 @@ const Dashboard = () => {
             Test Abandoned Email
           </Button>
         )}
-
 
         <AlertDialog>
           <AlertDialogTrigger asChild>

@@ -488,17 +488,34 @@ export function useOutreach() {
       const isNowOutreach = OUTREACH_STATUSES.includes(status);
       
       if (!wasOutreach && isNowOutreach) {
+        // Map status to outreach_type for logging
+        const typeMap: Record<string, string> = {
+          sms: 'sms',
+          whatsapp: 'whatsapp',
+          facebook_msg: 'facebook',
+          contacted: 'call',
+          sent_initial_text: 'whatsapp',
+          sent_voice_note: 'whatsapp',
+        };
+        const outreachType = typeMap[status] || 'manual';
+
         try {
-          await supabase.rpc('log_usage_event', {
-            p_event_type: 'message_sent',
-            p_meta: {
+          await Promise.all([
+            supabase.rpc('log_usage_event', {
+              p_event_type: 'message_sent',
+              p_meta: {
+                lead_id: leadId,
+                business_name: targetLead.business_name,
+                status,
+                source: 'status_change',
+              },
+            }),
+            supabase.from('outreach_logs').insert({
+              user_id: user.id,
               lead_id: leadId,
-              business_name: targetLead.business_name,
-              status,
-              source: 'status_change',
-            },
-          });
-          // Emit event so dashboard/progress panels can update in real time
+              outreach_type: outreachType,
+            }),
+          ]);
           window.dispatchEvent(new CustomEvent('outreach-message-sent'));
         } catch (e) {
           console.error('Failed to log message_sent (non-blocking):', e);

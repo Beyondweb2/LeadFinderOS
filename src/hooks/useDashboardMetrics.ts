@@ -7,113 +7,52 @@ import type { OutreachLead } from '@/types/outreach';
 const DRAFT_REVENUE = 49;
 const COMPLETION_REVENUE = 450;
 
-interface ActivityMetrics {
-  // Phone copies
-  phonesCopiedToday: number;
-  phonesCopiedYesterday: number;
-  phonesCopiedThisWeek: number;
-  phonesCopiedLastWeek: number;
-  
-  // Contacts made (status changes)
-  leadsContactedToday: number;
-  leadsContactedYesterday: number;
-  leadsContactedThisWeek: number;
-  leadsContactedLastWeek: number;
-  
-  // Activities logged
-  activitiesToday: number;
-  activitiesYesterday: number;
-  activitiesThisWeek: number;
-  
-  // Totals
-  totalPhonesCopied: number;
-  totalLeadsContacted: number;
+interface OutreachLogEntry {
+  outreach_type: string;
+  contacted_at: string;
 }
 
 interface DashboardMetrics {
-  // Conversion metrics
-  interestRate: number;
-  responseToInterestRate: number;
-  interestedCount: number;
-  contactedCount: number;
-  
-  // Revenue metrics
+  // Revenue
   totalRevenue: number;
-  draftRevenue: number;
-  completionRevenue: number;
+  revenueThisMonth: number;
+  revenueLastMonth: number;
   fullyPaidClients: number;
-  paidForDraftCount: number;
-  
-  // Outreach metrics
-  totalBusinessesAdded: number;
+
+  // Outreach activity (from outreach_logs)
+  totalContacted: number;
+  contactedToday: number;
+  contactedYesterday: number;
+  avg7Day: number;
+  callsTotal: number;
+  whatsappTotal: number;
+  smsTotal: number;
+  emailTotal: number;
+
+  // Pipeline (from lead statuses)
+  trackedLeads: number;
+  pipelineContacted: number;
+  pipelineInterested: number;
+  pipelineCallBooked: number;
+  pipelineClosedWon: number;
+
+  // Daily discipline
+  currentStreak: number;
+
+  // For Next Actions card
+  trackedLeadsList: OutreachLead[];
+
+  // For trial card
   noWebsiteBusinesses: number;
-  addedToday: number;
-  addedYesterday: number;
-  
-  // Activity metrics (legacy)
-  recordDay: { date: string; count: number } | null;
-  avgPerDayAllTime: number;
-  avgPerDayLast7Days: number;
-  
-  // New activity metrics
-  activity: ActivityMetrics;
-  
-  // Tracked leads
-  trackedLeads: OutreachLead[];
+  totalBusinessesAdded: number;
 }
 
-interface DailyAddCount {
-  date: string;
-  count: number;
-}
-
-// Helper to get date strings
-const getDateRanges = () => {
-  const now = new Date();
-  
-  const today = new Date(now);
-  today.setHours(0, 0, 0, 0);
-  
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  
-  const startOfWeek = new Date(today);
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay()); // Sunday
-  
-  const startOfLastWeek = new Date(startOfWeek);
-  startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
-  
-  const endOfLastWeek = new Date(startOfWeek);
-  endOfLastWeek.setDate(endOfLastWeek.getDate() - 1);
-  
-  return {
-    todayStr: today.toISOString(),
-    yesterdayStr: yesterday.toISOString(),
-    yesterdayEndStr: today.toISOString(),
-    weekStartStr: startOfWeek.toISOString(),
-    lastWeekStartStr: startOfLastWeek.toISOString(),
-    lastWeekEndStr: startOfWeek.toISOString(),
-  };
-};
+const getDateStr = (d: Date) => d.toISOString().split('T')[0];
 
 export function useDashboardMetrics() {
   const [allLeads, setAllLeads] = useState<OutreachLead[]>([]);
+  const [outreachLogs, setOutreachLogs] = useState<OutreachLogEntry[]>([]);
   const [totalNoWebsiteFound, setTotalNoWebsiteFound] = useState(0);
-  const [activityData, setActivityData] = useState<ActivityMetrics>({
-    phonesCopiedToday: 0,
-    phonesCopiedYesterday: 0,
-    phonesCopiedThisWeek: 0,
-    phonesCopiedLastWeek: 0,
-    leadsContactedToday: 0,
-    leadsContactedYesterday: 0,
-    leadsContactedThisWeek: 0,
-    leadsContactedLastWeek: 0,
-    activitiesToday: 0,
-    activitiesYesterday: 0,
-    activitiesThisWeek: 0,
-    totalPhonesCopied: 0,
-    totalLeadsContacted: 0,
-  });
   const [isLoading, setIsLoading] = useState(true);
   const hasLoadedOnceRef = useRef(false);
   const { user } = useAuth();
@@ -125,35 +64,16 @@ export function useDashboardMetrics() {
       setIsLoading(true);
     }
     
-    const dates = getDateRanges();
-    
-    // Fetch all data in parallel
-    const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult] = await Promise.all([
-      // All leads
+    const [leadsResult, logsResult, searchHistoryResult] = await Promise.all([
       supabase
         .from('outreach_leads')
         .select('*')
         .order('created_at', { ascending: true }),
-      
-      // Copied phones with timestamps
       supabase
-        .from('copied_phones')
-        .select('copied_at')
-        .eq('user_id', user.id),
-      
-      // Outreach activities
-      supabase
-        .from('outreach_activities')
-        .select('created_at')
-        .eq('user_id', user.id),
-      
-      // Lead contacts (for tracking actual outreach)
-      supabase
-        .from('lead_contacts')
-        .select('contacted_at')
-        .eq('user_id', user.id),
-      
-      // Search history for no_website_count
+        .from('outreach_logs')
+        .select('outreach_type, contacted_at')
+        .eq('user_id', user.id)
+        .order('contacted_at', { ascending: false }),
       supabase
         .from('search_history')
         .select('no_website_count')
@@ -169,57 +89,11 @@ export function useDashboardMetrics() {
     }
 
     setAllLeads((leadsResult.data || []) as OutreachLead[]);
+    setOutreachLogs((logsResult.data || []) as OutreachLogEntry[]);
     
-    // Sum no_website_count from all searches
     const searchHistory = searchHistoryResult.data || [];
     const totalFound = searchHistory.reduce((sum, s) => sum + (s.no_website_count || 0), 0);
     setTotalNoWebsiteFound(totalFound);
-    
-    // Process copied phones
-    const copiedPhones = copiedPhonesResult.data || [];
-    const phonesCopiedToday = copiedPhones.filter(p => p.copied_at >= dates.todayStr).length;
-    const phonesCopiedYesterday = copiedPhones.filter(p => 
-      p.copied_at >= dates.yesterdayStr && p.copied_at < dates.yesterdayEndStr
-    ).length;
-    const phonesCopiedThisWeek = copiedPhones.filter(p => p.copied_at >= dates.weekStartStr).length;
-    const phonesCopiedLastWeek = copiedPhones.filter(p => 
-      p.copied_at >= dates.lastWeekStartStr && p.copied_at < dates.lastWeekEndStr
-    ).length;
-    
-    // Process activities
-    const activities = activitiesResult.data || [];
-    const activitiesToday = activities.filter(a => a.created_at >= dates.todayStr).length;
-    const activitiesYesterday = activities.filter(a => 
-      a.created_at >= dates.yesterdayStr && a.created_at < dates.yesterdayEndStr
-    ).length;
-    const activitiesThisWeek = activities.filter(a => a.created_at >= dates.weekStartStr).length;
-    
-    // Process contacts (leads contacted)
-    const contacts = contactsResult.data || [];
-    const leadsContactedToday = contacts.filter(c => c.contacted_at >= dates.todayStr).length;
-    const leadsContactedYesterday = contacts.filter(c => 
-      c.contacted_at >= dates.yesterdayStr && c.contacted_at < dates.yesterdayEndStr
-    ).length;
-    const leadsContactedThisWeek = contacts.filter(c => c.contacted_at >= dates.weekStartStr).length;
-    const leadsContactedLastWeek = contacts.filter(c => 
-      c.contacted_at >= dates.lastWeekStartStr && c.contacted_at < dates.lastWeekEndStr
-    ).length;
-    
-    setActivityData({
-      phonesCopiedToday,
-      phonesCopiedYesterday,
-      phonesCopiedThisWeek,
-      phonesCopiedLastWeek,
-      leadsContactedToday,
-      leadsContactedYesterday,
-      leadsContactedThisWeek,
-      leadsContactedLastWeek,
-      activitiesToday,
-      activitiesYesterday,
-      activitiesThisWeek,
-      totalPhonesCopied: copiedPhones.length,
-      totalLeadsContacted: contacts.length,
-    });
   }, [user]);
 
   useEffect(() => {
@@ -227,106 +101,131 @@ export function useDashboardMetrics() {
   }, [fetchAllData]);
 
   const metrics = useMemo<DashboardMetrics>(() => {
-    const totalBusinessesAdded = allLeads.length;
-    
-    // Count businesses with no website - from all searches (not just CRM)
-    const noWebsiteBusinesses = totalNoWebsiteFound;
-    
-    // Calculate today and yesterday counts
-    const today = new Date();
+    const now = new Date();
+    const today = new Date(now);
     today.setHours(0, 0, 0, 0);
-    const todayStr = today.toISOString().split('T')[0];
+    const todayStr = getDateStr(today);
     
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
-    const yesterdayStr = yesterday.toISOString().split('T')[0];
-    
-    const addedToday = allLeads.filter(l => l.created_at.split('T')[0] === todayStr).length;
-    const addedYesterday = allLeads.filter(l => l.created_at.split('T')[0] === yesterdayStr).length;
-    
-    // Conversion metrics
-    const interestedStatuses = ['interested', 'wants_draft', 'waiting', 'reviewing_draft', 'paid_for_draft', 'completed'];
-    const interestedCount = allLeads.filter(l => interestedStatuses.includes(l.status)).length;
-    
-    // Count as contacted if status indicates any form of contact was made
-    const contactedStatuses = [
-      'contacted', 'call_back', 'not_answered', 'on_hold', 
-      'wants_draft', 'interested', 'not_interested', 
-      'sent_initial_text', 'replied', 'sent_voice_note',
-      'awaiting_decision', 'waiting', 'reviewing_draft', 
-      'paid_for_draft', 'completed', 'no_whatsapp'
-    ];
-    const contactedCount = allLeads.filter(l => contactedStatuses.includes(l.status)).length;
-    
-    const interestRate = totalBusinessesAdded > 0 
-      ? (interestedCount / totalBusinessesAdded) * 100 
-      : 0;
-    
-    const responseToInterestRate = contactedCount > 0 
-      ? (interestedCount / contactedCount) * 100 
-      : 0;
-    
-    // Revenue metrics
+    const yesterdayStr = getDateStr(yesterday);
+
+    // --- Revenue from lead statuses ---
     const paidForDraftCount = allLeads.filter(l => l.status === 'paid_for_draft').length;
     const completedCount = allLeads.filter(l => l.status === 'completed').length;
-    
     const draftRevenue = (paidForDraftCount + completedCount) * DRAFT_REVENUE;
     const completionRevenue = completedCount * COMPLETION_REVENUE;
     const totalRevenue = draftRevenue + completionRevenue;
+
+    // Monthly revenue from payment_date
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     
-    // Activity metrics - calculate daily add counts
+    const getLeadRevenue = (lead: OutreachLead) => {
+      let rev = 0;
+      if (lead.status === 'paid_for_draft' || lead.status === 'completed') rev += DRAFT_REVENUE;
+      if (lead.status === 'completed') rev += COMPLETION_REVENUE;
+      return rev;
+    };
+
+    const revenueThisMonth = allLeads
+      .filter(l => l.payment_date && new Date(l.payment_date) >= thisMonthStart)
+      .reduce((sum, l) => sum + getLeadRevenue(l), 0);
+
+    const revenueLastMonth = allLeads
+      .filter(l => {
+        if (!l.payment_date) return false;
+        const d = new Date(l.payment_date);
+        return d >= lastMonthStart && d < thisMonthStart;
+      })
+      .reduce((sum, l) => sum + getLeadRevenue(l), 0);
+
+    // --- Outreach activity from outreach_logs ---
+    const totalContacted = outreachLogs.length;
+    const contactedToday = outreachLogs.filter(l => l.contacted_at.split('T')[0] === todayStr).length;
+    const contactedYesterday = outreachLogs.filter(l => l.contacted_at.split('T')[0] === yesterdayStr).length;
+
+    // 7-day average
+    const sevenDaysAgo = new Date(today);
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const sevenDaysAgoStr = sevenDaysAgo.toISOString();
+    const last7DaysLogs = outreachLogs.filter(l => l.contacted_at >= sevenDaysAgoStr);
+    const avg7Day = last7DaysLogs.length / 7;
+
+    // Channel breakdown
+    const callsTotal = outreachLogs.filter(l => l.outreach_type === 'call').length;
+    const whatsappTotal = outreachLogs.filter(l => l.outreach_type === 'whatsapp').length;
+    const smsTotal = outreachLogs.filter(l => l.outreach_type === 'sms').length;
+    const emailTotal = outreachLogs.filter(l => l.outreach_type === 'email').length;
+
+    // --- Pipeline from lead statuses ---
+    const contactedStatuses = [
+      'contacted', 'call_back', 'not_answered', 'on_hold',
+      'wants_draft', 'interested', 'not_interested',
+      'sent_initial_text', 'replied', 'sent_voice_note',
+      'awaiting_decision', 'waiting', 'reviewing_draft',
+      'paid_for_draft', 'completed', 'no_whatsapp',
+      'sms', 'whatsapp', 'facebook_msg',
+    ];
+    const interestedStatuses = [
+      'interested', 'wants_draft', 'waiting', 'reviewing_draft',
+      'awaiting_decision', 'paid_for_draft', 'completed',
+    ];
+
+    const activeLeads = allLeads.filter(l => !l.is_archived);
+    const trackedLeadsList = activeLeads.filter(l => l.is_potential_work);
+    const pipelineContacted = activeLeads.filter(l => contactedStatuses.includes(l.status)).length;
+    const pipelineInterested = activeLeads.filter(l => interestedStatuses.includes(l.status)).length;
+    const pipelineCallBooked = activeLeads.filter(l => l.status === 'call_back').length;
+    const pipelineClosedWon = allLeads.filter(l => l.status === 'completed').length;
+
+    // --- Daily discipline: streak of days with 5+ contacts ---
     const dailyCounts: Record<string, number> = {};
-    allLeads.forEach(lead => {
-      const date = lead.created_at.split('T')[0];
+    outreachLogs.forEach(l => {
+      const date = l.contacted_at.split('T')[0];
       dailyCounts[date] = (dailyCounts[date] || 0) + 1;
     });
-    
-    const dailyCountsArray: DailyAddCount[] = Object.entries(dailyCounts)
-      .map(([date, count]) => ({ date, count }))
-      .sort((a, b) => b.count - a.count);
-    
-    const recordDay = dailyCountsArray.length > 0 ? dailyCountsArray[0] : null;
-    
-    const uniqueDays = Object.keys(dailyCounts).length;
-    const avgPerDayAllTime = uniqueDays > 0 
-      ? totalBusinessesAdded / uniqueDays 
-      : 0;
-    
-    const sevenDaysAgo = new Date();
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
-    
-    const last7DaysLeads = allLeads.filter(l => {
-      const leadDate = l.created_at.split('T')[0];
-      return leadDate >= sevenDaysAgoStr;
-    });
-    
-    const avgPerDayLast7Days = last7DaysLeads.length / 7;
-    
-    // Tracked leads (potential work)
-    const trackedLeads = allLeads.filter(l => l.is_potential_work && !l.is_archived);
+
+    let currentStreak = 0;
+    const checkDate = new Date(today);
+    // If today has 0 contacts, start from yesterday
+    if ((dailyCounts[todayStr] || 0) < 5) {
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+    while (true) {
+      const ds = getDateStr(checkDate);
+      if ((dailyCounts[ds] || 0) >= 5) {
+        currentStreak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
 
     return {
-      interestRate,
-      responseToInterestRate,
-      interestedCount,
-      contactedCount,
       totalRevenue,
-      draftRevenue,
-      completionRevenue,
+      revenueThisMonth,
+      revenueLastMonth,
       fullyPaidClients: completedCount,
-      paidForDraftCount,
-      totalBusinessesAdded,
-      noWebsiteBusinesses,
-      addedToday,
-      addedYesterday,
-      recordDay,
-      avgPerDayAllTime,
-      avgPerDayLast7Days,
-      activity: activityData,
-      trackedLeads,
+      totalContacted,
+      contactedToday,
+      contactedYesterday,
+      avg7Day,
+      callsTotal,
+      whatsappTotal,
+      smsTotal,
+      emailTotal,
+      trackedLeads: trackedLeadsList.length,
+      pipelineContacted,
+      pipelineInterested,
+      pipelineCallBooked,
+      pipelineClosedWon,
+      currentStreak,
+      trackedLeadsList,
+      noWebsiteBusinesses: totalNoWebsiteFound,
+      totalBusinessesAdded: allLeads.length,
     };
-  }, [allLeads, activityData, totalNoWebsiteFound]);
+  }, [allLeads, outreachLogs, totalNoWebsiteFound]);
 
   return {
     metrics,
