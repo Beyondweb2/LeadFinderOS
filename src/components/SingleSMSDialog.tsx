@@ -92,6 +92,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
     const url = generateSMSUrl(lead.phone, message);
     window.open(url, '_self');
     window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+    window.dispatchEvent(new CustomEvent('challenge-contact-sent', { detail: { leadId: lead.business_name } }));
     onOpenChange(false);
 
     supabase.rpc('log_usage_event', {

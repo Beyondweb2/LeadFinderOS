@@ -95,6 +95,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
     const url = generateWhatsAppUrl(lead.phone, message);
     window.open(url, '_blank');
     window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+    window.dispatchEvent(new CustomEvent('challenge-contact-sent', { detail: { leadId: lead.business_name } }));
     onOpenChange(false);
 
     supabase.rpc('log_usage_event', {

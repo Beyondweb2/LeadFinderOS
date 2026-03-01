@@ -43,8 +43,7 @@ const Outreach = () => {
 
   const isReadOnly = false;
 
-  // CRM Automation: auto-set "waiting" status + follow-up date on contact
-  // Also record the contact for the 10 Business Challenge
+  // CRM Automation: auto-set contact_method on contact button click
   useEffect(() => {
     const handler = (e: Event) => {
       const { leadId, method } = (e as CustomEvent).detail || {};
@@ -54,13 +53,25 @@ const Outreach = () => {
         contact_method: method,
       };
       updateLead(leadId, updates);
-
-      // Record for challenge (dedupe handled server-side)
-      challenge.recordContact(leadId);
     };
     window.addEventListener('crm-contact-action', handler);
     return () => window.removeEventListener('crm-contact-action', handler);
-  }, [updateLead, challenge.recordContact]);
+  }, [updateLead]);
+
+  // Challenge 10: only count when user actually opens SMS/WhatsApp app
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { leadId: businessName } = (e as CustomEvent).detail || {};
+      if (!businessName) return;
+      // Resolve lead ID from business name
+      const lead = allLeads.find(l => l.business_name === businessName);
+      if (lead) {
+        challenge.recordContact(lead.id);
+      }
+    };
+    window.addEventListener('challenge-contact-sent', handler);
+    return () => window.removeEventListener('challenge-contact-sent', handler);
+  }, [challenge.recordContact, allLeads]);
 
   // Show challenge completion toast
   useEffect(() => {
