@@ -554,16 +554,6 @@ const Landing = () => {
               <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
                 No card required · Instant access · Cancel anytime
               </p>
-              {/* Mobile-only sign in below */}
-              <Button 
-                variant="ghost" 
-                className="sm:hidden text-[12px] font-medium text-foreground/40 hover:text-foreground/70 h-[36px] px-5 rounded-xl transition-all duration-200 mt-1" 
-                asChild
-              >
-                <Link to="/auth">
-                  Sign in
-                </Link>
-              </Button>
             </div>
 
             {/* Mobile trust badges */}
