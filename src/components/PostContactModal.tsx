@@ -53,15 +53,15 @@ export function PostContactModal() {
 
           {/* Title */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-5">
-            <span className="text-foreground">✨ Magic! </span>
-            <span className="text-primary">All done automatically</span>
+            <span className="text-foreground">💡 Quick Tip: </span>
+            <span className="text-primary">How to get more replies</span>
           </DialogTitle>
 
           {/* Body */}
           <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-6 space-y-4">
-            <p>We've automatically moved this lead to <span className="font-semibold text-foreground">"Waiting for Reply"</span> and set a follow-up date for you.</p>
-            <p>Check your CRM to see it in action!</p>
-            <p>No manual updates needed - LeadFinder handles your pipeline so you can focus on closing deals.</p>
+            <p><span className="font-semibold text-foreground">Cold calling</span> is the fastest way to land clients — don't be afraid to pick up the phone.</p>
+            <p>After sending your first text, follow up with a <span className="font-semibold text-foreground">short 20-second voice note</span> — it builds trust and stands out.</p>
+            <p>Keep it casual, be yourself, and focus on <span className="font-semibold text-foreground">starting a conversation</span> — not selling.</p>
           </div>
 
           {/* CTA */}

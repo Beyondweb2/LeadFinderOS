@@ -9,7 +9,6 @@ import { useOutreach } from '@/hooks/useOutreach';
 import { useChallenge10 } from '@/hooks/useChallenge10';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import { addDays, format } from 'date-fns';
 import type { OutreachLead, ContactMethod, PipelineStatus } from '@/types/outreach';
 
 const Outreach = () => {
@@ -50,15 +49,10 @@ const Outreach = () => {
     const handler = (e: Event) => {
       const { leadId, method } = (e as CustomEvent).detail || {};
       if (!leadId) return;
-      const followUpDate = format(addDays(new Date(), 2), 'yyyy-MM-dd');
+      if (!method) return;
       const updates: Record<string, any> = {
-        status: 'waiting',
-        next_action: 'follow_up',
-        next_action_date: followUpDate,
+        contact_method: method,
       };
-      if (method) {
-        updates.contact_method = method;
-      }
       updateLead(leadId, updates);
 
       // Record for challenge (dedupe handled server-side)
