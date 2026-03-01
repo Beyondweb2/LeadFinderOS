@@ -30,7 +30,7 @@ export function SkipWalkthroughButton() {
     } catch {}
     // Log exit event
     supabase.rpc('log_walkthrough_event' as any, {
-      p_event_type: 'walkthrough_exit',
+      p_event_type: 'walkthrough_skip',
       p_meta: { step: 0, walkthrough_id: 'main' },
     }).then(() => {});
     setConfirmOpen(false);
