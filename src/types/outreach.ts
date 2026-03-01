@@ -194,5 +194,5 @@ export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'follow_up', label: 'Follow-up' },
   { value: 'send_draft', label: 'Send Draft' },
   { value: 'remove_if_no_reply', label: 'Remove if no reply' },
-  { value: 'none', label: 'None' },
+  { value: 'none', label: 'Set Action' },
 ];

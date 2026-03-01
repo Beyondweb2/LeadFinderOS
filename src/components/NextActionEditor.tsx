@@ -62,7 +62,7 @@ export function getDisplayLabel(action: NextActionType | null, leadId?: string):
     const customLabel = getLeadCustomAction(leadId);
     if (customLabel) return customLabel;
   }
-  return NEXT_ACTION_OPTIONS.find((o) => o.value === action)?.label || 'None';
+  return NEXT_ACTION_OPTIONS.find((o) => o.value === action)?.label || 'Set Action';
 }
 
 export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionEditorProps) {
@@ -135,7 +135,7 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
   };
 
   const currentAction = action || 'none';
-  const displayLabel = currentCustomLabel || NEXT_ACTION_OPTIONS.find((o) => o.value === currentAction)?.label || 'None';
+  const displayLabel = currentCustomLabel || NEXT_ACTION_OPTIONS.find((o) => o.value === currentAction)?.label || 'Set Action';
   const colorClass = currentCustomLabel ? 'text-teal-400' : actionColors[currentAction as NextActionType] || 'text-muted-foreground';
   const iconEl = currentCustomLabel ? <Tag className="h-3 w-3" /> : actionIcons[currentAction as NextActionType] || <Circle className="h-3 w-3" />;
 
