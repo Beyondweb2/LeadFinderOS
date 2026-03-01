@@ -37,6 +37,13 @@ interface DashboardMetrics {
   interestedCount: number;
   contactedCount: number;
   
+  // New engagement metrics
+  repliedCount: number;
+  callsBookedCount: number;
+  replyRate: number;
+  bookingRate: number;
+  positiveReplies: number;
+  
   // Revenue metrics
   totalRevenue: number;
   draftRevenue: number;
@@ -60,6 +67,9 @@ interface DashboardMetrics {
   
   // Tracked leads
   trackedLeads: OutreachLead[];
+  
+  // All leads for pipeline card
+  allLeads: OutreachLead[];
 }
 
 interface DailyAddCount {
@@ -306,11 +316,29 @@ export function useDashboardMetrics() {
     // Tracked leads (potential work)
     const trackedLeads = allLeads.filter(l => l.is_potential_work && !l.is_archived);
 
+    // Replied count
+    const repliedStatuses = ['replied', 'awaiting_decision'];
+    const repliedCount = allLeads.filter(l => repliedStatuses.includes(l.status)).length;
+    
+    // Calls booked (interested + pipeline stages)
+    const callBookedStatuses = ['interested', 'wants_draft', 'waiting', 'reviewing_draft'];
+    const callsBookedCount = allLeads.filter(l => callBookedStatuses.includes(l.status)).length;
+    
+    // Rates
+    const replyRate = contactedCount > 0 ? (repliedCount / contactedCount) * 100 : 0;
+    const bookingRate = contactedCount > 0 ? (callsBookedCount / contactedCount) * 100 : 0;
+    const positiveReplies = repliedCount + callsBookedCount;
+
     return {
       interestRate,
       responseToInterestRate,
       interestedCount,
       contactedCount,
+      repliedCount,
+      callsBookedCount,
+      replyRate,
+      bookingRate,
+      positiveReplies,
       totalRevenue,
       draftRevenue,
       completionRevenue,
@@ -325,6 +353,7 @@ export function useDashboardMetrics() {
       avgPerDayLast7Days,
       activity: activityData,
       trackedLeads,
+      allLeads,
     };
   }, [allLeads, activityData, totalNoWebsiteFound]);
 
