@@ -679,9 +679,12 @@ export type Database = {
           updated_at: string
           user_id: string
           walkthrough_completed: boolean
+          walkthrough_completed_at: string | null
           walkthrough_last_seen_at: string | null
           walkthrough_last_step: number | null
           walkthrough_max_step: number
+          walkthrough_skipped_at: string | null
+          walkthrough_started_at: string | null
         }
         Insert: {
           businesses_added_count?: number
@@ -693,9 +696,12 @@ export type Database = {
           updated_at?: string
           user_id: string
           walkthrough_completed?: boolean
+          walkthrough_completed_at?: string | null
           walkthrough_last_seen_at?: string | null
           walkthrough_last_step?: number | null
           walkthrough_max_step?: number
+          walkthrough_skipped_at?: string | null
+          walkthrough_started_at?: string | null
         }
         Update: {
           businesses_added_count?: number
@@ -707,9 +713,12 @@ export type Database = {
           updated_at?: string
           user_id?: string
           walkthrough_completed?: boolean
+          walkthrough_completed_at?: string | null
           walkthrough_last_seen_at?: string | null
           walkthrough_last_step?: number | null
           walkthrough_max_step?: number
+          walkthrough_skipped_at?: string | null
+          walkthrough_started_at?: string | null
         }
         Relationships: []
       }

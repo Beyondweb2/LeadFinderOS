@@ -53,8 +53,6 @@ import {
   RefreshCw,
   Trash2,
   Footprints,
-  TrendingDown,
-  CheckCircle2,
 } from 'lucide-react';
 
 interface AdminUser {
@@ -72,6 +70,9 @@ interface AdminUser {
   walkthrough_completed: boolean;
   walkthrough_max_step: number;
   walkthrough_last_seen_at: string | null;
+  walkthrough_started_at: string | null;
+  walkthrough_completed_at: string | null;
+  walkthrough_skipped_at: string | null;
   stripe_subscription_id: string | null;
   search_count: number;
   businesses_added_count: number;
@@ -81,20 +82,37 @@ interface AdminUser {
   last_search_at: string | null;
 }
 
-interface WalkthroughStats {
-  totalStarted: number;
-  totalCompleted: number;
-  completionRate: number;
-  stepCounts: number[];
-  topDropoffStep: number;
-  maxDrop: number;
-  userTable: Array<{
-    user_id: string;
-    email: string;
-    max_step: number;
-    completed: boolean;
-    last_seen_at: string | null;
-  }>;
+function getWalkthroughStatus(u: AdminUser): 'completed' | 'skipped' | 'in_progress' | 'not_started' {
+  if (u.walkthrough_completed_at || u.walkthrough_completed) return 'completed';
+  if (u.walkthrough_skipped_at) return 'skipped';
+  if (u.walkthrough_started_at || u.walkthrough_max_step > 0) return 'in_progress';
+  return 'not_started';
+}
+
+function walkthroughStatusLabel(status: 'completed' | 'skipped' | 'in_progress' | 'not_started'): string {
+  switch (status) {
+    case 'completed': return 'Completed';
+    case 'skipped': return 'Skipped';
+    case 'in_progress': return 'In Progress';
+    case 'not_started': return 'Not Started';
+  }
+}
+
+function walkthroughStatusColor(status: 'completed' | 'skipped' | 'in_progress' | 'not_started'): string {
+  switch (status) {
+    case 'completed': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+    case 'in_progress': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+    case 'skipped': return 'bg-red-500/15 text-red-400 border-red-500/30';
+    case 'not_started': return 'bg-muted text-muted-foreground border-border';
+  }
+}
+
+function walkthroughStepLabel(u: AdminUser): string {
+  const status = getWalkthroughStatus(u);
+  if (status === 'completed') return 'Completed';
+  if (status === 'skipped') return 'Skipped';
+  if (status === 'in_progress') return `Step ${u.walkthrough_max_step}/8`;
+  return 'Not Started';
 }
 
 interface UsageEvent {
@@ -187,8 +205,6 @@ export default function AdminDashboard() {
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
-  const [walkthroughStats, setWalkthroughStats] = useState<WalkthroughStats | null>(null);
-  const [isLoadingWtStats, setIsLoadingWtStats] = useState(false);
 
   const getAccessToken = useCallback(async (): Promise<string | null> => {
     // Always get a fresh session
@@ -291,31 +307,6 @@ export default function AdminDashboard() {
     setIsDeletingUser(false);
   }, [getAccessToken, selectedUser]);
 
-  const fetchWalkthroughStats = useCallback(async () => {
-    const accessToken = await getAccessToken();
-    if (!accessToken) return;
-    setIsLoadingWtStats(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('admin-funnel', {
-        body: { action: 'walkthrough_stats' },
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!error && data && !data.error) {
-        setWalkthroughStats({
-          totalStarted: data.totalStarted ?? 0,
-          totalCompleted: data.totalCompleted ?? 0,
-          completionRate: data.completionRate ?? 0,
-          stepCounts: Array.isArray(data.stepCounts) ? data.stepCounts : [],
-          topDropoffStep: data.topDropoffStep ?? 1,
-          maxDrop: data.maxDrop ?? 0,
-          userTable: Array.isArray(data.userTable) ? data.userTable : [],
-        });
-      }
-    } catch (e) {
-      console.error('[AdminDashboard] walkthrough stats error:', e);
-    }
-    setIsLoadingWtStats(false);
-  }, [getAccessToken]);
 
   useEffect(() => {
     if (!isSubLoading && !isAdmin) {
@@ -324,9 +315,8 @@ export default function AdminDashboard() {
     }
     if (!isSubLoading && isAdmin) {
       fetchUsers();
-      fetchWalkthroughStats();
     }
-  }, [isSubLoading, isAdmin, navigate, fetchUsers, fetchWalkthroughStats]);
+  }, [isSubLoading, isAdmin, navigate, fetchUsers]);
 
   const handleRowClick = (user: AdminUser) => {
     setSelectedUser(user);
@@ -339,6 +329,22 @@ export default function AdminDashboard() {
   const totalFreeUsers = users.filter(u => u.access_mode === 'free_user').length;
   const totalSearches = users.reduce((s, u) => s + u.search_count, 0);
   const totalMessages = users.reduce((s, u) => s + u.messages_sent_count, 0);
+
+  // Walkthrough summary counts (computed from user data)
+  const wtStarted = users.filter(u => getWalkthroughStatus(u) !== 'not_started').length;
+  const wtCompleted = users.filter(u => getWalkthroughStatus(u) === 'completed').length;
+  const wtSkipped = users.filter(u => getWalkthroughStatus(u) === 'skipped').length;
+  const wtNotStarted = users.filter(u => getWalkthroughStatus(u) === 'not_started').length;
+  // Top dropoff step
+  const stepDropoffs = Array.from({ length: 8 }, (_, i) => {
+    const atStep = users.filter(u => {
+      const s = getWalkthroughStatus(u);
+      return (s === 'in_progress') && u.walkthrough_max_step === i + 1;
+    }).length;
+    return atStep;
+  });
+  const topDropoffIdx = stepDropoffs.indexOf(Math.max(...stepDropoffs));
+  const topDropoffStep = stepDropoffs[topDropoffIdx] > 0 ? topDropoffIdx + 1 : null;
 
   if (isSubLoading) {
     return (
@@ -424,104 +430,21 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* Walkthrough Progress Card */}
-        <Card>
-          <CardHeader className="pb-3 pt-4 px-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                <Footprints className="h-4 w-4 text-primary" /> Walkthrough Progress
-              </CardTitle>
-              <Button variant="ghost" size="sm" onClick={fetchWalkthroughStats} disabled={isLoadingWtStats}>
-                <RefreshCw className={`h-3.5 w-3.5 ${isLoadingWtStats ? 'animate-spin' : ''}`} />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            {isLoadingWtStats && !walkthroughStats ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              </div>
-            ) : walkthroughStats ? (
-              <div className="space-y-4">
-                {/* Summary row */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-lg border border-border p-3 text-center">
-                    <p className="text-2xl font-bold">{walkthroughStats.totalStarted}</p>
-                    <p className="text-[10px] text-muted-foreground">Started</p>
-                  </div>
-                  <div className="rounded-lg border border-border p-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <CheckCircle2 className="h-4 w-4 text-primary" />
-                      <p className="text-2xl font-bold">{walkthroughStats.totalCompleted}</p>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">Completed ({walkthroughStats.completionRate}%)</p>
-                  </div>
-                  <div className="rounded-lg border border-border p-3 text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <TrendingDown className="h-4 w-4 text-destructive" />
-                      <p className="text-2xl font-bold">Step {walkthroughStats.topDropoffStep}</p>
-                    </div>
-                    <p className="text-[10px] text-muted-foreground">Top Dropoff ({walkthroughStats.maxDrop} users)</p>
-                  </div>
-                </div>
-
-                {/* Step funnel */}
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-2">Step-by-Step Funnel</p>
-                  <div className="space-y-1.5">
-                    {walkthroughStats.stepCounts.map((count, i) => {
-                      const maxCount = walkthroughStats.stepCounts[0] || 1;
-                      const pct = Math.round((count / maxCount) * 100);
-                      return (
-                        <div key={i} className="flex items-center gap-2 text-xs">
-                          <span className="w-12 text-muted-foreground shrink-0">Step {i + 1}</span>
-                          <div className="flex-1 h-5 rounded bg-muted/50 overflow-hidden">
-                            <div
-                              className="h-full rounded bg-primary/60 transition-all"
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                          <span className="w-10 text-right tabular-nums font-medium">{count}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* User table */}
-                {walkthroughStats.userTable.length > 0 && (
-                  <div>
-                    <p className="text-xs font-medium text-muted-foreground mb-2">Recent Walkthrough Users (top 100)</p>
-                    <div className="overflow-x-auto max-h-[300px] overflow-y-auto rounded border border-border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">Email</TableHead>
-                            <TableHead className="text-xs text-center">Max Step</TableHead>
-                            <TableHead className="text-xs text-center">Completed</TableHead>
-                            <TableHead className="text-xs">Last Seen</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {walkthroughStats.userTable.map((row) => (
-                            <TableRow key={row.user_id}>
-                              <TableCell className="text-xs max-w-[180px] truncate">{row.email}</TableCell>
-                              <TableCell className="text-xs text-center tabular-nums">{row.max_step}/8</TableCell>
-                              <TableCell className="text-xs text-center">{row.completed ? '✅' : '—'}</TableCell>
-                              <TableCell className="text-xs text-muted-foreground">{timeAgo(row.last_seen_at)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground text-center py-4">No walkthrough data yet</p>
+        {/* Walkthrough Summary Row */}
+        {users.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-border bg-card/50 px-4 py-2.5 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground flex items-center gap-1.5">
+              <Footprints className="h-3.5 w-3.5 text-primary" /> Walkthrough:
+            </span>
+            <span>Started: <strong className="text-foreground">{wtStarted}</strong></span>
+            <span>Completed: <strong className="text-foreground">{wtCompleted}</strong></span>
+            <span>Skipped: <strong className="text-foreground">{wtSkipped}</strong></span>
+            <span>Not Started: <strong className="text-foreground">{wtNotStarted}</strong></span>
+            {topDropoffStep && (
+              <span>Top Drop-off: <strong className="text-foreground">Step {topDropoffStep}</strong></span>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        )}
 
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
@@ -574,7 +497,9 @@ export default function AdminDashboard() {
                       <TableHead>Access</TableHead>
                       <TableHead>Billing</TableHead>
                       <TableHead>Messages</TableHead>
-                      <TableHead>Walkthrough</TableHead>
+                      <TableHead>WT Status</TableHead>
+                      <TableHead>Current Step</TableHead>
+                      <TableHead>Last WT Activity</TableHead>
                       <TableHead>Paid At</TableHead>
                       <TableHead className="text-right">Searches</TableHead>
                       <TableHead className="text-right">Added</TableHead>
@@ -585,7 +510,7 @@ export default function AdminDashboard() {
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                           No users found
                         </TableCell>
                       </TableRow>
@@ -615,8 +540,16 @@ export default function AdminDashboard() {
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {u.messages_sent_count ?? 0}
                           </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={walkthroughStatusColor(getWalkthroughStatus(u))}>
+                              {walkthroughStatusLabel(getWalkthroughStatus(u))}
+                            </Badge>
+                          </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {u.walkthrough_completed ? '✅' : u.walkthrough_max_step > 0 ? `Step ${u.walkthrough_max_step}/8` : '—'}
+                            {walkthroughStepLabel(u)}
+                          </TableCell>
+                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                            {timeAgo(u.walkthrough_last_seen_at)}
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {formatDate(u.paid_at)}
@@ -722,7 +655,10 @@ export default function AdminDashboard() {
                     </div>
                     <div className="rounded-lg border border-border p-3">
                       <p className="text-xs text-muted-foreground">Walkthrough</p>
-                      <p className="text-sm font-medium mt-1">{selectedUser.walkthrough_completed ? 'Completed' : 'Not completed'}</p>
+                      <Badge variant="outline" className={`mt-1 ${walkthroughStatusColor(getWalkthroughStatus(selectedUser))}`}>
+                        {walkthroughStatusLabel(getWalkthroughStatus(selectedUser))}
+                      </Badge>
+                      <p className="text-xs text-muted-foreground mt-1">{walkthroughStepLabel(selectedUser)}</p>
                     </div>
                     {selectedUser.stripe_subscription_id && (
                       <div className="rounded-lg border border-border p-3 col-span-2">
