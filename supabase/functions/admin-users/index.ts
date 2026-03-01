@@ -125,7 +125,7 @@ serve(async (req) => {
 
       const [metricsRes, subsRes, trialsRes, funnelRes] = await Promise.all([
         userIds.length > 0
-          ? serviceClient.from('user_metrics').select('user_id, search_count, businesses_added_count, messages_sent_count, replies_count, last_active_at, last_search_at').in('user_id', userIds)
+          ? serviceClient.from('user_metrics').select('user_id, search_count, businesses_added_count, messages_sent_count, replies_count, last_active_at, last_search_at, walkthrough_max_step, walkthrough_completed as wt_completed, walkthrough_last_seen_at, walkthrough_last_step').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
           ? serviceClient.from('subscriptions').select('user_id, status, current_period_end, stripe_customer_id, stripe_subscription_id').in('user_id', userIds)
@@ -210,6 +210,8 @@ serve(async (req) => {
           replies_count: metrics?.replies_count ?? 0,
           last_active_at: metrics?.last_active_at || null,
           last_search_at: metrics?.last_search_at || null,
+          walkthrough_max_step: metrics?.walkthrough_max_step ?? 0,
+          walkthrough_last_seen_at: metrics?.walkthrough_last_seen_at || null,
         };
       });
 

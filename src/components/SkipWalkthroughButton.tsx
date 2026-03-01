@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
+import { supabase } from '@/integrations/supabase/client';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
 import {
   Dialog,
@@ -27,8 +28,12 @@ export function SkipWalkthroughButton() {
       localStorage.setItem(`demo_walkthrough_dismissed_${user.id}`, 'true');
       localStorage.setItem(`walkthrough_completed_${user.id}`, 'true');
     } catch {}
+    // Log exit event
+    supabase.rpc('log_walkthrough_event' as any, {
+      p_event_type: 'walkthrough_exit',
+      p_meta: { step: 0, walkthrough_id: 'main' },
+    }).then(() => {});
     setConfirmOpen(false);
-    // Immediately kill walkthrough overlay everywhere
     window.dispatchEvent(new CustomEvent('skip-walkthrough'));
     window.dispatchEvent(new CustomEvent('pulse-search-nav'));
   };
