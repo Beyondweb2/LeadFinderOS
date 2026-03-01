@@ -40,19 +40,15 @@ export function AppLayout({ children }: AppLayoutProps) {
   useEffect(() => {
     if (challenge.isLoading || challenge.modalShown) return;
 
-    const handleWalkthroughDone = () => {
-      // Small delay to let walkthrough UI dismiss first
-      setTimeout(() => {
-        challenge.triggerModal();
-      }, 4000);
+    const handleReady = () => {
+      challenge.triggerModal();
     };
 
-    // Listen for both skip and natural completion
-    window.addEventListener('walkthrough-all-done', handleWalkthroughDone);
-    window.addEventListener('skip-walkthrough', handleWalkthroughDone);
+    window.addEventListener('walkthrough-dismissed', handleReady);
+    window.addEventListener('skip-walkthrough', handleReady);
     return () => {
-      window.removeEventListener('walkthrough-all-done', handleWalkthroughDone);
-      window.removeEventListener('skip-walkthrough', handleWalkthroughDone);
+      window.removeEventListener('walkthrough-dismissed', handleReady);
+      window.removeEventListener('skip-walkthrough', handleReady);
     };
   }, [challenge.isLoading, challenge.modalShown, challenge.triggerModal]);
 
