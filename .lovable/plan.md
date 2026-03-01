@@ -1,22 +1,16 @@
 
 
-## Two Changes
+## Issue
 
-### 1. Reduce CRM pulse duration from 2 seconds to 800ms
+The Resend error says `mail.lead-finder-app.com` is not verified, but your screenshot shows the verified domain is `lead-finder-app.com` (without the `mail.` subdomain). The `from` address in both edge functions uses the wrong subdomain.
 
-Both `AppSidebar.tsx` (line 136) and `MobileBottomNav.tsx` (line 130) currently set the CRM green pulse to 2000ms. Reduce to 800ms so it flashes briefly then stops.
+## Plan
 
-**Files:**
-- `src/components/AppSidebar.tsx` — line 136: change `setTimeout(() => setFlashCRM(false), 2000)` → `800`
-- `src/components/MobileBottomNav.tsx` — line 130: change `setTimeout(() => setCrmGlow(false), 2000)` → `800`
+Update the `from` email address in two files:
 
-### 2. Rewrite OutreachTipsDialog content to practical tips
+1. **`supabase/functions/test-abandoned-email/index.ts`** — Change `from: "Paul <paul@mail.lead-finder-app.com>"` to `from: "Paul <paul@lead-finder-app.com>"`
 
-Replace the current instructional body in `OutreachTipsDialog.tsx` with 3 concise outreach tips:
+2. **`supabase/functions/lifecycle-emails/index.ts`** — Same change: `from: "Paul <paul@mail.lead-finder-app.com>"` to `from: "Paul <paul@lead-finder-app.com>"`
 
-1. **Keep it casual** — No links, images, or videos in your first message. Just be friendly and try to get a casual reply first.
-2. **Try WhatsApp first** — If they don't have WhatsApp, try SMS. But the best option is to call — have a pitch ready using a pre-made script template.
-3. **Make conversation** — Don't sell straight away. Ask a question, reference their business, and keep it natural.
-
-Update the headline to something like "3 Tips Before You Reach Out". Remove the channel-specific desktop/phone instructions. Keep the Skip link, CTA button, and "Don't show again" checkbox unchanged.
+No other changes needed. The functions will redeploy automatically.
 
