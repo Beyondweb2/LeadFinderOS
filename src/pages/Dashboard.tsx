@@ -3,10 +3,10 @@ import { Link } from 'react-router-dom';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
-import { RevenueCard } from '@/components/dashboard/RevenueCard';
-import { ConversionCard } from '@/components/dashboard/ConversionCard';
-import { OutreachCard } from '@/components/dashboard/OutreachCard';
-import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
+import { OutreachActivityCard } from '@/components/dashboard/OutreachActivityCard';
+import { ResponseEngagementCard } from '@/components/dashboard/ResponseEngagementCard';
+import { PipelineSnapshotCard } from '@/components/dashboard/PipelineSnapshotCard';
+import { DailyDisciplineCard } from '@/components/dashboard/DailyDisciplineCard';
 import { TrialProgressCard } from '@/components/dashboard/TrialProgressCard';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -116,31 +116,28 @@ const Dashboard = () => {
         </section>
       )}
 
-      {/* Primary Metrics - Revenue & Conversion */}
+      {/* Primary Metrics */}
       <section>
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Performance</h2>
         <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
-          <RevenueCard
-            totalRevenue={metrics.totalRevenue}
-            draftRevenue={metrics.draftRevenue}
-            completionRevenue={metrics.completionRevenue}
-            fullyPaidClients={metrics.fullyPaidClients}
-            paidForDraftCount={metrics.paidForDraftCount}
+          <OutreachActivityCard
+            contactsLifetime={metrics.contactedCount}
+            contactsToday={metrics.addedToday}
+            repliesReceived={metrics.repliedCount}
+            callsBooked={metrics.callsBookedCount}
           />
-          <ConversionCard
-            interestRate={metrics.interestRate}
-            responseToInterestRate={metrics.responseToInterestRate}
-            interestedCount={metrics.interestedCount}
+          <ResponseEngagementCard
+            replyRate={metrics.replyRate}
+            bookingRate={metrics.bookingRate}
+            positiveReplies={metrics.positiveReplies}
             contactedCount={metrics.contactedCount}
-            totalBusinessesAdded={metrics.totalBusinessesAdded}
           />
-          <OutreachCard
-            totalBusinessesAdded={metrics.totalBusinessesAdded}
-            addedToday={metrics.addedToday}
-            addedYesterday={metrics.addedYesterday}
-            avgPerDay={metrics.avgPerDayAllTime}
+          <PipelineSnapshotCard leads={metrics.allLeads} />
+          <DailyDisciplineCard
+            contactsToday={metrics.addedToday}
+            sevenDayAvg={metrics.avgPerDayLast7Days}
+            leads={metrics.allLeads}
           />
-          <NextActionsCard trackedLeads={metrics.trackedLeads} />
         </div>
       </section>
 
