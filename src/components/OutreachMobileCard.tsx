@@ -103,6 +103,11 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
             )}
             <WhatsAppStatusBadge status={lead.whatsapp_status} compact />
           </div>
+          {hasPhone && (
+            <a href={`tel:${lead.phone}`} className="text-[11px] text-muted-foreground leading-none truncate">
+              {lead.phone}
+            </a>
+          )}
 
           {/* Three dropdowns: Contact Method, Status, Next Action */}
           {!readOnly && (
