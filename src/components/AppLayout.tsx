@@ -44,7 +44,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       // Small delay to let walkthrough UI dismiss first
       setTimeout(() => {
         challenge.triggerModal();
-      }, 1500);
+      }, 4000);
     };
 
     // Listen for both skip and natural completion
