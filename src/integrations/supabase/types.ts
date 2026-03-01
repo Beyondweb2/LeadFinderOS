@@ -174,18 +174,21 @@ export type Database = {
           created_at: string
           event_type: string
           id: string
+          meta: Json | null
           user_id: string | null
         }
         Insert: {
           created_at?: string
           event_type: string
           id?: string
+          meta?: Json | null
           user_id?: string | null
         }
         Update: {
           created_at?: string
           event_type?: string
           id?: string
+          meta?: Json | null
           user_id?: string | null
         }
         Relationships: []
@@ -640,6 +643,10 @@ export type Database = {
           search_count: number
           updated_at: string
           user_id: string
+          walkthrough_completed: boolean
+          walkthrough_last_seen_at: string | null
+          walkthrough_last_step: number | null
+          walkthrough_max_step: number
         }
         Insert: {
           businesses_added_count?: number
@@ -650,6 +657,10 @@ export type Database = {
           search_count?: number
           updated_at?: string
           user_id: string
+          walkthrough_completed?: boolean
+          walkthrough_last_seen_at?: string | null
+          walkthrough_last_step?: number | null
+          walkthrough_max_step?: number
         }
         Update: {
           businesses_added_count?: number
@@ -660,6 +671,10 @@ export type Database = {
           search_count?: number
           updated_at?: string
           user_id?: string
+          walkthrough_completed?: boolean
+          walkthrough_last_seen_at?: string | null
+          walkthrough_last_step?: number | null
+          walkthrough_max_step?: number
         }
         Relationships: []
       }
@@ -811,6 +826,10 @@ export type Database = {
         Returns: boolean
       }
       log_usage_event: {
+        Args: { p_event_type: string; p_meta?: Json }
+        Returns: undefined
+      }
+      log_walkthrough_event: {
         Args: { p_event_type: string; p_meta?: Json }
         Returns: undefined
       }

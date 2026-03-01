@@ -18,14 +18,12 @@ serve(async (req) => {
   );
 
   try {
-    // Auth check
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("Unauthorized");
     const token = authHeader.replace("Bearer ", "");
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     if (userError || !userData.user) throw new Error("Unauthorized");
 
-    // Admin role check
     const { data: roleData } = await supabase
       .from("user_roles")
       .select("role")
@@ -40,34 +38,131 @@ serve(async (req) => {
       });
     }
 
-    const now = new Date();
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    // Parse body for action
+    let body: Record<string, unknown> = {};
+    try { body = await req.json(); } catch { /* no body = default action */ }
+    const action = (body.action as string) || "funnel_stats";
 
-    const eventTypes = ["demo_started", "trial_started", "subscription_active"];
-    const results: Record<string, { last7: number; allTime: number }> = {};
+    // ===================== FUNNEL STATS (original) =====================
+    if (action === "funnel_stats") {
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-    for (const et of eventTypes) {
-      // All time count
-      const { count: allTime, error: e1 } = await supabase
-        .from("funnel_events")
-        .select("id", { count: "exact", head: true })
-        .eq("event_type", et);
-      if (e1) throw e1;
+      const eventTypes = ["demo_started", "trial_started", "subscription_active"];
+      const results: Record<string, { last7: number; allTime: number }> = {};
 
-      // Last 7 days count
-      const { count: last7, error: e2 } = await supabase
-        .from("funnel_events")
-        .select("id", { count: "exact", head: true })
-        .eq("event_type", et)
-        .gte("created_at", sevenDaysAgo);
-      if (e2) throw e2;
+      for (const et of eventTypes) {
+        const { count: allTime } = await supabase
+          .from("funnel_events")
+          .select("id", { count: "exact", head: true })
+          .eq("event_type", et);
 
-      results[et] = { last7: last7 ?? 0, allTime: allTime ?? 0 };
+        const { count: last7 } = await supabase
+          .from("funnel_events")
+          .select("id", { count: "exact", head: true })
+          .eq("event_type", et)
+          .gte("created_at", sevenDaysAgo);
+
+        results[et] = { last7: last7 ?? 0, allTime: allTime ?? 0 };
+      }
+
+      return new Response(JSON.stringify(results), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
     }
 
-    return new Response(JSON.stringify(results), {
+    // ===================== WALKTHROUGH STATS =====================
+    if (action === "walkthrough_stats") {
+      const TOTAL_STEPS = 8;
+
+      // Step-by-step counts from funnel_events
+      const stepCounts: number[] = [];
+      for (let s = 1; s <= TOTAL_STEPS; s++) {
+        // Count distinct users who viewed this step
+        const { data: rows } = await supabase
+          .from("funnel_events")
+          .select("user_id")
+          .eq("event_type", "walkthrough_step_view")
+          .contains("meta", { step: s });
+        
+        // Dedupe by user_id
+        const uniqueUsers = new Set((rows || []).map((r: any) => r.user_id));
+        stepCounts.push(uniqueUsers.size);
+      }
+
+      // Total started (saw step 1)
+      const totalStarted = stepCounts[0] || 0;
+
+      // Total completed
+      const { data: completedRows } = await supabase
+        .from("funnel_events")
+        .select("user_id")
+        .eq("event_type", "walkthrough_complete");
+      const completedUsers = new Set((completedRows || []).map((r: any) => r.user_id));
+      const totalCompleted = completedUsers.size;
+
+      const completionRate = totalStarted > 0 ? Math.round((totalCompleted / totalStarted) * 100) : 0;
+
+      // Top dropoff step
+      let topDropoffStep = 1;
+      let maxDrop = 0;
+      for (let i = 0; i < stepCounts.length - 1; i++) {
+        const drop = stepCounts[i] - stepCounts[i + 1];
+        if (drop > maxDrop) {
+          maxDrop = drop;
+          topDropoffStep = i + 1;
+        }
+      }
+
+      // Latest 100 users with walkthrough data from user_metrics
+      const { data: userRows } = await supabase
+        .from("user_metrics")
+        .select("user_id, walkthrough_max_step, walkthrough_completed, walkthrough_last_seen_at")
+        .gt("walkthrough_max_step", 0)
+        .order("walkthrough_last_seen_at", { ascending: false })
+        .limit(100);
+
+      // Get emails for these users
+      const userIds = (userRows || []).map((r: any) => r.user_id);
+      let emailMap: Record<string, string> = {};
+      if (userIds.length > 0) {
+        // Fetch from auth in batches
+        const { data: authData } = await supabase.auth.admin.listUsers({ perPage: 200 });
+        if (authData?.users) {
+          for (const u of authData.users) {
+            if (userIds.includes(u.id)) {
+              emailMap[u.id] = u.email || u.id;
+            }
+          }
+        }
+      }
+
+      const userTable = (userRows || []).map((r: any) => ({
+        user_id: r.user_id,
+        email: emailMap[r.user_id] || r.user_id,
+        max_step: r.walkthrough_max_step,
+        completed: r.walkthrough_completed,
+        last_seen_at: r.walkthrough_last_seen_at,
+      }));
+
+      return new Response(JSON.stringify({
+        totalStarted,
+        totalCompleted,
+        completionRate,
+        stepCounts,
+        topDropoffStep,
+        maxDrop,
+        userTable,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    return new Response(JSON.stringify({ error: "Unknown action" }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 200,
+      status: 400,
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);

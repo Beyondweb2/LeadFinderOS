@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
+import { useWalkthroughTracking } from '@/hooks/useWalkthroughTracking';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 
@@ -88,6 +89,7 @@ export function WalkthroughOverlay() {
   const { state, allDone, isDemoUser, isReplay } = useDemoChecklist();
   const isActive = isDemoUser || isReplay;
   const { walkthroughOpen } = useWalkthroughStatus();
+  const { logStepView, logExit } = useWalkthroughTracking(isReplay);
   const location = useLocation();
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
@@ -113,6 +115,11 @@ export function WalkthroughOverlay() {
     const next = getActiveStep(state, location.pathname);
     setActiveStep(next);
 
+    // Track step view (debounced in the hook)
+    if (next) {
+      logStepView(next.step);
+    }
+
     // Auto-scroll to the target element once per step change
     if (next && next.step !== lastScrolledStepRef.current) {
       lastScrolledStepRef.current = next.step;
@@ -126,7 +133,7 @@ export function WalkthroughOverlay() {
         }
       });
     }
-  }, [state, isActive, allDone, walkthroughOpen, location.pathname, tick]);
+  }, [state, isActive, allDone, walkthroughOpen, location.pathname, tick, logStepView]);
 
   // Listen for trial modal to pause/resume overlay
   useEffect(() => {

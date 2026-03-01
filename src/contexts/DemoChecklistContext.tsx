@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocation } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface DemoChecklistState {
   searchDone: boolean;
@@ -351,8 +352,12 @@ export function DemoChecklistProvider({
   useEffect(() => {
     if (allDone && !allDoneRef.current) {
       allDoneRef.current = true;
+      // Log walkthrough complete event
+      supabase.rpc('log_walkthrough_event' as any, {
+        p_event_type: 'walkthrough_complete',
+        p_meta: { walkthrough_id: 'main' },
+      }).then(() => {});
       if (isReplay) {
-        // Replay mode: just close walkthrough silently, no popups
         setIsOpen(false);
         setIsReplay(false);
       } else {
