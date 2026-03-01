@@ -1,4 +1,5 @@
 import { memo } from 'react';
+import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { PhoneFetchStatus } from '@/hooks/useOutreach';
@@ -100,6 +101,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
             {lead.is_potential_work && (
               <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />
             )}
+            <WhatsAppStatusBadge status={lead.whatsapp_status} compact />
           </div>
 
           {/* Three dropdowns: Contact Method, Status, Next Action */}

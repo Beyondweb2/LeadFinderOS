@@ -57,6 +57,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
+import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
@@ -134,7 +135,7 @@ export function OutreachTable({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isRecoveringPhones, setIsRecoveringPhones] = useState(false);
   const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
-  const [whatsAppLead, setWhatsAppLead] = useState<{ phone: string; business_name: string } | null>(null);
+  const [whatsAppLead, setWhatsAppLead] = useState<{ phone: string; business_name: string; id?: string; whatsapp_status?: string | null } | null>(null);
   const [smsLead, setSmsLead] = useState<{ phone: string; business_name: string } | null>(null);
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
@@ -254,7 +255,7 @@ export function OutreachTable({
   // Handle WhatsApp button click - store lead ID for highlighting
   const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
-    setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name });
+    setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name, id: lead.id, whatsapp_status: lead.whatsapp_status });
     window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'whatsapp' } }));
   }, []);
 
@@ -1000,6 +1001,7 @@ export function OutreachTable({
                           {lead.is_potential_work && (
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
                           )}
+                          <WhatsAppStatusBadge status={lead.whatsapp_status} />
                         </div>
                       </TableCell>
                       <TableCell>
