@@ -86,6 +86,10 @@ export function DemoChecklistPanel() {
     setShowCompletionModal(false);
     handleDismiss();
     window.dispatchEvent(new CustomEvent('pulse-search-nav'));
+    // If tips modal won't show, signal that walkthrough flow is fully done
+    if (tipsDismissed || !isFreeUser) {
+      window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
+    }
   };
 
   const handleTipsModalClose = useCallback((open: boolean) => {
@@ -95,8 +99,10 @@ export function DemoChecklistPanel() {
       if (tipsDismissedKey) {
         try { setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true'); } catch {}
       }
+      // Tips modal closed — walkthrough flow fully done
+      window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
     }
-  }, [tipsDismissedKey]);
+  }, [tipsDismissedKey, isFreeUser]);
 
   if (!isDemoUser || dismissed) return null;
 
