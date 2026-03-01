@@ -428,7 +428,7 @@ const Feedback = () => {
               asChild
             >
               <a
-                href="https://wa.me/447477932564?text=Hi%2C%20I%20have%20feedback%20about%20LeadFinder%20Pro"
+                href="https://wa.me/66645468692?text=Hi%2C%20I%20have%20feedback%20about%20LeadFinder%20Pro"
                 target="_blank"
                 rel="noopener noreferrer"
               >
