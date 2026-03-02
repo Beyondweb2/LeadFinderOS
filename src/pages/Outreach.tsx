@@ -91,6 +91,10 @@ const Outreach = () => {
   const handlePipelineStatusChange = useCallback(async (leadId: string, status: PipelineStatus) => {
     await updateStatus(leadId, status as any);
     window.dispatchEvent(new CustomEvent('demo-checklist-pipeline-status-set'));
+    // Count toward challenge when status set to Attempted (waiting)
+    if (status === 'waiting') {
+      challenge.recordContact(leadId);
+    }
     // Auto-track when setting to Interested
     if (status === 'interested') {
       const lead = allLeads.find(l => l.id === leadId);
