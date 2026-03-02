@@ -53,6 +53,13 @@ import {
   RefreshCw,
   Trash2,
   Footprints,
+  Timer,
+  CheckCircle,
+  XCircle,
+  TrendingUp,
+  PoundSterling,
+  Info,
+  Percent,
 } from 'lucide-react';
 
 interface AdminUser {
@@ -325,8 +332,22 @@ export default function AdminDashboard() {
 
   const filtered = users;
 
-  const totalActive = users.filter(u => u.access_mode === 'paid').length;
-  const totalFreeUsers = users.filter(u => u.access_mode === 'free_user').length;
+  // --- Trial-model metrics ---
+  // Trials Started = anyone who has a stripe subscription (started a trial)
+  const trialsStarted = users.filter(u => u.stripe_subscription_id).length;
+  // Trialing Active = currently trialing in Stripe
+  const trialingActive = users.filter(u => u.billing_status === 'trialing').length;
+  // Paid Subscribers = active after first invoice
+  const paidSubscribers = users.filter(u => u.billing_status === 'active').length;
+  // Trial Cancellations = canceled before ever paying
+  const trialChurn = users.filter(u => u.billing_status === 'canceled' && !u.paid_at).length;
+  // Paid Churn = canceled after paying
+  const paidChurn = users.filter(u => u.billing_status === 'canceled' && !!u.paid_at).length;
+  // Trial → Paid conversion rate
+  const trialToPaidRate = trialsStarted > 0 ? ((paidSubscribers / trialsStarted) * 100).toFixed(1) : '0.0';
+  // MRR
+  const mrr = paidSubscribers * 19.99;
+
   const totalSearches = users.reduce((s, u) => s + u.search_count, 0);
   const totalMessages = users.reduce((s, u) => s + u.messages_sent_count, 0);
 
@@ -335,7 +356,6 @@ export default function AdminDashboard() {
   const wtCompleted = users.filter(u => getWalkthroughStatus(u) === 'completed').length;
   const wtSkipped = users.filter(u => getWalkthroughStatus(u) === 'skipped').length;
   const wtNotStarted = users.filter(u => getWalkthroughStatus(u) === 'not_started').length;
-  // Top dropoff step
   const stepDropoffs = Array.from({ length: 8 }, (_, i) => {
     const atStep = users.filter(u => {
       const s = getWalkthroughStatus(u);
@@ -386,28 +406,84 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* Summary Cards - Acquisition Pipeline */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
           <Card>
             <CardHeader className="pb-2 pt-4 px-4">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Users className="h-3.5 w-3.5" /> Active Subscribers
+                <TrendingUp className="h-3.5 w-3.5" /> Trials Started
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{totalActive}</p>
+              <p className="text-2xl font-bold">{trialsStarted}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-amber-500/30">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Timer className="h-3.5 w-3.5 text-amber-500" /> Trialing
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-2xl font-bold">{trialingActive}</p>
             </CardContent>
           </Card>
           <Card>
             <CardHeader className="pb-2 pt-4 px-4">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Activity className="h-3.5 w-3.5" /> Free Users
+                <CheckCircle className="h-3.5 w-3.5 text-green-500" /> Paid Subscribers
               </CardTitle>
             </CardHeader>
             <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{totalFreeUsers}</p>
+              <p className="text-2xl font-bold">{paidSubscribers}</p>
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Percent className="h-3.5 w-3.5" /> Trial→Paid
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-2xl font-bold">{trialToPaidRate}%</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <PoundSterling className="h-3.5 w-3.5 text-emerald-500" /> MRR
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-2xl font-bold">£{mrr.toFixed(2)}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <XCircle className="h-3.5 w-3.5 text-red-500" /> Churn
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <div className="flex items-baseline gap-2">
+                <p className="text-2xl font-bold">{trialChurn + paidChurn}</p>
+              </div>
+              <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
+                <span>Trial: {trialChurn}</span>
+                <span>Paid: {paidChurn}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Revenue helper text */}
+        <p className="text-xs text-muted-foreground/70 flex items-center gap-1">
+          <Info className="h-3 w-3" />
+          Revenue only reflects successful payments after the 5-day trial period.
+        </p>
+
+        {/* Activity Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">
           <Card>
             <CardHeader className="pb-2 pt-4 px-4">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
