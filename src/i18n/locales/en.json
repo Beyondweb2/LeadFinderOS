@@ -191,7 +191,7 @@
     "step1BusinessType": "Type a business type or tap a quick option.",
     "step1Location": "Type a location or pick one from Quick Locations.",
     "step1Search": "Press Find Leads to search.",
-    "step2Select": "Select 3 businesses you want to contact.  Selected: {{count}} / 3\n(This can be skipped next step)",
+    "step2Select": "Select 3 businesses you might want to contact.\n{{count}} / 3",
     "step3Contact": "Contact businesses via Call, SMS or WhatsApp.\n{{count}}/3 contacted.",
     "step3NavToOutreach": "Open Outreach to contact businesses ({{count}}/3).",
     "step5Track": "Track businesses that are interested.",
