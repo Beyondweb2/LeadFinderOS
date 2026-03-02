@@ -50,3 +50,6 @@ verify_jwt = false
 
 [functions.get-checkout-email]
 verify_jwt = false
+
+[functions.check-email-subscription]
+verify_jwt = false

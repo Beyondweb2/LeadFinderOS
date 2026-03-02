@@ -23,8 +23,10 @@ const Auth = () => {
   const { t } = useTranslation();
   const [searchParamsInit] = useSearchParams();
   const intentParam = searchParamsInit.get('intent');
-  const [isLogin, setIsLogin] = useState(!intentParam);
-  const [email, setEmail] = useState('');
+  const emailParam = searchParamsInit.get('email');
+  const existingParam = searchParamsInit.get('existing');
+  const [isLogin, setIsLogin] = useState(!intentParam || existingParam === 'true');
+  const [email, setEmail] = useState(emailParam || '');
   const [password, setPassword] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(() => {
     try {
@@ -236,11 +238,13 @@ const Auth = () => {
             Lead<span className="text-gradient-primary">Finder</span> Pro
           </CardTitle>
           <CardDescription>
-            {isLogin 
-              ? t('auth.signInToFind')
-              : t('auth.createAccountDesc')}
+            {existingParam === 'true'
+              ? 'You already have Pro — sign in to continue.'
+              : isLogin 
+                ? t('auth.signInToFind')
+                : t('auth.createAccountDesc')}
           </CardDescription>
-          {!isLogin && (
+          {!isLogin && !existingParam && (
             <p className="text-xs text-muted-foreground mt-2">
               Start with a 5-day free trial · £0 today
             </p>
@@ -257,8 +261,8 @@ const Auth = () => {
                 placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                disabled={isSubmitting}
-                className={errors.email ? 'border-destructive' : ''}
+                disabled={isSubmitting || (existingParam === 'true' && !!emailParam)}
+                className={`${errors.email ? 'border-destructive' : ''} ${existingParam === 'true' && emailParam ? 'bg-muted cursor-not-allowed' : ''}`}
               />
               {errors.email && (
                 <p className="text-sm text-destructive">{errors.email}</p>
