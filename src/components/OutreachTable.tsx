@@ -146,6 +146,8 @@ export function OutreachTable({
   const [smsDialogLead, setSmsDialogLead] = useState<OutreachLead | null>(null);
   // Optimistic UI state: leadId -> partial overrides
   const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, Record<string, any>>>(new Map());
+  // Track leads contacted during walkthrough (so highlight moves to next business)
+  const [walkthroughContactedIds, setWalkthroughContactedIds] = useState<Set<string>>(new Set());
 
   // Contact action hook: immediate persist, no undo
   const { executeContact } = useContactAction({
@@ -300,7 +302,7 @@ export function OutreachTable({
     });
   }, [leads, optimisticUpdates]);
 
-  // Handle WhatsApp button click - open template dialog
+  // Handle WhatsApp button click - open template dialog + count walkthrough contact
   const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
     if (lead.whatsapp_status === 'no') {
       toast({
@@ -309,19 +311,43 @@ export function OutreachTable({
       });
       return;
     }
+    // Count for walkthrough immediately on button click (not on dialog CTA)
+    setWalkthroughContactedIds(prev => {
+      if (prev.has(lead.id)) return prev;
+      const next = new Set(prev);
+      next.add(lead.id);
+      window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+      return next;
+    });
     setWhatsappDialogLead(lead);
   }, [toast]);
 
-  // Handle SMS button click - open template dialog
+  // Handle SMS button click - open template dialog + count walkthrough contact
   const handleSMSClick = useCallback((lead: OutreachLead) => {
+    setWalkthroughContactedIds(prev => {
+      if (prev.has(lead.id)) return prev;
+      const next = new Set(prev);
+      next.add(lead.id);
+      window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+      return next;
+    });
     setSmsDialogLead(lead);
   }, []);
 
-  // Handle Call button click - direct open + toast (no template needed)
+  // Handle Call button click - direct open + count walkthrough contact
   const handleCallClick = useCallback((lead: OutreachLead) => {
+    setWalkthroughContactedIds(prev => {
+      if (prev.has(lead.id)) return prev;
+      const next = new Set(prev);
+      next.add(lead.id);
+      window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+      return next;
+    });
     highlightLead(lead.id);
     executeContact(lead, 'call');
   }, [executeContact]);
+
+  // handleCallClick is defined below with walkthrough tracking
 
   // Called when user clicks "Open App" in WhatsApp/SMS dialog
   const handleDialogSent = useCallback((leadId: string, channel: 'whatsapp' | 'sms') => {
@@ -992,6 +1018,7 @@ export function OutreachTable({
                   onCompleteAction={() => onNextActionChange(lead.id, 'none' as NextActionType)}
                   phoneFetchStatus={phoneFetchStatus[lead.id]}
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
+                  isWalkthroughContacted={walkthroughContactedIds.has(lead.id)}
                 />
               ))
             )}
@@ -1172,7 +1199,7 @@ export function OutreachTable({
                         </>
                       )}
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-1.5" data-walkthrough={lead.outreach_attempts === 0 ? 'contact' : undefined} data-lead-contacted={lead.outreach_attempts > 0 ? 'true' : undefined}>
+                        <div className="flex items-center justify-center gap-1.5" data-walkthrough={lead.outreach_attempts === 0 && !walkthroughContactedIds.has(lead.id) ? 'contact' : undefined} data-lead-contacted={lead.outreach_attempts > 0 ? 'true' : undefined}>
                           {lead.google_maps_url && (
                             <a
                               href={lead.google_maps_url}

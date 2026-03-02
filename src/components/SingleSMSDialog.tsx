@@ -93,7 +93,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
     const message = template.replace(/\{\{business_name\}\}/g, lead.business_name);
     const url = generateSMSUrl(lead.phone, message);
     window.open(url, '_self');
-    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+    // demo-checklist-contact dispatched by OutreachTable on button click
     window.dispatchEvent(new CustomEvent('challenge-contact-sent', { detail: { leadId: lead.business_name } }));
 
     // Signal send happened — confirmation & logAttempt handled externally
@@ -120,7 +120,6 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
   return (
     <Dialog open={open} onOpenChange={(v) => {
       onOpenChange(v);
-      if (!v) window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -220,7 +219,6 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
         <DialogFooter className="gap-2 flex-row justify-end sm:justify-end">
           <Button variant="outline" onClick={() => {
             onOpenChange(false);
-            window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
           }}>
             Cancel
           </Button>
