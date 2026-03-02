@@ -25,20 +25,10 @@ export function OutreachTipsDialog() {
 
   const storageKey = user?.id ? `outreach_tips_dismissed_${user.id}` : null;
 
-  // Auto-open on first visit to Outreach page (if not dismissed)
   useEffect(() => {
     if (!storageKey) return;
     const dismissed = localStorage.getItem(storageKey);
     if (dismissed) return;
-
-    // Show immediately on mount for first-time visitors
-    setContactMethod('whatsapp');
-    setOpen(true);
-  }, [storageKey]);
-
-  // Also respond to explicit contact click events (to update the contact method)
-  useEffect(() => {
-    if (!storageKey) return;
 
     const onContactClick = (e: Event) => {
       if (!localStorage.getItem(storageKey)) {
@@ -48,9 +38,19 @@ export function OutreachTipsDialog() {
       }
     };
 
+    // Also show when user skips the contact walkthrough step
+    const onSkipContact = () => {
+      if (!localStorage.getItem(storageKey)) {
+        setContactMethod('whatsapp');
+        setOpen(true);
+      }
+    };
+
     window.addEventListener('outreach-first-contact-click', onContactClick);
+    window.addEventListener('walkthrough-skip-contact-steps', onSkipContact);
     return () => {
       window.removeEventListener('outreach-first-contact-click', onContactClick);
+      window.removeEventListener('walkthrough-skip-contact-steps', onSkipContact);
     };
   }, [storageKey]);
 
