@@ -54,7 +54,7 @@ const BillingCancel = () => {
                   </>
                 )}
               </Button>
-              <Button variant="ghost" onClick={() => navigate('/landing', { replace: true })}>
+              <Button variant="ghost" onClick={() => { window.location.href = '/landing'; }}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Go Back
               </Button>
