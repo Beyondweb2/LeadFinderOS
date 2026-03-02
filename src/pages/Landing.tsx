@@ -726,9 +726,9 @@ const Landing = () => {
 
           <ScrollReveal className="w-full" delay={320} direction="up">
             <div className="flex flex-col items-center justify-center mt-10 sm:mt-14">
-              <a
-                href="/auth"
-                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-sm sm:text-base transition-all duration-300 hover:scale-[1.04] active:scale-[0.98]"
+              <button
+                onClick={scrollToPricing}
+                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-sm sm:text-base transition-all duration-300 hover:scale-[1.04] active:scale-[0.98] cursor-pointer"
                 style={{
                   background: 'hsl(210 100% 50%)',
                   color: 'hsl(220 40% 4%)',
@@ -736,9 +736,9 @@ const Landing = () => {
                 }}
               >
                 Start Finding Leads →
-              </a>
+              </button>
               <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
-                No card required · Full access instantly · Cancel anytime
+                5-day free trial · £0 today · Cancel anytime
               </p>
             </div>
           </ScrollReveal>
