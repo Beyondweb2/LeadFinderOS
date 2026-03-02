@@ -761,7 +761,7 @@ const Landing = () => {
                   boxShadow: '0 4px 20px hsl(210 100% 50% / 0.35), 0 0 40px hsl(210 100% 50% / 0.1)',
                 }}
               >
-                Start Finding Leads →
+                Try it free →
               </button>
               <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
                 5-day free trial · £0 today · Cancel anytime
