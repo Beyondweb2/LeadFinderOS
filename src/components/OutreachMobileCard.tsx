@@ -247,9 +247,9 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                 ) : null}
               </div>
               {/* Row 2: SMS, WhatsApp, Track */}
-              <div className="flex items-center gap-0.5" data-walkthrough={lead.outreach_attempts === 0 ? 'contact' : undefined}>
+              <div className="flex items-center gap-0.5">
                 {hasPhone ? (
-                  <>
+                  <div className="flex items-center gap-0.5" data-walkthrough={lead.outreach_attempts === 0 ? 'contact' : undefined}>
                     <Button
                       variant="ghost"
                       size="icon"
@@ -266,7 +266,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                     </Button>
-                  </>
+                  </div>
                 ) : null}
                 {!readOnly && showTrackButton && onTrack && (
                   lead.is_potential_work ? (
