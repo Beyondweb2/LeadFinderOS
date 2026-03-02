@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
+import { Navigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useTrial } from '@/hooks/useTrial';
 import { Loader2 } from 'lucide-react';
 import { PaymentPausedScreen } from '@/components/PaymentPausedScreen';
 
@@ -9,12 +9,9 @@ interface SubscriptionGateProps {
 }
 
 export function SubscriptionGate({ children }: SubscriptionGateProps) {
-  const { isLoading: subLoading, isPaymentPaused } = useSubscription();
-  const { isLoading: trialLoading } = useTrial();
+  const { isLoading: subLoading, isPaymentPaused, isPaidSubscriber, isStripeTrialing, isAdmin } = useSubscription();
 
-  const isLoading = subLoading || trialLoading;
-
-  if (isLoading) {
+  if (subLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -27,7 +24,12 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     return <PaymentPausedScreen />;
   }
 
-  // All authenticated users get full app access.
-  // Search limits are enforced at the search level, not the gate level.
+  // Only allow access for paid subscribers, trialing users, or admins
+  const hasAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
+
+  if (!hasAccess) {
+    return <Navigate to="/subscribe" replace />;
+  }
+
   return <>{children}</>;
 }
