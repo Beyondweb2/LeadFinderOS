@@ -11,8 +11,8 @@ interface StepDef {
   tooltip: string | ((state: any) => string);
   noDim?: boolean;
   tooltipPosition?: 'top' | 'bottom' | 'right';
-  /** On desktop, render as inline banner anchored to this selector instead of floating tooltip */
-  desktopBannerAnchor?: string;
+  /** Selector for a safe anchor element to position tooltip near (not on top of target) */
+  anchorNearSelector?: string;
 }
 
 const TOTAL_STEPS = 8;
@@ -36,7 +36,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 1, selector: '[data-walkthrough-step="search"]', tooltip: 'Press Find Leads to search.', noDim: true };
   }
 
-  // Step 2 – Select 3 leads
+  // Step 2 – Select 3 leads (tooltip anchored near Actions column header, not on buttons)
   if (!state.addedToCrm) {
     const selected = state.crmAddCount || 0;
     return {
@@ -44,8 +44,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
       selector: '[data-walkthrough="add-crm"]',
       tooltip: `Select 3 businesses you want to contact.  Selected: ${selected} / 3`,
       noDim: true,
-      tooltipPosition: 'top',
-      desktopBannerAnchor: '[data-walkthrough="results-header"]',
+      anchorNearSelector: '[data-walkthrough="actions-column-header"]',
     };
   }
 
@@ -87,6 +86,42 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
   }
 
   return null;
+}
+
+/**
+ * Compute a tooltip position anchored near (but not on top of) a reference element.
+ * The tooltip sits above the anchor with a left offset so it doesn't cover the action buttons.
+ */
+function computeAnchoredTooltipPos(
+  anchorSelector: string,
+  targetRect: DOMRect,
+): { top: number; left: number; placement: 'above-left' | 'above-right' | 'sticky-top' } | null {
+  const anchor = document.querySelector(anchorSelector);
+  if (!anchor) return null;
+
+  const anchorRect = anchor.getBoundingClientRect();
+  const tooltipW = 270;
+  const tooltipH = 80;
+  const gap = 16; // minimum spacing from any interactive element
+
+  // Strategy 1: Position above the Actions column header, shifted left
+  const aboveTop = anchorRect.top - tooltipH - gap;
+  const aboveLeft = anchorRect.left + anchorRect.width / 2;
+  
+  if (aboveTop > 10) {
+    // Clamp horizontally
+    const clampedLeft = Math.max(tooltipW / 2 + 8, Math.min(window.innerWidth - tooltipW / 2 - 8, aboveLeft));
+    return { top: aboveTop, left: clampedLeft, placement: 'above-left' };
+  }
+
+  // Strategy 2: Position to the left of the Actions column
+  const leftOfColumn = anchorRect.left - tooltipW - gap;
+  if (leftOfColumn > 10) {
+    return { top: anchorRect.top + anchorRect.height / 2, left: leftOfColumn + tooltipW / 2, placement: 'above-right' };
+  }
+
+  // Strategy 3: Sticky at top of viewport
+  return { top: 70, left: window.innerWidth / 2, placement: 'sticky-top' };
 }
 
 export function WalkthroughOverlay() {
@@ -174,6 +209,17 @@ export function WalkthroughOverlay() {
     const rect = el.getBoundingClientRect();
     setTargetRect(rect);
 
+    // If this step uses anchored positioning (Step 2), compute position relative to anchor
+    if (activeStep.anchorNearSelector) {
+      const anchored = computeAnchoredTooltipPos(activeStep.anchorNearSelector, rect);
+      if (anchored) {
+        setTooltipPos({ top: anchored.top, left: anchored.left });
+        rafRef.current = requestAnimationFrame(updatePosition);
+        return;
+      }
+    }
+
+    // Default tooltip positioning
     const padding = 12;
     const tooltipHeight = 80;
     const spaceBelow = window.innerHeight - rect.bottom;
@@ -216,9 +262,6 @@ export function WalkthroughOverlay() {
 
   if (!activeStep || !walkthroughOpen || paused || allDone) return null;
   if (!targetRect) return null;
-
-  const isDesktop = window.innerWidth >= 1024;
-  const useBanner = isDesktop && !!activeStep.desktopBannerAnchor;
 
   const pad = 8;
   const spotlightStyle = {
@@ -287,14 +330,12 @@ export function WalkthroughOverlay() {
         />
       )}
 
-      {/* Desktop banner mode: renders inside a safe anchor area */}
-      {useBanner && <WalkthroughBanner step={activeStep.step} text={tooltipText} anchorSelector={activeStep.desktopBannerAnchor!} />}
-
-      {/* Floating tooltip (mobile or non-banner steps) */}
-      {!useBanner && tooltipPos && (
+      {/* Floating tooltip */}
+      {tooltipPos && (
         <div
-          className="absolute pointer-events-none px-3.5 py-3 rounded-xl bg-[hsl(220,50%,7%)] border border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.15)] max-w-[260px] text-center"
+          className="pointer-events-none px-3.5 py-3 rounded-xl bg-[hsl(220,50%,7%)] border border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.15)] max-w-[270px] text-center"
           style={{
+            position: 'fixed',
             top: tooltipPos.top,
             left: tooltipPos.left,
             transform: (activeStep.tooltipPosition === 'right' && window.innerWidth >= 640) ? 'translateY(-50%)' : 'translateX(-50%)',
@@ -318,34 +359,5 @@ export function WalkthroughOverlay() {
       `}</style>
     </div>,
     document.body
-  );
-}
-
-/** Desktop-only banner rendered via portal into a safe anchor element */
-function WalkthroughBanner({ step, text, anchorSelector }: { step: number; text: string; anchorSelector: string }) {
-  const [anchor, setAnchor] = useState<Element | null>(null);
-
-  useEffect(() => {
-    const find = () => {
-      const el = document.querySelector(anchorSelector);
-      setAnchor(el);
-    };
-    find();
-    const interval = setInterval(find, 500);
-    return () => clearInterval(interval);
-  }, [anchorSelector]);
-
-  if (!anchor) return null;
-
-  return createPortal(
-    <div className="w-full py-2.5 px-4 bg-[hsl(220,50%,7%)] border border-amber-500/40 rounded-lg flex items-center justify-center gap-3 mb-3 shadow-[0_0_16px_rgba(245,158,11,0.1)]">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400/90 shrink-0">
-        Step {step} of {TOTAL_STEPS}
-      </span>
-      <span className="text-[13px] text-foreground font-medium text-center">
-        {text}
-      </span>
-    </div>,
-    anchor
   );
 }
