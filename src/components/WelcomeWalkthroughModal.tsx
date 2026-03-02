@@ -95,16 +95,16 @@ export function WelcomeWalkthroughModal() {
 
           {/* Headline */}
           <h3 className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4 text-foreground">
-            Let's Get Your First Clients 👋
+            Let's Get Your <span className="text-primary">First Clients</span> 👋
           </h3>
 
           {/* Body */}
           <div className="text-center text-[14px] text-muted-foreground/80 leading-relaxed mb-2">
-            <p>This quick guided mission will help you contact your first 3 businesses in under 5 minutes.</p>
+            <p>Follow this short guided mission to contact 3 real businesses in under 2 minutes.</p>
           </div>
           <div className="text-left text-[13px] text-muted-foreground/70 leading-relaxed mb-2 space-y-1 w-full px-2">
-            <p>• Find real businesses</p>
-            <p>• Contact them instantly</p>
+            <p>• Find live businesses instantly</p>
+            <p>• Contact them in one click</p>
             <p>• Start building your pipeline</p>
           </div>
           <p className="text-center text-[12px] text-muted-foreground/50 mb-6">
