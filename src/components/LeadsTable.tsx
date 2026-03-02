@@ -120,7 +120,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <CardTitle className="text-lg font-semibold">Search Results</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
               {leads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
-              <span className="text-muted-foreground/70 ml-1">— Tap 👁 to view details, 📋 to add to CRM</span>
+            </p>
+            <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+              Tap 👁 to view details · 📋 to add to CRM
             </p>
           </div>
           <div className="flex items-center gap-2">
