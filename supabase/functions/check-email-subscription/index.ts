@@ -25,13 +25,15 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Check if a user with this email exists
-    const { data: users } = await supabaseClient.auth.admin.listUsers({
+    // Look up user by email using admin API
+    const { data: userListData } = await supabaseClient.auth.admin.listUsers({
       page: 1,
-      perPage: 50,
+      perPage: 1,
+      filter: normalizedEmail,
     });
 
-    const existingUser = users?.users?.find(
+    // Filter for exact match (filter is a substring search)
+    const existingUser = userListData?.users?.find(
       (u) => u.email?.toLowerCase() === normalizedEmail
     );
 
