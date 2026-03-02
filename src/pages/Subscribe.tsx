@@ -125,9 +125,9 @@ const Subscribe = () => {
           {/* Benefits */}
           <div className="space-y-3.5">
             {TRIAL_FEATURES.map((feature) => (
-              <div key={feature} className="flex items-center gap-3">
-                <div className="flex-shrink-0 h-5 w-5 rounded-full bg-emerald-500/15 flex items-center justify-center">
-                  <Check className="h-3 w-3 text-emerald-400" />
+              <div key={feature} className="flex items-center gap-4">
+                <div className="flex-shrink-0 h-6 w-6 rounded-full bg-emerald-500/20 flex items-center justify-center shadow-[0_0_8px_hsl(142_76%_45%/0.2)]">
+                  <Check className="h-3.5 w-3.5 text-emerald-400" strokeWidth={3} />
                 </div>
                 <span className="text-sm">{feature}</span>
               </div>
