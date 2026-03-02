@@ -68,7 +68,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 5 – Press the gold star Track button
   if (!state.trackPressed) {
     if (pathname === '/outreach') {
-      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Press the ⭐ Track button to mark a lead as worth following up.', noDim: true };
+      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Track businesses that are interested.', noDim: true };
     }
     return { step: 5, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM and press ⭐ Track on a lead.' };
   }
