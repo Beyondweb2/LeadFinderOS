@@ -194,21 +194,7 @@ export function DemoChecklistProvider({
       });
     };
 
-    // Undo handler: decrement contact count
-    const onContactUndo = () => {
-      setState(prev => {
-        const newCount = Math.max(0, prev.contactsMadeCount - 1);
-        const next = {
-          ...prev,
-          contactsMadeCount: newCount,
-          firstContactMade: newCount >= 1,
-          threeContactsMade: newCount >= 3,
-          contactAttempted: newCount >= 1,
-        };
-        saveState(next, user?.id);
-        return next;
-      });
-    };
+
 
     const onNoteSaved = () => completeStep('noteAdded');
 
@@ -245,7 +231,7 @@ export function DemoChecklistProvider({
     window.addEventListener('crm-lead-added', onCrmAdd);
     window.addEventListener('crm-lead-purged', onCrmPurged);
     window.addEventListener('demo-checklist-contact', onContact);
-    window.addEventListener('demo-checklist-contact-undo', onContactUndo);
+    
     window.addEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
     window.addEventListener('demo-checklist-track-note-saved', onNoteSaved);
     window.addEventListener('demo-checklist-track-pressed', onTrackPressed);
@@ -275,7 +261,7 @@ export function DemoChecklistProvider({
       window.removeEventListener('crm-lead-added', onCrmAdd);
       window.removeEventListener('crm-lead-purged', onCrmPurged);
       window.removeEventListener('demo-checklist-contact', onContact);
-      window.removeEventListener('demo-checklist-contact-undo', onContactUndo);
+      
       window.removeEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
       window.removeEventListener('demo-checklist-track-note-saved', onNoteSaved);
       window.removeEventListener('demo-checklist-track-pressed', onTrackPressed);
