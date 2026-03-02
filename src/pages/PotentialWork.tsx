@@ -87,16 +87,37 @@ const mapLegacyStatus = (status: string): string => LEGACY_STATUS_MAP[status] ||
 
 const CUSTOM_STATUSES_KEY_PREFIX = 'leadfinder_custom_statuses_';
 
-const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
-  { value: 'none', label: 'None' },
-  { value: 'call', label: 'Call' },
-  { value: 'follow_up', label: 'Follow Up' },
-  { value: '2nd_follow_up', label: '2nd Follow Up' },
-  { value: 'send_draft', label: 'Send Draft' },
-  { value: 'send_initial_text', label: 'Send Initial Text' },
-  { value: 'send_voice_note', label: 'Send Voice Note' },
-  { value: 'send_follow_up', label: 'Send Follow-up' },
+/* Track Leads pipeline actions — mapped to DB enum values */
+const TRACK_NEXT_ACTION_OPTIONS: { value: string; label: string; dbValue: NextActionType }[] = [
+  { value: 'none', label: 'None', dbValue: 'none' },
+  { value: 'schedule_discovery', label: 'Schedule Discovery Call', dbValue: 'call' },
+  { value: 'prepare_proposal', label: 'Prepare Proposal', dbValue: 'send_draft' },
+  { value: 'send_proposal', label: 'Send Proposal', dbValue: 'send_draft' },
+  { value: 'follow_up_proposal', label: 'Follow Up on Proposal', dbValue: 'follow_up' },
+  { value: 'send_revision', label: 'Send Revision', dbValue: 'send_follow_up' },
+  { value: 'collect_payment', label: 'Collect Payment', dbValue: 'follow_up' },
+  { value: 'start_project', label: 'Start Project', dbValue: 'follow_up' },
+  { value: 'check_in', label: 'Check In', dbValue: 'follow_up' },
+  { value: 'close_lost', label: 'Close – Lost', dbValue: 'remove_if_no_reply' },
 ];
+
+/* Map legacy DB actions → new Track page action keys */
+const LEGACY_ACTION_MAP: Record<string, string> = {
+  call: 'schedule_discovery',
+  send_draft: 'send_proposal',
+  follow_up: 'follow_up_proposal',
+  '2nd_follow_up': 'follow_up_proposal',
+  send_initial_text: 'schedule_discovery',
+  send_voice_note: 'follow_up_proposal',
+  send_follow_up: 'follow_up_proposal',
+};
+
+const mapLegacyAction = (action: string | null): string => {
+  if (!action || action === 'none') return 'none';
+  return LEGACY_ACTION_MAP[action] || action;
+};
+
+const TRACK_ACTION_KEY_PREFIX = 'leadfinder_track_action_';
 
 const CONTACT_METHOD_LABELS: Record<string, string> = {
   whatsapp: 'WhatsApp',
@@ -106,13 +127,19 @@ const CONTACT_METHOD_LABELS: Record<string, string> = {
 };
 
 const NEXT_ACTION_COLORS: Record<string, string> = {
+  schedule_discovery: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+  prepare_proposal: 'bg-orange-500/20 text-orange-400 border-orange-500/40',
+  send_proposal: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+  follow_up_proposal: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
+  send_revision: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+  collect_payment: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+  start_project: 'bg-green-500/20 text-green-400 border-green-500/40',
+  check_in: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40',
+  close_lost: 'bg-zinc-500/20 text-zinc-400 border-zinc-500/40',
+  // Legacy fallbacks
   call: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
-  follow_up: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
-  '2nd_follow_up': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
-  send_draft: 'bg-orange-500/20 text-orange-400 border-orange-500/40',
-  send_initial_text: 'bg-green-500/20 text-green-400 border-green-500/40',
-  send_voice_note: 'bg-violet-500/20 text-violet-400 border-violet-500/40',
-  send_follow_up: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+  follow_up: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
+  send_draft: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
   none: 'bg-muted text-muted-foreground border-border/50',
 };
 
@@ -173,11 +200,37 @@ const getStageIndex = (status: string): number => {
   return PIPELINE_STAGES.indexOf(mapped);
 };
 
+const getTrackActionForLead = (leadId: string): string | null => {
+  try {
+    const raw = localStorage.getItem(`${TRACK_ACTION_KEY_PREFIX}${leadId}`);
+    return raw || null;
+  } catch { return null; }
+};
+
+const setTrackActionForLead = (leadId: string, actionKey: string | null) => {
+  try {
+    if (actionKey && actionKey !== 'none') {
+      localStorage.setItem(`${TRACK_ACTION_KEY_PREFIX}${leadId}`, actionKey);
+    } else {
+      localStorage.removeItem(`${TRACK_ACTION_KEY_PREFIX}${leadId}`);
+    }
+  } catch {}
+};
+
 const getNextActionLabel = (action: NextActionType | null, leadId: string) => {
   const customLabel = getLeadCustomAction(leadId);
   if (customLabel) return customLabel;
+  // Check track-specific action key first
+  const trackKey = getTrackActionForLead(leadId);
+  if (trackKey && trackKey !== 'none') {
+    const opt = TRACK_NEXT_ACTION_OPTIONS.find(o => o.value === trackKey);
+    if (opt) return opt.label;
+  }
   if (!action || action === 'none') return null;
-  return NEXT_ACTION_OPTIONS.find(o => o.value === action)?.label || null;
+  // Fallback: map legacy DB action to track label
+  const mapped = mapLegacyAction(action);
+  const opt = TRACK_NEXT_ACTION_OPTIONS.find(o => o.value === mapped);
+  return opt?.label || null;
 };
 
 /* ───────── LeadCard ───────── */
@@ -226,7 +279,14 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     setNotes(lead.notes || '');
     setNotesDirty(false);
     const cl = getLeadCustomAction(lead.id);
-    setNextAction(cl ? `custom::${cl}` : (lead.next_action || 'none'));
+    const trackKey = getTrackActionForLead(lead.id);
+    if (cl) {
+      setNextAction(`custom::${cl}`);
+    } else if (trackKey) {
+      setNextAction(trackKey);
+    } else {
+      setNextAction(mapLegacyAction(lead.next_action || 'none'));
+    }
     setNextActionDate(lead.next_action_date ? new Date(lead.next_action_date) : undefined);
     setEditedName(lead.business_name);
   }, [lead.notes, lead.next_action, lead.next_action_date, lead.business_name, lead.id]);
@@ -260,11 +320,21 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     }
     setNextAction(v);
     const isCustom = v.startsWith('custom::');
-    const dbAction: NextActionType = isCustom ? 'follow_up' : v as NextActionType;
-    if (isCustom) setLeadCustomAction(lead.id, v.slice(8));
-    else setLeadCustomAction(lead.id, null);
-    if (dbAction === 'none') {
+    // Resolve DB value
+    let dbAction: NextActionType;
+    if (isCustom) {
+      dbAction = 'follow_up';
+      setLeadCustomAction(lead.id, v.slice(8));
+      setTrackActionForLead(lead.id, null);
+    } else {
+      setLeadCustomAction(lead.id, null);
+      const trackOpt = TRACK_NEXT_ACTION_OPTIONS.find(o => o.value === v);
+      dbAction = trackOpt ? trackOpt.dbValue : (v as NextActionType);
+      setTrackActionForLead(lead.id, v);
+    }
+    if (dbAction === 'none' || v === 'none') {
       setNextActionDate(undefined);
+      setTrackActionForLead(lead.id, null);
     }
     await onNextActionChange(lead.id, dbAction, dbAction === 'none' ? undefined : (nextActionDate ? format(nextActionDate, 'yyyy-MM-dd') : undefined));
     if (dbAction !== 'none') {
@@ -341,9 +411,11 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const nextActionLabel = getNextActionLabel(lead.next_action, lead.id);
   const statusLabel = getStatusLabel(lead.status, customStatuses);
   const statusColorCls = getMappedStatusColor(lead.status);
+  const trackActionKey = getTrackActionForLead(lead.id);
+  const resolvedActionKey = customLabel ? 'custom' : (trackActionKey || mapLegacyAction(lead.next_action || 'none'));
   const actionColorCls = customLabel
     ? 'bg-teal-500/15 text-teal-400 border-teal-500/25'
-    : NEXT_ACTION_COLORS[lead.next_action || 'none'] || NEXT_ACTION_COLORS.none;
+    : NEXT_ACTION_COLORS[resolvedActionKey] || NEXT_ACTION_COLORS.none;
 
   return (
     <>
@@ -569,9 +641,17 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             {/* Status selector */}
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground w-12 shrink-0">Status</span>
-              <Select value={mapLegacyStatus(lead.status)} onValueChange={(v) => {
+              <Select value={mapLegacyStatus(lead.status)} onValueChange={async (v) => {
                 if (v === '__add_custom__') { onAddCustomStatus(); return; }
                 onStatusChange(lead.id, v as LeadStatus);
+                // Auto-clear next action when moving to terminal statuses
+                if (v === 'paid' || v === 'closed_lost') {
+                  setNextAction('none');
+                  setNextActionDate(undefined);
+                  setTrackActionForLead(lead.id, null);
+                  setLeadCustomAction(lead.id, null);
+                  await onNextActionChange(lead.id, 'none' as NextActionType);
+                }
                 window.dispatchEvent(new CustomEvent('demo-checklist-track-status-changed'));
                 window.dispatchEvent(new CustomEvent('demo-checklist-track-status-update'));
               }}>
@@ -626,7 +706,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                     <SelectValue placeholder="Next action" />
                   </SelectTrigger>
                   <SelectContent>
-                    {NEXT_ACTION_OPTIONS.map((opt) => (
+                    {TRACK_NEXT_ACTION_OPTIONS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
                     {customActions.length > 0 && (
