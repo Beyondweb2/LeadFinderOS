@@ -86,34 +86,34 @@ export function TrialProgressCard({
   ];
 
   return (
-    <div className="rounded-lg border border-border bg-card p-3 sm:p-4 space-y-3">
+    <div className="rounded-lg border border-border bg-card p-4 sm:p-5 space-y-4">
       {/* Header row */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Unlock className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold">Free Trial</span>
+        <div className="flex items-center gap-2.5">
+          <Unlock className="h-5 w-5 text-primary" />
+          <span className="text-base font-semibold">Free Trial</span>
         </div>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-sm text-muted-foreground font-medium">
           {countdown || '...'}
         </span>
       </div>
 
       {/* Billing reassurance */}
       {trialEnd && (
-        <p className="text-xs text-muted-foreground text-center">
+        <p className="text-sm text-muted-foreground text-center">
           You won't be charged until {new Date(trialEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
         </p>
       )}
 
       {/* 4-stat grid */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-4 gap-3">
         {stats.map((s) => (
-          <div key={s.label} className="flex flex-col items-center gap-1 py-2 rounded-md bg-muted/30">
-            <div className={`p-1.5 rounded-md ${s.bg}`}>
-              <s.icon className={`h-3.5 w-3.5 ${s.color}`} />
+          <div key={s.label} className="flex flex-col items-center gap-1.5 py-3 rounded-lg bg-muted/30">
+            <div className={`p-2 rounded-lg ${s.bg}`}>
+              <s.icon className={`h-4.5 w-4.5 sm:h-5 sm:w-5 ${s.color}`} />
             </div>
-            <span className="text-base font-bold">{s.value}</span>
-            <span className="text-[10px] text-muted-foreground leading-tight">{s.label}</span>
+            <span className="text-lg sm:text-xl font-bold">{s.value}</span>
+            <span className="text-xs text-muted-foreground leading-tight">{s.label}</span>
           </div>
         ))}
       </div>
