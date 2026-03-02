@@ -40,9 +40,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   const showWalkthrough = isDemoUser || isTrialingUser;
   const challenge = useChallenge10();
 
-  // Listen for walkthrough completion — set pending flag (always registered, regardless of challenge load state)
+  // Listen for walkthrough completion — set pending flag only for subscribed users
   useEffect(() => {
     const handleReady = () => {
+      if (!hasProAccess && !isStripeTrialing) return; // Only for subscribed/trialing users
       try {
         const key = user?.id ? `challenge_10_pending_${user.id}` : 'challenge_10_pending';
         localStorage.setItem(key, 'true');
@@ -55,7 +56,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       window.removeEventListener('walkthrough-dismissed', handleReady);
       window.removeEventListener('skip-walkthrough', handleReady);
     };
-  }, [user?.id]);
+  }, [user?.id, hasProAccess, isStripeTrialing]);
 
   // Once challenge state loads, check if there's a pending trigger (e.g. if event fired before load finished)
   useEffect(() => {
