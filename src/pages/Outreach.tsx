@@ -105,7 +105,15 @@ const Outreach = () => {
   const handlePipelineStatusChange = useCallback(async (leadId: string, status: PipelineStatus) => {
     await updateStatus(leadId, status as any);
     window.dispatchEvent(new CustomEvent('demo-checklist-pipeline-status-set'));
-  }, [updateStatus]);
+    // Auto-track when setting to Interested
+    if (status === 'interested') {
+      const lead = allLeads.find(l => l.id === leadId);
+      if (lead && !lead.is_potential_work) {
+        await updateLead(leadId, { is_potential_work: true });
+        window.dispatchEvent(new CustomEvent('track-lead-added'));
+      }
+    }
+  }, [updateStatus, updateLead, allLeads]);
 
   if (isLoading) {
     return (

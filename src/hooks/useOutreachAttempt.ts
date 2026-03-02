@@ -15,9 +15,13 @@ export function useOutreachAttempt() {
       last_outreach_attempt_at: new Date().toISOString(),
     };
 
-    // If status is not_contacted, auto-set to waiting (Attempted)
+    // If status is New (not_contacted), auto-set to Attempted (waiting)
+    // Do not override Replied, Interested, Closed, Not Interested
+    const protectedStatuses = ['replied', 'interested', 'not_interested', 'completed'];
     if (!currentStatus || currentStatus === 'not_contacted') {
       updates.status = 'waiting';
+    } else if (protectedStatuses.includes(currentStatus)) {
+      // Don't change status
     }
 
     // Fire-and-forget: update lead + insert event in parallel

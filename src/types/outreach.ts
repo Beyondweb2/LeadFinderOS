@@ -168,20 +168,16 @@ export const CONTACT_METHOD_OPTIONS: { value: ContactMethod; label: string }[] =
 export type PipelineStatus = 
   | 'not_contacted'
   | 'waiting'
-  | 'no_reply'
-  | 'sent_follow_up'
-  | 'sent_voice_note'
+  | 'replied'
   | 'interested'
   | 'not_interested'
   | 'completed';
 
 export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [
-  { value: 'not_contacted', label: 'Not Contacted' },
-  { value: 'waiting', label: 'Waiting for Reply' },
-  { value: 'no_reply', label: 'No Reply' },
-  { value: 'sent_follow_up', label: 'Sent Follow-up' },
-  { value: 'sent_voice_note', label: 'Sent Voice Message' },
-  { value: 'interested', label: 'Interested' },
+  { value: 'not_contacted', label: 'New' },
+  { value: 'waiting', label: 'Attempted' },
+  { value: 'replied', label: 'Replied' },
+  { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'completed', label: 'Closed' },
 ];
