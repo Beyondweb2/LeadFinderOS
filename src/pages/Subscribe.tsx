@@ -12,7 +12,7 @@ const TRIAL_FEATURES = [
   'Find qualified business leads',
   'Message business owners instantly',
   'Organise and track every lead',
-  'Follow up consistently',
+  'Close more deals',
 ];
 
 const Subscribe = () => {
