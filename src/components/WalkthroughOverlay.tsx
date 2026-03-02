@@ -42,7 +42,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return {
       step: 2,
       selector: '[data-walkthrough="add-crm"]',
-      tooltip: `Select 3 businesses you want to contact.  Selected: ${selected} / 3`,
+      tooltip: `Select 3 businesses you want to contact.  Selected: ${selected} / 3\n(This can be skipped next step)`,
       noDim: true,
       anchorNearSelector: '[data-walkthrough="actions-column-header"]',
     };
