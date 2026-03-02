@@ -62,12 +62,15 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   }, [isInOutreach]);
 
   const [statusFilters, setStatusFilters] = useState<WebsiteStatus[]>([
-    'NO_WEBSITE', 'DIRECTORY_ONLY', 'HAS_OWN_WEBSITE', 'UNCERTAIN',
+    'NO_WEBSITE', 'HAS_OWN_WEBSITE', 'UNCERTAIN',
   ]);
   const [currentPage, setCurrentPage] = useState(1);
 
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => statusFilters.includes(lead.websiteStatus));
+    return leads.filter((lead) => {
+      const effectiveStatus = lead.websiteStatus === 'DIRECTORY_ONLY' ? 'NO_WEBSITE' : lead.websiteStatus;
+      return statusFilters.includes(effectiveStatus);
+    });
   }, [leads, statusFilters]);
 
   // Reset page on filter/data change
@@ -79,13 +82,13 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     currentPage * ITEMS_PER_PAGE,
   );
 
-  const noWebsiteCount = leads.filter((l) => l.websiteStatus === 'NO_WEBSITE').length;
+  const noWebsiteCount = leads.filter((l) => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
   const toggleFilter = useCallback((status: WebsiteStatus, checked: boolean) => {
     setStatusFilters(prev => checked ? [...prev, status] : prev.filter(s => s !== status));
   }, []);
 
-  const statusFilterOptions: WebsiteStatus[] = useMemo(() => ['NO_WEBSITE', 'DIRECTORY_ONLY', 'HAS_OWN_WEBSITE', 'UNCERTAIN'], []);
+  const statusFilterOptions: WebsiteStatus[] = useMemo(() => ['NO_WEBSITE', 'HAS_OWN_WEBSITE', 'UNCERTAIN'], []);
 
   const renderFilterMenu = useCallback((align: 'start' | 'end' = 'start') => (
     <DropdownMenu>

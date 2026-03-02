@@ -151,7 +151,7 @@ interface SearchLead {
   name: string;
   googleMapsUrl: string;
   websiteUrl: string | null;
-  websiteStatus: 'NO_WEBSITE' | 'DIRECTORY_ONLY' | 'HAS_OWN_WEBSITE';
+  websiteStatus: 'NO_WEBSITE' | 'HAS_OWN_WEBSITE';
   confidence: number;
   reason: string;
 }
@@ -161,7 +161,7 @@ function classifyWebsite(websiteUri: string | null | undefined): { status: Searc
     return { status: 'NO_WEBSITE', confidence: 1.0, reason: 'No website listed on Google' };
   }
   if (isDirectoryUrl(websiteUri)) {
-    return { status: 'DIRECTORY_ONLY', confidence: 0.95, reason: `Directory listing: ${extractDomain(websiteUri)}` };
+    return { status: 'NO_WEBSITE', confidence: 0.95, reason: `Directory listing only: ${extractDomain(websiteUri)}` };
   }
   return { status: 'HAS_OWN_WEBSITE', confidence: 0.9, reason: 'Has own website' };
 }
@@ -266,7 +266,7 @@ async function textSearchPlaces(
         reason,
       });
 
-      if (status === 'NO_WEBSITE' || status === 'DIRECTORY_ONLY') {
+      if (status === 'NO_WEBSITE') {
         noWebsiteCount++;
       }
     }
@@ -280,8 +280,8 @@ async function textSearchPlaces(
     console.log(`[DIAG-SEARCH] After page ${page}: pool=${pool.length}, noWebsite=${noWebsiteCount}`);
   }
 
-  // ── Selection: NO_WEBSITE/DIRECTORY_ONLY first, fill remainder with HAS_OWN_WEBSITE ──
-  const noWebsiteLeads = pool.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY');
+  // ── Selection: NO_WEBSITE first, fill remainder with HAS_OWN_WEBSITE ──
+  const noWebsiteLeads = pool.filter(l => l.websiteStatus === 'NO_WEBSITE');
   const hasWebsiteLeads = pool.filter(l => l.websiteStatus === 'HAS_OWN_WEBSITE');
 
   const finalLeads: SearchLead[] = [];

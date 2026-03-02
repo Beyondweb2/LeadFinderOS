@@ -1,6 +1,6 @@
 export type WebsiteStatus = 
   | 'NO_WEBSITE' 
-  | 'DIRECTORY_ONLY' 
+  | 'DIRECTORY_ONLY' // kept for backward compat, treated as NO_WEBSITE everywhere
   | 'HAS_OWN_WEBSITE' 
   | 'UNCERTAIN';
 
