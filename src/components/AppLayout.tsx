@@ -95,18 +95,6 @@ export function AppLayout({ children }: AppLayoutProps) {
             {/* Skip walkthrough link — top-right, outside modals */}
             <div className="flex items-center justify-end gap-2 px-4 sm:px-6 lg:px-8 pt-2 pb-1">
               <SkipWalkthroughButton />
-              <div className="flex items-center gap-2 md:hidden">
-                <AccentColorPicker />
-                <Avatar className="h-8 w-8">
-                  {avatarUrl ? (
-                    <AvatarImage src={avatarUrl} alt="Profile" />
-                  ) : null}
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                    {user?.email?.charAt(0).toUpperCase() || 'U'}
-                  </AvatarFallback>
-                </Avatar>
-                <UserMenu />
-              </div>
             </div>
             <main ref={mainRef} className="flex-1 overflow-auto pb-20 md:pb-0">
               <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
