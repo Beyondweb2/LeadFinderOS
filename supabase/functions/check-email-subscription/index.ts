@@ -18,6 +18,7 @@ serve(async (req) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    console.log('[CHECK-EMAIL-SUBSCRIPTION] Checking email', normalizedEmail);
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -25,17 +26,31 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Look up user by email using admin API
-    const { data: userListData } = await supabaseClient.auth.admin.listUsers({
-      page: 1,
-      perPage: 1,
-      filter: normalizedEmail,
-    });
+    // Check if a user with this email exists (scan paginated auth users)
+    let existingUser: { id: string; email?: string | null } | undefined;
+    let page = 1;
+    const perPage = 100;
+    const maxPages = 50;
 
-    // Filter for exact match (filter is a substring search)
-    const existingUser = userListData?.users?.find(
-      (u) => u.email?.toLowerCase() === normalizedEmail
-    );
+    while (!existingUser && page <= maxPages) {
+      const { data: usersData, error: usersError } = await supabaseClient.auth.admin.listUsers({
+        page,
+        perPage,
+      });
+
+      if (usersError) throw usersError;
+
+      const users = usersData?.users ?? [];
+      console.log('[CHECK-EMAIL-SUBSCRIPTION] Page fetched', { page, count: users.length });
+
+      existingUser = users.find((u) => u.email?.toLowerCase() === normalizedEmail);
+
+      // Stop when no more pages
+      if (users.length < perPage) break;
+      page += 1;
+    }
+
+    console.log('[CHECK-EMAIL-SUBSCRIPTION] Existing user found', { found: !!existingUser });
 
     if (!existingUser) {
       return new Response(JSON.stringify({ exists: false, hasActiveSubscription: false }), {
