@@ -17,6 +17,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 // Subscribe page removed — checkout happens directly from landing
 import BillingSuccess from "./pages/BillingSuccess";
+import CompleteSetup from "./pages/CompleteSetup";
 import BillingCancel from "./pages/BillingCancel";
 import Outreach from "./pages/Outreach";
 import Dashboard from "./pages/Dashboard";
@@ -139,6 +140,7 @@ const App = () => {
           <Routes>
             <Route path="/auth" element={<Auth />} />
              <Route path="/billing/success" element={<BillingSuccess />} />
+             <Route path="/complete-setup" element={<CompleteSetup />} />
              <Route path="/billing/cancel" element={<BillingCancel />} />
              <Route 
                path="/landing" 

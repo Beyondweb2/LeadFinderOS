@@ -29,9 +29,10 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const { session_id, password } = await req.json();
+    const { session_id, password, language } = await req.json();
     if (!session_id) throw new Error("Missing session_id");
-    if (!password || password.length < 6) throw new Error("Password must be at least 6 characters");
+    if (!password || password.length < 8) throw new Error("Password must be at least 8 characters");
+    const userLanguage = language || 'en';
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
@@ -102,6 +103,8 @@ serve(async (req) => {
         plan_status: 'active',
         trial_used: true,
         lifecycle_stage: 99,
+        preferred_language: userLanguage,
+        setup_completed: true,
       });
       logStep("Created user_trials row");
     } else {
@@ -110,6 +113,8 @@ serve(async (req) => {
         trial_used: true,
         lifecycle_stage: 99,
         checkout_started_at: null,
+        preferred_language: userLanguage,
+        setup_completed: true,
       }).eq('user_id', userId);
       logStep("Updated user_trials row");
     }

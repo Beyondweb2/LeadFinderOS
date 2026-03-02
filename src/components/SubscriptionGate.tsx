@@ -1,6 +1,8 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { PaymentPausedScreen } from '@/components/PaymentPausedScreen';
 
@@ -10,8 +12,33 @@ interface SubscriptionGateProps {
 
 export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const { isLoading: subLoading, isPaymentPaused, isPaidSubscriber, isStripeTrialing, isAdmin } = useSubscription();
+  const { user } = useAuth();
+  const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
+  const [setupLoading, setSetupLoading] = useState(true);
 
-  if (subLoading) {
+  useEffect(() => {
+    if (!user?.id) {
+      setSetupLoading(false);
+      return;
+    }
+
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from('user_trials')
+          .select('setup_completed')
+          .eq('user_id', user.id)
+          .maybeSingle();
+        setSetupCompleted((data as any)?.setup_completed ?? false);
+      } catch {
+        setSetupCompleted(false);
+      } finally {
+        setSetupLoading(false);
+      }
+    })();
+  }, [user?.id]);
+
+  if (subLoading || setupLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -29,6 +56,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
   if (!hasAccess) {
     return <Navigate to="/landing" replace />;
+  }
+
+  // If subscribed but setup not completed, redirect to complete-setup
+  if (!isAdmin && !setupCompleted) {
+    return <Navigate to="/complete-setup" replace />;
   }
 
   return <>{children}</>;
