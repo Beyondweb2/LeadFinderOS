@@ -120,7 +120,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <CardTitle className="text-lg font-semibold">Search Results</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
               {leads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
-              <span className="text-muted-foreground/70 ml-1">— Tap 📋 to add to CRM</span>
+              <span className="text-muted-foreground/70 ml-1">— Tap 👁 to view details, 📋 to add to CRM</span>
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -138,7 +138,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <p className="text-sm text-muted-foreground">
               Found {leads.length} businesses •
               <span className="text-status-hot font-semibold ml-1">{noWebsiteCount} without websites</span>
-              <span className="text-muted-foreground/70 ml-2">— Click 📋 to add to CRM</span>
+              <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to add to CRM</span>
             </p>
           </div>
           <div className="flex items-center gap-2">
