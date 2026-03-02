@@ -85,7 +85,7 @@ const PIPELINE_STAGES = DEFAULT_POTENTIAL_WORK_STATUSES.map(s => s.value);
 
 const mapLegacyStatus = (status: string): string => LEGACY_STATUS_MAP[status] || status;
 
-const CUSTOM_STATUSES_KEY = 'leadfinder_custom_statuses';
+const CUSTOM_STATUSES_KEY_PREFIX = 'leadfinder_custom_statuses_';
 
 const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'none', label: 'None' },
@@ -887,16 +887,20 @@ const PotentialWorkPage = () => {
     return data as OutreachLead;
   }, []);
 
+  const customStatusesKey = user?.id ? `${CUSTOM_STATUSES_KEY_PREFIX}${user.id}` : null;
+
   useEffect(() => {
+    if (!customStatusesKey) return;
     try {
-      const saved = localStorage.getItem(CUSTOM_STATUSES_KEY);
+      const saved = localStorage.getItem(customStatusesKey);
       if (saved) setCustomStatuses(JSON.parse(saved));
+      else setCustomStatuses([]);
     } catch {}
-  }, []);
+  }, [customStatusesKey]);
 
   const saveCustomStatuses = (updated: { value: string; label: string }[]) => {
     setCustomStatuses(updated);
-    localStorage.setItem(CUSTOM_STATUSES_KEY, JSON.stringify(updated));
+    if (customStatusesKey) localStorage.setItem(customStatusesKey, JSON.stringify(updated));
   };
 
   const handleAddCustomStatus = () => {
