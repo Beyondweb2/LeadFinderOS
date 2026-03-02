@@ -41,7 +41,6 @@ serve(async (req) => {
         });
       }
 
-      // Rate limit by code to prevent abuse
       const rl = checkRateLimit(`click:${code}`, 30, RATE_WINDOW_MS);
       if (!rl.allowed) {
         return new Response(JSON.stringify({ ok: true }), {
@@ -50,12 +49,6 @@ serve(async (req) => {
         });
       }
 
-      await supabaseAdmin
-        .from('affiliates')
-        .update({ click_count: supabaseAdmin.rpc ? undefined : undefined })
-        .eq('code', code.toLowerCase().trim());
-
-      // Use raw SQL increment via rpc is not available, so do read-then-write
       const { data: aff } = await supabaseAdmin
         .from('affiliates')
         .select('click_count')
@@ -131,13 +124,14 @@ serve(async (req) => {
                 .eq('affiliate_id', affiliate.id),
               supabaseAdmin
                 .from('user_trials')
-                .select('id, plan_status')
+                .select('id, plan_status, trial_end_date')
                 .eq('affiliate_code', affiliate.code),
             ]);
 
             const conversions = conversionsResult.data || [];
             const trials = trialsResult.data || [];
 
+            // Paid conversions = actual payments after trial (from affiliate_conversions)
             const totalConversions = conversions.length;
             const pendingCommission = conversions
               .filter(c => c.status === 'pending')
@@ -145,15 +139,21 @@ serve(async (req) => {
             const paidCommission = conversions
               .filter(c => c.status === 'paid')
               .reduce((sum, c) => sum + c.commission_amount, 0);
+            // Revenue only from paid invoices (affiliate_conversions)
             const totalRevenue = conversions
               .reduce((sum, c) => sum + c.first_payment_amount, 0);
 
-            const trialSignups = trials.length;
-            const paidSubscriptions = conversions.length; // each conversion = a paid sub
+            // Trial metrics
+            const trialSignups = trials.length; // all who started a trial via this code
+            const now = new Date();
+            const trialing = trials.filter(t => {
+              // Currently in trial: plan_status is 'trial' and trial hasn't ended
+              return t.plan_status === 'trial' && new Date(t.trial_end_date) > now;
+            }).length;
 
             const clickCount = affiliate.click_count || 0;
-            const clickToSignup = clickCount > 0 ? ((trialSignups / clickCount) * 100).toFixed(1) : '0.0';
-            const signupToPaid = trialSignups > 0 ? ((paidSubscriptions / trialSignups) * 100).toFixed(1) : '0.0';
+            const clickToTrial = clickCount > 0 ? ((trialSignups / clickCount) * 100).toFixed(1) : '0.0';
+            const trialToPaid = trialSignups > 0 ? ((totalConversions / trialSignups) * 100).toFixed(1) : '0.0';
 
             return {
               ...affiliate,
@@ -161,10 +161,11 @@ serve(async (req) => {
               pending_commission: pendingCommission,
               paid_commission: paidCommission,
               trial_signups: trialSignups,
+              trialing,
               total_revenue: totalRevenue,
-              paid_subscriptions: paidSubscriptions,
-              click_to_signup: clickToSignup,
-              signup_to_paid: signupToPaid,
+              paid_subscriptions: totalConversions,
+              click_to_trial: clickToTrial,
+              trial_to_paid: trialToPaid,
             };
           })
         );

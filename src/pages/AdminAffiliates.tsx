@@ -48,7 +48,10 @@ import {
   Trash2, 
   ExternalLink,
   TrendingUp,
-  Percent
+  Percent,
+  ArrowRight,
+  Timer,
+  Info
 } from 'lucide-react';
 
 interface Affiliate {
@@ -63,11 +66,12 @@ interface Affiliate {
   pending_commission: number;
   paid_commission: number;
   trial_signups: number;
+  trialing: number;
   click_count: number;
   total_revenue: number;
   paid_subscriptions: number;
-  click_to_signup: string;
-  signup_to_paid: string;
+  click_to_trial: string;
+  trial_to_paid: string;
 }
 
 interface Conversion {
@@ -114,7 +118,6 @@ export default function AdminAffiliates() {
   const checkAdminAndLoad = async () => {
     if (!user) return;
     
-    // Check admin role
     const { data } = await supabase.rpc('has_role', { 
       _user_id: user.id, 
       _role: 'admin' 
@@ -329,8 +332,12 @@ export default function AdminAffiliates() {
   const totalPaid = affiliates.reduce((sum, a) => sum + a.paid_commission, 0);
   const totalConversions = affiliates.reduce((sum, a) => sum + a.total_conversions, 0);
   const totalTrialSignups = affiliates.reduce((sum, a) => sum + a.trial_signups, 0);
+  const totalTrialing = affiliates.reduce((sum, a) => sum + (a.trialing || 0), 0);
   const totalClicks = affiliates.reduce((sum, a) => sum + (a.click_count || 0), 0);
   const totalRevenue = affiliates.reduce((sum, a) => sum + (a.total_revenue || 0), 0);
+
+  const overallClickToTrial = totalClicks > 0 ? ((totalTrialSignups / totalClicks) * 100).toFixed(1) : '0.0';
+  const overallTrialToPaid = totalTrialSignups > 0 ? ((totalConversions / totalTrialSignups) * 100).toFixed(1) : '0.0';
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8">
@@ -344,6 +351,10 @@ export default function AdminAffiliates() {
             <div>
               <h1 className="text-2xl font-bold">Affiliate Dashboard</h1>
               <p className="text-muted-foreground">Create links, manage partners & track commissions</p>
+              <p className="text-xs text-muted-foreground/70 mt-1 flex items-center gap-1">
+                <Info className="h-3 w-3" />
+                Trials last 5 days. Paid conversions and commission will update after the trial ends and the first payment succeeds.
+              </p>
             </div>
           </div>
           <Button onClick={() => setShowCreateDialog(true)} size="lg">
@@ -353,7 +364,7 @@ export default function AdminAffiliates() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Clicks</CardTitle>
@@ -368,12 +379,24 @@ export default function AdminAffiliates() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Signups</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Trials Started</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-blue-500" />
                 <span className="text-2xl font-bold">{totalTrialSignups}</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-amber-500/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Trialing</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-2">
+                <Timer className="h-5 w-5 text-amber-500" />
+                <span className="text-2xl font-bold">{totalTrialing}</span>
               </div>
             </CardContent>
           </Card>
@@ -416,30 +439,63 @@ export default function AdminAffiliates() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Paid Out</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Click→Trial</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-green-500" />
-                <span className="text-2xl font-bold">{formatCurrency(totalPaid)}</span>
+                <Percent className="h-5 w-5 text-primary" />
+                <span className="text-2xl font-bold">{overallClickToTrial}%</span>
               </div>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Click→Paid</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Trial→Paid</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-2">
-                <Percent className="h-5 w-5 text-primary" />
-                <span className="text-2xl font-bold">
-                  {totalClicks > 0 ? ((totalConversions / totalClicks) * 100).toFixed(1) : '0.0'}%
-                </span>
+                <Percent className="h-5 w-5 text-green-500" />
+                <span className="text-2xl font-bold">{overallTrialToPaid}%</span>
               </div>
             </CardContent>
           </Card>
         </div>
+
+        {/* Pipeline Section */}
+        <Card className="border-border/50">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Pipeline</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between gap-2 overflow-x-auto">
+              <div className="flex flex-col items-center min-w-[80px]">
+                <span className="text-2xl font-bold">{totalClicks}</span>
+                <span className="text-xs text-muted-foreground">Clicks</span>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex flex-col items-center min-w-[80px]">
+                <span className="text-2xl font-bold text-blue-500">{totalTrialSignups}</span>
+                <span className="text-xs text-muted-foreground">Trials Started</span>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex flex-col items-center min-w-[80px]">
+                <span className="text-2xl font-bold text-amber-500">{totalTrialing}</span>
+                <span className="text-xs text-muted-foreground">Trialing</span>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex flex-col items-center min-w-[80px]">
+                <span className="text-2xl font-bold text-green-500">{totalConversions}</span>
+                <span className="text-xs text-muted-foreground">Paid</span>
+              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              <div className="flex flex-col items-center min-w-[80px]">
+                <span className="text-2xl font-bold text-yellow-500">{formatCurrency(totalPending)}</span>
+                <span className="text-xs text-muted-foreground">Pending Commission</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Quick Link Generator */}
         <Card className="border-primary/20 bg-primary/5">
@@ -524,11 +580,12 @@ export default function AdminAffiliates() {
                       <TableHead>Affiliate</TableHead>
                       <TableHead>Link</TableHead>
                       <TableHead>Clicks</TableHead>
-                      <TableHead>Signups</TableHead>
+                      <TableHead>Trials</TableHead>
+                      <TableHead>Trialing</TableHead>
                       <TableHead>Paid</TableHead>
+                      <TableHead>Click→Trial</TableHead>
+                      <TableHead>Trial→Paid</TableHead>
                       <TableHead>Revenue</TableHead>
-                      <TableHead>Click→Sign</TableHead>
-                      <TableHead>Sign→Paid</TableHead>
                       <TableHead>Commission</TableHead>
                       <TableHead>Active</TableHead>
                       <TableHead></TableHead>
@@ -566,21 +623,24 @@ export default function AdminAffiliates() {
                           <span className="font-medium">{affiliate.click_count || 0}</span>
                         </TableCell>
                         <TableCell>
-                          <span className="text-muted-foreground">{affiliate.trial_signups}</span>
+                          <span className="text-blue-500 font-medium">{affiliate.trial_signups}</span>
                         </TableCell>
                         <TableCell>
-                          <span className="font-medium">{affiliate.paid_subscriptions || 0}</span>
+                          <span className="text-amber-500 font-medium">{affiliate.trialing || 0}</span>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-green-500 font-medium">{affiliate.paid_subscriptions || 0}</span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{affiliate.click_to_trial}%</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{affiliate.trial_to_paid}%</Badge>
                         </TableCell>
                         <TableCell>
                           <span className="text-emerald-600 dark:text-emerald-400 font-medium">
                             {formatCurrency(affiliate.total_revenue || 0)}
                           </span>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{affiliate.click_to_signup}%</Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{affiliate.signup_to_paid}%</Badge>
                         </TableCell>
                         <TableCell>
                           <span className="text-amber-600 dark:text-amber-400 font-medium">
@@ -746,8 +806,8 @@ export default function AdminAffiliates() {
               {conversions.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <DollarSign className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                  <p>No conversions yet for this affiliate.</p>
-                  <p className="text-sm mt-1">Conversions appear when referred users make their first payment.</p>
+                  <p>No paid conversions yet for this affiliate.</p>
+                  <p className="text-sm mt-1">Conversions appear when referred users pay their first invoice after the 5-day trial.</p>
                 </div>
               ) : (
                 <>
