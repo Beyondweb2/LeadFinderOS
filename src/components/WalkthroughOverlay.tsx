@@ -4,6 +4,7 @@ import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
 import { useWalkthroughTracking } from '@/hooks/useWalkthroughTracking';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 interface StepDef {
   step: number;
@@ -17,82 +18,70 @@ interface StepDef {
 
 const TOTAL_STEPS = 8;
 
-function getActiveStep(state: any, pathname: string): StepDef | null {
-  // Step 1 – Search for businesses
+function getActiveStep(state: any, pathname: string, t: any): StepDef | null {
   if (!state.searchDone) {
     if (pathname !== '/find-leads') {
-      return { step: 1, selector: '[data-walkthrough="search-nav"]', tooltip: 'Search for a business category & location.', noDim: true };
+      return { step: 1, selector: '[data-walkthrough="search-nav"]', tooltip: t('walkthrough.step1SearchNav'), noDim: true };
     }
     const bizInput = document.querySelector('[data-walkthrough-step="business-type"]');
     const bizValue = (bizInput as HTMLInputElement)?.value?.trim();
     if (!bizValue) {
-      return { step: 1, selector: '[data-walkthrough-step="business-type-area"]', tooltip: 'Type a business type or tap a quick option.', noDim: true };
+      return { step: 1, selector: '[data-walkthrough-step="business-type-area"]', tooltip: t('walkthrough.step1BusinessType'), noDim: true };
     }
     const locInput = document.querySelector('[data-walkthrough-step="location"]');
     const locValue = (locInput as HTMLInputElement)?.value?.trim();
     if (!locValue) {
-      return { step: 1, selector: '[data-walkthrough-step="location-area"]', tooltip: 'Type a location or pick one from Quick Locations.', noDim: true };
+      return { step: 1, selector: '[data-walkthrough-step="location-area"]', tooltip: t('walkthrough.step1Location'), noDim: true };
     }
-    return { step: 1, selector: '[data-walkthrough-step="search"]', tooltip: 'Press Find Leads to search.', noDim: true };
+    return { step: 1, selector: '[data-walkthrough-step="search"]', tooltip: t('walkthrough.step1Search'), noDim: true };
   }
 
-  // Step 2 – Select 3 leads (tooltip anchored near Actions column header, not on buttons)
   if (!state.addedToCrm) {
     const selected = state.crmAddCount || 0;
     return {
-      step: 2,
-      selector: '[data-walkthrough="add-crm"]',
-      tooltip: `Select 3 businesses you want to contact.  Selected: ${selected} / 3\n(This can be skipped next step)`,
-      noDim: true,
-      anchorNearSelector: '[data-walkthrough="actions-column-header"]',
+      step: 2, selector: '[data-walkthrough="add-crm"]',
+      tooltip: t('walkthrough.step2Select', { count: selected }),
+      noDim: true, anchorNearSelector: '[data-walkthrough="actions-column-header"]',
     };
   }
 
-  // Step 3 – Contact 3 leads via Call, SMS or WhatsApp (merged step)
   if (!state.threeContactsMade) {
     const contacted = state.contactsMadeCount || 0;
     if (pathname === '/outreach') {
-      return { step: 3, selector: '[data-walkthrough="contact"]', tooltip: `Contact businesses via Call, SMS or WhatsApp.\n${contacted}/3 contacted.`, noDim: true };
+      return { step: 3, selector: '[data-walkthrough="contact"]', tooltip: t('walkthrough.step3Contact', { count: contacted }), noDim: true };
     }
-    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: `Open Outreach to contact businesses (${contacted}/3).` };
+    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: t('walkthrough.step3NavToOutreach', { count: contacted }) };
   }
 
-  // Step 5 – Press the gold star Track button
   if (!state.trackPressed) {
     if (pathname === '/outreach') {
-      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Track businesses that are interested.', noDim: true };
+      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: t('walkthrough.step5Track'), noDim: true };
     }
-    return { step: 5, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open Outreach and press ⭐ Track on a lead.' };
+    return { step: 5, selector: '[data-walkthrough="crm-nav"]', tooltip: t('walkthrough.step5NavToOutreach') };
   }
 
-  // Step 6 – Navigate to Track Leads page
   if (!state.viewedProgress) {
-    return { step: 6, selector: '[data-walkthrough="track-nav"]', tooltip: 'Manage your pipeline here.', tooltipPosition: 'top' };
+    return { step: 6, selector: '[data-walkthrough="track-nav"]', tooltip: t('walkthrough.step6Pipeline'), tooltipPosition: 'top' };
   }
 
-  // Step 7 – Update pipeline status (top of card)
   if (!state.trackStatusSet) {
-    return { step: 7, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the status for this lead.', noDim: true };
+    return { step: 7, selector: '[data-walkthrough-step="track-status-select"]', tooltip: t('walkthrough.step7Status'), noDim: true };
   }
 
-  // Step 8 – Set a next action
   if (!state.nextActionSet) {
-    return { step: 8, selector: '[data-walkthrough="next-action"]', tooltip: 'Now set a next action for this lead.', noDim: true };
+    return { step: 8, selector: '[data-walkthrough="next-action"]', tooltip: t('walkthrough.step8NextAction'), noDim: true };
   }
 
-  // Step 9 – Set a date
   if (!state.nextDateSet) {
-    return { step: 9, selector: '[data-walkthrough-step="follow-up-date"]', tooltip: 'Pick a date for this action.', noDim: true };
+    return { step: 9, selector: '[data-walkthrough-step="follow-up-date"]', tooltip: t('walkthrough.step9Date'), noDim: true };
   }
 
-  // Step 10 – Add a note
   if (!state.noteAdded) {
-    return { step: 10, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details about this lead.', noDim: true };
+    return { step: 10, selector: '[data-walkthrough="notes"]', tooltip: t('walkthrough.step10Note'), noDim: true };
   }
 
-  // Step 11 – Collapse a card
   if (!state.cardCollapsed) {
-    return { step: 11, selector: '[data-walkthrough="collapse-card"]', tooltip: 'Collapse the card to finish. You\'re all set!', noDim: true, tooltipPosition: 'top' };
+    return { step: 11, selector: '[data-walkthrough="collapse-card"]', tooltip: t('walkthrough.step11Collapse'), noDim: true, tooltipPosition: 'top' };
   }
 
   return null;
@@ -140,6 +129,7 @@ export function WalkthroughOverlay() {
   const { walkthroughOpen } = useWalkthroughStatus();
   const { logStepView, logExit } = useWalkthroughTracking(isReplay);
   const location = useLocation();
+  const { t } = useTranslation();
   const [targetRect, setTargetRect] = useState<DOMRect | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
   const [activeStep, setActiveStep] = useState<StepDef | null>(null);

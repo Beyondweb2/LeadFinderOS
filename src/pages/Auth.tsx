@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
 import { readLastRoute } from '@/hooks/usePersistLastRoute';
@@ -12,20 +13,24 @@ import { Loader2, CreditCard, Sparkles, Gift, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
+import { LanguageSelector } from '@/components/LanguageSelector';
+import { type SupportedLanguage } from '@/hooks/useLanguage';
+import { LANG_STORAGE_KEY } from '@/i18n';
 import appLogo from '@/assets/logo.png';
 import { trackCompleteRegistration } from '@/lib/fbPixel';
 
-const authSchema = z.object({
-  email: z.string().trim().email({ message: 'Please enter a valid email address' }),
-  password: z.string().min(6, { message: 'Password must be at least 6 characters' }),
-});
-
 const Auth = () => {
+  const { t } = useTranslation();
   const [searchParamsInit] = useSearchParams();
   const intentParam = searchParamsInit.get('intent');
   const [isLogin, setIsLogin] = useState(!intentParam);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(() => {
+    try {
+      return (localStorage.getItem(LANG_STORAGE_KEY) as SupportedLanguage) || 'en';
+    } catch { return 'en'; }
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRedirectingToCheckout, setIsRedirectingToCheckout] = useState(false);
   const [showTrialModal, setShowTrialModal] = useState(false);
@@ -35,7 +40,7 @@ const Auth = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  // Redirect if already authenticated — always go to app (silent free searches handle limits)
+  // Redirect if already authenticated
   useEffect(() => {
     if (!user || isLoading) return;
 
@@ -52,7 +57,6 @@ const Auth = () => {
       // ignore
     }
 
-    // Fallback to last remembered in-app route
     if (!redirectTo) {
       redirectTo = readLastRoute(user.id) || '/';
     }
@@ -61,6 +65,10 @@ const Auth = () => {
   }, [user, isLoading, navigate]);
 
   const validateForm = () => {
+    const authSchema = z.object({
+      email: z.string().trim().email({ message: t('auth.validEmail') }),
+      password: z.string().min(6, { message: t('auth.passwordMinLength') }),
+    });
     const result = authSchema.safeParse({ email, password });
     if (!result.success) {
       const fieldErrors: { email?: string; password?: string } = {};
@@ -88,41 +96,48 @@ const Auth = () => {
         if (error) {
           if (error.message.includes('Invalid login credentials')) {
             toast({
-              title: 'Login failed',
-              description: 'Invalid email or password. Please try again.',
+              title: t('auth.loginFailed'),
+              description: t('auth.invalidCredentials'),
               variant: 'destructive',
             });
           } else {
             toast({
-              title: 'Login failed',
+              title: t('auth.loginFailed'),
               description: error.message,
               variant: 'destructive',
             });
           }
-        } else {
-          // Login success — no toast
         }
       } else {
+        // Store selected language before signup
+        try { localStorage.setItem(LANG_STORAGE_KEY, selectedLanguage); } catch {}
+
         const { error } = await signUp(email, password);
         if (error) {
           if (error.message.includes('User already registered')) {
             toast({
-              title: 'Sign up failed',
-              description: 'This email is already registered. Try logging in instead.',
+              title: t('auth.signUpFailed'),
+              description: t('auth.emailAlreadyRegistered'),
               variant: 'destructive',
             });
           } else {
             toast({
-              title: 'Sign up failed',
+              title: t('auth.signUpFailed'),
               description: error.message,
               variant: 'destructive',
             });
           }
         } else {
           trackCompleteRegistration();
+          // Save language to DB after signup via edge function
+          try {
+            await supabase.functions.invoke('ensure-trial', {
+              body: { action: 'set_language', language: selectedLanguage },
+            });
+          } catch {}
           toast({
-            title: 'Account created!',
-            description: 'Welcome! Redirecting to your dashboard...',
+            title: t('auth.accountCreated'),
+            description: t('auth.welcomeRedirecting'),
           });
           navigate('/');
           return;
@@ -131,6 +146,16 @@ const Auth = () => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  // When language changes on the form, also update i18n immediately
+  const handleLanguageChange = (lang: SupportedLanguage) => {
+    setSelectedLanguage(lang);
+    try { localStorage.setItem(LANG_STORAGE_KEY, lang); } catch {}
+    // Dynamic import to change language
+    import('@/i18n').then(({ default: i18n }) => {
+      i18n.changeLanguage(lang);
+    });
   };
 
   if (isLoading) {
@@ -143,13 +168,11 @@ const Auth = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      {/* Capture affiliate codes from URL */}
       <AffiliateCapture />
       {/* Free Trial Loading Modal */}
       <Dialog open={showTrialModal} onOpenChange={() => {}}>
         <DialogContent className="sm:max-w-md border-primary/30 bg-card/95 backdrop-blur-xl" hideClose>
           <div className="flex flex-col items-center justify-center py-8 gap-6">
-            {/* Animated ring */}
             <div className="relative">
               <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
               <div className="relative h-20 w-20 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
@@ -158,38 +181,35 @@ const Auth = () => {
               </div>
             </div>
             
-            {/* Text content */}
             <div className="text-center space-y-2">
               <h3 className="text-xl font-bold flex items-center justify-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
-                3-Day Full Access
+                {t('trial.threeDayFullAccess')}
                 <Sparkles className="h-5 w-5 text-primary" />
               </h3>
               <p className="text-muted-foreground text-sm">
-                Setting up your free trial - £0 for 3 days, then £19.99/mo. Cancel anytime.
+                {t('trial.settingUpTrial')}
               </p>
             </div>
             
-            {/* Benefits list */}
             <div className="space-y-2 text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Check className="h-4 w-4 text-primary" />
-                <span>Unlimited business searches</span>
+                <span>{t('trial.unlimitedSearches')}</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Check className="h-4 w-4 text-primary" />
-                <span>Full outreach & pipeline tracking</span>
+                <span>{t('trial.fullOutreach')}</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Check className="h-4 w-4 text-primary" />
-                <span>WhatsApp & SMS outreach templates</span>
+                <span>{t('trial.whatsappTemplates')}</span>
               </div>
             </div>
 
-            {/* Demo fallback */}
             <div className="text-center pt-1 border-t border-border/50">
               <p className="text-xs text-muted-foreground mb-1">
-                Not ready to add a card yet?
+                {t('trial.notReadyCard')}
               </p>
               <button
                 type="button"
@@ -199,14 +219,13 @@ const Auth = () => {
                 }}
                 className="text-xs text-primary hover:underline font-medium"
               >
-                1 free search & walkthrough in demo →
+                {t('trial.freeSearchDemo')}
               </button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      
       <Card className="w-full max-w-md relative z-10 bg-card border-border">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-4">
@@ -217,12 +236,12 @@ const Auth = () => {
           </CardTitle>
           <CardDescription>
             {isLogin 
-              ? 'Sign in to find businesses without websites' 
-              : 'Create an account and find more clients today'}
+              ? t('auth.signInToFind')
+              : t('auth.createAccountDesc')}
           </CardDescription>
           {!isLogin && (
             <p className="text-xs text-muted-foreground mt-2">
-              No card required. See real results instantly.
+              {t('auth.noCardRequired')}
             </p>
           )}
         </CardHeader>
@@ -230,11 +249,11 @@ const Auth = () => {
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">{t('auth.email')}</Label>
               <Input
                 id="email"
                 type="email"
-                placeholder="you@example.com"
+                placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isSubmitting}
@@ -246,11 +265,11 @@ const Auth = () => {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">{t('auth.password')}</Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder={t('auth.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isSubmitting}
@@ -260,6 +279,15 @@ const Auth = () => {
                 <p className="text-sm text-destructive">{errors.password}</p>
               )}
             </div>
+
+            {/* Language selector - shown on signup */}
+            {!isLogin && (
+              <LanguageSelector
+                value={selectedLanguage}
+                onChange={handleLanguageChange}
+                label={t('auth.chooseLanguage')}
+              />
+            )}
           </CardContent>
           
           <CardFooter className="flex flex-col gap-4">
@@ -271,15 +299,15 @@ const Auth = () => {
               {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {isLogin ? 'Signing in...' : 'Creating account...'}
+                  {isLogin ? t('auth.signingIn') : t('auth.creatingAccount')}
                 </>
               ) : (
-                isLogin ? 'Sign In' : 'Create Account'
+                isLogin ? t('auth.signIn') : t('auth.createAccount')
               )}
             </Button>
             
             <p className="text-sm text-muted-foreground text-center">
-              {isLogin ? "Don't have an account? " : 'Already have an account? '}
+              {isLogin ? t('auth.noAccount') + ' ' : t('auth.haveAccount') + ' '}
               <button
                 type="button"
                 onClick={() => {
@@ -288,7 +316,7 @@ const Auth = () => {
                 }}
                 className="text-primary hover:underline font-medium"
               >
-                {isLogin ? 'Sign up' : 'Sign in'}
+                {isLogin ? t('auth.signUp') : t('auth.signIn')}
               </button>
             </p>
           </CardFooter>

@@ -1,0 +1,1 @@
+ALTER TABLE public.user_trials ADD COLUMN IF NOT EXISTS preferred_language text DEFAULT 'en';
