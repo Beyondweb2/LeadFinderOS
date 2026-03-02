@@ -154,7 +154,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
             WhatsApp Message
           </DialogTitle>
           <DialogDescription>
-            Send a WhatsApp message to <span className="font-semibold text-foreground">{lead.business_name}</span>
+            To <span className="font-semibold text-foreground">{lead.business_name}</span>
           </DialogDescription>
         </DialogHeader>
 
