@@ -350,17 +350,7 @@ export function WalkthroughOverlay() {
             Step {activeStep.step} of {TOTAL_STEPS}
           </div>
           <div className="text-[13px] text-foreground font-medium leading-relaxed whitespace-pre-line">
-            {(() => {
-              const text = tooltipText || '';
-              const lastSpaceIdx = text.lastIndexOf(' ');
-              if (lastSpaceIdx === -1) return <span className="text-primary">{text}</span>;
-              return (
-                <>
-                  {text.slice(0, lastSpaceIdx)}{' '}
-                  <span className="text-primary">{text.slice(lastSpaceIdx + 1)}</span>
-                </>
-              );
-            })()}
+            {tooltipText}
           </div>
         </div>
       )}
