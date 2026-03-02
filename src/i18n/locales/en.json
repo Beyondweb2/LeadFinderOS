@@ -103,7 +103,7 @@
     "searchTip": "This can take 20-30 seconds - hang tight!",
     "freeSearchRemaining": "{{count}} free search remaining",
     "freeSearchesRemaining": "{{count}} free searches remaining",
-    "startFreeTrial": "Start Free 3-Day Trial",
+    "startFreeTrial": "Start Free 5-Day Trial",
     "starting": "Starting..."
   },
   "results": {
@@ -360,8 +360,8 @@
     "withoutWebsites": "Without Websites",
     "messagesSent": "Messages Sent",
     "unlockMomentum": "Unlock unlimited searches and keep building momentum.",
-    "pricingNote": "After 3-day free trial → £19.99/month",
-    "startTrial": "Start Free 3-Day Trial",
+    "pricingNote": "After 5-day free trial → £19.99/month",
+    "startTrial": "Start Free 5-Day Trial",
     "openingCheckout": "Opening checkout..."
   },
   "skipWalkthrough": {
