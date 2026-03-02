@@ -9,7 +9,6 @@ import { useOutreach } from '@/hooks/useOutreach';
 import { useChallenge10 } from '@/hooks/useChallenge10';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
-import { WhatsAppReturnCheck } from '@/components/WhatsAppReturnCheck';
 import type { OutreachLead, ContactMethod, PipelineStatus } from '@/types/outreach';
 
 const Outreach = () => {
@@ -182,8 +181,6 @@ const Outreach = () => {
         onSkip={challenge.skipChallenge}
       />
 
-      {/* WhatsApp return-to-app confirmation */}
-      <WhatsAppReturnCheck />
     </div>
   );
 };
