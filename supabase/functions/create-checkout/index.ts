@@ -8,7 +8,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-// Rate limit: 5 requests per minute (prevents checkout spam)
 const RATE_LIMIT = 5;
 const RATE_WINDOW_MS = 60000;
 
@@ -27,55 +26,61 @@ const logStep = (step: string, details?: unknown) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
 };
- 
- serve(async (req) => {
-   if (req.method === "OPTIONS") {
-     return new Response(null, { headers: corsHeaders });
-   }
- 
-   try {
-     logStep("Function started");
- 
-     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
-     logStep("Stripe key verified");
- 
-     const supabaseClient = createClient(
-       Deno.env.get("SUPABASE_URL") ?? "",
-        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-        { auth: { persistSession: false } }
-     );
- 
-     const authHeader = req.headers.get("Authorization");
-     if (!authHeader) throw new Error("No authorization header provided");
-     logStep("Authorization header found");
- 
-     const token = authHeader.replace("Bearer ", "");
-     const { data } = await supabaseClient.auth.getUser(token);
-     const user = data.user;
-      if (!user?.email) throw new Error("User not authenticated or email not available");
-      logStep("User authenticated", { userId: user.id, email: user.email });
 
-      // Apply rate limiting (5 requests/minute per user)
-      const rateLimitResult = checkRateLimit(`checkout:${user.id}`, RATE_LIMIT, RATE_WINDOW_MS);
-      if (!rateLimitResult.allowed) {
-        logStep("Rate limit exceeded", { userId: user.id });
-        return new Response(
-          JSON.stringify({ error: "Too many checkout attempts. Please wait a moment and try again." }),
-          {
-            headers: { 
-              ...corsHeaders, 
-              "Content-Type": "application/json",
-              ...rateLimitHeaders(rateLimitResult, RATE_LIMIT)
-            },
-            status: 429,
-          }
-        );
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    logStep("Function started");
+
+    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
+    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
+    logStep("Stripe key verified");
+
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } }
+    );
+
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const origin = resolveOrigin(req.headers.get("origin"));
+
+    // Check if there's an authenticated user (existing user re-subscribing)
+    const authHeader = req.headers.get("Authorization");
+    let user: { id: string; email: string } | null = null;
+
+    if (authHeader && authHeader !== "Bearer null" && authHeader !== "Bearer undefined") {
+      try {
+        const token = authHeader.replace("Bearer ", "");
+        const { data } = await supabaseClient.auth.getUser(token);
+        if (data.user?.email) {
+          user = { id: data.user.id, email: data.user.email };
+          logStep("Authenticated user", { userId: user.id, email: user.email });
+        }
+      } catch {
+        logStep("Auth header present but invalid, proceeding as anonymous");
       }
+    }
 
-      const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    // Rate limit by user ID or IP
+    const rateLimitKey = user ? `checkout:${user.id}` : `checkout:${req.headers.get("x-forwarded-for") || "anon"}`;
+    const rateLimitResult = checkRateLimit(rateLimitKey, RATE_LIMIT, RATE_WINDOW_MS);
+    if (!rateLimitResult.allowed) {
+      logStep("Rate limit exceeded", { key: rateLimitKey });
+      return new Response(
+        JSON.stringify({ error: "Too many checkout attempts. Please wait a moment and try again." }),
+        {
+          headers: { ...corsHeaders, "Content-Type": "application/json", ...rateLimitHeaders(rateLimitResult, RATE_LIMIT) },
+          status: 429,
+        }
+      );
+    }
 
-      // ─── SUBSCRIPTION GUARD: check DB for existing active subscription ───
+    // If authenticated user, check for existing active subscription
+    if (user) {
       const { data: existingSub } = await supabaseClient
         .from('subscriptions')
         .select('id, status, stripe_customer_id, stripe_subscription_id')
@@ -88,163 +93,109 @@ const logStep = (step: string, details?: unknown) => {
         logStep("GUARD: User already has active subscription, redirecting to portal", {
           userId: user.id,
           existingStatus: existingSub.status,
-          subscriptionId: existingSub.stripe_subscription_id,
         });
 
-        // Redirect to billing portal instead of creating a new checkout
-        const origin = resolveOrigin(req.headers.get("origin"));
         try {
           const portalSession = await stripe.billingPortal.sessions.create({
             customer: existingSub.stripe_customer_id,
             return_url: `${origin}/`,
           });
-
           return new Response(JSON.stringify({ url: portalSession.url, redirectedToPortal: true }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: 200,
           });
         } catch (portalError) {
-          // Customer no longer exists in Stripe — clean up stale record and proceed with new checkout
           const msg = portalError instanceof Error ? portalError.message : String(portalError);
           logStep("GUARD: Billing portal failed, cleaning stale subscription", { error: msg });
-          await supabaseClient
-            .from('subscriptions')
-            .delete()
-            .eq('id', existingSub.id);
+          await supabaseClient.from('subscriptions').delete().eq('id', existingSub.id);
           logStep("GUARD: Deleted stale subscription record, proceeding with new checkout");
         }
       }
+    }
 
-      logStep("GUARD: No active subscription found, proceeding with checkout");
-      // ─── END GUARD ───
+    // Check for existing Stripe customer
+    let customerId: string | undefined;
+    if (user) {
+      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+      if (customers.data.length > 0) {
+        customerId = customers.data[0].id;
+        logStep("Found existing Stripe customer", { customerId });
+      }
+    }
 
-      // ─── Mark checkout_abandoned + checkout_started_at for lifecycle emails ───
-       await supabaseClient
-         .from('user_trials')
-         .update({
-           checkout_abandoned: true,
-           checkout_started_at: new Date().toISOString(),
-         })
-         .eq('user_id', user.id)
-         .is('checkout_started_at', null);
-       logStep("Set checkout_abandoned + checkout_started_at", { userId: user.id });
-     
-      // Check trial_used flag from user_trials (single source of truth)
+    // Check if user has already used a trial
+    let trialUsed = false;
+    if (user) {
       const { data: trialRow } = await supabaseClient
         .from('user_trials')
         .select('trial_used')
         .eq('user_id', user.id)
         .single();
-      
-      const trialUsed = trialRow?.trial_used === true;
-      logStep("Trial used check", { userId: user.id, trialUsed });
+      trialUsed = trialRow?.trial_used === true;
+    }
 
-      // Check for existing customer
-      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-      let customerId: string | undefined;
-      
-      if (customers.data.length > 0) {
-        customerId = customers.data[0].id;
-        logStep("Found existing Stripe customer", { customerId });
-      }
-
-      // Get affiliate code and ref_source from user_trials if present
+    // Get tracking metadata if authenticated
+    const trackingMetadata: Record<string, string> = {};
+    if (user) {
       const { data: trialData } = await supabaseClient
         .from('user_trials')
         .select('affiliate_code, ref_source')
         .eq('user_id', user.id)
         .single();
-      
-      const affiliateCode = trialData?.affiliate_code || null;
-      const refSource = trialData?.ref_source || null;
-      logStep("Tracking data check", { affiliateCode, refSource });
-
-      // Create checkout session
-      // Only offer trial if user has never had a subscription before
-      const sessionConfig: {
-        customer?: string;
-        customer_email?: string;
-        client_reference_id: string;
-        metadata?: { affiliate_code?: string };
-        line_items: Array<{ price: string; quantity: number }>;
-        mode: "subscription";
-        payment_method_types: string[];
-        subscription_data?: { trial_period_days: number; metadata?: { affiliate_code?: string } };
-        success_url: string;
-        cancel_url: string;
-      } = {
-        customer: customerId,
-        customer_email: customerId ? undefined : user.email,
-        client_reference_id: user.id,
-        line_items: [
-          {
-            price: "price_1SxN38Gi4ps7kJ7R8UE1kYGS",
-            quantity: 1,
-          },
-        ],
-        mode: "subscription",
-        payment_method_types: ['card'],
-        success_url: `${resolveOrigin(req.headers.get("origin"))}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${resolveOrigin(req.headers.get("origin"))}/billing/cancel`,
-      };
-      
-      // Add tracking metadata if present (affiliate_code and/or ref_source)
-      const trackingMetadata: Record<string, string> = {};
-      if (affiliateCode) trackingMetadata.affiliate_code = affiliateCode;
-      if (refSource) trackingMetadata.ref_source = refSource;
-      
-      if (Object.keys(trackingMetadata).length > 0) {
-        sessionConfig.metadata = trackingMetadata;
-      }
-      
-      // Offer 5-day trial if user hasn't used one before
-      if (!trialUsed) {
-        logStep("Creating checkout with 5-day free trial");
-        sessionConfig.subscription_data = {
-          trial_period_days: 5,
-          ...(Object.keys(trackingMetadata).length > 0 ? { metadata: trackingMetadata } : {}),
-        };
-      } else {
-        logStep("Creating checkout without trial (trial already used)");
-        if (Object.keys(trackingMetadata).length > 0) {
-          sessionConfig.subscription_data = {
-            trial_period_days: 0,
-            metadata: trackingMetadata,
-          };
-        }
-      }
-      
-      logStep("Creating checkout session", { 
-        priceId: "price_1SxN38Gi4ps7kJ7R8UE1kYGS", 
-        mode: "subscription",
-        hasCustomer: !!customerId,
-        trialUsed 
-      });
-      const session = await stripe.checkout.sessions.create(sessionConfig);
- 
-     logStep("Checkout session created", { sessionId: session.id, userId: user.id, trialUsed });
-
-     // Log funnel event: trial_started (fire-and-forget)
-     supabaseClient
-       .from('funnel_events')
-       .insert({ user_id: user.id, event_type: 'trial_started' })
-       .then(({ error }) => {
-         if (error) console.log('[FUNNEL] trial_started insert failed', error.message);
-         else console.log('[FUNNEL] trial_started logged', { userId: user.id });
-       });
-
-     return new Response(JSON.stringify({ url: session.url }), {
-       headers: { ...corsHeaders, "Content-Type": "application/json" },
-       status: 200,
-     });
-    } catch (error) {
-      // Log detailed error server-side only
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      logStep("ERROR", { message: errorMessage });
-      // Return generic error to client - don't expose internal details
-      return new Response(JSON.stringify({ error: "Unable to create checkout session. Please try again." }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-        status: 500,
-      });
+      if (trialData?.affiliate_code) trackingMetadata.affiliate_code = trialData.affiliate_code;
+      if (trialData?.ref_source) trackingMetadata.ref_source = trialData.ref_source;
     }
- });
+
+    // Build checkout session config
+    const sessionConfig: Record<string, unknown> = {
+      line_items: [{ price: "price_1SxN38Gi4ps7kJ7R8UE1kYGS", quantity: 1 }],
+      mode: "subscription",
+      payment_method_types: ['card'],
+      success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/billing/cancel`,
+    };
+
+    if (customerId) {
+      sessionConfig.customer = customerId;
+    } else if (user) {
+      sessionConfig.customer_email = user.email;
+    }
+    // For anonymous users, Stripe collects email automatically
+
+    if (user) {
+      sessionConfig.client_reference_id = user.id;
+    }
+
+    if (Object.keys(trackingMetadata).length > 0) {
+      sessionConfig.metadata = trackingMetadata;
+    }
+
+    // Offer 5-day trial for new users (anonymous always get trial)
+    if (!trialUsed) {
+      logStep("Creating checkout with 5-day free trial");
+      sessionConfig.subscription_data = {
+        trial_period_days: 5,
+        ...(Object.keys(trackingMetadata).length > 0 ? { metadata: trackingMetadata } : {}),
+      };
+    } else {
+      logStep("Creating checkout without trial (trial already used)");
+    }
+
+    logStep("Creating checkout session", { hasCustomer: !!customerId, hasUser: !!user, trialUsed });
+    const session = await stripe.checkout.sessions.create(sessionConfig as Stripe.Checkout.SessionCreateParams);
+
+    logStep("Checkout session created", { sessionId: session.id });
+
+    return new Response(JSON.stringify({ url: session.url }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 200,
+    });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    logStep("ERROR", { message: errorMessage });
+    return new Response(JSON.stringify({ error: "Unable to create checkout session. Please try again." }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500,
+    });
+  }
+});

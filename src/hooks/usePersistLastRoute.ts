@@ -28,6 +28,7 @@ export function isSafeAppRoute(path: string) {
   // Never resume into public-only routes
   if (path.startsWith("/landing")) return false;
   if (path.startsWith("/auth")) return false;
+  if (path.startsWith("/subscribe")) return false;
   if (path.startsWith("/terms")) return true; // still safe, but not in-app; keep allowed
   return true;
 }

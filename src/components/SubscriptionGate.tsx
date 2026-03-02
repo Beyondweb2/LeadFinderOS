@@ -28,7 +28,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const hasAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
 
   if (!hasAccess) {
-    return <Navigate to="/subscribe" replace />;
+    return <Navigate to="/landing" replace />;
   }
 
   return <>{children}</>;
