@@ -380,7 +380,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   <button
                     className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
                     onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-                    data-walkthrough="next-action"
+                    
                   >
                     + Set action
                   </button>
