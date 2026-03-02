@@ -51,7 +51,7 @@ const Subscribe = () => {
   }, []);
 
   const handleBack = useCallback(() => {
-    navigate('/');
+    navigate('/landing');
   }, [navigate]);
 
   const handleSubscribe = async () => {
