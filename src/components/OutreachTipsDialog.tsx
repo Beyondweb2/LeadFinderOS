@@ -49,17 +49,21 @@ export function OutreachTipsDialog() {
     }
   }, [open]);
 
-  const handleClose = () => {
+  const handleClose = (skipped = false) => {
     setOpen(false);
     if (dontShowAgain && storageKey) {
       localStorage.setItem(storageKey, 'true');
+    }
+    if (skipped) {
+      // Skip contact steps entirely so walkthrough moves to Track step
+      window.dispatchEvent(new CustomEvent('walkthrough-skip-contact-steps'));
     }
   };
 
   const cta = ctaConfig[contactMethod || 'whatsapp'];
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(); else setOpen(true); }}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(true); else setOpen(true); }}>
       <DialogContent
         className="sm:max-w-[400px] p-0 overflow-hidden rounded-2xl border-border/40 bg-[hsl(220_50%_5%)]"
       >
@@ -102,7 +106,7 @@ export function OutreachTipsDialog() {
           <p className="text-center text-[12px] text-muted-foreground mb-5">
             Not ready to send yet?{' '}
             <button
-              onClick={() => handleClose()}
+              onClick={() => handleClose(true)}
               className="text-[13px] font-medium text-primary hover:text-primary/80 cursor-pointer transition-colors underline-offset-2 hover:underline"
             >
               Skip
@@ -111,7 +115,7 @@ export function OutreachTipsDialog() {
 
           {/* CTA */}
           <button
-            onClick={() => handleClose()}
+            onClick={() => handleClose(false)}
             className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all"
           >
             {cta.icon}
