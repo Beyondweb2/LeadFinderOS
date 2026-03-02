@@ -291,16 +291,10 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
             </Popover>
           </div>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex justify-end">
             <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            {canSave && (
-              <Button size="sm" onClick={handleSave} data-walkthrough-step="follow-up-save">
-                <Save className="h-3.5 w-3.5 mr-1.5" />
-                Save
-              </Button>
-            )}
           </div>
         </div>
       </PopoverContent>
