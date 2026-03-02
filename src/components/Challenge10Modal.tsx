@@ -34,21 +34,23 @@ export function Challenge10Modal({ open, onStart, onSkip }: Challenge10ModalProp
             <div />
           </div>
 
-          {/* Icon + Title */}
+          {/* Title */}
           <div className="flex items-center gap-2.5 mb-3">
             <Target className="h-6 w-6 text-primary shrink-0" />
             <h3 className="text-[20px] sm:text-[22px] font-bold tracking-tight text-foreground">
-              Daily Challenge
+              Challenge
             </h3>
           </div>
 
-          {/* Description */}
-          <div className="text-center text-[13px] text-muted-foreground leading-relaxed mb-5 space-y-2">
-            <p className="text-foreground font-medium text-[15px]">
-              Contact <span className="text-primary font-bold">10</span> businesses today
-            </p>
-            <p>Your progress is tracked automatically on the Outreach page.</p>
-            <p>Most freelancers stop at 3 — the ones who win push past 10.</p>
+          {/* Main line */}
+          <p className="text-foreground font-semibold text-[16px] sm:text-[17px] text-center mb-3">
+            Contact <span className="text-primary font-bold">10</span> businesses today
+          </p>
+
+          {/* Body */}
+          <div className="text-center text-[13px] text-muted-foreground leading-relaxed mb-5 space-y-1.5">
+            <p>10 per day is solid.</p>
+            <p>Do it consistently and clients follow.</p>
           </div>
 
           {/* CTA */}
@@ -56,7 +58,7 @@ export function Challenge10Modal({ open, onStart, onSkip }: Challenge10ModalProp
             onClick={handleGotIt}
             className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all"
           >
-            Got it — Let's Go
+            Let's Go
             <ArrowRight className="h-4 w-4" />
           </button>
         </div>
