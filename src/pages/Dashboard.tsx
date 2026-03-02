@@ -233,7 +233,7 @@ const Dashboard = () => {
             <AlertDialogHeader>
               <AlertDialogTitle>Full account reset?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will delete <strong>everything</strong> — all CRM leads, outreach history, templates, contact logs, search history, and metrics. Only your subscription will remain. This cannot be undone.
+                This will delete <strong>everything</strong> — all outreach leads, outreach history, templates, contact logs, search history, and metrics. Only your subscription will remain. This cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

@@ -122,7 +122,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
               {leads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
             </p>
             <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-              Tap 👁 to view details · 📋 to add to CRM
+              Tap 👁 to view details · 📋 to add to Outreach
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -140,7 +140,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <p className="text-sm text-muted-foreground">
               Found {leads.length} businesses •
               <span className="text-status-hot font-semibold ml-1">{noWebsiteCount} without websites</span>
-              <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to add to CRM</span>
+              <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to add to Outreach</span>
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -311,7 +311,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                               <ClipboardList className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Add to CRM</TooltipContent>
+                          <TooltipContent>Add to Outreach</TooltipContent>
                         </Tooltip>
                       )
                     )}

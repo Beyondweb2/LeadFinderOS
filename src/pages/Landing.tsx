@@ -627,10 +627,10 @@ const Landing = () => {
               },
               {
                 num: 2,
-                title: 'Add to CRM',
+                title: 'Add to Outreach',
                 body: 'Save promising leads in one click and organise them into your pipeline.',
                 img: step2Results,
-                alt: 'Add leads to CRM',
+                alt: 'Add leads to Outreach',
               },
               {
                 num: 3,

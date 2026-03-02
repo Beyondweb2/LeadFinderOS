@@ -10,9 +10,10 @@ export function useOutreachAttempt() {
   const logAttempt = useCallback(async (leadId: string, channel: Channel, currentStatus?: string) => {
     if (!user) return;
 
-    // 1. Increment outreach_attempts & set last_outreach_attempt_at
+    // 1. Increment outreach_attempts & set last_outreach_attempt_at + contact_method
     const updates: Record<string, any> = {
       last_outreach_attempt_at: new Date().toISOString(),
+      contact_method: channel,
     };
 
     // If status is New (not_contacted), auto-set to Attempted (waiting)

@@ -43,20 +43,7 @@ const Outreach = () => {
 
   const isReadOnly = false;
 
-  // CRM Automation: auto-set contact_method on contact button click
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { leadId, method } = (e as CustomEvent).detail || {};
-      if (!leadId) return;
-      if (!method) return;
-      const updates: Record<string, any> = {
-        contact_method: method,
-      };
-      updateLead(leadId, updates);
-    };
-    window.addEventListener('crm-contact-action', handler);
-    return () => window.removeEventListener('crm-contact-action', handler);
-  }, [updateLead]);
+  // Contact method updates are now handled directly in useContactAction + useOutreachAttempt
 
   // Listen for WhatsApp status updates from the prompt dialog
   useEffect(() => {
@@ -136,7 +123,7 @@ const Outreach = () => {
 
       {/* Page Header */}
       <div className="text-center sm:text-left">
-        <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
+        <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach</h1>
         <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
           Contact businesses via WhatsApp, SMS or call. Update their status, then track promising ones in Track Leads.
         </p>

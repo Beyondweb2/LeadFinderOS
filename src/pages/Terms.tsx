@@ -50,7 +50,7 @@ const Terms = () => {
               <p className="text-sm text-muted-foreground leading-relaxed">
                 LeadFinder Pro is a lead generation tool that helps users find businesses without websites 
                 using publicly available data from Google Maps. The service includes search functionality, 
-                CRM features, and contact management tools.
+                outreach features, and contact management tools.
               </p>
             </section>
 

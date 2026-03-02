@@ -206,7 +206,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                   size="icon"
                   className="h-7 w-7 text-blue-600 hover:text-blue-500 hover:bg-blue-500/10"
                   onClick={() => {
-                    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'facebook_msg' } }));
+                    if (onContactMethodChange) onContactMethodChange('facebook_msg' as any);
                     openFacebookSearch(lead.business_name);
                   }}
                 >

@@ -54,7 +54,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     if (pathname === '/outreach') {
       return { step: 3, selector: '[data-walkthrough="contact"]', tooltip: `Contact businesses via Call, SMS or WhatsApp.\n${contacted}/3 contacted.`, noDim: true };
     }
-    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: `Open your CRM to contact businesses (${contacted}/3).` };
+    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: `Open Outreach to contact businesses (${contacted}/3).` };
   }
 
   // Step 5 – Press the gold star Track button
@@ -62,7 +62,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     if (pathname === '/outreach') {
       return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Track businesses that are interested.', noDim: true };
     }
-    return { step: 5, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM and press ⭐ Track on a lead.' };
+    return { step: 5, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open Outreach and press ⭐ Track on a lead.' };
   }
 
   // Step 6 – Navigate to Track Leads page

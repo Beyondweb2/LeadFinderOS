@@ -742,7 +742,7 @@ export function OutreachTable({
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <ClipboardList className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             <CardTitle className="text-base sm:text-lg">
-              {isArchiveView ? 'Archived' : 'Outreach CRM'}
+              {isArchiveView ? 'Archived' : 'Outreach'}
               <span className="ml-1.5 sm:ml-2 text-xs sm:text-sm font-normal text-muted-foreground">
                 ({leads.length})
               </span>
@@ -1190,7 +1190,7 @@ export function OutreachTable({
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'facebook_msg' } }));
+                              if (onContactMethodChange) onContactMethodChange(lead.id, 'facebook_msg' as any);
                               openFacebookSearch(lead.business_name);
                             }}
                           >

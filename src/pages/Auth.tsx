@@ -178,7 +178,7 @@ const Auth = () => {
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Check className="h-4 w-4 text-primary" />
-                <span>Full CRM & pipeline tracking</span>
+                <span>Full outreach & pipeline tracking</span>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Check className="h-4 w-4 text-primary" />

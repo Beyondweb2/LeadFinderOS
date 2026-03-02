@@ -45,7 +45,7 @@ import { Check, Sparkles, Sun, Moon, RotateCcw } from 'lucide-react';
 const mainNavItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Search', url: '/find-leads', icon: Search },
-  { title: 'CRM', url: '/outreach', icon: ClipboardList },
+  { title: 'Outreach', url: '/outreach', icon: ClipboardList },
   { title: 'Track', url: '/potential-work', icon: Briefcase },
 ];
 
@@ -208,7 +208,7 @@ export function MobileBottomNav() {
                   'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[60px]',
                   item.title === 'Search' && (searchPulse || searchGlow)
                     ? 'text-yellow-400 animate-pulse'
-                    : item.title === 'CRM' && (crmGlow || crmPulseWalkthrough)
+                    : item.title === 'Outreach' && (crmGlow || crmPulseWalkthrough)
                       ? 'text-green-400 animate-pulse'
                       : item.title === 'Track' && (trackGlow || trackPulseWalkthrough)
                         ? 'text-yellow-400 animate-pulse'
@@ -219,12 +219,12 @@ export function MobileBottomNav() {
               >
                 <item.icon className={cn(
                   'h-5 w-5 transition-all',
-                  item.title === 'CRM' && (crmGlow || crmPulseWalkthrough) && 'scale-110',
+                  item.title === 'Outreach' && (crmGlow || crmPulseWalkthrough) && 'scale-110',
                   item.title === 'Track' && (trackGlow || trackPulseWalkthrough) && 'scale-110'
                 )} />
                 <span className={cn(
                   "text-[10px] font-medium",
-                  item.title === 'CRM' && crmGlow && 'text-green-400',
+                  item.title === 'Outreach' && crmGlow && 'text-green-400',
                   item.title === 'Track' && trackGlow && 'text-yellow-400'
                 )}>{item.title}</span>
               </Link>
