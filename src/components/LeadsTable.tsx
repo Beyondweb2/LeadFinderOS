@@ -225,7 +225,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                 <TableHead className="w-[40%]">Business Name</TableHead>
                 <TableHead className="w-[25%]">Website Status</TableHead>
                 <TableHead className="w-[20%]">Business Info</TableHead>
-                <TableHead className="w-[15%]">Actions</TableHead>
+                <TableHead className="w-[15%]" data-walkthrough="actions-column-header">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
