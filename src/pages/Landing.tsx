@@ -444,8 +444,7 @@ const Landing = () => {
       });
       if (checkoutError) throw checkoutError;
       if (checkoutData?.url) {
-        window.open(checkoutData.url, '_blank');
-        window.dispatchEvent(new Event('checkout-opened'));
+        window.location.href = checkoutData.url;
       } else {
         throw new Error('No checkout URL received');
       }
