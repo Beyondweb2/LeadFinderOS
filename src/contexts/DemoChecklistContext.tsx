@@ -220,11 +220,27 @@ export function DemoChecklistProvider({
       if (anchor) onContact();
     };
 
+    // Skip contact steps entirely (user skipped tips dialog)
+    const onSkipContactSteps = () => {
+      setState(prev => {
+        const next = {
+          ...prev,
+          firstContactMade: true,
+          threeContactsMade: true,
+          contactsMadeCount: Math.max(prev.contactsMadeCount, 3),
+          contactAttempted: true,
+        };
+        saveState(next, user?.id);
+        return next;
+      });
+    };
+
     window.addEventListener('demo-checklist-search', onSearch);
     window.addEventListener('crm-lead-added', onCrmAdd);
     window.addEventListener('crm-lead-purged', onCrmPurged);
     window.addEventListener('outreach-attempt-logged', onAttemptLogged);
     window.addEventListener('demo-checklist-contact', onContact);
+    window.addEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
     window.addEventListener('demo-checklist-track-note-saved', onNoteSaved);
     window.addEventListener('demo-checklist-next-action-set', onNextActionSet);
     window.addEventListener('demo-checklist-next-date-set', onNextDateSet);
@@ -252,6 +268,7 @@ export function DemoChecklistProvider({
       window.removeEventListener('crm-lead-purged', onCrmPurged);
       window.removeEventListener('outreach-attempt-logged', onAttemptLogged);
       window.removeEventListener('demo-checklist-contact', onContact);
+      window.removeEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
       window.removeEventListener('demo-checklist-track-note-saved', onNoteSaved);
       window.removeEventListener('demo-checklist-next-action-set', onNextActionSet);
       window.removeEventListener('demo-checklist-next-date-set', onNextDateSet);
