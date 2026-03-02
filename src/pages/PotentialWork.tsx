@@ -562,7 +562,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             {/* Next Action + Due Date */}
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground w-12 shrink-0">Action</span>
-              <div className="flex-1">
+              <div className="flex-1" data-walkthrough="next-action">
                 <Select value={nextAction} onValueChange={handleNextActionChange}>
                   <SelectTrigger className="h-8 text-xs border-border/50" data-walkthrough-step="follow-up-action">
                     <SelectValue placeholder="Next action" />
