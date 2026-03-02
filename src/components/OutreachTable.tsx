@@ -52,6 +52,7 @@ import {
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { openFacebookSearch } from '@/lib/facebookSearch';
 import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
+import { useContactAction } from '@/hooks/useContactAction';
 import { useDebouncedCallback } from 'use-debounce';
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
@@ -63,9 +64,6 @@ import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
-import { SingleWhatsAppDialog } from './SingleWhatsAppDialog';
-import { SingleSMSDialog } from './SingleSMSDialog';
-import { PostSendConfirmDialog } from './PostSendConfirmDialog';
 import { CSVImportDialog } from './CSVImportDialog';
 import { OutreachMobileCard } from './OutreachMobileCard';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
@@ -138,14 +136,57 @@ export function OutreachTable({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isRecoveringPhones, setIsRecoveringPhones] = useState(false);
   const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
-  const [whatsAppLead, setWhatsAppLead] = useState<{ phone: string; business_name: string; id?: string; whatsapp_status?: string | null; status?: string } | null>(null);
-  const [smsLead, setSmsLead] = useState<{ phone: string; business_name: string; id?: string; status?: string } | null>(null);
   const { logAttempt } = useOutreachAttempt();
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
-  const [pendingSendConfirm, setPendingSendConfirm] = useState<{ leadId: string; channel: 'sms' | 'whatsapp'; businessName: string; status?: string } | null>(null);
-  const [showSendConfirm, setShowSendConfirm] = useState(false);
-  const sendConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Optimistic UI state: leadId -> partial overrides
+  const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, Record<string, any>>>(new Map());
+
+  // Contact action hook: direct open + undo toast
+  const { executeContact } = useContactAction({
+    onOptimisticUpdate: useCallback((leadId: string, updates: Record<string, any>) => {
+      setOptimisticUpdates(prev => {
+        const next = new Map(prev);
+        next.set(leadId, { ...(prev.get(leadId) || {}), ...updates });
+        return next;
+      });
+    }, []),
+    onRevert: useCallback((leadId: string, _updates: Record<string, any>) => {
+      setOptimisticUpdates(prev => {
+        const next = new Map(prev);
+        next.delete(leadId);
+        return next;
+      });
+    }, []),
+    onPersist: useCallback((leadId: string, channel: 'whatsapp' | 'sms' | 'call', previousStatus: string) => {
+      // Persist to DB
+      logAttempt(leadId, channel, previousStatus);
+      window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId, method: channel } }));
+      // Clear optimistic state
+      setOptimisticUpdates(prev => {
+        const next = new Map(prev);
+        next.delete(leadId);
+        return next;
+      });
+      // Highlight next uncontacted lead
+      const currentLeads = leadsRef.current;
+      const contactedId = leadId;
+      const nextLead = currentLeads.find(l => l.id !== contactedId && l.phone && l.outreach_attempts === 0 && l.status === 'not_contacted');
+      if (nextLead) {
+        highlightLead(nextLead.id);
+      }
+    }, [logAttempt]),
+    onContactCounted: useCallback((leadId: string) => {
+      window.dispatchEvent(new CustomEvent('outreach-attempt-logged', { detail: { leadId, channel: 'contact' } }));
+    }, []),
+    onContactUndone: useCallback((_leadId: string) => {
+      // Walkthrough decrement handled by DemoChecklistContext if needed
+    }, []),
+  });
+
+  // Keep a ref to current leads for use in callbacks
+  const leadsRef = useRef(leads);
+  useEffect(() => { leadsRef.current = leads; }, [leads]);
 
   // Debounced search handlers (200ms)
   const debouncedSearch = useDebouncedCallback((value: string) => {
@@ -259,56 +300,40 @@ export function OutreachTable({
     });
   }, [tableStateKey, searchQuery, statusFilter, countryFilter, sortField, sortDirection, currentPage]);
 
-  // Handle WhatsApp button click - store lead ID for highlighting
-  const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
-    highlightLead(lead.id);
-    setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name, id: lead.id, whatsapp_status: lead.whatsapp_status, status: lead.status });
-  }, []);
+  // Apply optimistic updates to leads for rendering
+  const leadsWithOptimistic = useMemo(() => {
+    if (optimisticUpdates.size === 0) return leads;
+    return leads.map(lead => {
+      const updates = optimisticUpdates.get(lead.id);
+      if (!updates) return lead;
+      return { ...lead, ...updates };
+    });
+  }, [leads, optimisticUpdates]);
 
-  // Handle SMS button click
+  // Handle WhatsApp button click - direct open + toast
+  const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
+    if (lead.whatsapp_status === 'no') {
+      toast({
+        description: `${lead.business_name} not on WhatsApp. Try SMS or Call.`,
+        duration: 3000,
+      });
+      return;
+    }
+    highlightLead(lead.id);
+    executeContact(lead, 'whatsapp');
+  }, [executeContact, toast]);
+
+  // Handle SMS button click - direct open + toast
   const handleSMSClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
-    setSmsLead({ phone: lead.phone || '', business_name: lead.business_name, id: lead.id, status: lead.status });
-  }, []);
+    executeContact(lead, 'sms');
+  }, [executeContact]);
 
-  // Handle Call button click - highlight the lead and trigger CRM automation
+  // Handle Call button click - direct open + toast
   const handleCallClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
-    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'call' } }));
-    // Log outreach attempt for calls
-    logAttempt(lead.id, 'call', lead.status);
-    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
-    window.dispatchEvent(new CustomEvent('challenge-contact-sent', { detail: { leadId: lead.business_name } }));
-  }, [logAttempt]);
-
-  // Handle send signal from SMS/WhatsApp dialogs — delay 1s then show confirmation
-  const handleDialogSent = useCallback((leadId: string, channel: 'sms' | 'whatsapp') => {
-    const lead = leads.find(l => l.id === leadId);
-    setPendingSendConfirm({ leadId, channel, businessName: lead?.business_name || '', status: lead?.status });
-    // Clear any existing timer
-    if (sendConfirmTimerRef.current) clearTimeout(sendConfirmTimerRef.current);
-    sendConfirmTimerRef.current = setTimeout(() => {
-      setShowSendConfirm(true);
-    }, 1000);
-  }, [leads]);
-
-  // User confirmed message was sent
-  const handleSendConfirmed = useCallback(() => {
-    if (!pendingSendConfirm) return;
-    const { leadId, channel, status } = pendingSendConfirm;
-    // Log outreach attempt (updates status to Attempted if New)
-    logAttempt(leadId, channel, status);
-    // Set contact method
-    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId, method: channel === 'whatsapp' ? 'whatsapp' : 'sms' } }));
-    setShowSendConfirm(false);
-    setPendingSendConfirm(null);
-  }, [pendingSendConfirm, logAttempt]);
-
-  // User denied message was sent
-  const handleSendDenied = useCallback(() => {
-    setShowSendConfirm(false);
-    setPendingSendConfirm(null);
-  }, []);
+    executeContact(lead, 'call');
+  }, [executeContact]);
 
   // Count leads missing phone numbers
   const leadsWithMissingPhones = useMemo(() => {
@@ -569,7 +594,7 @@ export function OutreachTable({
   };
 
   const filteredAndSortedLeads = useMemo(() => {
-    let result = [...leads];
+    let result = [...leadsWithOptimistic];
 
     // Filter by search
     if (searchQuery) {
@@ -642,7 +667,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leads, searchQuery, locationFilter, statusFilter, countryFilter, sortField, sortDirection]);
+  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, sortField, sortDirection]);
 
   const newestLeadId = useMemo(() => {
     if (leads.length === 0) return null;
@@ -828,7 +853,7 @@ export function OutreachTable({
                 onClick={() => {
                   const selectedLead = filteredAndSortedLeads.find(l => selectedIds.has(l.id));
                   if (selectedLead) {
-                    setWhatsAppLead({ phone: selectedLead.phone || '', business_name: selectedLead.business_name });
+                    handleWhatsAppClick(selectedLead);
                   }
                 }}
                 className="bg-background text-xs h-8"
@@ -1310,42 +1335,6 @@ export function OutreachTable({
         )}
       </CardContent>
 
-      {/* WhatsApp Dialog */}
-      <SingleWhatsAppDialog
-        open={!!whatsAppLead}
-        onOpenChange={(open) => {
-          if (!open) {
-            setWhatsAppLead(null);
-            window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
-          }
-        }}
-        lead={whatsAppLead}
-        onSent={handleDialogSent}
-      />
-
-      {/* SMS Dialog */}
-      <SingleSMSDialog
-        open={!!smsLead}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSmsLead(null);
-            window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
-          }
-        }}
-        lead={smsLead}
-        onSent={handleDialogSent}
-      />
-
-      {/* Post-send confirmation dialog */}
-      {pendingSendConfirm && (
-        <PostSendConfirmDialog
-          open={showSendConfirm}
-          onConfirm={handleSendConfirmed}
-          onDeny={handleSendDenied}
-          channel={pendingSendConfirm.channel}
-          businessName={pendingSendConfirm.businessName}
-        />
-      )}
 
       {/* CSV Import Dialog */}
       {onImportLeads && (

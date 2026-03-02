@@ -351,13 +351,14 @@ export function WalkthroughOverlay() {
       {/* Floating tooltip */}
       {tooltipPos && (
         <div
-          className="pointer-events-none px-3.5 py-3 rounded-xl bg-[hsl(220,50%,7%)] border border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.15)] max-w-[270px] text-center"
+          className="px-3.5 py-3 rounded-xl bg-[hsl(220,50%,7%)] border border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.15)] max-w-[270px] text-center"
           style={{
             position: 'fixed',
             top: tooltipPos.top,
             left: tooltipPos.left,
             transform: (activeStep.tooltipPosition === 'right' && window.innerWidth >= 640) ? 'translateY(-50%)' : 'translateX(-50%)',
             zIndex: 41,
+            pointerEvents: (activeStep.step === 3 || activeStep.step === 4) ? 'auto' : 'none',
           }}
         >
           <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400/90 mb-1">
@@ -366,6 +367,16 @@ export function WalkthroughOverlay() {
           <div className="text-[13px] text-foreground font-medium leading-relaxed whitespace-pre-line">
             {tooltipText}
           </div>
+          {(activeStep.step === 3 || activeStep.step === 4) && (
+            <button
+              className="mt-2 text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors cursor-pointer"
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('walkthrough-skip-contact-steps'));
+              }}
+            >
+              Skip this step
+            </button>
+          )}
         </div>
       )}
 

@@ -132,15 +132,15 @@ function dispatch(action: Action) {
   });
 }
 
-type Toast = Omit<ToasterToast, "id">;
+type Toast = Omit<ToasterToast, "id"> & { force?: boolean };
 
 function isMobileViewport() {
   return typeof window !== 'undefined' && window.innerWidth < 640;
 }
 
-function toast({ ...props }: Toast) {
-  // On mobile, suppress all non-destructive toasts to save screen space
-  if (isMobileViewport() && props.variant !== 'destructive') {
+function toast({ force, ...props }: Toast) {
+  // On mobile, suppress all non-destructive toasts to save screen space (unless forced)
+  if (isMobileViewport() && props.variant !== 'destructive' && !force) {
     return { id: '', dismiss: () => {}, update: () => {} };
   }
 
