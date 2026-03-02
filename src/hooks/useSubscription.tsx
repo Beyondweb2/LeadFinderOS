@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 
@@ -18,7 +18,15 @@ interface SubscriptionState {
   isPaymentPaused: boolean;   // true when 2+ failures — blocks access
 }
 
-export function useSubscription() {
+interface SubscriptionContextType extends SubscriptionState {
+  checkSubscription: (skipLocalCheck?: boolean) => Promise<void>;
+  createCheckout: () => Promise<void>;
+  openCustomerPortal: () => Promise<void>;
+}
+
+const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
+
+export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { user, session } = useAuth();
   const [state, setState] = useState<SubscriptionState>({
     subscribed: false,
@@ -58,10 +66,8 @@ export function useSubscription() {
     const accessToken = accessTokenRef.current;
     
     if (!accessToken || !userId) {
-      // Only reset if we never had a subscription state (avoid clearing during token refresh)
       setState(prev => {
         if (prev.subscribed || prev.status) {
-          // Preserve existing state — likely a transient token gap during refresh
           return { ...prev, isLoading: false };
         }
         return { ...prev, isLoading: false, subscribed: false, status: null, trialEnd: null, isPaidSubscriber: false, isStripeTrialing: false, paymentFailureCount: 0, lastPaymentFailedAt: null, isPaymentPaused: false };
@@ -72,7 +78,6 @@ export function useSubscription() {
     try {
       setState(prev => ({ ...prev, isLoading: true, error: null }));
       
-      // First check if user is admin (bypass subscription check)
       const isAdmin = await checkAdminRole(userId);
       if (isAdmin) {
         setState({
@@ -93,7 +98,6 @@ export function useSubscription() {
         return;
       }
       
-      // First check local database for cached subscription (faster)
       if (!skipLocalCheck) {
         const { data: localSub, error: localError } = await supabase
           .from('user_subscription_status' as any)
@@ -101,53 +105,43 @@ export function useSubscription() {
           .eq('user_id', userId)
           .maybeSingle() as { data: { id: string; user_id: string; status: string; current_period_end: string | null; created_at: string; updated_at: string } | null; error: any };
 
-      if (!localError && localSub) {
+        if (!localError && localSub) {
           const validStatuses = ['active', 'trialing', 'past_due'];
           const isValid = validStatuses.includes(localSub.status);
           const isPaid = ['active', 'past_due'].includes(localSub.status);
           const isTrialing = localSub.status === 'trialing';
-          
-          // For trialing users, use current_period_end as trialEnd fallback
-          // so the trial card shows immediately without waiting for Stripe API
           const localTrialEnd = isTrialing ? localSub.current_period_end : null;
           
-           setState({
-             subscribed: isValid,
-             productId: null,
-             subscriptionEnd: localSub.current_period_end,
-             trialEnd: localTrialEnd,
-             isLoading: isValid,
-             error: null,
-             status: localSub.status,
-             isAdmin: false,
-             isPaidSubscriber: isPaid,
-             isStripeTrialing: isTrialing,
-             paymentFailureCount: 0,
-             lastPaymentFailedAt: null,
-             isPaymentPaused: false,
-           });
+          setState({
+            subscribed: isValid,
+            productId: null,
+            subscriptionEnd: localSub.current_period_end,
+            trialEnd: localTrialEnd,
+            isLoading: isValid,
+            error: null,
+            status: localSub.status,
+            isAdmin: false,
+            isPaidSubscriber: isPaid,
+            isStripeTrialing: isTrialing,
+            paymentFailureCount: 0,
+            lastPaymentFailedAt: null,
+            isPaymentPaused: false,
+          });
           
           if (!isValid) return;
         }
       }
       
-      // Get fresh session before calling edge function
       const { data: sessionData } = await supabase.auth.getSession();
       const freshToken = sessionData?.session?.access_token;
       
       if (!freshToken) {
-        // Session expired temporarily — preserve existing state to avoid flicker
-        setState(prev => ({
-          ...prev,
-          isLoading: false,
-        }));
+        setState(prev => ({ ...prev, isLoading: false }));
         return;
       }
       
-      // Update the ref with fresh token
       accessTokenRef.current = freshToken;
       
-      // Fall back to Stripe API check with fresh token
       const { data, error } = await supabase.functions.invoke('check-subscription', {
         headers: {
           Authorization: `Bearer ${freshToken}`,
@@ -155,13 +149,8 @@ export function useSubscription() {
       });
 
       if (error) {
-        // If auth error, treat as not subscribed rather than showing error
         if (error.message?.includes('Auth') || error.message?.includes('authentication')) {
-          // Auth error during refresh — preserve existing state to avoid flicker
-          setState(prev => ({
-            ...prev,
-            isLoading: false,
-          }));
+          setState(prev => ({ ...prev, isLoading: false }));
           return;
         }
         throw error;
@@ -170,32 +159,27 @@ export function useSubscription() {
       const subStatus = data.subscription_status ?? null;
       const isPaid = ['active', 'past_due'].includes(subStatus);
       const isTrialing = subStatus === 'trialing';
+      const failureCount = data.payment_failure_count ?? 0;
+      const isPaused = subStatus === 'paused' || failureCount >= 2;
       
-       const failureCount = data.payment_failure_count ?? 0;
-       const isPaused = subStatus === 'paused' || failureCount >= 2;
-       
-       setState({
-         subscribed: data.subscribed ?? false,
-         productId: data.product_id ?? null,
-         subscriptionEnd: data.subscription_end ?? null,
-         trialEnd: data.trial_end ?? null,
-         isLoading: false,
-         error: null,
-         status: subStatus,
-         isAdmin: false,
-         isPaidSubscriber: isPaid && !isPaused,
-         isStripeTrialing: isTrialing,
-         paymentFailureCount: failureCount,
-         lastPaymentFailedAt: data.last_payment_failed_at ?? null,
-         isPaymentPaused: isPaused,
-       });
+      setState({
+        subscribed: data.subscribed ?? false,
+        productId: data.product_id ?? null,
+        subscriptionEnd: data.subscription_end ?? null,
+        trialEnd: data.trial_end ?? null,
+        isLoading: false,
+        error: null,
+        status: subStatus,
+        isAdmin: false,
+        isPaidSubscriber: isPaid && !isPaused,
+        isStripeTrialing: isTrialing,
+        paymentFailureCount: failureCount,
+        lastPaymentFailedAt: data.last_payment_failed_at ?? null,
+        isPaymentPaused: isPaused,
+      });
     } catch (err) {
       console.error('Subscription check failed:', err);
-      // Preserve existing state (e.g. local DB trial data) — just stop loading
-      setState(prev => ({
-        ...prev,
-        isLoading: false,
-      }));
+      setState(prev => ({ ...prev, isLoading: false }));
     }
   }, [checkAdminRole]);
 
@@ -204,7 +188,6 @@ export function useSubscription() {
     const newUserId = user?.id ?? null;
     const newAccessToken = session?.access_token ?? null;
     
-    // Only trigger if user ID actually changed (not just token refresh)
     if (newUserId !== userIdRef.current) {
       userIdRef.current = newUserId;
       accessTokenRef.current = newAccessToken;
@@ -212,24 +195,23 @@ export function useSubscription() {
       if (newUserId) {
         checkSubscription();
       } else {
-         setState({
-           subscribed: false,
-           productId: null,
-           subscriptionEnd: null,
-           trialEnd: null,
-           isLoading: false,
-           error: null,
-           status: null,
-           isAdmin: false,
-           isPaidSubscriber: false,
-           isStripeTrialing: false,
-           paymentFailureCount: 0,
-           lastPaymentFailedAt: null,
-           isPaymentPaused: false,
-         });
+        setState({
+          subscribed: false,
+          productId: null,
+          subscriptionEnd: null,
+          trialEnd: null,
+          isLoading: false,
+          error: null,
+          status: null,
+          isAdmin: false,
+          isPaidSubscriber: false,
+          isStripeTrialing: false,
+          paymentFailureCount: 0,
+          lastPaymentFailedAt: null,
+          isPaymentPaused: false,
+        });
       }
     } else if (newAccessToken !== accessTokenRef.current) {
-      // Token refreshed but same user - just update ref, no re-fetch needed
       accessTokenRef.current = newAccessToken;
     }
   }, [user?.id, session?.access_token, checkSubscription]);
@@ -254,7 +236,6 @@ export function useSubscription() {
           filter: `user_id=eq.${userId}`,
         },
         () => {
-          // Subscription changed - recheck status
           checkSubscription();
         }
       )
@@ -270,7 +251,7 @@ export function useSubscription() {
     };
   }, [user?.id, checkSubscription]);
 
-  // Periodic refresh every 5 minutes as fallback (was 60s - too aggressive)
+  // Periodic refresh every 5 minutes as fallback
   useEffect(() => {
     const userId = userIdRef.current;
     if (!userId) return;
@@ -278,45 +259,59 @@ export function useSubscription() {
     const interval = setInterval(() => checkSubscription(), 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [user?.id, checkSubscription]);
- 
-   const createCheckout = async () => {
-     if (!session?.access_token) {
-       throw new Error('Not authenticated');
-     }
- 
-     const { data, error } = await supabase.functions.invoke('create-checkout', {
-       headers: {
-         Authorization: `Bearer ${session.access_token}`,
-       },
-     });
- 
-     if (error) throw error;
-     if (data?.url) {
-       window.location.href = data.url;
-     }
-   };
- 
-    const openCustomerPortal = async () => {
-      if (!session?.access_token) {
-        throw new Error('Not authenticated');
-      }
- 
-      const { data, error } = await supabase.functions.invoke('customer-portal', {
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
- 
-      if (error) throw error;
-      if (data?.url) {
-        window.location.href = data.url;
-      }
-    };
- 
-   return {
-     ...state,
-     checkSubscription,
-     createCheckout,
-     openCustomerPortal,
-   };
- }
+
+  const createCheckout = useCallback(async () => {
+    if (!session?.access_token) {
+      throw new Error('Not authenticated');
+    }
+
+    const { data, error } = await supabase.functions.invoke('create-checkout', {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (error) throw error;
+    if (data?.url) {
+      window.location.href = data.url;
+    }
+  }, [session?.access_token]);
+
+  const openCustomerPortal = useCallback(async () => {
+    if (!session?.access_token) {
+      throw new Error('Not authenticated');
+    }
+
+    const { data, error } = await supabase.functions.invoke('customer-portal', {
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
+
+    if (error) throw error;
+    if (data?.url) {
+      window.location.href = data.url;
+    }
+  }, [session?.access_token]);
+
+  const value: SubscriptionContextType = {
+    ...state,
+    checkSubscription,
+    createCheckout,
+    openCustomerPortal,
+  };
+
+  return (
+    <SubscriptionContext.Provider value={value}>
+      {children}
+    </SubscriptionContext.Provider>
+  );
+}
+
+export function useSubscription() {
+  const context = useContext(SubscriptionContext);
+  if (context === undefined) {
+    throw new Error('useSubscription must be used within a SubscriptionProvider');
+  }
+  return context;
+}
