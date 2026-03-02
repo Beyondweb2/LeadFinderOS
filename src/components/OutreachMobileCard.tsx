@@ -47,6 +47,7 @@ interface OutreachMobileCardProps {
   onCompleteAction?: () => void;
   phoneFetchStatus?: PhoneFetchStatus;
   onRetryPhoneFetch?: () => void;
+  isWalkthroughContacted?: boolean;
 }
 
 export const OutreachMobileCard = memo(function OutreachMobileCard({
@@ -70,6 +71,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   onCompleteAction,
   phoneFetchStatus,
   onRetryPhoneFetch,
+  isWalkthroughContacted = false,
 }: OutreachMobileCardProps) {
   const isPhoneFetching = phoneFetchStatus === 'pending';
   const isPhoneFailed = phoneFetchStatus === 'failed';
@@ -249,7 +251,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
               {/* Row 2: SMS, WhatsApp, Track */}
               <div className="flex items-center gap-0.5">
                 {hasPhone ? (
-                  <div className="flex items-center gap-0.5" data-walkthrough={lead.outreach_attempts === 0 ? 'contact' : undefined}>
+                  <div className="flex items-center gap-0.5" data-walkthrough={lead.outreach_attempts === 0 && !isWalkthroughContacted ? 'contact' : undefined}>
                     <Button
                       variant="ghost"
                       size="icon"

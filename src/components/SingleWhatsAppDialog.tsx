@@ -118,7 +118,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
     }
 
     window.open(url, '_blank');
-    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+    // demo-checklist-contact dispatched by OutreachTable on button click
     window.dispatchEvent(new CustomEvent('challenge-contact-sent', { detail: { leadId: lead.business_name } }));
 
     // Signal send happened — confirmation & logAttempt handled externally
@@ -145,7 +145,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
   return (
     <Dialog open={open} onOpenChange={(v) => {
       onOpenChange(v);
-      if (!v) window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -247,7 +246,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
         <DialogFooter className="gap-2 flex-row justify-end">
           <Button variant="outline" onClick={() => {
             onOpenChange(false);
-            window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
           }}>
             Cancel
           </Button>

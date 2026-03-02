@@ -34,8 +34,7 @@ export function useContactAction({ onUpdate, onPersisted }: UseContactActionOpti
     }
     onUpdate(lead.id, updates);
 
-    // Fire walkthrough / checklist events
-    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+    // demo-checklist-contact dispatched by OutreachTable on button click
     window.dispatchEvent(new CustomEvent('challenge-contact-sent', { detail: { leadId: lead.business_name } }));
 
     // Trigger one-time post-contact popup
