@@ -12,6 +12,7 @@ export interface DemoChecklistState {
   contactsMadeCount: number;
   viewedProgress: boolean;
   noteAdded: boolean;
+  trackStatusSet: boolean;
   nextActionSet: boolean;
   nextDateSet: boolean;
   cardCollapsed: boolean;
@@ -52,6 +53,7 @@ const defaultState: DemoChecklistState = {
   contactsMadeCount: 0,
   viewedProgress: false,
   noteAdded: false,
+  trackStatusSet: false,
   nextActionSet: false,
   nextDateSet: false,
   cardCollapsed: false,
@@ -211,6 +213,7 @@ export function DemoChecklistProvider({
 
     const onNoteSaved = () => completeStep('noteAdded');
 
+    const onTrackStatusChanged = () => completeStep('trackStatusSet');
     const onNextActionSet = () => completeStep('nextActionSet');
     const onNextDateSet = () => completeStep('nextDateSet');
 
@@ -247,6 +250,7 @@ export function DemoChecklistProvider({
     window.addEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
     window.addEventListener('demo-checklist-track-note-saved', onNoteSaved);
     window.addEventListener('demo-checklist-track-pressed', onTrackPressed);
+    window.addEventListener('demo-checklist-track-status-changed', onTrackStatusChanged);
     window.addEventListener('demo-checklist-next-action-set', onNextActionSet);
     window.addEventListener('demo-checklist-next-date-set', onNextDateSet);
     window.addEventListener('demo-checklist-card-collapsed', onCardCollapsed);
@@ -276,6 +280,7 @@ export function DemoChecklistProvider({
       window.removeEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
       window.removeEventListener('demo-checklist-track-note-saved', onNoteSaved);
       window.removeEventListener('demo-checklist-track-pressed', onTrackPressed);
+      window.removeEventListener('demo-checklist-track-status-changed', onTrackStatusChanged);
       window.removeEventListener('demo-checklist-next-action-set', onNextActionSet);
       window.removeEventListener('demo-checklist-next-date-set', onNextDateSet);
       window.removeEventListener('demo-checklist-card-collapsed', onCardCollapsed);
@@ -294,7 +299,7 @@ export function DemoChecklistProvider({
     }
   }, [isDemoUser, isReplay, location.pathname, completeStep]);
 
-  // 10 steps
+  // 11 steps
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
@@ -303,12 +308,13 @@ export function DemoChecklistProvider({
     state.trackPressed,
     state.viewedProgress,
     state.noteAdded,
+    state.trackStatusSet,
     state.nextActionSet,
     state.nextDateSet,
     state.cardCollapsed,
   ].filter(Boolean).length;
 
-  const allDone = completedCount === 10;
+  const allDone = completedCount === 11;
 
   const allDoneRef = useRef(false);
   useEffect(() => {
@@ -331,7 +337,7 @@ export function DemoChecklistProvider({
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
-      totalSteps: 10,
+      totalSteps: 11,
       allDone,
       completeStep,
       isOpen,
@@ -348,7 +354,7 @@ export function DemoChecklistProvider({
 const fallback: DemoChecklistContextType = {
   state: defaultState,
   completedCount: 0,
-  totalSteps: 10,
+  totalSteps: 11,
   allDone: false,
   completeStep: () => {},
   isOpen: false,

@@ -83,19 +83,24 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 7, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details about this lead.', noDim: true };
   }
 
-  // Step 8 – Set a next action
+  // Step 8 – Update pipeline status
+  if (!state.trackStatusSet) {
+    return { step: 8, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the pipeline status for this lead.', noDim: true };
+  }
+
+  // Step 9 – Set a next action
   if (!state.nextActionSet) {
-    return { step: 8, selector: '[data-walkthrough="next-action"]', tooltip: 'Set a next action or follow-up for one lead.', noDim: true };
+    return { step: 9, selector: '[data-walkthrough="next-action"]', tooltip: 'Now set a next action for this lead.', noDim: true };
   }
 
-  // Step 9 – Set a date
+  // Step 10 – Set a date
   if (!state.nextDateSet) {
-    return { step: 9, selector: '[data-walkthrough-step="follow-up-date"]', tooltip: 'Now pick a date for this action.', noDim: true };
+    return { step: 10, selector: '[data-walkthrough-step="follow-up-date"]', tooltip: 'Pick a date for this action.', noDim: true };
   }
 
-  // Step 10 – Collapse a card
+  // Step 11 – Collapse a card
   if (!state.cardCollapsed) {
-    return { step: 10, selector: '[data-walkthrough="collapse-card"]', tooltip: 'Collapse the card to finish. You\'re all set!', noDim: true, tooltipPosition: 'top' };
+    return { step: 11, selector: '[data-walkthrough="collapse-card"]', tooltip: 'Collapse the card to finish. You\'re all set!', noDim: true, tooltipPosition: 'top' };
   }
 
   return null;
