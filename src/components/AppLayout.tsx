@@ -40,22 +40,31 @@ export function AppLayout({ children }: AppLayoutProps) {
   const showWalkthrough = isDemoUser || isTrialingUser;
   const challenge = useChallenge10();
 
-  // Listen for walkthrough completion events to trigger the 10 Business Challenge modal
-  // Only triggers once — for users completing the walkthrough for the first time after this feature ships
+  // Listen for walkthrough completion — set a flag so the challenge modal shows on next search page visit
   useEffect(() => {
     if (challenge.isLoading || challenge.modalShown) return;
 
     const handleReady = () => {
+      try {
+        const key = user?.id ? `challenge_10_pending_${user.id}` : 'challenge_10_pending';
+        localStorage.setItem(key, 'true');
+      } catch {}
+    };
+
+    // Listen for search page trigger
+    const handleTrigger = () => {
       challenge.triggerModal();
     };
 
     window.addEventListener('walkthrough-dismissed', handleReady);
     window.addEventListener('skip-walkthrough', handleReady);
+    window.addEventListener('trigger-challenge-10-modal', handleTrigger);
     return () => {
       window.removeEventListener('walkthrough-dismissed', handleReady);
       window.removeEventListener('skip-walkthrough', handleReady);
+      window.removeEventListener('trigger-challenge-10-modal', handleTrigger);
     };
-  }, [challenge.isLoading, challenge.modalShown, challenge.triggerModal]);
+  }, [challenge.isLoading, challenge.modalShown, user?.id, challenge.triggerModal]);
 
 
 
@@ -115,6 +124,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             onStart={challenge.startChallenge}
             onSkip={challenge.skipChallenge}
           />
+
 
         </div>
       </SidebarProvider>

@@ -65,6 +65,20 @@ const Index = () => {
   const { session, user } = useAuth();
   const { walkthroughCompleted } = useWalkthroughStatus();
   const { toast } = useToast();
+
+  // Trigger challenge modal on first search page visit after walkthrough completion
+  useEffect(() => {
+    const key = user?.id ? `challenge_10_pending_${user.id}` : 'challenge_10_pending';
+    try {
+      if (localStorage.getItem(key) === 'true') {
+        localStorage.removeItem(key);
+        // Small delay to let the page render first
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('trigger-challenge-10-modal'));
+        }, 500);
+      }
+    } catch {}
+  }, [user?.id]);
   
   // Pro access = active, past_due, admin, or trialing (Stripe trial)
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
@@ -362,6 +376,7 @@ const Index = () => {
 
       {/* Post-first-search guidance modal */}
       <PostFirstSearchModal />
+
     </div>
   );
 };
