@@ -620,27 +620,20 @@ const Landing = () => {
             {[
               {
                 num: 1,
-                title: 'Find Businesses That Actually Need You',
+                title: 'Find Leads Instantly',
                 body: "Instantly uncover businesses without websites so you're never pitching blind.",
-                img: step1Search,
-                alt: 'Find leads search form',
+                img: step2Results,
+                alt: 'Find leads results list',
               },
               {
                 num: 2,
-                title: 'Build Your Pipeline',
-                body: 'Save high potential businesses and organise your outreach so nothing slips through.',
-                img: step2Results,
-                alt: 'Add leads to Outreach',
-              },
-              {
-                num: 3,
                 title: 'Start Conversations',
                 body: 'Send personalised WhatsApp or SMS messages in seconds.',
                 img: step3Outreach,
                 alt: 'Start outreach with templates',
               },
               {
-                num: 4,
+                num: 3,
                 title: 'Track & Close Deals',
                 body: 'Track every lead from first message to paid client so your outreach turns into income.',
                 img: step4Dashboard,
