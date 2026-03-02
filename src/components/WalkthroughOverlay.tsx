@@ -70,19 +70,19 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 6, selector: '[data-walkthrough="track-nav"]', tooltip: 'Manage your pipeline here.', tooltipPosition: 'top' };
   }
 
-  // Step 7 – Add a note to one lead
-  if (!state.noteAdded) {
-    return { step: 7, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details about this lead.', noDim: true };
-  }
-
-  // Step 8 – Update pipeline status
+  // Step 7 – Update pipeline status (top of card)
   if (!state.trackStatusSet) {
-    return { step: 8, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the status for this lead.', noDim: true };
+    return { step: 7, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the status for this lead.', noDim: true };
   }
 
-  // Step 9 – Set a next action
+  // Step 8 – Set a next action
   if (!state.nextActionSet) {
-    return { step: 9, selector: '[data-walkthrough="next-action"]', tooltip: 'Now set a next action for this lead.', noDim: true };
+    return { step: 8, selector: '[data-walkthrough="next-action"]', tooltip: 'Now set a next action for this lead.', noDim: true };
+  }
+
+  // Step 9 – Add a note
+  if (!state.noteAdded) {
+    return { step: 9, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details about this lead.', noDim: true };
   }
 
   // Step 10 – Set a date
