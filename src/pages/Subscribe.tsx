@@ -9,10 +9,10 @@ import { useToast } from '@/hooks/use-toast';
 import logoIcon from '@/assets/leadfinder-logo-icon.png';
 
 const TRIAL_FEATURES = [
-  'Unlimited lead searches',
-  'Add leads to your pipeline in one click',
-  'Message instantly via WhatsApp or SMS',
-  'Track every contact and follow-up',
+  'Find new client opportunities every day',
+  'Reach business owners instantly and start real conversations',
+  'Stay organised and never miss a follow-up',
+  'Turn consistent outreach into consistent income',
 ];
 
 const Subscribe = () => {
