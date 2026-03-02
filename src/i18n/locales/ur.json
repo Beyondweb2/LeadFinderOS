@@ -32,7 +32,12 @@
     "selectLanguage": "زبان منتخب کریں",
     "english": "English",
     "hindi": "हिन्दी",
-    "urdu": "اردو"
+    "urdu": "اردو",
+    "dismiss": "خارج کریں",
+    "skip": "چھوڑیں",
+    "gotIt": "سمجھ آ گیا",
+    "maybeLater": "بعد میں",
+    "to_business": "کو"
   },
   "nav": {
     "dashboard": "ڈیش بورڈ",
@@ -281,5 +286,111 @@
     "title": "اپنی زبان منتخب کریں",
     "subtitle": "جاری رکھنے کے لیے اپنی پسندیدہ زبان منتخب کریں",
     "continue": "جاری رکھیں"
+  },
+  "postContact": {
+    "greatStart": "!بہترین شروعات",
+    "hereIsWhatNext": "اب آگے کیا کریں",
+    "noWhatsappTrySms": "WhatsApp نہیں ہے؟",
+    "noWhatsappTrySmsDesc": "اس کے بجائے SMS بھیجنے کی کوشش کریں — بہت سے کاروبار اب بھی باقاعدگی سے ٹیکسٹ پیغامات چیک کرتے ہیں۔",
+    "callingIsKing": "کال کرنا سب سے بہتر ہے",
+    "callingIsKingDesc": "— یہ کلائنٹس حاصل کرنے کا سب سے تیز طریقہ ہے۔ فون اٹھانے اور جلدی بات کرنے سے نہ گھبرائیں۔",
+    "whenSomeoneReplies": "جب کوئی جواب دے",
+    "whenSomeoneRepliesDesc": "— بات چیت کریں، وائس نوٹ بھیجیں۔ پھر ان کی حیثیت اپ ڈیٹ کریں اور \"فالو اپ\" جیسا اگلا عمل مقرر کریں تاکہ آپ کبھی ٹریک نہ کھوئیں۔",
+    "gotItKeepGoing": "سمجھ آ گیا، جاری رکھیں"
+  },
+  "postFirstSearch": {
+    "headline1": "آپ نے ابھی کاروبار تلاش کیے",
+    "headline2": "جنہیں آپ کی خدمات کی ضرورت ہو سکتی ہے",
+    "clickEye": "مکمل تفصیلات دیکھنے کے لیے آنکھ کا آئکن کلک کریں",
+    "addToCrm": "جب آپ کو کوئی ملے جس سے رابطہ کرنا چاہتے ہیں، اسے اپنے CRM میں شامل کریں",
+    "save3Leads": "آؤٹ ریچ ان لاک کرنے کے لیے <accent>3 لیڈز</accent> محفوظ کریں",
+    "andContinue": "اور واک تھرو جاری رکھنے کے لیے",
+    "gotItSave3": "سمجھ آ گیا – میں 3 لیڈز محفوظ کروں گا"
+  },
+  "outreachTips": {
+    "headline1": "رابطہ کرنے سے پہلے",
+    "headline2": "4 مشورے",
+    "tip1Title": "دیے گئے ٹیمپلیٹ کا استعمال کریں",
+    "tip1Desc": "— 'Initial Contact Cycle' ٹیمپلیٹ 6 ثابت شدہ آرام دہ اوپنرز کے درمیان آٹو روٹیٹ کرتا ہے۔ بس بھیجیں — یہ اگلا چن لیتا ہے۔",
+    "tip2Title": "آرام سے رہیں",
+    "tip2Desc": "— اپنے پہلے پیغام میں کوئی لنک، تصاویر یا ویڈیوز نہیں۔ بس دوستانہ رہیں اور آرام سے جواب حاصل کرنے کی کوشش کریں۔",
+    "tip3Title": "پہلے WhatsApp آزمائیں",
+    "tip3Desc": "— اگر ان کے پاس WhatsApp نہیں ہے، SMS آزمائیں۔ لیکن سب سے بہتر آپشن کال کرنا ہے — تیار اسکرپٹ ٹیمپلیٹ رکھیں۔",
+    "tip4Title": "بات چیت کریں",
+    "tip4Desc": "— فوری فروخت نہ کریں۔ سوال پوچھیں، ان کے کاروبار کا حوالہ دیں، اور قدرتی رہیں۔",
+    "notReady": "ابھی بھیجنے کے لیے تیار نہیں؟",
+    "sendInitialText": "ابتدائی ٹیکسٹ بھیجیں"
+  },
+  "challenge": {
+    "title": "چیلنج",
+    "contact10": "آج <accent>10</accent> کاروبار سے رابطہ کریں",
+    "solidPerDay": "روزانہ 10 اچھا ہے۔",
+    "consistencyPays": "اسے مسلسل کریں اور کلائنٹس آئیں گے۔",
+    "letsGo": "چلیں شروع کریں"
+  },
+  "checkout": {
+    "unlockUnlimited": "لامحدود رسائی ان لاک کریں",
+    "priceMonthly": "£19.99/ماہ · کسی بھی وقت منسوخ کریں",
+    "redirecting": "...ری ڈائریکٹ ہو رہا ہے",
+    "continueToCheckout": "محفوظ چیک آؤٹ پر جائیں",
+    "cancelAnytimeNote": "اپنے ڈیش بورڈ سے ایک کلک میں کسی بھی وقت منسوخ کریں۔",
+    "unlimitedBenefits": {
+      "searches": "لامحدود لیڈ تلاش",
+      "outreach": "مکمل آؤٹ ریچ رسائی",
+      "tracking": "رابطہ ٹریکنگ اور نوٹس",
+      "templates": "ای میل اور کال ٹیمپلیٹس"
+    },
+    "unlockPrice": "لامحدود ان لاک — £19.99/ماہ",
+    "cancelAnytime": "کسی بھی وقت منسوخ",
+    "checkoutFailed": "چیک آؤٹ ناکام",
+    "checkoutFailedDesc": "براہ کرم دوبارہ کوشش کریں۔"
+  },
+  "activation": {
+    "waitingPayment": "...ادائیگی کا انتظار",
+    "completeCheckout": "نئے ٹیب میں چیک آؤٹ مکمل کریں۔ یہ سکرین خود بخود اپ ڈیٹ ہو جائے گی۔",
+    "activated": "!آپ فعال ہو گئے",
+    "fullAccessUnlocked": "...مکمل رسائی ان لاک۔ ڈیش بورڈ پر ری ڈائریکٹ ہو رہا ہے"
+  },
+  "trialLimit": {
+    "readyForNext": "اپنے اگلے",
+    "client": "کلائنٹ کے لیے تیار؟",
+    "reachedLimit": "آپ کی مفت تلاش کی حد ختم ہو گئی ہے۔",
+    "keepBuilding": "اپنی پائپ لائن بناتے رہیں۔",
+    "businessesFound": "کاروبار ملے",
+    "withoutWebsites": "بغیر ویب سائٹ",
+    "messagesSent": "پیغامات بھیجے گئے",
+    "unlockMomentum": "لامحدود تلاشیں ان لاک کریں اور رفتار برقرار رکھیں۔",
+    "pricingNote": "3 دن کے مفت ٹرائل کے بعد → £19.99/ماہ",
+    "startTrial": "3 دن کا مفت ٹرائل شروع کریں",
+    "openingCheckout": "...چیک آؤٹ کھل رہا ہے"
+  },
+  "skipWalkthrough": {
+    "buttonLabel": "واک تھرو چھوڑیں",
+    "title": "واک تھرو چھوڑیں؟",
+    "description": "آپ رہنمائی والے اقدامات کے بغیر ایپ کا استعمال جاری رکھ سکتے ہیں۔",
+    "continueWalkthrough": "واک تھرو جاری رکھیں",
+    "yesSkip": "ہاں، چھوڑیں"
+  },
+  "postSend": {
+    "messageSent": "پیغام بھیجا گیا؟",
+    "didYouSend": "کیا آپ نے {{channel}} پیغام <bold>{{name}}</bold> کو بھیجا؟",
+    "noBtn": "نہیں",
+    "yesSent": "ہاں، بھیجا"
+  },
+  "messaging": {
+    "whatsappMessage": "WhatsApp پیغام",
+    "smsMessage": "SMS پیغام",
+    "initialMessage": "ابتدائی پیغام",
+    "preview": "پریویو",
+    "noPhoneOnFile": "اس کاروبار کے پاس فون نمبر نہیں ہے۔",
+    "openWhatsApp": "WhatsApp کھولیں",
+    "openSmsApp": "SMS ایپ کھولیں",
+    "opening": "...کھل رہا ہے",
+    "notOnWhatsApp": "WhatsApp پر نہیں",
+    "notOnWhatsAppDesc": "{{name}} کو پہلے WhatsApp پر نہیں کے طور پر نشان زد کیا گیا تھا۔ SMS یا کال آزمائیں۔",
+    "complianceNote": "یقینی بنائیں کہ آؤٹ ریچ پلیٹ فارم اور مقامی ضوابط کی تعمیل کرتی ہے۔",
+    "autoRotateNote": "دہرانے کو کم کرنے اور جواب کی شرح بہتر بنانے کے لیے 6 ثابت شدہ اوپننگ پیغامات کے درمیان روٹیٹ ہو رہا ہے۔",
+    "walkthroughNudgeStep": "قدم 3 / 8",
+    "walkthroughNudgeText": "6 ثابت شدہ پیغامات کے درمیان آٹو روٹیٹ کرنے کے لیے <accent>\"Initial Contact Cycle\"</accent> منتخب کریں۔"
   }
 }

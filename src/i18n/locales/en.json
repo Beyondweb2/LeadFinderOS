@@ -32,7 +32,12 @@
     "selectLanguage": "Select Language",
     "english": "English",
     "hindi": "हिन्दी",
-    "urdu": "اردو"
+    "urdu": "اردو",
+    "dismiss": "Dismiss",
+    "skip": "Skip",
+    "gotIt": "Got it",
+    "maybeLater": "Maybe later",
+    "to_business": "To"
   },
   "nav": {
     "dashboard": "Dashboard",
@@ -281,5 +286,111 @@
     "title": "Choose Your Language",
     "subtitle": "Select your preferred language to continue",
     "continue": "Continue"
+  },
+  "postContact": {
+    "greatStart": "Great Start!",
+    "hereIsWhatNext": "Here's What To Do Next",
+    "noWhatsappTrySms": "No WhatsApp?",
+    "noWhatsappTrySmsDesc": "Try sending an SMS instead — many businesses still check text messages regularly.",
+    "callingIsKing": "Calling is king",
+    "callingIsKingDesc": "— it's the fastest way to land clients. Don't be afraid to pick up the phone and have a quick chat.",
+    "whenSomeoneReplies": "When someone replies",
+    "whenSomeoneRepliesDesc": "— have a conversation, send a voice note. Then update their Status and set a Next Action like \"Follow Up\" so you never lose track.",
+    "gotItKeepGoing": "Got it, let's keep going"
+  },
+  "postFirstSearch": {
+    "headline1": "You've just found businesses",
+    "headline2": "that may need your services",
+    "clickEye": "Click the eye icon to view full details",
+    "addToCrm": "When you find one you want to contact, add it to your CRM",
+    "save3Leads": "Save <accent>3 leads</accent> to unlock outreach",
+    "andContinue": "and continue the walkthrough",
+    "gotItSave3": "Got it – I'll save 3 leads"
+  },
+  "outreachTips": {
+    "headline1": "4 Tips Before",
+    "headline2": "You Reach Out",
+    "tip1Title": "Use the template provided",
+    "tip1Desc": "— The 'Initial Contact Cycle' template auto-rotates between 6 proven casual openers. Just hit send — it picks the next one for you.",
+    "tip2Title": "Keep it casual",
+    "tip2Desc": "— No links, images, or videos in your first message. Just be friendly and try to get a casual reply first.",
+    "tip3Title": "Try WhatsApp first",
+    "tip3Desc": "— If they don't have WhatsApp, try SMS. But the best option is to call — have a pitch ready using a pre-made script template.",
+    "tip4Title": "Make conversation",
+    "tip4Desc": "— Don't sell straight away. Ask a question, reference their business, and keep it natural.",
+    "notReady": "Not ready to send yet?",
+    "sendInitialText": "Send Initial Text"
+  },
+  "challenge": {
+    "title": "Challenge",
+    "contact10": "Contact <accent>10</accent> businesses today",
+    "solidPerDay": "10 per day is solid.",
+    "consistencyPays": "Do it consistently and clients follow.",
+    "letsGo": "Let's Go"
+  },
+  "checkout": {
+    "unlockUnlimited": "Unlock unlimited access",
+    "priceMonthly": "£19.99/month · Cancel anytime",
+    "redirecting": "Redirecting...",
+    "continueToCheckout": "Continue to Secure Checkout",
+    "cancelAnytimeNote": "Cancel anytime from your dashboard in one click.",
+    "unlimitedBenefits": {
+      "searches": "Unlimited lead searches",
+      "outreach": "Full Outreach access",
+      "tracking": "Contact tracking & notes",
+      "templates": "Email & call templates"
+    },
+    "unlockPrice": "Unlock unlimited — £19.99/month",
+    "cancelAnytime": "Cancel anytime",
+    "checkoutFailed": "Checkout failed",
+    "checkoutFailedDesc": "Please try again."
+  },
+  "activation": {
+    "waitingPayment": "Waiting for payment...",
+    "completeCheckout": "Complete checkout in the new tab. This screen will update automatically.",
+    "activated": "You're activated!",
+    "fullAccessUnlocked": "Full access unlocked. Redirecting to dashboard..."
+  },
+  "trialLimit": {
+    "readyForNext": "Ready to land your next",
+    "client": "client?",
+    "reachedLimit": "You've reached your free search limit.",
+    "keepBuilding": "Keep building your pipeline.",
+    "businessesFound": "Businesses Found",
+    "withoutWebsites": "Without Websites",
+    "messagesSent": "Messages Sent",
+    "unlockMomentum": "Unlock unlimited searches and keep building momentum.",
+    "pricingNote": "After 3-day free trial → £19.99/month",
+    "startTrial": "Start Free 3-Day Trial",
+    "openingCheckout": "Opening checkout..."
+  },
+  "skipWalkthrough": {
+    "buttonLabel": "Skip walkthrough",
+    "title": "Skip walkthrough?",
+    "description": "You can continue using the app without guided steps.",
+    "continueWalkthrough": "Continue walkthrough",
+    "yesSkip": "Yes, skip"
+  },
+  "postSend": {
+    "messageSent": "Message sent?",
+    "didYouSend": "Did you send the {{channel}} message to <bold>{{name}}</bold>?",
+    "noBtn": "No",
+    "yesSent": "Yes, sent"
+  },
+  "messaging": {
+    "whatsappMessage": "WhatsApp Message",
+    "smsMessage": "SMS Message",
+    "initialMessage": "Initial Message",
+    "preview": "Preview",
+    "noPhoneOnFile": "This business doesn't have a phone number on file.",
+    "openWhatsApp": "Open WhatsApp",
+    "openSmsApp": "Open SMS App",
+    "opening": "Opening...",
+    "notOnWhatsApp": "Not on WhatsApp",
+    "notOnWhatsAppDesc": "{{name}} was previously marked as not on WhatsApp. Try SMS or Call instead.",
+    "complianceNote": "Ensure outreach complies with platform and local regulations.",
+    "autoRotateNote": "Rotating between 6 proven opening messages to reduce repetition and improve reply rates.",
+    "walkthroughNudgeStep": "Step 3 of 8",
+    "walkthroughNudgeText": "Select <accent>\"Initial Contact Cycle\"</accent> to auto-rotate between 6 proven messages."
   }
 }

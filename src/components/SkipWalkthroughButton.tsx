@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,6 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 
 export function SkipWalkthroughButton() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { isDemoUser } = useDemoChecklist();
   const { walkthroughOpen } = useWalkthroughStatus();
@@ -23,12 +25,10 @@ export function SkipWalkthroughButton() {
 
   const handleSkip = () => {
     if (!user?.id) return;
-    // Set all dismiss/complete flags
     try {
       localStorage.setItem(`demo_walkthrough_dismissed_${user.id}`, 'true');
       localStorage.setItem(`walkthrough_completed_${user.id}`, 'true');
     } catch {}
-    // Log exit event
     Promise.resolve(supabase.rpc('log_walkthrough_event' as any, {
       p_event_type: 'walkthrough_skip',
       p_meta: { step: 0, walkthrough_id: 'main' },
@@ -44,23 +44,21 @@ export function SkipWalkthroughButton() {
         onClick={() => setConfirmOpen(true)}
         className="text-[12px] text-primary hover:underline underline-offset-2 cursor-pointer transition-colors"
       >
-        Skip walkthrough
+        {t('skipWalkthrough.buttonLabel')}
       </button>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="sm:max-w-[380px]">
           <DialogHeader>
-            <DialogTitle>Skip walkthrough?</DialogTitle>
-            <DialogDescription>
-              You can continue using the app without guided steps.
-            </DialogDescription>
+            <DialogTitle>{t('skipWalkthrough.title')}</DialogTitle>
+            <DialogDescription>{t('skipWalkthrough.description')}</DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-              Continue walkthrough
+              {t('skipWalkthrough.continueWalkthrough')}
             </Button>
             <Button onClick={handleSkip}>
-              Yes, skip
+              {t('skipWalkthrough.yesSkip')}
             </Button>
           </DialogFooter>
         </DialogContent>

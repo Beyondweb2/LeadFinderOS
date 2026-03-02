@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -17,6 +18,8 @@ interface CheckoutConfirmDialogProps {
 }
 
 export function CheckoutConfirmDialog({ open, onOpenChange, onConfirm, isLoading }: CheckoutConfirmDialogProps) {
+  const { t } = useTranslation();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -24,42 +27,21 @@ export function CheckoutConfirmDialog({ open, onOpenChange, onConfirm, isLoading
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
             <Shield className="h-6 w-6 text-primary" />
           </div>
-           <DialogTitle className="text-xl">
-             Unlock unlimited access
-           </DialogTitle>
-           <DialogDescription className="text-base">
-             £19.99/month · Cancel anytime
-           </DialogDescription>
+           <DialogTitle className="text-xl">{t('checkout.unlockUnlimited')}</DialogTitle>
+           <DialogDescription className="text-base">{t('checkout.priceMonthly')}</DialogDescription>
         </DialogHeader>
 
         <DialogFooter className="flex-col gap-2 sm:flex-col">
-          <Button
-            onClick={onConfirm}
-            disabled={isLoading}
-            className="w-full"
-          >
+          <Button onClick={onConfirm} disabled={isLoading} className="w-full">
             {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Redirecting...
-              </>
+              <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{t('checkout.redirecting')}</>
             ) : (
-              <>
-                <CreditCard className="mr-2 h-4 w-4" />
-                Continue to Secure Checkout
-              </>
+              <><CreditCard className="mr-2 h-4 w-4" />{t('checkout.continueToCheckout')}</>
             )}
           </Button>
-          <p className="text-xs text-muted-foreground text-center">
-            Cancel anytime from your dashboard in one click.
-          </p>
-          <Button
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
-            className="w-full text-muted-foreground"
-            disabled={isLoading}
-          >
-            Cancel
+          <p className="text-xs text-muted-foreground text-center">{t('checkout.cancelAnytimeNote')}</p>
+          <Button variant="ghost" onClick={() => onOpenChange(false)} className="w-full text-muted-foreground" disabled={isLoading}>
+            {t('common.cancel')}
           </Button>
         </DialogFooter>
       </DialogContent>

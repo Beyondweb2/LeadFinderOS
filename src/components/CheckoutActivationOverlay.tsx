@@ -1,10 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import appLogo from '@/assets/logo.png';
 
 export function CheckoutActivationOverlay() {
+  const { t } = useTranslation();
   const { session } = useAuth();
   const [phase, setPhase] = useState<'hidden' | 'polling' | 'activated'>('hidden');
 
@@ -15,22 +17,17 @@ export function CheckoutActivationOverlay() {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       return data?.subscribed === true;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }, [session?.access_token]);
 
   useEffect(() => {
-    const handleCheckoutOpened = () => {
-      setPhase('polling');
-    };
+    const handleCheckoutOpened = () => { setPhase('polling'); };
     window.addEventListener('checkout-opened', handleCheckoutOpened);
     return () => window.removeEventListener('checkout-opened', handleCheckoutOpened);
   }, []);
 
   useEffect(() => {
     if (phase !== 'polling') return;
-
     let cancelled = false;
     const poll = async () => {
       while (!cancelled) {
@@ -39,10 +36,7 @@ export function CheckoutActivationOverlay() {
         const active = await pollForActivation();
         if (active && !cancelled) {
           setPhase('activated');
-          // Redirect after showing success
-          setTimeout(() => {
-            window.location.href = '/';
-          }, 2500);
+          setTimeout(() => { window.location.href = '/'; }, 2500);
           break;
         }
       }
@@ -62,16 +56,14 @@ export function CheckoutActivationOverlay() {
           <>
             <Loader2 className="h-10 w-10 text-primary animate-spin" />
             <div>
-              <h2 className="text-lg font-semibold mb-1">Waiting for payment...</h2>
-              <p className="text-sm text-muted-foreground">
-                Complete checkout in the new tab. This screen will update automatically.
-              </p>
+              <h2 className="text-lg font-semibold mb-1">{t('activation.waitingPayment')}</h2>
+              <p className="text-sm text-muted-foreground">{t('activation.completeCheckout')}</p>
             </div>
             <button
               onClick={() => setPhase('hidden')}
               className="text-xs text-muted-foreground/60 hover:text-muted-foreground underline mt-2"
             >
-              Dismiss
+              {t('common.dismiss')}
             </button>
           </>
         )}
@@ -80,10 +72,8 @@ export function CheckoutActivationOverlay() {
           <>
             <CheckCircle2 className="h-12 w-12 text-green-500" />
             <div>
-              <h2 className="text-lg font-semibold mb-1">You're activated!</h2>
-              <p className="text-sm text-muted-foreground">
-                Full access unlocked. Redirecting to dashboard...
-              </p>
+              <h2 className="text-lg font-semibold mb-1">{t('activation.activated')}</h2>
+              <p className="text-sm text-muted-foreground">{t('activation.fullAccessUnlocked')}</p>
             </div>
           </>
         )}
