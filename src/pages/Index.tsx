@@ -171,9 +171,17 @@ const Index = () => {
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
   // "Unlock Unlimited" button on search form now opens the modal instead of going to Stripe directly
-  const handleUnlockClick = useCallback(() => {
-    setShowUpgradeAfterLimit(true);
-  }, []);
+  const handleUnlockClick = useCallback(async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('create-checkout', {
+        headers: { Authorization: `Bearer ${session?.access_token}` },
+      });
+      if (error) throw error;
+      if (data?.url) window.open(data.url, '_blank');
+    } catch (err) {
+      toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
+    }
+  }, [session?.access_token, toast]);
 
   // Handle search attempt
   const handleSearch = useCallback((filters: any) => {
