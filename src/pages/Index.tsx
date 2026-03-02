@@ -122,20 +122,6 @@ const Index = () => {
     }
   }, [walkthroughCompleted, isFreeUser, localSearchCount, freeSearchCount, user?.id]);
 
-  // Clear blur and restart walkthrough when user becomes a subscriber
-  useEffect(() => {
-    if (hasProAccess) {
-      setButtonExhausted(false);
-      setCtaSwapped(false);
-      persistBlur(false, user?.id);
-      // Reset walkthrough so it shows again after subscribing
-      if (user?.id) {
-        localStorage.removeItem(`demo_walkthrough_dismissed_${user.id}`);
-        localStorage.removeItem(`walkthrough_completed_${user.id}`);
-        window.dispatchEvent(new Event('start-walkthrough'));
-      }
-    }
-  }, [hasProAccess, user?.id]);
 
   // Free search exhausted — after 2nd search completes, block further searches
   const freeSearchesExhausted = isFreeUser && localSearchCount >= 1;
