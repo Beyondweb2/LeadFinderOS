@@ -127,8 +127,8 @@ const Subscribe = () => {
             <div className="border-t border-border/20 pt-5">
               <div className="space-y-4.5 pl-1" style={{ display: 'flex', flexDirection: 'column', gap: '1.125rem' }}>
                 {TRIAL_FEATURES.map((feature) => (
-                  <div key={feature} className="flex items-center gap-4.5" style={{ gap: '1.125rem' }}>
-                    <div className="flex-shrink-0 h-[26px] w-[26px] rounded-full bg-emerald-500/20 flex items-center justify-center shadow-[0_0_10px_hsl(142_76%_45%/0.2),0_0_4px_hsl(142_76%_45%/0.1)]">
+                  <div key={feature} className="flex items-center gap-3">
+                    <div className="flex-shrink-0 h-[26px] w-[26px] rounded-full bg-emerald-500/20 flex items-center justify-center">
                       <Check className="h-3.5 w-3.5 text-emerald-400" strokeWidth={3} />
                     </div>
                     <span className="text-sm font-medium">{feature}</span>
