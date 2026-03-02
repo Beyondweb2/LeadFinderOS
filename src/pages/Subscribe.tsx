@@ -9,10 +9,10 @@ import { useToast } from '@/hooks/use-toast';
 import logoIcon from '@/assets/leadfinder-logo-icon.png';
 
 const TRIAL_FEATURES = [
-  'Find new client opportunities every day',
-  'Reach business owners instantly and start real conversations',
-  'Stay organised and never miss a follow-up',
-  'Turn consistent outreach into consistent income',
+  'Discover new client opportunities every day',
+  'Start real conversations with business owners',
+  'Never miss a follow-up',
+  'Turn outreach into predictable income',
 ];
 
 const Subscribe = () => {
@@ -123,7 +123,7 @@ const Subscribe = () => {
           </p>
 
           {/* Benefits */}
-          <div className="space-y-2.5">
+          <div className="space-y-3.5">
             {TRIAL_FEATURES.map((feature) => (
               <div key={feature} className="flex items-center gap-3">
                 <div className="flex-shrink-0 h-5 w-5 rounded-full bg-emerald-500/15 flex items-center justify-center">
