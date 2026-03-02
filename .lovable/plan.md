@@ -1,21 +1,18 @@
 
 
-## Issue
+## Problem
 
-The CTA flow itself is correct: all buttons route to `/auth?intent=upgrade` → signup → `/subscribe` (5-day card-upfront trial). However, the **disclaimer text** under multiple CTAs still references the **old model** ("No card required"), which contradicts the current card-upfront 5-day free trial.
+On iOS Safari, `window.open(url, '_blank')` is blocked by the popup blocker when called after an asynchronous operation (the email check + checkout API calls). Safari only allows `window.open` in the direct, synchronous call stack of a user gesture (tap/click). Since there are two sequential async calls before the `window.open`, Safari silently blocks it.
 
-## Locations to fix
+## Solution
 
-**Landing page (`src/pages/Landing.tsx`):**
-1. **Line 555** — Hero CTA disclaimer: `"No card required · Instant access · Cancel anytime"` → `"5-day free trial · £0 today · Cancel anytime"`
-2. **Line 995** — Final CTA button text: `"Start free access"` → `"Start Free Trial — £0 Today"`
-3. **Line 1001** — Final CTA disclaimer: `"No card required · Full access instantly · Cancel anytime"` → `"5-day free trial · £0 today · Cancel anytime"`
+Replace `window.open(checkoutData.url, '_blank')` with `window.location.href = checkoutData.url` for the email-first checkout flow. This performs a same-tab redirect which is never blocked by popup blockers on any platform.
 
-**Start page (`src/pages/Start.tsx`):**
-4. **Line 31** — Benefits list item: `"No card required to start"` → remove or replace with a relevant benefit
-5. **Line 35** — Trust point: `"No card required to create an account"` → update to reflect trial model
-6. **Line 90-91** — Hero CTA disclaimer: `"No card required · Full access · Takes 30 seconds"` → `"5-day free trial · £0 today · Cancel anytime"`
-7. **Line 213-214** — Final CTA disclaimer: `"No card required · Full access"` → `"5-day free trial · £0 today"`
+## Changes
 
-All CTA button links (`/auth?intent=upgrade`) are correct and don't need changing. The signup → `/subscribe` redirect in Auth.tsx is also correct.
+**`src/pages/Landing.tsx`** (line ~447):
+- Change `window.open(checkoutData.url, '_blank')` to `window.location.href = checkoutData.url`
+- Remove the `checkout-opened` event dispatch (not needed for same-tab navigation)
+
+This is consistent with how the authenticated `createCheckout` in `useSubscription.tsx` already works (line ~209: `window.location.href = data.url`).
 
