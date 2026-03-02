@@ -40,10 +40,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const showWalkthrough = isDemoUser || isTrialingUser;
   const challenge = useChallenge10();
 
-  // Listen for walkthrough completion — set a flag so the challenge modal shows on next search page visit
+  // Listen for walkthrough completion — set pending flag (always registered, regardless of challenge load state)
   useEffect(() => {
-    if (challenge.isLoading || challenge.modalShown) return;
-
     const handleReady = () => {
       try {
         const key = user?.id ? `challenge_10_pending_${user.id}` : 'challenge_10_pending';
@@ -51,20 +49,30 @@ export function AppLayout({ children }: AppLayoutProps) {
       } catch {}
     };
 
-    // Listen for search page trigger
-    const handleTrigger = () => {
-      challenge.triggerModal();
-    };
-
     window.addEventListener('walkthrough-dismissed', handleReady);
     window.addEventListener('skip-walkthrough', handleReady);
-    window.addEventListener('trigger-challenge-10-modal', handleTrigger);
     return () => {
       window.removeEventListener('walkthrough-dismissed', handleReady);
       window.removeEventListener('skip-walkthrough', handleReady);
-      window.removeEventListener('trigger-challenge-10-modal', handleTrigger);
     };
-  }, [challenge.isLoading, challenge.modalShown, user?.id, challenge.triggerModal]);
+  }, [user?.id]);
+
+  // Once challenge state loads, check if there's a pending trigger (e.g. if event fired before load finished)
+  useEffect(() => {
+    if (challenge.isLoading || challenge.modalShown) return;
+
+    const key = user?.id ? `challenge_10_pending_${user.id}` : 'challenge_10_pending';
+    try {
+      if (localStorage.getItem(key) === 'true' && location.pathname === '/find-leads') {
+        localStorage.removeItem(key);
+        setTimeout(() => challenge.triggerModal(), 300);
+      }
+    } catch {}
+
+    const handleTrigger = () => challenge.triggerModal();
+    window.addEventListener('trigger-challenge-10-modal', handleTrigger);
+    return () => window.removeEventListener('trigger-challenge-10-modal', handleTrigger);
+  }, [challenge.isLoading, challenge.modalShown, user?.id, challenge.triggerModal, location.pathname]);
 
 
 
