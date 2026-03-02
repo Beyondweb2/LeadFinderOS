@@ -139,7 +139,8 @@ const Auth = () => {
             title: t('auth.accountCreated'),
             description: t('auth.welcomeRedirecting'),
           });
-          navigate('/');
+          // New users go to trial signup page to enter card details
+          navigate('/subscribe');
           return;
         }
       }
@@ -241,7 +242,7 @@ const Auth = () => {
           </CardDescription>
           {!isLogin && (
             <p className="text-xs text-muted-foreground mt-2">
-              {t('auth.noCardRequired')}
+              Start with a 5-day free trial · £0 today
             </p>
           )}
         </CardHeader>
