@@ -37,6 +37,9 @@ function getActiveStep(state: any, pathname: string, t: any): StepDef | null {
   }
 
   if (!state.addedToCrm) {
+    // Hide step 2 when results are blurred (paywall/trial limit)
+    const isBlurred = !!document.querySelector('.backdrop-blur-md');
+    if (isBlurred) return null;
     const selected = state.crmAddCount || 0;
     return {
       step: 2, selector: '[data-walkthrough="add-crm"]',
