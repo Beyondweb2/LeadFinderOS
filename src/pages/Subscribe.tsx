@@ -151,16 +151,9 @@ const Subscribe = () => {
             </div>
           </div>
 
-          {/* Pricing — no box */}
-          <div className="text-center space-y-0.5 pt-2">
-            <p className="text-2xl font-bold">£0 <span className="text-sm font-normal text-muted-foreground">today</span></p>
-            <p className="text-xs text-muted-foreground">Cancel anytime from your account</p>
-            <p className="text-xs text-muted-foreground">After 5 days · £19.99/month</p>
-          </div>
-
           {/* CTA / Waiting */}
           {waitingForPayment ? (
-            <div className="text-center space-y-3">
+            <div className="text-center space-y-3 pt-4">
               <div className="flex items-center justify-center gap-2 text-primary">
                 <Loader2 className="h-5 w-5 animate-spin" />
                 <span className="font-medium text-sm">Waiting for payment setup...</span>
@@ -183,10 +176,11 @@ const Subscribe = () => {
               </Button>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-3 pt-4">
               <Button
                 onClick={handleSubscribe}
-                className="btn-premium w-full h-[52px] text-base font-bold text-primary-foreground shadow-[0_4px_20px_hsl(210_100%_50%/0.3)] hover:shadow-[0_6px_24px_hsl(210_100%_50%/0.4)] hover:-translate-y-0.5 transition-all"
+                variant="outline"
+                className="w-full h-[52px] text-base font-bold rounded-full border-primary/40 bg-primary/5 hover:bg-primary/10 hover:border-primary/60 transition-all"
                 size="lg"
                 disabled={isLoading}
               >
@@ -196,13 +190,18 @@ const Subscribe = () => {
                     Starting...
                   </>
                 ) : (
-                  'Start Free Trial — £0 Today →'
+                  <>
+                    Start Free Trial — £0 Today
+                    <span className="ml-2">→</span>
+                  </>
                 )}
               </Button>
 
-              {/* Micro trust — single line */}
               <p className="text-center text-[11px] text-muted-foreground">
-                Secure payment via Stripe · Reminder before billing
+                5-day free trial · £0 today · Cancel anytime
+              </p>
+              <p className="text-center text-[11px] text-muted-foreground -mt-2">
+                After trial · £19.99/month · Secure payment via Stripe
               </p>
             </div>
           )}
