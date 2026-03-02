@@ -98,7 +98,7 @@ const BillingSuccess = () => {
             <>
               <CheckCircle2 className="h-12 w-12 text-green-500" />
               <div className="text-center">
-                <h2 className="text-xl font-semibold mb-2">Payment received!</h2>
+                <h2 className="text-xl font-semibold mb-2">Trial activated!</h2>
                 <p className="text-muted-foreground mb-4">You can close this tab and return to the app.</p>
                 <Button onClick={() => navigate('/', { replace: true })}>
                   Go to Dashboard
@@ -121,8 +121,11 @@ const BillingSuccess = () => {
             <>
               <CheckCircle2 className="h-12 w-12 text-green-500" />
               <div className="text-center">
-                <h2 className="text-xl font-semibold mb-2">You're all set!</h2>
-                <p className="text-muted-foreground">You can close this tab and return to the app.</p>
+                <h2 className="text-xl font-semibold mb-2">Trial activated!</h2>
+                <p className="text-muted-foreground mb-4">You now have full access. Close this tab to continue.</p>
+                <Button onClick={() => navigate('/', { replace: true })}>
+                  Go to Dashboard
+                </Button>
               </div>
             </>
           )}
