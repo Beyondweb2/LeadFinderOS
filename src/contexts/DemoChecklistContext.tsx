@@ -165,6 +165,15 @@ export function DemoChecklistProvider({
       });
     };
 
+    const onCrmPurged = () => {
+      setState(prev => {
+        const newCount = Math.max(0, prev.crmAddCount - 1);
+        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 3 };
+        saveState(next, user?.id);
+        return next;
+      });
+    };
+
     // Steps 3 & 4: listen for outreach-attempt-logged
     const onAttemptLogged = () => {
       setState(prev => {
@@ -213,6 +222,7 @@ export function DemoChecklistProvider({
 
     window.addEventListener('demo-checklist-search', onSearch);
     window.addEventListener('crm-lead-added', onCrmAdd);
+    window.addEventListener('crm-lead-purged', onCrmPurged);
     window.addEventListener('outreach-attempt-logged', onAttemptLogged);
     window.addEventListener('demo-checklist-contact', onContact);
     window.addEventListener('demo-checklist-track-note-saved', onNoteSaved);
@@ -239,6 +249,7 @@ export function DemoChecklistProvider({
     return () => {
       window.removeEventListener('demo-checklist-search', onSearch);
       window.removeEventListener('crm-lead-added', onCrmAdd);
+      window.removeEventListener('crm-lead-purged', onCrmPurged);
       window.removeEventListener('outreach-attempt-logged', onAttemptLogged);
       window.removeEventListener('demo-checklist-contact', onContact);
       window.removeEventListener('demo-checklist-track-note-saved', onNoteSaved);

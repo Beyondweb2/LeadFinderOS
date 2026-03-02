@@ -54,6 +54,8 @@ export function useOutreach() {
       description: 'No phone number found — not added.',
       variant: 'destructive',
     });
+    // Notify walkthrough to decrement CRM add count
+    window.dispatchEvent(new CustomEvent('crm-lead-purged'));
   }, []);
 
   const fetchOnePhone = useCallback(async (item: { outreachLeadId: string; placeId: string; businessName: string }) => {
