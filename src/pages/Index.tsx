@@ -119,11 +119,17 @@ const Index = () => {
     }
   }, [walkthroughCompleted, isFreeUser, localSearchCount, freeSearchCount, user?.id]);
 
-  // Clear blur when user becomes a subscriber
+  // Clear blur and restart walkthrough when user becomes a subscriber
   useEffect(() => {
     if (hasProAccess) {
       setButtonExhausted(false);
       persistBlur(false, user?.id);
+      // Reset walkthrough so it shows again after subscribing
+      if (user?.id) {
+        localStorage.removeItem(`demo_walkthrough_dismissed_${user.id}`);
+        localStorage.removeItem(`walkthrough_completed_${user.id}`);
+        window.dispatchEvent(new Event('start-walkthrough'));
+      }
     }
   }, [hasProAccess, user?.id]);
 
@@ -265,7 +271,7 @@ const Index = () => {
           disabled={postAbandonExhausted && !hasProAccess}
           isUpgradeLoading={isCheckoutLoading}
           onUpgrade={handleUnlockClick}
-          freeSearchesExhausted={freeSearchesExhausted}
+          freeSearchesExhausted={buttonExhausted && isFreeUser}
         />
       </section>
 
