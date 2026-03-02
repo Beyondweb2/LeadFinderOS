@@ -1,29 +1,29 @@
 
 
-## Plan: Outreach Attempt Tracking & Walkthrough Redesign — IMPLEMENTED
+## Bug Fix: Invalid enum value for next_action_type
 
-All 4 parts have been implemented:
+### Root Cause
+The error `invalid input value for enum next_action_type: "send_revision"` occurs in **`handleDateChange`** (line 351 of `PotentialWork.tsx`). When the user changes the date, it casts the local track action key directly as a `NextActionType` instead of looking up the mapped `dbValue` from `TRACK_NEXT_ACTION_OPTIONS`.
 
-### Part 1: Database ✅
-- Added `outreach_attempts` (int, default 0) and `last_outreach_attempt_at` (timestamptz) to `outreach_leads`
-- Created `outreach_events` table with RLS (insert/select own rows)
+```typescript
+// BUG (line 351):
+const dbAction: NextActionType = isCustom ? 'follow_up' : nextAction as NextActionType;
+// "send_revision" is NOT a valid DB enum — should resolve to "send_follow_up"
+```
 
-### Part 2: Attempt Logging ✅
-- Created `useOutreachAttempt` hook with `logAttempt(leadId, channel)` and `logWhatsAppUnavailable(leadId)`
-- Wired into SingleWhatsAppDialog, SingleSMSDialog, and OutreachTable call clicks
-- Auto-sets status to 'waiting' when lead is 'not_contacted'
-- Dispatches `outreach-attempt-logged` event for walkthrough
+### Fix
 
-### Part 3: WhatsApp Return Check ✅
-- Created `WhatsAppReturnCheck` component with visibility-based return detection
-- localStorage markers for pending checks, 2-minute staleness window
-- Yes/No confirmation modal on return
-- Loading state on WhatsApp send button to prevent double-clicks
-- Removed old `WhatsAppStatusPrompt` component
+**File: `src/pages/PotentialWork.tsx`**
 
-### Part 4: Walkthrough Redesign ✅
-- New 8 steps: Search → Select 5 leads → Contact 1st → Contact 2 more → View Progress → Add Note → Set Next Action → Collapse Card
-- Storage prefix changed to `demo_checklist_v4` (clean slate for all users)
-- Steps 3 & 4 validated by `outreach-attempt-logged` events
-- Step 2 now requires 5 leads instead of 3
-- Updated sidebar/nav pulse indicators
+1. **Fix `handleDateChange`** (line 351): Look up the `dbValue` from `TRACK_NEXT_ACTION_OPTIONS` instead of casting directly:
+   ```typescript
+   const trackOpt = TRACK_NEXT_ACTION_OPTIONS.find(o => o.value === nextAction);
+   const dbAction: NextActionType = isCustom ? 'follow_up' : (trackOpt?.dbValue || nextAction as NextActionType);
+   ```
+
+2. **Apply the same safety pattern everywhere** the raw `nextAction` state is sent to the DB — scan for any other direct casts of track keys as `NextActionType`.
+
+### Scope
+- Label-only change in one file, no DB or layout changes
+- No restrictions between status and action combinations (they are already independent; the bug was purely a mapping miss)
+
