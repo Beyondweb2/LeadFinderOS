@@ -359,16 +359,6 @@ export function WalkthroughOverlay() {
           <div className="text-[13px] text-foreground font-medium leading-relaxed whitespace-pre-line">
             {tooltipText}
           </div>
-          {activeStep.step === 3 && (
-            <button
-              className="mt-2 text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors cursor-pointer"
-              onClick={() => {
-                window.dispatchEvent(new CustomEvent('walkthrough-skip-contact-steps'));
-              }}
-            >
-              Skip this step
-            </button>
-          )}
         </div>
       )}
 
