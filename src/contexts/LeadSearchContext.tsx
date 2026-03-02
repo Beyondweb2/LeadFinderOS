@@ -280,12 +280,12 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           // Filter out excluded businesses
           const filteredLeads = data.leads.filter(lead => !isExcluded(lead));
 
-          // Sort: NO_WEBSITE first, then DIRECTORY_ONLY, then others
+          // Sort: NO_WEBSITE/DIRECTORY_ONLY first, then others
           const statusOrder: Record<string, number> = {
             'NO_WEBSITE': 0,
+            'DIRECTORY_ONLY': 0,
             'UNCERTAIN': 1,
-            'DIRECTORY_ONLY': 2,
-            'HAS_OWN_WEBSITE': 3,
+            'HAS_OWN_WEBSITE': 2,
           };
           filteredLeads.sort((a, b) => (statusOrder[a.websiteStatus] ?? 9) - (statusOrder[b.websiteStatus] ?? 9));
 

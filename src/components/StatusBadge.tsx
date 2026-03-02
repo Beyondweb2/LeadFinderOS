@@ -21,10 +21,10 @@ const statusConfig: Record<WebsiteStatus, {
     icon: Flame,
   },
   DIRECTORY_ONLY: {
-    label: 'Directory Only',
-    shortLabel: 'Directory',
-    className: 'bg-[hsl(var(--status-directory))] text-[hsl(var(--status-directory-foreground))] border-transparent font-semibold',
-    icon: Building,
+    label: 'No Website',
+    shortLabel: 'No Website',
+    className: 'bg-[hsl(var(--status-hot))] text-[hsl(var(--status-hot-foreground))] border-transparent font-semibold',
+    icon: Flame,
   },
   HAS_OWN_WEBSITE: {
     label: 'Has Website',
