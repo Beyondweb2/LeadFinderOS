@@ -15,7 +15,7 @@ interface StepDef {
   anchorNearSelector?: string;
 }
 
-const TOTAL_STEPS = 9;
+const TOTAL_STEPS = 8;
 
 function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 1 – Search for businesses
@@ -48,21 +48,13 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     };
   }
 
-  // Step 3 – Contact first lead via Call, SMS or WhatsApp
-  if (!state.firstContactMade) {
-    if (pathname === '/outreach') {
-      return { step: 3, selector: '[data-walkthrough="contact"]', tooltip: 'Contact your first lead via Call, SMS or WhatsApp.', noDim: true };
-    }
-    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact your first lead.' };
-  }
-
-  // Step 4 – Contact 2 more leads (3 total)
+  // Step 3 – Contact 3 leads via Call, SMS or WhatsApp (merged step)
   if (!state.threeContactsMade) {
-    const remaining = 3 - (state.contactsMadeCount || 0);
+    const contacted = state.contactsMadeCount || 0;
     if (pathname === '/outreach') {
-      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: `Contact ${remaining} more lead${remaining !== 1 ? 's' : ''} (${state.contactsMadeCount || 0}/3 done).`, noDim: true };
+      return { step: 3, selector: '[data-walkthrough="contact"]', tooltip: `Contact businesses via Call, SMS or WhatsApp.\n${contacted}/3 contacted.`, noDim: true };
     }
-    return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: `Open your CRM — contact ${remaining} more lead${remaining !== 1 ? 's' : ''}.` };
+    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: `Open your CRM to contact businesses (${contacted}/3).` };
   }
 
   // Step 5 – Press the gold star Track button
@@ -358,7 +350,7 @@ export function WalkthroughOverlay() {
             left: tooltipPos.left,
             transform: (activeStep.tooltipPosition === 'right' && window.innerWidth >= 640) ? 'translateY(-50%)' : 'translateX(-50%)',
             zIndex: 41,
-            pointerEvents: (activeStep.step === 3 || activeStep.step === 4) ? 'auto' : 'none',
+            pointerEvents: activeStep.step === 3 ? 'auto' : 'none',
           }}
         >
           <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400/90 mb-1">
@@ -367,7 +359,7 @@ export function WalkthroughOverlay() {
           <div className="text-[13px] text-foreground font-medium leading-relaxed whitespace-pre-line">
             {tooltipText}
           </div>
-          {(activeStep.step === 3 || activeStep.step === 4) && (
+          {activeStep.step === 3 && (
             <button
               className="mt-2 text-[11px] text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors cursor-pointer"
               onClick={() => {

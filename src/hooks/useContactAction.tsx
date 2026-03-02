@@ -85,6 +85,7 @@ export function useContactAction({
             };
             onRevert(lead.id, revertUpdates);
             onContactUndone(lead.id);
+            window.dispatchEvent(new CustomEvent('demo-checklist-contact-undo'));
             dismiss(toastId);
 
             // Log undo event

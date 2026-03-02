@@ -178,16 +178,15 @@ export function DemoChecklistProvider({
       });
     };
 
-    // Steps 3 & 4: listen for outreach-attempt-logged
-    const onAttemptLogged = () => {
+    // Single handler for contact events (used by demo-checklist-contact only)
+    const onContact = () => {
       setState(prev => {
         const newCount = prev.contactsMadeCount + 1;
         const next = {
           ...prev,
           contactsMadeCount: newCount,
-          firstContactMade: true,
+          firstContactMade: newCount >= 1,
           threeContactsMade: newCount >= 3,
-          // Legacy compat
           contactAttempted: true,
         };
         saveState(next, user?.id);
@@ -195,16 +194,16 @@ export function DemoChecklistProvider({
       });
     };
 
-    // Also count tel: clicks and demo-checklist-contact as attempts
-    const onContact = () => {
+    // Undo handler: decrement contact count
+    const onContactUndo = () => {
       setState(prev => {
-        const newCount = prev.contactsMadeCount + 1;
+        const newCount = Math.max(0, prev.contactsMadeCount - 1);
         const next = {
           ...prev,
           contactsMadeCount: newCount,
-          firstContactMade: true,
+          firstContactMade: newCount >= 1,
           threeContactsMade: newCount >= 3,
-          contactAttempted: true,
+          contactAttempted: newCount >= 1,
         };
         saveState(next, user?.id);
         return next;
@@ -245,8 +244,8 @@ export function DemoChecklistProvider({
     window.addEventListener('demo-checklist-search', onSearch);
     window.addEventListener('crm-lead-added', onCrmAdd);
     window.addEventListener('crm-lead-purged', onCrmPurged);
-    window.addEventListener('outreach-attempt-logged', onAttemptLogged);
     window.addEventListener('demo-checklist-contact', onContact);
+    window.addEventListener('demo-checklist-contact-undo', onContactUndo);
     window.addEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
     window.addEventListener('demo-checklist-track-note-saved', onNoteSaved);
     window.addEventListener('demo-checklist-track-pressed', onTrackPressed);
@@ -275,8 +274,8 @@ export function DemoChecklistProvider({
       window.removeEventListener('demo-checklist-search', onSearch);
       window.removeEventListener('crm-lead-added', onCrmAdd);
       window.removeEventListener('crm-lead-purged', onCrmPurged);
-      window.removeEventListener('outreach-attempt-logged', onAttemptLogged);
       window.removeEventListener('demo-checklist-contact', onContact);
+      window.removeEventListener('demo-checklist-contact-undo', onContactUndo);
       window.removeEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
       window.removeEventListener('demo-checklist-track-note-saved', onNoteSaved);
       window.removeEventListener('demo-checklist-track-pressed', onTrackPressed);
@@ -299,11 +298,10 @@ export function DemoChecklistProvider({
     }
   }, [isDemoUser, isReplay, location.pathname, completeStep]);
 
-  // 11 steps
+  // 10 steps (merged contact steps 3+4 into one)
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
-    state.firstContactMade,
     state.threeContactsMade,
     state.trackPressed,
     state.viewedProgress,
@@ -314,7 +312,7 @@ export function DemoChecklistProvider({
     state.cardCollapsed,
   ].filter(Boolean).length;
 
-  const allDone = completedCount === 11;
+  const allDone = completedCount === 10;
 
   const allDoneRef = useRef(false);
   useEffect(() => {
@@ -337,7 +335,7 @@ export function DemoChecklistProvider({
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
-      totalSteps: 11,
+      totalSteps: 10,
       allDone,
       completeStep,
       isOpen,
@@ -354,7 +352,7 @@ export function DemoChecklistProvider({
 const fallback: DemoChecklistContextType = {
   state: defaultState,
   completedCount: 0,
-  totalSteps: 11,
+  totalSteps: 10,
   allDone: false,
   completeStep: () => {},
   isOpen: false,
