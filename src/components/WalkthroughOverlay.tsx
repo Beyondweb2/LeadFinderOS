@@ -34,13 +34,13 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 1, selector: '[data-walkthrough-step="search"]', tooltip: 'Press Find Leads to search.', noDim: true };
   }
 
-  // Step 2 – Select 5 leads
+  // Step 2 – Select 3 leads
   if (!state.addedToCrm) {
-    const remaining = 5 - (state.crmAddCount || 0);
+    const selected = state.crmAddCount || 0;
     return {
       step: 2,
       selector: '[data-walkthrough="add-crm"]',
-      tooltip: `Select ${remaining} more lead${remaining !== 1 ? 's' : ''} you want to contact.`,
+      tooltip: `Select 3 businesses you want to contact.\n\nSelected: ${selected} / 3`,
       noDim: true,
       tooltipPosition: 'top',
     };
@@ -295,7 +295,7 @@ export function WalkthroughOverlay() {
           <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400/90 mb-1">
             Step {activeStep.step} of {TOTAL_STEPS}
           </div>
-          <div className="text-[13px] text-foreground font-medium leading-relaxed">
+          <div className="text-[13px] text-foreground font-medium leading-relaxed whitespace-pre-line">
             {tooltipText}
           </div>
         </div>
