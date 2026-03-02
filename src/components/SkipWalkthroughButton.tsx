@@ -29,10 +29,10 @@ export function SkipWalkthroughButton() {
       localStorage.setItem(`walkthrough_completed_${user.id}`, 'true');
     } catch {}
     // Log exit event
-    supabase.rpc('log_walkthrough_event' as any, {
+    Promise.resolve(supabase.rpc('log_walkthrough_event' as any, {
       p_event_type: 'walkthrough_skip',
       p_meta: { step: 0, walkthrough_id: 'main' },
-    }).then(() => {});
+    })).catch(() => {});
     setConfirmOpen(false);
     window.dispatchEvent(new CustomEvent('skip-walkthrough'));
     window.dispatchEvent(new CustomEvent('pulse-search-nav'));

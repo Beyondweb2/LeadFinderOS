@@ -304,10 +304,10 @@ export function DemoChecklistProvider({
   useEffect(() => {
     if (allDone && !allDoneRef.current) {
       allDoneRef.current = true;
-      supabase.rpc('log_walkthrough_event' as any, {
+      Promise.resolve(supabase.rpc('log_walkthrough_event' as any, {
         p_event_type: 'walkthrough_complete',
         p_meta: { walkthrough_id: 'main' },
-      }).then(() => {});
+      })).catch(() => {});
       if (isReplay) {
         setIsOpen(false);
         setIsReplay(false);

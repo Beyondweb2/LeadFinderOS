@@ -41,13 +41,13 @@ export function useContactAction({ onUpdate, onPersisted }: UseContactActionOpti
     window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
 
     // Log usage event
-    supabase.rpc('log_usage_event', {
+    Promise.resolve(supabase.rpc('log_usage_event', {
       p_event_type: 'contact_cta_clicked',
       p_meta: { channel, lead_id: lead.id, business_name: lead.business_name },
-    }).then(() => {});
+    })).catch(() => {});
 
     // Persist to DB immediately
-    logAttempt(lead.id, channel, previousStatus);
+    logAttempt(lead.id, channel, previousStatus).catch(() => {});
     // DB persistence handled by logAttempt (includes contact_method + status)
 
     onPersisted(lead.id, channel);

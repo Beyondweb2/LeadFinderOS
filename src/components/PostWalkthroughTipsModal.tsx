@@ -40,11 +40,11 @@ export function PostWalkthroughTipsModal({ open, onOpenChange }: PostWalkthrough
         localStorage.setItem(`post_walkthrough_tips_dismissed_${user.id}`, 'true');
       } catch {}
       // Also persist to backend
-      supabase
+      Promise.resolve(supabase
         .from('user_trials')
         .update({ walkthrough_completed: true } as any)
         .eq('user_id', user.id)
-        .then(() => {});
+      ).catch(() => {});
     }
     onOpenChange(false);
   };

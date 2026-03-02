@@ -368,13 +368,13 @@ export function useOutreach() {
     }]);
 
     // Fire-and-forget: history insert, activity log, usage tracking (non-blocking)
-    supabase.from('outreach_history').insert({
+    Promise.resolve(supabase.from('outreach_history').insert({
       user_id: user.id,
       business_name: lead.name,
       google_maps_url: lead.googleMapsUrl || null,
       country,
        phone: lead.phone || null,
-    }).then(() => {});
+    })).catch(() => {});
 
     logActivity(newLead.id, 'added', `Added ${lead.name} to outreach list`).then(() => {}).catch(() => {});
 
@@ -476,12 +476,16 @@ export function useOutreach() {
     
     // Log activity inline (avoid dependency issue with logActivity)
     if (result && targetLead && user) {
-      await supabase.from('outreach_activities').insert({
-        lead_id: leadId,
-        user_id: user.id,
-        activity_type: 'status_change',
-        description: `Status changed to ${status.replace('_', ' ')}`,
-      });
+      try {
+        await supabase.from('outreach_activities').insert({
+          lead_id: leadId,
+          user_id: user.id,
+          activity_type: 'status_change',
+          description: `Status changed to ${status.replace('_', ' ')}`,
+        });
+      } catch (e) {
+        console.error('Failed to log activity (non-blocking):', e);
+      }
       // Notify demo checklist that status was changed
       window.dispatchEvent(new CustomEvent('demo-checklist-status-change'));
       
@@ -508,14 +512,18 @@ export function useOutreach() {
       }
     }
     if (result && status === 'not_interested' && lead) {
-      const { error } = await supabase
-        .from('outreach_leads')
-        .update({ is_archived: true })
-        .eq('id', leadId);
+      try {
+        const { error } = await supabase
+          .from('outreach_leads')
+          .update({ is_archived: true })
+          .eq('id', leadId);
 
-      if (!error) {
-        setLeads((prev) => prev.filter((l) => l.id !== leadId));
-        setArchivedLeads((prev) => [{ ...lead, is_archived: true, status: 'not_interested' }, ...prev]);
+        if (!error) {
+          setLeads((prev) => prev.filter((l) => l.id !== leadId));
+          setArchivedLeads((prev) => [{ ...lead, is_archived: true, status: 'not_interested' }, ...prev]);
+        }
+      } catch (e) {
+        console.error('Failed to auto-archive (non-blocking):', e);
       }
     }
     
@@ -804,14 +812,18 @@ export function useOutreach() {
     
     // Added to Track Leads — no toast
 
-    // Log activity
+    // Log activity (non-blocking)
     if (user) {
-      await supabase.from('outreach_activities').insert({
-        lead_id: leadId,
-        user_id: user.id,
-        activity_type: 'interested',
-        description: 'Marked as interested and added to Track Leads',
-      });
+      try {
+        await supabase.from('outreach_activities').insert({
+          lead_id: leadId,
+          user_id: user.id,
+          activity_type: 'interested',
+          description: 'Marked as interested and added to Track Leads',
+        });
+      } catch (e) {
+        console.error('Failed to log interested activity (non-blocking):', e);
+      }
     }
 
     return true;
