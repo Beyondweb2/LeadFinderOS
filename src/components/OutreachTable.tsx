@@ -276,6 +276,8 @@ export function OutreachTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableStateKey]);
 
+  
+
   // Persist table state to both storages
   useEffect(() => {
     writeStoredState({
@@ -700,6 +702,12 @@ export function OutreachTable({
     currentPage * ITEMS_PER_PAGE
   );
 
+  // Fallback: if no lead was contacted yet (e.g. skipped walkthrough contact step),
+  // highlight the first untracked lead's star button for the walkthrough
+  const walkthroughTrackLeadId = lastContactedLeadId
+    || paginatedLeads.find(l => !l.is_potential_work)?.id
+    || null;
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
@@ -980,7 +988,7 @@ export function OutreachTable({
                   readOnly={readOnly}
                   showTrackButton={!!onMarkAsInterested}
                   isHighlighted={lastContactedLeadId === lead.id}
-                  isLastContacted={lastContactedLeadId === lead.id}
+                  isLastContacted={lastContactedLeadId === lead.id || walkthroughTrackLeadId === lead.id}
                   onCompleteAction={() => onNextActionChange(lead.id, 'none' as NextActionType)}
                   phoneFetchStatus={phoneFetchStatus[lead.id]}
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
@@ -1263,7 +1271,7 @@ export function OutreachTable({
                                 size="sm"
                                 className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary"
                                 onClick={() => onMarkAsInterested([lead.id])}
-                                {...(lastContactedLeadId === lead.id ? { 'data-walkthrough-step': 'track-star', 'data-walkthrough': 'track' } : {})}
+                                {...(walkthroughTrackLeadId === lead.id ? { 'data-walkthrough-step': 'track-star', 'data-walkthrough': 'track' } : {})}
                               >
                                 <Star className="h-3.5 w-3.5 mr-1" />
                                 Track
