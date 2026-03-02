@@ -191,6 +191,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const [showAddCustomAction, setShowAddCustomAction] = useState(false);
   const [newCustomAction, setNewCustomAction] = useState('');
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
   const expandRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -247,6 +248,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const handleDateChange = async (d: Date | undefined) => {
     setNextActionDate(d);
     if (d) {
+      setDatePopoverOpen(false);
       const isCustom = nextAction.startsWith('custom::');
       const dbAction: NextActionType = isCustom ? 'follow_up' : nextAction as NextActionType;
       await onNextActionChange(lead.id, dbAction, format(d, 'yyyy-MM-dd'));
@@ -590,7 +592,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 </Select>
               </div>
 
-              <Popover>
+              <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
