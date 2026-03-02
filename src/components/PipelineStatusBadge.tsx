@@ -10,7 +10,7 @@ interface PipelineStatusBadgeProps {
 const statusConfig: Record<string, { label: string; shortLabel: string; className: string }> = {
   not_contacted: {
     label: 'New',
-    shortLabel: 'New',
+    shortLabel: 'Status',
     className: 'bg-muted text-muted-foreground border-border/50',
   },
   waiting: {
@@ -42,7 +42,7 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
 
 const defaultConfig = {
   label: 'New',
-  shortLabel: 'New',
+  shortLabel: 'Status',
   className: 'bg-muted text-muted-foreground border-border/50',
 };
 

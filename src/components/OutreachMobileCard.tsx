@@ -112,67 +112,72 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
 
           {/* Three dropdowns: Contact Method, Status, Next Action */}
           {!readOnly && (
-            <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
-              {/* Contact Method */}
-              {onContactMethodChange && (
-                <Select
-                  value={lead.contact_method || ''}
-                  onValueChange={(v) => {
-                    onContactMethodChange(v as ContactMethod);
-                  }}
-                >
-                  <SelectTrigger 
-                    className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0"
-                    {...(isLastContacted ? { 'data-walkthrough-step': 'contact-method', 'data-walkthrough': 'contact-method' } : {})}
+            <div className="space-y-1" onClick={(e) => e.stopPropagation()}>
+              {/* Row 1: Contact Method + Status */}
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {/* Contact Method */}
+                {onContactMethodChange && (
+                  <Select
+                    value={lead.contact_method || ''}
+                    onValueChange={(v) => {
+                      onContactMethodChange(v as ContactMethod);
+                    }}
                   >
-                    <ContactMethodBadge method={lead.contact_method as ContactMethod} compact />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CONTACT_METHOD_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+                    <SelectTrigger 
+                      className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0"
+                      {...(isLastContacted ? { 'data-walkthrough-step': 'contact-method', 'data-walkthrough': 'contact-method' } : {})}
+                    >
+                      <ContactMethodBadge method={lead.contact_method as ContactMethod} compact />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONTACT_METHOD_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
 
-              {/* Pipeline Status */}
-              {onPipelineStatusChange && (
-                <Select
-                  value={lead.status || 'not_contacted'}
-                  onValueChange={(v) => {
-                    const status = v as PipelineStatus;
-                    onPipelineStatusChange(status);
-                    if (status === 'interested' && onAutoTrack && !lead.is_potential_work) {
-                      onAutoTrack();
-                    }
-                  }}
-                >
-                  <SelectTrigger 
-                    className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0"
-                    {...(isLastContacted ? { 'data-walkthrough-step': 'pipeline-status', 'data-walkthrough': 'pipeline-status' } : {})}
+                {/* Pipeline Status */}
+                {onPipelineStatusChange && (
+                  <Select
+                    value={lead.status || 'not_contacted'}
+                    onValueChange={(v) => {
+                      const status = v as PipelineStatus;
+                      onPipelineStatusChange(status);
+                      if (status === 'interested' && onAutoTrack && !lead.is_potential_work) {
+                        onAutoTrack();
+                      }
+                    }}
                   >
-                    <PipelineStatusBadge status={lead.status as PipelineStatus} compact />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PIPELINE_STATUS_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+                    <SelectTrigger 
+                      className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0"
+                      {...(isLastContacted ? { 'data-walkthrough-step': 'pipeline-status', 'data-walkthrough': 'pipeline-status' } : {})}
+                    >
+                      <PipelineStatusBadge status={lead.status as PipelineStatus} compact />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PIPELINE_STATUS_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
 
-              {/* Next Action Editor */}
+              {/* Row 2: Next Action (always below) */}
               {onNextActionChange && (
-                <NextActionEditor
-                  action={lead.next_action as NextActionType | null}
-                  date={lead.next_action_date}
-                  onUpdate={(action, date) => onNextActionChange(action, date)}
-                  leadId={lead.id}
-                />
+                <div>
+                  <NextActionEditor
+                    action={lead.next_action as NextActionType | null}
+                    date={lead.next_action_date}
+                    onUpdate={(action, date) => onNextActionChange(action, date)}
+                    leadId={lead.id}
+                  />
+                </div>
               )}
             </div>
           )}
