@@ -208,7 +208,9 @@ export function MobileBottomNav() {
                   'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[60px]',
                   item.title === 'Search' && (searchPulse || searchGlow)
                     ? 'text-yellow-400 animate-pulse'
-                    : item.title === 'Outreach' && (crmGlow || crmPulseWalkthrough)
+                    : item.title === 'Outreach' && crmPulseWalkthrough
+                      ? 'text-yellow-400 animate-pulse'
+                      : item.title === 'Outreach' && crmGlow
                       ? 'text-green-400 animate-pulse'
                       : item.title === 'Track' && (trackGlow || trackPulseWalkthrough)
                         ? 'text-yellow-400 animate-pulse'
