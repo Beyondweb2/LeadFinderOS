@@ -60,9 +60,7 @@ export function OutreachTipsDialog() {
     if (storageKey) {
       localStorage.setItem(storageKey, 'true');
     }
-    if (skipped) {
-      window.dispatchEvent(new CustomEvent('walkthrough-skip-contact-steps'));
-    }
+    // Skip always just closes back to outreach — no re-triggering contact steps
   };
 
   return (

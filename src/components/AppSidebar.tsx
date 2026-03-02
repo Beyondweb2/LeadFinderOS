@@ -55,11 +55,12 @@ export function AppSidebar() {
   const [flashCRM, setFlashCRM] = useState(false);
   const [flashTrack, setFlashTrack] = useState(false);
   const [flashSearch, setFlashSearch] = useState(false);
+  const [searchTooltip, setSearchTooltip] = useState(false);
 
   useEffect(() => {
     const onCRMAdded = () => { setFlashCRM(true); setTimeout(() => setFlashCRM(false), 800); };
     const onTrackAdded = () => { setFlashTrack(true); setTimeout(() => setFlashTrack(false), 2000); };
-    const onSearchPulse = () => { setFlashSearch(true); setTimeout(() => setFlashSearch(false), 4000); };
+    const onSearchPulse = () => { setFlashSearch(true); setSearchTooltip(true); setTimeout(() => setFlashSearch(false), 4000); setTimeout(() => setSearchTooltip(false), 6000); };
     window.addEventListener('crm-lead-added', onCRMAdded);
     window.addEventListener('track-lead-added', onTrackAdded);
     window.addEventListener('pulse-search-nav', onSearchPulse);
@@ -103,7 +104,7 @@ export function AppSidebar() {
                         data-walkthrough-step={item.url === '/potential-work' ? 'track-leads' : item.url === '/outreach' ? 'outreach-crm' : undefined}
                         data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : item.url === '/potential-work' ? 'track-nav' : undefined}
                         className={cn(
-                          'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+                          'relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
                           isActive ? 'bg-sidebar-accent text-sidebar-primary font-medium' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
                         )}
                       >
@@ -115,6 +116,11 @@ export function AppSidebar() {
                           <span className="truncate">{item.title}</span>
                           <span className="text-xs text-sidebar-foreground/50 truncate">{item.description}</span>
                         </div>
+                        {item.url === '/find-leads' && searchTooltip && (
+                          <span className="absolute -top-1 right-2 whitespace-nowrap text-[10px] font-medium text-amber-400 bg-card/95 border border-amber-500/30 rounded-md px-2 py-1 shadow-lg animate-bounce z-50">
+                            {t('completion.findMoreLeads')}
+                          </span>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
