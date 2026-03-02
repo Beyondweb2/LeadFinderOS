@@ -9,10 +9,10 @@ import { useToast } from '@/hooks/use-toast';
 import logoIcon from '@/assets/leadfinder-logo-icon.png';
 
 const TRIAL_FEATURES = [
-  'Get more clients',
-  'Message businesses instantly',
-  'Stay organised',
-  'Build predictable income',
+  'Find qualified business leads',
+  'Message business owners instantly',
+  'Organise and track every lead',
+  'Follow up consistently',
 ];
 
 const Subscribe = () => {
@@ -111,8 +111,8 @@ const Subscribe = () => {
 
           {/* Brand header */}
           <div className="relative flex items-center justify-center">
-            <img src={logoIcon} alt="" className="absolute left-1/2 -translate-x-[calc(50%+5.5rem)] h-7 w-7" />
-            <p className="text-xl font-bold tracking-tight">
+            <img src={logoIcon} alt="" className="absolute left-1/2 -translate-x-[calc(50%+6.5rem)] h-8 w-8" />
+            <p className="text-2xl font-bold tracking-tight">
               Lead<span className="text-primary">Finder</span> Pro
             </p>
           </div>
