@@ -42,8 +42,6 @@ const Dashboard = () => {
   const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
   
   const isAdmin = user?.email === 'pauljsales455@outlook.com';
-  // Show trial progress only for Stripe trialing users (not paid subscribers)
-  const showTrialProgress = !isSubscriptionLoading && isStripeTrialing && !isPaidSubscriber;
 
   // Wait for all data to load before rendering
   if (isLoading || isSubscriptionLoading) {
@@ -96,10 +94,7 @@ const Dashboard = () => {
       <div className="text-center sm:text-left">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm sm:text-base text-muted-foreground">
-          {showTrialProgress 
-            ? 'Your free trial is active — everything unlocked'
-            : 'Track your performance and revenue'
-          }
+          Track your performance and revenue
         </p>
       </div>
 
@@ -131,18 +126,6 @@ const Dashboard = () => {
         </div>
       </section>
 
-      {/* Trial Progress Card - Below performance, only for Stripe trialing users */}
-      {showTrialProgress && (
-        <section>
-          <TrialProgressCard
-            trialEnd={trialEnd}
-            noWebsiteBusinesses={metrics.noWebsiteBusinesses}
-            addedToCRM={metrics.totalBusinessesAdded}
-            searchesToday={metrics.activity.activitiesToday}
-            totalLeadsAdded={metrics.totalBusinessesAdded}
-          />
-        </section>
-      )}
 
       {/* Quick Links */}
       <section>
