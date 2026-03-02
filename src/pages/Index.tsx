@@ -304,7 +304,7 @@ const Index = () => {
 
       {/* Results Section */}
       {leads.length > 0 && (
-        <section className={`relative ${buttonExhausted && isFreeUser ? 'select-none' : ''}`}>
+        <section data-walkthrough="results-header" className={`relative ${buttonExhausted && isFreeUser ? 'select-none' : ''}`}>
           {/* Blur overlay for paywall teaser */}
           {buttonExhausted && isFreeUser && (
             <div className="absolute inset-0 z-10 backdrop-blur-md bg-background/30 rounded-lg flex items-center justify-center">
