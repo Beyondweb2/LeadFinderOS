@@ -123,7 +123,7 @@ const Outreach = () => {
 
       {/* Page Header */}
       <div className="text-center sm:text-left">
-        <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach</h1>
+        <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
         <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
           Contact businesses via WhatsApp, SMS or call. Update their status, then track promising ones in Track Leads.
         </p>
