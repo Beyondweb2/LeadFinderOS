@@ -13,6 +13,7 @@ export interface DemoChecklistState {
   viewedProgress: boolean;
   noteAdded: boolean;
   nextActionSet: boolean;
+  nextDateSet: boolean;
   cardCollapsed: boolean;
   // Legacy compat fields (unused but kept so old localStorage doesn't break parsing)
   contactAttempted: boolean;
@@ -52,6 +53,7 @@ const defaultState: DemoChecklistState = {
   viewedProgress: false,
   noteAdded: false,
   nextActionSet: false,
+  nextDateSet: false,
   cardCollapsed: false,
   // Legacy compat
   contactAttempted: false,
@@ -210,7 +212,7 @@ export function DemoChecklistProvider({
     const onNoteSaved = () => completeStep('noteAdded');
 
     const onNextActionSet = () => completeStep('nextActionSet');
-    const onNextDateSet = () => completeStep('nextActionSet');
+    const onNextDateSet = () => completeStep('nextDateSet');
 
     const onCardCollapsed = () => completeStep('cardCollapsed');
 
@@ -292,7 +294,7 @@ export function DemoChecklistProvider({
     }
   }, [isDemoUser, isReplay, location.pathname, completeStep]);
 
-  // 9 steps
+  // 10 steps
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
@@ -302,10 +304,11 @@ export function DemoChecklistProvider({
     state.viewedProgress,
     state.noteAdded,
     state.nextActionSet,
+    state.nextDateSet,
     state.cardCollapsed,
   ].filter(Boolean).length;
 
-  const allDone = completedCount === 9;
+  const allDone = completedCount === 10;
 
   const allDoneRef = useRef(false);
   useEffect(() => {
@@ -328,7 +331,7 @@ export function DemoChecklistProvider({
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
-      totalSteps: 9,
+      totalSteps: 10,
       allDone,
       completeStep,
       isOpen,
@@ -345,7 +348,7 @@ export function DemoChecklistProvider({
 const fallback: DemoChecklistContextType = {
   state: defaultState,
   completedCount: 0,
-  totalSteps: 9,
+  totalSteps: 10,
   allDone: false,
   completeStep: () => {},
   isOpen: false,

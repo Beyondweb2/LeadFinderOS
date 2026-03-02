@@ -88,9 +88,14 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 8, selector: '[data-walkthrough="next-action"]', tooltip: 'Set a next action or follow-up for one lead.', noDim: true };
   }
 
-  // Step 9 – Collapse a card
+  // Step 9 – Set a date
+  if (!state.nextDateSet) {
+    return { step: 9, selector: '[data-walkthrough-step="follow-up-date"]', tooltip: 'Now pick a date for this action.', noDim: true };
+  }
+
+  // Step 10 – Collapse a card
   if (!state.cardCollapsed) {
-    return { step: 9, selector: '[data-walkthrough="collapse-card"]', tooltip: 'Collapse the card to finish. You\'re all set!', noDim: true, tooltipPosition: 'top' };
+    return { step: 10, selector: '[data-walkthrough="collapse-card"]', tooltip: 'Collapse the card to finish. You\'re all set!', noDim: true, tooltipPosition: 'top' };
   }
 
   return null;
