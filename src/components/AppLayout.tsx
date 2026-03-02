@@ -104,7 +104,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <div className="min-h-screen flex w-full bg-background">
 
           {/* Desktop sidebar - hidden on mobile */}
-          <div className="hidden md:block">
+          <div className="hidden md:block h-screen sticky top-0">
             <AppSidebar />
           </div>
 
