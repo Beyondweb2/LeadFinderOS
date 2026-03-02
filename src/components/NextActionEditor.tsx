@@ -90,10 +90,13 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
     }
   }, [open, action, date]);
 
-  // Auto-save when both action and date are picked
+  // Auto-save when both action and date are ready
+  // Triggers when: (1) both freshly picked, or (2) date picked with pre-existing action
   useEffect(() => {
-    if (actionPicked && datePicked && selectedAction && selectedAction !== '' && selectedDate) {
-      // Small delay so the user sees the date selection
+    const hasAction = selectedAction && selectedAction !== '' && selectedAction !== 'none';
+    const hasDate = !!selectedDate;
+    const shouldAutoSave = hasAction && hasDate && (actionPicked || datePicked);
+    if (shouldAutoSave) {
       const t = setTimeout(() => handleSave(), 400);
       return () => clearTimeout(t);
     }
@@ -155,8 +158,8 @@ export function NextActionEditor({ action, date, onUpdate, leadId }: NextActionE
 
   const showCompleteButton = action && action !== 'none';
   
-  // canSave kept for manual save fallback but auto-save is primary
-  const canSave = actionPicked && selectedAction && selectedAction !== '' && selectedDate;
+  // canSave: show manual save only when user hasn't triggered auto-save yet
+  const canSave = (actionPicked || datePicked) && selectedAction && selectedAction !== '' && selectedAction !== 'none' && selectedDate;
 
   return (
     <div className="flex items-center gap-1" data-walkthrough-step="follow-up" data-walkthrough="next-action">
