@@ -94,37 +94,37 @@ const Subscribe = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4" style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 40%, hsl(220 50% 8%) 0%, hsl(220 50% 4%) 100%)' }}>
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="relative z-10 w-full max-w-md">
         <Button variant="ghost" className="mb-4" onClick={handleBack}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back
         </Button>
 
-        <div className="bg-[hsl(220_50%_6%)] border border-border/30 rounded-3xl overflow-hidden px-7 py-9 sm:px-9 sm:py-10 space-y-7 shadow-[0_16px_60px_hsl(0_0%_0%/0.5),0_4px_20px_hsl(0_0%_0%/0.3)]">
+        <div className="bg-[hsl(220_50%_6%)] border border-border/30 rounded-2xl overflow-hidden px-7 py-8 sm:px-9 sm:py-10 space-y-6 shadow-[0_8px_40px_hsl(0_0%_0%/0.4)]">
           {/* Green pill */}
           <div className="flex justify-center">
-            <span className="inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-0.5 text-[11px] font-semibold tracking-widest uppercase text-emerald-400 shadow-[0_0_12px_hsl(142_76%_45%/0.12)]">
+            <span className="inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-0.5 text-[11px] font-semibold tracking-widest uppercase text-emerald-400">
               Free Trial
             </span>
           </div>
 
           {/* Brand header */}
-          <div className="flex items-center justify-center gap-2.5">
-            <img src={logoIcon} alt="" className="h-7 w-7" />
-            <p className="text-xl font-bold tracking-tight">
-              Lead<span className="text-primary">Finder</span> Pro
+          <div className="text-center space-y-1.5">
+            <div className="flex items-center justify-center gap-2.5">
+              <img src={logoIcon} alt="" className="h-7 w-7" />
+              <p className="text-xl font-bold tracking-tight">
+                Lead<span className="text-primary">Finder</span> Pro
+              </p>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Everything you need to find and close your next client.
             </p>
           </div>
 
-          {/* Description */}
-          <p className="text-center text-sm text-muted-foreground">
-            Everything you need to find and close your next client.
-          </p>
-
-          {/* Price hero */}
-          <div className="text-center space-y-1.5">
-            <p className="text-4xl font-extrabold tracking-tight">£0 Today</p>
+          {/* Pricing block */}
+          <div className="text-center space-y-1">
+            <p className="text-lg font-semibold">£0 today</p>
             <p className="text-sm text-muted-foreground">5 Day Free Trial · Cancel anytime</p>
           </div>
 
@@ -179,7 +179,7 @@ const Subscribe = () => {
             <div className="space-y-3.5">
               <Button
                 onClick={handleSubscribe}
-                className="btn-premium w-full h-13 text-base font-bold text-primary-foreground shadow-[0_4px_20px_hsl(210_100%_50%/0.3)] hover:shadow-[0_6px_28px_hsl(210_100%_50%/0.4)] hover:-translate-y-0.5 transition-all"
+                className="btn-premium w-full h-12 text-base font-bold text-primary-foreground shadow-[0_4px_20px_hsl(210_100%_50%/0.3)] hover:shadow-[0_6px_28px_hsl(210_100%_50%/0.4)] hover:-translate-y-0.5 transition-all"
                 size="lg"
                 disabled={isLoading}
               >
