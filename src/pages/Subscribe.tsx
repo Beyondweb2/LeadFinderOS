@@ -110,8 +110,8 @@ const Subscribe = () => {
           </div>
 
           {/* Brand header */}
-          <div className="flex items-center justify-center gap-2.5">
-            <img src={logoIcon} alt="" className="h-7 w-7" />
+          <div className="relative flex items-center justify-center">
+            <img src={logoIcon} alt="" className="absolute left-1/2 -translate-x-[calc(50%+4.5rem)] h-7 w-7" />
             <p className="text-xl font-bold tracking-tight">
               Lead<span className="text-primary">Finder</span> Pro
             </p>
@@ -136,8 +136,8 @@ const Subscribe = () => {
 
           {/* Pricing — no box */}
           <div className="text-center space-y-0.5 pt-1">
-            <p className="text-xs text-muted-foreground">After 5 days</p>
-            <p className="text-2xl font-bold">£19.99<span className="text-sm font-normal text-muted-foreground">/month</span></p>
+            <p className="text-xs text-muted-foreground">After 5 days · £19.99/month</p>
+            <p className="text-2xl font-bold">£0 <span className="text-sm font-normal text-muted-foreground">today</span></p>
             <p className="text-xs text-muted-foreground">Cancel anytime from your account</p>
           </div>
 
