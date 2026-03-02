@@ -147,26 +147,16 @@ export function OutreachTable({
   // Optimistic UI state: leadId -> partial overrides
   const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, Record<string, any>>>(new Map());
 
-  // Contact action hook: direct open + undo toast
+  // Contact action hook: immediate persist, no undo
   const { executeContact } = useContactAction({
-    onOptimisticUpdate: useCallback((leadId: string, updates: Record<string, any>) => {
+    onUpdate: useCallback((leadId: string, updates: Record<string, any>) => {
       setOptimisticUpdates(prev => {
         const next = new Map(prev);
         next.set(leadId, { ...(prev.get(leadId) || {}), ...updates });
         return next;
       });
     }, []),
-    onRevert: useCallback((leadId: string, _updates: Record<string, any>) => {
-      setOptimisticUpdates(prev => {
-        const next = new Map(prev);
-        next.delete(leadId);
-        return next;
-      });
-    }, []),
-    onPersist: useCallback((leadId: string, channel: 'whatsapp' | 'sms' | 'call', previousStatus: string) => {
-      // Persist to DB
-      logAttempt(leadId, channel, previousStatus);
-      window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId, method: channel } }));
+    onPersisted: useCallback((leadId: string, _channel: 'whatsapp' | 'sms' | 'call') => {
       // Clear optimistic state
       setOptimisticUpdates(prev => {
         const next = new Map(prev);
@@ -175,17 +165,10 @@ export function OutreachTable({
       });
       // Highlight next uncontacted lead
       const currentLeads = leadsRef.current;
-      const contactedId = leadId;
-      const nextLead = currentLeads.find(l => l.id !== contactedId && l.phone && l.outreach_attempts === 0 && l.status === 'not_contacted');
+      const nextLead = currentLeads.find(l => l.id !== leadId && l.phone && l.outreach_attempts === 0 && l.status === 'not_contacted');
       if (nextLead) {
         highlightLead(nextLead.id);
       }
-    }, [logAttempt]),
-    onContactCounted: useCallback((_leadId: string) => {
-      // Walkthrough counting handled via demo-checklist-contact event in useContactAction
-    }, []),
-    onContactUndone: useCallback((_leadId: string) => {
-      // Walkthrough decrement handled by DemoChecklistContext if needed
     }, []),
   });
 
