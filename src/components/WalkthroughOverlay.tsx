@@ -217,8 +217,8 @@ export function WalkthroughOverlay() {
     const rect = el.getBoundingClientRect();
     setTargetRect(rect);
 
-    // If this step uses anchored positioning (Step 2), compute position relative to anchor
-    if (activeStep.anchorNearSelector) {
+    // If this step uses anchored positioning (Step 2), compute position relative to anchor (desktop only)
+    if (activeStep.anchorNearSelector && window.innerWidth >= 640) {
       const anchored = computeAnchoredTooltipPos(activeStep.anchorNearSelector, rect);
       if (anchored) {
         setTooltipPos({ top: anchored.top, left: anchored.left });
