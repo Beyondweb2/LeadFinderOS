@@ -1,29 +1,21 @@
 
 
-## Bug Fix: Invalid enum value for next_action_type
+## Issue
 
-### Root Cause
-The error `invalid input value for enum next_action_type: "send_revision"` occurs in **`handleDateChange`** (line 351 of `PotentialWork.tsx`). When the user changes the date, it casts the local track action key directly as a `NextActionType` instead of looking up the mapped `dbValue` from `TRACK_NEXT_ACTION_OPTIONS`.
+The CTA flow itself is correct: all buttons route to `/auth?intent=upgrade` → signup → `/subscribe` (5-day card-upfront trial). However, the **disclaimer text** under multiple CTAs still references the **old model** ("No card required"), which contradicts the current card-upfront 5-day free trial.
 
-```typescript
-// BUG (line 351):
-const dbAction: NextActionType = isCustom ? 'follow_up' : nextAction as NextActionType;
-// "send_revision" is NOT a valid DB enum — should resolve to "send_follow_up"
-```
+## Locations to fix
 
-### Fix
+**Landing page (`src/pages/Landing.tsx`):**
+1. **Line 555** — Hero CTA disclaimer: `"No card required · Instant access · Cancel anytime"` → `"5-day free trial · £0 today · Cancel anytime"`
+2. **Line 995** — Final CTA button text: `"Start free access"` → `"Start Free Trial — £0 Today"`
+3. **Line 1001** — Final CTA disclaimer: `"No card required · Full access instantly · Cancel anytime"` → `"5-day free trial · £0 today · Cancel anytime"`
 
-**File: `src/pages/PotentialWork.tsx`**
+**Start page (`src/pages/Start.tsx`):**
+4. **Line 31** — Benefits list item: `"No card required to start"` → remove or replace with a relevant benefit
+5. **Line 35** — Trust point: `"No card required to create an account"` → update to reflect trial model
+6. **Line 90-91** — Hero CTA disclaimer: `"No card required · Full access · Takes 30 seconds"` → `"5-day free trial · £0 today · Cancel anytime"`
+7. **Line 213-214** — Final CTA disclaimer: `"No card required · Full access"` → `"5-day free trial · £0 today"`
 
-1. **Fix `handleDateChange`** (line 351): Look up the `dbValue` from `TRACK_NEXT_ACTION_OPTIONS` instead of casting directly:
-   ```typescript
-   const trackOpt = TRACK_NEXT_ACTION_OPTIONS.find(o => o.value === nextAction);
-   const dbAction: NextActionType = isCustom ? 'follow_up' : (trackOpt?.dbValue || nextAction as NextActionType);
-   ```
-
-2. **Apply the same safety pattern everywhere** the raw `nextAction` state is sent to the DB — scan for any other direct casts of track keys as `NextActionType`.
-
-### Scope
-- Label-only change in one file, no DB or layout changes
-- No restrictions between status and action combinations (they are already independent; the bug was purely a mapping miss)
+All CTA button links (`/auth?intent=upgrade`) are correct and don't need changing. The signup → `/subscribe` redirect in Auth.tsx is also correct.
 
