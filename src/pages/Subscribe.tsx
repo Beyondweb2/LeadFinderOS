@@ -101,7 +101,7 @@ const Subscribe = () => {
           Back
         </Button>
 
-        <div className="bg-[hsl(220_50%_6%)] border border-border/30 rounded-2xl overflow-hidden px-7 py-8 sm:px-9 sm:py-10 space-y-6 shadow-[0_8px_40px_hsl(0_0%_0%/0.4)]">
+        <div className="bg-[hsl(220_50%_6%)] border border-border/25 rounded-3xl overflow-hidden px-8 py-10 sm:px-10 sm:py-12 space-y-7 shadow-[0_12px_50px_hsl(0_0%_0%/0.45)]">
           {/* Green pill */}
           <div className="flex justify-center">
             <span className="inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-0.5 text-[11px] font-semibold tracking-widest uppercase text-emerald-400">
@@ -109,10 +109,10 @@ const Subscribe = () => {
             </span>
           </div>
 
-          {/* Brand header */}
-          <div className="text-center space-y-1.5">
-            <div className="flex items-center justify-center gap-2.5">
-              <img src={logoIcon} alt="" className="h-7 w-7" />
+          {/* Brand header — icon absolute so text stays centered */}
+          <div className="text-center space-y-2">
+            <div className="relative flex items-center justify-center">
+              <img src={logoIcon} alt="" className="absolute left-1/2 -translate-x-[calc(50%+64px)] h-7 w-7" />
               <p className="text-xl font-bold tracking-tight">
                 Lead<span className="text-primary">Finder</span> Pro
               </p>
@@ -122,17 +122,17 @@ const Subscribe = () => {
             </p>
           </div>
 
+          {/* Divider */}
+          <div className="border-t border-border/15" />
+
           {/* Pricing block */}
-          <div className="text-center space-y-1">
+          <div className="text-center space-y-1.5">
             <p className="text-lg font-semibold">£0 today</p>
             <p className="text-sm text-muted-foreground">5 Day Free Trial · Cancel anytime</p>
           </div>
 
-          {/* Divider */}
-          <div className="border-t border-border/20" />
-
           {/* Benefits */}
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             {TRIAL_FEATURES.map((feature) => (
               <div key={feature} className="flex items-center gap-3">
                 <div className="flex-shrink-0 h-5 w-5 rounded-full bg-emerald-500/15 flex items-center justify-center">
@@ -144,9 +144,9 @@ const Subscribe = () => {
           </div>
 
           {/* Divider */}
-          <div className="border-t border-border/20" />
+          <div className="border-t border-border/15" />
 
-          {/* Recurring price — subdued */}
+          {/* Recurring price */}
           <p className="text-center text-xs text-muted-foreground">
             £19.99/month after trial
           </p>
@@ -176,10 +176,10 @@ const Subscribe = () => {
               </Button>
             </div>
           ) : (
-            <div className="space-y-3.5">
+            <div className="space-y-4">
               <Button
                 onClick={handleSubscribe}
-                className="btn-premium w-full h-12 text-base font-bold text-primary-foreground shadow-[0_4px_20px_hsl(210_100%_50%/0.3)] hover:shadow-[0_6px_28px_hsl(210_100%_50%/0.4)] hover:-translate-y-0.5 transition-all"
+                className="btn-premium w-full h-13 text-base font-bold text-primary-foreground shadow-[0_4px_24px_hsl(210_100%_50%/0.25)] hover:shadow-[0_6px_30px_hsl(210_100%_50%/0.35)] hover:-translate-y-0.5 transition-all"
                 size="lg"
                 disabled={isLoading}
               >
