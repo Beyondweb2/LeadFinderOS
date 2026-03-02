@@ -52,6 +52,7 @@ interface LeadsTableProps {
 }
 
 export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false }: LeadsTableProps) {
+  const handleExport = blurred ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
   const shouldPulseCrm = isDemoUser && !state.addedToCrm;
   const handleAddToOutreach = useCallback((lead: Lead) => {
@@ -128,7 +129,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           </div>
           <div className="flex items-center gap-2">
             {renderFilterMenu('start')}
-            <Button onClick={onExport} size="sm" className="h-8 px-2.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button onClick={handleExport} size="sm" className="h-8 px-2.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
               <Download className="h-3.5 w-3.5 mr-1.5" />Export
             </Button>
           </div>
@@ -146,7 +147,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           </div>
           <div className="flex items-center gap-2">
             {renderFilterMenu('end')}
-            <Button onClick={onExport} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+            <Button onClick={handleExport} className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
               <Download className="mr-2 h-4 w-4" />Export CSV
             </Button>
           </div>
