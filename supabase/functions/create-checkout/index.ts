@@ -48,6 +48,18 @@ serve(async (req) => {
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const origin = resolveOrigin(req.headers.get("origin"));
 
+    // Parse body for customer_email (email-first flow)
+    let bodyEmail: string | null = null;
+    try {
+      const body = await req.json();
+      if (body?.customer_email && typeof body.customer_email === "string") {
+        bodyEmail = body.customer_email.trim().toLowerCase();
+        logStep("Email-first flow", { email: bodyEmail });
+      }
+    } catch {
+      // No body or invalid JSON — that's fine
+    }
+
     // Check if there's an authenticated user (existing user re-subscribing)
     const authHeader = req.headers.get("Authorization");
     let user: { id: string; email: string } | null = null;
@@ -159,8 +171,10 @@ serve(async (req) => {
       sessionConfig.customer = customerId;
     } else if (user) {
       sessionConfig.customer_email = user.email;
+    } else if (bodyEmail) {
+      sessionConfig.customer_email = bodyEmail;
     }
-    // For anonymous users, Stripe collects email automatically
+    // For anonymous users without bodyEmail, Stripe collects email automatically
 
     if (user) {
       sessionConfig.client_reference_id = user.id;
