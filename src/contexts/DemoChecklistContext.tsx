@@ -235,6 +235,8 @@ export function DemoChecklistProvider({
       });
     };
 
+    const onTrackPressed = () => completeStep('trackPressed');
+
     window.addEventListener('demo-checklist-search', onSearch);
     window.addEventListener('crm-lead-added', onCrmAdd);
     window.addEventListener('crm-lead-purged', onCrmPurged);
@@ -242,6 +244,7 @@ export function DemoChecklistProvider({
     window.addEventListener('demo-checklist-contact', onContact);
     window.addEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
     window.addEventListener('demo-checklist-track-note-saved', onNoteSaved);
+    window.addEventListener('demo-checklist-track-pressed', onTrackPressed);
     window.addEventListener('demo-checklist-next-action-set', onNextActionSet);
     window.addEventListener('demo-checklist-next-date-set', onNextDateSet);
     window.addEventListener('demo-checklist-card-collapsed', onCardCollapsed);
@@ -270,6 +273,7 @@ export function DemoChecklistProvider({
       window.removeEventListener('demo-checklist-contact', onContact);
       window.removeEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
       window.removeEventListener('demo-checklist-track-note-saved', onNoteSaved);
+      window.removeEventListener('demo-checklist-track-pressed', onTrackPressed);
       window.removeEventListener('demo-checklist-next-action-set', onNextActionSet);
       window.removeEventListener('demo-checklist-next-date-set', onNextDateSet);
       window.removeEventListener('demo-checklist-card-collapsed', onCardCollapsed);
@@ -288,19 +292,20 @@ export function DemoChecklistProvider({
     }
   }, [isDemoUser, isReplay, location.pathname, completeStep]);
 
-  // 8 steps
+  // 9 steps
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
     state.firstContactMade,
     state.threeContactsMade,
+    state.trackPressed,
     state.viewedProgress,
     state.noteAdded,
     state.nextActionSet,
     state.cardCollapsed,
   ].filter(Boolean).length;
 
-  const allDone = completedCount === 8;
+  const allDone = completedCount === 9;
 
   const allDoneRef = useRef(false);
   useEffect(() => {
@@ -323,7 +328,7 @@ export function DemoChecklistProvider({
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
-      totalSteps: 8,
+      totalSteps: 9,
       allDone,
       completeStep,
       isOpen,
@@ -340,7 +345,7 @@ export function DemoChecklistProvider({
 const fallback: DemoChecklistContextType = {
   state: defaultState,
   completedCount: 0,
-  totalSteps: 8,
+  totalSteps: 9,
   allDone: false,
   completeStep: () => {},
   isOpen: false,

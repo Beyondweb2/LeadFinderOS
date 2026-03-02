@@ -15,7 +15,7 @@ interface StepDef {
   anchorNearSelector?: string;
 }
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 9;
 
 function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 1 – Search for businesses
@@ -65,24 +65,32 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: `Open your CRM — contact ${remaining} more lead${remaining !== 1 ? 's' : ''}.` };
   }
 
-  // Step 5 – View progress in Track Leads
+  // Step 5 – Press the gold star Track button
+  if (!state.trackPressed) {
+    if (pathname === '/outreach') {
+      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Press the ⭐ Track button to mark a lead as worth following up.', noDim: true };
+    }
+    return { step: 5, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM and press ⭐ Track on a lead.' };
+  }
+
+  // Step 6 – Navigate to Track Leads page
   if (!state.viewedProgress) {
-    return { step: 5, selector: '[data-walkthrough="track-nav"]', tooltip: 'Track interested leads & manage your pipeline here.', tooltipPosition: 'top' };
+    return { step: 6, selector: '[data-walkthrough="track-nav"]', tooltip: 'Manage your pipeline here.', tooltipPosition: 'top' };
   }
 
-  // Step 6 – Add a note to one lead
+  // Step 7 – Add a note to one lead
   if (!state.noteAdded) {
-    return { step: 6, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details about this lead.', noDim: true };
+    return { step: 7, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details about this lead.', noDim: true };
   }
 
-  // Step 7 – Set a next action
+  // Step 8 – Set a next action
   if (!state.nextActionSet) {
-    return { step: 7, selector: '[data-walkthrough="next-action"]', tooltip: 'Set a next action or follow-up for one lead.', noDim: true };
+    return { step: 8, selector: '[data-walkthrough="next-action"]', tooltip: 'Set a next action or follow-up for one lead.', noDim: true };
   }
 
-  // Step 8 – Collapse a card
+  // Step 9 – Collapse a card
   if (!state.cardCollapsed) {
-    return { step: 8, selector: '[data-walkthrough="collapse-card"]', tooltip: 'Collapse the card to finish. You\'re all set!', noDim: true, tooltipPosition: 'top' };
+    return { step: 9, selector: '[data-walkthrough="collapse-card"]', tooltip: 'Collapse the card to finish. You\'re all set!', noDim: true, tooltipPosition: 'top' };
   }
 
   return null;
