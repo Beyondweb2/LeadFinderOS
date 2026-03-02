@@ -95,15 +95,20 @@ export function WelcomeWalkthroughModal() {
 
           {/* Headline */}
           <h3 className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4 text-foreground">
-            Welcome 👋
+            Let's Get Your First Clients 👋
           </h3>
 
           {/* Body */}
           <div className="text-center text-[14px] text-muted-foreground/80 leading-relaxed mb-2">
-            <p>Want a quick 60-second walkthrough to see how everything works?</p>
+            <p>This quick guided mission will help you contact your first 3 businesses in under 5 minutes.</p>
+          </div>
+          <div className="text-left text-[13px] text-muted-foreground/70 leading-relaxed mb-2 space-y-1 w-full px-2">
+            <p>• Find real businesses</p>
+            <p>• Contact them instantly</p>
+            <p>• Start building your pipeline</p>
           </div>
           <p className="text-center text-[12px] text-muted-foreground/50 mb-6">
-            You can skip at any time.
+            No setup. No theory. Just action.
           </p>
 
           {/* Primary CTA */}
@@ -111,7 +116,7 @@ export function WelcomeWalkthroughModal() {
             onClick={() => dismiss(true)}
             className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all mb-3 outline-none focus:outline-none focus-visible:outline-none border-none ring-0 focus:ring-0 focus-visible:ring-0"
           >
-            Start Walkthrough
+            Start Client Mission
             <ArrowRight className="h-4 w-4" />
           </button>
 
@@ -120,7 +125,7 @@ export function WelcomeWalkthroughModal() {
             onClick={() => dismiss(false)}
             className="w-full h-10 rounded-xl text-[13px] font-medium text-muted-foreground/70 hover:text-foreground transition-colors"
           >
-            Skip for now
+            I'll explore on my own
           </button>
         </div>
       </DialogContent>
