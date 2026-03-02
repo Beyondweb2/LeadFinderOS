@@ -1,15 +1,9 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarHeader,
-  SidebarFooter,
+  Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent,
+  SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarHeader, SidebarFooter,
 } from '@/components/ui/sidebar';
 import { UserMenu } from '@/components/UserMenu';
 import { AccentColorPicker } from '@/components/AccentColorPicker';
@@ -18,44 +12,36 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { 
-  LayoutDashboard, 
-  Search, 
-  ClipboardList, 
-  FileText,
-  Star,
-  DollarSign,
-  HelpCircle,
-  Users,
-  MessageSquare,
-  ShieldCheck
+  LayoutDashboard, Search, ClipboardList, FileText, Star,
+  DollarSign, HelpCircle, Users, MessageSquare, ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import appLogo from '@/assets/logo.png';
 
-const navItems = [
-  { title: 'Dashboard', url: '/', icon: LayoutDashboard, description: 'Overview & today\'s tasks' },
-  { title: 'Find Leads', url: '/find-leads', icon: Search, description: 'Search for businesses' },
-  { title: 'Outreach CRM', url: '/outreach', icon: ClipboardList, description: 'Cold call & gather numbers' },
-  { title: 'Track Leads', url: '/potential-work', icon: Star, description: 'Leads who want to work' },
-  { title: 'Paid Clients', url: '/paid-clients', icon: DollarSign, description: 'Completed payments' },
-  { title: 'Templates', url: '/templates', icon: FileText, description: 'Text & voice scripts' },
-  { title: 'How to Use', url: '/how-to-use', icon: HelpCircle, description: 'Step-by-step guide' },
-  { title: 'Feedback', url: '/feedback', icon: MessageSquare, description: 'Share your thoughts' },
-];
-
-const adminItems = [
-  { title: 'Dashboard', url: '/admin', icon: ShieldCheck, description: 'User metrics & analytics' },
-  { title: 'Affiliates', url: '/admin/affiliates', icon: Users, description: 'Manage affiliate partners' },
-];
-
 export function AppSidebar() {
+  const { t } = useTranslation();
   const location = useLocation();
   const { isAdmin } = useSubscription();
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
 
-  // Walkthrough pulse states
+  const navItems = [
+    { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard, description: t('nav.dashboardDesc') },
+    { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: t('nav.findLeadsDesc') },
+    { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
+    { title: t('nav.trackLeads'), url: '/potential-work', icon: Star, description: t('nav.trackLeadsDesc') },
+    { title: t('nav.paidClients'), url: '/paid-clients', icon: DollarSign, description: t('nav.paidClientsDesc') },
+    { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
+    { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle, description: t('nav.howToUseDesc') },
+    { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare, description: t('nav.feedbackDesc') },
+  ];
+
+  const adminItems = [
+    { title: t('nav.adminDashboard'), url: '/admin', icon: ShieldCheck, description: t('nav.adminDashboardDesc') },
+    { title: t('nav.affiliates'), url: '/admin/affiliates', icon: Users, description: t('nav.affiliatesDesc') },
+  ];
+
   let searchPulse = false;
   let crmPulseWalkthrough = false;
   let trackPulseWalkthrough = false;
@@ -66,7 +52,6 @@ export function AppSidebar() {
     trackPulseWalkthrough = isDemoUser && walkthroughActive && demoState.threeContactsMade && !demoState.viewedProgress;
   } catch {}
 
-  // Flash state for sidebar icons
   const [flashCRM, setFlashCRM] = useState(false);
   const [flashTrack, setFlashTrack] = useState(false);
   const [flashSearch, setFlashSearch] = useState(false);
@@ -86,10 +71,7 @@ export function AppSidebar() {
   }, []);
 
   return (
-    <Sidebar 
-      className="border-r border-sidebar-border bg-sidebar"
-      collapsible="none"
-    >
+    <Sidebar className="border-r border-sidebar-border bg-sidebar" collapsible="none">
       <SidebarHeader className="border-b border-sidebar-border p-4">
         <div className="flex items-center gap-3">
           <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
@@ -97,9 +79,7 @@ export function AppSidebar() {
             <h1 className="text-lg font-bold tracking-tight truncate">
               Lead<span className="text-sidebar-primary">Finder</span> Pro
             </h1>
-            <p className="text-xs text-sidebar-foreground/60 truncate">
-              All-in-one CRM
-            </p>
+            <p className="text-xs text-sidebar-foreground/60 truncate">{t('nav.allInOneCRM')}</p>
           </div>
         </div>
       </SidebarHeader>
@@ -116,7 +96,7 @@ export function AppSidebar() {
                   (item.url === '/find-leads' && (searchPulse || flashSearch));
                 const flashColor = item.url === '/outreach' ? 'text-green-400' : (item.url === '/potential-work' || item.url === '/find-leads') ? 'text-yellow-400' : '';
                 return (
-                  <SidebarMenuItem key={item.title}>
+                  <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild isActive={isActive}>
                       <Link 
                         to={item.url}
@@ -124,9 +104,7 @@ export function AppSidebar() {
                         data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : item.url === '/potential-work' ? 'track-nav' : undefined}
                         className={cn(
                           'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                          isActive
-                            ? 'bg-sidebar-accent text-sidebar-primary font-medium' 
-                            : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                          isActive ? 'bg-sidebar-accent text-sidebar-primary font-medium' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
                         )}
                       >
                         <item.icon className={cn(
@@ -135,9 +113,7 @@ export function AppSidebar() {
                         )} style={isFlashing ? { filter: `drop-shadow(0 0 6px currentColor)` } : undefined} />
                         <div className="flex flex-col overflow-hidden">
                           <span className="truncate">{item.title}</span>
-                          <span className="text-xs text-sidebar-foreground/50 truncate">
-                            {item.description}
-                          </span>
+                          <span className="text-xs text-sidebar-foreground/50 truncate">{item.description}</span>
                         </div>
                       </Link>
                     </SidebarMenuButton>
@@ -152,32 +128,22 @@ export function AppSidebar() {
           <SidebarGroup>
             <SidebarGroupContent>
               <div className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
-                Admin
+                {t('common.admin')}
               </div>
               <SidebarMenu>
                 {adminItems.map((item) => {
                   const isActive = location.pathname === item.url;
                   return (
-                    <SidebarMenuItem key={item.title}>
+                    <SidebarMenuItem key={item.url}>
                       <SidebarMenuButton asChild isActive={isActive}>
-                        <Link 
-                          to={item.url}
-                          className={cn(
-                            'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                            isActive 
-                              ? 'bg-sidebar-accent text-sidebar-primary font-medium' 
-                              : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-                          )}
-                        >
-                          <item.icon className={cn(
-                            'h-5 w-5 shrink-0',
-                            isActive ? 'text-sidebar-primary' : ''
-                          )} />
+                        <Link to={item.url} className={cn(
+                          'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+                          isActive ? 'bg-sidebar-accent text-sidebar-primary font-medium' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
+                        )}>
+                          <item.icon className={cn('h-5 w-5 shrink-0', isActive ? 'text-sidebar-primary' : '')} />
                           <div className="flex flex-col overflow-hidden">
                             <span className="truncate">{item.title}</span>
-                            <span className="text-xs text-sidebar-foreground/50 truncate">
-                              {item.description}
-                            </span>
+                            <span className="text-xs text-sidebar-foreground/50 truncate">{item.description}</span>
                           </div>
                         </Link>
                       </SidebarMenuButton>
@@ -194,9 +160,7 @@ export function AppSidebar() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
-              {avatarUrl ? (
-                <AvatarImage src={avatarUrl} alt="Profile" />
-              ) : null}
+              {avatarUrl ? <AvatarImage src={avatarUrl} alt="Profile" /> : null}
               <AvatarFallback className="bg-primary/10 text-primary text-xs">
                 {user?.email?.charAt(0).toUpperCase() || 'U'}
               </AvatarFallback>

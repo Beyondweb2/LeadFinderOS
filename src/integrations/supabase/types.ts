@@ -794,6 +794,7 @@ export type Database = {
           paid_at: string | null
           plan_status: string
           post_abandon_search_used: boolean
+          preferred_language: string | null
           ref_source: string | null
           searches_today: number
           searches_used: number
@@ -821,6 +822,7 @@ export type Database = {
           paid_at?: string | null
           plan_status?: string
           post_abandon_search_used?: boolean
+          preferred_language?: string | null
           ref_source?: string | null
           searches_today?: number
           searches_used?: number
@@ -848,6 +850,7 @@ export type Database = {
           paid_at?: string | null
           plan_status?: string
           post_abandon_search_used?: boolean
+          preferred_language?: string | null
           ref_source?: string | null
           searches_today?: number
           searches_used?: number

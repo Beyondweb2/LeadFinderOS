@@ -36,15 +36,17 @@ serve(async (req) => {
     if (!user?.id) throw new Error("User not authenticated");
     logStep("User authenticated", { userId: user.id });
 
-    // Parse optional body for affiliate code, ref source, or action
+    // Parse optional body
     let affiliateCode: string | null = null;
     let refSource: string | null = null;
     let action: string | null = null;
+    let language: string | null = null;
     try {
       const body = await req.json();
       affiliateCode = body?.affiliate_code || null;
       refSource = body?.ref_source || null;
       action = body?.action || null;
+      language = body?.language || null;
     } catch {
       // No body or invalid JSON - that's fine
     }
@@ -60,6 +62,27 @@ serve(async (req) => {
         throw new Error(`Failed to update: ${updateErr.message}`);
       }
       logStep("Walkthrough prompt marked as seen", { userId: user.id });
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // Handle set_language action
+    if (action === 'set_language' && language) {
+      const allowedLangs = ['en', 'hi', 'ur'];
+      if (!allowedLangs.includes(language)) {
+        throw new Error(`Invalid language: ${language}`);
+      }
+      const { error: updateErr } = await supabaseClient
+        .from('user_trials')
+        .update({ preferred_language: language })
+        .eq('user_id', user.id);
+      if (updateErr) {
+        logStep("Error setting language", { error: updateErr.message });
+        throw new Error(`Failed to update language: ${updateErr.message}`);
+      }
+      logStep("Language set", { userId: user.id, language });
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -144,10 +167,8 @@ serve(async (req) => {
       status: 200,
     });
   } catch (error) {
-    // Log detailed error server-side only
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("ERROR", { message: errorMessage });
-    // Return generic error to client
     return new Response(JSON.stringify({ error: "Unable to set up your account. Please try again." }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
