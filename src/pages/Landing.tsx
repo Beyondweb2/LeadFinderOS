@@ -621,23 +621,23 @@ const Landing = () => {
               {
                 num: 1,
                 title: 'Find Leads Instantly',
-                body: "Instantly uncover businesses without websites so you're never pitching blind.",
+                body: 'See businesses missing a website in seconds and spot easy opportunities instantly.',
                 img: step2Results,
                 alt: 'Find leads results list',
               },
               {
                 num: 2,
-                title: 'Start Conversations',
-                body: 'Send personalised WhatsApp or SMS messages in seconds.',
+                title: 'Run Your Outreach',
+                body: 'Message, call or WhatsApp in one click and manage every follow up in one place.',
                 img: step3Outreach,
-                alt: 'Start outreach with templates',
+                alt: 'Outreach and contact management',
               },
               {
                 num: 3,
-                title: 'Track & Close Deals',
-                body: 'Track every lead from first message to paid client so your outreach turns into income.',
+                title: 'Turn Outreach Into Revenue',
+                body: 'See your deals, follow ups and revenue in one place.',
                 img: step4Dashboard,
-                alt: 'Dashboard analytics',
+                alt: 'Dashboard revenue overview',
               },
             ].map((step) => {
               const isEven = step.num % 2 === 0;
