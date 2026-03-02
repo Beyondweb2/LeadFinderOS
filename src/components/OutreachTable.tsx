@@ -51,6 +51,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { openFacebookSearch } from '@/lib/facebookSearch';
+import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
 import { useDebouncedCallback } from 'use-debounce';
 import { useToast } from '@/hooks/use-toast';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
@@ -136,8 +137,9 @@ export function OutreachTable({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isRecoveringPhones, setIsRecoveringPhones] = useState(false);
   const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
-  const [whatsAppLead, setWhatsAppLead] = useState<{ phone: string; business_name: string; id?: string; whatsapp_status?: string | null } | null>(null);
-  const [smsLead, setSmsLead] = useState<{ phone: string; business_name: string } | null>(null);
+  const [whatsAppLead, setWhatsAppLead] = useState<{ phone: string; business_name: string; id?: string; whatsapp_status?: string | null; status?: string } | null>(null);
+  const [smsLead, setSmsLead] = useState<{ phone: string; business_name: string; id?: string; status?: string } | null>(null);
+  const { logAttempt } = useOutreachAttempt();
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
 
@@ -256,14 +258,14 @@ export function OutreachTable({
   // Handle WhatsApp button click - store lead ID for highlighting
   const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
-    setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name, id: lead.id, whatsapp_status: lead.whatsapp_status });
+    setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name, id: lead.id, whatsapp_status: lead.whatsapp_status, status: lead.status });
     window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'whatsapp' } }));
   }, []);
 
   // Handle SMS button click
   const handleSMSClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
-    setSmsLead({ phone: lead.phone || '', business_name: lead.business_name });
+    setSmsLead({ phone: lead.phone || '', business_name: lead.business_name, id: lead.id, status: lead.status });
     window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'sms' } }));
   }, []);
 
@@ -271,7 +273,11 @@ export function OutreachTable({
   const handleCallClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
     window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'call' } }));
-  }, []);
+    // Log outreach attempt for calls
+    logAttempt(lead.id, 'call', lead.status);
+    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+    window.dispatchEvent(new CustomEvent('challenge-contact-sent', { detail: { leadId: lead.business_name } }));
+  }, [logAttempt]);
 
   // Count leads missing phone numbers
   const leadsWithMissingPhones = useMemo(() => {

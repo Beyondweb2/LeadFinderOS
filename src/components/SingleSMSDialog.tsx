@@ -12,17 +12,18 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { MessageCircle, Send, AlertTriangle, RotateCcw, FileText } from 'lucide-react';
+import { MessageCircle, Send, AlertTriangle, RotateCcw } from 'lucide-react';
 import { generateSMSUrl } from '@/lib/leadUtils';
 import { TemplatePicker } from '@/components/TemplatePicker';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAutoRotateTemplate } from '@/hooks/useAutoRotateTemplate';
 import { AutoRotateToggle } from '@/components/AutoRotateToggle';
+import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
 
 interface SingleSMSDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  lead: { phone: string; business_name: string } | null;
+  lead: { phone: string; business_name: string; id?: string; status?: string } | null;
 }
 
 const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
@@ -35,6 +36,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
   const [templatesOpened, setTemplatesOpened] = useState(false);
 
   const { autoOn, toggleAuto, getNextTemplate } = useAutoRotateTemplate();
+  const { logAttempt } = useOutreachAttempt();
 
   // Walkthrough awareness
   const { isDemoUser, state } = useDemoChecklist();
@@ -85,7 +87,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
     return template.replace(/\{\{business_name\}\}/g, lead.business_name);
   }, [template, lead]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!lead || !lead.phone) return;
     
     const message = template.replace(/\{\{business_name\}\}/g, lead.business_name);
@@ -93,6 +95,12 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
     window.open(url, '_self');
     window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     window.dispatchEvent(new CustomEvent('challenge-contact-sent', { detail: { leadId: lead.business_name } }));
+
+    // Log the outreach attempt
+    if (lead.id) {
+      await logAttempt(lead.id, 'sms', lead.status);
+    }
+
     onOpenChange(false);
 
     supabase.rpc('log_usage_event', {
@@ -155,7 +163,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
               </div>
               {showTemplateNudge && !templatesOpened && (
                 <div className="mb-3 p-3 rounded-lg border border-yellow-500/40 bg-card shadow-lg">
-                  <div className="text-[10px] font-semibold text-primary mb-0.5">Step 4 of 7</div>
+                  <div className="text-[10px] font-semibold text-primary mb-0.5">Step 3 of 8</div>
                   <p className="text-xs text-foreground">
                     Select <span className="font-semibold text-primary">"Initial Contact Cycle"</span> to auto-rotate between 6 proven messages.
                   </p>
