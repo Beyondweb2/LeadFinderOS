@@ -11,6 +11,8 @@ interface StepDef {
   tooltip: string | ((state: any) => string);
   noDim?: boolean;
   tooltipPosition?: 'top' | 'bottom' | 'right';
+  /** On desktop, render as inline banner anchored to this selector instead of floating tooltip */
+  desktopBannerAnchor?: string;
 }
 
 const TOTAL_STEPS = 8;
@@ -40,9 +42,10 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return {
       step: 2,
       selector: '[data-walkthrough="add-crm"]',
-      tooltip: `Select 3 businesses you want to contact.\n\nSelected: ${selected} / 3`,
+      tooltip: `Select 3 businesses you want to contact.  Selected: ${selected} / 3`,
       noDim: true,
       tooltipPosition: 'top',
+      desktopBannerAnchor: '[data-walkthrough="results-header"]',
     };
   }
 
@@ -214,6 +217,9 @@ export function WalkthroughOverlay() {
   if (!activeStep || !walkthroughOpen || paused || allDone) return null;
   if (!targetRect) return null;
 
+  const isDesktop = window.innerWidth >= 1024;
+  const useBanner = isDesktop && !!activeStep.desktopBannerAnchor;
+
   const pad = 8;
   const spotlightStyle = {
     top: targetRect.top - pad,
@@ -281,8 +287,11 @@ export function WalkthroughOverlay() {
         />
       )}
 
-      {/* Tooltip with step counter */}
-      {tooltipPos && (
+      {/* Desktop banner mode: renders inside a safe anchor area */}
+      {useBanner && <WalkthroughBanner step={activeStep.step} text={tooltipText} anchorSelector={activeStep.desktopBannerAnchor!} />}
+
+      {/* Floating tooltip (mobile or non-banner steps) */}
+      {!useBanner && tooltipPos && (
         <div
           className="absolute pointer-events-none px-3.5 py-3 rounded-xl bg-[hsl(220,50%,7%)] border border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.15)] max-w-[260px] text-center"
           style={{
@@ -309,5 +318,34 @@ export function WalkthroughOverlay() {
       `}</style>
     </div>,
     document.body
+  );
+}
+
+/** Desktop-only banner rendered via portal into a safe anchor element */
+function WalkthroughBanner({ step, text, anchorSelector }: { step: number; text: string; anchorSelector: string }) {
+  const [anchor, setAnchor] = useState<Element | null>(null);
+
+  useEffect(() => {
+    const find = () => {
+      const el = document.querySelector(anchorSelector);
+      setAnchor(el);
+    };
+    find();
+    const interval = setInterval(find, 500);
+    return () => clearInterval(interval);
+  }, [anchorSelector]);
+
+  if (!anchor) return null;
+
+  return createPortal(
+    <div className="w-full py-2.5 px-4 bg-[hsl(220,50%,7%)] border border-amber-500/40 rounded-lg flex items-center justify-center gap-3 mb-3 shadow-[0_0_16px_rgba(245,158,11,0.1)]">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400/90 shrink-0">
+        Step {step} of {TOTAL_STEPS}
+      </span>
+      <span className="text-[13px] text-foreground font-medium text-center">
+        {text}
+      </span>
+    </div>,
+    anchor
   );
 }
