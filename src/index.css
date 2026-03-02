@@ -80,6 +80,11 @@
   * {
     @apply border-border;
     --tw-ring-offset-color: hsl(var(--background));
+    outline-color: hsl(var(--border));
+  }
+  
+  *:focus-visible {
+    outline-color: hsl(var(--border));
   }
 
   body {
