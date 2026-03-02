@@ -16,7 +16,7 @@ interface StepDef {
   anchorNearSelector?: string;
 }
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 11;
 
 function getActiveStep(state: any, pathname: string, t: any): StepDef | null {
   if (!state.searchDone) {

@@ -455,7 +455,31 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             <div className="flex-1 min-w-0 space-y-1.5 lg:space-y-2">
               {/* Name */}
               <div className="flex items-center gap-1.5">
-                <span className="font-semibold text-sm sm:text-base lg:text-[17px] leading-tight truncate">{lead.business_name}</span>
+                {editingName ? (
+                  <div className="flex items-center gap-1 flex-1 min-w-0" data-no-expand onClick={(e) => e.stopPropagation()}>
+                    <Input
+                      value={editedName}
+                      onChange={(e) => setEditedName(e.target.value)}
+                      className="h-7 text-xs font-semibold px-1.5 flex-1"
+                      autoFocus
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); } }}
+                    />
+                    <button onClick={handleSaveName} className="h-6 w-6 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded"><Check className="h-3 w-3" /></button>
+                    <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><X className="h-3 w-3" /></button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="font-semibold text-sm sm:text-base lg:text-[17px] leading-tight truncate">{lead.business_name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+                      className="h-5 w-5 flex items-center justify-center text-muted-foreground/30 hover:text-foreground rounded transition-colors shrink-0"
+                      data-no-expand
+                      title="Edit name"
+                    >
+                      <Pencil className="h-2.5 w-2.5" />
+                    </button>
+                  </>
+                )}
               </div>
 
               {/* Meta line */}
@@ -800,27 +824,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               )}
             </div>
 
-            {/* Edit name inline */}
-            {editingName ? (
-              <div className="flex items-center gap-1 pt-1">
-                <Input
-                  value={editedName}
-                  onChange={(e) => setEditedName(e.target.value)}
-                  className="h-7 text-xs font-semibold px-1.5 flex-1"
-                  autoFocus
-                  onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); } }}
-                />
-                <button onClick={handleSaveName} className="h-6 w-6 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded"><Check className="h-3 w-3" /></button>
-                <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><X className="h-3 w-3" /></button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setEditingName(true)}
-                className="text-[11px] text-muted-foreground/40 hover:text-foreground flex items-center gap-1 pt-1"
-              >
-                <Pencil className="h-2.5 w-2.5" /> Edit name
-              </button>
-            )}
 
           </div>
 

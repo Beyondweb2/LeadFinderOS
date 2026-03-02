@@ -56,6 +56,7 @@ export function MobileBottomNav() {
   const [crmGlow, setCrmGlow] = useState(false);
   const [trackGlow, setTrackGlow] = useState(false);
   const [searchGlow, setSearchGlow] = useState(false);
+  const [searchTooltip, setSearchTooltip] = useState(false);
 
   const mainNavItems = [
     { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard },
@@ -84,7 +85,7 @@ export function MobileBottomNav() {
   useEffect(() => {
     const crmHandler = () => { setCrmGlow(true); setTimeout(() => setCrmGlow(false), 800); };
     const trackHandler = () => { setTrackGlow(true); setTimeout(() => setTrackGlow(false), 2000); };
-    const searchHandler = () => { setSearchGlow(true); setTimeout(() => setSearchGlow(false), 4000); };
+    const searchHandler = () => { setSearchGlow(true); setSearchTooltip(true); setTimeout(() => setSearchGlow(false), 4000); setTimeout(() => setSearchTooltip(false), 6000); };
     window.addEventListener('crm-lead-added', crmHandler);
     window.addEventListener('track-lead-added', trackHandler);
     window.addEventListener('pulse-search-nav', searchHandler);
@@ -124,13 +125,18 @@ export function MobileBottomNav() {
                 data-walkthrough-step={item.url === '/potential-work' ? 'track-leads' : item.url === '/outreach' ? 'outreach-crm' : undefined}
                 data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : item.url === '/potential-work' ? 'track-nav' : undefined}
                 className={cn(
-                  'flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[60px]',
+                  'relative flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[60px]',
                   item.url === '/find-leads' && (searchPulse || searchGlow) ? 'text-yellow-400 animate-pulse'
                     : item.url === '/outreach' && crmPulseWalkthrough ? 'text-yellow-400 animate-pulse'
                     : item.url === '/outreach' && crmGlow ? 'text-green-400 animate-pulse'
                     : item.url === '/potential-work' && (trackGlow || trackPulseWalkthrough) ? 'text-yellow-400 animate-pulse'
                     : isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 )}>
+                {item.url === '/find-leads' && searchTooltip && (
+                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-medium text-amber-400 bg-card/95 border border-amber-500/30 rounded-md px-2 py-1 shadow-lg animate-bounce z-50">
+                    {t('completion.findMoreLeads')}
+                  </span>
+                )}
                 <item.icon className={cn(
                   'h-5 w-5 transition-all',
                   item.url === '/outreach' && (crmGlow || crmPulseWalkthrough) && 'scale-110',

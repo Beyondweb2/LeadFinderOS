@@ -134,7 +134,7 @@ export function DemoChecklistPanel() {
             </h3>
 
             <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5 space-y-3">
-              <p>{t('completion.contacted').replace('<bold>', '').replace('</bold>', '')}<br />{t('completion.thatsHow')}</p>
+              <p>{t('completion.contacted').replace('<bold>', '').replace('</bold>', '')}</p>
               <p>{t('completion.mostFreelancers')}<br />{t('completion.keepStacking')}</p>
             </div>
 
@@ -155,7 +155,7 @@ export function DemoChecklistPanel() {
               </div>
             </div>
 
-            <p className="text-center text-[12px] text-primary/70 font-medium mb-5">{t('completion.volumeQuote')}</p>
+            <p className="text-center text-[12px] text-foreground font-medium mb-5">{t('completion.volumeQuote')}</p>
 
             <button onClick={handleCompletionDismiss} className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all">
               {t('completion.cta')}
