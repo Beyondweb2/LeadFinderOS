@@ -9,10 +9,10 @@ import { useToast } from '@/hooks/use-toast';
 import logoIcon from '@/assets/leadfinder-logo-icon.png';
 
 const TRIAL_FEATURES = [
-  'Discover new client opportunities every day',
-  'Start real conversations with business owners',
-  'Never miss a follow-up',
-  'Turn outreach into predictable income',
+  'Get more clients',
+  'Message businesses instantly',
+  'Stay organised',
+  'Build predictable income',
 ];
 
 const Subscribe = () => {
@@ -101,7 +101,7 @@ const Subscribe = () => {
           Back to app
         </Button>
 
-        <div className="bg-[hsl(220_50%_5%)] border border-border/40 rounded-2xl overflow-hidden px-6 py-7 sm:px-8 sm:py-8 space-y-5">
+        <div className="bg-[hsl(220_50%_5%)] border border-border/40 rounded-2xl overflow-hidden px-6 py-7 sm:px-8 sm:py-8 space-y-6 shadow-[0_8px_32px_hsl(220_50%_3%/0.5)]">
           {/* Green pill */}
           <div className="flex justify-center">
             <span className="inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-0.5 text-[11px] font-semibold tracking-widest uppercase text-emerald-400 shadow-[0_0_12px_hsl(142_76%_45%/0.15)]">
@@ -123,7 +123,7 @@ const Subscribe = () => {
           </p>
 
           {/* Benefits */}
-          <div className="space-y-3.5">
+          <div className="space-y-4">
             {TRIAL_FEATURES.map((feature) => (
               <div key={feature} className="flex items-center gap-4">
                 <div className="flex-shrink-0 h-6 w-6 rounded-full bg-emerald-500/20 flex items-center justify-center shadow-[0_0_8px_hsl(142_76%_45%/0.2)]">
@@ -169,7 +169,7 @@ const Subscribe = () => {
             <div className="space-y-3">
               <Button
                 onClick={handleSubscribe}
-                className="btn-premium w-full h-12 text-base font-bold text-primary-foreground shadow-[0_4px_20px_hsl(210_100%_50%/0.3)] hover:shadow-[0_6px_24px_hsl(210_100%_50%/0.4)] hover:-translate-y-0.5 transition-all"
+                className="btn-premium w-full h-[52px] text-base font-bold text-primary-foreground shadow-[0_4px_20px_hsl(210_100%_50%/0.3)] hover:shadow-[0_6px_24px_hsl(210_100%_50%/0.4)] hover:-translate-y-0.5 transition-all"
                 size="lg"
                 disabled={isLoading}
               >
