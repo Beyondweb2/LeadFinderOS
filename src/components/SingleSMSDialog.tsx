@@ -129,7 +129,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
             SMS Message
           </DialogTitle>
           <DialogDescription>
-            Send an SMS to <span className="font-semibold text-foreground">{lead.business_name}</span>
+            To <span className="font-semibold text-foreground">{lead.business_name}</span>
           </DialogDescription>
         </DialogHeader>
 
@@ -217,7 +217,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
           </div>
         )}
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 flex-row justify-end sm:justify-end">
           <Button variant="outline" onClick={() => {
             onOpenChange(false);
             window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
@@ -225,7 +225,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
             Cancel
           </Button>
           {hasPhone && (
-            <Button onClick={handleSend} className="bg-blue-600 hover:bg-blue-700">
+            <Button onClick={handleSend} className="bg-blue-600 hover:bg-blue-700 whitespace-nowrap">
               <Send className="h-4 w-4 mr-2" />
               Open SMS App
             </Button>
