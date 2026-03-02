@@ -51,7 +51,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
   // Step 3 – Contact first lead via Call, SMS or WhatsApp
   if (!state.firstContactMade) {
     if (pathname === '/outreach') {
-      return { step: 3, selector: '[data-walkthrough="contact"]', tooltip: 'Contact your first lead via Call, SMS or WhatsApp.', noDim: true };
+      return { step: 3, selector: '[data-walkthrough="contact"]', tooltip: 'Contact your first lead via Call, SMS or WhatsApp.\n\nContact method & status will auto-update.', noDim: true };
     }
     return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact your first lead.' };
   }
@@ -67,7 +67,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
 
   // Step 5 – View progress in Track Leads
   if (!state.viewedProgress) {
-    return { step: 5, selector: '[data-walkthrough="track-nav"]', tooltip: 'View your progress in Track Leads.', tooltipPosition: 'top' };
+    return { step: 5, selector: '[data-walkthrough="track-nav"]', tooltip: 'Track interested leads & manage your pipeline here.', tooltipPosition: 'top' };
   }
 
   // Step 6 – Add a note to one lead
