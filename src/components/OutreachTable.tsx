@@ -181,8 +181,8 @@ export function OutreachTable({
         highlightLead(nextLead.id);
       }
     }, [logAttempt]),
-    onContactCounted: useCallback((leadId: string) => {
-      window.dispatchEvent(new CustomEvent('outreach-attempt-logged', { detail: { leadId, channel: 'contact' } }));
+    onContactCounted: useCallback((_leadId: string) => {
+      // Walkthrough counting handled via demo-checklist-contact event in useContactAction
     }, []),
     onContactUndone: useCallback((_leadId: string) => {
       // Walkthrough decrement handled by DemoChecklistContext if needed
