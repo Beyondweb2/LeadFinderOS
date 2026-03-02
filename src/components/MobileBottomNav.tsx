@@ -133,9 +133,11 @@ export function MobileBottomNav() {
                     : isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 )}>
                 {item.url === '/find-leads' && searchTooltip && (
-                  <span className="absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap text-[10px] font-medium text-amber-400 bg-card/95 border border-amber-500/30 rounded-md px-2 py-1 shadow-lg animate-bounce z-50">
-                    {t('completion.findMoreLeads')}
-                  </span>
+                  <div className="absolute -top-16 left-1/2 -translate-x-1/2 z-50 pointer-events-none px-3.5 py-2.5 rounded-xl bg-[hsl(220,50%,7%)] border border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.15)] max-w-[220px] text-center animate-bounce">
+                    <div className="text-[13px] text-foreground font-medium leading-relaxed whitespace-nowrap">
+                      {t('completion.findMoreLeads')}
+                    </div>
+                  </div>
                 )}
                 <item.icon className={cn(
                   'h-5 w-5 transition-all',
