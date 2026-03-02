@@ -17,6 +17,8 @@ const corsHeaders = {
 const MAX_RESULTS = 50;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const FREE_SEARCH_LIMIT = 3;
+const MIN_NO_WEBSITE_TARGET = 3;
+const MAX_EXPANSION_ATTEMPTS = 12;
 
 // ═══════════════════════════════════════════════
 // INPUT VALIDATION
@@ -98,7 +100,7 @@ function isDirectoryUrl(url: string): boolean {
 }
 
 async function generateCacheKey(keyword: string, location: string, radius: number): Promise<string> {
-  const input = `v2|${keyword.toLowerCase()}|${location.toLowerCase()}|${radius}`;
+  const input = `v3-expand|${keyword.toLowerCase()}|${location.toLowerCase()}|${radius}`;
   const data = new TextEncoder().encode(input);
   const hash = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -154,6 +156,7 @@ interface SearchLead {
   websiteStatus: 'NO_WEBSITE' | 'HAS_OWN_WEBSITE';
   confidence: number;
   reason: string;
+  isExpanded?: boolean;
 }
 
 function classifyWebsite(websiteUri: string | null | undefined): { status: SearchLead['websiteStatus']; confidence: number; reason: string } {
@@ -175,6 +178,8 @@ interface SelectionDebug {
   noWebsiteCount: number;
   returnedNoWebsite: number;
   returnedHasWebsite: number;
+  expansionAttempts?: number;
+  expanded?: boolean;
 }
 
 async function textSearchPlaces(
@@ -310,6 +315,127 @@ async function textSearchPlaces(
 }
 
 // ═══════════════════════════════════════════════
+// NEARBY AREA EXPANSION
+// ═══════════════════════════════════════════════
+function generateExpansionCentres(lat: number, lng: number): { lat: number; lng: number }[] {
+  const centres: { lat: number; lng: number }[] = [];
+  // 8 compass directions
+  const directions = [
+    { dLat: 1, dLng: 0 },   // N
+    { dLat: 1, dLng: 1 },   // NE
+    { dLat: 0, dLng: 1 },   // E
+    { dLat: -1, dLng: 1 },  // SE
+    { dLat: -1, dLng: 0 },  // S
+    { dLat: -1, dLng: -1 }, // SW
+    { dLat: 0, dLng: -1 },  // W
+    { dLat: 1, dLng: -1 },  // NW
+  ];
+  // 3 distance rings: ~10km, ~20km, ~30km (in degrees, ~0.09° ≈ 10km lat)
+  const rings = [0.09, 0.18, 0.27];
+
+  for (const ring of rings) {
+    for (const dir of directions) {
+      centres.push({
+        lat: lat + dir.dLat * ring,
+        lng: lng + dir.dLng * ring,
+      });
+    }
+  }
+  return centres;
+}
+
+async function expandSearch(
+  keyword: string,
+  originalLat: number,
+  originalLng: number,
+  radius: number,
+  apiKey: string,
+  existingLeads: SearchLead[],
+  debug: DebugMeta
+): Promise<{ expandedLeads: SearchLead[]; attempts: number }> {
+  const seenIds = new Set(existingLeads.map(l => l.id));
+  const expandedLeads: SearchLead[] = [];
+  const centres = generateExpansionCentres(originalLat, originalLng);
+  let attempts = 0;
+  
+  const currentNoWebsite = existingLeads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
+  let totalNoWebsite = currentNoWebsite;
+
+  console.log(`[EXPAND] Starting expansion: need ${MIN_NO_WEBSITE_TARGET - currentNoWebsite} more NO_WEBSITE leads`);
+
+  for (const centre of centres) {
+    if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET || attempts >= MAX_EXPANSION_ATTEMPTS) break;
+
+    attempts++;
+    console.log(`[EXPAND] Attempt ${attempts}: searching at (${centre.lat.toFixed(4)}, ${centre.lng.toFixed(4)})`);
+
+    try {
+      // Single-page search at the expansion centre (keep it fast)
+      const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
+      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri';
+      const clampedRadius = Math.min(radius, 50000);
+
+      const res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': FIELD_MASK,
+        },
+        body: JSON.stringify({
+          textQuery: keyword,
+          locationBias: {
+            circle: {
+              center: { latitude: centre.lat, longitude: centre.lng },
+              radius: clampedRadius,
+            },
+          },
+          pageSize: 20,
+        }),
+      });
+
+      debug.googleCallsMade.textSearchPages++;
+
+      if (!res.ok) {
+        console.warn(`[EXPAND] Search failed at centre ${attempts}: ${res.status}`);
+        continue;
+      }
+
+      const data = await res.json();
+      const places = data.places || [];
+
+      for (const place of places) {
+        const placeId = (place.id || '').replace(/^places\//, '');
+        if (!placeId || seenIds.has(placeId)) continue;
+        seenIds.add(placeId);
+
+        const { status, confidence, reason } = classifyWebsite(place.websiteUri);
+        if (status !== 'NO_WEBSITE') continue; // Only collect NO_WEBSITE from expansion
+
+        expandedLeads.push({
+          id: placeId,
+          name: place.displayName?.text || 'Unknown',
+          googleMapsUrl: place.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+          websiteUrl: place.websiteUri || null,
+          websiteStatus: status,
+          confidence,
+          reason,
+          isExpanded: true,
+        });
+        totalNoWebsite++;
+
+        if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET) break;
+      }
+    } catch (err) {
+      console.warn(`[EXPAND] Error at centre ${attempts}:`, err);
+    }
+  }
+
+  console.log(`[EXPAND] Completed: ${attempts} attempts, found ${expandedLeads.length} additional NO_WEBSITE leads`);
+  return { expandedLeads, attempts };
+}
+
+// ═══════════════════════════════════════════════
 // ERROR HANDLING
 // ═══════════════════════════════════════════════
 function sanitizeError(error: unknown): { message: string; status: number } {
@@ -330,6 +456,53 @@ function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, 
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json', ...extraHeaders },
   });
+}
+
+// ═══════════════════════════════════════════════
+// PERFORM SEARCH WITH OPTIONAL EXPANSION
+// ═══════════════════════════════════════════════
+async function performSearchWithExpansion(
+  keyword: string,
+  location: string,
+  radius: number,
+  apiKey: string,
+  debug: DebugMeta
+): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
+  const { lat, lng } = await geocodeLocation(location, apiKey, debug);
+  const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, apiKey, debug);
+
+  const noWebCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
+
+  if (noWebCount >= MIN_NO_WEBSITE_TARGET) {
+    return { leads, selectionDebug, expanded: false };
+  }
+
+  // Expansion needed
+  console.log(`[EXPAND] Only ${noWebCount} NO_WEBSITE leads, expanding search...`);
+  const { expandedLeads, attempts } = await expandSearch(keyword, lat, lng, radius, apiKey, leads, debug);
+
+  if (expandedLeads.length > 0) {
+    // Insert expanded NO_WEBSITE leads at the front (after existing NO_WEBSITE)
+    const existingNoWeb = leads.filter(l => l.websiteStatus === 'NO_WEBSITE');
+    const existingHasWeb = leads.filter(l => l.websiteStatus === 'HAS_OWN_WEBSITE');
+    const merged = [...existingNoWeb, ...expandedLeads, ...existingHasWeb].slice(0, MAX_RESULTS);
+
+    const updatedDebug: SelectionDebug = {
+      ...selectionDebug,
+      noWebsiteCount: existingNoWeb.length + expandedLeads.length,
+      returnedNoWebsite: merged.filter(l => l.websiteStatus === 'NO_WEBSITE').length,
+      returnedHasWebsite: merged.filter(l => l.websiteStatus === 'HAS_OWN_WEBSITE').length,
+      totalPoolCount: selectionDebug.totalPoolCount + expandedLeads.length,
+      expansionAttempts: attempts,
+      expanded: true,
+    };
+
+    return { leads: merged, selectionDebug: updatedDebug, expanded: true };
+  }
+
+  selectionDebug.expansionAttempts = attempts;
+  selectionDebug.expanded = true;
+  return { leads, selectionDebug, expanded: true };
 }
 
 // ═══════════════════════════════════════════════
@@ -383,9 +556,8 @@ serve(async (req) => {
       }
 
       console.log(`[DEMO] Searching for "${keyword}" in "${location}" within ${radius}m`);
-      const { lat, lng } = await geocodeLocation(location, GOOGLE_MAPS_API_KEY, debug);
-      const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, GOOGLE_MAPS_API_KEY, debug);
-      console.log(`[DEMO] Found ${leads.length} leads`);
+      const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug);
+      console.log(`[DEMO] Found ${leads.length} leads (expanded: ${expanded})`);
 
       return jsonResponse({
         leads,
@@ -393,6 +565,7 @@ serve(async (req) => {
         searchId: crypto.randomUUID(),
         source: 'google',
         cached: false,
+        expanded,
         _debug: { ...debug, ...selectionDebug },
       });
     }
@@ -583,31 +756,34 @@ serve(async (req) => {
 
     if (cached?.results) {
       debug.cached = true;
-      console.log(`Cache HIT for "${keyword}" in "${location}" (${(cached.results as SearchLead[]).length} results)`);
+      const cachedLeads = cached.results as SearchLead[];
+      console.log(`Cache HIT for "${keyword}" in "${location}" (${cachedLeads.length} results)`);
+
+      const hasExpanded = cachedLeads.some(l => l.isExpanded);
 
       // Log usage even for cached searches
       try {
         await supabaseClient.rpc('log_usage_event', {
           p_event_type: 'search',
-          p_meta: { query: keyword, location, radius, results_count: (cached.results as SearchLead[]).length, cached: true, source: 'google' },
+          p_meta: { query: keyword, location, radius, results_count: cachedLeads.length, cached: true, source: 'google' },
         });
       } catch {}
 
       return jsonResponse({
-        leads: cached.results,
-        totalFound: (cached.results as SearchLead[]).length,
+        leads: cachedLeads,
+        totalFound: cachedLeads.length,
         searchId: crypto.randomUUID(),
         source: 'google',
         cached: true,
+        expanded: hasExpanded,
         _debug: debug,
       });
     }
 
-    // ─── SEARCH ──────────────────────────────────
+    // ─── SEARCH WITH EXPANSION ───────────────────
     console.log(`[DIAG-HANDLER] Starting search for "${keyword}" in "${location}" within ${radius}m`);
-    const { lat, lng } = await geocodeLocation(location, GOOGLE_MAPS_API_KEY, debug);
-    const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, GOOGLE_MAPS_API_KEY, debug);
-    console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb)`);
+    const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug);
+    console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb, expanded: ${expanded})`);
 
     // ─── CACHE STORE ─────────────────────────────
     try {
@@ -623,7 +799,7 @@ serve(async (req) => {
     try {
       await supabaseClient.rpc('log_usage_event', {
         p_event_type: 'search',
-        p_meta: { query: keyword, location, radius, results_count: leads.length, cached: false, source: 'google' },
+        p_meta: { query: keyword, location, radius, results_count: leads.length, cached: false, source: 'google', expanded },
       });
     } catch (trackingErr) {
       console.error('Usage tracking failed (non-blocking):', trackingErr);
@@ -635,6 +811,7 @@ serve(async (req) => {
       searchId: crypto.randomUUID(),
       source: 'google',
       cached: false,
+      expanded,
       _debug: { ...debug, ...selectionDebug },
     });
 

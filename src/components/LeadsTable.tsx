@@ -164,7 +164,12 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                 className="flex items-center justify-between py-2.5 px-3 rounded-md border border-border bg-background/80"
               >
                 <div className="flex-1 min-w-0 mr-2">
-                  <p className="font-medium text-sm truncate leading-tight">{lead.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="font-medium text-sm truncate leading-tight">{lead.name}</p>
+                    {lead.isExpanded && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
+                    )}
+                  </div>
                   <div className="mt-1"><StatusBadge status={lead.websiteStatus} compact /></div>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
@@ -236,7 +241,12 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   className="border-border hover:bg-muted/30"
                 >
                   <TableCell className="font-medium">
-                    <span className="truncate block">{lead.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="truncate block">{lead.name}</span>
+                      {lead.isExpanded && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Tooltip>
