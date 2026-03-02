@@ -726,7 +726,7 @@ const Landing = () => {
           </div>
 
           <ScrollReveal className="w-full" delay={320} direction="up">
-            <div className="flex justify-center mt-10 sm:mt-14">
+            <div className="flex flex-col items-center justify-center mt-10 sm:mt-14">
               <a
                 href="/auth"
                 className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-sm sm:text-base transition-all duration-300 hover:scale-[1.04] active:scale-[0.98]"
