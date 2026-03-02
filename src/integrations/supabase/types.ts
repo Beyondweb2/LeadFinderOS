@@ -822,6 +822,7 @@ export type Database = {
           ref_source: string | null
           searches_today: number
           searches_used: number
+          setup_completed: boolean
           trial_days: number
           trial_end_date: string
           trial_started_at: string
@@ -850,6 +851,7 @@ export type Database = {
           ref_source?: string | null
           searches_today?: number
           searches_used?: number
+          setup_completed?: boolean
           trial_days?: number
           trial_end_date: string
           trial_started_at?: string
@@ -878,6 +880,7 @@ export type Database = {
           ref_source?: string | null
           searches_today?: number
           searches_used?: number
+          setup_completed?: boolean
           trial_days?: number
           trial_end_date?: string
           trial_started_at?: string
