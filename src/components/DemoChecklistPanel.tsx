@@ -127,7 +127,7 @@ export function DemoChecklistPanel() {
 
             {/* Headline */}
             <h3 className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4 text-foreground">
-              Momentum creates <span className="text-primary">clients</span>. Don't stop now.
+              More Outreach. More <span className="text-primary">Clients</span>.
             </h3>
 
             {/* Supporting text */}
