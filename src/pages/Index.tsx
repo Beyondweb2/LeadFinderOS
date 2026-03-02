@@ -94,6 +94,8 @@ const Index = () => {
   // Persisted search count and blur state
   const [localSearchCount, setLocalSearchCount] = useState(() => getPersistedSearchCount(user?.id));
   const [buttonExhausted, setButtonExhausted] = useState(() => isBlurPersisted(user?.id));
+  // CTA swap only after results have loaded with blur
+  const [ctaSwapped, setCtaSwapped] = useState(() => isBlurPersisted(user?.id));
   
   // Determine if still loading access status
   const isAccessLoading = isTrialLoading || isSubscriptionLoading;
@@ -107,6 +109,7 @@ const Index = () => {
     const blur = isBlurPersisted(user?.id);
     setLocalSearchCount(count);
     setButtonExhausted(blur);
+    setCtaSwapped(blur);
   }, [user?.id]);
 
   // Initialize search count based on walkthrough completion — only if the user
@@ -123,6 +126,7 @@ const Index = () => {
   useEffect(() => {
     if (hasProAccess) {
       setButtonExhausted(false);
+      setCtaSwapped(false);
       persistBlur(false, user?.id);
       // Reset walkthrough so it shows again after subscribing
       if (user?.id) {
@@ -157,8 +161,9 @@ const Index = () => {
         // Track cumulative businesses found
         setTotalBusinessesFound(prev => prev + leads.length);
 
-        // On 2nd+ search, show paywall after results load
+        // Swap CTA and show paywall after results load with blur
         if (buttonExhausted) {
+          setCtaSwapped(true);
           setTimeout(() => setShowUpgradeAfterLimit(true), 100);
         }
       }
@@ -271,7 +276,7 @@ const Index = () => {
           disabled={postAbandonExhausted && !hasProAccess}
           isUpgradeLoading={isCheckoutLoading}
           onUpgrade={handleUnlockClick}
-          freeSearchesExhausted={buttonExhausted && isFreeUser}
+          freeSearchesExhausted={ctaSwapped && isFreeUser}
         />
       </section>
 
@@ -332,27 +337,29 @@ const Index = () => {
 
       {/* Results Section */}
       {leads.length > 0 && (
-        <section data-walkthrough="results-header" className={`relative ${buttonExhausted && isFreeUser ? 'select-none' : ''}`}>
-          {/* Blur overlay for paywall teaser */}
-          {buttonExhausted && isFreeUser && (
-            <div className="absolute inset-0 z-10 backdrop-blur-md bg-background/30 rounded-lg flex items-center justify-center">
-              <div className="flex flex-col items-center gap-3 text-center px-4">
-                <Lock className="h-8 w-8 text-primary" />
-                <p className="text-sm font-semibold text-foreground">Start your free trial to unlock these leads</p>
-                <Button size="sm" onClick={() => setShowUpgradeAfterLimit(true)} className="gap-2">
-                  <Sparkles className="h-4 w-4" /> Unlock Access
-                </Button>
+        <section data-walkthrough="results-header">
+          <div className={`relative ${buttonExhausted && isFreeUser ? 'select-none' : ''}`}>
+            {/* Blur overlay — only covers the table, not the header info */}
+            {buttonExhausted && isFreeUser && (
+              <div className="absolute inset-0 z-10 backdrop-blur-md bg-background/30 rounded-lg flex items-center justify-center">
+                <div className="flex flex-col items-center gap-3 text-center px-4">
+                  <Lock className="h-8 w-8 text-primary" />
+                  <p className="text-sm font-semibold text-foreground">Start your free trial to unlock these leads</p>
+                  <Button size="sm" onClick={() => setShowUpgradeAfterLimit(true)} className="gap-2">
+                    <Sparkles className="h-4 w-4" /> Unlock Access
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
-          <LeadsTable 
-            leads={leads} 
-            onExport={exportToCsv}
-            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
-            isInOutreach={isInOutreach}
-            onMapLinkClick={markAsChecked}
-            isChecked={isChecked}
-          />
+            )}
+            <LeadsTable 
+              leads={leads} 
+              onExport={exportToCsv}
+              onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
+              isInOutreach={isInOutreach}
+              onMapLinkClick={markAsChecked}
+              isChecked={isChecked}
+            />
+          </div>
         </section>
       )}
 
