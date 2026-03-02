@@ -552,7 +552,7 @@ const Landing = () => {
                 </Button>
               </div>
               <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
-                No card required · Instant access · Cancel anytime
+                5-day free trial · £0 today · Cancel anytime
               </p>
             </div>
 
@@ -992,13 +992,13 @@ const Landing = () => {
                 asChild
               >
                 <Link to="/auth?intent=upgrade">
-                  Start free access
+                  Start Free Trial — £0 Today
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                 </Link>
               </Button>
 
               <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
-                No card required · Full access instantly · Cancel anytime
+                5-day free trial · £0 today · Cancel anytime
               </p>
             </div>
           </ScrollReveal>
