@@ -188,7 +188,7 @@ const Subscribe = () => {
                   </>
                 ) : (
                   <>
-                    Start Free Trial — £0 Today
+                    Start Free Trial
                     <span className="ml-2">→</span>
                   </>
                 )}
