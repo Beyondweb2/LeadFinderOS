@@ -62,13 +62,14 @@ import { cn } from '@/lib/utils';
 /* ───────── constants ───────── */
 
 const DEFAULT_POTENTIAL_WORK_STATUSES: { value: string; label: string }[] = [
-  { value: 'qualified', label: 'Qualified' },
-  { value: 'discovery_call_booked', label: 'Discovery Call Booked' },
-  { value: 'proposal_sent', label: 'Proposal Sent' },
-  { value: 'reviewing_proposal', label: 'Reviewing Proposal' },
-  { value: 'revision_requested', label: 'Revision Requested' },
-  { value: 'paid', label: 'Paid' },
-  { value: 'closed_lost', label: 'Closed – Lost' },
+  { value: 'qualified', label: 'Call Booked' },
+  { value: 'discovery_call_booked', label: 'Sent Quote' },
+  { value: 'proposal_sent', label: 'Sent Draft' },
+  { value: 'reviewing_proposal', label: 'Waiting for Feedback' },
+  { value: 'revision_requested', label: 'Changes Requested' },
+  { value: 'paid', label: 'Invoice Sent' },
+  { value: 'payment_received', label: 'Payment Received' },
+  { value: 'closed_lost', label: 'Not Going Ahead' },
 ];
 
 /* Map legacy DB statuses → new pipeline statuses */
@@ -90,15 +91,14 @@ const CUSTOM_STATUSES_KEY_PREFIX = 'leadfinder_custom_statuses_';
 /* Track Leads pipeline actions — mapped to DB enum values */
 const TRACK_NEXT_ACTION_OPTIONS: { value: string; label: string; dbValue: NextActionType }[] = [
   { value: 'none', label: 'None', dbValue: 'none' },
-  { value: 'schedule_discovery', label: 'Schedule Discovery Call', dbValue: 'call' },
-  { value: 'prepare_proposal', label: 'Prepare Proposal', dbValue: 'send_draft' },
-  { value: 'send_proposal', label: 'Send Proposal', dbValue: 'send_draft' },
-  { value: 'follow_up_proposal', label: 'Follow Up on Proposal', dbValue: 'follow_up' },
-  { value: 'send_revision', label: 'Send Revision', dbValue: 'send_follow_up' },
-  { value: 'collect_payment', label: 'Collect Payment', dbValue: 'follow_up' },
-  { value: 'start_project', label: 'Start Project', dbValue: 'follow_up' },
+  { value: 'follow_up_proposal', label: 'Follow Up', dbValue: 'follow_up' },
+  { value: 'send_proposal', label: 'Send Quote', dbValue: 'send_draft' },
+  { value: 'prepare_proposal', label: 'Send Draft', dbValue: 'send_draft' },
+  { value: 'send_revision', label: 'Send Updated Draft', dbValue: 'send_follow_up' },
+  { value: 'schedule_discovery', label: 'Book Call', dbValue: 'call' },
+  { value: 'collect_payment', label: 'Send Invoice', dbValue: 'follow_up' },
   { value: 'check_in', label: 'Check In', dbValue: 'follow_up' },
-  { value: 'close_lost', label: 'Close – Lost', dbValue: 'remove_if_no_reply' },
+  { value: 'start_project', label: 'Start Work', dbValue: 'follow_up' },
 ];
 
 /* Map legacy DB actions → new Track page action keys */
@@ -135,7 +135,6 @@ const NEXT_ACTION_COLORS: Record<string, string> = {
   collect_payment: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
   start_project: 'bg-green-500/20 text-green-400 border-green-500/40',
   check_in: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40',
-  close_lost: 'bg-zinc-500/20 text-zinc-400 border-zinc-500/40',
   // Legacy fallbacks
   call: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
   follow_up: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
@@ -150,6 +149,7 @@ const STATUS_COLORS: Record<string, string> = {
   reviewing_proposal: 'bg-sky-500/20 text-sky-400 border-sky-500/40',
   revision_requested: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
   paid: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+  payment_received: 'bg-green-500/20 text-green-400 border-green-500/40',
   closed_lost: 'bg-zinc-500/20 text-zinc-400 border-zinc-500/40',
   // Legacy fallbacks
   interested: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
