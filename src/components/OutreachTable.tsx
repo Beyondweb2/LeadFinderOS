@@ -1114,7 +1114,7 @@ export function OutreachTable({
                         </>
                       )}
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1.5" data-walkthrough={lead.outreach_attempts === 0 ? 'contact' : undefined} data-lead-contacted={lead.outreach_attempts > 0 ? 'true' : undefined}>
                           {lead.google_maps_url && (
                             <a
                               href={lead.google_maps_url}
@@ -1174,7 +1174,6 @@ export function OutreachTable({
                                     onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'sms' } })); handleSMSClick(lead); }}
                                     className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-colors"
                                     title="Send SMS"
-                                    data-walkthrough="contact"
                                   >
                                     <MessageCircle className="h-4 w-4" />
                                   </button>
@@ -1182,8 +1181,6 @@ export function OutreachTable({
                                     onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'whatsapp' } })); handleWhatsAppClick(lead); }}
                                     className="p-1.5 rounded-md hover:bg-green-500/10 text-green-500 hover:text-green-400 transition-colors"
                                     title="Send WhatsApp message"
-                                    data-walkthrough-step="contact"
-                                    data-walkthrough="contact"
                                   >
                                     <MessageSquare className="h-4 w-4" />
                                   </button>
