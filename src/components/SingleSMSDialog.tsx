@@ -18,25 +18,25 @@ import { TemplatePicker } from '@/components/TemplatePicker';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAutoRotateTemplate } from '@/hooks/useAutoRotateTemplate';
 import { AutoRotateToggle } from '@/components/AutoRotateToggle';
-import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
 
 interface SingleSMSDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   lead: { phone: string; business_name: string; id?: string; status?: string } | null;
+  /** Called when user clicks "Open SMS App" — signals a send happened (confirmation handled externally) */
+  onSent?: (leadId: string, channel: 'sms') => void;
 }
 
 const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
 const STORAGE_KEY = 'leadfinder_sms_template';
 
-export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogProps) {
+export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSDialogProps) {
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
   const [isModified, setIsModified] = useState(false);
   const [showTemplateNudge, setShowTemplateNudge] = useState(false);
   const [templatesOpened, setTemplatesOpened] = useState(false);
 
   const { autoOn, toggleAuto, getNextTemplate } = useAutoRotateTemplate();
-  const { logAttempt } = useOutreachAttempt();
 
   // Walkthrough awareness
   const { isDemoUser, state } = useDemoChecklist();
@@ -96,9 +96,9 @@ export function SingleSMSDialog({ open, onOpenChange, lead }: SingleSMSDialogPro
     window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     window.dispatchEvent(new CustomEvent('challenge-contact-sent', { detail: { leadId: lead.business_name } }));
 
-    // Log the outreach attempt
-    if (lead.id) {
-      await logAttempt(lead.id, 'sms', lead.status);
+    // Signal send happened — confirmation & logAttempt handled externally
+    if (lead.id && onSent) {
+      onSent(lead.id, 'sms');
     }
 
     onOpenChange(false);
