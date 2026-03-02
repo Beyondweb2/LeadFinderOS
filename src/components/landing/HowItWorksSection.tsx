@@ -44,7 +44,7 @@ const STEPS: StepData[] = [
     description: 'Instantly uncover businesses without websites so you\'re never pitching blind.',
     images: [step1Image],
     badge: '20+ Countries',
-    blueWord: 'You',
+    blueWord: 'Businesses',
   },
   {
     icon: ClipboardList,
@@ -68,7 +68,7 @@ const STEPS: StepData[] = [
     description: 'Track every lead from first message to paid client so your outreach turns into income.',
     images: [step4Image],
     badge: 'Full Pipeline',
-    blueWord: 'Deals',
+    blueWord: 'Close',
   },
 ];
 

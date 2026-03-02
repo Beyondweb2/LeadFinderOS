@@ -718,8 +718,7 @@ const Landing = () => {
                       style={{ color: 'hsl(210 100% 60%)' }}
                     >{step.num}.</span>
                     <h3 className="text-xl sm:text-2xl font-bold tracking-tight mb-2 sm:mb-3">
-                      {step.title.split(' ').slice(0, -1).join(' ')}{' '}
-                      <span className="text-gradient-primary">{step.title.split(' ').slice(-1)[0]}</span>
+                      {step.title}
                     </h3>
                     <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto">
                       {step.body}
@@ -757,8 +756,7 @@ const Landing = () => {
                       style={{ color: 'hsl(210 100% 60%)' }}
                     >{step.num}.</span>
                     <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
-                      {step.title.split(' ').slice(0, -1).join(' ')}{' '}
-                      <span className="text-gradient-primary">{step.title.split(' ').slice(-1)[0]}</span>
+                      {step.title}
                     </h3>
                     <p className="text-muted-foreground/70 text-base md:text-lg leading-[1.6]">
                       {step.body}
