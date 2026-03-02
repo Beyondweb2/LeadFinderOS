@@ -28,11 +28,11 @@ const BENEFITS = [
   'Find businesses without websites in seconds',
   'Open WhatsApp or SMS instantly with templates',
   'Track every contact and follow-up',
-  'No card required to start',
+  '5-day free trial · £0 today',
 ];
 
 const TRUST_POINTS = [
-  'No card required to create an account',
+  '5-day free trial with full access',
   'Upgrade only if you want unlimited access',
   'Cancel anytime',
   'Real human support via WhatsApp',
@@ -87,7 +87,7 @@ const Start = () => {
             </Link>
           </Button>
           <p className="text-xs text-muted-foreground/50 mt-3">
-            No card required · Full access · Takes 30 seconds
+            5-day free trial · £0 today · Cancel anytime
           </p>
         </div>
       </section>
@@ -211,7 +211,7 @@ const Start = () => {
             </Link>
           </Button>
           <p className="text-xs text-muted-foreground/50 mt-3">
-            No card required · Full access
+            5-day free trial · £0 today
           </p>
         </div>
       </section>
