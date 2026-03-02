@@ -127,12 +127,14 @@ export function DemoChecklistPanel() {
 
             {/* Headline */}
             <h3 className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4 text-foreground">
-              Keep the <span className="text-primary">pipeline</span> moving.
+              Momentum creates <span className="text-primary">clients</span>. Don't stop now.
             </h3>
 
             {/* Supporting text */}
-            <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5 space-y-0.5">
-              <p>Keep searching and sending messages to build momentum.</p>
+            <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5 space-y-1.5">
+              <p>You've started your outreach</p>
+              <p>Most freelancers stop after the first few messages</p>
+              <p>The ones who win keep stacking conversations</p>
             </div>
 
             {/* Stats highlight card — matches contact tips value card */}
@@ -154,8 +156,8 @@ export function DemoChecklistPanel() {
             </div>
 
             {/* Micro-pressure */}
-            <p className="text-center text-[11px] text-muted-foreground/50 mb-5">
-              Most people stop after the first message.
+            <p className="text-center text-[12px] text-primary/70 font-medium mb-5">
+              Consistency creates clients.
             </p>
 
             {/* CTA */}
@@ -163,7 +165,7 @@ export function DemoChecklistPanel() {
               onClick={handleCompletionDismiss}
               className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all"
             >
-              Find More Leads
+              Find My Next Client
               <ArrowRight className="h-4 w-4" />
             </button>
 
