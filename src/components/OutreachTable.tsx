@@ -65,6 +65,7 @@ import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
 import { SingleWhatsAppDialog } from './SingleWhatsAppDialog';
 import { SingleSMSDialog } from './SingleSMSDialog';
+import { PostSendConfirmDialog } from './PostSendConfirmDialog';
 import { CSVImportDialog } from './CSVImportDialog';
 import { OutreachMobileCard } from './OutreachMobileCard';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
@@ -142,6 +143,9 @@ export function OutreachTable({
   const { logAttempt } = useOutreachAttempt();
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
+  const [pendingSendConfirm, setPendingSendConfirm] = useState<{ leadId: string; channel: 'sms' | 'whatsapp'; businessName: string; status?: string } | null>(null);
+  const [showSendConfirm, setShowSendConfirm] = useState(false);
+  const sendConfirmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounced search handlers (200ms)
   const debouncedSearch = useDebouncedCallback((value: string) => {
@@ -259,14 +263,12 @@ export function OutreachTable({
   const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
     setWhatsAppLead({ phone: lead.phone || '', business_name: lead.business_name, id: lead.id, whatsapp_status: lead.whatsapp_status, status: lead.status });
-    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'whatsapp' } }));
   }, []);
 
   // Handle SMS button click
   const handleSMSClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
     setSmsLead({ phone: lead.phone || '', business_name: lead.business_name, id: lead.id, status: lead.status });
-    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: 'sms' } }));
   }, []);
 
   // Handle Call button click - highlight the lead and trigger CRM automation
@@ -278,6 +280,35 @@ export function OutreachTable({
     window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     window.dispatchEvent(new CustomEvent('challenge-contact-sent', { detail: { leadId: lead.business_name } }));
   }, [logAttempt]);
+
+  // Handle send signal from SMS/WhatsApp dialogs — delay 1s then show confirmation
+  const handleDialogSent = useCallback((leadId: string, channel: 'sms' | 'whatsapp') => {
+    const lead = leads.find(l => l.id === leadId);
+    setPendingSendConfirm({ leadId, channel, businessName: lead?.business_name || '', status: lead?.status });
+    // Clear any existing timer
+    if (sendConfirmTimerRef.current) clearTimeout(sendConfirmTimerRef.current);
+    sendConfirmTimerRef.current = setTimeout(() => {
+      setShowSendConfirm(true);
+    }, 1000);
+  }, [leads]);
+
+  // User confirmed message was sent
+  const handleSendConfirmed = useCallback(() => {
+    if (!pendingSendConfirm) return;
+    const { leadId, channel, status } = pendingSendConfirm;
+    // Log outreach attempt (updates status to Attempted if New)
+    logAttempt(leadId, channel, status);
+    // Set contact method
+    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId, method: channel === 'whatsapp' ? 'whatsapp' : 'sms' } }));
+    setShowSendConfirm(false);
+    setPendingSendConfirm(null);
+  }, [pendingSendConfirm, logAttempt]);
+
+  // User denied message was sent
+  const handleSendDenied = useCallback(() => {
+    setShowSendConfirm(false);
+    setPendingSendConfirm(null);
+  }, []);
 
   // Count leads missing phone numbers
   const leadsWithMissingPhones = useMemo(() => {
@@ -1284,13 +1315,12 @@ export function OutreachTable({
         open={!!whatsAppLead}
         onOpenChange={(open) => {
           if (!open) {
-            const lid = whatsAppLead?.business_name && leads.find(l => l.business_name === whatsAppLead.business_name)?.id;
             setWhatsAppLead(null);
             window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
-            if (lid) window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lid, method: 'whatsapp' } }));
           }
         }}
         lead={whatsAppLead}
+        onSent={handleDialogSent}
       />
 
       {/* SMS Dialog */}
@@ -1298,14 +1328,24 @@ export function OutreachTable({
         open={!!smsLead}
         onOpenChange={(open) => {
           if (!open) {
-            const lid = smsLead?.business_name && leads.find(l => l.business_name === smsLead.business_name)?.id;
             setSmsLead(null);
             window.dispatchEvent(new CustomEvent('post-contact-modal-trigger'));
-            if (lid) window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lid, method: 'sms' } }));
           }
         }}
         lead={smsLead}
+        onSent={handleDialogSent}
       />
+
+      {/* Post-send confirmation dialog */}
+      {pendingSendConfirm && (
+        <PostSendConfirmDialog
+          open={showSendConfirm}
+          onConfirm={handleSendConfirmed}
+          onDeny={handleSendDenied}
+          channel={pendingSendConfirm.channel}
+          businessName={pendingSendConfirm.businessName}
+        />
+      )}
 
       {/* CSV Import Dialog */}
       {onImportLeads && (

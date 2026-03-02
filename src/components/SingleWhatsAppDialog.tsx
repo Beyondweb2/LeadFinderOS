@@ -19,18 +19,19 @@ import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAutoRotateTemplate } from '@/hooks/useAutoRotateTemplate';
 import { AutoRotateToggle } from '@/components/AutoRotateToggle';
 import { useToast } from '@/hooks/use-toast';
-import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
 
 interface SingleWhatsAppDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   lead: { phone: string; business_name: string; id?: string; whatsapp_status?: string | null; status?: string } | null;
+  /** Called when user clicks "Open WhatsApp" — signals a send happened (confirmation handled externally) */
+  onSent?: (leadId: string, channel: 'whatsapp') => void;
 }
 
 const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
 const STORAGE_KEY = 'leadfinder_whatsapp_template';
 
-export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAppDialogProps) {
+export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: SingleWhatsAppDialogProps) {
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
   const [isModified, setIsModified] = useState(false);
   const [showTemplateNudge, setShowTemplateNudge] = useState(false);
@@ -39,7 +40,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
 
   const { autoOn, toggleAuto, getNextTemplate } = useAutoRotateTemplate();
   const { toast } = useToast();
-  const { logAttempt } = useOutreachAttempt();
 
   // Walkthrough awareness
   const { isDemoUser, state } = useDemoChecklist();
@@ -121,9 +121,9 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead }: SingleWhatsAp
     window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     window.dispatchEvent(new CustomEvent('challenge-contact-sent', { detail: { leadId: lead.business_name } }));
 
-    // Log the outreach attempt
-    if (lead.id) {
-      await logAttempt(lead.id, 'whatsapp', lead.status);
+    // Signal send happened — confirmation & logAttempt handled externally
+    if (lead.id && onSent) {
+      onSent(lead.id, 'whatsapp');
     }
 
     onOpenChange(false);
