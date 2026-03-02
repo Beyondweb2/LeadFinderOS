@@ -1167,7 +1167,7 @@ const PotentialWorkPage = () => {
       {potentialWorkLeads.length === 0 ? (
         <Card className="border-border/50">
           <div className="py-10 text-center text-muted-foreground text-sm">
-            No tracked leads yet. Click "Track" in the Outreach CRM to see them here.
+            No tracked leads yet. Click "Track" in Outreach to see them here.
           </div>
         </Card>
       ) : (

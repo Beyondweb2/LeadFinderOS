@@ -51,7 +51,7 @@ export function OutreachProgressSummary({
 
   const stats = [
     { label: 'Businesses Found', value: businessesFound, icon: Search },
-    { label: 'Added to CRM', value: addedToCrm, icon: Users },
+    { label: 'Added to Outreach', value: addedToCrm, icon: Users },
     { label: 'Messages Sent', value: messagesSent, icon: MessageSquare },
     { label: 'Leads Tracked', value: leadsTracked, icon: Star },
   ];

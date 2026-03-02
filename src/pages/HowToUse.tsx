@@ -44,7 +44,7 @@ const STEPS = [
     number: 3,
     icon: MessageSquare,
     title: 'Reach Out & Track Progress',
-    description: 'In the Outreach CRM, tap the WhatsApp button to message a lead. If they don\'t have WhatsApp, an SMS button appears instead. Mark leads as "Contacted" after reaching out, then click "Track" when someone shows interest.',
+    description: 'In Outreach, tap the WhatsApp button to message a lead. If they don\'t have WhatsApp, an SMS button appears instead. Mark leads as "Contacted" after reaching out, then click "Track" when someone shows interest.',
     image: step3Crm,
     tip: 'A direct phone call often gets the best response. Prepare a short pitch and keep it friendly.',
   },

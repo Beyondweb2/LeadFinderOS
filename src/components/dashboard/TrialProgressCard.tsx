@@ -80,7 +80,7 @@ export function TrialProgressCard({
 
   const stats = [
     { label: 'No website', value: noWebsiteBusinesses, icon: Target, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    { label: 'In CRM', value: addedToCRM, icon: Users, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    { label: 'In Outreach', value: addedToCRM, icon: Users, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
     { label: 'Msgs sent', value: messagesSent, icon: MessageSquare, color: 'text-purple-400', bg: 'bg-purple-500/10' },
     { label: 'Tracked', value: trackedCount, icon: Star, color: 'text-amber-400', bg: 'bg-amber-500/10' },
   ];

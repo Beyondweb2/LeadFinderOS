@@ -12,7 +12,7 @@ import appLogo from '@/assets/logo.png';
 
 const BENEFITS = [
   'Unlimited lead searches',
-  'Full CRM & tracking',
+  'Full outreach & tracking',
   'WhatsApp & SMS outreach',
   'Export & templates',
 ];

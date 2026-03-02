@@ -27,7 +27,7 @@ export function OutreachCard({
       <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
         <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
           <Database className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500" />
-          <span className="truncate">Outreach CRM</span>
+          <span className="truncate">Outreach</span>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 sm:space-y-4 p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">

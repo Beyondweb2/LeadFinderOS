@@ -20,7 +20,7 @@ interface UpgradePromptDialogProps {
 
 const BENEFITS = [
   'Unlimited lead searches',
-  'Full Outreach CRM access',
+  'Full Outreach access',
   'Contact tracking & notes',
   'Email & call templates',
 ];

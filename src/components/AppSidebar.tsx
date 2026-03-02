@@ -36,7 +36,7 @@ import appLogo from '@/assets/logo.png';
 const navItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard, description: 'Overview & today\'s tasks' },
   { title: 'Find Leads', url: '/find-leads', icon: Search, description: 'Search for businesses' },
-  { title: 'Outreach CRM', url: '/outreach', icon: ClipboardList, description: 'Cold call & gather numbers' },
+  { title: 'Outreach', url: '/outreach', icon: ClipboardList, description: 'Cold call & gather numbers' },
   { title: 'Track Leads', url: '/potential-work', icon: Briefcase, description: 'Leads who want to work' },
   { title: 'Paid Clients', url: '/paid-clients', icon: DollarSign, description: 'Completed payments' },
   { title: 'Templates', url: '/templates', icon: FileText, description: 'Text & voice scripts' },

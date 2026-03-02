@@ -21,12 +21,17 @@ export function useContactAction({ onUpdate, onPersisted }: UseContactActionOpti
 
     const previousStatus = lead.status;
 
-    // Update contact_method only (not status)
+    // Update contact_method and status locally
+    const protectedStatuses = ['replied', 'interested', 'not_interested', 'completed'];
     const updates: Record<string, any> = {
       contact_method: channel === 'whatsapp' ? 'whatsapp' : channel === 'sms' ? 'sms' : 'call',
       outreach_attempts: (lead.outreach_attempts || 0) + 1,
       last_outreach_attempt_at: new Date().toISOString(),
     };
+    // Auto-set status to Attempted (waiting) for new leads
+    if (!previousStatus || previousStatus === 'not_contacted') {
+      updates.status = 'waiting';
+    }
     onUpdate(lead.id, updates);
 
     // Fire walkthrough / checklist events
@@ -44,7 +49,7 @@ export function useContactAction({ onUpdate, onPersisted }: UseContactActionOpti
 
     // Persist to DB immediately
     logAttempt(lead.id, channel, previousStatus);
-    window.dispatchEvent(new CustomEvent('crm-contact-action', { detail: { leadId: lead.id, method: channel } }));
+    // DB persistence handled by logAttempt (includes contact_method + status)
 
     onPersisted(lead.id, channel);
   }, [onUpdate, onPersisted, logAttempt]);

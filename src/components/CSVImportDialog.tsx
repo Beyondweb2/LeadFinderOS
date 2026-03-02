@@ -108,7 +108,7 @@ export function CSVImportDialog({ open, onOpenChange, onImport, existingLeads }:
             Import Leads from CSV
           </DialogTitle>
           <DialogDescription>
-            Upload a CSV file to import leads into your CRM.
+            Upload a CSV file to import leads into your Outreach.
           </DialogDescription>
         </DialogHeader>
 

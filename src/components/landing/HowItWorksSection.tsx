@@ -57,11 +57,11 @@ const STEPS: StepData[] = [
   },
   {
     icon: ClipboardList,
-    title: 'Add to CRM in One Click',
+    title: 'Add to Outreach in One Click',
     description: 'Save good leads instantly so nothing gets lost and every follow-up has a place.',
     images: [step2Image],
     badge: 'Instant Save',
-    blueWord: 'CRM',
+    blueWord: 'Outreach',
   },
   {
     icon: BarChart3,
