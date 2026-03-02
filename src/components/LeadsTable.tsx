@@ -48,9 +48,10 @@ interface LeadsTableProps {
   isInOutreach?: (leadName: string, googleMapsUrl?: string) => boolean;
   onMapLinkClick?: (businessName: string, googleMapsUrl?: string) => void;
   isChecked?: (businessName: string, googleMapsUrl?: string) => boolean;
+  blurred?: boolean;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false }: LeadsTableProps) {
   const { state, isDemoUser } = useDemoChecklist();
   const shouldPulseCrm = isDemoUser && !state.addedToCrm;
   const handleAddToOutreach = useCallback((lead: Lead) => {
@@ -152,7 +153,10 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         </div>
       </CardHeader>
 
-      <CardContent className="p-3 md:p-6">
+      <CardContent className={`p-3 md:p-6 ${blurred ? 'relative select-none' : ''}`}>
+        {blurred && (
+          <div className="absolute inset-0 z-10 backdrop-blur-md bg-background/30 rounded-b-lg" />
+        )}
         {/* Mobile View */}
         <div className="md:hidden space-y-1.5">
           {paginatedLeads.length === 0 ? (
