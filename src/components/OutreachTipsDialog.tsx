@@ -20,7 +20,7 @@ const ctaConfig: Record<string, { label: string; icon: React.ReactNode }> = {
 export function OutreachTipsDialog() {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [dontShowAgain, setDontShowAgain] = useState(false);
+  
   const [contactMethod, setContactMethod] = useState<ContactMethod>(null);
 
   const storageKey = user?.id ? `outreach_tips_dismissed_${user.id}` : null;
@@ -64,7 +64,7 @@ export function OutreachTipsDialog() {
 
   const handleClose = (skipped = false) => {
     setOpen(false);
-    if (dontShowAgain && storageKey) {
+    if (storageKey) {
       localStorage.setItem(storageKey, 'true');
     }
     if (skipped) {
@@ -139,18 +139,8 @@ export function OutreachTipsDialog() {
             {cta.label}
           </button>
 
-          {/* Don't show again */}
-          <div className="flex items-center justify-center gap-1.5 mt-3">
-            <Checkbox
-              id="dont-show-again"
-              checked={dontShowAgain}
-              onCheckedChange={(checked) => setDontShowAgain(checked === true)}
-              className="h-3 w-3"
-            />
-            <label htmlFor="dont-show-again" className="text-[10px] text-muted-foreground/60 cursor-pointer">
-              Don't show this again
-            </label>
-          </div>
+
+
         </div>
       </DialogContent>
     </Dialog>
