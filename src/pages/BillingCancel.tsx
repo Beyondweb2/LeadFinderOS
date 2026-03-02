@@ -38,7 +38,7 @@ const BillingCancel = () => {
           <div className="text-center">
             <h2 className="text-xl font-semibold mb-2">Checkout Cancelled</h2>
             <p className="text-muted-foreground mb-6">
-              No worries! Your card was not charged. You can try again or go back to explore the app.
+              No worries! Your card was not charged. You can try again whenever you're ready.
             </p>
             <div className="flex flex-col gap-2">
               <Button onClick={handleTryAgain} disabled={isLoading}>
@@ -54,9 +54,9 @@ const BillingCancel = () => {
                   </>
                 )}
               </Button>
-              <Button variant="ghost" onClick={() => navigate('/')}>
+              <Button variant="ghost" onClick={() => navigate('/landing', { replace: true })}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to App
+                Go Back
               </Button>
             </div>
           </div>
