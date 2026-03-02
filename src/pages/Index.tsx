@@ -154,7 +154,7 @@ const Index = () => {
   }, [freeSearchExhausted, isAccessLoading, isFreeUser]);
 
   // Count businesses without websites
-  const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
+  const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
   // "Unlock Unlimited" button on search form now opens the modal instead of going to Stripe directly
   const handleUnlockClick = useCallback(() => {
