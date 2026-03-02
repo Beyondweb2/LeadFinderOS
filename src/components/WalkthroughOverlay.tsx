@@ -151,7 +151,7 @@ export function WalkthroughOverlay() {
       setActiveStep(null);
       return;
     }
-    const next = getActiveStep(state, location.pathname);
+    const next = getActiveStep(state, location.pathname, t);
     setActiveStep(next);
 
     if (next) {
