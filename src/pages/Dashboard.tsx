@@ -91,7 +91,7 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="space-y-5 sm:space-y-7">
       {/* Page Header */}
       <div className="text-center sm:text-left">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
@@ -102,19 +102,6 @@ const Dashboard = () => {
           }
         </p>
       </div>
-
-      {/* Trial Progress Card - Only for Stripe trialing users */}
-      {showTrialProgress && (
-        <section>
-          <TrialProgressCard
-            trialEnd={trialEnd}
-            noWebsiteBusinesses={metrics.noWebsiteBusinesses}
-            addedToCRM={metrics.totalBusinessesAdded}
-            searchesToday={metrics.activity.activitiesToday}
-            totalLeadsAdded={metrics.totalBusinessesAdded}
-          />
-        </section>
-      )}
 
       {/* Primary Metrics - Revenue & Conversion */}
       <section>
@@ -143,6 +130,19 @@ const Dashboard = () => {
           <NextActionsCard trackedLeads={metrics.trackedLeads} />
         </div>
       </section>
+
+      {/* Trial Progress Card - Below performance, only for Stripe trialing users */}
+      {showTrialProgress && (
+        <section>
+          <TrialProgressCard
+            trialEnd={trialEnd}
+            noWebsiteBusinesses={metrics.noWebsiteBusinesses}
+            addedToCRM={metrics.totalBusinessesAdded}
+            searchesToday={metrics.activity.activitiesToday}
+            totalLeadsAdded={metrics.totalBusinessesAdded}
+          />
+        </section>
+      )}
 
       {/* Quick Links */}
       <section>
