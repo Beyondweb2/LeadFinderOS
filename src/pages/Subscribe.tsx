@@ -4,14 +4,15 @@ import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Check, Loader2, ArrowLeft, Shield, Clock } from 'lucide-react';
+import { Check, Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import logoIcon from '@/assets/leadfinder-logo-icon.png';
 
 const TRIAL_FEATURES = [
   'Unlimited lead searches',
-  'Stay organised as you reach out',
-  'Turn outreach into paying clients',
+  'Add leads to your pipeline in one click',
+  'Message instantly via WhatsApp or SMS',
+  'Track every contact and follow-up',
 ];
 
 const Subscribe = () => {
@@ -100,30 +101,29 @@ const Subscribe = () => {
           Back to app
         </Button>
 
-        <div className="bg-[hsl(220_50%_5%)] border border-border/40 rounded-xl overflow-hidden p-5 sm:p-7 space-y-4">
+        <div className="bg-[hsl(220_50%_5%)] border border-border/40 rounded-2xl overflow-hidden px-6 py-7 sm:px-8 sm:py-8 space-y-5">
+          {/* Green pill */}
+          <div className="flex justify-center">
+            <span className="inline-flex items-center rounded-full bg-emerald-500/10 border border-emerald-500/20 px-3 py-0.5 text-[11px] font-semibold tracking-widest uppercase text-emerald-400 shadow-[0_0_12px_hsl(142_76%_45%/0.15)]">
+              Free Trial
+            </span>
+          </div>
+
           {/* Brand header */}
-          <div className="flex items-center justify-center gap-2">
-            <img src={logoIcon} alt="" className="h-5 w-5" />
-            <p className="text-sm font-semibold tracking-wide">
+          <div className="flex items-center justify-center gap-2.5">
+            <img src={logoIcon} alt="" className="h-7 w-7" />
+            <p className="text-xl font-bold tracking-tight">
               Lead<span className="text-primary">Finder</span> Pro
             </p>
           </div>
 
-          {/* Headline + sub */}
-          <div className="text-center space-y-1.5">
-            <h1 className="text-2xl font-bold tracking-tight">
-              Start your 5-day <span className="text-primary">free trial</span>
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              £0 today · Full access · Cancel anytime
-            </p>
-            <p className="text-sm text-muted-foreground/70">
-              Find your next client today.
-            </p>
-          </div>
+          {/* Description */}
+          <p className="text-center text-sm text-muted-foreground">
+            Everything you need to find and close your next client.
+          </p>
 
           {/* Benefits */}
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             {TRIAL_FEATURES.map((feature) => (
               <div key={feature} className="flex items-center gap-3">
                 <div className="flex-shrink-0 h-5 w-5 rounded-full bg-emerald-500/15 flex items-center justify-center">
@@ -134,8 +134,8 @@ const Subscribe = () => {
             ))}
           </div>
 
-          {/* Pricing */}
-          <div className="rounded-lg bg-muted/50 border border-border/40 px-4 py-3 text-center space-y-0.5">
+          {/* Pricing — no box */}
+          <div className="text-center space-y-0.5 pt-1">
             <p className="text-xs text-muted-foreground">After 5 days</p>
             <p className="text-2xl font-bold">£19.99<span className="text-sm font-normal text-muted-foreground">/month</span></p>
             <p className="text-xs text-muted-foreground">Cancel anytime from your account</p>
@@ -179,21 +179,14 @@ const Subscribe = () => {
                     Starting...
                   </>
                 ) : (
-                  'Start Free Trial — £0 Today'
+                  'Start Free Trial — £0 Today →'
                 )}
               </Button>
 
-              {/* Micro trust */}
-              <div className="flex flex-col items-center gap-1.5 pt-1">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Shield className="h-3 w-3" />
-                  <span>Secure payment via Stripe</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Clock className="h-3 w-3" />
-                  <span>Reminder before billing</span>
-                </div>
-              </div>
+              {/* Micro trust — single line */}
+              <p className="text-center text-[11px] text-muted-foreground">
+                Secure payment via Stripe · Reminder before billing
+              </p>
             </div>
           )}
         </div>
