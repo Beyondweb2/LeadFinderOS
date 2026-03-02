@@ -242,7 +242,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                 ) : null}
               </div>
               {/* Row 2: SMS, WhatsApp, Track */}
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-0.5" data-walkthrough={lead.outreach_attempts === 0 ? 'contact' : undefined}>
                 {hasPhone ? (
                   <>
                     <Button
@@ -250,7 +250,6 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                       size="icon"
                       className="h-7 w-7 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10"
                       onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'sms' } })); onSMSClick?.(); }}
-                      data-walkthrough="contact"
                     >
                       <MessageCircle className="h-3.5 w-3.5" />
                     </Button>
@@ -259,7 +258,6 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                       size="icon"
                       className="h-7 w-7 text-green-500 hover:text-green-400 hover:bg-green-500/10"
                       onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'whatsapp' } })); onWhatsAppClick?.(); }}
-                      data-walkthrough="contact"
                     >
                       <MessageSquare className="h-3.5 w-3.5" />
                     </Button>
