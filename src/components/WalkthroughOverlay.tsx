@@ -85,7 +85,7 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
 
   // Step 8 – Update pipeline status
   if (!state.trackStatusSet) {
-    return { step: 8, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the pipeline status for this lead.', noDim: true };
+    return { step: 8, selector: '[data-walkthrough-step="track-status-select"]', tooltip: 'Update the status for this lead.', noDim: true };
   }
 
   // Step 9 – Set a next action
