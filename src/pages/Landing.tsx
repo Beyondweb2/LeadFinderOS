@@ -83,15 +83,18 @@ const ScrollReveal = ({
   );
 };
 
+// Smooth scroll to pricing card
+const scrollToPricing = () => {
+  document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
+};
+
 // Inline CTA band — desktop only, inserted between sections
 const InlineCTA = ({ text = 'Ready to find your next client?' }: { text?: string }) => (
   <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
-    <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" asChild>
-      <Link to="/auth?intent=upgrade">
-        Try it free
-        <ArrowRight className="ml-2 h-4 w-4" />
-      </Link>
+    <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={scrollToPricing}>
+      Try it free
+      <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
   </div>
 );
@@ -484,13 +487,11 @@ const Landing = () => {
             <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm px-2 sm:px-4" asChild>
               <Link to="/auth">Sign In</Link>
             </Button>
-            <Button 
-              asChild 
+             <Button 
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
+              onClick={scrollToPricing}
             >
-              <Link to="/auth?intent=upgrade">
-                Try it free
-              </Link>
+              Try it free
             </Button>
           </div>
         </div>
@@ -534,12 +535,10 @@ const Landing = () => {
                 <Button 
                   size="lg" 
                   className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto sm:min-w-[280px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
-                  asChild
+                  onClick={scrollToPricing}
                 >
-                  <Link to="/auth?intent=upgrade">
-                    Try it free
-                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
-                  </Link>
+                  Try it free
+                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Button>
                 <Button 
                   variant="ghost" 
@@ -947,7 +946,7 @@ const Landing = () => {
       </ScrollReveal>
 
       {/* Final CTA — Free Access Card */}
-      <section className="relative z-10 pb-16 sm:pb-20 md:pb-24 px-4">
+      <section id="pricing" className="relative z-10 pb-16 sm:pb-20 md:pb-24 px-4">
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
             <div
@@ -962,7 +961,7 @@ const Landing = () => {
                 className="inline-block text-[11px] sm:text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full mb-5"
                 style={{ background: 'hsl(142 76% 45% / 0.12)', color: 'hsl(142 76% 55%)' }}
               >
-                Free Access
+                Free Trial
               </span>
 
               <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">Lead<span className="text-gradient-primary">Finder</span> Pro</h3>
@@ -999,6 +998,9 @@ const Landing = () => {
 
               <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
                 5-day free trial · £0 today · Cancel anytime
+              </p>
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 mt-1">
+                After trial · £19.99/month · Secure payment via Stripe
               </p>
             </div>
           </ScrollReveal>
@@ -1049,9 +1051,9 @@ const Landing = () => {
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
                 Sign In
               </Link>
-              <Link to="/auth?intent=upgrade" className="hover:text-foreground transition-colors duration-200">
+              <a href="#pricing" className="hover:text-foreground transition-colors duration-200">
                 Try it free
-              </Link>
+              </a>
               <Link to="/feedback" className="hover:text-foreground transition-colors duration-200">
                 Feedback
               </Link>
@@ -1085,14 +1087,12 @@ const Landing = () => {
           }`}
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
-          <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" asChild>
-            <Link to="/auth?intent=upgrade">
+          <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={scrollToPricing}>
               Try it free
               <ArrowRight className="ml-2 h-4 w-4" />
-            </Link>
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            No card required · Instant access · Cancel anytime
+            5-day free trial · £0 today · Cancel anytime
           </p>
         </div>
       )}
