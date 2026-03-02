@@ -62,14 +62,28 @@ import { cn } from '@/lib/utils';
 /* ───────── constants ───────── */
 
 const DEFAULT_POTENTIAL_WORK_STATUSES: { value: string; label: string }[] = [
-  { value: 'interested', label: 'Interested' },
-  { value: 'wants_draft', label: 'Wants a Draft' },
-  { value: 'on_hold', label: 'Waiting' },
-  { value: 'reviewing_draft', label: 'Reviewing Draft' },
-  { value: 'paid_for_draft', label: 'Paid for Draft' },
-  { value: 'not_interested', label: 'Not Interested' },
-  { value: 'completed', label: 'Completed → Paid Client' },
+  { value: 'qualified', label: 'Qualified' },
+  { value: 'discovery_call_booked', label: 'Discovery Call Booked' },
+  { value: 'proposal_sent', label: 'Proposal Sent' },
+  { value: 'reviewing_proposal', label: 'Reviewing Proposal' },
+  { value: 'revision_requested', label: 'Revision Requested' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'closed_lost', label: 'Closed – Lost' },
 ];
+
+/* Map legacy DB statuses → new pipeline statuses */
+const LEGACY_STATUS_MAP: Record<string, string> = {
+  interested: 'qualified',
+  paid_for_draft: 'paid',
+  reviewing_draft: 'reviewing_proposal',
+  completed: 'paid',
+  wants_draft: 'proposal_sent',
+  on_hold: 'qualified',
+};
+
+const PIPELINE_STAGES = DEFAULT_POTENTIAL_WORK_STATUSES.map(s => s.value);
+
+const mapLegacyStatus = (status: string): string => LEGACY_STATUS_MAP[status] || status;
 
 const CUSTOM_STATUSES_KEY = 'leadfinder_custom_statuses';
 
@@ -103,13 +117,16 @@ const NEXT_ACTION_COLORS: Record<string, string> = {
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  interested: 'bg-green-500/20 text-green-400 border-green-500/40',
-  wants_draft: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40',
-  on_hold: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
-  reviewing_draft: 'bg-sky-500/20 text-sky-400 border-sky-500/40',
-  paid_for_draft: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
-  not_interested: 'bg-red-500/20 text-red-400 border-red-500/40',
-  completed: 'bg-green-600/20 text-green-500 border-green-600/40',
+  qualified: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+  discovery_call_booked: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40',
+  proposal_sent: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+  reviewing_proposal: 'bg-sky-500/20 text-sky-400 border-sky-500/40',
+  revision_requested: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+  paid: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+  closed_lost: 'bg-zinc-500/20 text-zinc-400 border-zinc-500/40',
+  // Legacy fallbacks
+  interested: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+  not_interested: 'bg-zinc-500/20 text-zinc-400 border-zinc-500/40',
 };
 
 /* ───────── helpers ───────── */
@@ -141,8 +158,19 @@ const getDueLabel = (nextActionDate: string | null, nextAction: NextActionType |
 };
 
 const getStatusLabel = (status: string, customStatuses: { value: string; label: string }[]) => {
-  const found = [...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses].find(s => s.value === status);
+  const mapped = mapLegacyStatus(status);
+  const found = [...DEFAULT_POTENTIAL_WORK_STATUSES, ...customStatuses].find(s => s.value === mapped);
   return found?.label || status;
+};
+
+const getMappedStatusColor = (status: string): string => {
+  const mapped = mapLegacyStatus(status);
+  return STATUS_COLORS[mapped] || STATUS_COLORS[status] || 'bg-muted text-muted-foreground border-border/50';
+};
+
+const getStageIndex = (status: string): number => {
+  const mapped = mapLegacyStatus(status);
+  return PIPELINE_STAGES.indexOf(mapped);
 };
 
 const getNextActionLabel = (action: NextActionType | null, leadId: string) => {
@@ -312,7 +340,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const contactMethodDisplay = lead.contact_method ? CONTACT_METHOD_LABELS[lead.contact_method] || lead.contact_method : null;
   const nextActionLabel = getNextActionLabel(lead.next_action, lead.id);
   const statusLabel = getStatusLabel(lead.status, customStatuses);
-  const statusColorCls = STATUS_COLORS[lead.status] || 'bg-muted text-muted-foreground border-border/50';
+  const statusColorCls = getMappedStatusColor(lead.status);
   const actionColorCls = customLabel
     ? 'bg-teal-500/15 text-teal-400 border-teal-500/25'
     : NEXT_ACTION_COLORS[lead.next_action || 'none'] || NEXT_ACTION_COLORS.none;
@@ -371,6 +399,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               {/* Status pill + action + due */}
               <div className="flex items-center gap-1.5 flex-wrap" data-no-expand>
                 <span className={cn('inline-flex items-center h-5 lg:h-[22px] px-2 lg:px-2.5 rounded-full text-[10px] lg:text-[11px] font-bold border', statusColorCls)} data-walkthrough="status">
+                  {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-2.5 w-2.5 mr-0.5 text-emerald-400" />}
                   {statusLabel}
                 </span>
                 {nextActionLabel && (
@@ -540,7 +569,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             {/* Status selector */}
             <div className="flex items-center gap-2">
               <span className="text-[11px] text-muted-foreground w-12 shrink-0">Status</span>
-              <Select value={lead.status} onValueChange={(v) => {
+              <Select value={mapLegacyStatus(lead.status)} onValueChange={(v) => {
                 if (v === '__add_custom__') { onAddCustomStatus(); return; }
                 onStatusChange(lead.id, v as LeadStatus);
                 window.dispatchEvent(new CustomEvent('demo-checklist-track-status-changed'));
@@ -560,6 +589,33 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Pipeline stage tracker */}
+            {(() => {
+              const currentIdx = getStageIndex(lead.status);
+              const isPaid = mapLegacyStatus(lead.status) === 'paid';
+              const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
+              return (
+                <div className="flex items-center gap-0.5 px-0 py-1">
+                  {PIPELINE_STAGES.filter(s => s !== 'closed_lost').map((stage, idx) => {
+                    const isActive = idx === currentIdx;
+                    const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
+                    return (
+                      <div key={stage} className="flex items-center flex-1 gap-0.5">
+                        <div
+                          className={cn(
+                            'h-1.5 rounded-full flex-1 transition-colors',
+                            isCompleted || isActive
+                              ? isPaid ? 'bg-emerald-500' : 'bg-primary'
+                              : isLost ? 'bg-zinc-700' : 'bg-border/60'
+                          )}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* Next Action + Due Date */}
             <div className="flex items-center gap-2">
@@ -872,12 +928,12 @@ const PotentialWorkPage = () => {
   };
 
   const allPotentialLeads = useMemo(() => {
-    const interestedStatuses: LeadStatus[] = ['interested', 'wants_draft', 'on_hold', 'reviewing_draft', 'paid_for_draft'];
+    const pipelineStatuses = PIPELINE_STAGES;
     const allLeads = [...leads, ...archivedLeads];
-    let result = allLeads.filter((lead) => 
-      (lead.is_potential_work || interestedStatuses.includes(lead.status)) && 
-      lead.status !== 'completed'
-    );
+    let result = allLeads.filter((lead) => {
+      const mapped = mapLegacyStatus(lead.status);
+      return lead.is_potential_work || pipelineStatuses.includes(mapped) || lead.status === 'interested';
+    });
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
@@ -938,7 +994,7 @@ const PotentialWorkPage = () => {
           Track Leads
         </h1>
         <p className="text-xs text-muted-foreground">
-          Manage interested leads from first response to completed deal.
+          Manage your deal pipeline from first interest to closed deal.
         </p>
       </div>
 
