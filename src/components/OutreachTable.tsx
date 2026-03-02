@@ -68,6 +68,8 @@ import { CSVImportDialog } from './CSVImportDialog';
 import { OutreachMobileCard } from './OutreachMobileCard';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS } from '@/types/outreach';
+import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
+import { SingleSMSDialog } from '@/components/SingleSMSDialog';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -139,6 +141,9 @@ export function OutreachTable({
   const { logAttempt } = useOutreachAttempt();
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
+  // Dialog state for WhatsApp/SMS template pages
+  const [whatsappDialogLead, setWhatsappDialogLead] = useState<OutreachLead | null>(null);
+  const [smsDialogLead, setSmsDialogLead] = useState<OutreachLead | null>(null);
   // Optimistic UI state: leadId -> partial overrides
   const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, Record<string, any>>>(new Map());
 
@@ -310,7 +315,7 @@ export function OutreachTable({
     });
   }, [leads, optimisticUpdates]);
 
-  // Handle WhatsApp button click - direct open + toast
+  // Handle WhatsApp button click - open template dialog
   const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
     if (lead.whatsapp_status === 'no') {
       toast({
@@ -319,20 +324,26 @@ export function OutreachTable({
       });
       return;
     }
-    highlightLead(lead.id);
-    executeContact(lead, 'whatsapp');
-  }, [executeContact, toast]);
+    setWhatsappDialogLead(lead);
+  }, [toast]);
 
-  // Handle SMS button click - direct open + toast
+  // Handle SMS button click - open template dialog
   const handleSMSClick = useCallback((lead: OutreachLead) => {
-    highlightLead(lead.id);
-    executeContact(lead, 'sms');
-  }, [executeContact]);
+    setSmsDialogLead(lead);
+  }, []);
 
-  // Handle Call button click - direct open + toast
+  // Handle Call button click - direct open + toast (no template needed)
   const handleCallClick = useCallback((lead: OutreachLead) => {
     highlightLead(lead.id);
     executeContact(lead, 'call');
+  }, [executeContact]);
+
+  // Called when user clicks "Open App" in WhatsApp/SMS dialog
+  const handleDialogSent = useCallback((leadId: string, channel: 'whatsapp' | 'sms') => {
+    const lead = leadsRef.current.find(l => l.id === leadId);
+    if (!lead) return;
+    highlightLead(lead.id);
+    executeContact(lead, channel);
   }, [executeContact]);
 
   // Count leads missing phone numbers
@@ -1345,6 +1356,22 @@ export function OutreachTable({
           existingLeads={leads}
         />
       )}
+
+      {/* WhatsApp Template Dialog */}
+      <SingleWhatsAppDialog
+        open={!!whatsappDialogLead}
+        onOpenChange={(open) => { if (!open) setWhatsappDialogLead(null); }}
+        lead={whatsappDialogLead}
+        onSent={handleDialogSent}
+      />
+
+      {/* SMS Template Dialog */}
+      <SingleSMSDialog
+        open={!!smsDialogLead}
+        onOpenChange={(open) => { if (!open) setSmsDialogLead(null); }}
+        lead={smsDialogLead}
+        onSent={handleDialogSent}
+      />
     </Card>
   );
 }

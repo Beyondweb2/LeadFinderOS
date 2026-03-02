@@ -2,13 +2,9 @@ import { useCallback, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
-import { generateWhatsAppUrl, generateSMSUrl } from '@/lib/leadUtils';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead } from '@/types/outreach';
 
-const WHATSAPP_TEMPLATE_KEY = 'leadfinder_whatsapp_template';
-const SMS_TEMPLATE_KEY = 'leadfinder_sms_template';
-const DEFAULT_TEMPLATE = 'Hi, is this the right number for {{business_name}}?';
 const TOAST_DURATION = 4000;
 
 interface PendingContact {
@@ -37,39 +33,14 @@ export function useContactAction({
   const pendingRef = useRef<Map<string, PendingContact>>(new Map());
   const { logAttempt } = useOutreachAttempt();
 
-  const getTemplate = (channel: 'whatsapp' | 'sms') => {
-    const key = channel === 'whatsapp' ? WHATSAPP_TEMPLATE_KEY : SMS_TEMPLATE_KEY;
-    try {
-      return localStorage.getItem(key) || DEFAULT_TEMPLATE;
-    } catch {
-      return DEFAULT_TEMPLATE;
-    }
-  };
-
+  /** Call this AFTER the external app has been opened (e.g. from dialog's "Open App" CTA) */
   const executeContact = useCallback((lead: OutreachLead, channel: 'whatsapp' | 'sms' | 'call') => {
-    if (!lead.phone) return;
-
     // Prevent double-counting
     if (pendingRef.current.has(lead.id)) return;
 
     const previousStatus = lead.status;
 
-    // 1. Open the app immediately
-    if (channel === 'whatsapp') {
-      const template = getTemplate('whatsapp');
-      const message = template.replace(/\{\{business_name\}\}/g, lead.business_name);
-      const url = generateWhatsAppUrl(lead.phone, message);
-      window.open(url, '_blank');
-    } else if (channel === 'sms') {
-      const template = getTemplate('sms');
-      const message = template.replace(/\{\{business_name\}\}/g, lead.business_name);
-      const url = generateSMSUrl(lead.phone, message);
-      window.open(url, '_self');
-    } else {
-      // Call - already handled via tel: link, this is just for tracking
-    }
-
-    // 2. Optimistic UI update
+    // Optimistic UI update
     const optimisticUpdates: Record<string, any> = {};
     if (!previousStatus || previousStatus === 'not_contacted') {
       optimisticUpdates.status = 'waiting';
