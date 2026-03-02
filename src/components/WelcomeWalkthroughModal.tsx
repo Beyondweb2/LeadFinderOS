@@ -113,7 +113,7 @@ export function WelcomeWalkthroughModal() {
             onClick={() => dismiss(true)}
             className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all mb-3 outline-none focus:outline-none focus-visible:outline-none border-none ring-0 focus:ring-0 focus-visible:ring-0"
           >
-            Start Client Mission
+            Start Getting Clients
             <ArrowRight className="h-4 w-4" />
           </button>
 
