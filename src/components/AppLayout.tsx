@@ -17,6 +17,10 @@ import { usePersistedScroll } from '@/hooks/usePersistedScroll';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useChallenge10 } from '@/hooks/useChallenge10';
+import { UserMenu } from '@/components/UserMenu';
+import { AccentColorPicker } from '@/components/AccentColorPicker';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { useAvatar } from '@/hooks/useAvatar';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -24,6 +28,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { user } = useAuth();
+  const { avatarUrl } = useAvatar();
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const { isStripeTrialing, isLoading: isTrialLoading } = useTrial();
@@ -88,8 +93,20 @@ export function AppLayout({ children }: AppLayoutProps) {
           {/* Main content area */}
           <div className="flex-1 flex flex-col min-w-0 relative z-10">
             {/* Skip walkthrough link — top-right, outside modals */}
-            <div className="flex justify-end px-4 sm:px-6 lg:px-8 pt-2">
+            <div className="flex items-center justify-end gap-2 px-4 sm:px-6 lg:px-8 pt-2 pb-1">
               <SkipWalkthroughButton />
+              <div className="flex items-center gap-2">
+                <AccentColorPicker />
+                <Avatar className="h-8 w-8">
+                  {avatarUrl ? (
+                    <AvatarImage src={avatarUrl} alt="Profile" />
+                  ) : null}
+                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                    {user?.email?.charAt(0).toUpperCase() || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+                <UserMenu />
+              </div>
             </div>
             <main ref={mainRef} className="flex-1 overflow-auto pb-20 md:pb-0">
               <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
