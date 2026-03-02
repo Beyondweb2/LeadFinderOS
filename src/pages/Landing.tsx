@@ -725,6 +725,22 @@ const Landing = () => {
             })}
           </div>
 
+          <ScrollReveal className="w-full" delay={320} direction="up">
+            <div className="flex justify-center mt-10 sm:mt-14">
+              <a
+                href="/auth"
+                className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-base sm:text-lg transition-all duration-300 hover:scale-[1.04] active:scale-[0.98]"
+                style={{
+                  background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
+                  color: 'white',
+                  boxShadow: '0 4px 20px hsl(210 100% 50% / 0.35), 0 0 40px hsl(210 100% 50% / 0.1)',
+                }}
+              >
+                Start Finding Leads →
+              </a>
+            </div>
+          </ScrollReveal>
+
         </div>
       </section>
 
