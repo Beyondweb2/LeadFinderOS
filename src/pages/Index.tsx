@@ -66,22 +66,22 @@ const Index = () => {
   const { walkthroughCompleted } = useWalkthroughStatus();
   const { toast } = useToast();
 
-  // Trigger challenge modal on first search page visit after walkthrough completion
+  // Pro access = active, past_due, admin, or trialing (Stripe trial)
+  const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
+
+  // Trigger challenge modal on first search page visit after walkthrough completion (only for subscribed users)
   useEffect(() => {
+    if (!hasProAccess) return;
     const key = user?.id ? `challenge_10_pending_${user.id}` : 'challenge_10_pending';
     try {
       if (localStorage.getItem(key) === 'true') {
         localStorage.removeItem(key);
-        // Small delay to let the page render first
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('trigger-challenge-10-modal'));
         }, 500);
       }
     } catch {}
-  }, [user?.id]);
-  
-  // Pro access = active, past_due, admin, or trialing (Stripe trial)
-  const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
+  }, [user?.id, hasProAccess]);
   
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
