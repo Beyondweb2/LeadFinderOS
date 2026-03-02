@@ -99,13 +99,13 @@ export function WelcomeWalkthroughModal() {
           </h3>
 
           {/* Body */}
-          <div className="text-center text-[14px] text-muted-foreground/80 leading-relaxed mb-2">
-            <p>Follow this short guided mission to contact 3 real businesses in under 2 minutes.</p>
-          </div>
+          <p className="text-center text-[14px] text-muted-foreground/80 leading-relaxed mb-4">
+            Contact 3 real businesses in under 2 minutes.
+          </p>
           <div className="text-left text-[13px] text-muted-foreground/70 leading-relaxed mb-6 space-y-1.5 w-full px-2">
-            <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">1.</span> Find live businesses instantly</p>
-            <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">2.</span> Contact them in one click</p>
-            <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">3.</span> Start building your pipeline</p>
+            <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">1.</span> Find businesses with no website</p>
+            <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">2.</span> Message them instantly</p>
+            <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">3.</span> Start real conversations</p>
           </div>
 
           {/* Primary CTA */}
