@@ -338,15 +338,28 @@ const Index = () => {
       {/* Results Section */}
       {leads.length > 0 && (
         <section data-walkthrough="results-header">
-          <LeadsTable 
-            leads={leads} 
-            onExport={exportToCsv}
-            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
-            isInOutreach={isInOutreach}
-            onMapLinkClick={markAsChecked}
-            isChecked={isChecked}
-            blurred={buttonExhausted && isFreeUser}
-          />
+          <div className="relative">
+            {buttonExhausted && isFreeUser && (
+              <div className="absolute top-[20%] left-0 right-0 z-20 flex justify-center pointer-events-none">
+                <div className="flex flex-col items-center gap-3 text-center px-4 pointer-events-auto">
+                  <Lock className="h-8 w-8 text-primary" />
+                  <p className="text-sm font-semibold text-foreground">Start your free trial to unlock these leads</p>
+                  <Button size="sm" onClick={() => setShowUpgradeAfterLimit(true)} className="gap-2">
+                    <Sparkles className="h-4 w-4" /> Unlock Access
+                  </Button>
+                </div>
+              </div>
+            )}
+            <LeadsTable 
+              leads={leads} 
+              onExport={exportToCsv}
+              onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
+              isInOutreach={isInOutreach}
+              onMapLinkClick={markAsChecked}
+              isChecked={isChecked}
+              blurred={buttonExhausted && isFreeUser}
+            />
+          </div>
         </section>
       )}
 
