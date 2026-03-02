@@ -216,6 +216,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
   }, [user?.id, session?.access_token, checkSubscription]);
 
+  // Ensure isLoading resolves for unauthenticated users on initial mount
+  useEffect(() => {
+    if (!user && !session) {
+      setState(prev => prev.isLoading ? { ...prev, isLoading: false } : prev);
+    }
+  }, [user, session]);
+
   // Set up realtime subscription for instant updates
   useEffect(() => {
     const userId = userIdRef.current;
