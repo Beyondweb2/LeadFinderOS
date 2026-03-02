@@ -8,9 +8,9 @@ import { Check, Loader2, ArrowLeft, Shield, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const TRIAL_FEATURES = [
-  'Unlimited searches',
-  'Track and manage outreach properly',
-  'Build a real pipeline',
+  'Unlimited lead searches',
+  'Keep your outreach organised',
+  'Turn outreach into real clients',
 ];
 
 const Subscribe = () => {
@@ -130,9 +130,10 @@ const Subscribe = () => {
           </div>
 
           {/* Pricing */}
-          <div className="rounded-lg bg-muted/50 border border-border/40 p-4 text-center space-y-0.5">
+          <div className="rounded-lg bg-muted/50 border border-border/40 p-4 text-center space-y-1">
+            <p className="text-sm text-muted-foreground">After 5 days</p>
             <p className="text-2xl font-bold">£19.99<span className="text-sm font-normal text-muted-foreground">/month</span></p>
-            <p className="text-xs text-muted-foreground">Cancel anytime</p>
+            <p className="text-xs text-muted-foreground">Cancel anytime from your account</p>
           </div>
 
           {/* CTA / Waiting */}
