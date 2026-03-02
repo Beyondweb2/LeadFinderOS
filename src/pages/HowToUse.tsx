@@ -28,33 +28,33 @@ const STEPS = [
     number: 1,
     icon: Search,
     title: 'Search for Businesses',
-    description: 'Enter a business type (e.g., "cafe") and select a location. Use the country and city options to narrow down your search. Set your search radius and click "Search".',
+    description: 'Enter a business type (e.g., "plumber", "restaurant") and select a country and city. Set your search radius and hit "Search" to instantly find businesses in that area — those without websites are highlighted as hot leads.',
     image: step1Search,
-    tip: 'Use specific business types for better results. Try "plumber", "restaurant", "gym", etc.',
+    tip: 'Be specific with your business type for better results. Try niches like "dental clinic" or "auto repair" to find less competitive leads.',
   },
   {
     number: 2,
     icon: ClipboardList,
-    title: 'Review Search Results',
-    description: 'Browse the list of businesses. Green "No Website" badges indicate hot leads - businesses without websites who might need your services. Click "Add to CRM" to save leads you want to contact.',
+    title: 'Save Leads to Your Outreach List',
+    description: 'Browse your results and look for green "No Website" badges — these are businesses most likely to need your services. Tap "Add to Outreach" to save them to your pipeline ready for contacting.',
     image: step2Results,
-    tip: 'Focus on businesses with high ratings and many reviews - they\'re established but still need a website.',
+    tip: 'Businesses with high ratings and lots of reviews are established and earning — they just need a website to match.',
   },
   {
     number: 3,
     icon: MessageSquare,
-    title: 'Reach Out & Track Progress',
-    description: 'In Outreach, tap the WhatsApp button to message a lead. If they don\'t have WhatsApp, an SMS button appears instead. Mark leads as "Contacted" after reaching out, then click "Track" when someone shows interest.',
+    title: 'Contact Leads via WhatsApp, SMS or Call',
+    description: 'Head to your Outreach page to see all saved leads. Tap the WhatsApp, SMS or Call button to reach out directly. Use message templates to send personalised pitches in seconds. Once contacted, mark the lead and move interested ones to Track Leads.',
     image: step3Crm,
-    tip: 'A direct phone call often gets the best response. Prepare a short pitch and keep it friendly.',
+    tip: 'A quick phone call often gets the best response. Keep your pitch short, friendly, and focused on how you can help their business.',
   },
   {
     number: 4,
     icon: CheckCircle,
-    title: 'Track Leads',
-    description: 'The Track Leads page shows all leads who responded positively. Track their status, add notes, schedule follow-ups, and manage them through to completion.',
+    title: 'Track Interested Leads to Closing',
+    description: 'When a lead shows interest, they move to Track Leads — your mini CRM. Set deal stages like "Sent Quote" or "Call Booked", schedule follow-ups, add notes, and manage each lead through to payment. Everything auto-saves as you go.',
     image: step4TrackLeads,
-    tip: 'Set next actions and dates to stay organized. Use notes to remember conversation details.',
+    tip: 'Use next actions and dates to stay on top of follow-ups. Leads with clear next steps are far more likely to convert.',
   },
 ];
 
@@ -93,7 +93,7 @@ const HowToUse = () => {
         </h1>
         <p className="text-muted-foreground text-sm md:text-base max-w-2xl mx-auto sm:mx-0 mb-4">
           Follow this step-by-step guide to find businesses without websites, 
-          reach out via cold calls or texts, and convert leads into paying clients.
+          reach out via WhatsApp, SMS or calls, track interested leads, and close deals.
         </p>
         {!isPublicGuide && (
           <Button onClick={handleRestartWalkthrough} variant="outline" size="sm" className="gap-1.5">
