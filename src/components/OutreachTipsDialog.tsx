@@ -12,9 +12,9 @@ import { MessageSquare, Phone, Send } from 'lucide-react';
 type ContactMethod = 'whatsapp' | 'sms' | 'call' | null;
 
 const ctaConfig: Record<string, { label: string; icon: React.ReactNode }> = {
-  whatsapp: { label: 'Open WhatsApp & Send', icon: <Send className="h-4 w-4" /> },
-  sms: { label: 'Send SMS Now', icon: <MessageSquare className="h-4 w-4" /> },
-  call: { label: 'Start Call', icon: <Phone className="h-4 w-4" /> },
+  whatsapp: { label: 'Send Initial Text', icon: <Send className="h-4 w-4" /> },
+  sms: { label: 'Send Initial Text', icon: <MessageSquare className="h-4 w-4" /> },
+  call: { label: 'Send Initial Text', icon: <Phone className="h-4 w-4" /> },
 };
 
 export function OutreachTipsDialog() {
@@ -94,7 +94,7 @@ export function OutreachTipsDialog() {
 
           {/* Headline */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-5">
-            <span className="text-foreground">3 Tips Before</span>
+            <span className="text-foreground">4 Tips Before</span>
             <br />
             <span className="text-primary">You Reach Out</span>
           </DialogTitle>
@@ -102,15 +102,19 @@ export function OutreachTipsDialog() {
           {/* Tips */}
           <div className="text-left text-[13px] text-muted-foreground leading-relaxed mb-4 space-y-3 w-full">
             <div className="flex gap-2.5">
-              <span className="text-primary font-bold text-sm shrink-0">1.</span>
+              <span className="text-green-400 font-bold text-sm shrink-0">1.</span>
+              <p><span className="text-foreground font-medium">Use the template provided</span> — The 'Initial Contact Cycle' template auto-rotates between 6 proven casual openers. Just hit send — it picks the next one for you.</p>
+            </div>
+            <div className="flex gap-2.5">
+              <span className="text-green-400 font-bold text-sm shrink-0">2.</span>
               <p><span className="text-foreground font-medium">Keep it casual</span> — No links, images, or videos in your first message. Just be friendly and try to get a casual reply first.</p>
             </div>
             <div className="flex gap-2.5">
-              <span className="text-primary font-bold text-sm shrink-0">2.</span>
+              <span className="text-green-400 font-bold text-sm shrink-0">3.</span>
               <p><span className="text-foreground font-medium">Try WhatsApp first</span> — If they don't have WhatsApp, try SMS. But the best option is to call — have a pitch ready using a pre-made script template.</p>
             </div>
             <div className="flex gap-2.5">
-              <span className="text-primary font-bold text-sm shrink-0">3.</span>
+              <span className="text-green-400 font-bold text-sm shrink-0">4.</span>
               <p><span className="text-foreground font-medium">Make conversation</span> — Don't sell straight away. Ask a question, reference their business, and keep it natural.</p>
             </div>
           </div>
