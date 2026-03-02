@@ -62,8 +62,8 @@ export function AppSidebar() {
   try {
     const { state: demoState, isDemoUser, isOpen: walkthroughActive } = useDemoChecklist();
     searchPulse = isDemoUser && walkthroughActive && !demoState.searchDone;
-    crmPulseWalkthrough = isDemoUser && walkthroughActive && demoState.addedToCrm && !demoState.contactAttempted;
-    trackPulseWalkthrough = isDemoUser && walkthroughActive && demoState.leadTracked && !demoState.followUpSet;
+    crmPulseWalkthrough = isDemoUser && walkthroughActive && demoState.addedToCrm && !demoState.firstContactMade;
+    trackPulseWalkthrough = isDemoUser && walkthroughActive && demoState.threeContactsMade && !demoState.viewedProgress;
   } catch {}
 
   // Flash state for sidebar icons

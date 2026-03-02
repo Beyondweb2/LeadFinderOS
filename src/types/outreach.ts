@@ -105,6 +105,8 @@ export interface OutreachLead {
   contact_method?: string | null;
   whatsapp_status?: string | null;
   whatsapp_checked_at?: string | null;
+  outreach_attempts?: number;
+  last_outreach_attempt_at?: string | null;
 }
 
 export interface OutreachActivity {

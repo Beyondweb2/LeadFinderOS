@@ -34,50 +34,51 @@ function getActiveStep(state: any, pathname: string): StepDef | null {
     return { step: 1, selector: '[data-walkthrough-step="search"]', tooltip: 'Press Find Leads to search.', noDim: true };
   }
 
-  // Step 2 – Find "No Website" leads & add 3 to CRM
+  // Step 2 – Select 5 leads
   if (!state.addedToCrm) {
-    const remaining = 3 - (state.crmAddCount || 0);
+    const remaining = 5 - (state.crmAddCount || 0);
     return {
       step: 2,
       selector: '[data-walkthrough="add-crm"]',
-      tooltip: `"No Website" = they need YOU. Add ${remaining} more lead${remaining !== 1 ? 's' : ''} to your CRM.`,
+      tooltip: `Select ${remaining} more lead${remaining !== 1 ? 's' : ''} you want to contact.`,
       noDim: true,
       tooltipPosition: 'top',
     };
   }
 
-  // Step 3 – Go to CRM
-  if (!state.crmPageOpened) {
-    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to message this lead.' };
-  }
-
-  // Step 4 – Send a message (WhatsApp/SMS/Call)
-  if (!state.contactAttempted) {
+  // Step 3 – Contact first lead via Call, SMS or WhatsApp
+  if (!state.firstContactMade) {
     if (pathname === '/outreach') {
-      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: 'Contact via call, SMS or WhatsApp. (This can be skipped next screen)', noDim: true };
+      return { step: 3, selector: '[data-walkthrough="contact"]', tooltip: 'Contact your first lead via Call, SMS or WhatsApp.', noDim: true };
     }
-    return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact via call, SMS or WhatsApp.' };
+    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to contact your first lead.' };
   }
 
-  // Step 5 – Press Track (star) when a business responds positively
-  if (!state.trackPressed) {
+  // Step 4 – Contact 2 more leads (3 total)
+  if (!state.threeContactsMade) {
+    const remaining = 3 - (state.contactsMadeCount || 0);
     if (pathname === '/outreach') {
-      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: 'Track any business that shows interest.', noDim: true, tooltipPosition: 'bottom' };
+      return { step: 4, selector: '[data-walkthrough="contact"]', tooltip: `Contact ${remaining} more lead${remaining !== 1 ? 's' : ''} (${state.contactsMadeCount || 0}/3 done).`, noDim: true };
     }
-    return { step: 5, selector: '[data-walkthrough="crm-nav"]', tooltip: 'Open your CRM to track a lead.' };
+    return { step: 4, selector: '[data-walkthrough="crm-nav"]', tooltip: `Open your CRM — contact ${remaining} more lead${remaining !== 1 ? 's' : ''}.` };
   }
 
-  // Step 6 – Open Track Leads page
-  if (!state.leadTracked) {
-    return { step: 6, selector: '[data-walkthrough="track-nav"]', tooltip: 'Open Track Leads to manage your pipeline.', tooltipPosition: 'top' };
+  // Step 5 – View progress in Track Leads
+  if (!state.viewedProgress) {
+    return { step: 5, selector: '[data-walkthrough="track-nav"]', tooltip: 'View your progress in Track Leads.', tooltipPosition: 'top' };
   }
 
-  // Step 7 – Add a note on the tracked lead
+  // Step 6 – Add a note to one lead
   if (!state.noteAdded) {
-    return { step: 7, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details about this lead.', noDim: true };
+    return { step: 6, selector: '[data-walkthrough="notes"]', tooltip: 'Add a note to remember key details about this lead.', noDim: true };
   }
 
-  // Step 8 – Collapse the card to finish
+  // Step 7 – Set a next action
+  if (!state.nextActionSet) {
+    return { step: 7, selector: '[data-walkthrough="next-action"]', tooltip: 'Set a next action or follow-up for one lead.', noDim: true };
+  }
+
+  // Step 8 – Collapse a card
   if (!state.cardCollapsed) {
     return { step: 8, selector: '[data-walkthrough="collapse-card"]', tooltip: 'Collapse the card to finish. You\'re all set!', noDim: true, tooltipPosition: 'top' };
   }
@@ -99,7 +100,7 @@ export function WalkthroughOverlay() {
   const lastScrolledStepRef = useRef<number | null>(null);
   const [tick, setTick] = useState(0);
 
-  // Re-evaluate sub-steps periodically (for input value changes on search page)
+  // Re-evaluate sub-steps periodically
   useEffect(() => {
     if (!isActive || allDone || !walkthroughOpen) return;
     const interval = setInterval(() => setTick(t => t + 1), 500);
@@ -115,12 +116,10 @@ export function WalkthroughOverlay() {
     const next = getActiveStep(state, location.pathname);
     setActiveStep(next);
 
-    // Track step view (debounced in the hook)
     if (next) {
       logStepView(next.step);
     }
 
-    // Auto-scroll to the target element once per step change
     if (next && next.step !== lastScrolledStepRef.current) {
       lastScrolledStepRef.current = next.step;
       requestAnimationFrame(() => {
@@ -154,7 +153,6 @@ export function WalkthroughOverlay() {
       return;
     }
 
-    // Find the first *visible* matching element (non-zero dimensions)
     const allMatches = document.querySelectorAll(activeStep.selector);
     let el: Element | null = null;
     for (const candidate of allMatches) {
@@ -171,10 +169,6 @@ export function WalkthroughOverlay() {
     }
 
     const rect = el.getBoundingClientRect();
-
-    // Only auto-scroll once per step change, not every frame
-    // This prevents hijacking user scroll on mobile
-
     setTargetRect(rect);
 
     const padding = 12;
@@ -192,17 +186,14 @@ export function WalkthroughOverlay() {
 
     if (activeStep.tooltipPosition === 'right') {
       if (isMobile) {
-        // On mobile, always place tooltip above elements near bottom nav
         setTooltipPos({ top: rect.top - tooltipHeight - padding, left: clampedLeft });
       } else {
         setTooltipPos({ top: rect.top + rect.height / 2, left: rect.right + padding });
       }
     } else {
       const preferTop = activeStep.tooltipPosition === 'top';
-      // On mobile, ensure tooltip doesn't go behind bottom nav
       const effectiveSpaceBelow = spaceBelow - mobileNavHeight;
       if (preferTop || effectiveSpaceBelow <= tooltipHeight + padding) {
-        // If element is inside the bottom nav, add extra offset so tooltip is fully visible
         const extraOffset = isInBottomNav ? 20 : 0;
         setTooltipPos({ top: rect.top - tooltipHeight - padding - extraOffset, left: clampedLeft });
       } else {

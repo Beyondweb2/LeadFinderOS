@@ -261,6 +261,33 @@ export type Database = {
           },
         ]
       }
+      outreach_events: {
+        Row: {
+          channel: string
+          created_at: string
+          event_type: string
+          id: string
+          lead_id: string
+          user_id: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          event_type: string
+          id?: string
+          lead_id: string
+          user_id: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          lead_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       outreach_history: {
         Row: {
           added_at: string
@@ -311,11 +338,13 @@ export type Database = {
           image_url: string | null
           is_archived: boolean
           is_potential_work: boolean
+          last_outreach_attempt_at: string | null
           list_type: string
           next_action: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date: string | null
           next_checkin_date: string | null
           notes: string | null
+          outreach_attempts: number
           paid_for: string | null
           payment_date: string | null
           phone: string | null
@@ -346,11 +375,13 @@ export type Database = {
           image_url?: string | null
           is_archived?: boolean
           is_potential_work?: boolean
+          last_outreach_attempt_at?: string | null
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null
           next_checkin_date?: string | null
           notes?: string | null
+          outreach_attempts?: number
           paid_for?: string | null
           payment_date?: string | null
           phone?: string | null
@@ -381,11 +412,13 @@ export type Database = {
           image_url?: string | null
           is_archived?: boolean
           is_potential_work?: boolean
+          last_outreach_attempt_at?: string | null
           list_type?: string
           next_action?: Database["public"]["Enums"]["next_action_type"] | null
           next_action_date?: string | null
           next_checkin_date?: string | null
           notes?: string | null
+          outreach_attempts?: number
           paid_for?: string | null
           payment_date?: string | null
           phone?: string | null

@@ -7,24 +7,18 @@ export interface DemoChecklistState {
   searchDone: boolean;
   addedToCrm: boolean;
   crmAddCount: number;
-  crmPageOpened: boolean;
-  contactAttempted: boolean;
-  contactMethodSet: boolean;
-  pipelineStatusSet: boolean;
-  statusChanged: boolean;
-  step4ActionSet: boolean;
-  step4DateSet: boolean;
-  trackPressed: boolean;
-  statusUpdated: boolean; // derived: contactMethodSet && pipelineStatusSet && step4ActionSet
-  leadTracked: boolean;
+  firstContactMade: boolean;
+  threeContactsMade: boolean;
+  contactsMadeCount: number;
+  viewedProgress: boolean;
   noteAdded: boolean;
-  trackStatusChanged: boolean;
+  nextActionSet: boolean;
   cardCollapsed: boolean;
-  followUpActionSet: boolean;
-  followUpDateSet: boolean;
-  followUpNoteAdded: boolean;
-  followUpStatusChanged: boolean;
-  followUpSet: boolean;
+  // Legacy compat fields (unused but kept so old localStorage doesn't break parsing)
+  contactAttempted: boolean;
+  crmPageOpened: boolean;
+  trackPressed: boolean;
+  leadTracked: boolean;
 }
 
 interface DemoChecklistContextType {
@@ -42,21 +36,28 @@ interface DemoChecklistContextType {
 
 const DemoChecklistContext = createContext<DemoChecklistContextType | null>(null);
 
-const STORAGE_PREFIX = 'demo_checklist_v3';
+const STORAGE_PREFIX = 'demo_checklist_v4';
 
 function getKey(userId?: string) {
   return userId ? `${STORAGE_PREFIX}_${userId}` : STORAGE_PREFIX;
 }
 
 const defaultState: DemoChecklistState = {
-  searchDone: false, addedToCrm: false, crmAddCount: 0, crmPageOpened: false,
-  contactAttempted: false, contactMethodSet: false, pipelineStatusSet: false,
-  statusChanged: false, step4ActionSet: false, step4DateSet: false,
-  trackPressed: false, statusUpdated: false, leadTracked: false, noteAdded: false,
-  trackStatusChanged: false, cardCollapsed: false,
-  // Legacy fields kept for backwards compat
-  followUpActionSet: false, followUpDateSet: false, followUpNoteAdded: false,
-  followUpStatusChanged: false, followUpSet: false,
+  searchDone: false,
+  addedToCrm: false,
+  crmAddCount: 0,
+  firstContactMade: false,
+  threeContactsMade: false,
+  contactsMadeCount: 0,
+  viewedProgress: false,
+  noteAdded: false,
+  nextActionSet: false,
+  cardCollapsed: false,
+  // Legacy compat
+  contactAttempted: false,
+  crmPageOpened: false,
+  trackPressed: false,
+  leadTracked: false,
 };
 
 function loadState(userId?: string): DemoChecklistState {
@@ -91,8 +92,7 @@ export function DemoChecklistProvider({
     setState(loadState(user?.id));
   }, [user?.id]);
 
-  // Auto-open walkthrough when isDemoUser — but defer if welcome modal might show
-  // Listen for explicit 'start-walkthrough' event from welcome modal
+  // Auto-open walkthrough when isDemoUser
   useEffect(() => {
     if (!isDemoUser) return;
 
@@ -107,11 +107,8 @@ export function DemoChecklistProvider({
     window.addEventListener('start-walkthrough', onStart);
     window.addEventListener('skip-walkthrough', onSkip);
 
-    // For returning users who already saw the prompt, auto-open after delay
-    // (the welcome modal won't render for them)
     if (!initializedRef.current) {
       const timer = setTimeout(() => {
-        // Don't auto-open if welcome modal is active
         if (!initializedRef.current && !(window as any).__welcomeModalActive) {
           initializedRef.current = true;
           setIsOpen(true);
@@ -146,12 +143,10 @@ export function DemoChecklistProvider({
     setIsReplay(true);
     setIsOpen(true);
     allDoneRef.current = false;
-    // Remove walkthrough-completed flags so the overlay renders again
     if (user?.id) {
       localStorage.removeItem(`demo_walkthrough_dismissed_${user.id}`);
       localStorage.removeItem(`walkthrough_completed_${user.id}`);
     }
-    // Notify walkthrough status hook
     window.dispatchEvent(new CustomEvent('start-walkthrough'));
   }, [user?.id]);
 
@@ -160,124 +155,69 @@ export function DemoChecklistProvider({
     if (!isDemoUser && !isReplay) return;
 
     const onSearch = () => completeStep('searchDone');
+
     const onCrmAdd = () => {
       setState(prev => {
         const newCount = prev.crmAddCount + 1;
-        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 3 };
+        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 5 };
         saveState(next, user?.id);
         return next;
       });
     };
-    const onContact = () => completeStep('contactAttempted');
-    const onContactMethod = () => {
+
+    // Steps 3 & 4: listen for outreach-attempt-logged
+    const onAttemptLogged = () => {
       setState(prev => {
-        if (prev.contactMethodSet) return prev;
-        const next = { ...prev, contactMethodSet: true, statusUpdated: prev.pipelineStatusSet && prev.step4ActionSet };
+        const newCount = prev.contactsMadeCount + 1;
+        const next = {
+          ...prev,
+          contactsMadeCount: newCount,
+          firstContactMade: true,
+          threeContactsMade: newCount >= 3,
+          // Legacy compat
+          contactAttempted: true,
+        };
         saveState(next, user?.id);
         return next;
       });
     };
-    const onPipelineStatus = () => {
+
+    // Also count tel: clicks and demo-checklist-contact as attempts
+    const onContact = () => {
       setState(prev => {
-        if (prev.pipelineStatusSet) return prev;
-        const next = { ...prev, pipelineStatusSet: true, statusUpdated: prev.contactMethodSet && prev.step4ActionSet };
+        const newCount = prev.contactsMadeCount + 1;
+        const next = {
+          ...prev,
+          contactsMadeCount: newCount,
+          firstContactMade: true,
+          threeContactsMade: newCount >= 3,
+          contactAttempted: true,
+        };
         saveState(next, user?.id);
         return next;
       });
     };
-    const onStatus = () => {
-      setState(prev => {
-        if (prev.statusChanged) return prev;
-        const next = { ...prev, statusChanged: true, statusUpdated: prev.contactMethodSet && prev.pipelineStatusSet && prev.step4ActionSet };
-        saveState(next, user?.id);
-        return next;
-      });
-    };
-    const onStep4Action = () => {
-      setState(prev => {
-        if (prev.step4ActionSet) return prev;
-        const next = { ...prev, step4ActionSet: true, statusUpdated: prev.contactMethodSet && prev.pipelineStatusSet };
-        saveState(next, user?.id);
-        return next;
-      });
-    };
-    const onStep4Date = () => {
-      setState(prev => {
-        if (prev.step4DateSet) return prev;
-        const next = { ...prev, step4DateSet: true };
-        saveState(next, user?.id);
-        return next;
-      });
-    };
-    const onTrack = () => {
-      setState(prev => {
-        if (prev.trackPressed) return prev;
-        const next = { ...prev, trackPressed: true };
-        saveState(next, user?.id);
-        return next;
-      });
-    };
-    const onOpenTrackLeads = () => completeStep('leadTracked');
-    const onFollowUpAction = () => {
-      setState(prev => {
-        if (prev.followUpActionSet) return prev;
-        const next = { ...prev, followUpActionSet: true, followUpSet: prev.followUpDateSet };
-        saveState(next, user?.id);
-        return next;
-      });
-    };
-    const onFollowUpDate = () => {
-      setState(prev => {
-        if (prev.followUpDateSet) return prev;
-        const next = { ...prev, followUpDateSet: true, followUpSet: prev.followUpActionSet };
-        saveState(next, user?.id);
-        return next;
-      });
-    };
-    const onFollowUpNote = () => {
-      setState(prev => {
-        if (prev.followUpNoteAdded) return prev;
-        const next = { ...prev, followUpNoteAdded: true };
-        saveState(next, user?.id);
-        return next;
-      });
-    };
-    const onFollowUpStatus = () => {
-      setState(prev => {
-        if (prev.followUpStatusChanged) return prev;
-        const next = { ...prev, followUpStatusChanged: true };
-        saveState(next, user?.id);
-        return next;
-      });
-    };
-    const onNoteSaved = () => {
-      completeStep('noteAdded');
-    };
-    const onTrackStatusChanged = () => {
-      completeStep('trackStatusChanged');
-    };
+
+    const onNoteSaved = () => completeStep('noteAdded');
+
+    const onNextActionSet = () => completeStep('nextActionSet');
+    const onNextDateSet = () => completeStep('nextActionSet');
+
+    const onCardCollapsed = () => completeStep('cardCollapsed');
 
     const onTelClick = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const anchor = target.closest('a[href^="tel:"]');
-      if (anchor) completeStep('contactAttempted');
+      if (anchor) onContact();
     };
 
     window.addEventListener('demo-checklist-search', onSearch);
     window.addEventListener('crm-lead-added', onCrmAdd);
+    window.addEventListener('outreach-attempt-logged', onAttemptLogged);
     window.addEventListener('demo-checklist-contact', onContact);
-    window.addEventListener('demo-checklist-contact-method-set', onContactMethod);
-    window.addEventListener('demo-checklist-pipeline-status-set', onPipelineStatus);
-    window.addEventListener('demo-checklist-status-change', onStatus);
-    window.addEventListener('demo-checklist-step4-action-set', onStep4Action);
-    window.addEventListener('demo-checklist-step4-date-set', onStep4Date);
-    window.addEventListener('demo-checklist-track-pressed', onTrack);
-    window.addEventListener('demo-checklist-next-action-set', onFollowUpAction);
-    window.addEventListener('demo-checklist-next-date-set', onFollowUpDate);
     window.addEventListener('demo-checklist-track-note-saved', onNoteSaved);
-    window.addEventListener('demo-checklist-track-status-changed', onFollowUpStatus);
-    window.addEventListener('demo-checklist-track-status-update', onTrackStatusChanged);
-    const onCardCollapsed = () => completeStep('cardCollapsed');
+    window.addEventListener('demo-checklist-next-action-set', onNextActionSet);
+    window.addEventListener('demo-checklist-next-date-set', onNextDateSet);
     window.addEventListener('demo-checklist-card-collapsed', onCardCollapsed);
     document.addEventListener('click', onTelClick, true);
 
@@ -299,60 +239,45 @@ export function DemoChecklistProvider({
     return () => {
       window.removeEventListener('demo-checklist-search', onSearch);
       window.removeEventListener('crm-lead-added', onCrmAdd);
+      window.removeEventListener('outreach-attempt-logged', onAttemptLogged);
       window.removeEventListener('demo-checklist-contact', onContact);
-      window.removeEventListener('demo-checklist-contact-method-set', onContactMethod);
-      window.removeEventListener('demo-checklist-pipeline-status-set', onPipelineStatus);
-      window.removeEventListener('demo-checklist-status-change', onStatus);
-      window.removeEventListener('demo-checklist-step4-action-set', onStep4Action);
-      window.removeEventListener('demo-checklist-step4-date-set', onStep4Date);
-      window.removeEventListener('demo-checklist-track-pressed', onTrack);
-      window.removeEventListener('demo-checklist-next-action-set', onFollowUpAction);
-      window.removeEventListener('demo-checklist-next-date-set', onFollowUpDate);
       window.removeEventListener('demo-checklist-track-note-saved', onNoteSaved);
-      window.removeEventListener('demo-checklist-track-status-changed', onFollowUpStatus);
-      window.removeEventListener('demo-checklist-track-status-update', onTrackStatusChanged);
+      window.removeEventListener('demo-checklist-next-action-set', onNextActionSet);
+      window.removeEventListener('demo-checklist-next-date-set', onNextDateSet);
       window.removeEventListener('demo-checklist-card-collapsed', onCardCollapsed);
       document.removeEventListener('click', onTelClick, true);
       window.removeEventListener('quick-locations-toggle', onQuickLocToggle);
     };
   }, [isDemoUser, isReplay, completeStep, isOpen]);
 
-  // Complete "CRM page opened" when user visits /outreach
-  useEffect(() => {
-    if (!isDemoUser && !isReplay) return;
-    if (state.addedToCrm && location.pathname === '/outreach') {
-      completeStep('crmPageOpened');
-    }
-  }, [isDemoUser, isReplay, location.pathname, state.addedToCrm, completeStep]);
-
-  // Complete "Open Track Leads page" when user visits /potential-work
+  // Step 5: Complete "viewedProgress" when user visits /potential-work
   useEffect(() => {
     if (!isDemoUser && !isReplay) return;
     if (location.pathname === '/potential-work') {
+      completeStep('viewedProgress');
+      // Legacy compat
       completeStep('leadTracked');
     }
   }, [isDemoUser, isReplay, location.pathname, completeStep]);
 
-  // 8 steps: searchDone, addedToCrm, crmPageOpened, contactAttempted, trackPressed, leadTracked, noteAdded, cardCollapsed
+  // 8 steps
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
-    state.crmPageOpened,
-    state.contactAttempted,
-    state.trackPressed,
-    state.leadTracked,
+    state.firstContactMade,
+    state.threeContactsMade,
+    state.viewedProgress,
     state.noteAdded,
+    state.nextActionSet,
     state.cardCollapsed,
   ].filter(Boolean).length;
 
   const allDone = completedCount === 8;
 
-  // Dispatch event when all steps are completed for the first time
   const allDoneRef = useRef(false);
   useEffect(() => {
     if (allDone && !allDoneRef.current) {
       allDoneRef.current = true;
-      // Log walkthrough complete event
       supabase.rpc('log_walkthrough_event' as any, {
         p_event_type: 'walkthrough_complete',
         p_meta: { walkthrough_id: 'main' },
