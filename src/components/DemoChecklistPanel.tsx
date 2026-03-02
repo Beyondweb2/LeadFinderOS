@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
 import { PostWalkthroughTipsModal } from '@/components/PostWalkthroughTipsModal';
@@ -7,15 +8,11 @@ import { useSubscription } from '@/hooks/useSubscription';
 import appLogo from '@/assets/logo.png';
 import { supabase } from '@/integrations/supabase/client';
 import { ArrowRight } from 'lucide-react';
-import {
-  Dialog,
-  DialogContent,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 
 function CountUp({ value }: { value: number }) {
   const [display, setDisplay] = useState(0);
   const rafRef2 = useRef<number>();
-
   useEffect(() => {
     if (value === 0) { setDisplay(0); return; }
     const duration = 1000;
@@ -29,11 +26,11 @@ function CountUp({ value }: { value: number }) {
     rafRef2.current = requestAnimationFrame(animate);
     return () => { if (rafRef2.current) cancelAnimationFrame(rafRef2.current); };
   }, [value]);
-
   return <div className="text-2xl font-bold text-primary">{display}</div>;
 }
 
 export function DemoChecklistPanel() {
+  const { t } = useTranslation();
   const { state, allDone, isDemoUser } = useDemoChecklist();
   const { isStripeTrialing } = useTrial();
   const { isPaidSubscriber } = useSubscription();
@@ -41,12 +38,10 @@ export function DemoChecklistPanel() {
 
   const dismissKey = user?.id ? `demo_walkthrough_dismissed_${user.id}` : null;
   const [dismissed, setDismissed] = useState(false);
-
   const [showTipsModal, setShowTipsModal] = useState(false);
   const tipsModalShownRef = useRef(false);
   const prevAllDoneRef = useRef(allDone);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
-
   const [metrics, setMetrics] = useState({ noWebsite: 0, added: 0, messages: 0 });
 
   const isFreeUser = !isPaidSubscriber && !isStripeTrialing;
@@ -95,19 +90,14 @@ export function DemoChecklistPanel() {
 
   const handleDismiss = () => {
     setDismissed(true);
-    if (dismissKey) {
-      try { localStorage.setItem(dismissKey, 'true'); } catch {}
-    }
-    if (user?.id) {
-      try { localStorage.setItem(`walkthrough_completed_${user.id}`, 'true'); } catch {}
-    }
+    if (dismissKey) { try { localStorage.setItem(dismissKey, 'true'); } catch {} }
+    if (user?.id) { try { localStorage.setItem(`walkthrough_completed_${user.id}`, 'true'); } catch {} }
   };
 
   const handleCompletionDismiss = () => {
     setShowCompletionModal(false);
     handleDismiss();
     window.dispatchEvent(new CustomEvent('pulse-search-nav'));
-    // If tips modal won't show, signal that walkthrough flow is fully done
     if (tipsDismissed || !isFreeUser) {
       window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
     }
@@ -117,10 +107,7 @@ export function DemoChecklistPanel() {
     setShowTipsModal(open);
     if (!open) {
       tipsModalShownRef.current = true;
-      if (tipsDismissedKey) {
-        try { setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true'); } catch {}
-      }
-      // Tips modal closed — walkthrough flow fully done
+      if (tipsDismissedKey) { try { setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true'); } catch {} }
       window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
     }
   }, [tipsDismissedKey, isFreeUser]);
@@ -130,12 +117,8 @@ export function DemoChecklistPanel() {
   return (
     <>
       <Dialog open={showCompletionModal} onOpenChange={(v) => { if (!v) handleCompletionDismiss(); }}>
-        <DialogContent
-          hideClose
-          className="max-w-sm sm:max-w-[400px] mx-auto p-0 overflow-hidden border-border/40 bg-[hsl(220_50%_5%)] rounded-2xl"
-        >
+        <DialogContent hideClose className="max-w-sm sm:max-w-[400px] mx-auto p-0 overflow-hidden border-border/40 bg-[hsl(220_50%_5%)] rounded-2xl">
           <div className="px-7 pt-7 pb-6 sm:px-8 sm:pt-8 sm:pb-7 flex flex-col items-center">
-            {/* Brand — 3-column centered layout */}
             <div className="grid grid-cols-[40px_1fr_40px] items-center w-full mb-6">
               <div className="flex justify-start">
                 <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
@@ -146,46 +129,36 @@ export function DemoChecklistPanel() {
               <div />
             </div>
 
-            {/* Headline */}
             <h3 className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4 text-foreground">
-              More Outreach. More <span className="text-primary">Clients</span>.
+              {t('completion.headline')} <span className="text-primary">{t('completion.headlineAccent')}</span>.
             </h3>
 
-            {/* Supporting text */}
             <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5 space-y-3">
-              <p>You've contacted <span className="text-foreground font-medium">3 businesses</span>.<br />That's how this starts.</p>
-              <p>Most freelancers stop here.<br />The ones who land clients keep stacking outreach.</p>
+              <p>{t('completion.contacted').replace('<bold>', '').replace('</bold>', '')}<br />{t('completion.thatsHow')}</p>
+              <p>{t('completion.mostFreelancers')}<br />{t('completion.keepStacking')}</p>
             </div>
 
-            {/* Stats highlight card — matches contact tips value card */}
             <div className="w-full rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] px-5 py-4 mb-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
               <div className="flex items-center justify-around">
                 <div className="text-center">
                   <CountUp value={metrics.noWebsite} />
-                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Businesses Found</div>
+                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">{t('completion.businessesFound')}</div>
                 </div>
                 <div className="text-center">
                   <CountUp value={metrics.added} />
-                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Leads Added</div>
+                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">{t('completion.leadsAdded')}</div>
                 </div>
                 <div className="text-center">
                   <CountUp value={metrics.messages} />
-                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Conversations</div>
+                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">{t('completion.conversations')}</div>
                 </div>
               </div>
             </div>
 
-            {/* Supporting line under stats */}
-            <p className="text-center text-[12px] text-primary/70 font-medium mb-5">
-              Clients come from volume.
-            </p>
+            <p className="text-center text-[12px] text-primary/70 font-medium mb-5">{t('completion.volumeQuote')}</p>
 
-            {/* CTA */}
-            <button
-              onClick={handleCompletionDismiss}
-              className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all"
-            >
-              Find My Next Client
+            <button onClick={handleCompletionDismiss} className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all">
+              {t('completion.cta')}
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>

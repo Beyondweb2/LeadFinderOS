@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -18,14 +19,8 @@ interface UpgradePromptDialogProps {
   searchesUsed: number;
 }
 
-const BENEFITS = [
-  'Unlimited lead searches',
-  'Full Outreach access',
-  'Contact tracking & notes',
-  'Email & call templates',
-];
-
 export function UpgradePromptDialog({ open, onOpenChange, searchesUsed }: UpgradePromptDialogProps) {
+  const { t } = useTranslation();
   const { createCheckout } = useSubscription();
   const [showConfirm, setShowConfirm] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -40,6 +35,13 @@ export function UpgradePromptDialog({ open, onOpenChange, searchesUsed }: Upgrad
     try { await createCheckout(); } catch { setIsLoading(false); }
   };
 
+  const benefits = [
+    t('checkout.unlimitedBenefits.searches'),
+    t('checkout.unlimitedBenefits.outreach'),
+    t('checkout.unlimitedBenefits.tracking'),
+    t('checkout.unlimitedBenefits.templates'),
+  ];
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -48,17 +50,15 @@ export function UpgradePromptDialog({ open, onOpenChange, searchesUsed }: Upgrad
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
               <Sparkles className="h-6 w-6 text-primary" />
             </div>
-            <DialogTitle className="text-xl">
-              Unlock unlimited access
-            </DialogTitle>
+            <DialogTitle className="text-xl">{t('checkout.unlockUnlimited')}</DialogTitle>
             <DialogDescription className="text-base">
-              Upgrade to continue unlimited searches and keep building your pipeline.
+              {t('checkout.unlockPrice').replace('Unlock unlimited — ', '')}
             </DialogDescription>
           </DialogHeader>
 
           <div className="py-4">
             <ul className="space-y-2">
-              {BENEFITS.map((benefit) => (
+              {benefits.map((benefit) => (
                 <li key={benefit} className="flex items-center gap-2 text-sm">
                   <Check className="h-4 w-4 text-primary shrink-0" />
                   <span>{benefit}</span>
@@ -69,15 +69,11 @@ export function UpgradePromptDialog({ open, onOpenChange, searchesUsed }: Upgrad
 
           <DialogFooter className="flex-col gap-2 sm:flex-col">
             <Button onClick={handleUpgrade} className="w-full">
-              Unlock unlimited — £19.99/month
+              {t('checkout.unlockPrice')}
             </Button>
-            <p className="text-xs text-muted-foreground text-center">Cancel anytime</p>
-            <Button 
-              variant="ghost" 
-              onClick={() => onOpenChange(false)}
-              className="w-full"
-            >
-              Maybe later
+            <p className="text-xs text-muted-foreground text-center">{t('checkout.cancelAnytime')}</p>
+            <Button variant="ghost" onClick={() => onOpenChange(false)} className="w-full">
+              {t('common.maybeLater')}
             </Button>
           </DialogFooter>
         </DialogContent>

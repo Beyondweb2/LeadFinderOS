@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -11,16 +12,10 @@ import { MessageSquare, Phone, Send } from 'lucide-react';
 
 type ContactMethod = 'whatsapp' | 'sms' | 'call' | null;
 
-const ctaConfig: Record<string, { label: string; icon: React.ReactNode }> = {
-  whatsapp: { label: 'Send Initial Text', icon: <Send className="h-4 w-4" /> },
-  sms: { label: 'Send Initial Text', icon: <MessageSquare className="h-4 w-4" /> },
-  call: { label: 'Send Initial Text', icon: <Phone className="h-4 w-4" /> },
-};
-
 export function OutreachTipsDialog() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  
   const [contactMethod, setContactMethod] = useState<ContactMethod>(null);
 
   const storageKey = user?.id ? `outreach_tips_dismissed_${user.id}` : null;
@@ -37,8 +32,6 @@ export function OutreachTipsDialog() {
         setOpen(true);
       }
     };
-
-    // Also show when user skips the contact walkthrough step
     const onSkipContact = () => {
       if (!localStorage.getItem(storageKey)) {
         setContactMethod('whatsapp');
@@ -68,20 +61,14 @@ export function OutreachTipsDialog() {
       localStorage.setItem(storageKey, 'true');
     }
     if (skipped) {
-      // Skip contact steps entirely so walkthrough moves to Track step
       window.dispatchEvent(new CustomEvent('walkthrough-skip-contact-steps'));
     }
   };
 
-  const cta = ctaConfig[contactMethod || 'whatsapp'];
-
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose(true); else setOpen(true); }}>
-      <DialogContent
-        className="sm:max-w-[400px] p-0 overflow-hidden rounded-2xl border-border/40 bg-[hsl(220_50%_5%)]"
-      >
+      <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden rounded-2xl border-border/40 bg-[hsl(220_50%_5%)]">
         <div className="px-7 pt-7 pb-6 sm:px-8 sm:pt-8 sm:pb-7 flex flex-col items-center">
-          {/* Brand — 3-column centered layout */}
           <div className="grid grid-cols-[40px_1fr_40px] items-center w-full mb-6">
             <div className="flex justify-start">
               <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 shrink-0" />
@@ -92,55 +79,38 @@ export function OutreachTipsDialog() {
             <div />
           </div>
 
-          {/* Headline */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-5">
-            <span className="text-foreground">4 Tips Before</span>
+            <span className="text-foreground">{t('outreachTips.headline1')}</span>
             <br />
-            <span className="text-primary">You Reach Out</span>
+            <span className="text-primary">{t('outreachTips.headline2')}</span>
           </DialogTitle>
 
-          {/* Tips */}
           <div className="text-left text-[13px] text-muted-foreground leading-relaxed mb-4 space-y-3 w-full">
-            <div className="flex gap-2.5">
-              <span className="text-green-400 font-bold text-sm shrink-0">1.</span>
-              <p><span className="text-foreground font-medium">Use the template provided</span> — The 'Initial Contact Cycle' template auto-rotates between 6 proven casual openers. Just hit send — it picks the next one for you.</p>
-            </div>
-            <div className="flex gap-2.5">
-              <span className="text-green-400 font-bold text-sm shrink-0">2.</span>
-              <p><span className="text-foreground font-medium">Keep it casual</span> — No links, images, or videos in your first message. Just be friendly and try to get a casual reply first.</p>
-            </div>
-            <div className="flex gap-2.5">
-              <span className="text-green-400 font-bold text-sm shrink-0">3.</span>
-              <p><span className="text-foreground font-medium">Try WhatsApp first</span> — If they don't have WhatsApp, try SMS. But the best option is to call — have a pitch ready using a pre-made script template.</p>
-            </div>
-            <div className="flex gap-2.5">
-              <span className="text-green-400 font-bold text-sm shrink-0">4.</span>
-              <p><span className="text-foreground font-medium">Make conversation</span> — Don't sell straight away. Ask a question, reference their business, and keep it natural.</p>
-            </div>
+            {[1, 2, 3, 4].map((n) => (
+              <div key={n} className="flex gap-2.5">
+                <span className="text-green-400 font-bold text-sm shrink-0">{n}.</span>
+                <p><span className="text-foreground font-medium">{t(`outreachTips.tip${n}Title`)}</span> {t(`outreachTips.tip${n}Desc`)}</p>
+              </div>
+            ))}
           </div>
 
-          {/* Skip line */}
           <p className="text-center text-[12px] text-muted-foreground mb-5">
-            Not ready to send yet?{' '}
+            {t('outreachTips.notReady')}{' '}
             <button
               onClick={() => handleClose(true)}
               className="text-[13px] font-medium text-primary hover:text-primary/80 cursor-pointer transition-colors underline-offset-2 hover:underline"
             >
-              Skip
+              {t('common.skip')}
             </button>
           </p>
 
-          {/* CTA */}
           <button
             onClick={() => handleClose(false)}
             className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all"
           >
-            {cta.icon}
-            {cta.label}
+            <Send className="h-4 w-4" />
+            {t('outreachTips.sendInitialText')}
           </button>
-
-
-
         </div>
       </DialogContent>
     </Dialog>

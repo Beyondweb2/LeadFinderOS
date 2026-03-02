@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import {
   Dialog,
   DialogContent,
@@ -18,32 +19,28 @@ interface PostSendConfirmDialogProps {
 }
 
 export function PostSendConfirmDialog({ open, onConfirm, onDeny, channel, businessName }: PostSendConfirmDialogProps) {
+  const { t } = useTranslation();
   const channelLabel = channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onDeny(); }}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle className="text-center">Message sent?</DialogTitle>
+          <DialogTitle className="text-center">{t('postSend.messageSent')}</DialogTitle>
           <DialogDescription className="text-center">
-            Did you send the {channelLabel} message to <span className="font-semibold text-foreground">{businessName}</span>?
+            {t('postSend.didYouSend', { channel: channelLabel, name: businessName })
+              .replace('<bold>', '')
+              .replace('</bold>', '')}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter className="flex-row gap-3 justify-center sm:justify-center">
-          <Button
-            variant="outline"
-            onClick={onDeny}
-            className="flex-1"
-          >
+          <Button variant="outline" onClick={onDeny} className="flex-1">
             <XCircle className="h-4 w-4 mr-2" />
-            No
+            {t('postSend.noBtn')}
           </Button>
-          <Button
-            onClick={onConfirm}
-            className="flex-1 bg-green-600 hover:bg-green-700"
-          >
+          <Button onClick={onConfirm} className="flex-1 bg-green-600 hover:bg-green-700">
             <CheckCircle className="h-4 w-4 mr-2" />
-            Yes, sent
+            {t('postSend.yesSent')}
           </Button>
         </DialogFooter>
       </DialogContent>
