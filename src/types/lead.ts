@@ -18,6 +18,7 @@ export interface Lead {
   confidence: number;
   reason: string;
   businessStatus?: string;
+  isExpanded?: boolean;
 }
 
 export type Country = 'UK' | 'Australia' | 'USA' | 'Canada' | 'Germany' | 'France' | 'Spain' | 'Italy' | 'Netherlands' | 'Belgium' | 'Ireland' | 'NewZealand' | 'SouthAfrica' | 'India' | 'Singapore' | 'UAE' | 'Brazil' | 'Mexico' | 'Japan' | 'Sweden';
@@ -38,4 +39,5 @@ export interface SearchResponse {
   searchId: string;
   source?: string;
   cached?: boolean;
+  expanded?: boolean;
 }

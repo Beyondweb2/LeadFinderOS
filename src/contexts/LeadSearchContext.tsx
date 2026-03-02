@@ -25,6 +25,7 @@ interface LeadSearchContextType {
   postAbandonExhausted: boolean;
   freeSearchExhausted: boolean;
   searchError: string | null;
+  expanded: boolean;
 }
 
 const LeadSearchContext = createContext<LeadSearchContextType | null>(null);
@@ -37,6 +38,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [postAbandonExhausted, setPostAbandonExhausted] = useState(false);
   const [freeSearchExhausted, setFreeSearchExhausted] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const lastSearchRef = useRef<{ filters: SearchFilters; skipTrialCount: boolean; isDemo: boolean } | null>(null);
   const { toast } = useToast();
@@ -162,6 +164,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     setPostAbandonExhausted(false);
     setFreeSearchExhausted(false);
     setSearchError(null);
+    setExpanded(false);
     
     // Refresh excluded businesses before searching (skip for demo)
     if (!isDemo) await fetchExcludedBusinesses();
@@ -291,6 +294,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
 
           setLeads(filteredLeads);
           setSearchError(null);
+          setExpanded(!!data.expanded);
 
           // Persist demo leads to localStorage so they survive navigation
           if (storageKeys) {
@@ -405,7 +409,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     postAbandonExhausted,
     freeSearchExhausted,
     searchError,
-  }), [leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError]);
+    expanded,
+  }), [leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>

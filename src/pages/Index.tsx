@@ -15,7 +15,7 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
 import { supabase } from '@/integrations/supabase/client';
-import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock, Loader2, RefreshCw } from 'lucide-react';
+import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock, Loader2, RefreshCw, MapPin, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, Country } from '@/types/lead';
@@ -57,7 +57,7 @@ function persistBlur(active: boolean, userId?: string) {
 
 const Index = () => {
   const location = useLocation();
-  const { leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError } = useLeadSearchContext();
+  const { leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed, freeSearchCount } = useTrial();
@@ -264,6 +264,41 @@ const Index = () => {
           <span className="text-sm sm:text-base font-medium text-foreground">
             <span className="text-primary font-bold">{noWebsiteCount}</span> business{noWebsiteCount !== 1 ? 'es' : ''} here need{noWebsiteCount === 1 ? 's' : ''} a website
           </span>
+        </div>
+      )}
+
+      {/* Expanded search indicator */}
+      {leads.length > 0 && expanded && noWebsiteCount >= 3 && (
+        <div className="flex items-center gap-2 py-2 px-3 sm:px-4 bg-muted/30 border border-border/50 rounded-lg">
+          <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          <span className="text-xs sm:text-sm text-muted-foreground">
+            Expanded to nearby areas to find more businesses without websites.
+          </span>
+        </div>
+      )}
+
+      {/* Fallback: expansion couldn't find 3 No Website leads */}
+      {leads.length > 0 && expanded && noWebsiteCount < 3 && !isLoading && (
+        <div className="flex flex-col gap-3 py-3 px-4 bg-muted/20 border border-border/40 rounded-lg">
+          <div className="flex items-start gap-2">
+            <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+            <span className="text-xs sm:text-sm text-muted-foreground">
+              We couldn't find 3 businesses without websites nearby for this search. Try a broader category for better results.
+            </span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {['Electrician', 'Plumber', 'Landscaper'].map((cat) => (
+              <Button
+                key={cat}
+                variant="outline"
+                size="sm"
+                className="text-xs h-7"
+                onClick={() => handleSearch({ keyword: cat, location: '', radius: 50000, country: lastSearchCountry })}
+              >
+                {cat}
+              </Button>
+            ))}
+          </div>
         </div>
       )}
 
