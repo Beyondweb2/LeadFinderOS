@@ -128,7 +128,7 @@ const Index = () => {
   }, [hasProAccess, user?.id]);
 
   // Free search exhausted — after 2nd search completes, block further searches
-  const freeSearchesExhausted = isFreeUser && localSearchCount >= 4;
+  const freeSearchesExhausted = isFreeUser && localSearchCount >= 1;
 
   // Check if paywall was dismissed within cooldown period
   const isWithinCooldown = useCallback(() => {
@@ -185,8 +185,8 @@ const Index = () => {
 
   // Handle search attempt
   const handleSearch = useCallback((filters: any) => {
-    // If already exhausted (3rd+ search), just show paywall
-    if (isFreeUser && localSearchCount >= 4) {
+    // If already exhausted, just show paywall
+    if (isFreeUser && localSearchCount >= 1) {
       setShowUpgradeAfterLimit(true);
       return;
     }
@@ -196,8 +196,8 @@ const Index = () => {
       const newCount = localSearchCount + 1;
       setLocalSearchCount(newCount);
       persistSearchCount(newCount, user?.id);
-      // Flag 2nd search for blur
-      if (newCount >= 4) {
+      // Flag first search for blur
+      if (newCount >= 1) {
         setButtonExhausted(true);
         persistBlur(true, user?.id);
       }
@@ -261,7 +261,7 @@ const Index = () => {
           isOnTrial={false}
           searchesRemaining={Infinity}
           dailyLimit={Infinity}
-          isPaidSubscriber={isAccessLoading || hasProAccess || localSearchCount < 2}
+          isPaidSubscriber={isAccessLoading || hasProAccess}
           disabled={postAbandonExhausted && !hasProAccess}
           isUpgradeLoading={isCheckoutLoading}
           onUpgrade={handleUnlockClick}
