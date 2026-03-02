@@ -138,16 +138,14 @@ const Subscribe = () => {
           {/* Benefits */}
           <div className="pt-2">
             <div className="border-t border-border/20 pt-5">
-              <div className="space-y-4.5 pl-1" style={{ display: 'flex', flexDirection: 'column', gap: '1.125rem' }}>
+              <ul className="space-y-4 pl-1">
                 {TRIAL_FEATURES.map((feature) => (
-                  <div key={feature} className="flex items-center gap-3">
-                    <div className="flex-shrink-0 h-[26px] w-[26px] rounded-full bg-emerald-500/20 flex items-center justify-center">
-                      <Check className="h-3.5 w-3.5 text-emerald-400" strokeWidth={3} />
-                    </div>
-                    <span className="text-sm font-medium">{feature}</span>
-                  </div>
+                  <li key={feature} className="flex items-start gap-3 text-sm font-medium leading-snug">
+                    <Check className="h-5 w-5 shrink-0 mt-0.5" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
+                    <span>{feature}</span>
+                  </li>
                 ))}
-              </div>
+              </ul>
             </div>
           </div>
 
@@ -179,8 +177,7 @@ const Subscribe = () => {
             <div className="space-y-3 pt-4">
               <Button
                 onClick={handleSubscribe}
-                variant="outline"
-                className="w-full h-[52px] text-base font-bold rounded-full border-primary/40 bg-primary/5 hover:bg-primary/10 hover:border-primary/60 transition-all"
+                className="btn-premium w-full h-[52px] text-base font-bold rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300"
                 size="lg"
                 disabled={isLoading}
               >
