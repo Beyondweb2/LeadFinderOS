@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { reportClientError } from '@/lib/errorReporting';
 import type { Lead, SearchFilters, SearchResponse } from '@/types/lead';
 
 interface ExcludedBusiness {
@@ -24,7 +25,7 @@ interface LeadSearchContextType {
   clearTrialLimitError: () => void;
   postAbandonExhausted: boolean;
   freeSearchExhausted: boolean;
-  searchError: string | null;
+  searchError: { message: string; errorId: string } | null;
   expanded: boolean;
 }
 
@@ -37,7 +38,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [trialLimitError, setTrialLimitError] = useState<TrialLimitError | null>(null);
   const [postAbandonExhausted, setPostAbandonExhausted] = useState(false);
   const [freeSearchExhausted, setFreeSearchExhausted] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searchError, setSearchError] = useState<{ message: string; errorId: string } | null>(null);
   const [expanded, setExpanded] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const lastSearchRef = useRef<{ filters: SearchFilters; skipTrialCount: boolean; isDemo: boolean } | null>(null);
@@ -267,9 +268,17 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
             return;
           }
           
-          // Non-retryable error — show to user, keep last results visible
+          // Non-retryable error — report diagnostics and show to user
           const errMsg = error.message || 'Search failed. Tap retry to try again.';
-          setSearchError(errMsg);
+          const errorId = await reportClientError({
+            functionName: 'search-leads',
+            payload: { keyword: filters.keyword, location: filters.location, radius: filters.radius },
+            userId: user?.id ?? null,
+            httpStatus: (error.context as any)?.status ?? null,
+            responseBody: body ? JSON.stringify(body).slice(0, 4000) : error.message,
+            errorMessage: error.message,
+          }).catch(() => 'UNKNOWN');
+          setSearchError({ message: errMsg, errorId });
           toast({
             title: 'Search failed',
             description: errMsg,
@@ -324,11 +333,18 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
           continue;
         }
-        // All retries exhausted — keep last results visible, show error
+        // All retries exhausted — report diagnostics, keep last results visible
         const errMsg = err?.message?.includes('timed out')
           ? 'Search timed out — please try again.'
           : 'Connection error — please check your internet and try again.';
-        setSearchError(errMsg);
+        const errorId = await reportClientError({
+          functionName: 'search-leads',
+          payload: { keyword: filters.keyword, location: filters.location, radius: filters.radius },
+          userId: user?.id ?? null,
+          errorMessage: err?.message || String(err),
+          errorStack: err?.stack,
+        }).catch(() => 'UNKNOWN');
+        setSearchError({ message: errMsg, errorId });
         toast({
           title: 'Search failed',
           description: errMsg,
