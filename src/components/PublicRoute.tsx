@@ -1,6 +1,7 @@
 import { ReactNode, useMemo } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
 import { Loader2 } from 'lucide-react';
 import { readLastRoute } from '@/hooks/usePersistLastRoute';
 
@@ -10,9 +11,9 @@ interface PublicRouteProps {
 
 export function PublicRoute({ children }: PublicRouteProps) {
   const { user, isLoading } = useAuth();
+  const { isPaidSubscriber, isStripeTrialing, isLoading: subLoading } = useSubscription();
   const [searchParams] = useSearchParams();
 
-  // Allow authenticated users to stay on the page if welcome=demo param is present
   const hasDemoWelcome = searchParams.get('welcome') === 'demo';
 
   const resumePath = useMemo(() => {
@@ -20,7 +21,7 @@ export function PublicRoute({ children }: PublicRouteProps) {
     return readLastRoute(user.id) || '/';
   }, [user]);
 
-  if (isLoading) {
+  if (isLoading || subLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -28,13 +29,14 @@ export function PublicRoute({ children }: PublicRouteProps) {
     );
   }
 
-  // If user is authenticated but has demo welcome flag, let them see the page (with popup)
   if (user && hasDemoWelcome) {
     return <>{children}</>;
   }
 
-  // If user is authenticated, redirect to the last place they were in the app
-  if (user) {
+  // Only redirect authenticated users who have an active subscription.
+  // Unsubscribed users should be able to view the landing page.
+  const hasActiveSubscription = isPaidSubscriber || isStripeTrialing;
+  if (user && hasActiveSubscription) {
     return <Navigate to={resumePath || '/'} replace />;
   }
 
