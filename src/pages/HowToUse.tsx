@@ -117,7 +117,6 @@ const HowToUse = () => {
                   
                   <div className="flex-1 min-w-0">
                     <CardTitle className="text-lg md:text-xl flex items-center justify-center sm:justify-start gap-2 mb-2">
-                      <step.icon className="h-5 w-5 text-primary flex-shrink-0" />
                       {step.title}
                     </CardTitle>
                     <p className="text-muted-foreground text-sm md:text-base leading-relaxed">
