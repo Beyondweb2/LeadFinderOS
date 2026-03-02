@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import appLogo from '@/assets/logo.png';
-import { ArrowRight, Check } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -102,10 +102,10 @@ export function WelcomeWalkthroughModal() {
           <div className="text-center text-[14px] text-muted-foreground/80 leading-relaxed mb-2">
             <p>Follow this short guided mission to contact 3 real businesses in under 2 minutes.</p>
           </div>
-          <div className="text-[13px] text-muted-foreground/70 leading-relaxed mb-6 space-y-1.5 w-full flex flex-col items-center">
-            <p className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0" /> Find live businesses instantly</p>
-            <p className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0" /> Contact them in one click</p>
-            <p className="flex items-center gap-2"><Check className="h-4 w-4 text-emerald-400 shrink-0" /> Start building your pipeline</p>
+          <div className="text-left text-[13px] text-muted-foreground/70 leading-relaxed mb-6 space-y-1.5 w-full px-2">
+            <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">1.</span> Find live businesses instantly</p>
+            <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">2.</span> Contact them in one click</p>
+            <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">3.</span> Start building your pipeline</p>
           </div>
 
           {/* Primary CTA */}
