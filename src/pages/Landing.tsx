@@ -428,8 +428,8 @@ const Landing = () => {
       });
       if (error) throw error;
 
-      if (data?.hasActiveSubscription) {
-        // Redirect to sign-in with prefilled email
+      if (data?.exists) {
+        // User already has an account — redirect to sign-in
         navigate(`/auth?email=${encodeURIComponent(trimmed)}&existing=true`);
         return;
       }
