@@ -5,7 +5,7 @@ import {
   Search, 
   ClipboardList, 
   FileText,
-  Briefcase,
+  Star,
   DollarSign,
   MoreHorizontal,
   Palette,
@@ -46,7 +46,7 @@ const mainNavItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Search', url: '/find-leads', icon: Search },
   { title: 'Outreach', url: '/outreach', icon: ClipboardList },
-  { title: 'Track', url: '/potential-work', icon: Briefcase },
+  { title: 'Track', url: '/potential-work', icon: Star },
 ];
 
 const moreNavItems = [
