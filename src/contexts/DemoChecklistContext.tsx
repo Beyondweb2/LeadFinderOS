@@ -106,7 +106,9 @@ export function DemoChecklistProvider({
     };
     const onSkip = () => {
       initializedRef.current = true;
+      allDoneRef.current = true;
       setIsOpen(false);
+      setIsReplay(false);
     };
     window.addEventListener('start-walkthrough', onStart);
     window.addEventListener('skip-walkthrough', onSkip);
