@@ -729,10 +729,10 @@ const Landing = () => {
             <div className="flex justify-center mt-10 sm:mt-14">
               <a
                 href="/auth"
-                className="inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-base sm:text-lg transition-all duration-300 hover:scale-[1.04] active:scale-[0.98]"
+                className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-sm sm:text-base transition-all duration-300 hover:scale-[1.04] active:scale-[0.98]"
                 style={{
-                  background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
-                  color: 'white',
+                  background: 'hsl(210 100% 50%)',
+                  color: 'hsl(220 40% 4%)',
                   boxShadow: '0 4px 20px hsl(210 100% 50% / 0.35), 0 0 40px hsl(210 100% 50% / 0.1)',
                 }}
               >
