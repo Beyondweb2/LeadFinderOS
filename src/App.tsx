@@ -1,10 +1,12 @@
 import { useEffect, Component, type ReactNode } from "react";
+
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
@@ -126,6 +128,7 @@ const App = () => {
   <ErrorBoundary>
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
+      <SubscriptionProvider>
       <AccentInitializer>
         <TooltipProvider>
           <Toaster />
@@ -295,6 +298,7 @@ const App = () => {
           </LeadSearchProvider>
         </TooltipProvider>
       </AccentInitializer>
+      </SubscriptionProvider>
     </AuthProvider>
   </QueryClientProvider>
   </ErrorBoundary>
