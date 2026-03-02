@@ -152,10 +152,9 @@ export function DemoChecklistPanel() {
             </h3>
 
             {/* Supporting text */}
-            <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5 space-y-1.5">
-              <p>You've started your outreach</p>
-              <p>Most freelancers stop after the first few messages</p>
-              <p>The ones who win keep stacking conversations</p>
+            <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5 space-y-3">
+              <p>You've contacted <span className="text-foreground font-medium">3 businesses</span>.<br />That's how this starts.</p>
+              <p>Most freelancers stop here.<br />The ones who land clients keep stacking outreach.</p>
             </div>
 
             {/* Stats highlight card — matches contact tips value card */}
@@ -176,9 +175,9 @@ export function DemoChecklistPanel() {
               </div>
             </div>
 
-            {/* Micro-pressure */}
+            {/* Supporting line under stats */}
             <p className="text-center text-[12px] text-primary/70 font-medium mb-5">
-              Consistency creates clients.
+              Clients come from volume.
             </p>
 
             {/* CTA */}
@@ -189,11 +188,6 @@ export function DemoChecklistPanel() {
               Find My Next Client
               <ArrowRight className="h-4 w-4" />
             </button>
-
-            {/* Subtext */}
-            <p className="text-center text-[10px] text-muted-foreground/40 mt-3">
-              Consistency creates clients.
-            </p>
           </div>
         </DialogContent>
       </Dialog>
