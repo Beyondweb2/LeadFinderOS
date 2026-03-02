@@ -95,7 +95,7 @@ export function WelcomeWalkthroughModal() {
 
           {/* Headline */}
           <h3 className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4 text-foreground">
-            Let's Get Your First{' '}<br /><span className="text-primary">Client</span> 👋
+            Let's Get Your<br /><span className="text-primary">First Clients</span> 👋
           </h3>
 
           {/* Body */}
