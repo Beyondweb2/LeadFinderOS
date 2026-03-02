@@ -98,7 +98,7 @@ const Subscribe = () => {
       <div className="relative z-10 w-full max-w-md">
         <Button variant="ghost" className="mb-4" onClick={handleBack}>
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back
+          Go to app
         </Button>
 
         <div className="bg-[hsl(220_50%_5%)] border border-border/40 rounded-2xl overflow-hidden px-6 py-7 sm:px-8 sm:py-8 space-y-6 shadow-[0_8px_32px_hsl(220_50%_3%/0.5)]">
