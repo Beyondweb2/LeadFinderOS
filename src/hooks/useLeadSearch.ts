@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { reportClientError } from '@/lib/errorReporting';
 import type { Lead, SearchFilters, SearchResponse } from '@/types/lead';
 
 interface TrialLimitError {
@@ -8,8 +9,9 @@ interface TrialLimitError {
   limit: number;
 }
 
-interface PostAbandonExhausted {
-  exhausted: true;
+interface SearchErrorState {
+  errorId: string;
+  message: string;
 }
 
 export function useLeadSearch() {
@@ -17,6 +19,8 @@ export function useLeadSearch() {
   const [isLoading, setIsLoading] = useState(false);
   const [trialLimitError, setTrialLimitError] = useState<TrialLimitError | null>(null);
   const [postAbandonExhausted, setPostAbandonExhausted] = useState(false);
+  const [searchError, setSearchError] = useState<SearchErrorState | null>(null);
+  const [lastFilters, setLastFilters] = useState<SearchFilters | null>(null);
   const { toast } = useToast();
 
   const checkPreviousSearch = async (filters: SearchFilters): Promise<{ searched: boolean; date?: string; count?: number }> => {
@@ -60,12 +64,21 @@ export function useLeadSearch() {
   };
 
   const clearTrialLimitError = () => setTrialLimitError(null);
+  const clearSearchError = () => setSearchError(null);
 
   const search = async (filters: SearchFilters) => {
     setIsLoading(true);
     setTrialLimitError(null);
     setPostAbandonExhausted(false);
+    setSearchError(null);
+    setLastFilters(filters);
     
+    let userId: string | null = null;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      userId = user?.id ?? null;
+    } catch { /* ignore */ }
+
     try {
       const { data, error } = await supabase.functions.invoke<SearchResponse>('search-leads', {
         body: filters,
@@ -74,25 +87,25 @@ export function useLeadSearch() {
       if (error) {
         console.error('Search error:', error);
         
-        // Try to parse the error context for trial limit
+        // Try to parse the error context for trial limit / post-abandon
+        let parsedBody: any = null;
         try {
           const errorContext = error.context;
           if (errorContext && typeof errorContext === 'object') {
-            const body = await errorContext.json?.() || errorContext;
-            if (body?.code === 'POST_ABANDON_EXHAUSTED') {
+            parsedBody = await errorContext.json?.() || errorContext;
+            if (parsedBody?.code === 'POST_ABANDON_EXHAUSTED') {
               setPostAbandonExhausted(true);
               return;
             }
-            if (body?.code === 'TRIAL_LIMIT_REACHED') {
+            if (parsedBody?.code === 'TRIAL_LIMIT_REACHED') {
               setTrialLimitError({
-                searchesToday: body.searches_today || 3,
-                limit: body.limit || 3,
+                searchesToday: parsedBody.searches_today || 3,
+                limit: parsedBody.limit || 3,
               });
               return;
             }
           }
         } catch {
-          // Check if error message indicates trial limit
           if (error.message?.includes('Trial limit reached')) {
             setTrialLimitError({ searchesToday: 3, limit: 3 });
             return;
@@ -105,12 +118,22 @@ export function useLeadSearch() {
                                errorMessage.includes('network') ||
                                errorMessage.includes('fetch');
         
-        toast({
-          title: 'Search failed',
-          description: isNetworkError 
-            ? 'Network error - please check your connection and try again.'
-            : (error.message || 'Failed to search for businesses. Please try again.'),
-          variant: 'destructive',
+        // Report diagnostic error
+        const errorId = await reportClientError({
+          functionName: 'search-leads',
+          payload: { keyword: filters.keyword, location: filters.location, radius: filters.radius },
+          userId,
+          httpStatus: (error.context as any)?.status ?? null,
+          responseBody: parsedBody ? JSON.stringify(parsedBody).slice(0, 4000) : error.message,
+          errorMessage: error.message,
+          extra: { isNetworkError },
+        });
+
+        setSearchError({
+          errorId,
+          message: isNetworkError 
+            ? 'Network error — please check your connection and try again.'
+            : 'Something went wrong running this search. Please try again.',
         });
         return;
       }
@@ -118,17 +141,30 @@ export function useLeadSearch() {
       if (data) {
         setLeads(data.leads);
         await saveSearch(filters, data.leads.length);
-        // Search complete — no toast
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Search error:', err);
-      toast({
-        title: 'Search failed',
-        description: 'Connection error - please check your internet and try again.',
-        variant: 'destructive',
+      
+      const errorId = await reportClientError({
+        functionName: 'search-leads',
+        payload: { keyword: filters.keyword, location: filters.location, radius: filters.radius },
+        userId,
+        errorMessage: err?.message || String(err),
+        errorStack: err?.stack,
+      });
+
+      setSearchError({
+        errorId,
+        message: 'Connection error — please check your internet and try again.',
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const retrySearch = () => {
+    if (lastFilters) {
+      search(lastFilters);
     }
   };
 
@@ -185,8 +221,6 @@ export function useLeadSearch() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-
-      // Export complete — no toast
     } catch (err) {
       console.error('CSV export failed:', err);
       toast({
@@ -206,5 +240,8 @@ export function useLeadSearch() {
     clearTrialLimitError,
     postAbandonExhausted,
     checkPreviousSearch,
+    searchError,
+    clearSearchError,
+    retrySearch,
   };
 }

@@ -118,6 +118,30 @@ export type Database = {
         }
         Relationships: []
       }
+      client_error_reports: {
+        Row: {
+          context: Json
+          created_at: string
+          error_id: string
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          context?: Json
+          created_at?: string
+          error_id: string
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          context?: Json
+          created_at?: string
+          error_id?: string
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       copied_phones: {
         Row: {
           copied_at: string
