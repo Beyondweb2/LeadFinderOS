@@ -12,6 +12,27 @@ import {
   DialogContent,
 } from '@/components/ui/dialog';
 
+function CountUp({ value }: { value: number }) {
+  const [display, setDisplay] = useState(0);
+  const rafRef2 = useRef<number>();
+
+  useEffect(() => {
+    if (value === 0) { setDisplay(0); return; }
+    const duration = 1000;
+    const start = performance.now();
+    const animate = (now: number) => {
+      const progress = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(eased * value));
+      if (progress < 1) rafRef2.current = requestAnimationFrame(animate);
+    };
+    rafRef2.current = requestAnimationFrame(animate);
+    return () => { if (rafRef2.current) cancelAnimationFrame(rafRef2.current); };
+  }, [value]);
+
+  return <div className="text-2xl font-bold text-primary">{display}</div>;
+}
+
 export function DemoChecklistPanel() {
   const { state, allDone, isDemoUser } = useDemoChecklist();
   const { isStripeTrialing } = useTrial();
@@ -141,15 +162,15 @@ export function DemoChecklistPanel() {
             <div className="w-full rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] px-5 py-4 mb-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
               <div className="flex items-center justify-around">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-primary">{metrics.noWebsite}</div>
+                  <CountUp value={metrics.noWebsite} />
                   <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Businesses Found</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-primary">{metrics.added}</div>
+                  <CountUp value={metrics.added} />
                   <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Leads Added</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-primary">{metrics.messages}</div>
+                  <CountUp value={metrics.messages} />
                   <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Conversations</div>
                 </div>
               </div>
