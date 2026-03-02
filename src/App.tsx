@@ -15,7 +15,7 @@ import { AccentInitializer } from "@/components/AccentInitializer";
 import { RefSourceCapture } from "@/components/RefSourceCapture";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
-import Subscribe from "./pages/Subscribe";
+// Subscribe page removed — checkout happens directly from landing
 import BillingSuccess from "./pages/BillingSuccess";
 import BillingCancel from "./pages/BillingCancel";
 import Outreach from "./pages/Outreach";
@@ -138,14 +138,6 @@ const App = () => {
               <RefSourceCapture />
           <Routes>
             <Route path="/auth" element={<Auth />} />
-             <Route 
-               path="/subscribe" 
-               element={
-                 <ProtectedRoute>
-                   <Subscribe />
-                 </ProtectedRoute>
-               } 
-              />
              <Route path="/billing/success" element={<BillingSuccess />} />
              <Route path="/billing/cancel" element={<BillingCancel />} />
              <Route 

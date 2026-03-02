@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { trackLead } from '@/lib/fbPixel';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
@@ -14,6 +15,7 @@ import {
   MessageSquare,
   Star,
   Zap,
+  Loader2,
 } from 'lucide-react';
 import demoVideo from '@/assets/leadfinder-demo-v5.mp4';
 import appLogo from '@/assets/logo.png';
@@ -386,9 +388,33 @@ const Landing = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
 
   // Lock landing page to dark brand theme
   useLandingTheme();
+
+  const handleStartCheckout = useCallback(async () => {
+    setIsStartingCheckout(true);
+    try {
+      const headers: Record<string, string> = {};
+      // If user is logged in, pass their token
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.access_token) {
+        headers.Authorization = `Bearer ${sessionData.session.access_token}`;
+      }
+
+      const { data, error } = await supabase.functions.invoke('create-checkout', { headers });
+      if (error) throw error;
+      if (data?.url) {
+        window.location.href = data.url;
+        return; // Keep loading state while redirecting
+      }
+      throw new Error('No checkout URL received');
+    } catch (err) {
+      console.error('Checkout error:', err);
+      setIsStartingCheckout(false);
+    }
+  }, []);
 
   // Track scroll to show/hide sticky CTA and adjust header button
   useEffect(() => {
@@ -988,12 +1014,20 @@ const Landing = () => {
               <Button
                 size="lg"
                 className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
-                asChild
+                onClick={handleStartCheckout}
+                disabled={isStartingCheckout}
               >
-                <Link to="/auth?intent=upgrade">
-                  Start Free Trial — £0 Today
-                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-                </Link>
+                {isStartingCheckout ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Redirecting to checkout...
+                  </>
+                ) : (
+                  <>
+                    Start Free Trial — £0 Today
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  </>
+                )}
               </Button>
 
               <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">

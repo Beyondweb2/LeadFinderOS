@@ -139,8 +139,8 @@ const Auth = () => {
             title: t('auth.accountCreated'),
             description: t('auth.welcomeRedirecting'),
           });
-          // New users go to trial signup page to enter card details
-          navigate('/subscribe');
+          // New users go to landing to start checkout
+          navigate('/landing');
           return;
         }
       }
