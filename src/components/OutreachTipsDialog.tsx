@@ -37,8 +37,21 @@ export function OutreachTipsDialog() {
         setOpen(true);
       }
     };
+
+    // Also show when user skips the contact walkthrough step
+    const onSkipContact = () => {
+      if (!localStorage.getItem(storageKey)) {
+        setContactMethod('whatsapp');
+        setOpen(true);
+      }
+    };
+
     window.addEventListener('outreach-first-contact-click', onContactClick);
-    return () => window.removeEventListener('outreach-first-contact-click', onContactClick);
+    window.addEventListener('walkthrough-skip-contact-steps', onSkipContact);
+    return () => {
+      window.removeEventListener('outreach-first-contact-click', onContactClick);
+      window.removeEventListener('walkthrough-skip-contact-steps', onSkipContact);
+    };
   }, [storageKey]);
 
   useEffect(() => {
