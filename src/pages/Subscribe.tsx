@@ -6,11 +6,12 @@ import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Check, Loader2, ArrowLeft, Shield, Clock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import logoIcon from '@/assets/leadfinder-logo-icon.png';
 
 const TRIAL_FEATURES = [
   'Unlimited lead searches',
-  'Keep your outreach organised',
-  'Turn outreach into real clients',
+  'Stay organised as you reach out',
+  'Turn outreach into paying clients',
 ];
 
 const Subscribe = () => {
@@ -99,26 +100,30 @@ const Subscribe = () => {
           Back to app
         </Button>
 
-        <div className="bg-[hsl(220_50%_5%)] border border-border/40 rounded-xl overflow-hidden p-6 sm:p-8 space-y-6">
+        <div className="bg-[hsl(220_50%_5%)] border border-border/40 rounded-xl overflow-hidden p-5 sm:p-7 space-y-4">
           {/* Brand header */}
-          <div className="text-center">
+          <div className="flex items-center justify-center gap-2">
+            <img src={logoIcon} alt="" className="h-5 w-5" />
             <p className="text-sm font-semibold tracking-wide">
               Lead<span className="text-primary">Finder</span> Pro
             </p>
           </div>
 
-          {/* Headline */}
-          <div className="text-center space-y-2">
+          {/* Headline + sub */}
+          <div className="text-center space-y-1.5">
             <h1 className="text-2xl font-bold tracking-tight">
-              Start your 5-day free trial
+              Start your 5-day <span className="text-primary">free trial</span>
             </h1>
             <p className="text-sm text-muted-foreground">
               £0 today · Full access · Cancel anytime
             </p>
+            <p className="text-sm text-muted-foreground/70">
+              Find your next client today.
+            </p>
           </div>
 
           {/* Benefits */}
-          <div className="space-y-3">
+          <div className="space-y-2">
             {TRIAL_FEATURES.map((feature) => (
               <div key={feature} className="flex items-center gap-3">
                 <div className="flex-shrink-0 h-5 w-5 rounded-full bg-emerald-500/15 flex items-center justify-center">
@@ -130,8 +135,8 @@ const Subscribe = () => {
           </div>
 
           {/* Pricing */}
-          <div className="rounded-lg bg-muted/50 border border-border/40 p-4 text-center space-y-1">
-            <p className="text-sm text-muted-foreground">After 5 days</p>
+          <div className="rounded-lg bg-muted/50 border border-border/40 px-4 py-3 text-center space-y-0.5">
+            <p className="text-xs text-muted-foreground">After 5 days</p>
             <p className="text-2xl font-bold">£19.99<span className="text-sm font-normal text-muted-foreground">/month</span></p>
             <p className="text-xs text-muted-foreground">Cancel anytime from your account</p>
           </div>
@@ -161,10 +166,10 @@ const Subscribe = () => {
               </Button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-3">
               <Button
                 onClick={handleSubscribe}
-                className="btn-premium w-full h-12 text-base font-bold text-primary-foreground"
+                className="btn-premium w-full h-12 text-base font-bold text-primary-foreground shadow-[0_4px_20px_hsl(210_100%_50%/0.3)] hover:shadow-[0_6px_24px_hsl(210_100%_50%/0.4)] hover:-translate-y-0.5 transition-all"
                 size="lg"
                 disabled={isLoading}
               >
