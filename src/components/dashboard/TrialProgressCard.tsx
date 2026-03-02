@@ -91,12 +91,19 @@ export function TrialProgressCard({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Unlock className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold">Full Access</span>
+          <span className="text-sm font-semibold">Free Trial</span>
         </div>
         <span className="text-xs text-muted-foreground">
           {countdown || '...'}
         </span>
       </div>
+
+      {/* Billing reassurance */}
+      {trialEnd && (
+        <p className="text-xs text-muted-foreground text-center">
+          You won't be charged until {new Date(trialEnd).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+        </p>
+      )}
 
       {/* 4-stat grid */}
       <div className="grid grid-cols-4 gap-2">

@@ -4,16 +4,23 @@ import { useNavigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Check, Loader2, CreditCard, ArrowLeft } from 'lucide-react';
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
+import { Check, Loader2, ArrowLeft, Shield, Clock, CreditCard, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
 
-const FEATURES = [
+const TRIAL_FEATURES = [
   'Unlimited lead searches',
-  'Full CRM & tracking',
-  'WhatsApp & SMS outreach',
-  'Export & templates',
+  'Full Outreach CRM & tracking',
+  'WhatsApp & SMS outreach tools',
+  'Export leads & message templates',
+  'Build a consistent pipeline',
+];
+
+const TRUST_POINTS = [
+  { icon: Shield, text: 'Secure payment via Stripe' },
+  { icon: Clock, text: 'Email reminder 24h before billing' },
+  { icon: CreditCard, text: 'Cancel instantly from your account' },
 ];
 
 const Subscribe = () => {
@@ -31,7 +38,7 @@ const Subscribe = () => {
     }
   }, [authLoading, user, navigate]);
 
-  // Redirect paid subscribers to dashboard
+  // Redirect paid/trialing subscribers to dashboard
   useEffect(() => {
     if (subLoading) return;
     if (isPaidSubscriber || isStripeTrialing) {
@@ -98,43 +105,67 @@ const Subscribe = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-
       <div className="relative z-10 w-full max-w-lg">
-        <Button variant="ghost" className="mb-6" onClick={handleBack}>
+        <Button variant="ghost" className="mb-4" onClick={handleBack}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to app
         </Button>
 
-        <Card className="bg-card/80 backdrop-blur-xl border-primary/20">
-          <CardHeader className="text-center pb-2">
+        <Card className="bg-card/80 backdrop-blur-xl border-primary/20 overflow-hidden">
+          {/* Header */}
+          <CardHeader className="text-center pb-4 pt-8">
             <div className="flex justify-center mb-4">
-              <img src={appLogo} alt="LeadFinder Pro" className="h-12 w-12" />
+              <div className="relative">
+                <img src={appLogo} alt="LeadFinder Pro" className="h-14 w-14" />
+                <div className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                  FREE
+                </div>
+              </div>
             </div>
-            <CardTitle className="text-2xl font-bold">
-              Unlock unlimited access
-            </CardTitle>
-            <CardDescription className="text-base">
-              Upgrade to continue unlimited searches and keep building your pipeline.
-            </CardDescription>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              Start your 5-day free trial
+            </h1>
+            <div className="flex flex-col items-center gap-1 mt-3">
+              <div className="flex items-center gap-3">
+                <span className="inline-flex items-center gap-1 text-sm font-medium text-primary bg-primary/10 px-3 py-1 rounded-full">
+                  <Zap className="h-3.5 w-3.5" />
+                  £0 today
+                </span>
+                <span className="text-sm text-muted-foreground">•</span>
+                <span className="text-sm text-muted-foreground">Full access</span>
+                <span className="text-sm text-muted-foreground">•</span>
+                <span className="text-sm text-muted-foreground">Cancel anytime</span>
+              </div>
+            </div>
           </CardHeader>
 
-          <CardContent className="space-y-6">
-            <ul className="space-y-3">
-              {FEATURES.map((feature) => (
-                <li key={feature} className="flex items-center gap-3">
-                  <Check className="h-5 w-5 text-primary shrink-0" />
-                  <span>{feature}</span>
-                </li>
+          <CardContent className="space-y-6 px-6">
+            {/* Features */}
+            <div className="space-y-3">
+              {TRIAL_FEATURES.map((feature) => (
+                <div key={feature} className="flex items-center gap-3">
+                  <div className="flex-shrink-0 h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center">
+                    <Check className="h-3 w-3 text-primary" />
+                  </div>
+                  <span className="text-sm">{feature}</span>
+                </div>
               ))}
-            </ul>
+            </div>
+
+            {/* Pricing clarity */}
+            <div className="rounded-lg bg-muted/50 border border-border p-4 text-center space-y-1">
+              <p className="text-sm font-medium">After your free trial</p>
+              <p className="text-2xl font-bold">£19.99<span className="text-sm font-normal text-muted-foreground">/month</span></p>
+              <p className="text-xs text-muted-foreground">No hidden fees · Cancel in one click</p>
+            </div>
           </CardContent>
 
-          <CardFooter className="flex flex-col gap-3">
+          <CardFooter className="flex flex-col gap-4 px-6 pb-8">
             {waitingForPayment ? (
               <div className="w-full text-center space-y-3">
                 <div className="flex items-center justify-center gap-2 text-primary">
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  <span className="font-medium">Waiting for payment...</span>
+                  <span className="font-medium">Waiting for payment setup...</span>
                 </div>
                 <p className="text-xs text-muted-foreground">
                   Complete checkout in the new tab. This page will update automatically.
@@ -157,7 +188,7 @@ const Subscribe = () => {
               <>
                 <Button
                   onClick={handleSubscribe}
-                  className="w-full"
+                  className="w-full h-12 text-base font-semibold"
                   size="lg"
                   disabled={isLoading}
                 >
@@ -168,14 +199,20 @@ const Subscribe = () => {
                     </>
                   ) : (
                     <>
-                      <CreditCard className="mr-2 h-4 w-4" />
-                      Unlock unlimited - £19.99/month
+                      Start Free Trial — £0 Today
                     </>
                   )}
                 </Button>
-                <p className="text-xs text-muted-foreground text-center">
-                  Cancel anytime
-                </p>
+
+                {/* Trust elements */}
+                <div className="w-full space-y-2 pt-2">
+                  {TRUST_POINTS.map((point) => (
+                    <div key={point.text} className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <point.icon className="h-3.5 w-3.5 flex-shrink-0" />
+                      <span>{point.text}</span>
+                    </div>
+                  ))}
+                </div>
               </>
             )}
           </CardFooter>

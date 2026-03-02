@@ -97,7 +97,7 @@ const Dashboard = () => {
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm sm:text-base text-muted-foreground">
           {showTrialProgress 
-            ? 'Full access is active — everything unlocked'
+            ? 'Your free trial is active — everything unlocked'
             : 'Track your performance and revenue'
           }
         </p>

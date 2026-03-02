@@ -197,11 +197,11 @@ const logStep = (step: string, details?: unknown) => {
         sessionConfig.metadata = trackingMetadata;
       }
       
-      // Offer 3-day trial if user hasn't used one before
+      // Offer 5-day trial if user hasn't used one before
       if (!trialUsed) {
-        logStep("Creating checkout with 3-day free trial");
+        logStep("Creating checkout with 5-day free trial");
         sessionConfig.subscription_data = {
-          trial_period_days: 3,
+          trial_period_days: 5,
           ...(Object.keys(trackingMetadata).length > 0 ? { metadata: trackingMetadata } : {}),
         };
       } else {
