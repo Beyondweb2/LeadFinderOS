@@ -348,7 +348,8 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     if (d) {
       setDatePopoverOpen(false);
       const isCustom = nextAction.startsWith('custom::');
-      const dbAction: NextActionType = isCustom ? 'follow_up' : nextAction as NextActionType;
+      const trackOpt = TRACK_NEXT_ACTION_OPTIONS.find(o => o.value === nextAction);
+      const dbAction: NextActionType = isCustom ? 'follow_up' : (trackOpt?.dbValue || nextAction as NextActionType);
       await onNextActionChange(lead.id, dbAction, format(d, 'yyyy-MM-dd'));
       if (dbAction !== 'none') {
         window.dispatchEvent(new CustomEvent('demo-checklist-next-action-set'));
