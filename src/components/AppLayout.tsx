@@ -95,7 +95,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             {/* Skip walkthrough link — top-right, outside modals */}
             <div className="flex items-center justify-end gap-2 px-4 sm:px-6 lg:px-8 pt-2 pb-1">
               <SkipWalkthroughButton />
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 md:hidden">
                 <AccentColorPicker />
                 <Avatar className="h-8 w-8">
                   {avatarUrl ? (
