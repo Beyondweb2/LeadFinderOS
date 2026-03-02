@@ -86,9 +86,13 @@ const ScrollReveal = ({
   );
 };
 
-// Smooth scroll to pricing card
+// Smooth scroll to pricing card (centered in viewport)
 const scrollToPricing = () => {
-  document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
+  const el = document.getElementById('pricing');
+  if (!el) return;
+  const rect = el.getBoundingClientRect();
+  const offset = window.scrollY + rect.top - (window.innerHeight / 2) + (rect.height / 2);
+  window.scrollTo({ top: offset, behavior: 'smooth' });
 };
 
 // Inline CTA band — desktop only, inserted between sections
@@ -403,7 +407,7 @@ const Landing = () => {
     setEmailError('');
     // Scroll to pricing
     setTimeout(() => {
-      document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' });
+      scrollToPricing();
     }, 100);
   }, []);
 
