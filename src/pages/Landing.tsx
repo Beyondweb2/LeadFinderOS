@@ -738,6 +738,9 @@ const Landing = () => {
               >
                 Start Finding Leads →
               </a>
+              <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
+                No card required · Full access instantly · Cancel anytime
+              </p>
             </div>
           </ScrollReveal>
 
