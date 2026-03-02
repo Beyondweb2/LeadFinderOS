@@ -44,3 +44,9 @@ verify_jwt = false
 
 [functions.test-abandoned-email]
 verify_jwt = false
+
+[functions.complete-signup]
+verify_jwt = false
+
+[functions.get-checkout-email]
+verify_jwt = false
