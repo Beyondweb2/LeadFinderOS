@@ -106,6 +106,7 @@ export function WelcomeWalkthroughModal() {
             <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">1.</span> Find businesses with no website</p>
             <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">2.</span> Message them instantly</p>
             <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">3.</span> Start real conversations</p>
+            <p className="flex items-center gap-2"><span className="text-emerald-400 font-semibold">4.</span> Track progress</p>
           </div>
 
           {/* Primary CTA */}
