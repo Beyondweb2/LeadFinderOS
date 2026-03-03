@@ -414,7 +414,7 @@ const Landing = () => {
             headers: { Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` },
           });
           if (error) throw error;
-          if (data?.url) window.open(data.url, '_blank');
+          if (data?.url) window.location.href = data.url;
         } catch {
           navigate('/auth?intent=upgrade');
         } finally {
