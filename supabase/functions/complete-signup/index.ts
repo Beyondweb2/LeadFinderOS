@@ -137,11 +137,19 @@ serve(async (req) => {
     }, { onConflict: 'user_id' });
     logStep("Subscription record saved");
 
-    // Log funnel event
-    await supabaseAdmin.from('funnel_events').insert({
-      user_id: userId,
-      event_type: 'signup_with_trial',
-    });
+    // Log funnel events
+    await supabaseAdmin.from('funnel_events').insert([
+      { user_id: userId, event_type: 'signup_with_trial' },
+      { user_id: userId, event_type: 'trial_started' },
+    ]);
+    logStep("Funnel events logged: signup_with_trial + trial_started");
+
+    // Mark checkout_attempts as converted
+    await supabaseAdmin
+      .from('checkout_attempts')
+      .update({ converted: true })
+      .eq('email', email);
+    logStep("Checkout attempt marked converted", { email });
 
     // Sign in the user to get a session token
     const { data: signInData, error: signInError } = await supabaseAdmin.auth.admin.generateLink({

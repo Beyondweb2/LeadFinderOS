@@ -389,7 +389,7 @@
 
         logStep("Subscription record updated", { userId: user.id, status });
 
-        // Log funnel event: subscription_active (fire-and-forget)
+        // Log funnel events (fire-and-forget)
         if (status === 'active') {
           supabaseAdmin
             .from('funnel_events')
@@ -397,6 +397,15 @@
             .then(({ error }) => {
               if (error) console.log('[FUNNEL] subscription_active insert failed', error.message);
               else console.log('[FUNNEL] subscription_active logged', { userId: user.id });
+            });
+        }
+        if (status === 'trialing') {
+          supabaseAdmin
+            .from('funnel_events')
+            .insert({ user_id: user.id, event_type: 'trial_started' })
+            .then(({ error }) => {
+              if (error) console.log('[FUNNEL] trial_started insert failed', error.message);
+              else console.log('[FUNNEL] trial_started logged', { userId: user.id });
             });
         }
       }

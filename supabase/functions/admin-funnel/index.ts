@@ -43,13 +43,26 @@ serve(async (req) => {
     try { body = await req.json(); } catch { /* no body = default action */ }
     const action = (body.action as string) || "funnel_stats";
 
-    // ===================== FUNNEL STATS (original) =====================
+    // ===================== FUNNEL STATS =====================
     if (action === "funnel_stats") {
       const now = new Date();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      const eventTypes = ["demo_started", "trial_started", "subscription_active"];
+      // Checkout attempts from dedicated table (top of funnel)
+      const { count: attemptsAll } = await supabase
+        .from("checkout_attempts")
+        .select("id", { count: "exact", head: true });
+
+      const { count: attempts7 } = await supabase
+        .from("checkout_attempts")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", sevenDaysAgo);
+
+      // Trial started + subscription active from funnel_events
+      const eventTypes = ["trial_started", "subscription_active"];
       const results: Record<string, { last7: number; allTime: number }> = {};
+
+      results["checkout_attempts"] = { last7: attempts7 ?? 0, allTime: attemptsAll ?? 0 };
 
       for (const et of eventTypes) {
         const { count: allTime } = await supabase
