@@ -466,7 +466,7 @@ export function useOutreach() {
     const previousStatus = targetLead?.status;
     
     // If new status is an outreach/contact method, persist it as contact_method
-    const CONTACT_METHOD_STATUSES: LeadStatus[] = ['whatsapp', 'sms', 'contacted', 'facebook_msg', 'sent_initial_text', 'sent_voice_note'];
+    const CONTACT_METHOD_STATUSES: LeadStatus[] = ['whatsapp', 'sms', 'facebook_msg', 'sent_initial_text', 'sent_voice_note'];
     const updates: Partial<OutreachLead> = { status };
     if (CONTACT_METHOD_STATUSES.includes(status)) {
       updates.contact_method = status;
