@@ -35,6 +35,7 @@ import Landing from "./pages/Landing";
 import Terms from "./pages/Terms";
 import Feedback from "./pages/Feedback";
 import AffiliateProgram from "./pages/AffiliateProgram";
+import Playbook from "./pages/Playbook";
 import UnlockAccess from "./pages/UnlockAccess";
 import Start from "./pages/Start";
 
@@ -252,6 +253,18 @@ const App = () => {
                    <SubscriptionGate>
                      <AppLayout>
                        <Templates />
+                     </AppLayout>
+                   </SubscriptionGate>
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/playbook" 
+              element={
+                <ProtectedRoute>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <Playbook />
                      </AppLayout>
                    </SubscriptionGate>
                 </ProtectedRoute>

@@ -48,6 +48,7 @@ import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from 
 import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS } from '@/types/outreach';
 import { SingleWhatsAppDialog } from './SingleWhatsAppDialog';
 import { FacebookSection } from './FacebookSection';
+import { OutreachNudge } from './OutreachNudge';
 
 interface OutreachLeadDialogProps {
   lead: OutreachLead | null;
@@ -151,6 +152,7 @@ export function OutreachLeadDialog({
                       </SelectContent>
                     </Select>
                   )}
+                  <OutreachNudge status={lead.status} />
                 </div>
               </div>
             </div>

@@ -13,7 +13,7 @@ import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText, Star,
-  DollarSign, HelpCircle, Users, MessageSquare, ShieldCheck
+  DollarSign, HelpCircle, Users, MessageSquare, ShieldCheck, Lightbulb
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
@@ -33,6 +33,7 @@ export function AppSidebar() {
     { title: t('nav.trackLeads'), url: '/potential-work', icon: Star, description: t('nav.trackLeadsDesc') },
     { title: t('nav.paidClients'), url: '/paid-clients', icon: DollarSign, description: t('nav.paidClientsDesc') },
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
+    { title: 'Playbook', url: '/playbook', icon: Lightbulb, description: 'Closing tips & tactics' },
     { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle, description: t('nav.howToUseDesc') },
     { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare, description: t('nav.feedbackDesc') },
   ];
