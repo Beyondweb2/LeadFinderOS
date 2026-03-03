@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -15,8 +15,10 @@ import { AccentInitializer } from "@/components/AccentInitializer";
 import { RefSourceCapture } from "@/components/RefSourceCapture";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
-import Confirmation from "./pages/Confirmation";
+// Subscribe page removed — checkout happens directly from landing
+import BillingSuccess from "./pages/BillingSuccess";
 import CompleteSetup from "./pages/CompleteSetup";
+import BillingCancel from "./pages/BillingCancel";
 import Outreach from "./pages/Outreach";
 import Dashboard from "./pages/Dashboard";
 import Templates from "./pages/Templates";
@@ -147,15 +149,9 @@ const App = () => {
               <ScrollToTop />
           <Routes>
             <Route path="/auth" element={<Auth />} />
-             <Route path="/confirmation" element={
-               <ProtectedRoute>
-                 <Confirmation />
-               </ProtectedRoute>
-             } />
+             <Route path="/billing/success" element={<BillingSuccess />} />
              <Route path="/complete-setup" element={<CompleteSetup />} />
-             {/* Legacy billing routes redirect to new flow */}
-             <Route path="/billing/success" element={<Navigate to="/confirmation" replace />} />
-             <Route path="/billing/cancel" element={<Navigate to="/landing?checkout=cancelled" replace />} />
+             <Route path="/billing/cancel" element={<BillingCancel />} />
              <Route 
                path="/landing" 
               element={

@@ -402,34 +402,64 @@ const Landing = () => {
   // Lock landing page to dark brand theme
   useLandingTheme();
 
-  const checkoutCancelled = searchParams.get('checkout') === 'cancelled';
-
   const handlePricingCTAClick = useCallback(() => {
-    // If user is logged in but not subscribed, go directly to checkout
-    if (user) {
-      setIsStartingCheckout(true);
-      (async () => {
-        try {
-          const { data, error } = await supabase.functions.invoke('create-checkout', {
-            headers: { Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` },
-          });
-          if (error) throw error;
-          if (data?.url) window.location.href = data.url;
-        } catch {
-          navigate('/auth?intent=upgrade');
-        } finally {
-          setIsStartingCheckout(false);
-        }
-      })();
+    setShowEmailStep(true);
+    setEmailError('');
+    // Scroll to pricing
+    setTimeout(() => {
+      scrollToPricing();
+    }, 100);
+  }, []);
+
+  const handleEmailContinue = useCallback(async () => {
+    const trimmed = checkoutEmail.trim().toLowerCase();
+    // Basic email validation
+    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+      setEmailError('Please enter a valid email address');
       return;
     }
-    // Not logged in — go to signup
-    navigate('/auth?intent=upgrade');
-  }, [user, navigate]);
+    setEmailError('');
+    setIsCheckingEmail(true);
 
-  const handleDismissCancelBanner = useCallback(() => {
-    setSearchParams({}, { replace: true });
-  }, [setSearchParams]);
+    try {
+      // Check if this email already has an active subscription
+      const { data, error } = await supabase.functions.invoke('check-email-subscription', {
+        body: { email: trimmed },
+      });
+      if (error) throw error;
+
+      if (data?.exists) {
+        // User already has an account — redirect to sign-in
+        navigate(`/auth?email=${encodeURIComponent(trimmed)}&existing=true`);
+        return;
+      }
+
+      // No active subscription — proceed to Stripe with this email
+      setIsStartingCheckout(true);
+      const headers: Record<string, string> = {};
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.access_token) {
+        headers.Authorization = `Bearer ${sessionData.session.access_token}`;
+      }
+
+      const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout', {
+        headers,
+        body: { customer_email: trimmed },
+      });
+      if (checkoutError) throw checkoutError;
+      if (checkoutData?.url) {
+        window.location.href = checkoutData.url;
+      } else {
+        throw new Error('No checkout URL received');
+      }
+    } catch (err) {
+      console.error('Email check/checkout error:', err);
+      setEmailError('Something went wrong. Please try again.');
+    } finally {
+      setIsCheckingEmail(false);
+      setIsStartingCheckout(false);
+    }
+  }, [checkoutEmail, navigate]);
 
   // Track scroll to show/hide sticky CTA and adjust header button
   useEffect(() => {
@@ -445,26 +475,6 @@ const Landing = () => {
     <div className="min-h-screen bg-background overflow-hidden">
       {/* Capture affiliate codes from URL */}
       <AffiliateCapture />
-
-      {/* Checkout cancelled trust banner */}
-      {checkoutCancelled && (
-        <div className="relative z-50 border-b" style={{ background: 'hsl(220 40% 8%)', borderColor: 'hsl(210 100% 50% / 0.15)' }}>
-          <div className="container mx-auto px-4 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
-            <div className="text-center sm:text-left">
-              <p className="text-sm sm:text-base font-semibold text-foreground">Checkout cancelled — no charge made</p>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">You weren't charged anything. Your free trial is £0 today and you can cancel anytime inside the dashboard.</p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={handlePricingCTAClick} disabled={isStartingCheckout}>
-                {isStartingCheckout ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Redirecting...</>) : (<>Resume Free Trial<ArrowRight className="ml-2 h-4 w-4" /></>)}
-              </Button>
-              <button onClick={handleDismissCancelBanner} className="p-1.5 rounded-full hover:bg-muted/20 text-muted-foreground hover:text-foreground transition-colors" aria-label="Dismiss">
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Feature Image Modal */}
       <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
@@ -1050,23 +1060,15 @@ const Landing = () => {
                 ))}
               </ul>
 
-              <Button
+              {!showEmailStep ? (
+                <>
+                  <Button
                     size="lg"
                     className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
                     onClick={handlePricingCTAClick}
-                    disabled={isStartingCheckout}
                   >
-                    {isStartingCheckout ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Redirecting...
-                      </>
-                    ) : (
-                      <>
-                        Start Free Trial
-                        <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-                      </>
-                    )}
+                    Start Free Trial
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
                   </Button>
 
                   <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
@@ -1075,6 +1077,53 @@ const Landing = () => {
                   <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 mt-1">
                     After trial · £19.99/month · Secure payment via Stripe
                   </p>
+                </>
+              ) : (
+                <div className="w-full max-w-sm mx-auto space-y-4">
+                  <h4 className="text-lg sm:text-xl font-bold tracking-tight text-center">
+                    Enter your email to start your free trial
+                  </h4>
+
+                  <div className="space-y-2">
+                    <Input
+                      type="email"
+                      placeholder="you@example.com"
+                      value={checkoutEmail}
+                      onChange={(e) => { setCheckoutEmail(e.target.value); setEmailError(''); }}
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleEmailContinue(); }}
+                      className="h-12 text-base bg-background/50 border-border/40 focus:border-primary/60"
+                      autoFocus
+                      disabled={isCheckingEmail || isStartingCheckout}
+                    />
+                    {emailError && (
+                      <p className="text-xs text-destructive text-center">{emailError}</p>
+                    )}
+                  </div>
+
+                  <Button
+                    size="lg"
+                    className="btn-premium w-full font-semibold h-[52px] text-[15px] rounded-xl shadow-lg shadow-primary/25"
+                    onClick={handleEmailContinue}
+                    disabled={isCheckingEmail || isStartingCheckout || !checkoutEmail.trim()}
+                  >
+                    {isCheckingEmail || isStartingCheckout ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        {isCheckingEmail ? 'Checking...' : 'Redirecting...'}
+                      </>
+                    ) : (
+                      'Continue'
+                    )}
+                  </Button>
+
+                  <p className="text-[11px] sm:text-xs text-muted-foreground/70 text-center">
+                    5-day free trial · £0 today · Cancel anytime
+                  </p>
+                  <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 text-center">
+                    After trial · £19.99/month · Secure payment via Stripe
+                  </p>
+                </div>
+              )}
             </div>
           </ScrollReveal>
         </div>
