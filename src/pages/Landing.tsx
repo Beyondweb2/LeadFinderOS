@@ -402,64 +402,34 @@ const Landing = () => {
   // Lock landing page to dark brand theme
   useLandingTheme();
 
-  const handlePricingCTAClick = useCallback(() => {
-    setShowEmailStep(true);
-    setEmailError('');
-    // Scroll to pricing
-    setTimeout(() => {
-      scrollToPricing();
-    }, 100);
-  }, []);
+  const checkoutCancelled = searchParams.get('checkout') === 'cancelled';
 
-  const handleEmailContinue = useCallback(async () => {
-    const trimmed = checkoutEmail.trim().toLowerCase();
-    // Basic email validation
-    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setEmailError('Please enter a valid email address');
+  const handlePricingCTAClick = useCallback(() => {
+    // If user is logged in but not subscribed, go directly to checkout
+    if (user) {
+      setIsStartingCheckout(true);
+      (async () => {
+        try {
+          const { data, error } = await supabase.functions.invoke('create-checkout', {
+            headers: { Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}` },
+          });
+          if (error) throw error;
+          if (data?.url) window.location.href = data.url;
+        } catch {
+          navigate('/auth?intent=upgrade');
+        } finally {
+          setIsStartingCheckout(false);
+        }
+      })();
       return;
     }
-    setEmailError('');
-    setIsCheckingEmail(true);
+    // Not logged in — go to signup
+    navigate('/auth?intent=upgrade');
+  }, [user, navigate]);
 
-    try {
-      // Check if this email already has an active subscription
-      const { data, error } = await supabase.functions.invoke('check-email-subscription', {
-        body: { email: trimmed },
-      });
-      if (error) throw error;
-
-      if (data?.exists) {
-        // User already has an account — redirect to sign-in
-        navigate(`/auth?email=${encodeURIComponent(trimmed)}&existing=true`);
-        return;
-      }
-
-      // No active subscription — proceed to Stripe with this email
-      setIsStartingCheckout(true);
-      const headers: Record<string, string> = {};
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session?.access_token) {
-        headers.Authorization = `Bearer ${sessionData.session.access_token}`;
-      }
-
-      const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout', {
-        headers,
-        body: { customer_email: trimmed },
-      });
-      if (checkoutError) throw checkoutError;
-      if (checkoutData?.url) {
-        window.location.href = checkoutData.url;
-      } else {
-        throw new Error('No checkout URL received');
-      }
-    } catch (err) {
-      console.error('Email check/checkout error:', err);
-      setEmailError('Something went wrong. Please try again.');
-    } finally {
-      setIsCheckingEmail(false);
-      setIsStartingCheckout(false);
-    }
-  }, [checkoutEmail, navigate]);
+  const handleDismissCancelBanner = useCallback(() => {
+    setSearchParams({}, { replace: true });
+  }, [setSearchParams]);
 
   // Track scroll to show/hide sticky CTA and adjust header button
   useEffect(() => {
@@ -1060,15 +1030,23 @@ const Landing = () => {
                 ))}
               </ul>
 
-              {!showEmailStep ? (
-                <>
-                  <Button
+              <Button
                     size="lg"
                     className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
                     onClick={handlePricingCTAClick}
+                    disabled={isStartingCheckout}
                   >
-                    Start Free Trial
-                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                    {isStartingCheckout ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Redirecting...
+                      </>
+                    ) : (
+                      <>
+                        Start Free Trial
+                        <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                      </>
+                    )}
                   </Button>
 
                   <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
@@ -1077,53 +1055,6 @@ const Landing = () => {
                   <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 mt-1">
                     After trial · £19.99/month · Secure payment via Stripe
                   </p>
-                </>
-              ) : (
-                <div className="w-full max-w-sm mx-auto space-y-4">
-                  <h4 className="text-lg sm:text-xl font-bold tracking-tight text-center">
-                    Enter your email to start your free trial
-                  </h4>
-
-                  <div className="space-y-2">
-                    <Input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={checkoutEmail}
-                      onChange={(e) => { setCheckoutEmail(e.target.value); setEmailError(''); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleEmailContinue(); }}
-                      className="h-12 text-base bg-background/50 border-border/40 focus:border-primary/60"
-                      autoFocus
-                      disabled={isCheckingEmail || isStartingCheckout}
-                    />
-                    {emailError && (
-                      <p className="text-xs text-destructive text-center">{emailError}</p>
-                    )}
-                  </div>
-
-                  <Button
-                    size="lg"
-                    className="btn-premium w-full font-semibold h-[52px] text-[15px] rounded-xl shadow-lg shadow-primary/25"
-                    onClick={handleEmailContinue}
-                    disabled={isCheckingEmail || isStartingCheckout || !checkoutEmail.trim()}
-                  >
-                    {isCheckingEmail || isStartingCheckout ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {isCheckingEmail ? 'Checking...' : 'Redirecting...'}
-                      </>
-                    ) : (
-                      'Continue'
-                    )}
-                  </Button>
-
-                  <p className="text-[11px] sm:text-xs text-muted-foreground/70 text-center">
-                    5-day free trial · £0 today · Cancel anytime
-                  </p>
-                  <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 text-center">
-                    After trial · £19.99/month · Secure payment via Stripe
-                  </p>
-                </div>
-              )}
             </div>
           </ScrollReveal>
         </div>
