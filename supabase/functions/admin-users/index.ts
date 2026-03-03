@@ -125,6 +125,21 @@ serve(async (req) => {
 
       const dayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
+      // Fetch contacted leads count per user (status != not_contacted, 1 per business)
+      const contactedLeadsRes = userIds.length > 0
+        ? await serviceClient
+            .from('outreach_leads')
+            .select('user_id, status')
+            .in('user_id', userIds)
+            .neq('status', 'not_contacted')
+        : { data: [] };
+
+      // Build contacted count map
+      const contactedCountMap = new Map<string, number>();
+      for (const lead of ((contactedLeadsRes as any).data || [])) {
+        contactedCountMap.set(lead.user_id, (contactedCountMap.get(lead.user_id) || 0) + 1);
+      }
+
       const [metricsRes, subsRes, trialsRes, funnelRes, checkoutAttempts24hRes, checkoutAttemptsRecentRes] = await Promise.all([
         userIds.length > 0
           ? serviceClient.from('user_metrics').select('user_id, search_count, businesses_added_count, messages_sent_count, replies_count, last_active_at, last_search_at, walkthrough_max_step, walkthrough_completed, walkthrough_last_seen_at, walkthrough_last_step, walkthrough_started_at, walkthrough_completed_at, walkthrough_skipped_at').in('user_id', userIds)
@@ -219,7 +234,7 @@ serve(async (req) => {
           stripe_subscription_id: sub?.stripe_subscription_id || null,
           search_count: metrics?.search_count ?? 0,
           businesses_added_count: metrics?.businesses_added_count ?? 0,
-          messages_sent_count: metrics?.messages_sent_count ?? 0,
+          messages_sent_count: contactedCountMap.get(u.id) ?? 0,
           replies_count: metrics?.replies_count ?? 0,
           last_active_at: metrics?.last_active_at || null,
           last_search_at: metrics?.last_search_at || null,
