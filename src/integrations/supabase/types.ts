@@ -120,24 +120,33 @@ export type Database = {
       }
       checkout_attempts: {
         Row: {
+          checkout_completed: boolean
           converted: boolean
           created_at: string
           email: string
           id: string
+          stripe_customer_id: string | null
+          stripe_subscription_id: string | null
           user_id: string | null
         }
         Insert: {
+          checkout_completed?: boolean
           converted?: boolean
           created_at?: string
           email: string
           id?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           user_id?: string | null
         }
         Update: {
+          checkout_completed?: boolean
           converted?: boolean
           created_at?: string
           email?: string
           id?: string
+          stripe_customer_id?: string | null
+          stripe_subscription_id?: string | null
           user_id?: string | null
         }
         Relationships: []

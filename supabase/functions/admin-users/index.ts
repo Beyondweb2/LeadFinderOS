@@ -144,7 +144,7 @@ serve(async (req) => {
           .gte('created_at', dayAgoIso),
         serviceClient
           .from('checkout_attempts')
-          .select('id, email, user_id, converted, created_at')
+          .select('id, email, user_id, converted, checkout_completed, created_at')
           .order('created_at', { ascending: false })
           .limit(25),
       ]);
