@@ -57,14 +57,15 @@ export function TrialProgressCard({
 
   useEffect(() => {
     if (!user) return;
-    // Fetch messages sent from user_metrics
+    // Count unique businesses contacted (status != not_contacted) = messages sent
     supabase
-      .from('user_metrics')
-      .select('messages_sent_count')
+      .from('outreach_leads')
+      .select('id', { count: 'exact', head: true })
       .eq('user_id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) setMessagesSent(data.messages_sent_count || 0);
+      .neq('status', 'not_contacted')
+      .eq('is_archived', false)
+      .then(({ count }) => {
+        setMessagesSent(count || 0);
       });
     // Fetch tracked leads count
     supabase
