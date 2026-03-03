@@ -4,7 +4,7 @@ import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { RevenueCard } from '@/components/dashboard/RevenueCard';
-import { ConversionCard } from '@/components/dashboard/ConversionCard';
+import { PipelineCard } from '@/components/dashboard/PipelineCard';
 import { OutreachCard } from '@/components/dashboard/OutreachCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
 import { TrialProgressCard } from '@/components/dashboard/TrialProgressCard';
@@ -44,7 +44,6 @@ const Dashboard = () => {
   
   const isAdmin = user?.email === 'pauljsales455@outlook.com';
 
-  // Wait for all data to load before rendering
   if (isLoading || isSubscriptionLoading) {
     return (
       <div className="flex items-center justify-center h-full py-16">
@@ -56,30 +55,20 @@ const Dashboard = () => {
   const handleFullReset = async () => {
     if (!user) return;
     setIsFullResetting(true);
-    
     try {
       const results = await Promise.all([
-        // Activity data
         supabase.from('copied_phones').delete().eq('user_id', user.id),
         supabase.from('outreach_activities').delete().eq('user_id', user.id),
         supabase.from('lead_contacts').delete().eq('user_id', user.id),
         supabase.from('search_history').delete().eq('user_id', user.id),
         supabase.from('checked_businesses').delete().eq('user_id', user.id),
-        // CRM data
         supabase.from('outreach_leads').delete().eq('user_id', user.id),
         supabase.from('outreach_history').delete().eq('user_id', user.id),
-        // Templates (non-default)
         supabase.from('templates').delete().eq('user_id', user.id),
-        // Metrics
         supabase.rpc('reset_my_metrics'),
       ]);
-      
       const errors = results.filter(r => r.error);
-      if (errors.length > 0) {
-        console.error('Full reset errors:', errors.map(e => e.error));
-      }
-      
-      // Full reset complete — no toast
+      if (errors.length > 0) console.error('Full reset errors:', errors.map(e => e.error));
       refetch();
     } catch (err) {
       console.error('Full reset failed:', err);
@@ -91,45 +80,35 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-5 sm:space-y-7">
-      {/* Rotating Tip */}
       <TipBar />
 
-      {/* Page Header */}
       <div className="text-center sm:text-left">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm sm:text-base text-muted-foreground">
-          Track your performance and revenue
+          Track your performance and pipeline
         </p>
       </div>
 
-      {/* Primary Metrics - Revenue & Conversion */}
       <section>
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Performance</h2>
         <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
           <RevenueCard
+            revenueThisMonth={metrics.revenueThisMonth}
+            revenueLastMonth={metrics.revenueLastMonth}
             totalRevenue={metrics.totalRevenue}
-            draftRevenue={metrics.draftRevenue}
-            completionRevenue={metrics.completionRevenue}
             fullyPaidClients={metrics.fullyPaidClients}
-            paidForDraftCount={metrics.paidForDraftCount}
+            activeProposals={metrics.activeProposals}
           />
-          <ConversionCard
-            interestRate={metrics.interestRate}
-            responseToInterestRate={metrics.responseToInterestRate}
-            interestedCount={metrics.interestedCount}
-            contactedCount={metrics.contactedCount}
-            totalBusinessesAdded={metrics.totalBusinessesAdded}
-          />
+          <PipelineCard pipeline={metrics.pipeline} />
           <OutreachCard
-            totalBusinessesAdded={metrics.totalBusinessesAdded}
-            addedToday={metrics.addedToday}
-            addedYesterday={metrics.addedYesterday}
-            avgPerDay={metrics.avgPerDayAllTime}
+            contactedToday={metrics.contactedToday}
+            contactedYesterday={metrics.contactedYesterday}
+            avg7Day={metrics.avg7Day}
+            channels7d={metrics.channels7d}
           />
           <NextActionsCard trackedLeads={metrics.trackedLeads} />
         </div>
       </section>
-
 
       {/* Quick Links */}
       <section>
@@ -171,7 +150,6 @@ const Dashboard = () => {
         </div>
       </section>
        
-      {/* Reset Counters & CTA */}
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
         <Button variant="outline" asChild>
           <Link to="/outreach" className="flex items-center gap-2">
@@ -192,11 +170,9 @@ const Dashboard = () => {
                 const { data, error } = await supabase.functions.invoke('test-abandoned-email', {
                   body: { email: 'pauljsales455@outlook.com' },
                 });
-                console.log('Test abandoned email response:', data);
                 if (error) throw error;
                 toast({ title: 'Test email sent', description: 'Check your inbox.' });
               } catch (err: any) {
-                console.error('Test email error:', err);
                 toast({ title: 'Failed to send test email', description: err.message || 'Unknown error', variant: 'destructive' });
               } finally {
                 setIsSendingTestEmail(false);
@@ -207,7 +183,6 @@ const Dashboard = () => {
             Test Abandoned Email
           </Button>
         )}
-
 
         <AlertDialog>
           <AlertDialogTrigger asChild>
