@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -212,6 +213,8 @@ export default function AdminDashboard() {
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const getAccessToken = useCallback(async (): Promise<string | null> => {
     // Always get a fresh session
@@ -314,6 +317,53 @@ export default function AdminDashboard() {
     setIsDeletingUser(false);
   }, [getAccessToken, selectedUser]);
 
+
+  const bulkDeleteUsers = useCallback(async () => {
+    const accessToken = await getAccessToken();
+    if (!accessToken) return;
+
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+
+    setIsBulkDeleting(true);
+
+    const { data, error } = await supabase.functions.invoke('admin-users', {
+      body: { action: 'bulk_delete_users', user_ids: ids },
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (error) {
+      toast.error(`Bulk delete failed: ${error.message}`);
+    } else if (data?.error) {
+      toast.error(`Bulk delete failed: ${data.error}`);
+    } else {
+      const successIds = new Set((data?.results || []).filter((r: any) => r.success).map((r: any) => r.id));
+      setUsers(prev => prev.filter(u => !successIds.has(u.id)));
+      setSelectedIds(new Set());
+      toast.success(`Deleted ${data?.deleted || 0} users${data?.failed ? `, ${data.failed} failed` : ''}`);
+      if (selectedUser && successIds.has(selectedUser.id)) setSelectedUser(null);
+    }
+
+    setIsBulkDeleting(false);
+  }, [getAccessToken, selectedIds, selectedUser]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    const selectableIds = filtered.filter(u => u.id !== user?.id).map(u => u.id);
+    if (selectedIds.size >= selectableIds.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableIds));
+    }
+  };
 
   useEffect(() => {
     if (!isSubLoading && !isAdmin) {
@@ -556,6 +606,43 @@ export default function AdminDashboard() {
           </Select>
         </div>
 
+        {/* Bulk Delete Bar */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+            <span className="text-sm font-medium">{selectedIds.size} selected</span>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={isBulkDeleting}>
+                  {isBulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                  Delete Selected
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete {selectedIds.size} users?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This will permanently delete <strong>{selectedIds.size}</strong> users and all their data. This cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-red-600 hover:bg-red-700"
+                    onClick={bulkDeleteUsers}
+                    disabled={isBulkDeleting}
+                  >
+                    {isBulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Delete All
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+              Clear
+            </Button>
+          </div>
+        )}
+
         {/* Users Table */}
         <Card>
           <CardContent className="p-0">
@@ -568,6 +655,12 @@ export default function AdminDashboard() {
                 <Table>
                   <TableHeader>
                     <TableRow>
+                      <TableHead className="w-10">
+                        <Checkbox
+                          checked={filtered.filter(u => u.id !== user?.id).length > 0 && selectedIds.size >= filtered.filter(u => u.id !== user?.id).length}
+                          onCheckedChange={toggleSelectAll}
+                        />
+                      </TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Signed Up</TableHead>
                       <TableHead>Access</TableHead>
@@ -586,7 +679,7 @@ export default function AdminDashboard() {
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={14} className="text-center py-8 text-muted-foreground">
                           No users found
                         </TableCell>
                       </TableRow>
@@ -594,9 +687,17 @@ export default function AdminDashboard() {
                       filtered.map((u) => (
                         <TableRow
                           key={u.id}
-                          className="cursor-pointer hover:bg-muted/50"
+                          className={`cursor-pointer hover:bg-muted/50 ${selectedIds.has(u.id) ? 'bg-muted/30' : ''}`}
                           onClick={() => handleRowClick(u)}
                         >
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            {u.id !== user?.id && (
+                              <Checkbox
+                                checked={selectedIds.has(u.id)}
+                                onCheckedChange={() => toggleSelect(u.id)}
+                              />
+                            )}
+                          </TableCell>
                           <TableCell className="font-medium text-sm max-w-[200px] truncate">
                             {u.email}
                           </TableCell>
