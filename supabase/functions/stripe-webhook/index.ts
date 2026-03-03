@@ -227,7 +227,42 @@
 
         const user = users.users.find(u => u.email === customer.email);
         if (!user) {
-          logStep("No user found for email", { email: customer.email });
+          logStep("No auth user found for email — marking checkout as completed", { email: customer.email });
+          
+          // Mark checkout_attempts as checkout_completed with Stripe data
+          // so admin dashboard can show they completed payment even without an account
+          const { error: updateError } = await supabaseAdmin
+            .from('checkout_attempts')
+            .update({
+              checkout_completed: true,
+              stripe_customer_id: customerId,
+              stripe_subscription_id: subscription.id,
+            })
+            .eq('email', customer.email);
+          
+          if (updateError) {
+            logStep("Failed to update checkout_attempts", { error: updateError.message });
+          } else {
+            logStep("checkout_attempts marked as checkout_completed", { email: customer.email });
+          }
+          
+          // Also insert if no checkout_attempt row exists for this email
+          const { data: existingAttempt } = await supabaseAdmin
+            .from('checkout_attempts')
+            .select('id')
+            .eq('email', customer.email)
+            .limit(1);
+          
+          if (!existingAttempt || existingAttempt.length === 0) {
+            await supabaseAdmin.from('checkout_attempts').insert({
+              email: customer.email,
+              checkout_completed: true,
+              stripe_customer_id: customerId,
+              stripe_subscription_id: subscription.id,
+            });
+            logStep("Created new checkout_attempt for untracked email", { email: customer.email });
+          }
+          
           return new Response(JSON.stringify({ received: true }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: 200,

@@ -135,6 +135,7 @@ interface CheckoutAttempt {
   email: string;
   user_id: string | null;
   converted: boolean;
+  checkout_completed: boolean;
   created_at: string;
 }
 
@@ -165,6 +166,7 @@ function billingStatusColor(status: string): string {
     case 'past_due': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
     case 'canceled': return 'bg-red-500/15 text-red-400 border-red-500/30';
     case 'checkout_started': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
+    case 'checkout_completed': return 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30';
     case 'no_stripe': return 'bg-muted text-muted-foreground border-border';
     default: return 'bg-muted text-muted-foreground border-border';
   }
@@ -174,6 +176,7 @@ function billingStatusLabel(status: string): string {
   switch (status) {
     case 'no_stripe': return 'No Stripe';
     case 'checkout_started': return 'Checkout Started';
+    case 'checkout_completed': return 'Paid – No Account';
     case 'trialing': return 'Stripe Trialing';
     case 'active': return 'Active';
     case 'past_due': return 'Past Due';
@@ -286,7 +289,7 @@ export default function AdminDashboard() {
             created_at: a.created_at,
             subscription_status: 'none',
             access_mode: 'checkout_only',
-            billing_status: a.converted ? 'converted' : 'checkout_started',
+            billing_status: a.converted ? 'converted' : (a.checkout_completed ? 'checkout_completed' : 'checkout_started'),
             current_period_end: null,
             demo_started_at: null,
             trial_started_at: null,
