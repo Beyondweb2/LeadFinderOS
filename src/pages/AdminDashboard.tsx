@@ -142,6 +142,7 @@ function accessModeColor(mode: string): string {
   switch (mode) {
     case 'paid': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
     case 'free_user': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
+    case 'checkout_only': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
     case 'signed_up': return 'bg-muted text-muted-foreground border-border';
     default: return 'bg-muted text-muted-foreground border-border';
   }
@@ -151,6 +152,7 @@ function accessModeLabel(mode: string): string {
   switch (mode) {
     case 'paid': return 'Paid (Unlimited)';
     case 'free_user': return 'Free Access';
+    case 'checkout_only': return 'Checkout Only';
     case 'signed_up': return 'Signed Up';
     default: return mode;
   }
@@ -268,11 +270,52 @@ export default function AdminDashboard() {
         toast.error(`Server error: ${data.error}`);
       } else {
         const userList = data?.users || [];
-        console.log('[AdminDashboard] Users received:', userList.length, 'total:', data?.total);
-        setUsers(userList);
+        const rawAttempts = (data?.recent_checkout_attempts || []) as CheckoutAttempt[];
+        
+        // Merge anonymous checkout attempts (no user_id) into the users list as pseudo-users
+        const existingEmails = new Set(userList.map((u: AdminUser) => u.email.toLowerCase()));
+        const anonymousAttempts: AdminUser[] = rawAttempts
+          .filter((a: CheckoutAttempt) => !a.user_id && !existingEmails.has(a.email.toLowerCase()))
+          // Dedupe by email (keep latest)
+          .filter((a: CheckoutAttempt, i: number, arr: CheckoutAttempt[]) => 
+            arr.findIndex((b: CheckoutAttempt) => b.email.toLowerCase() === a.email.toLowerCase()) === i
+          )
+          .map((a: CheckoutAttempt) => ({
+            id: `checkout-${a.id}`,
+            email: a.email,
+            created_at: a.created_at,
+            subscription_status: 'none',
+            access_mode: 'checkout_only',
+            billing_status: a.converted ? 'converted' : 'checkout_started',
+            current_period_end: null,
+            demo_started_at: null,
+            trial_started_at: null,
+            paid_at: null,
+            free_search_count: 0,
+            walkthrough_completed: false,
+            walkthrough_max_step: 0,
+            walkthrough_last_seen_at: null,
+            walkthrough_started_at: null,
+            walkthrough_completed_at: null,
+            walkthrough_skipped_at: null,
+            stripe_subscription_id: null,
+            search_count: 0,
+            businesses_added_count: 0,
+            messages_sent_count: 0,
+            replies_count: 0,
+            last_active_at: null,
+            last_search_at: null,
+          }));
+
+        const merged = [...userList, ...anonymousAttempts].sort(
+          (a: AdminUser, b: AdminUser) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        
+        console.log('[AdminDashboard] Users received:', userList.length, '+ anonymous attempts:', anonymousAttempts.length);
+        setUsers(merged);
         setCheckoutAttempts24h(data?.checkout_attempts_24h || 0);
-        setRecentCheckoutAttempts((data?.recent_checkout_attempts || []) as CheckoutAttempt[]);
-        if (userList.length === 0 && !searchQuery && statusFilter === 'all') {
+        setRecentCheckoutAttempts(rawAttempts);
+        if (merged.length === 0 && !searchQuery && statusFilter === 'all') {
           toast.info('No users returned. Check edge function logs for details.');
         }
       }
@@ -554,29 +597,7 @@ export default function AdminDashboard() {
           Revenue only reflects successful payments after the 5-day trial period.
         </p>
 
-        {/* Recent checkout attempts (includes anonymous) */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Recent Checkout Attempts (including anonymous)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {recentCheckoutAttempts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No checkout attempts recorded yet.</p>
-            ) : (
-              <div className="space-y-2">
-                {recentCheckoutAttempts.slice(0, 8).map((attempt) => (
-                  <div key={attempt.id} className="flex items-center justify-between gap-3 text-sm">
-                    <span className="font-medium truncate">{attempt.email}</span>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
-                      <Badge variant="outline">{attempt.converted ? 'Converted' : 'Started'}</Badge>
-                      <span>{formatDateTime(attempt.created_at)}</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+
 
         {/* Activity Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">
