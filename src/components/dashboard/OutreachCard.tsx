@@ -33,6 +33,15 @@ export function OutreachCard({
             {contactedToday}
           </div>
           <p className="text-[10px] sm:text-xs text-muted-foreground">Contacted today</p>
+          {contactedToday === 0 && contactedYesterday > 0 && (
+            <p className="text-[10px] text-muted-foreground/50 mt-0.5">No activity today</p>
+          )}
+          {contactedToday > 0 && contactedToday > contactedYesterday && (
+            <p className="text-[10px] text-green-500/70 mt-0.5">Up from yesterday</p>
+          )}
+          {contactedToday > 0 && contactedToday <= contactedYesterday && (
+            <p className="text-[10px] text-green-500/70 mt-0.5">Good momentum today</p>
+          )}
         </div>
 
         {/* Yesterday & 7d avg */}

@@ -14,13 +14,13 @@ interface PipelineCardProps {
   pipeline: PipelineCounts;
 }
 
-const stages: { key: keyof PipelineCounts; label: string; color: string }[] = [
-  { key: 'new', label: 'New', color: 'text-muted-foreground' },
-  { key: 'contacted', label: 'Contacted', color: 'text-blue-500' },
-  { key: 'followUp', label: 'Follow-up', color: 'text-amber-500' },
-  { key: 'interested', label: 'Interested', color: 'text-green-500' },
-  { key: 'proposalSent', label: 'Proposal', color: 'text-purple-500' },
-  { key: 'closedWon', label: 'Closed', color: 'text-green-500' },
+const stages: { key: keyof PipelineCounts; label: string; color: string; activeColor: string }[] = [
+  { key: 'new', label: 'New', color: 'text-muted-foreground/70', activeColor: 'text-muted-foreground' },
+  { key: 'contacted', label: 'Contacted', color: 'text-blue-500/70', activeColor: 'text-blue-500' },
+  { key: 'followUp', label: 'Follow-up', color: 'text-amber-500/70', activeColor: 'text-amber-500' },
+  { key: 'interested', label: 'Interested', color: 'text-green-500/80', activeColor: 'text-green-500 font-bold' },
+  { key: 'proposalSent', label: 'Proposal', color: 'text-purple-500/80', activeColor: 'text-purple-500 font-bold' },
+  { key: 'closedWon', label: 'Closed', color: 'text-emerald-500/80', activeColor: 'text-emerald-500 font-bold' },
 ];
 
 export function PipelineCard({ pipeline }: PipelineCardProps) {
@@ -48,7 +48,7 @@ export function PipelineCard({ pipeline }: PipelineCardProps) {
           {stages.map(stage => (
             <div key={stage.key} className="flex items-center justify-between">
               <span className="text-[10px] sm:text-xs text-muted-foreground">{stage.label}</span>
-              <span className={`text-xs sm:text-sm font-semibold ${stage.color}`}>
+              <span className={`text-xs sm:text-sm font-semibold ${pipeline[stage.key] > 0 ? stage.activeColor : stage.color}`}>
                 {pipeline[stage.key]}
               </span>
             </div>
