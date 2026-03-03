@@ -1,5 +1,5 @@
-import { Lightbulb } from 'lucide-react';
-import { Card } from '@/components/ui/card';
+import { Lightbulb, Info } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface TipItem {
   tip: string;
@@ -8,12 +8,14 @@ interface TipItem {
 
 interface Section {
   title: string;
+  step: string;
   tips: TipItem[];
 }
 
 const SECTIONS: Section[] = [
   {
     title: 'First Contact',
+    step: 'STEP 1',
     tips: [
       { tip: 'Ask "Are you open to getting more enquiries online?" instead of pitching immediately.', why: 'Opens a conversation instead of triggering a sales wall.' },
       { tip: 'Keep your first message casual — no links, no media, no pitch.' },
@@ -24,6 +26,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: 'After They Reply',
+    step: 'STEP 2',
     tips: [
       { tip: 'Send a 20-second voice note introducing yourself.', why: 'Voice builds trust faster than text.' },
       { tip: 'Send a quick 1-minute Loom video reviewing their current online presence.', why: 'Shows effort and expertise without a long call.' },
@@ -33,6 +36,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: 'Cold Calling',
+    step: 'STEP 3',
     tips: [
       { tip: 'Cold calling between 10am–12pm often gets the best answer rates.' },
       { tip: 'Have a 15-second intro ready: name, what you do, one benefit.' },
@@ -41,6 +45,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: 'Handling Objections',
+    step: 'STEP 4',
     tips: [
       { tip: 'If they say "maybe later", schedule a follow-up date and set a reminder.' },
       { tip: '"I already have a website" → "Great, I noticed a few things that could bring you more leads — want me to show you?"' },
@@ -49,6 +54,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: 'Pricing Strategy',
+    step: 'STEP 5',
     tips: [
       { tip: 'Offer a paid draft for £49 instead of building for free.', why: 'Filters out time-wasters and shows you value your work.' },
       { tip: 'Never build a full site for free before payment.' },
@@ -57,6 +63,7 @@ const SECTIONS: Section[] = [
   },
   {
     title: 'Follow-Up Strategy',
+    step: 'STEP 6',
     tips: [
       { tip: 'Follow up after 48 hours if no reply.' },
       { tip: 'Send a maximum of 3 follow-ups, spaced 2–3 days apart.' },
@@ -68,34 +75,77 @@ const SECTIONS: Section[] = [
 
 const Playbook = () => {
   return (
-    <div className="space-y-6 sm:space-y-8">
-      <div className="text-center sm:text-left">
-        <div className="flex items-center gap-2">
-          <Lightbulb className="h-5 w-5 text-amber-500" />
-          <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Playbook</h1>
+    <div className="relative">
+      {/* Sticky header — desktop only */}
+      <div className="hidden md:block sticky top-0 z-20 -mx-4 sm:-mx-6 lg:-mx-8 px-4 sm:px-6 lg:px-8 pb-4 pt-1 bg-background/80 backdrop-blur-md border-b border-border/50">
+        <div className="flex items-center gap-2.5">
+          <Lightbulb className="h-5 w-5 text-primary" />
+          <h1 className="text-xl font-bold tracking-tight">Playbook</h1>
         </div>
-        <p className="text-xs sm:text-sm text-muted-foreground mt-1 max-w-lg">
-          Tactical tips to help you close more deals. Short, direct, no fluff.
+        <p className="text-xs text-muted-foreground mt-0.5 max-w-lg">
+          Tactical tips to close more deals. Short, direct, no fluff.
         </p>
       </div>
 
-      {SECTIONS.map((section) => (
-        <section key={section.title}>
-          <h2 className="text-sm sm:text-base font-semibold mb-2 sm:mb-3">{section.title}</h2>
-          <div className="space-y-2">
-            {section.tips.map((item, i) => (
-              <Card key={i} className="p-3 sm:p-4 border-border">
-                <p className="text-sm text-foreground">{item.tip}</p>
-                {item.why && (
-                  <p className="text-xs text-muted-foreground mt-1.5 italic">
-                    Why this works: {item.why}
-                  </p>
-                )}
-              </Card>
-            ))}
-          </div>
-        </section>
-      ))}
+      {/* Mobile header */}
+      <div className="md:hidden text-center mb-6">
+        <div className="flex items-center justify-center gap-2">
+          <Lightbulb className="h-5 w-5 text-primary" />
+          <h1 className="text-xl font-bold tracking-tight">Playbook</h1>
+        </div>
+        <p className="text-xs text-muted-foreground mt-1 max-w-md mx-auto">
+          Tactical tips to close more deals. Short, direct, no fluff.
+        </p>
+      </div>
+
+      {/* Sections */}
+      <div className="space-y-10 sm:space-y-14 md:pt-6">
+        {SECTIONS.map((section, sectionIdx) => (
+          <section key={section.title}>
+            {/* Section header */}
+            <div className="mb-4 sm:mb-5">
+              <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-[0.15em] text-primary/70">
+                {section.step}
+              </span>
+              <h2 className="text-base sm:text-lg font-semibold text-foreground mt-0.5">
+                {section.title}
+              </h2>
+              <div className="mt-2 h-px bg-border/60" />
+            </div>
+
+            {/* Tip cards */}
+            <div className="space-y-3 sm:space-y-3">
+              {section.tips.map((item, i) => {
+                const isFirstOfFirst = sectionIdx === 0 && i === 0;
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      'group relative rounded-lg border p-4 sm:p-5 transition-all duration-200',
+                      'bg-card/60 border-border/40',
+                      'md:hover:bg-card md:hover:border-border/70 md:hover:shadow-[0_2px_12px_hsl(0_0%_0%/0.3)]',
+                      'leading-relaxed',
+                      isFirstOfFirst && 'border-l-2 border-l-primary/50 bg-card/80'
+                    )}
+                  >
+                    <p className="text-sm sm:text-[0.9375rem] text-foreground/90 leading-relaxed">
+                      {item.tip}
+                    </p>
+                    {item.why && (
+                      <div className="flex items-start gap-1.5 mt-3 pt-2.5 border-t border-border/30">
+                        <Info className="h-3 w-3 shrink-0 text-muted-foreground/60 mt-0.5" />
+                        <p className="text-[11px] sm:text-xs text-muted-foreground/70 leading-relaxed">
+                          {item.why}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))}
+      </div>
     </div>
   );
 };
