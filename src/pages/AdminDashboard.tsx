@@ -130,6 +130,14 @@ interface UsageEvent {
   created_at: string;
 }
 
+interface CheckoutAttempt {
+  id: string;
+  email: string;
+  user_id: string | null;
+  converted: boolean;
+  created_at: string;
+}
+
 function accessModeColor(mode: string): string {
   switch (mode) {
     case 'paid': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
@@ -215,6 +223,8 @@ export default function AdminDashboard() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [checkoutAttempts24h, setCheckoutAttempts24h] = useState(0);
+  const [recentCheckoutAttempts, setRecentCheckoutAttempts] = useState<CheckoutAttempt[]>([]);
 
   const getAccessToken = useCallback(async (): Promise<string | null> => {
     // Always get a fresh session
@@ -260,6 +270,8 @@ export default function AdminDashboard() {
         const userList = data?.users || [];
         console.log('[AdminDashboard] Users received:', userList.length, 'total:', data?.total);
         setUsers(userList);
+        setCheckoutAttempts24h(data?.checkout_attempts_24h || 0);
+        setRecentCheckoutAttempts((data?.recent_checkout_attempts || []) as CheckoutAttempt[]);
         if (userList.length === 0 && !searchQuery && statusFilter === 'all') {
           toast.info('No users returned. Check edge function logs for details.');
         }
@@ -457,7 +469,7 @@ export default function AdminDashboard() {
         )}
 
         {/* Summary Cards - Acquisition Pipeline */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
           <Card>
             <CardHeader className="pb-2 pt-4 px-4">
               <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
@@ -466,6 +478,16 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent className="px-4 pb-4">
               <p className="text-2xl font-bold">{trialsStarted}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Activity className="h-3.5 w-3.5" /> Checkout Attempts (24h)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-2xl font-bold">{checkoutAttempts24h}</p>
             </CardContent>
           </Card>
           <Card className="border-amber-500/30">
@@ -531,6 +553,30 @@ export default function AdminDashboard() {
           <Info className="h-3 w-3" />
           Revenue only reflects successful payments after the 5-day trial period.
         </p>
+
+        {/* Recent checkout attempts (includes anonymous) */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Recent Checkout Attempts (including anonymous)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {recentCheckoutAttempts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No checkout attempts recorded yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {recentCheckoutAttempts.slice(0, 8).map((attempt) => (
+                  <div key={attempt.id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-medium truncate">{attempt.email}</span>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground whitespace-nowrap">
+                      <Badge variant="outline">{attempt.converted ? 'Converted' : 'Started'}</Badge>
+                      <span>{formatDateTime(attempt.created_at)}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Activity Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">

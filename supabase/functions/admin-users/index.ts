@@ -123,7 +123,9 @@ serve(async (req) => {
 
       const userIds = authUsers.map(u => u.id);
 
-      const [metricsRes, subsRes, trialsRes, funnelRes] = await Promise.all([
+      const dayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+      const [metricsRes, subsRes, trialsRes, funnelRes, checkoutAttempts24hRes, checkoutAttemptsRecentRes] = await Promise.all([
         userIds.length > 0
           ? serviceClient.from('user_metrics').select('user_id, search_count, businesses_added_count, messages_sent_count, replies_count, last_active_at, last_search_at, walkthrough_max_step, walkthrough_completed, walkthrough_last_seen_at, walkthrough_last_step, walkthrough_started_at, walkthrough_completed_at, walkthrough_skipped_at').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
@@ -131,18 +133,29 @@ serve(async (req) => {
           ? serviceClient.from('subscriptions').select('user_id, status, current_period_end, stripe_customer_id, stripe_subscription_id').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
-          ? serviceClient.from('user_trials').select('user_id, plan_status, demo_search_used, trial_used, checkout_abandoned, free_search_count, walkthrough_completed').in('user_id', userIds)
+          ? serviceClient.from('user_trials').select('user_id, plan_status, demo_search_used, trial_used, checkout_abandoned, checkout_started_at, free_search_count, walkthrough_completed').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
           ? serviceClient.from('funnel_events').select('user_id, event_type, created_at').in('user_id', userIds).in('event_type', ['demo_started', 'trial_started', 'subscription_active'])
           : Promise.resolve({ data: [] }),
+        serviceClient
+          .from('checkout_attempts')
+          .select('id', { count: 'exact', head: true })
+          .gte('created_at', dayAgoIso),
+        serviceClient
+          .from('checkout_attempts')
+          .select('id, email, user_id, converted, created_at')
+          .order('created_at', { ascending: false })
+          .limit(25),
       ]);
 
       const metricsData = (metricsRes as any).data || [];
       const subsData = (subsRes as any).data || [];
       const trialsData = (trialsRes as any).data || [];
       const funnelData = (funnelRes as any).data || [];
-      console.log('[ADMIN-USERS] Joined data - metrics:', metricsData.length, 'subs:', subsData.length, 'trials:', trialsData.length, 'funnel:', funnelData.length);
+      const checkoutAttempts24h = (checkoutAttempts24hRes as any).count || 0;
+      const recentCheckoutAttempts = (checkoutAttemptsRecentRes as any).data || [];
+      console.log('[ADMIN-USERS] Joined data - metrics:', metricsData.length, 'subs:', subsData.length, 'trials:', trialsData.length, 'funnel:', funnelData.length, 'checkout_attempts_24h:', checkoutAttempts24h);
 
       const metricsMap = new Map(metricsData.map((m: any) => [m.user_id, m]));
       const subsMap = new Map(subsData.map((s: any) => [s.user_id, s]));
@@ -237,6 +250,8 @@ serve(async (req) => {
         page,
         per_page: perPage,
         total: authData?.users?.length ?? 0,
+        checkout_attempts_24h: checkoutAttempts24h,
+        recent_checkout_attempts: recentCheckoutAttempts,
       }, 200, corsHeaders, rlHeaders);
     }
 
