@@ -446,6 +446,26 @@ const Landing = () => {
       {/* Capture affiliate codes from URL */}
       <AffiliateCapture />
 
+      {/* Checkout cancelled trust banner */}
+      {checkoutCancelled && (
+        <div className="relative z-50 border-b" style={{ background: 'hsl(220 40% 8%)', borderColor: 'hsl(210 100% 50% / 0.15)' }}>
+          <div className="container mx-auto px-4 py-4 sm:py-5 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+            <div className="text-center sm:text-left">
+              <p className="text-sm sm:text-base font-semibold text-foreground">Checkout cancelled — no charge made</p>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">You weren't charged anything. Your free trial is £0 today and you can cancel anytime inside the dashboard.</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={handlePricingCTAClick} disabled={isStartingCheckout}>
+                {isStartingCheckout ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Redirecting...</>) : (<>Resume Free Trial<ArrowRight className="ml-2 h-4 w-4" /></>)}
+              </Button>
+              <button onClick={handleDismissCancelBanner} className="p-1.5 rounded-full hover:bg-muted/20 text-muted-foreground hover:text-foreground transition-colors" aria-label="Dismiss">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Feature Image Modal */}
       <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
         <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">
