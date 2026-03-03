@@ -3,13 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
 import { readLastRoute } from '@/hooks/usePersistLastRoute';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Loader2, CreditCard, Sparkles, Gift, Check } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
@@ -28,6 +28,7 @@ const Auth = () => {
   const [isLogin, setIsLogin] = useState(!intentParam || existingParam === 'true');
   const [email, setEmail] = useState(emailParam || '');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(() => {
     try {
       return (localStorage.getItem(LANG_STORAGE_KEY) as SupportedLanguage) || 'en';
@@ -35,115 +36,121 @@ const Auth = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRedirectingToCheckout, setIsRedirectingToCheckout] = useState(false);
-  const [showTrialModal, setShowTrialModal] = useState(false);
-  const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [errors, setErrors] = useState<{ email?: string; password?: string; confirmPassword?: string }>({});
   
-  const { signIn, signUp, user, isLoading } = useAuth();
+  const { signIn, signUp, user, session, isLoading } = useAuth();
+  const { isPaidSubscriber, isStripeTrialing, isLoading: subLoading, createCheckout } = useSubscription();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   // Redirect if already authenticated
   useEffect(() => {
-    if (!user || isLoading) return;
+    if (!user || isLoading || subLoading) return;
 
-    let redirectTo: string | null = null;
-    try {
-      redirectTo =
-        sessionStorage.getItem('leadfinder_post_login_redirect') ||
-        localStorage.getItem('leadfinder_post_login_redirect');
-      if (redirectTo) {
-        sessionStorage.removeItem('leadfinder_post_login_redirect');
-        localStorage.removeItem('leadfinder_post_login_redirect');
-      }
-    } catch {
-      // ignore
+    // If already subscribed, go to dashboard
+    if (isPaidSubscriber || isStripeTrialing) {
+      let redirectTo: string | null = null;
+      try {
+        redirectTo =
+          sessionStorage.getItem('leadfinder_post_login_redirect') ||
+          localStorage.getItem('leadfinder_post_login_redirect');
+        if (redirectTo) {
+          sessionStorage.removeItem('leadfinder_post_login_redirect');
+          localStorage.removeItem('leadfinder_post_login_redirect');
+        }
+      } catch {}
+      navigate(redirectTo || readLastRoute(user.id) || '/', { replace: true });
+      return;
     }
 
-    if (!redirectTo) {
-      redirectTo = readLastRoute(user.id) || '/';
+    // If logged in but no subscription and came with intent=upgrade, redirect to checkout
+    if (intentParam === 'upgrade' && !isRedirectingToCheckout) {
+      setIsRedirectingToCheckout(true);
+      (async () => {
+        try {
+          await createCheckout();
+        } catch {
+          navigate('/landing', { replace: true });
+        }
+      })();
     }
-
-    navigate(redirectTo, { replace: true });
-  }, [user, isLoading, navigate]);
+  }, [user, isLoading, subLoading, isPaidSubscriber, isStripeTrialing, navigate, intentParam, isRedirectingToCheckout, createCheckout]);
 
   const validateForm = () => {
-    const authSchema = z.object({
-      email: z.string().trim().email({ message: t('auth.validEmail') }),
-      password: z.string().min(6, { message: t('auth.passwordMinLength') }),
-    });
-    const result = authSchema.safeParse({ email, password });
-    if (!result.success) {
-      const fieldErrors: { email?: string; password?: string } = {};
-      result.error.errors.forEach((err) => {
-        if (err.path[0] === 'email') fieldErrors.email = err.message;
-        if (err.path[0] === 'password') fieldErrors.password = err.message;
-      });
-      setErrors(fieldErrors);
-      return false;
+    const newErrors: typeof errors = {};
+    
+    const emailResult = z.string().trim().email({ message: t('auth.validEmail') }).safeParse(email);
+    if (!emailResult.success) newErrors.email = emailResult.error.errors[0].message;
+    
+    if (password.length < 8) newErrors.password = 'Password must be at least 8 characters';
+    
+    if (!isLogin && password !== confirmPassword) {
+      newErrors.confirmPassword = 'Passwords do not match';
     }
-    setErrors({});
-    return true;
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!validateForm()) return;
-    
     setIsSubmitting(true);
 
     try {
       if (isLogin) {
         const { error } = await signIn(email, password);
         if (error) {
-          if (error.message.includes('Invalid login credentials')) {
-            toast({
-              title: t('auth.loginFailed'),
-              description: t('auth.invalidCredentials'),
-              variant: 'destructive',
-            });
-          } else {
-            toast({
-              title: t('auth.loginFailed'),
-              description: error.message,
-              variant: 'destructive',
-            });
-          }
+          toast({
+            title: t('auth.loginFailed'),
+            description: error.message.includes('Invalid login credentials')
+              ? t('auth.invalidCredentials')
+              : error.message,
+            variant: 'destructive',
+          });
         }
+        // After login, useEffect handles redirect
       } else {
-        // Store selected language before signup
+        // Signup flow
         try { localStorage.setItem(LANG_STORAGE_KEY, selectedLanguage); } catch {}
 
         const { error } = await signUp(email, password);
         if (error) {
-          if (error.message.includes('User already registered')) {
-            toast({
-              title: t('auth.signUpFailed'),
-              description: t('auth.emailAlreadyRegistered'),
-              variant: 'destructive',
-            });
-          } else {
-            toast({
-              title: t('auth.signUpFailed'),
-              description: error.message,
-              variant: 'destructive',
-            });
-          }
-        } else {
-          trackCompleteRegistration();
-          // Save language to DB after signup via edge function
-          try {
-            await supabase.functions.invoke('ensure-trial', {
-              body: { action: 'set_language', language: selectedLanguage },
-            });
-          } catch {}
           toast({
-            title: t('auth.accountCreated'),
-            description: t('auth.welcomeRedirecting'),
+            title: t('auth.signUpFailed'),
+            description: error.message.includes('User already registered')
+              ? t('auth.emailAlreadyRegistered')
+              : error.message,
+            variant: 'destructive',
           });
-          // New users go to landing to start checkout
-          navigate('/landing');
           return;
+        }
+
+        trackCompleteRegistration();
+
+        // Set language and mark setup completed (password already set)
+        try {
+          await supabase.functions.invoke('ensure-trial', {
+            body: { action: 'set_language', language: selectedLanguage },
+          });
+        } catch {}
+        try {
+          await supabase.functions.invoke('ensure-trial', {
+            body: { action: 'complete_setup' },
+          });
+        } catch {}
+
+        toast({
+          title: t('auth.accountCreated'),
+          description: 'Redirecting to start your free trial...',
+        });
+
+        // Redirect to Stripe checkout immediately
+        setIsRedirectingToCheckout(true);
+        try {
+          await createCheckout();
+        } catch {
+          navigate('/landing', { replace: true });
         }
       }
     } finally {
@@ -155,16 +162,18 @@ const Auth = () => {
   const handleLanguageChange = (lang: SupportedLanguage) => {
     setSelectedLanguage(lang);
     try { localStorage.setItem(LANG_STORAGE_KEY, lang); } catch {}
-    // Dynamic import to change language
     import('@/i18n').then(({ default: i18n }) => {
       i18n.changeLanguage(lang);
     });
   };
 
-  if (isLoading) {
+  if (isLoading || isRedirectingToCheckout) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {isRedirectingToCheckout && (
+          <p className="text-sm text-muted-foreground">Redirecting to checkout...</p>
+        )}
       </div>
     );
   }
@@ -172,62 +181,6 @@ const Auth = () => {
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <AffiliateCapture />
-      {/* Free Trial Loading Modal */}
-      <Dialog open={showTrialModal} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-md border-primary/30 bg-card/95 backdrop-blur-xl" hideClose>
-          <div className="flex flex-col items-center justify-center py-8 gap-6">
-            <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-              <div className="relative h-20 w-20 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Gift className="h-8 w-8 text-primary animate-pulse" />
-              </div>
-            </div>
-            
-            <div className="text-center space-y-2">
-              <h3 className="text-xl font-bold flex items-center justify-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                {t('trial.threeDayFullAccess')}
-                <Sparkles className="h-5 w-5 text-primary" />
-              </h3>
-              <p className="text-muted-foreground text-sm">
-                {t('trial.settingUpTrial')}
-              </p>
-            </div>
-            
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Check className="h-4 w-4 text-primary" />
-                <span>{t('trial.unlimitedSearches')}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Check className="h-4 w-4 text-primary" />
-                <span>{t('trial.fullOutreach')}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Check className="h-4 w-4 text-primary" />
-                <span>{t('trial.whatsappTemplates')}</span>
-              </div>
-            </div>
-
-            <div className="text-center pt-1 border-t border-border/50">
-              <p className="text-xs text-muted-foreground mb-1">
-                {t('trial.notReadyCard')}
-              </p>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowTrialModal(false);
-                  navigate('/demo');
-                }}
-                className="text-xs text-primary hover:underline font-medium"
-              >
-                {t('trial.freeSearchDemo')}
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       <Card className="w-full max-w-md relative z-10 bg-card border-border">
         <CardHeader className="text-center">
@@ -242,11 +195,11 @@ const Auth = () => {
               ? 'You already have Pro — sign in to continue.'
               : isLogin 
                 ? t('auth.signInToFind')
-                : t('auth.createAccountDesc')}
+                : 'Create your account to start your free trial'}
           </CardDescription>
           {!isLogin && !existingParam && (
             <p className="text-xs text-muted-foreground mt-2">
-              Start with a 5-day free trial · £0 today
+              5-day free trial · £0 today · Cancel anytime
             </p>
           )}
         </CardHeader>
@@ -274,7 +227,7 @@ const Auth = () => {
               <Input
                 id="password"
                 type="password"
-                placeholder={t('auth.passwordPlaceholder')}
+                placeholder="At least 8 characters"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isSubmitting}
@@ -284,6 +237,25 @@ const Auth = () => {
                 <p className="text-sm text-destructive">{errors.password}</p>
               )}
             </div>
+
+            {/* Confirm password - signup only */}
+            {!isLogin && (
+              <div className="space-y-2">
+                <Label htmlFor="confirm-password">Confirm password</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  placeholder="Re-enter your password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  disabled={isSubmitting}
+                  className={errors.confirmPassword ? 'border-destructive' : ''}
+                />
+                {errors.confirmPassword && (
+                  <p className="text-sm text-destructive">{errors.confirmPassword}</p>
+                )}
+              </div>
+            )}
 
             {/* Language selector - shown on signup */}
             {!isLogin && (
@@ -307,7 +279,7 @@ const Auth = () => {
                   {isLogin ? t('auth.signingIn') : t('auth.creatingAccount')}
                 </>
               ) : (
-                isLogin ? t('auth.signIn') : t('auth.createAccount')
+                isLogin ? t('auth.signIn') : 'Create Account & Start Free Trial'
               )}
             </Button>
             
@@ -318,6 +290,7 @@ const Auth = () => {
                 onClick={() => {
                   setIsLogin(!isLogin);
                   setErrors({});
+                  setConfirmPassword('');
                 }}
                 className="text-primary hover:underline font-medium"
               >
