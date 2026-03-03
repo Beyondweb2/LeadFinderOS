@@ -168,6 +168,7 @@ export const CONTACT_METHOD_OPTIONS: { value: ContactMethod; label: string }[] =
 export type PipelineStatus = 
   | 'not_contacted'
   | 'waiting'
+  | 'contacted'
   | 'replied'
   | 'interested'
   | 'not_interested'
@@ -176,6 +177,7 @@ export type PipelineStatus =
 export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [
   { value: 'not_contacted', label: 'New' },
   { value: 'waiting', label: 'Attempted' },
+  { value: 'contacted', label: 'Contacted' },
   { value: 'replied', label: 'Replied' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
