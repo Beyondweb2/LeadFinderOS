@@ -18,6 +18,11 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Attempted',
     className: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
   },
+  contacted: {
+    label: 'Contacted',
+    shortLabel: 'Contacted',
+    className: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+  },
   replied: {
     label: 'Replied',
     shortLabel: 'Replied',

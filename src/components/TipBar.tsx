@@ -31,8 +31,8 @@ export function TipBar() {
   });
 
   const tip = useMemo(() => {
-    const dayIndex = Math.floor(Date.now() / (1000 * 60 * 60 * 24));
-    return TIPS[dayIndex % TIPS.length];
+    const tenMinBlock = Math.floor(Date.now() / (1000 * 60 * 10));
+    return TIPS[tenMinBlock % TIPS.length];
   }, []);
 
   if (dismissed) return null;
