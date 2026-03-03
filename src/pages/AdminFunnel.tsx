@@ -53,10 +53,10 @@ const AdminFunnel = () => {
   if (isAdmin === null) return <div className="p-8 text-muted-foreground">Loading…</div>;
   if (!isAdmin) return <div className="p-8 text-destructive font-semibold">Unauthorized</div>;
 
-  const demo7 = data?.demo_started?.last7 ?? 0;
+  const checkout7 = data?.checkout_attempts?.last7 ?? 0;
   const trial7 = data?.trial_started?.last7 ?? 0;
   const paid7 = data?.subscription_active?.last7 ?? 0;
-  const demoAll = data?.demo_started?.allTime ?? 0;
+  const checkoutAll = data?.checkout_attempts?.allTime ?? 0;
   const trialAll = data?.trial_started?.allTime ?? 0;
   const paidAll = data?.subscription_active?.allTime ?? 0;
 
@@ -77,14 +77,14 @@ const AdminFunnel = () => {
           <section>
             <h2 className="text-lg font-semibold mb-3 text-muted-foreground">Last 7 Days</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <StatCard label="Demo Started" value={demo7} />
+              <StatCard label="Checkout Attempts" value={checkout7} />
               <StatCard label="Trial Started" value={trial7} />
               <StatCard label="Subscription Active" value={paid7} />
             </div>
             <div className="grid grid-cols-3 gap-3 mt-3">
-              <RateCard label="Demo → Trial" value={pct(trial7, demo7)} />
+              <RateCard label="Checkout → Trial" value={pct(trial7, checkout7)} />
               <RateCard label="Trial → Paid" value={pct(paid7, trial7)} />
-              <RateCard label="Demo → Paid" value={pct(paid7, demo7)} />
+              <RateCard label="Checkout → Paid" value={pct(paid7, checkout7)} />
             </div>
           </section>
 
@@ -92,14 +92,14 @@ const AdminFunnel = () => {
           <section>
             <h2 className="text-lg font-semibold mb-3 text-muted-foreground">All Time</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <StatCard label="Demo Started" value={demoAll} />
+              <StatCard label="Checkout Attempts" value={checkoutAll} />
               <StatCard label="Trial Started" value={trialAll} />
               <StatCard label="Subscription Active" value={paidAll} />
             </div>
             <div className="grid grid-cols-3 gap-3 mt-3">
-              <RateCard label="Demo → Trial" value={pct(trialAll, demoAll)} />
+              <RateCard label="Checkout → Trial" value={pct(trialAll, checkoutAll)} />
               <RateCard label="Trial → Paid" value={pct(paidAll, trialAll)} />
-              <RateCard label="Demo → Paid" value={pct(paidAll, demoAll)} />
+              <RateCard label="Checkout → Paid" value={pct(paidAll, checkoutAll)} />
             </div>
           </section>
         </div>

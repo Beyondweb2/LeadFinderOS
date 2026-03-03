@@ -170,7 +170,7 @@ serve(async (req) => {
         let billing_status = 'no_stripe';
         if (sub) {
           billing_status = sub.status; // trialing, active, past_due, canceled
-        } else if (trial?.checkout_abandoned) {
+        } else if (trial?.checkout_abandoned || trial?.checkout_started_at) {
           billing_status = 'checkout_started';
         }
 

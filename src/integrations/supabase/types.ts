@@ -118,6 +118,30 @@ export type Database = {
         }
         Relationships: []
       }
+      checkout_attempts: {
+        Row: {
+          converted: boolean
+          created_at: string
+          email: string
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          converted?: boolean
+          created_at?: string
+          email: string
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          converted?: boolean
+          created_at?: string
+          email?: string
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       client_error_reports: {
         Row: {
           context: Json

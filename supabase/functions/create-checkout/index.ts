@@ -200,6 +200,19 @@ serve(async (req) => {
 
     logStep("Checkout session created", { sessionId: session.id });
 
+    // Record checkout attempt for funnel tracking (captures every email that starts checkout)
+    const attemptEmail = user?.email || bodyEmail;
+    if (attemptEmail) {
+      await supabaseClient
+        .from('checkout_attempts')
+        .insert({
+          email: attemptEmail,
+          user_id: user?.id || null,
+          converted: false,
+        });
+      logStep("Checkout attempt recorded", { email: attemptEmail });
+    }
+
     // Record checkout start for lifecycle email tracking
     if (user) {
       await supabaseClient
