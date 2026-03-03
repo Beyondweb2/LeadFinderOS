@@ -1,0 +1,1 @@
+ALTER TABLE public.checkout_attempts ADD COLUMN IF NOT EXISTS reminder_sent_at timestamp with time zone DEFAULT NULL;
