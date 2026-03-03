@@ -349,6 +349,13 @@ export default function AdminDashboard() {
   }, [getAccessToken]);
 
   const deleteUser = useCallback(async (userId: string, email: string) => {
+    // Checkout-only pseudo-users aren't real auth users — just remove from UI
+    if (userId.startsWith('checkout-')) {
+      setUsers(prev => prev.filter(u => u.id !== userId));
+      if (selectedUser?.id === userId) setSelectedUser(null);
+      toast.success(`Removed ${email} from list`);
+      return;
+    }
     const accessToken = await getAccessToken();
     if (!accessToken) return;
 
@@ -377,8 +384,21 @@ export default function AdminDashboard() {
     const accessToken = await getAccessToken();
     if (!accessToken) return;
 
-    const ids = Array.from(selectedIds);
-    if (ids.length === 0) return;
+    const allIds = Array.from(selectedIds);
+    // Separate checkout-only pseudo-users from real auth users
+    const checkoutIds = allIds.filter(id => id.startsWith('checkout-'));
+    const ids = allIds.filter(id => !id.startsWith('checkout-'));
+
+    // Remove checkout-only entries from UI immediately
+    if (checkoutIds.length > 0) {
+      setUsers(prev => prev.filter(u => !checkoutIds.includes(u.id)));
+    }
+
+    if (ids.length === 0) {
+      setSelectedIds(new Set());
+      toast.success(`Removed ${checkoutIds.length} checkout entries from list`);
+      return;
+    }
 
     setIsBulkDeleting(true);
 
