@@ -279,6 +279,8 @@ export default function AdminDashboard() {
         const existingEmails = new Set(userList.map((u: AdminUser) => u.email.toLowerCase()));
         const anonymousAttempts: AdminUser[] = rawAttempts
           .filter((a: CheckoutAttempt) => !a.user_id && !existingEmails.has(a.email.toLowerCase()))
+          // Apply search filter to checkout-only entries too
+          .filter((a: CheckoutAttempt) => !searchQuery || a.email.toLowerCase().includes(searchQuery.toLowerCase()))
           // Dedupe by email (keep latest)
           .filter((a: CheckoutAttempt, i: number, arr: CheckoutAttempt[]) => 
             arr.findIndex((b: CheckoutAttempt) => b.email.toLowerCase() === a.email.toLowerCase()) === i
