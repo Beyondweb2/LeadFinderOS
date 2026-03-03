@@ -200,6 +200,15 @@ serve(async (req) => {
 
     logStep("Checkout session created", { sessionId: session.id });
 
+    // Record checkout start for lifecycle email tracking
+    if (user) {
+      await supabaseClient
+        .from('user_trials')
+        .update({ checkout_started_at: new Date().toISOString() })
+        .eq('user_id', user.id);
+      logStep("Set checkout_started_at", { userId: user.id });
+    }
+
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
