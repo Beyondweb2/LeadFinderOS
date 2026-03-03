@@ -27,43 +27,32 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
   const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
-
   const nextWeek = new Date(today);
   nextWeek.setDate(nextWeek.getDate() + 7);
 
-  // Leads with next actions
   const withActions = trackedLeads.filter(l => l.next_action && l.next_action !== 'none');
 
-  // Overdue
   const overdue = withActions.filter(l => {
     if (!l.next_action_date) return false;
     return new Date(l.next_action_date) < today;
   });
 
-  // Due today
   const dueToday = withActions.filter(l => {
     if (!l.next_action_date) return false;
     const d = new Date(l.next_action_date);
     return d >= today && d < tomorrow;
   });
 
-  // Due this week (tomorrow through 7 days)
   const dueThisWeek = withActions.filter(l => {
     if (!l.next_action_date) return false;
     const d = new Date(l.next_action_date);
     return d >= tomorrow && d < nextWeek;
   });
 
-  // All upcoming sorted
-  const upcoming = [...overdue, ...dueToday, ...dueThisWeek]
-    .sort((a, b) => {
-      const dateA = a.next_action_date ? new Date(a.next_action_date).getTime() : Infinity;
-      const dateB = b.next_action_date ? new Date(b.next_action_date).getTime() : Infinity;
-      return dateA - dateB;
-    });
+  // Overdue first, then today, then rest
+  const upcoming = [...overdue, ...dueToday, ...dueThisWeek];
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -75,9 +64,9 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
     return `In ${diff}d`;
   };
 
-  // Clamp index
   const safeIndex = upcoming.length > 0 ? Math.min(currentIndex, upcoming.length - 1) : 0;
   const currentLead = upcoming[safeIndex];
+  const isOverdue = currentLead?.next_action_date && new Date(currentLead.next_action_date) < today;
 
   const goNext = () => setCurrentIndex(i => Math.min(i + 1, upcoming.length - 1));
   const goPrev = () => setCurrentIndex(i => Math.max(i - 1, 0));
@@ -99,10 +88,13 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
             </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground">Tracked</p>
           </div>
-          <div className="text-center">
+          <div className="text-center relative">
             <div className={`text-xl sm:text-2xl md:text-3xl font-bold ${overdue.length > 0 ? 'text-red-500' : 'text-green-500'}`}>
               {overdue.length}
             </div>
+            {overdue.length > 0 && (
+              <span className="absolute top-0 right-1/4 h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+            )}
             <p className="text-[10px] sm:text-xs text-muted-foreground">Overdue</p>
           </div>
           <div className="text-center">
@@ -121,23 +113,25 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
               className="block p-2 rounded-md hover:bg-muted/50 transition-colors"
             >
               <div className="flex items-center gap-1.5 mb-1">
-                {currentLead.next_action_date && new Date(currentLead.next_action_date) < today ? (
+                {isOverdue ? (
                   <AlertTriangle className="h-3.5 w-3.5 text-red-500 shrink-0" />
                 ) : (
                   <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                 )}
                 <span className="text-sm font-medium break-words leading-tight">{currentLead.business_name}</span>
+                {isOverdue && (
+                  <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+                )}
               </div>
               <div className="flex items-center justify-between ml-5">
                 <span className="text-xs text-muted-foreground">
                   {getLeadCustomAction(currentLead.id) || ACTION_LABELS[currentLead.next_action || 'none']}
                 </span>
-                <span className={`text-xs font-medium ${currentLead.next_action_date && new Date(currentLead.next_action_date) < today ? 'text-red-500' : 'text-amber-500'}`}>
+                <span className={`text-xs font-medium ${isOverdue ? 'text-red-500' : 'text-amber-500'}`}>
                   {currentLead.next_action_date ? formatDate(currentLead.next_action_date) : '—'}
                 </span>
               </div>
             </Link>
-            {/* Cycling controls */}
             {upcoming.length > 1 && (
               <div className="flex items-center justify-between mt-1.5">
                 <Button variant="ghost" size="icon" className="h-6 w-6" onClick={goPrev} disabled={safeIndex === 0}>
@@ -155,6 +149,13 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
             <CheckCircle className="h-4 w-4 text-green-500 mx-auto mb-1" />
             <p className="text-xs text-muted-foreground">All caught up!</p>
           </div>
+        )}
+
+        {/* Overdue summary */}
+        {overdue.length > 0 && (
+          <p className="text-[10px] sm:text-xs text-red-500/80 text-center">
+            You have {overdue.length} overdue follow-up{overdue.length !== 1 ? 's' : ''}
+          </p>
         )}
       </CardContent>
     </Card>
