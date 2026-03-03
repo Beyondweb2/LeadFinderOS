@@ -7,6 +7,7 @@ interface RevenueCardProps {
   totalRevenue: number;
   fullyPaidClients: number;
   activeProposals: number;
+  pipelineDeals: number;
 }
 
 export function RevenueCard({
@@ -15,6 +16,7 @@ export function RevenueCard({
   totalRevenue,
   fullyPaidClients,
   activeProposals,
+  pipelineDeals,
 }: RevenueCardProps) {
   const change = revenueLastMonth > 0
     ? Math.round(((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100)
@@ -49,6 +51,12 @@ export function RevenueCard({
               </span>
             </div>
           </div>
+          {revenueThisMonth === 0 && pipelineDeals > 0 && (
+            <p className="text-[10px] text-muted-foreground/60 mt-0.5">{pipelineDeals} deal{pipelineDeals !== 1 ? 's' : ''} in pipeline</p>
+          )}
+          {revenueThisMonth > 0 && (
+            <p className="text-[10px] text-green-500/70 mt-0.5">+£{revenueThisMonth.toLocaleString()} added this month</p>
+          )}
         </div>
 
         {/* Middle row */}
@@ -73,7 +81,7 @@ export function RevenueCard({
         <div className="pt-2 border-t border-border/50">
           <div className="flex items-center justify-between">
             <span className="text-xs sm:text-sm text-muted-foreground">Lifetime</span>
-            <span className="text-xs sm:text-sm font-medium text-muted-foreground">£{totalRevenue.toLocaleString()}</span>
+            <span className="text-xs sm:text-sm font-medium text-muted-foreground/70">£{totalRevenue.toLocaleString()}</span>
           </div>
         </div>
       </CardContent>
