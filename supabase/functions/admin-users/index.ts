@@ -268,7 +268,6 @@ serve(async (req) => {
         return jsonResponse({ error: 'user_id required' }, 400, corsHeaders, rlHeaders);
       }
 
-      // Prevent self-deletion
       if (targetUserId === adminUserId) {
         return jsonResponse({ error: 'Cannot delete your own account' }, 400, corsHeaders, rlHeaders);
       }
@@ -281,7 +280,6 @@ serve(async (req) => {
         timestamp: new Date().toISOString(),
       }));
 
-      // Delete from auth (cascades to related tables via FK)
       const { error: deleteError } = await serviceClient.auth.admin.deleteUser(targetUserId);
 
       if (deleteError) {
@@ -290,6 +288,46 @@ serve(async (req) => {
       }
 
       return jsonResponse({ success: true }, 200, corsHeaders, rlHeaders);
+    }
+
+    // ===================== BULK DELETE USERS =====================
+    if (action === 'bulk_delete_users') {
+      const userIds: string[] = body.user_ids;
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        return jsonResponse({ error: 'user_ids array required' }, 400, corsHeaders, rlHeaders);
+      }
+
+      if (userIds.length > 50) {
+        return jsonResponse({ error: 'Maximum 50 users per bulk delete' }, 400, corsHeaders, rlHeaders);
+      }
+
+      // Filter out admin's own ID
+      const toDelete = userIds.filter(id => id !== adminUserId);
+
+      console.log(JSON.stringify({
+        level: 'warn',
+        admin_user_id: adminUserId,
+        action: 'bulk_delete_users',
+        count: toDelete.length,
+        timestamp: new Date().toISOString(),
+      }));
+
+      const results: { id: string; success: boolean; error?: string }[] = [];
+
+      for (const uid of toDelete) {
+        const { error: deleteError } = await serviceClient.auth.admin.deleteUser(uid);
+        if (deleteError) {
+          console.error(`[ADMIN-USERS] Bulk delete error for ${uid}:`, deleteError.message);
+          results.push({ id: uid, success: false, error: deleteError.message });
+        } else {
+          results.push({ id: uid, success: true });
+        }
+      }
+
+      const successCount = results.filter(r => r.success).length;
+      const failCount = results.filter(r => !r.success).length;
+
+      return jsonResponse({ success: true, deleted: successCount, failed: failCount, results }, 200, corsHeaders, rlHeaders);
     }
 
     return jsonResponse({ error: 'Unknown action' }, 400, corsHeaders, rlHeaders);
