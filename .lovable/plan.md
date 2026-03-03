@@ -1,18 +1,42 @@
 
 
-## Problem
+## Plan
 
-On iOS Safari, `window.open(url, '_blank')` is blocked by the popup blocker when called after an asynchronous operation (the email check + checkout API calls). Safari only allows `window.open` in the direct, synchronous call stack of a user gesture (tap/click). Since there are two sequential async calls before the `window.open`, Safari silently blocks it.
+### 1. Fix abandon email trigger — set `checkout_started_at` in `create-checkout`
 
-## Solution
+**File:** `supabase/functions/create-checkout/index.ts`
 
-Replace `window.open(checkoutData.url, '_blank')` with `window.location.href = checkoutData.url` for the email-first checkout flow. This performs a same-tab redirect which is never blocked by popup blockers on any platform.
+After the Stripe checkout session is successfully created (around line 200, after `const session = await stripe.checkout.sessions.create(...)`), add:
 
-## Changes
+```typescript
+// Record checkout start for lifecycle email tracking
+if (user) {
+  await supabaseClient
+    .from('user_trials')
+    .update({ checkout_started_at: new Date().toISOString() })
+    .eq('user_id', user.id);
+}
+```
 
-**`src/pages/Landing.tsx`** (line ~447):
-- Change `window.open(checkoutData.url, '_blank')` to `window.location.href = checkoutData.url`
-- Remove the `checkout-opened` event dispatch (not needed for same-tab navigation)
+This ensures the `lifecycle-emails` function can find users who started but didn't complete checkout.
 
-This is consistent with how the authenticated `createCheckout` in `useSubscription.tsx` already works (line ~209: `window.location.href = data.url`).
+### 2. Update abandon email copy in `lifecycle-emails`
+
+**File:** `supabase/functions/lifecycle-emails/index.ts`
+
+Replace the current email body with copy aligned to the 5-day free trial model. Key messaging:
+
+- You won't be charged for 5 days
+- Cancel anytime before the trial ends — completely free
+- Use the app fully during the trial to find clients
+- Even if you cancel, any clients you land during the trial are yours to keep
+- Emphasise the risk-free nature: potentially free clients
+
+Update subject line rotation to match the new tone (e.g., "5 days free — no charge today", "You won't pay a thing for 5 days").
+
+### Summary
+
+Two edge function edits:
+1. `create-checkout` — add one `update` call to set `checkout_started_at` after session creation
+2. `lifecycle-emails` — rewrite email HTML/text body and subject lines for the 5-day trial messaging
 
