@@ -32,6 +32,7 @@ import {
   Trash2,
   Mail,
 } from 'lucide-react';
+import { TipBar } from '@/components/TipBar';
 
 const Dashboard = () => {
   const { metrics, isLoading, refetch } = useDashboardMetrics();
@@ -90,6 +91,9 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-5 sm:space-y-7">
+      {/* Rotating Tip */}
+      <TipBar />
+
       {/* Page Header */}
       <div className="text-center sm:text-left">
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
