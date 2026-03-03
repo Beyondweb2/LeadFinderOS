@@ -120,11 +120,11 @@ serve(async (req) => {
 
         // Subject line rotation
         const subjects = [
-          "Still looking for clients?",
-          "10–20 businesses per day",
-          "You were close",
-          "Want more web clients this week?",
-          "Quick question about your trial",
+          "5 days free — no charge today",
+          "You won't pay a thing for 5 days",
+          "Your free trial is waiting",
+          "Potentially free clients — here's how",
+          "£0 today, cancel anytime",
         ];
         const subject = subjects[Math.floor(Math.random() * subjects.length)];
 
@@ -132,49 +132,57 @@ serve(async (req) => {
 
         const htmlBody = `<div style="font-family: sans-serif; font-size: 15px; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto;">
 <p>Hey ${displayName},</p>
-<p>You were about to activate your trial but didn't finish.</p>
-<p>If you're trying to land more web projects, here's the simple strategy most freelancers miss:</p>
-<p><strong>Contact 10–20 businesses per day.</strong></p>
-<p>Not 3. Not 5.<br/>10–20.</p>
-<p>That's where momentum starts.</p>
-<p>LeadFinder makes that easy by showing businesses without websites that you can contact immediately.</p>
-<p>Most users start seeing replies within days once they stay consistent.</p>
-<p>If something stopped you from activating, just reply and tell me what it was.</p>
-<p>Or jump back in here:</p>
-<p>👉 <a href="https://lead-finder-app.com/" style="color: #2563eb;">https://lead-finder-app.com/</a></p>
+<p>You started activating your free trial but didn't finish — just wanted to make sure you knew:</p>
+<p><strong>You won't be charged for 5 days.</strong></p>
+<p>That means you can use LeadFinder fully — search for businesses, contact them, land clients — and if you decide it's not for you, cancel before the 5 days are up. You'll pay nothing.</p>
+<p>But here's the thing most people don't realise:</p>
+<p>If you land even <strong>one client</strong> during your trial and then cancel, that client is yours to keep. That's potentially free work just from trying.</p>
+<p>The strategy is simple:</p>
+<ul style="padding-left: 20px;">
+<li>Search for businesses without websites in your area</li>
+<li>Contact 10–20 per day</li>
+<li>Follow up consistently</li>
+</ul>
+<p>Most users start getting replies within days.</p>
+<p>There's genuinely nothing to lose. Give it a go, and cancel anytime if it's not for you.</p>
+<p>👉 <a href="https://lead-finder-app.com/" style="color: #2563eb;">Finish activating your free trial</a></p>
+<p>If something stopped you, just reply and let me know.</p>
 <p>– Paul<br/>LeadFinder</p>
 <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0 12px;" />
-<p style="font-size: 12px; color: #6b7280;">LeadFinder · <a href="https://lead-finder-app.com/" style="color: #6b7280;">https://lead-finder-app.com</a><br/>You're receiving this email because you started activating a trial on LeadFinder.<br/>If you don't want reminders, reply and let me know.</p>
+<p style="font-size: 12px; color: #6b7280;">LeadFinder · <a href="https://lead-finder-app.com/" style="color: #6b7280;">https://lead-finder-app.com</a><br/>You're receiving this email because you started a free trial on LeadFinder.<br/>If you don't want reminders, reply and let me know.</p>
 </div>`;
 
         const textBody = `Hey ${displayName},
 
-You were about to activate your trial but didn't finish.
+You started activating your free trial but didn't finish — just wanted to make sure you knew:
 
-If you're trying to land more web projects, here's the simple strategy most freelancers miss:
+You won't be charged for 5 days.
 
-Contact 10–20 businesses per day.
+That means you can use LeadFinder fully — search for businesses, contact them, land clients — and if you decide it's not for you, cancel before the 5 days are up. You'll pay nothing.
 
-Not 3. Not 5.
-10–20.
+But here's the thing most people don't realise:
 
-That's where momentum starts.
+If you land even one client during your trial and then cancel, that client is yours to keep. That's potentially free work just from trying.
 
-LeadFinder makes that easy by showing businesses without websites that you can contact immediately.
+The strategy is simple:
+- Search for businesses without websites in your area
+- Contact 10–20 per day
+- Follow up consistently
 
-Most users start seeing replies within days once they stay consistent.
+Most users start getting replies within days.
 
-If something stopped you from activating, just reply and tell me what it was.
+There's genuinely nothing to lose. Give it a go, and cancel anytime if it's not for you.
 
-Or jump back in here:
-https://lead-finder-app.com/
+Finish activating your free trial: https://lead-finder-app.com/
+
+If something stopped you, just reply and let me know.
 
 – Paul
 LeadFinder
 
 ---
 LeadFinder · https://lead-finder-app.com
-You're receiving this email because you started activating a trial on LeadFinder.
+You're receiving this email because you started a free trial on LeadFinder.
 If you don't want reminders, reply and let me know.`;
 
         // Send email via Resend
