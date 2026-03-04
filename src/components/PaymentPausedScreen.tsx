@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, CreditCard, Loader2 } from 'lucide-react';
 
 export function PaymentPausedScreen() {
-  const { isPaymentPaused, openCustomerPortal, isLoading } = useSubscription();
+  const { openCustomerPortal, isLoading, status: subStatus } = useSubscription();
   const [portalLoading, setPortalLoading] = useState(false);
 
   const handleUpdateCard = async () => {
@@ -17,7 +17,7 @@ export function PaymentPausedScreen() {
     }
   };
 
-  if (isLoading || !isPaymentPaused) return null;
+  if (isLoading) return null;
 
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
@@ -28,14 +28,11 @@ export function PaymentPausedScreen() {
               <AlertTriangle className="h-7 w-7 text-destructive" />
             </div>
           </div>
-          <CardTitle className="text-xl">Account Paused</CardTitle>
+          <CardTitle className="text-xl">Your Access is Paused</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-center">
           <p className="text-sm text-muted-foreground">
-            Multiple payment attempts have failed. Your account has been paused until payment is resolved.
-          </p>
-          <p className="text-sm text-muted-foreground">
-            You cannot search for leads or access your CRM until your payment method is updated and a successful payment is processed.
+            Your subscription payment failed. Please update your payment method to continue using LeadFinder.
           </p>
           <Button onClick={handleUpdateCard} disabled={portalLoading} className="w-full" size="lg">
             {portalLoading ? (

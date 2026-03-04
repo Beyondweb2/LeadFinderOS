@@ -11,7 +11,7 @@ interface SubscriptionState {
   error: string | null;
   status: string | null;
   isAdmin: boolean;
-  isPaidSubscriber: boolean;  // true only for 'active' or 'past_due' (not trialing)
+  isPaidSubscriber: boolean;  // true only for 'active' (not trialing, not past_due)
   isStripeTrialing: boolean;  // true when status is 'trialing'
   paymentFailureCount: number;
   lastPaymentFailedAt: string | null;
@@ -106,9 +106,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           .maybeSingle() as { data: { id: string; user_id: string; status: string; current_period_end: string | null; created_at: string; updated_at: string } | null; error: any };
 
         if (!localError && localSub) {
-          const validStatuses = ['active', 'trialing', 'past_due'];
+          const validStatuses = ['active', 'trialing'];
           const isValid = validStatuses.includes(localSub.status);
-          const isPaid = ['active', 'past_due'].includes(localSub.status);
+          const isPaid = localSub.status === 'active';
           const isTrialing = localSub.status === 'trialing';
           const localTrialEnd = isTrialing ? localSub.current_period_end : null;
           
@@ -157,10 +157,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
 
       const subStatus = data.subscription_status ?? null;
-      const isPaid = ['active', 'past_due'].includes(subStatus);
+      const isPaid = subStatus === 'active';
       const isTrialing = subStatus === 'trialing';
       const failureCount = data.payment_failure_count ?? 0;
-      const isPaused = subStatus === 'paused' || failureCount >= 2;
+      const isPaused = subStatus === 'paused' || subStatus === 'past_due' || subStatus === 'unpaid' || failureCount >= 2;
       
       setState({
         subscribed: data.subscribed ?? false,

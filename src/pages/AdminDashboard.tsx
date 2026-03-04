@@ -142,6 +142,9 @@ interface CheckoutAttempt {
 function accessModeColor(mode: string): string {
   switch (mode) {
     case 'paid': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+    case 'trial': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
+    case 'payment_required': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
+    case 'no_access': return 'bg-red-500/15 text-red-400 border-red-500/30';
     case 'free_user': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
     case 'checkout_only': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
     case 'signed_up': return 'bg-muted text-muted-foreground border-border';
@@ -152,6 +155,9 @@ function accessModeColor(mode: string): string {
 function accessModeLabel(mode: string): string {
   switch (mode) {
     case 'paid': return 'Paid (Unlimited)';
+    case 'trial': return 'Trial';
+    case 'payment_required': return 'Payment Required';
+    case 'no_access': return 'No Access';
     case 'free_user': return 'Free Access';
     case 'checkout_only': return 'Checkout Only';
     case 'signed_up': return 'Signed Up';
