@@ -36,9 +36,9 @@ const BillingCancel = () => {
         <CardContent className="flex flex-col items-center gap-4 py-8">
           <div className="text-center">
             <h2 className="text-xl font-semibold mb-4">Checkout cancelled — no charge made</h2>
-            <p className="text-2xl font-bold text-primary mb-2">£0 today.</p>
+            <p className="text-2xl font-bold mb-2">Start your 5-day free trial for <span className="text-primary">£0</span>.</p>
             <p className="text-muted-foreground mb-6 leading-relaxed">
-              You get full access for 5 days, and if you cancel anytime before the 5 days end, you will not be charged.
+              You get full access to LeadFinder Pro for 5 days. If you cancel anytime before the trial ends, you will not be charged.
             </p>
             <div className="flex flex-col gap-2">
               <Button onClick={handleTryAgain} disabled={isLoading}>
