@@ -555,16 +555,14 @@ const Landing = () => {
             </span>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            {!user && (
-              <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm px-2 sm:px-4" asChild>
-                <Link to="/auth">Sign In</Link>
-              </Button>
-            )}
+            <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm px-2 sm:px-4" asChild>
+              <Link to="/auth">Sign In</Link>
+            </Button>
              <Button 
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
               onClick={scrollToPricing}
             >
-              {user ? 'Subscribe' : 'Try it free'}
+              Try it free
             </Button>
           </div>
         </div>
@@ -613,17 +611,15 @@ const Landing = () => {
                   Try it free
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Button>
-                {!user && (
-                  <Button 
-                    variant="ghost" 
-                    className="hidden sm:inline-flex text-[14px] font-medium text-foreground/40 hover:text-foreground/70 h-[52px] px-5 rounded-xl transition-all duration-200" 
-                    asChild
-                  >
-                    <Link to="/auth">
-                      Sign in
-                    </Link>
-                  </Button>
-                )}
+                <Button 
+                  variant="ghost" 
+                  className="hidden sm:inline-flex text-[14px] font-medium text-foreground/40 hover:text-foreground/70 h-[52px] px-5 rounded-xl transition-all duration-200" 
+                  asChild
+                >
+                  <Link to="/auth">
+                    Sign in
+                  </Link>
+                </Button>
               </div>
               <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
                 5-day free trial · £0 today · Cancel anytime
@@ -1170,11 +1166,9 @@ const Landing = () => {
               Lead<span className="text-gradient-primary">Finder</span> Pro
             </span>
             <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 md:gap-8 text-xs sm:text-sm text-muted-foreground">
-              {!user && (
-                <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
-                  Sign In
-                </Link>
-              )}
+              <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
+                Sign In
+              </Link>
               <a href="#pricing" className="hover:text-foreground transition-colors duration-200">
                 Try it free
               </a>
