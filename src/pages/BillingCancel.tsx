@@ -34,11 +34,11 @@ const BillingCancel = () => {
         </CardHeader>
         
         <CardContent className="flex flex-col items-center gap-4 py-8">
-          <XCircle className="h-12 w-12 text-muted-foreground" />
           <div className="text-center">
-            <h2 className="text-xl font-semibold mb-2">Checkout Cancelled</h2>
-            <p className="text-muted-foreground mb-6">
-              No worries! Your card was not charged. You can try again whenever you're ready.
+            <h2 className="text-xl font-semibold mb-4">Checkout cancelled — no charge made</h2>
+            <p className="text-2xl font-bold text-primary mb-2">£0 today.</p>
+            <p className="text-muted-foreground mb-6 leading-relaxed">
+              You get full access for 5 days, and if you cancel anytime before the 5 days end, you will not be charged.
             </p>
             <div className="flex flex-col gap-2">
               <Button onClick={handleTryAgain} disabled={isLoading}>
@@ -50,13 +50,13 @@ const BillingCancel = () => {
                 ) : (
                   <>
                     <CreditCard className="mr-2 h-4 w-4" />
-                    Try Again
+                    Resume Free Trial
                   </>
                 )}
               </Button>
               <Button variant="ghost" onClick={() => { window.location.href = '/landing'; }}>
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Go Back
+                Back to Home
               </Button>
             </div>
           </div>
