@@ -68,18 +68,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       (event, newSession) => {
         const newUserId = newSession?.user?.id ?? null;
         const userChanged = currentUserIdRef.current !== newUserId;
-        
+
         // Always update session (including token refresh) to keep access token current
         currentUserIdRef.current = newUserId;
         setSession(newSession);
-        
+
         // Only update user object if user actually changed
         if (userChanged || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
           setUser(newSession?.user ?? null);
         }
-        
+
         setIsLoading(false);
-        
+
         // On new signup, attach affiliate code and ref_source if present
         // Use setTimeout to avoid deadlocks from Supabase calls inside callback
         if (event === 'SIGNED_IN' && newSession?.user) {
@@ -87,7 +87,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setTimeout(async () => {
             const affiliateCode = getStoredAffiliateCode();
             const refSource = getAndClearRefSource();
-            
+
             const updateData: Record<string, string> = {};
             if (affiliateCode) {
               updateData.affiliate_code = affiliateCode;
@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (refSource) {
               updateData.ref_source = refSource;
             }
-            
+
             if (Object.keys(updateData).length > 0) {
               await supabase
                 .from('user_trials')
@@ -109,14 +109,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-      const userId = initialSession?.user?.id ?? null;
-      currentUserIdRef.current = userId;
+    // THEN restore and validate any cached session to avoid stale-cache login lockouts
+    (async () => {
+      const { data: { session: initialSession } } = await supabase.auth.getSession();
+
+      if (!initialSession) {
+        currentUserIdRef.current = null;
+        setSession(null);
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+      const { data: { user: verifiedUser }, error: verifyError } = await supabase.auth.getUser();
+
+      // If cached session is stale/invalid, clear local auth cache so user can sign in normally
+      if (verifyError || !verifiedUser) {
+        await supabase.auth.signOut({ scope: 'local' });
+        currentUserIdRef.current = null;
+        setSession(null);
+        setUser(null);
+        setIsLoading(false);
+        return;
+      }
+
+      currentUserIdRef.current = verifiedUser.id;
       setSession(initialSession);
-      setUser(initialSession?.user ?? null);
+      setUser(verifiedUser);
       setIsLoading(false);
-    });
+    })();
 
     return () => subscription.unsubscribe();
   }, []);
