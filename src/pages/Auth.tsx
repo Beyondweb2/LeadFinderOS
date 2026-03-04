@@ -25,7 +25,7 @@ const Auth = () => {
   const intentParam = searchParamsInit.get('intent');
   const emailParam = searchParamsInit.get('email');
   const existingParam = searchParamsInit.get('existing');
-  const [isLogin, setIsLogin] = useState(!intentParam || existingParam === 'true');
+  const [isLogin, setIsLogin] = useState(!intentParam || existingParam === 'true' || !intentParam);
   const [email, setEmail] = useState(emailParam || '');
   const [password, setPassword] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(() => {
@@ -311,19 +311,21 @@ const Auth = () => {
               )}
             </Button>
             
-            <p className="text-sm text-muted-foreground text-center">
-              {isLogin ? t('auth.noAccount') + ' ' : t('auth.haveAccount') + ' '}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsLogin(!isLogin);
-                  setErrors({});
-                }}
-                className="text-primary hover:underline font-medium"
-              >
-                {isLogin ? t('auth.signUp') : t('auth.signIn')}
-              </button>
-            </p>
+            {!isLogin && (
+              <p className="text-sm text-muted-foreground text-center">
+                {t('auth.haveAccount') + ' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsLogin(true);
+                    setErrors({});
+                  }}
+                  className="text-primary hover:underline font-medium"
+                >
+                  {t('auth.signIn')}
+                </button>
+              </p>
+            )}
           </CardFooter>
         </form>
       </Card>
