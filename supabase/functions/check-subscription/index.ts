@@ -91,9 +91,9 @@
         limit: 10,
       });
 
-       // Grant access for active, trialing, or past_due — even if cancel_at_period_end is true
-       // Cancelled trials keep full access until the trial period naturally expires
-       const validStatuses = ['active', 'trialing', 'past_due'];
+       // Grant access ONLY for active or trialing subscriptions
+       // past_due, canceled, unpaid etc. must block access immediately
+       const validStatuses = ['active', 'trialing'];
        const validSubscription = subscriptions.data.find((sub: { status: string }) => validStatuses.includes(sub.status));
       
       const hasActiveSub = !!validSubscription;

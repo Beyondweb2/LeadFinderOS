@@ -204,10 +204,14 @@ serve(async (req) => {
 
         // --- Access Mode ---
         let access_mode = 'free_user';
-        if (sub?.status === 'active' || sub?.status === 'past_due') {
+        if (sub?.status === 'active') {
           access_mode = 'paid';
         } else if (sub?.status === 'trialing') {
-          access_mode = 'paid'; // legacy trialing = paid access
+          access_mode = 'trial';
+        } else if (sub?.status === 'past_due' || sub?.status === 'unpaid') {
+          access_mode = 'payment_required';
+        } else if (sub?.status === 'canceled' || sub?.status === 'incomplete' || sub?.status === 'incomplete_expired') {
+          access_mode = 'no_access';
         }
 
         // Keep legacy subscription_status for filter compatibility
