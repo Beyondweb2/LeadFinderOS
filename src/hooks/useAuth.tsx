@@ -61,6 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   // Track user ID to prevent unnecessary re-renders on token refresh
   const currentUserIdRef = useRef<string | null>(null);
+  // Track whether initial session validation has completed
+  const initialValidationDoneRef = useRef(false);
 
   useEffect(() => {
     // Set up auth state listener FIRST
@@ -69,19 +71,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const newUserId = newSession?.user?.id ?? null;
         const userChanged = currentUserIdRef.current !== newUserId;
 
-        // Always update session (including token refresh) to keep access token current
         currentUserIdRef.current = newUserId;
         setSession(newSession);
 
-        // Only update user object if user actually changed
         if (userChanged || event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
           setUser(newSession?.user ?? null);
         }
 
-        setIsLoading(false);
+        // Only resolve isLoading from listener AFTER initial validation is done
+        // This prevents a stale cached session from briefly setting user before validation
+        if (initialValidationDoneRef.current) {
+          setIsLoading(false);
+        }
 
         // On new signup, attach affiliate code and ref_source if present
-        // Use setTimeout to avoid deadlocks from Supabase calls inside callback
         if (event === 'SIGNED_IN' && newSession?.user) {
           const userId = newSession.user.id;
           setTimeout(async () => {
@@ -109,34 +112,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // THEN restore and validate any cached session to avoid stale-cache login lockouts
+    // Validate any cached session with the server to clear stale tokens automatically
     (async () => {
-      const { data: { session: initialSession } } = await supabase.auth.getSession();
+      try {
+        const { data: { session: cachedSession } } = await supabase.auth.getSession();
 
-      if (!initialSession) {
-        currentUserIdRef.current = null;
-        setSession(null);
-        setUser(null);
+        if (!cachedSession) {
+          // No cached session — user is simply not logged in
+          currentUserIdRef.current = null;
+          setSession(null);
+          setUser(null);
+          return;
+        }
+
+        // Verify cached session is still valid on the server
+        const { data: { user: verifiedUser }, error: verifyError } = await supabase.auth.getUser();
+
+        if (verifyError || !verifiedUser) {
+          // Stale/invalid cached session — clear it so sign-in works normally
+          await supabase.auth.signOut({ scope: 'local' });
+          currentUserIdRef.current = null;
+          setSession(null);
+          setUser(null);
+          return;
+        }
+
+        // Valid session — set user state
+        currentUserIdRef.current = verifiedUser.id;
+        setSession(cachedSession);
+        setUser(verifiedUser);
+      } catch {
+        // Network error during validation — use cached session as fallback
+        const { data: { session: fallbackSession } } = await supabase.auth.getSession();
+        const userId = fallbackSession?.user?.id ?? null;
+        currentUserIdRef.current = userId;
+        setSession(fallbackSession);
+        setUser(fallbackSession?.user ?? null);
+      } finally {
+        initialValidationDoneRef.current = true;
         setIsLoading(false);
-        return;
       }
-
-      const { data: { user: verifiedUser }, error: verifyError } = await supabase.auth.getUser();
-
-      // If cached session is stale/invalid, clear local auth cache so user can sign in normally
-      if (verifyError || !verifiedUser) {
-        await supabase.auth.signOut({ scope: 'local' });
-        currentUserIdRef.current = null;
-        setSession(null);
-        setUser(null);
-        setIsLoading(false);
-        return;
-      }
-
-      currentUserIdRef.current = verifiedUser.id;
-      setSession(initialSession);
-      setUser(verifiedUser);
-      setIsLoading(false);
     })();
 
     return () => subscription.unsubscribe();
