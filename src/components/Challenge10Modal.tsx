@@ -20,9 +20,11 @@ export function Challenge10Modal({ open, onStart, onSkip }: Challenge10ModalProp
   };
 
   return (
-    <Dialog open={open} onOpenChange={(v) => { if (!v) handleGotIt(); }}>
+    <Dialog open={open} onOpenChange={() => {}}>
       <DialogContent
         hideClose
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
         className="max-w-sm sm:max-w-[400px] mx-auto p-0 overflow-hidden border-border/40 bg-[hsl(220_50%_5%)] rounded-2xl outline-none focus:outline-none focus-visible:outline-none [&:focus]:outline-none [&:focus-visible]:ring-0"
       >
         <div className="px-7 pt-7 pb-6 sm:px-8 sm:pt-8 sm:pb-7 flex flex-col items-center">
