@@ -38,6 +38,7 @@ import AffiliateProgram from "./pages/AffiliateProgram";
 import Playbook from "./pages/Playbook";
 import UnlockAccess from "./pages/UnlockAccess";
 import Start from "./pages/Start";
+import StartFreeTrial from "./pages/StartFreeTrial";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -164,6 +165,7 @@ const App = () => {
              <Route path="/feedback" element={<Feedback />} />
              <Route path="/partners" element={<AffiliateProgram />} />
              <Route path="/start" element={<Start />} />
+             <Route path="/start-free-trial" element={<StartFreeTrial />} />
              <Route path="/guide" element={<HowToUse />} />
              <Route 
                path="/unlock" 

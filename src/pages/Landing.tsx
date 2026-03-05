@@ -86,20 +86,16 @@ const ScrollReveal = ({
   );
 };
 
-// Smooth scroll to pricing card (centered in viewport)
-const scrollToPricing = () => {
-  const el = document.getElementById('pricing');
-  if (!el) return;
-  const rect = el.getBoundingClientRect();
-  const offset = window.scrollY + rect.top - (window.innerHeight / 2) + (rect.height / 2);
-  window.scrollTo({ top: offset, behavior: 'smooth' });
+// Navigate to start free trial page
+const goToStartTrial = (navigate: ReturnType<typeof useNavigate>) => () => {
+  navigate('/start-free-trial');
 };
 
 // Inline CTA band — desktop only, inserted between sections
-const InlineCTA = ({ text = 'Ready to find your next client?' }: { text?: string }) => (
+const InlineCTA = ({ text = 'Ready to find your next client?', onCTA }: { text?: string; onCTA: () => void }) => (
   <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
-    <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={scrollToPricing}>
+    <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={onCTA}>
       Try it free
       <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
@@ -393,73 +389,12 @@ const Landing = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
-  const [showEmailStep, setShowEmailStep] = useState(false);
-  const [checkoutEmail, setCheckoutEmail] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
-
   // Lock landing page to dark brand theme
   useLandingTheme();
 
-  const handlePricingCTAClick = useCallback(() => {
-    setShowEmailStep(true);
-    setEmailError('');
-    // Scroll to pricing
-    setTimeout(() => {
-      scrollToPricing();
-    }, 100);
-  }, []);
-
-  const handleEmailContinue = useCallback(async () => {
-    const trimmed = checkoutEmail.trim().toLowerCase();
-    // Basic email validation
-    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setEmailError('Please enter a valid email address');
-      return;
-    }
-    setEmailError('');
-    setIsCheckingEmail(true);
-
-    try {
-      // Check if this email already has an active subscription
-      const { data, error } = await supabase.functions.invoke('check-email-subscription', {
-        body: { email: trimmed },
-      });
-      if (error) throw error;
-
-      if (data?.exists) {
-        // User already has an account — redirect to sign-in
-        navigate(`/auth?email=${encodeURIComponent(trimmed)}&existing=true`);
-        return;
-      }
-
-      // No active subscription — proceed to Stripe with this email
-      setIsStartingCheckout(true);
-      const headers: Record<string, string> = {};
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session?.access_token) {
-        headers.Authorization = `Bearer ${sessionData.session.access_token}`;
-      }
-
-      const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout', {
-        headers,
-        body: { customer_email: trimmed },
-      });
-      if (checkoutError) throw checkoutError;
-      if (checkoutData?.url) {
-        window.location.href = checkoutData.url;
-      } else {
-        throw new Error('No checkout URL received');
-      }
-    } catch (err) {
-      console.error('Email check/checkout error:', err);
-      setEmailError('Something went wrong. Please try again.');
-    } finally {
-      setIsCheckingEmail(false);
-      setIsStartingCheckout(false);
-    }
-  }, [checkoutEmail, navigate]);
+  const handleCTA = useCallback(() => {
+    navigate('/start-free-trial');
+  }, [navigate]);
 
   // Track scroll to show/hide sticky CTA and adjust header button
   useEffect(() => {
