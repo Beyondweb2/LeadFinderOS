@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { Resend } from "npm:resend@2.0.0";
 import { checkRateLimit, rateLimitHeaders } from "../_shared/rate-limiter.ts";
 
 const corsHeaders = {
@@ -220,6 +221,39 @@ serve(async (req) => {
         .update({ checkout_started_at: new Date().toISOString() })
         .eq('user_id', user.id);
       logStep("Set checkout_started_at", { userId: user.id });
+    }
+
+    // Fire-and-forget: notify owner via email
+    try {
+      const resend = new Resend(Deno.env.get("RESEND_API_KEY"));
+      const checkoutEmail = user?.email || bodyEmail || "Unknown";
+      const userType = user ? "Existing user" : "New visitor";
+      const trialInfo = trialUsed ? "Trial already used" : "Eligible for trial";
+      const now = new Date().toLocaleString("en-GB", { timeZone: "Europe/London" });
+
+      await resend.emails.send({
+        from: "LeadFinder Pro <noreply@lead-finder-app.com>",
+        to: ["beyondwebcraft@outlook.com"],
+        subject: "[LeadFinder] 🔔 New Checkout Started",
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
+            <div style="background: linear-gradient(135deg, #f59e0b, #ef4444); padding: 16px 20px; border-radius: 12px 12px 0 0;">
+              <h2 style="color: white; margin: 0;">🔔 Checkout Started</h2>
+            </div>
+            <div style="background: #f8fafc; padding: 20px; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
+              <p style="margin: 0 0 8px;"><strong>Email:</strong> ${checkoutEmail}</p>
+              <p style="margin: 0 0 8px;"><strong>Type:</strong> ${userType}</p>
+              <p style="margin: 0 0 8px;"><strong>Trial:</strong> ${trialInfo}</p>
+              <p style="margin: 0; color: #64748b; font-size: 13px;">${now}</p>
+            </div>
+          </div>
+        `,
+      });
+      logStep("Owner notification email sent", { email: checkoutEmail });
+    } catch (notifyErr) {
+      logStep("Owner notification email failed (non-blocking)", {
+        error: notifyErr instanceof Error ? notifyErr.message : String(notifyErr),
+      });
     }
 
     return new Response(JSON.stringify({ url: session.url }), {
