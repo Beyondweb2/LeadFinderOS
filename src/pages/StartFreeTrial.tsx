@@ -110,7 +110,7 @@ const StartFreeTrial = () => {
             }}
           >
             <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-center mb-1 sm:mb-1.5">
-              Start your 5-day <span className="text-gradient-primary">free trial</span>
+              Start your 5-day <span className="whitespace-nowrap text-gradient-primary">free trial</span>
             </h1>
             <p className="text-[13px] sm:text-sm text-foreground/60 text-center leading-snug mb-5 sm:mb-6">
               Get full access to LeadFinder and start finding potential clients in minutes.
