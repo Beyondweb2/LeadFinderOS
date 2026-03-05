@@ -26,29 +26,16 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Check if a user with this email exists (scan paginated auth users)
-    let existingUser: { id: string; email?: string | null } | undefined;
-    let page = 1;
-    const perPage = 100;
-    const maxPages = 50;
+    // Direct lookup by email — no pagination needed
+    const { data: usersData, error: usersError } = await supabaseClient.auth.admin.listUsers({
+      page: 1,
+      perPage: 1,
+      filter: normalizedEmail,
+    });
 
-    while (!existingUser && page <= maxPages) {
-      const { data: usersData, error: usersError } = await supabaseClient.auth.admin.listUsers({
-        page,
-        perPage,
-      });
+    if (usersError) throw usersError;
 
-      if (usersError) throw usersError;
-
-      const users = usersData?.users ?? [];
-      console.log('[CHECK-EMAIL-SUBSCRIPTION] Page fetched', { page, count: users.length });
-
-      existingUser = users.find((u) => u.email?.toLowerCase() === normalizedEmail);
-
-      // Stop when no more pages
-      if (users.length < perPage) break;
-      page += 1;
-    }
+    const existingUser = usersData?.users?.find((u) => u.email?.toLowerCase() === normalizedEmail);
 
     console.log('[CHECK-EMAIL-SUBSCRIPTION] Existing user found', { found: !!existingUser });
 
