@@ -99,28 +99,31 @@ const StartFreeTrial = () => {
       </header>
 
       {/* Main content */}
-      <section className="relative z-10 pt-8 sm:pt-16 pb-12 sm:pb-24 px-3 sm:px-4">
-        <div className="container mx-auto max-w-[26rem] sm:max-w-md">
+      <section className="relative z-10 pt-6 sm:pt-16 pb-10 sm:pb-24 px-2.5 sm:px-4">
+        <div className="container mx-auto max-w-[25rem] sm:max-w-[28rem]">
           <div
-            className="rounded-2xl px-5 py-6 sm:px-10 sm:py-10"
+            className="rounded-2xl px-5 py-5 sm:px-10 sm:py-9"
             style={{
               background: 'linear-gradient(180deg, hsl(220 40% 10%) 0%, hsl(220 45% 7%) 100%)',
-              border: '1px solid hsl(210 100% 50% / 0.2)',
-              boxShadow: '0 0 60px hsl(210 100% 50% / 0.1), 0 0 90px hsl(210 100% 50% / 0.05), 0 8px 32px hsl(220 40% 4% / 0.5)',
+              border: '1px solid hsl(0 0% 100% / 0.1)',
+              boxShadow: '0 16px 48px hsl(220 40% 3% / 0.7), 0 2px 8px hsl(220 40% 3% / 0.4)',
             }}
           >
-            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-center mb-1 sm:mb-1.5">
+            <h1
+              className="font-bold tracking-tight text-center mb-1 sm:mb-1.5"
+              style={{ fontSize: 'clamp(1.25rem, 4vw, 1.75rem)', lineHeight: '1.05' }}
+            >
               Start your 5-day <span className="whitespace-nowrap text-gradient-primary">free trial</span>
             </h1>
-            <p className="text-[13px] sm:text-sm text-foreground/60 text-center leading-snug mb-5 sm:mb-6">
+            <p className="text-[12.5px] sm:text-sm text-foreground/60 text-center leading-snug mb-4 sm:mb-6">
               Get full access to LeadFinder and start finding potential clients in minutes.
             </p>
 
-            <ul className="space-y-2 sm:space-y-2.5 mb-4 sm:mb-5">
+            <ul className="space-y-1.5 sm:space-y-2.5 mb-3.5 sm:mb-5">
               {FEATURES.map((item, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-[13px] sm:text-sm text-foreground/85 font-medium leading-snug">
+                <li key={i} className="flex items-start gap-2 sm:gap-2.5 text-[12.5px] sm:text-sm text-foreground/85 font-medium leading-snug">
                   <Check
-                    className="h-4 w-4 shrink-0 mt-0.5"
+                    className="h-3.5 w-3.5 sm:h-4 sm:w-4 shrink-0 mt-[3px]"
                     style={{ color: 'hsl(142 76% 50%)' }}
                     strokeWidth={2.5}
                   />
@@ -129,22 +132,17 @@ const StartFreeTrial = () => {
               ))}
             </ul>
 
-            <div className="border-t border-border/30 pt-3 sm:pt-4 mb-3 sm:mb-4 text-center">
-              <p className="text-[13px] sm:text-sm text-foreground/65 leading-relaxed">
-                Full access during your trial.<br />
-                If you don't land a client in 5 days, cancel and you won't be charged.
+            <div className="border-t border-border/30 pt-2.5 sm:pt-4 mb-2.5 sm:mb-4 text-center">
+              <p className="text-[12px] sm:text-[13px] text-foreground/55 leading-relaxed">
+                Card required to start trial. No charge during the 5-day trial.
               </p>
             </div>
-
-            <p className="text-[11px] text-muted-foreground/45 text-center mb-4 sm:mb-5">
-              Card required to start trial. You will not be charged today.
-            </p>
 
             {!showEmailStep ? (
               <div className="text-center">
                 <Button
                   size="lg"
-                  className="btn-premium font-semibold h-12 sm:h-[52px] px-10 sm:px-14 text-[14px] sm:text-[15px] rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
+                  className="btn-premium font-semibold h-11 sm:h-[52px] px-10 sm:px-14 text-[13.5px] sm:text-[15px] rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
                   onClick={handleStartClick}
                 >
                   Start My 5-Day Free Trial
@@ -152,8 +150,8 @@ const StartFreeTrial = () => {
                 </Button>
               </div>
             ) : (
-              <div className="w-full space-y-3">
-                <h4 className="text-base sm:text-lg font-bold tracking-tight text-center">
+              <div className="w-full space-y-2.5 sm:space-y-3">
+                <h4 className="text-[15px] sm:text-lg font-bold tracking-tight text-center">
                   Enter your email to start
                 </h4>
                 <div className="space-y-1.5">
@@ -163,7 +161,7 @@ const StartFreeTrial = () => {
                     value={checkoutEmail}
                     onChange={(e) => { setCheckoutEmail(e.target.value); setEmailError(''); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleEmailContinue(); }}
-                    className="h-11 text-sm bg-background/50 border-border/40 focus:border-primary/60"
+                    className="h-10 sm:h-11 text-sm bg-background/50 border-border/40 focus:border-primary/60"
                     autoFocus
                     disabled={isCheckingEmail || isStartingCheckout}
                   />
@@ -173,7 +171,7 @@ const StartFreeTrial = () => {
                 </div>
                 <Button
                   size="lg"
-                  className="btn-premium w-full font-semibold h-11 text-[14px] rounded-xl shadow-lg shadow-primary/25"
+                  className="btn-premium w-full font-semibold h-10 sm:h-11 text-[13.5px] sm:text-[14px] rounded-xl shadow-lg shadow-primary/25"
                   onClick={handleEmailContinue}
                   disabled={isCheckingEmail || isStartingCheckout || !checkoutEmail.trim()}
                 >
@@ -189,12 +187,12 @@ const StartFreeTrial = () => {
               </div>
             )}
 
-            <div className="flex flex-col items-center gap-1.5 mt-4 sm:mt-5">
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/45">
+            <div className="flex flex-col items-center gap-1 mt-3.5 sm:mt-5">
+              <div className="flex items-center gap-1.5 text-[10.5px] sm:text-[11px] text-muted-foreground/40">
                 <Lock className="h-3 w-3" />
                 <span>Secure payment powered by Stripe</span>
               </div>
-              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/45">
+              <div className="flex items-center gap-1.5 text-[10.5px] sm:text-[11px] text-muted-foreground/40">
                 <Shield className="h-3 w-3" />
                 <span>Cancel anytime from your dashboard</span>
               </div>
