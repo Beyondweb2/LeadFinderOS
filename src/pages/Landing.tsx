@@ -495,7 +495,7 @@ const Landing = () => {
             </Button>
              <Button 
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
-              onClick={scrollToPricing}
+              onClick={handleCTA}
             >
               Try it free
             </Button>
@@ -541,7 +541,7 @@ const Landing = () => {
                 <Button 
                   size="lg" 
                   className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto sm:min-w-[280px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
-                  onClick={scrollToPricing}
+                  onClick={handleCTA}
                 >
                   Try it free
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
@@ -733,7 +733,7 @@ const Landing = () => {
           <ScrollReveal className="w-full" delay={320} direction="up">
             <div className="flex flex-col items-center justify-center mt-10 sm:mt-14">
               <button
-                onClick={scrollToPricing}
+                onClick={handleCTA}
                 className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-sm sm:text-base transition-all duration-300 hover:scale-[1.04] active:scale-[0.98] cursor-pointer"
                 style={{
                   background: 'hsl(210 100% 50%)',
@@ -991,70 +991,21 @@ const Landing = () => {
                 ))}
               </ul>
 
-              {!showEmailStep ? (
-                <>
-                  <Button
-                    size="lg"
-                    className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
-                    onClick={handlePricingCTAClick}
-                  >
-                    Start Free Trial
-                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-                  </Button>
+              <Button
+                size="lg"
+                className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
+                onClick={handleCTA}
+              >
+                Start Free Trial
+                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
 
-                  <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
-                    5-day free trial · £0 today · Cancel anytime
-                  </p>
-                  <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 mt-1">
-                    After trial · £19.99/month · Secure payment via Stripe
-                  </p>
-                </>
-              ) : (
-                <div className="w-full max-w-sm mx-auto space-y-4">
-                  <h4 className="text-lg sm:text-xl font-bold tracking-tight text-center">
-                    Enter your email to start your free trial
-                  </h4>
-
-                  <div className="space-y-2">
-                    <Input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={checkoutEmail}
-                      onChange={(e) => { setCheckoutEmail(e.target.value); setEmailError(''); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleEmailContinue(); }}
-                      className="h-12 text-base bg-background/50 border-border/40 focus:border-primary/60"
-                      autoFocus
-                      disabled={isCheckingEmail || isStartingCheckout}
-                    />
-                    {emailError && (
-                      <p className="text-xs text-destructive text-center">{emailError}</p>
-                    )}
-                  </div>
-
-                  <Button
-                    size="lg"
-                    className="btn-premium w-full font-semibold h-[52px] text-[15px] rounded-xl shadow-lg shadow-primary/25"
-                    onClick={handleEmailContinue}
-                    disabled={isCheckingEmail || isStartingCheckout || !checkoutEmail.trim()}
-                  >
-                    {isCheckingEmail || isStartingCheckout ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {isCheckingEmail ? 'Checking...' : 'Redirecting...'}
-                      </>
-                    ) : (
-                      'Continue'
-                    )}
-                  </Button>
-
-                  <p className="text-[11px] sm:text-xs text-muted-foreground/70 text-center">
-                    5-day free trial · £0 today · Cancel anytime
-                  </p>
-                  <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 text-center">
-                    After trial · £19.99/month · Secure payment via Stripe
-                  </p>
-                </div>
-              )}
+              <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
+                5-day free trial · £0 today · Cancel anytime
+              </p>
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 mt-1">
+                After trial · £19.99/month · Secure payment via Stripe
+              </p>
             </div>
           </ScrollReveal>
         </div>
@@ -1140,7 +1091,7 @@ const Landing = () => {
           }`}
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
-          <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={scrollToPricing}>
+          <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={handleCTA}>
               Try it free
               <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
