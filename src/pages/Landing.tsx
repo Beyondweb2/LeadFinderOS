@@ -14,7 +14,7 @@ import {
   MessageSquare,
   Star,
   Zap,
-  Loader2,
+  
 } from 'lucide-react';
 import demoVideo from '@/assets/leadfinder-demo-v5.mp4';
 import appLogo from '@/assets/logo.png';
