@@ -99,30 +99,28 @@ const StartFreeTrial = () => {
       </header>
 
       {/* Main content */}
-      <section className="relative z-10 pt-8 sm:pt-20 pb-12 sm:pb-28 px-3 sm:px-4">
-        <div className="container mx-auto max-w-[28rem] sm:max-w-lg">
+      <section className="relative z-10 pt-8 sm:pt-16 pb-12 sm:pb-24 px-3 sm:px-4">
+        <div className="container mx-auto max-w-[26rem] sm:max-w-md">
           <div
-            className="rounded-2xl px-5 py-7 sm:p-12"
+            className="rounded-2xl px-5 py-6 sm:px-10 sm:py-10"
             style={{
               background: 'linear-gradient(180deg, hsl(220 40% 10%) 0%, hsl(220 45% 7%) 100%)',
               border: '1px solid hsl(210 100% 50% / 0.2)',
               boxShadow: '0 0 60px hsl(210 100% 50% / 0.1), 0 0 90px hsl(210 100% 50% / 0.05), 0 8px 32px hsl(220 40% 4% / 0.5)',
             }}
           >
-            {/* Headline */}
-            <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-center mb-1.5 sm:mb-2">
+            <h1 className="text-[22px] sm:text-[28px] font-bold tracking-tight text-center mb-1 sm:mb-1.5">
               Start your 5-day <span className="text-gradient-primary">free trial</span>
             </h1>
-            <p className="text-[13px] sm:text-base text-foreground/65 text-center leading-relaxed mb-5 sm:mb-8 max-w-sm mx-auto">
+            <p className="text-[13px] sm:text-sm text-foreground/60 text-center leading-snug mb-5 sm:mb-6">
               Get full access to LeadFinder and start finding potential clients in minutes.
             </p>
 
-            {/* Feature checklist */}
-            <ul className="space-y-2.5 sm:space-y-3 mb-5 sm:mb-7 max-w-sm mx-auto">
+            <ul className="space-y-2 sm:space-y-2.5 mb-4 sm:mb-5">
               {FEATURES.map((item, i) => (
-                <li key={i} className="flex items-start gap-3 text-[13px] sm:text-sm text-foreground/85 font-medium leading-snug">
+                <li key={i} className="flex items-start gap-2.5 text-[13px] sm:text-sm text-foreground/85 font-medium leading-snug">
                   <Check
-                    className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 mt-0.5 sm:mt-0"
+                    className="h-4 w-4 shrink-0 mt-0.5"
                     style={{ color: 'hsl(142 76% 50%)' }}
                     strokeWidth={2.5}
                   />
@@ -131,44 +129,41 @@ const StartFreeTrial = () => {
               ))}
             </ul>
 
-            {/* Trust section */}
-            <div className="mb-3 sm:mb-5 text-center max-w-sm mx-auto border-t border-border/30 pt-4 sm:pt-5">
-              <p className="text-sm text-foreground/70 leading-relaxed">
+            <div className="border-t border-border/30 pt-3 sm:pt-4 mb-3 sm:mb-4 text-center">
+              <p className="text-[13px] sm:text-sm text-foreground/65 leading-relaxed">
                 Full access during your trial.<br />
-                If it doesn't help you land a client, cancel within 5 days and you won't be charged.
+                If you don't land a client in 5 days, cancel and you won't be charged.
               </p>
             </div>
 
-            {/* Disclaimer */}
-            <p className="text-[11px] sm:text-xs text-muted-foreground/50 text-center mb-5 sm:mb-7">
-              Card required to start trial. No charge during the 5-day trial.
+            <p className="text-[11px] text-muted-foreground/45 text-center mb-4 sm:mb-5">
+              Card required to start trial. You will not be charged today.
             </p>
 
-            {/* CTA / Email step */}
             {!showEmailStep ? (
               <div className="text-center">
                 <Button
                   size="lg"
-                  className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
+                  className="btn-premium font-semibold h-12 sm:h-[52px] px-10 sm:px-14 text-[14px] sm:text-[15px] rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
                   onClick={handleStartClick}
                 >
-                  Start My Free Trial
-                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+                  Start My 5-Day Free Trial
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </div>
             ) : (
-              <div className="w-full max-w-sm mx-auto space-y-4">
-                <h4 className="text-lg sm:text-xl font-bold tracking-tight text-center">
+              <div className="w-full space-y-3">
+                <h4 className="text-base sm:text-lg font-bold tracking-tight text-center">
                   Enter your email to start
                 </h4>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Input
                     type="email"
                     placeholder="you@example.com"
                     value={checkoutEmail}
                     onChange={(e) => { setCheckoutEmail(e.target.value); setEmailError(''); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') handleEmailContinue(); }}
-                    className="h-12 text-base bg-background/50 border-border/40 focus:border-primary/60"
+                    className="h-11 text-sm bg-background/50 border-border/40 focus:border-primary/60"
                     autoFocus
                     disabled={isCheckingEmail || isStartingCheckout}
                   />
@@ -178,7 +173,7 @@ const StartFreeTrial = () => {
                 </div>
                 <Button
                   size="lg"
-                  className="btn-premium w-full font-semibold h-[52px] text-[15px] rounded-xl shadow-lg shadow-primary/25"
+                  className="btn-premium w-full font-semibold h-11 text-[14px] rounded-xl shadow-lg shadow-primary/25"
                   onClick={handleEmailContinue}
                   disabled={isCheckingEmail || isStartingCheckout || !checkoutEmail.trim()}
                 >
@@ -194,14 +189,13 @@ const StartFreeTrial = () => {
               </div>
             )}
 
-            {/* Trust indicators */}
-            <div className="flex flex-col items-center gap-2 mt-6">
-              <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-muted-foreground/50">
-                <Lock className="h-3.5 w-3.5" />
+            <div className="flex flex-col items-center gap-1.5 mt-4 sm:mt-5">
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/45">
+                <Lock className="h-3 w-3" />
                 <span>Secure payment powered by Stripe</span>
               </div>
-              <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-muted-foreground/50">
-                <Shield className="h-3.5 w-3.5" />
+              <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/45">
+                <Shield className="h-3 w-3" />
                 <span>Cancel anytime from your dashboard</span>
               </div>
             </div>
