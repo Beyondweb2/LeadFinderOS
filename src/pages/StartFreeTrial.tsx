@@ -9,7 +9,7 @@ import { useLandingTheme } from '@/hooks/useLandingTheme';
 
 const FEATURES = [
   'Instantly find businesses that don\'t have websites',
-  'Contact them directly by phone or SMS',
+  'Contact them directly by call, SMS or WhatsApp',
   'Track outreach and follow-ups in one place',
   'Never miss a potential client',
 ];
@@ -99,10 +99,10 @@ const StartFreeTrial = () => {
       </header>
 
       {/* Main content */}
-      <section className="relative z-10 pt-12 sm:pt-20 pb-20 sm:pb-28 px-4">
-        <div className="container mx-auto max-w-lg">
+      <section className="relative z-10 pt-8 sm:pt-20 pb-12 sm:pb-28 px-3 sm:px-4">
+        <div className="container mx-auto max-w-[28rem] sm:max-w-lg">
           <div
-            className="rounded-2xl px-6 py-9 sm:p-12"
+            className="rounded-2xl px-5 py-7 sm:p-12"
             style={{
               background: 'linear-gradient(180deg, hsl(220 40% 10%) 0%, hsl(220 45% 7%) 100%)',
               border: '1px solid hsl(210 100% 50% / 0.2)',
@@ -110,15 +110,15 @@ const StartFreeTrial = () => {
             }}
           >
             {/* Headline */}
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-center mb-2">
+            <h1 className="text-xl sm:text-3xl font-bold tracking-tight text-center mb-1.5 sm:mb-2">
               Start your 5-day <span className="text-gradient-primary">free trial</span>
             </h1>
-            <p className="text-sm sm:text-base text-foreground/65 text-center leading-relaxed mb-8 max-w-sm mx-auto">
+            <p className="text-[13px] sm:text-base text-foreground/65 text-center leading-relaxed mb-5 sm:mb-8 max-w-sm mx-auto">
               Get full access to LeadFinder and start finding potential clients in minutes.
             </p>
 
             {/* Feature checklist */}
-            <ul className="space-y-3 mb-7 max-w-sm mx-auto">
+            <ul className="space-y-2.5 sm:space-y-3 mb-5 sm:mb-7 max-w-sm mx-auto">
               {FEATURES.map((item, i) => (
                 <li key={i} className="flex items-start gap-3 text-[13px] sm:text-sm text-foreground/85 font-medium leading-snug">
                   <Check
@@ -132,7 +132,7 @@ const StartFreeTrial = () => {
             </ul>
 
             {/* Trust section */}
-            <div className="mb-5 text-center max-w-sm mx-auto border-t border-border/30 pt-5">
+            <div className="mb-3 sm:mb-5 text-center max-w-sm mx-auto border-t border-border/30 pt-4 sm:pt-5">
               <p className="text-sm text-foreground/70 leading-relaxed">
                 Full access during your trial.<br />
                 If it doesn't help you land a client, cancel within 5 days and you won't be charged.
@@ -140,7 +140,7 @@ const StartFreeTrial = () => {
             </div>
 
             {/* Disclaimer */}
-            <p className="text-[11px] sm:text-xs text-muted-foreground/50 text-center mb-7">
+            <p className="text-[11px] sm:text-xs text-muted-foreground/50 text-center mb-5 sm:mb-7">
               Card required to start trial. No charge during the 5-day trial.
             </p>
 
