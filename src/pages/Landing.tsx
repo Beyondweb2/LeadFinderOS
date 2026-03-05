@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { trackLead } from '@/lib/fbPixel';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   Search,
