@@ -1,43 +1,21 @@
 
+## Problem
 
-## Create "Start Free Trial" Bridge Page
+When a logged-in user lands on `/landing` (e.g. because their subscription is blocked, or they were redirected by `SubscriptionGate`), the "Sign In" buttons are hidden because they're wrapped in `{!user && ...}`. The header CTA also changes from "Try it free" to "Subscribe". This means a user who signed out and back in, or whose session is stale, loses access to the Sign In button.
 
-### Summary
-Create a new `/start-free-trial` page that sits between the landing page and Stripe checkout. Update all landing page CTAs to link to this page instead of scrolling to the pricing card email input. The pricing card keeps its info but loses the email input step.
+There are 3 places in `Landing.tsx` where Sign In is conditionally hidden:
+1. **Header** (line 558): `{!user && <Button>Sign In</Button>}`
+2. **Hero CTA** (line 616): `{!user && <Button>Sign in</Button>}`
+3. **Footer** (line 1173): `{!user && <Link>Sign In</Link>}`
 
-### New File: `src/pages/StartFreeTrial.tsx`
+And the header CTA button (line 567) shows `user ? 'Subscribe' : 'Try it free'`.
 
-A single centered card page matching the app's dark theme and existing design system:
+## Plan
 
-- **Header**: Logo + "Sign In" link (same as `/start` page pattern)
-- **Card**: `rounded-2xl` with the same gradient background/border/shadow used on the pricing card
-- **Headline**: "Start your 5-day free trial"
-- **Subtext**: "Get full access to LeadFinder and start finding potential clients in minutes."
-- **Feature checklist**: 5 items with green Check icons (same `hsl(142 76% 50%)` color, `strokeWidth={2.5}`)
-- **Trust section**: Two paragraphs about full access and cancel-anytime reassurance
-- **Card reassurance**: Muted text about card details requirement
-- **CTA Button**: "Start My Free Trial" using `btn-premium` class → triggers email input + checkout flow (reuses the same `check-email-subscription` → `create-checkout` pattern from Landing.tsx)
-- **Trust indicators**: "Secure payment powered by Stripe" + "Cancel anytime from your dashboard" in muted text
+**Single file change: `src/pages/Landing.tsx`**
 
-The page will include an email input that appears when the CTA is clicked (same pattern as current pricing card), checking for existing users before redirecting to Stripe.
+1. **Always show the Sign In links** — remove the `!user &&` guards from all three locations so the Sign In button is always visible regardless of auth state.
 
-### Changes to `src/pages/Landing.tsx`
+2. **Keep the CTA button text as "Try it free"** always (remove the ternary that switches to "Subscribe" when logged in). Logged-in users who need to subscribe will still scroll to pricing and go through the normal checkout flow.
 
-1. **All `scrollToPricing` calls** in CTA buttons (hero, sticky mobile, section CTAs, footer "Try it free") → change to `navigate('/start-free-trial')`
-2. **`handlePricingCTAClick`** → change to `navigate('/start-free-trial')`
-3. **Pricing card**: Remove the email input step (`showEmailStep` state and related UI). Keep only the pricing info, feature list, and a CTA button that links to `/start-free-trial`
-4. **Remove** `checkoutEmail`, `showEmailStep`, `emailError`, `isCheckingEmail`, `isStartingCheckout` state and `handleEmailContinue` function (moved to the new page)
-5. **Footer** "Try it free" link → `Link to="/start-free-trial"`
-6. **Mobile sticky CTA** → navigate to `/start-free-trial`
-
-### Changes to `src/App.tsx`
-
-Add route:
-```tsx
-<Route path="/start-free-trial" element={<StartFreeTrial />} />
-```
-Public route (no auth required, no ProtectedRoute wrapper).
-
-### No other files changed
-The checkout logic (`create-checkout` edge function) remains identical. The new page just calls it from a different location.
-
+These are purely display changes — no routing, Stripe, or auth logic is modified.

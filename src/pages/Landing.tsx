@@ -1,10 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { trackLead } from '@/lib/fbPixel';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   Search,
@@ -16,7 +14,7 @@ import {
   MessageSquare,
   Star,
   Zap,
-  Loader2,
+  
 } from 'lucide-react';
 import demoVideo from '@/assets/leadfinder-demo-v5.mp4';
 import appLogo from '@/assets/logo.png';
@@ -86,20 +84,16 @@ const ScrollReveal = ({
   );
 };
 
-// Smooth scroll to pricing card (centered in viewport)
-const scrollToPricing = () => {
-  const el = document.getElementById('pricing');
-  if (!el) return;
-  const rect = el.getBoundingClientRect();
-  const offset = window.scrollY + rect.top - (window.innerHeight / 2) + (rect.height / 2);
-  window.scrollTo({ top: offset, behavior: 'smooth' });
+// Navigate to start free trial page
+const goToStartTrial = (navigate: ReturnType<typeof useNavigate>) => () => {
+  navigate('/start-free-trial');
 };
 
 // Inline CTA band — desktop only, inserted between sections
-const InlineCTA = ({ text = 'Ready to find your next client?' }: { text?: string }) => (
+const InlineCTA = ({ text = 'Ready to find your next client?', onCTA }: { text?: string; onCTA: () => void }) => (
   <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
-    <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={scrollToPricing}>
+    <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={onCTA}>
       Try it free
       <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
@@ -393,73 +387,12 @@ const Landing = () => {
   const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
-  const [showEmailStep, setShowEmailStep] = useState(false);
-  const [checkoutEmail, setCheckoutEmail] = useState('');
-  const [emailError, setEmailError] = useState('');
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
-
   // Lock landing page to dark brand theme
   useLandingTheme();
 
-  const handlePricingCTAClick = useCallback(() => {
-    setShowEmailStep(true);
-    setEmailError('');
-    // Scroll to pricing
-    setTimeout(() => {
-      scrollToPricing();
-    }, 100);
-  }, []);
-
-  const handleEmailContinue = useCallback(async () => {
-    const trimmed = checkoutEmail.trim().toLowerCase();
-    // Basic email validation
-    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      setEmailError('Please enter a valid email address');
-      return;
-    }
-    setEmailError('');
-    setIsCheckingEmail(true);
-
-    try {
-      // Check if this email already has an active subscription
-      const { data, error } = await supabase.functions.invoke('check-email-subscription', {
-        body: { email: trimmed },
-      });
-      if (error) throw error;
-
-      if (data?.exists) {
-        // User already has an account — redirect to sign-in
-        navigate(`/auth?email=${encodeURIComponent(trimmed)}&existing=true`);
-        return;
-      }
-
-      // No active subscription — proceed to Stripe with this email
-      setIsStartingCheckout(true);
-      const headers: Record<string, string> = {};
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData?.session?.access_token) {
-        headers.Authorization = `Bearer ${sessionData.session.access_token}`;
-      }
-
-      const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout', {
-        headers,
-        body: { customer_email: trimmed },
-      });
-      if (checkoutError) throw checkoutError;
-      if (checkoutData?.url) {
-        window.location.href = checkoutData.url;
-      } else {
-        throw new Error('No checkout URL received');
-      }
-    } catch (err) {
-      console.error('Email check/checkout error:', err);
-      setEmailError('Something went wrong. Please try again.');
-    } finally {
-      setIsCheckingEmail(false);
-      setIsStartingCheckout(false);
-    }
-  }, [checkoutEmail, navigate]);
+  const handleCTA = useCallback(() => {
+    navigate('/start-free-trial');
+  }, [navigate]);
 
   // Track scroll to show/hide sticky CTA and adjust header button
   useEffect(() => {
@@ -560,7 +493,7 @@ const Landing = () => {
             </Button>
              <Button 
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
-              onClick={scrollToPricing}
+              onClick={handleCTA}
             >
               Try it free
             </Button>
@@ -606,7 +539,7 @@ const Landing = () => {
                 <Button 
                   size="lg" 
                   className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto sm:min-w-[280px] shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
-                  onClick={scrollToPricing}
+                  onClick={handleCTA}
                 >
                   Try it free
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
@@ -798,7 +731,7 @@ const Landing = () => {
           <ScrollReveal className="w-full" delay={320} direction="up">
             <div className="flex flex-col items-center justify-center mt-10 sm:mt-14">
               <button
-                onClick={scrollToPricing}
+                onClick={handleCTA}
                 className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-sm sm:text-base transition-all duration-300 hover:scale-[1.04] active:scale-[0.98] cursor-pointer"
                 style={{
                   background: 'hsl(210 100% 50%)',
@@ -1056,70 +989,21 @@ const Landing = () => {
                 ))}
               </ul>
 
-              {!showEmailStep ? (
-                <>
-                  <Button
-                    size="lg"
-                    className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
-                    onClick={handlePricingCTAClick}
-                  >
-                    Start Free Trial
-                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
-                  </Button>
+              <Button
+                size="lg"
+                className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
+                onClick={handleCTA}
+              >
+                Start Free Trial
+                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
+              </Button>
 
-                  <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
-                    5-day free trial · £0 today · Cancel anytime
-                  </p>
-                  <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 mt-1">
-                    After trial · £19.99/month · Secure payment via Stripe
-                  </p>
-                </>
-              ) : (
-                <div className="w-full max-w-sm mx-auto space-y-4">
-                  <h4 className="text-lg sm:text-xl font-bold tracking-tight text-center">
-                    Enter your email to start your free trial
-                  </h4>
-
-                  <div className="space-y-2">
-                    <Input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={checkoutEmail}
-                      onChange={(e) => { setCheckoutEmail(e.target.value); setEmailError(''); }}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleEmailContinue(); }}
-                      className="h-12 text-base bg-background/50 border-border/40 focus:border-primary/60"
-                      autoFocus
-                      disabled={isCheckingEmail || isStartingCheckout}
-                    />
-                    {emailError && (
-                      <p className="text-xs text-destructive text-center">{emailError}</p>
-                    )}
-                  </div>
-
-                  <Button
-                    size="lg"
-                    className="btn-premium w-full font-semibold h-[52px] text-[15px] rounded-xl shadow-lg shadow-primary/25"
-                    onClick={handleEmailContinue}
-                    disabled={isCheckingEmail || isStartingCheckout || !checkoutEmail.trim()}
-                  >
-                    {isCheckingEmail || isStartingCheckout ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {isCheckingEmail ? 'Checking...' : 'Redirecting...'}
-                      </>
-                    ) : (
-                      'Continue'
-                    )}
-                  </Button>
-
-                  <p className="text-[11px] sm:text-xs text-muted-foreground/70 text-center">
-                    5-day free trial · £0 today · Cancel anytime
-                  </p>
-                  <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 text-center">
-                    After trial · £19.99/month · Secure payment via Stripe
-                  </p>
-                </div>
-              )}
+              <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
+                5-day free trial · £0 today · Cancel anytime
+              </p>
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 mt-1">
+                After trial · £19.99/month · Secure payment via Stripe
+              </p>
             </div>
           </ScrollReveal>
         </div>
@@ -1169,9 +1053,9 @@ const Landing = () => {
               <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
                 Sign In
               </Link>
-              <a href="#pricing" className="hover:text-foreground transition-colors duration-200">
+              <Link to="/start-free-trial" className="hover:text-foreground transition-colors duration-200">
                 Try it free
-              </a>
+              </Link>
               <Link to="/feedback" className="hover:text-foreground transition-colors duration-200">
                 Feedback
               </Link>
@@ -1205,7 +1089,7 @@ const Landing = () => {
           }`}
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
-          <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={scrollToPricing}>
+          <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={handleCTA}>
               Try it free
               <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
