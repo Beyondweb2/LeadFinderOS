@@ -10,9 +10,8 @@ import { useLandingTheme } from '@/hooks/useLandingTheme';
 const FEATURES = [
   'Instantly find businesses that don\'t have websites',
   'Contact them directly by phone or SMS',
-  'Track all your outreach and follow-ups in one place',
-  'Organise leads and set next actions so you never miss a follow-up',
-  'Use the same outreach system freelancers use to land clients',
+  'Track outreach and follow-ups in one place',
+  'Never miss a potential client',
 ];
 
 const StartFreeTrial = () => {
@@ -112,14 +111,14 @@ const StartFreeTrial = () => {
           >
             {/* Headline */}
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-center mb-2">
-              Start your 5-day free trial
+              Start your 5-day <span className="text-gradient-primary">free trial</span>
             </h1>
             <p className="text-sm sm:text-base text-foreground/65 text-center leading-relaxed mb-8 max-w-sm mx-auto">
               Get full access to LeadFinder and start finding potential clients in minutes.
             </p>
 
             {/* Feature checklist */}
-            <ul className="space-y-3 mb-8 max-w-sm mx-auto">
+            <ul className="space-y-3 mb-7 max-w-sm mx-auto">
               {FEATURES.map((item, i) => (
                 <li key={i} className="flex items-start gap-3 text-[13px] sm:text-sm text-foreground/85 font-medium leading-snug">
                   <Check
@@ -133,21 +132,16 @@ const StartFreeTrial = () => {
             </ul>
 
             {/* Trust section */}
-            <div className="mb-8 text-center space-y-3 max-w-sm mx-auto">
+            <div className="mb-5 text-center max-w-sm mx-auto border-t border-border/30 pt-5">
               <p className="text-sm text-foreground/70 leading-relaxed">
-                You get full access to the entire platform during your 5-day trial.
-              </p>
-              <p className="text-sm text-foreground/70 leading-relaxed">
-                If you don't land a client or decide it's not for you, simply cancel within the trial and you won't be charged anything.
-              </p>
-              <p className="text-sm font-medium text-foreground/80">
-                No hidden fees. No commitment.
+                Full access during your trial.<br />
+                If it doesn't help you land a client, cancel within 5 days and you won't be charged.
               </p>
             </div>
 
-            {/* Card reassurance */}
-            <p className="text-[11px] sm:text-xs text-muted-foreground/60 text-center mb-8 max-w-sm mx-auto leading-relaxed">
-              Card details are required to start the trial, but you will not be charged during the 5-day trial period.
+            {/* Disclaimer */}
+            <p className="text-[11px] sm:text-xs text-muted-foreground/50 text-center mb-7">
+              Card required to start trial. No charge during the 5-day trial.
             </p>
 
             {/* CTA / Email step */}
