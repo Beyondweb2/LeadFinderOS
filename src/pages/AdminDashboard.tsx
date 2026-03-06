@@ -237,6 +237,8 @@ export default function AdminDashboard() {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [checkoutAttempts24h, setCheckoutAttempts24h] = useState(0);
   const [recentCheckoutAttempts, setRecentCheckoutAttempts] = useState<CheckoutAttempt[]>([]);
+  const deletedIdsRef = useRef<Set<string>>(new Set());
+  const hasFetchedRef = useRef(false);
 
   const getAccessToken = useCallback(async (): Promise<string | null> => {
     // Always get a fresh session
