@@ -112,13 +112,31 @@ const UnlockAccess = () => {
     }
   };
 
-  if (authLoading || !user) {
+  if (authLoading || !user || trialLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
+
+  // Determine copy based on whether trial was already used
+  const hasUsedTrial = trialUsed;
+  const headlineText = hasUsedTrial
+    ? 'Subscribe to Get Full Access'
+    : 'Unlock Full Access — Free for 5 Days';
+  const subheadText = hasUsedTrial
+    ? '£19.99/month · Cancel anytime'
+    : '£0 today · £19.99/month after 5 days · Cancel anytime';
+  const confirmHeadline = hasUsedTrial
+    ? 'You\'re subscribing to LeadFinder Pro.'
+    : 'You\'re starting a 5-day full access trial.';
+  const confirmSubtext = hasUsedTrial
+    ? 'You will be charged £19.99/month. Cancel anytime.'
+    : 'You will only be charged after the trial ends. Cancel anytime before renewal.';
+  const ctaButtonText = hasUsedTrial
+    ? 'Subscribe Now — £19.99/mo'
+    : 'Unlock My 5-Day Free Access';
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
