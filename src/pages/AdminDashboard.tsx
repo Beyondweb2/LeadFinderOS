@@ -537,7 +537,7 @@ export default function AdminDashboard() {
               <p className="text-sm text-muted-foreground">{users.length} users total</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchUsers} disabled={isLoading}>
+          <Button variant="outline" size="sm" onClick={() => { deletedIdsRef.current.clear(); fetchUsers(); }} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
