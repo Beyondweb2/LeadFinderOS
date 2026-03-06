@@ -49,6 +49,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const userIdRef = useRef<string | null>(null);
   const accessTokenRef = useRef<string | null>(null);
 
+  // Cache edge function result for 5 minutes to avoid repeated calls on route changes
+  const edgeCacheRef = useRef<{ data: any; timestamp: number; userId: string } | null>(null);
+  const CACHE_TTL_MS = 5 * 60 * 1000;
+
   // Check if user has admin role
   const checkAdminRole = useCallback(async (userId: string): Promise<boolean> => {
     const { data, error } = await supabase
@@ -141,19 +145,31 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
       
       accessTokenRef.current = freshToken;
-      
-      const { data, error } = await supabase.functions.invoke('check-subscription', {
-        headers: {
-          Authorization: `Bearer ${freshToken}`,
-        },
-      });
 
-      if (error) {
-        if (error.message?.includes('Auth') || error.message?.includes('authentication')) {
-          setState(prev => ({ ...prev, isLoading: false }));
-          return;
+      // Use cached edge function result if fresh enough
+      const cached = edgeCacheRef.current;
+      const now = Date.now();
+      let data: any;
+
+      if (cached && cached.userId === userId && (now - cached.timestamp) < CACHE_TTL_MS) {
+        data = cached.data;
+      } else {
+        const { data: freshData, error } = await supabase.functions.invoke('check-subscription', {
+          headers: {
+            Authorization: `Bearer ${freshToken}`,
+          },
+        });
+
+        if (error) {
+          if (error.message?.includes('Auth') || error.message?.includes('authentication')) {
+            setState(prev => ({ ...prev, isLoading: false }));
+            return;
+          }
+          throw error;
         }
-        throw error;
+
+        data = freshData;
+        edgeCacheRef.current = { data, timestamp: now, userId };
       }
 
       const subStatus = data.subscription_status ?? null;
@@ -243,6 +259,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${userId}`,
         },
         () => {
+          // Invalidate cache so realtime updates trigger a fresh edge function call
+          edgeCacheRef.current = null;
           checkSubscription();
         }
       )
