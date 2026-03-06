@@ -33,8 +33,7 @@ export function PublicRoute({ children }: PublicRouteProps) {
     return <>{children}</>;
   }
 
-  // Only redirect authenticated users who have an active subscription.
-  // Unsubscribed users should be able to view the landing page.
+  // Redirect authenticated users based on subscription status
   const hasActiveSubscription = isPaidSubscriber || isStripeTrialing;
   if (user && hasActiveSubscription) {
     return <Navigate to={resumePath || '/'} replace />;
