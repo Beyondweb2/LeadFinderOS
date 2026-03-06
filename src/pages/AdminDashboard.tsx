@@ -389,6 +389,7 @@ export default function AdminDashboard() {
       toast.error(`Delete failed: ${data.error}`);
     } else {
       toast.success(`Deleted ${email}`);
+      deletedIdsRef.current.add(userId);
       setUsers(prev => prev.filter(u => u.id !== userId));
       if (selectedUser?.id === userId) setSelectedUser(null);
     }
