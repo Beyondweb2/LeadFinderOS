@@ -49,6 +49,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const userIdRef = useRef<string | null>(null);
   const accessTokenRef = useRef<string | null>(null);
 
+  // Cache edge function result for 5 minutes to avoid repeated calls on route changes
+  const edgeCacheRef = useRef<{ data: any; timestamp: number; userId: string } | null>(null);
+  const CACHE_TTL_MS = 5 * 60 * 1000;
+
   // Check if user has admin role
   const checkAdminRole = useCallback(async (userId: string): Promise<boolean> => {
     const { data, error } = await supabase
