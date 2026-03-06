@@ -153,11 +153,9 @@ const UnlockAccess = () => {
           <div className="flex flex-col items-center py-6 gap-5 text-center">
             <Shield className="h-10 w-10 text-primary" />
             <div className="space-y-2">
-              <h3 className="text-lg font-bold">You're starting a 3-day full access trial.</h3>
+              <h3 className="text-lg font-bold">{confirmHeadline}</h3>
               <p className="text-sm text-muted-foreground">
-                You will only be charged after the trial ends.
-                <br />
-                Cancel anytime before renewal.
+                {confirmSubtext}
               </p>
             </div>
             <Button
@@ -199,10 +197,10 @@ const UnlockAccess = () => {
               <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9" />
             </div>
             <CardTitle className="text-2xl font-bold tracking-tight">
-               Unlock Full Access — Free for 3 Days
+               {headlineText}
              </CardTitle>
              <p className="text-sm text-muted-foreground mt-2">
-               £0 today · £19.99/month after 3 days · Cancel anytime
+               {subheadText}
             </p>
           </CardHeader>
 
@@ -250,18 +248,20 @@ const UnlockAccess = () => {
                   onClick={() => setShowConfirmModal(true)}
                 >
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Unlock My 3-Day Access
+                  {ctaButtonText}
                 </Button>
                 <p className="text-[11px] text-muted-foreground/60 text-center">
                   Secure payment via Stripe · Cancel anytime
                 </p>
-                <Link
-                  to="/find-leads"
-                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors mt-1"
-                >
-                  <Search className="h-3 w-3" />
-                  Skip — try 1 free search, no card required
-                </Link>
+                {!hasUsedTrial && (
+                  <Link
+                    to="/find-leads"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors mt-1"
+                  >
+                    <Search className="h-3 w-3" />
+                    Skip — try 1 free search, no card required
+                  </Link>
+                )}
               </>
             )}
           </CardFooter>
