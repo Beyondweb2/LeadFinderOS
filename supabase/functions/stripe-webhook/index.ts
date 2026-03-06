@@ -66,9 +66,18 @@
             // Get customer email to find user
             const customer = await stripe.customers.retrieve(customerId);
             if (!customer.deleted && customer.email) {
-              // Find user by email
-              const { data: users } = await supabaseAdmin.auth.admin.listUsers();
-              const user = users?.users.find(u => u.email === customer.email);
+              // Find user by email (paginated search for reliability)
+              let user: { id: string; email?: string } | undefined;
+              const normalizedEmail = customer.email!.toLowerCase();
+              let page = 1;
+              const perPage = 100;
+              while (!user) {
+                const { data: batch } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+                if (!batch?.users || batch.users.length === 0) break;
+                user = batch.users.find(u => u.email?.toLowerCase() === normalizedEmail);
+                if (batch.users.length < perPage) break;
+                page++;
+              }
               
               if (user) {
                 logStep("Processing invoice.paid for affiliate", { userId: user.id, amount: invoice.amount_paid });
@@ -221,11 +230,19 @@
 
         logStep("Found customer", { email: customer.email });
 
-        // Find user by email
-        const { data: users, error: userError } = await supabaseAdmin.auth.admin.listUsers();
-        if (userError) throw new Error(`Failed to list users: ${userError.message}`);
-
-        const user = users.users.find(u => u.email === customer.email);
+        // Find user by email (paginated search for reliability)
+        const normalizedSubEmail = customer.email!.toLowerCase();
+        let user: { id: string; email?: string } | undefined;
+        let subPage = 1;
+        const subPerPage = 100;
+        while (!user) {
+          const { data: batch, error: userError } = await supabaseAdmin.auth.admin.listUsers({ page: subPage, perPage: subPerPage });
+          if (userError) throw new Error(`Failed to list users: ${userError.message}`);
+          if (!batch?.users || batch.users.length === 0) break;
+          user = batch.users.find(u => u.email?.toLowerCase() === normalizedSubEmail);
+          if (batch.users.length < subPerPage) break;
+          subPage++;
+        }
         if (!user) {
           logStep("No auth user found for email — marking checkout as completed", { email: customer.email });
           

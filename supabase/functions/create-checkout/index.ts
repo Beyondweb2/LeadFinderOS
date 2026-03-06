@@ -49,14 +49,23 @@ serve(async (req) => {
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const origin = resolveOrigin(req.headers.get("origin"));
 
-    // Parse body for customer_email (email-first flow)
+    // Parse body for customer_email and affiliate tracking (email-first flow)
     let bodyEmail: string | null = null;
+    let bodyAffiliateCode: string | null = null;
+    let bodyRefSource: string | null = null;
     try {
       const body = await req.json();
       if (body?.customer_email && typeof body.customer_email === "string") {
         bodyEmail = body.customer_email.trim().toLowerCase();
         logStep("Email-first flow", { email: bodyEmail });
       }
+      if (body?.affiliate_code && typeof body.affiliate_code === "string") {
+        bodyAffiliateCode = body.affiliate_code.trim();
+      }
+      if (body?.ref_source && typeof body.ref_source === "string") {
+        bodyRefSource = body.ref_source.trim();
+      }
+      if (bodyAffiliateCode) logStep("Affiliate code from body", { code: bodyAffiliateCode });
     } catch {
       // No body or invalid JSON — that's fine
     }
@@ -179,6 +188,14 @@ serve(async (req) => {
 
     if (user) {
       sessionConfig.client_reference_id = user.id;
+    }
+
+    // Add affiliate/ref from body (anonymous flow) if not already set from user data
+    if (bodyAffiliateCode && !trackingMetadata.affiliate_code) {
+      trackingMetadata.affiliate_code = bodyAffiliateCode;
+    }
+    if (bodyRefSource && !trackingMetadata.ref_source) {
+      trackingMetadata.ref_source = bodyRefSource;
     }
 
     if (Object.keys(trackingMetadata).length > 0) {
