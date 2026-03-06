@@ -29,10 +29,13 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const { session_id, password, language } = await req.json();
+    const { session_id, password, language, affiliate_code, ref_source } = await req.json();
     if (!session_id) throw new Error("Missing session_id");
     if (!password || password.length < 8) throw new Error("Password must be at least 8 characters");
     const userLanguage = language || 'en';
+    const cleanAffiliateCode = typeof affiliate_code === 'string' ? affiliate_code.trim() : null;
+    const cleanRefSource = typeof ref_source === 'string' ? ref_source.trim() : null;
+    if (cleanAffiliateCode) logStep("Affiliate code received", { code: cleanAffiliateCode });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
@@ -105,8 +108,10 @@ serve(async (req) => {
         lifecycle_stage: 99,
         preferred_language: userLanguage,
         setup_completed: true,
+        ...(cleanAffiliateCode ? { affiliate_code: cleanAffiliateCode } : {}),
+        ...(cleanRefSource ? { ref_source: cleanRefSource } : {}),
       });
-      logStep("Created user_trials row");
+      logStep("Created user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource });
     } else {
       await supabaseAdmin.from('user_trials').update({
         plan_status: 'active',
@@ -115,8 +120,10 @@ serve(async (req) => {
         checkout_started_at: null,
         preferred_language: userLanguage,
         setup_completed: true,
+        ...(cleanAffiliateCode ? { affiliate_code: cleanAffiliateCode } : {}),
+        ...(cleanRefSource ? { ref_source: cleanRefSource } : {}),
       }).eq('user_id', userId);
-      logStep("Updated user_trials row");
+      logStep("Updated user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource });
     }
 
     // Upsert subscription record

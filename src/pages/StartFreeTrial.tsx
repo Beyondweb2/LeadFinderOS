@@ -56,9 +56,13 @@ const StartFreeTrial = () => {
         headers.Authorization = `Bearer ${sessionData.session.access_token}`;
       }
 
+      // Pass affiliate/ref tracking from localStorage
+      const affiliateCode = localStorage.getItem('leadfinder_affiliate_code') || undefined;
+      const refSource = localStorage.getItem('leadfinder_ref_source') || undefined;
+
       const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout', {
         headers,
-        body: { customer_email: trimmed },
+        body: { customer_email: trimmed, affiliate_code: affiliateCode, ref_source: refSource },
       });
       if (checkoutError) throw checkoutError;
       if (checkoutData?.url) {

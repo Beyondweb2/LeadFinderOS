@@ -89,8 +89,12 @@ const CompleteSetup = () => {
     setStatus('creating');
 
     try {
+      // Pass affiliate/ref tracking from localStorage
+      const affiliateCode = localStorage.getItem('leadfinder_affiliate_code') || undefined;
+      const refSource = localStorage.getItem('leadfinder_ref_source') || undefined;
+
       const { data, error } = await supabase.functions.invoke('complete-signup', {
-        body: { session_id: sessionId, password, language },
+        body: { session_id: sessionId, password, language, affiliate_code: affiliateCode, ref_source: refSource },
       });
 
       if (error) throw new Error(error.message);

@@ -231,6 +231,7 @@ export default function AdminDashboard() {
   const [userEvents, setUserEvents] = useState<UsageEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [isDeletingUser, setIsDeletingUser] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<AdminUser | null>(null);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
@@ -836,37 +837,14 @@ export default function AdminDashboard() {
                           </TableCell>
                           <TableCell>
                             {u.id !== user?.id && (
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-muted-foreground hover:text-red-400"
-                                    onClick={(e) => e.stopPropagation()}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent onClick={(e) => e.stopPropagation()}>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>Delete user?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      This will permanently delete <strong>{u.email}</strong> and all their data. This action cannot be undone.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      className="bg-red-600 hover:bg-red-700"
-                                      onClick={() => deleteUser(u.id, u.email)}
-                                      disabled={isDeletingUser}
-                                    >
-                                      {isDeletingUser ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                                      Delete
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                                onClick={(e) => { e.stopPropagation(); setUserToDelete(u); }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
                             )}
                           </TableCell>
                         </TableRow>
@@ -882,6 +860,34 @@ export default function AdminDashboard() {
           Showing {filtered.length} of {users.length} users
         </p>
       </div>
+
+      {/* Single User Delete Dialog (state-driven, outside table loop) */}
+      <AlertDialog open={!!userToDelete} onOpenChange={(open) => { if (!open) setUserToDelete(null); }}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete user?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete <strong>{userToDelete?.email}</strong> and all their data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700"
+              onClick={() => {
+                if (userToDelete) {
+                  deleteUser(userToDelete.id, userToDelete.email);
+                  setUserToDelete(null);
+                }
+              }}
+              disabled={isDeletingUser}
+            >
+              {isDeletingUser ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* User Detail Drawer */}
       <Sheet open={!!selectedUser} onOpenChange={(open) => { if (!open) setSelectedUser(null); }}>
