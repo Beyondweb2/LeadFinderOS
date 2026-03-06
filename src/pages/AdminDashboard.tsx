@@ -465,10 +465,12 @@ export default function AdminDashboard() {
       navigate('/', { replace: true });
       return;
     }
-    if (!isSubLoading && isAdmin) {
+    if (!isSubLoading && isAdmin && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
       fetchUsers();
     }
-  }, [isSubLoading, isAdmin, navigate, fetchUsers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSubLoading, isAdmin, navigate]);
 
   const handleRowClick = (user: AdminUser) => {
     setSelectedUser(user);
