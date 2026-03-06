@@ -55,7 +55,8 @@ serve(async (req) => {
     if (!email) throw new Error("No email found in checkout session");
     if (!subscription) throw new Error("No subscription found");
 
-    logStep("Checkout verified", { email, subscriptionId: subscription.id, status: subscription.status });
+    const planStatus = subscription.status === 'trialing' ? 'trial' : 'active';
+    logStep("Checkout verified", { email, subscriptionId: subscription.id, status: subscription.status, planStatus });
 
     // Check if a user with this email already exists
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
