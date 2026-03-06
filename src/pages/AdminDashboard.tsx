@@ -367,6 +367,7 @@ export default function AdminDashboard() {
   const deleteUser = useCallback(async (userId: string, email: string) => {
     // Checkout-only pseudo-users aren't real auth users — just remove from UI
     if (userId.startsWith('checkout-')) {
+      deletedIdsRef.current.add(userId);
       setUsers(prev => prev.filter(u => u.id !== userId));
       if (selectedUser?.id === userId) setSelectedUser(null);
       toast.success(`Removed ${email} from list`);
