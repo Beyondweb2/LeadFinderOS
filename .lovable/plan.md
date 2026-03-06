@@ -1,41 +1,21 @@
 
-
 ## Problem
 
-The affiliate dashboard's "Trialing" metric is always 0 because of a `plan_status` mismatch:
+When a logged-in user lands on `/landing` (e.g. because their subscription is blocked, or they were redirected by `SubscriptionGate`), the "Sign In" buttons are hidden because they're wrapped in `{!user && ...}`. The header CTA also changes from "Try it free" to "Subscribe". This means a user who signed out and back in, or whose session is stale, loses access to the Sign In button.
 
-- **`complete-signup`** sets `plan_status = 'active'` for all new signups (lines 106, 117), even when the Stripe subscription is actually `trialing`
-- **`admin-affiliates`** counts "Trialing" by filtering `plan_status === 'trial'` AND `trial_end_date > now()`
-- These never match — the value is `'active'`, not `'trial'`
+There are 3 places in `Landing.tsx` where Sign In is conditionally hidden:
+1. **Header** (line 558): `{!user && <Button>Sign In</Button>}`
+2. **Hero CTA** (line 616): `{!user && <Button>Sign in</Button>}`
+3. **Footer** (line 1173): `{!user && <Link>Sign In</Link>}`
 
-Additionally, the `handle_new_user_trial` DB trigger sets `plan_status = 'free'`, so there are three different values floating around (`'free'`, `'trial'`, `'active'`) with no consistency.
+And the header CTA button (line 567) shows `user ? 'Subscribe' : 'Try it free'`.
 
-## Fix
+## Plan
 
-**`supabase/functions/complete-signup/index.ts`** — Set `plan_status` based on the actual Stripe subscription status:
-- If `subscription.status === 'trialing'` → set `plan_status = 'trial'` 
-- If `subscription.status === 'active'` → set `plan_status = 'active'`
+**Single file change: `src/pages/Landing.tsx`**
 
-This is a 2-line change (lines 106 and 117): replace the hardcoded `'active'` with a conditional based on `subscription.status`.
+1. **Always show the Sign In links** — remove the `!user &&` guards from all three locations so the Sign In button is always visible regardless of auth state.
 
-**`supabase/functions/admin-affiliates/index.ts`** — No changes needed. The filter `plan_status === 'trial'` is correct; it just never had matching data.
+2. **Keep the CTA button text as "Try it free"** always (remove the ternary that switches to "Subscribe" when logged in). Logged-in users who need to subscribe will still scroll to pricing and go through the normal checkout flow.
 
-## Technical Detail
-
-```text
-Current flow:
-  Stripe status = "trialing"
-  complete-signup → plan_status = "active"  ← WRONG
-  admin-affiliates → WHERE plan_status = 'trial' → 0 results
-
-Fixed flow:
-  Stripe status = "trialing"  
-  complete-signup → plan_status = "trial"   ← CORRECT
-  admin-affiliates → WHERE plan_status = 'trial' → 1 result ✓
-```
-
-### Files to change
-| File | Change |
-|------|--------|
-| `supabase/functions/complete-signup/index.ts` | Map Stripe `subscription.status` to `plan_status` instead of hardcoding `'active'` |
-
+These are purely display changes — no routing, Stripe, or auth logic is modified.
