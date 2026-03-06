@@ -259,6 +259,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           filter: `user_id=eq.${userId}`,
         },
         () => {
+          // Invalidate cache so realtime updates trigger a fresh edge function call
+          edgeCacheRef.current = null;
           checkSubscription();
         }
       )
