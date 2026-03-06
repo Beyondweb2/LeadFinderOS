@@ -432,6 +432,7 @@ export default function AdminDashboard() {
       toast.error(`Bulk delete failed: ${data.error}`);
     } else {
       const successIds = new Set((data?.results || []).filter((r: any) => r.success).map((r: any) => r.id));
+      successIds.forEach(id => deletedIdsRef.current.add(id));
       setUsers(prev => prev.filter(u => !successIds.has(u.id)));
       setSelectedIds(new Set());
       toast.success(`Deleted ${data?.deleted || 0} users${data?.failed ? `, ${data.failed} failed` : ''}`);
