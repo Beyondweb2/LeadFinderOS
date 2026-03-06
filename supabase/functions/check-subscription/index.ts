@@ -102,9 +102,10 @@
       let subscriptionStatus: string | null = null;
       let trialEnd: string | null = null;
 
-      // Check local DB for payment failure count
+      // Check local DB for payment failure count and trial history
       let paymentFailureCount = 0;
       let lastPaymentFailedAt: string | null = null;
+      let hasUsedTrial = false;
       
       const { data: localSub } = await supabaseClient
         .from('subscriptions')
@@ -123,6 +124,15 @@
           subscriptionStatus = 'paused';
         }
       }
+
+      // Check trial_used from user_trials
+      const { data: trialData } = await supabaseClient
+        .from('user_trials')
+        .select('trial_used')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      hasUsedTrial = trialData?.trial_used === true;
 
       if (hasActiveSub && validSubscription) {
          // Safely handle the timestamp conversion
@@ -165,7 +175,8 @@
         subscription_status: subscriptionStatus,
         trial_end: trialEnd,
         payment_failure_count: paymentFailureCount,
-        last_payment_failed_at: lastPaymentFailedAt
+        last_payment_failed_at: lastPaymentFailedAt,
+        has_used_trial: hasUsedTrial,
      }), {
        headers: { ...corsHeaders, "Content-Type": "application/json" },
        status: 200,

@@ -56,7 +56,9 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const hasAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
 
   if (!hasAccess) {
-    return <Navigate to="/landing" replace />;
+    // Route non-paying authenticated users to checkout, not back to landing
+    // This prevents the sign-in loop where landing → auth → / → landing
+    return <Navigate to="/unlock" replace />;
   }
 
   // If subscribed but setup not completed, redirect to complete-setup

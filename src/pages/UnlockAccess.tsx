@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useTrial } from '@/hooks/useTrial';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +24,7 @@ const UnlockAccess = () => {
   const [waitingForPayment, setWaitingForPayment] = useState(false);
   const { user, session, isLoading: authLoading } = useAuth();
   const { isPaidSubscriber, isStripeTrialing, checkSubscription, isLoading: subLoading } = useSubscription();
+  const { trialUsed, isLoading: trialLoading } = useTrial();
   const { toast } = useToast();
   const navigate = useNavigate();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -110,13 +112,31 @@ const UnlockAccess = () => {
     }
   };
 
-  if (authLoading || !user) {
+  if (authLoading || !user || trialLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
+
+  // Determine copy based on whether trial was already used
+  const hasUsedTrial = trialUsed;
+  const headlineText = hasUsedTrial
+    ? 'Subscribe to Get Full Access'
+    : 'Unlock Full Access — Free for 5 Days';
+  const subheadText = hasUsedTrial
+    ? '£19.99/month · Cancel anytime'
+    : '£0 today · £19.99/month after 5 days · Cancel anytime';
+  const confirmHeadline = hasUsedTrial
+    ? 'You\'re subscribing to LeadFinder Pro.'
+    : 'You\'re starting a 5-day full access trial.';
+  const confirmSubtext = hasUsedTrial
+    ? 'You will be charged £19.99/month. Cancel anytime.'
+    : 'You will only be charged after the trial ends. Cancel anytime before renewal.';
+  const ctaButtonText = hasUsedTrial
+    ? 'Subscribe Now — £19.99/mo'
+    : 'Unlock My 5-Day Free Access';
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -133,11 +153,9 @@ const UnlockAccess = () => {
           <div className="flex flex-col items-center py-6 gap-5 text-center">
             <Shield className="h-10 w-10 text-primary" />
             <div className="space-y-2">
-              <h3 className="text-lg font-bold">You're starting a 3-day full access trial.</h3>
+              <h3 className="text-lg font-bold">{confirmHeadline}</h3>
               <p className="text-sm text-muted-foreground">
-                You will only be charged after the trial ends.
-                <br />
-                Cancel anytime before renewal.
+                {confirmSubtext}
               </p>
             </div>
             <Button
@@ -179,10 +197,10 @@ const UnlockAccess = () => {
               <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9" />
             </div>
             <CardTitle className="text-2xl font-bold tracking-tight">
-               Unlock Full Access — Free for 3 Days
+               {headlineText}
              </CardTitle>
              <p className="text-sm text-muted-foreground mt-2">
-               £0 today · £19.99/month after 3 days · Cancel anytime
+               {subheadText}
             </p>
           </CardHeader>
 
@@ -230,18 +248,20 @@ const UnlockAccess = () => {
                   onClick={() => setShowConfirmModal(true)}
                 >
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Unlock My 3-Day Access
+                  {ctaButtonText}
                 </Button>
                 <p className="text-[11px] text-muted-foreground/60 text-center">
                   Secure payment via Stripe · Cancel anytime
                 </p>
-                <Link
-                  to="/find-leads"
-                  className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors mt-1"
-                >
-                  <Search className="h-3 w-3" />
-                  Skip — try 1 free search, no card required
-                </Link>
+                {!hasUsedTrial && (
+                  <Link
+                    to="/find-leads"
+                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors mt-1"
+                  >
+                    <Search className="h-3 w-3" />
+                    Skip — try 1 free search, no card required
+                  </Link>
+                )}
               </>
             )}
           </CardFooter>

@@ -202,8 +202,8 @@ serve(async (req) => {
           billing_status = 'checkout_started';
         }
 
-        // --- Access Mode ---
-        let access_mode = 'free_user';
+        // --- Access Mode (what the user currently experiences) ---
+        let access_mode = 'no_stripe';
         if (sub?.status === 'active') {
           access_mode = 'paid';
         } else if (sub?.status === 'trialing') {
@@ -212,6 +212,11 @@ serve(async (req) => {
           access_mode = 'payment_required';
         } else if (sub?.status === 'canceled' || sub?.status === 'incomplete' || sub?.status === 'incomplete_expired') {
           access_mode = 'no_access';
+        } else if (!sub && trial?.trial_used) {
+          // Old user who used trial/free access but never subscribed via Stripe
+          access_mode = 'trial_used_no_sub';
+        } else if (!sub && trial) {
+          access_mode = 'free_user';
         }
 
         // Keep legacy subscription_status for filter compatibility

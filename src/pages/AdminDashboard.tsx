@@ -145,22 +145,26 @@ function accessModeColor(mode: string): string {
     case 'trial': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
     case 'payment_required': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
     case 'no_access': return 'bg-red-500/15 text-red-400 border-red-500/30';
+    case 'trial_used_no_sub': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
     case 'free_user': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
     case 'checkout_only': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
     case 'signed_up': return 'bg-muted text-muted-foreground border-border';
+    case 'no_stripe': return 'bg-muted text-muted-foreground border-border';
     default: return 'bg-muted text-muted-foreground border-border';
   }
 }
 
 function accessModeLabel(mode: string): string {
   switch (mode) {
-    case 'paid': return 'Paid (Unlimited)';
-    case 'trial': return 'Trial';
+    case 'paid': return 'Paid Active';
+    case 'trial': return 'Trial Active';
     case 'payment_required': return 'Payment Required';
-    case 'no_access': return 'No Access';
-    case 'free_user': return 'Free Access';
+    case 'no_access': return 'Cancelled';
+    case 'trial_used_no_sub': return 'Trial Used · No Sub';
+    case 'free_user': return 'Free User';
     case 'checkout_only': return 'Checkout Only';
     case 'signed_up': return 'Signed Up';
+    case 'no_stripe': return 'No Stripe Record';
     default: return mode;
   }
 }
