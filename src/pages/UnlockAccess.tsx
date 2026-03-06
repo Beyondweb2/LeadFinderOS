@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useTrial } from '@/hooks/useTrial';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,6 +24,7 @@ const UnlockAccess = () => {
   const [waitingForPayment, setWaitingForPayment] = useState(false);
   const { user, session, isLoading: authLoading } = useAuth();
   const { isPaidSubscriber, isStripeTrialing, checkSubscription, isLoading: subLoading } = useSubscription();
+  const { trialUsed, isLoading: trialLoading } = useTrial();
   const { toast } = useToast();
   const navigate = useNavigate();
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
