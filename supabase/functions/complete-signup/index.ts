@@ -104,7 +104,7 @@ serve(async (req) => {
         trial_started_at: new Date().toISOString(),
         trial_days: 5,
         trial_end_date: trialEnd,
-        plan_status: 'active',
+        plan_status: planStatus,
         trial_used: true,
         lifecycle_stage: 99,
         preferred_language: userLanguage,
@@ -115,7 +115,7 @@ serve(async (req) => {
       logStep("Created user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource });
     } else {
       await supabaseAdmin.from('user_trials').update({
-        plan_status: 'active',
+        plan_status: planStatus,
         trial_used: true,
         lifecycle_stage: 99,
         checkout_started_at: null,
