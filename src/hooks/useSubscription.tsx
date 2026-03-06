@@ -145,19 +145,31 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
       
       accessTokenRef.current = freshToken;
-      
-      const { data, error } = await supabase.functions.invoke('check-subscription', {
-        headers: {
-          Authorization: `Bearer ${freshToken}`,
-        },
-      });
 
-      if (error) {
-        if (error.message?.includes('Auth') || error.message?.includes('authentication')) {
-          setState(prev => ({ ...prev, isLoading: false }));
-          return;
+      // Use cached edge function result if fresh enough
+      const cached = edgeCacheRef.current;
+      const now = Date.now();
+      let data: any;
+
+      if (cached && cached.userId === userId && (now - cached.timestamp) < CACHE_TTL_MS) {
+        data = cached.data;
+      } else {
+        const { data: freshData, error } = await supabase.functions.invoke('check-subscription', {
+          headers: {
+            Authorization: `Bearer ${freshToken}`,
+          },
+        });
+
+        if (error) {
+          if (error.message?.includes('Auth') || error.message?.includes('authentication')) {
+            setState(prev => ({ ...prev, isLoading: false }));
+            return;
+          }
+          throw error;
         }
-        throw error;
+
+        data = freshData;
+        edgeCacheRef.current = { data, timestamp: now, userId };
       }
 
       const subStatus = data.subscription_status ?? null;
