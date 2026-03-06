@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -237,6 +237,8 @@ export default function AdminDashboard() {
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const [checkoutAttempts24h, setCheckoutAttempts24h] = useState(0);
   const [recentCheckoutAttempts, setRecentCheckoutAttempts] = useState<CheckoutAttempt[]>([]);
+  const deletedIdsRef = useRef<Set<string>>(new Set());
+  const hasFetchedRef = useRef(false);
 
   const getAccessToken = useCallback(async (): Promise<string | null> => {
     // Always get a fresh session
@@ -319,9 +321,11 @@ export default function AdminDashboard() {
             last_search_at: null,
           }));
 
-        const merged = [...userList, ...anonymousAttempts].sort(
-          (a: AdminUser, b: AdminUser) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+        const merged = [...userList, ...anonymousAttempts]
+          .filter((u: AdminUser) => !deletedIdsRef.current.has(u.id))
+          .sort(
+            (a: AdminUser, b: AdminUser) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
         
         console.log('[AdminDashboard] Users received:', userList.length, '+ anonymous attempts:', anonymousAttempts.length);
         setUsers(merged);
@@ -363,6 +367,7 @@ export default function AdminDashboard() {
   const deleteUser = useCallback(async (userId: string, email: string) => {
     // Checkout-only pseudo-users aren't real auth users — just remove from UI
     if (userId.startsWith('checkout-')) {
+      deletedIdsRef.current.add(userId);
       setUsers(prev => prev.filter(u => u.id !== userId));
       if (selectedUser?.id === userId) setSelectedUser(null);
       toast.success(`Removed ${email} from list`);
@@ -384,6 +389,7 @@ export default function AdminDashboard() {
       toast.error(`Delete failed: ${data.error}`);
     } else {
       toast.success(`Deleted ${email}`);
+      deletedIdsRef.current.add(userId);
       setUsers(prev => prev.filter(u => u.id !== userId));
       if (selectedUser?.id === userId) setSelectedUser(null);
     }
@@ -403,6 +409,7 @@ export default function AdminDashboard() {
 
     // Remove checkout-only entries from UI immediately
     if (checkoutIds.length > 0) {
+      checkoutIds.forEach(id => deletedIdsRef.current.add(id));
       setUsers(prev => prev.filter(u => !checkoutIds.includes(u.id)));
     }
 
@@ -424,7 +431,8 @@ export default function AdminDashboard() {
     } else if (data?.error) {
       toast.error(`Bulk delete failed: ${data.error}`);
     } else {
-      const successIds = new Set((data?.results || []).filter((r: any) => r.success).map((r: any) => r.id));
+      const successIds = new Set<string>((data?.results || []).filter((r: any) => r.success).map((r: any) => r.id));
+      successIds.forEach(id => deletedIdsRef.current.add(id));
       setUsers(prev => prev.filter(u => !successIds.has(u.id)));
       setSelectedIds(new Set());
       toast.success(`Deleted ${data?.deleted || 0} users${data?.failed ? `, ${data.failed} failed` : ''}`);
@@ -457,10 +465,12 @@ export default function AdminDashboard() {
       navigate('/', { replace: true });
       return;
     }
-    if (!isSubLoading && isAdmin) {
+    if (!isSubLoading && isAdmin && !hasFetchedRef.current) {
+      hasFetchedRef.current = true;
       fetchUsers();
     }
-  }, [isSubLoading, isAdmin, navigate, fetchUsers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSubLoading, isAdmin, navigate]);
 
   const handleRowClick = (user: AdminUser) => {
     setSelectedUser(user);
@@ -527,7 +537,7 @@ export default function AdminDashboard() {
               <p className="text-sm text-muted-foreground">{users.length} users total</p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchUsers} disabled={isLoading}>
+          <Button variant="outline" size="sm" onClick={() => { deletedIdsRef.current.clear(); fetchUsers(); }} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
