@@ -409,6 +409,7 @@ export default function AdminDashboard() {
 
     // Remove checkout-only entries from UI immediately
     if (checkoutIds.length > 0) {
+      checkoutIds.forEach(id => deletedIdsRef.current.add(id));
       setUsers(prev => prev.filter(u => !checkoutIds.includes(u.id)));
     }
 
