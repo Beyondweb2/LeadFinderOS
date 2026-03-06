@@ -321,9 +321,11 @@ export default function AdminDashboard() {
             last_search_at: null,
           }));
 
-        const merged = [...userList, ...anonymousAttempts].sort(
-          (a: AdminUser, b: AdminUser) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+        const merged = [...userList, ...anonymousAttempts]
+          .filter((u: AdminUser) => !deletedIdsRef.current.has(u.id))
+          .sort(
+            (a: AdminUser, b: AdminUser) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
         
         console.log('[AdminDashboard] Users received:', userList.length, '+ anonymous attempts:', anonymousAttempts.length);
         setUsers(merged);
