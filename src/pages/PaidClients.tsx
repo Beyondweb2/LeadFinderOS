@@ -490,6 +490,10 @@ const PaidClientsPage = () => {
     }).length;
   }, [paidClients]);
 
+  const totalRevenue = useMemo(() => {
+    return paidClients.reduce((sum, c) => sum + (c.amount_paid || 0), 0);
+  }, [paidClients]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-16">
