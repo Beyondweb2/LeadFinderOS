@@ -256,6 +256,23 @@ interface LeadCardProps {
   userId: string | undefined;
 }
 
+const SERVICE_OPTIONS = [
+  'Website Design',
+  'Website Development',
+  'SEO',
+  'Google Business Setup',
+  'Hosting',
+  'Maintenance',
+  'Copywriting',
+];
+
+const PROJECT_STATUS_OPTIONS = [
+  { value: 'not_started', label: 'Not Started' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'waiting_on_client', label: 'Waiting On Client' },
+  { value: 'completed', label: 'Completed' },
+];
+
 const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
