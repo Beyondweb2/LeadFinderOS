@@ -809,6 +809,29 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </Popover>
             </div>
 
+            {/* Potential Revenue */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-muted-foreground w-12 shrink-0">Revenue</span>
+              <div className="relative flex-1">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">£</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={potentialRevenue}
+                  onChange={(e) => setPotentialRevenue(e.target.value)}
+                  onBlur={async () => {
+                    const val = potentialRevenue ? parseFloat(potentialRevenue) : null;
+                    if (val !== (lead.potential_revenue ?? null)) {
+                      await onUpdateLead(lead.id, { potential_revenue: val } as any);
+                    }
+                  }}
+                  className="h-8 text-xs border-border/50 pl-6"
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
             {/* Notes */}
             <div className="pt-1" data-walkthrough="notes">
               {isEditingNotes ? (
@@ -853,6 +876,105 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               )}
             </div>
 
+            {/* Service Delivery Section — collapsible, shown when status is payment_received/paid */}
+            <Collapsible open={serviceDeliveryOpen} onOpenChange={setServiceDeliveryOpen}>
+              <CollapsibleTrigger asChild>
+                <button className="flex items-center gap-2 w-full text-left py-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors" data-no-expand onClick={(e) => e.stopPropagation()}>
+                  <Package className="h-3.5 w-3.5" />
+                  Service Delivery
+                  <ChevronDown className={cn('h-3 w-3 ml-auto transition-transform', serviceDeliveryOpen && 'rotate-180')} />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2 border-t border-border/30">
+                <div>
+                  <label className="text-[11px] text-muted-foreground block mb-1">Project Overview</label>
+                  <Textarea
+                    value={projectOverview}
+                    onChange={(e) => setProjectOverview(e.target.value)}
+                    onBlur={async () => {
+                      if (projectOverview !== (lead.project_overview || '')) {
+                        await onUpdateLead(lead.id, { project_overview: projectOverview || null } as any);
+                      }
+                    }}
+                    rows={2}
+                    className="resize-none text-xs border-border/50"
+                    placeholder="Describe what you'll deliver..."
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground block mb-1.5">Services Included</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {SERVICE_OPTIONS.map(service => (
+                      <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <Checkbox
+                          checked={servicesIncluded.includes(service)}
+                          onCheckedChange={(checked) => {
+                            const updated = checked
+                              ? [...servicesIncluded, service]
+                              : servicesIncluded.filter(s => s !== service);
+                            setServicesIncluded(updated);
+                            onUpdateLead(lead.id, { services_included: updated } as any);
+                          }}
+                          className="h-3.5 w-3.5"
+                        />
+                        {service}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] text-muted-foreground block mb-1">Project Value (£)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={projectValue}
+                      onChange={(e) => setProjectValue(e.target.value)}
+                      onBlur={async () => {
+                        const val = projectValue ? parseFloat(projectValue) : null;
+                        if (val !== (lead.project_value ?? null)) {
+                          await onUpdateLead(lead.id, { project_value: val } as any);
+                        }
+                      }}
+                      className="h-8 text-xs border-border/50"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground block mb-1">Project Status</label>
+                    <Select value={projectStatus} onValueChange={async (v) => {
+                      setProjectStatus(v);
+                      await onUpdateLead(lead.id, { project_status: v } as any);
+                    }}>
+                      <SelectTrigger className="h-8 text-xs border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROJECT_STATUS_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground block mb-1">Delivery Notes</label>
+                  <Textarea
+                    value={deliveryNotes}
+                    onChange={(e) => setDeliveryNotes(e.target.value)}
+                    onBlur={async () => {
+                      if (deliveryNotes !== (lead.delivery_notes || '')) {
+                        await onUpdateLead(lead.id, { delivery_notes: deliveryNotes || null } as any);
+                      }
+                    }}
+                    rows={2}
+                    className="resize-none text-xs border-border/50"
+                    placeholder="Notes about delivery..."
+                  />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
           </div>
 
