@@ -107,6 +107,15 @@ export interface OutreachLead {
   whatsapp_checked_at?: string | null;
   outreach_attempts?: number;
   last_outreach_attempt_at?: string | null;
+  // New fields
+  potential_revenue?: number | null;
+  contact_name?: string | null;
+  website?: string | null;
+  services_included?: string[] | null;
+  project_overview?: string | null;
+  project_value?: number | null;
+  project_status?: string | null;
+  delivery_notes?: string | null;
 }
 
 export interface OutreachActivity {

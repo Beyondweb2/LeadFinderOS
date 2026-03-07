@@ -400,7 +400,7 @@ export function useOutreach() {
 
   const updateLead = useCallback(async (
     leadId: string,
-    updates: Partial<Pick<OutreachLead, 'status' | 'next_action' | 'next_action_date' | 'notes' | 'email' | 'business_name' | 'amount_paid' | 'paid_for' | 'payment_date' | 'project_duration' | 'next_checkin_date' | 'checkin_notes' | 'image_url' | 'facebook_url' | 'facebook_confidence' | 'facebook_method' | 'facebook_last_checked_at' | 'contact_method' | 'whatsapp_status' | 'whatsapp_checked_at' | 'outreach_attempts' | 'last_outreach_attempt_at' | 'is_potential_work'>>
+    updates: Partial<Pick<OutreachLead, 'status' | 'next_action' | 'next_action_date' | 'notes' | 'email' | 'business_name' | 'amount_paid' | 'paid_for' | 'payment_date' | 'project_duration' | 'next_checkin_date' | 'checkin_notes' | 'image_url' | 'facebook_url' | 'facebook_confidence' | 'facebook_method' | 'facebook_last_checked_at' | 'contact_method' | 'whatsapp_status' | 'whatsapp_checked_at' | 'outreach_attempts' | 'last_outreach_attempt_at' | 'is_potential_work' | 'potential_revenue' | 'contact_name' | 'website' | 'services_included' | 'project_overview' | 'project_value' | 'project_status' | 'delivery_notes'>>
   ) => {
     const { data, error } = await supabase
       .from('outreach_leads')
