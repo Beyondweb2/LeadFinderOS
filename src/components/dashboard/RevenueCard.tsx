@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { PoundSterling, TrendingUp, TrendingDown, Minus, Users, FileText } from 'lucide-react';
+import { PoundSterling, TrendingUp, TrendingDown, Minus, Users, FileText, Target } from 'lucide-react';
 
 interface RevenueCardProps {
   revenueThisMonth: number;
@@ -8,6 +8,8 @@ interface RevenueCardProps {
   fullyPaidClients: number;
   activeProposals: number;
   pipelineDeals: number;
+  totalPotentialRevenue?: number;
+  closedRevenue?: number;
 }
 
 export function RevenueCard({
@@ -17,6 +19,8 @@ export function RevenueCard({
   fullyPaidClients,
   activeProposals,
   pipelineDeals,
+  totalPotentialRevenue = 0,
+  closedRevenue = 0,
 }: RevenueCardProps) {
   const change = revenueLastMonth > 0
     ? Math.round(((revenueThisMonth - revenueLastMonth) / revenueLastMonth) * 100)
@@ -59,6 +63,17 @@ export function RevenueCard({
           )}
         </div>
 
+        {/* Potential Revenue */}
+        {totalPotentialRevenue > 0 && (
+          <div className="flex items-center justify-between py-1.5 px-2 rounded-md bg-amber-500/5 border border-amber-500/20">
+            <div className="flex items-center gap-1.5">
+              <Target className="h-3 w-3 text-amber-500" />
+              <span className="text-[10px] sm:text-xs text-muted-foreground">Pipeline Value</span>
+            </div>
+            <span className="text-xs sm:text-sm font-semibold text-amber-500">£{totalPotentialRevenue.toLocaleString()}</span>
+          </div>
+        )}
+
         {/* Middle row */}
         <div className="hidden sm:grid grid-cols-2 gap-3 sm:gap-4 pt-2 border-t border-border/50">
           <div className="space-y-1">
@@ -77,12 +92,18 @@ export function RevenueCard({
           </div>
         </div>
 
-        {/* Lifetime */}
-        <div className="pt-2 border-t border-border/50">
+        {/* Lifetime + Closed */}
+        <div className="pt-2 border-t border-border/50 space-y-1">
           <div className="flex items-center justify-between">
             <span className="text-xs sm:text-sm text-muted-foreground">Lifetime</span>
             <span className="text-xs sm:text-sm font-medium text-muted-foreground/70">£{totalRevenue.toLocaleString()}</span>
           </div>
+          {closedRevenue > 0 && (
+            <div className="flex items-center justify-between">
+              <span className="text-xs sm:text-sm text-muted-foreground">Closed Revenue</span>
+              <span className="text-xs sm:text-sm font-medium text-green-500/70">£{closedRevenue.toLocaleString()}</span>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

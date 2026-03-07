@@ -99,6 +99,8 @@ const Dashboard = () => {
             fullyPaidClients={metrics.fullyPaidClients}
             activeProposals={metrics.activeProposals}
             pipelineDeals={metrics.pipeline.interested + metrics.pipeline.proposalSent}
+            totalPotentialRevenue={metrics.totalPotentialRevenue}
+            closedRevenue={metrics.closedRevenue}
           />
           <PipelineCard pipeline={metrics.pipeline} />
           <OutreachCard
