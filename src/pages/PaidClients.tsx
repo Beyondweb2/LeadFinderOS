@@ -464,9 +464,9 @@ const PaidClientsPage = () => {
 
   // Filter to only show completed/paid clients
   const paidClients = useMemo(() => {
-    const paidStatuses: LeadStatus[] = ['completed', 'paid_for_draft', 'payment_received' as LeadStatus];
+    const paidStatuses = ['completed', 'paid_for_draft', 'payment_received'];
     
-    let result = leads.filter((lead) => paidStatuses.includes(lead.status) || mapLegacyStatus(lead.status) === 'payment_received');
+    let result = leads.filter((lead) => paidStatuses.includes(lead.status));
     
     if (searchQuery) {
       const query = searchQuery.toLowerCase();

@@ -1085,7 +1085,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-emerald-500">
-              <CheckCircle className="h-5 w-5" />
+              <Check className="h-5 w-5" />
               Client Moved to Paid Clients
             </DialogTitle>
           </DialogHeader>
