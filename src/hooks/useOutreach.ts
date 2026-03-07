@@ -200,10 +200,16 @@ export function useOutreach() {
   // Auto-enrich leads missing phone numbers on load
   const hasEnrichedRef = useRef(false);
 
+  // Only refetch when user ID changes (login/logout), not on token refresh
   useEffect(() => {
-    fetchLeads();
-    fetchOutreachHistory();
-  }, [fetchLeads, fetchOutreachHistory]);
+    const currentUserId = user?.id ?? null;
+    if (currentUserId === userIdRef.current) return;
+    userIdRef.current = currentUserId;
+    if (currentUserId) {
+      fetchLeads();
+      fetchOutreachHistory();
+    }
+  }, [user?.id, fetchLeads, fetchOutreachHistory]);
 
   // After leads are loaded, enqueue phone fetches for leads without phone but with place_id
   useEffect(() => {
