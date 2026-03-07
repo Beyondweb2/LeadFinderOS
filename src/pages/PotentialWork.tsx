@@ -697,7 +697,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           ref={expandRef}
           className={cn(
             'overflow-hidden transition-all duration-300 ease-out',
-            isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+            isExpanded ? 'max-h-[450px] opacity-100' : 'max-h-0 opacity-0'
           )}
         >
           <div className="border-t border-border/50 px-3.5 sm:px-5 py-3.5 space-y-3">
