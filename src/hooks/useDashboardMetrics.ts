@@ -48,6 +48,8 @@ interface DashboardMetrics {
   fullyPaidClients: number;
   paidForDraftCount: number;
   activeProposals: number;
+  totalPotentialRevenue: number;
+  closedRevenue: number;
 
   // Pipeline
   pipeline: PipelineCounts;
