@@ -10,11 +10,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { LeadStatus, NextActionType } from '@/types/outreach';
+
+const CONTACT_METHOD_OPTIONS = [
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'sms', label: 'SMS' },
+  { value: 'contacted', label: 'Call' },
+  { value: 'facebook_msg', label: 'Facebook' },
+];
 
 interface AddCustomLeadDialogProps {
   onLeadAdded: () => void;
