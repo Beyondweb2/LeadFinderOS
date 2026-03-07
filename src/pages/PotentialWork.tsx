@@ -991,6 +991,73 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Service Delivery Sheet */}
+      <Sheet open={serviceDeliveryOpen} onOpenChange={setServiceDeliveryOpen}>
+        <SheetContent side="right" className="w-[340px] sm:w-[400px] overflow-y-auto">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="flex items-center gap-2 text-base">
+              <Package className="h-4 w-4 text-primary" />
+              Service Delivery
+            </SheetTitle>
+            <p className="text-xs text-muted-foreground">{lead.business_name}</p>
+          </SheetHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-[11px] text-muted-foreground block mb-1">Project Overview</label>
+              <Textarea
+                value={projectOverview}
+                onChange={(e) => setProjectOverview(e.target.value)}
+                onBlur={async () => {
+                  if (projectOverview !== (lead.project_overview || '')) {
+                    await onUpdateLead(lead.id, { project_overview: projectOverview || null } as any);
+                  }
+                }}
+                rows={3}
+                className="resize-none text-xs border-border/50"
+                placeholder="Describe what you'll deliver..."
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-muted-foreground block mb-1.5">Services Included</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {SERVICE_OPTIONS.map(service => (
+                  <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <Checkbox
+                      checked={servicesIncluded.includes(service)}
+                      onCheckedChange={(checked) => {
+                        const updated = checked
+                          ? [...servicesIncluded, service]
+                          : servicesIncluded.filter(s => s !== service);
+                        setServicesIncluded(updated);
+                        onUpdateLead(lead.id, { services_included: updated } as any);
+                      }}
+                      className="h-3.5 w-3.5"
+                    />
+                    {service}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] text-muted-foreground block mb-1">Project Status</label>
+              <Select value={projectStatus} onValueChange={async (v) => {
+                setProjectStatus(v);
+                await onUpdateLead(lead.id, { project_status: v } as any);
+              }}>
+                <SelectTrigger className="h-8 text-xs border-border/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROJECT_STATUS_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 };
