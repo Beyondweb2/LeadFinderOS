@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useOutreach } from '@/hooks/useOutreach';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { AlertTriangle, Clock, CalendarCheck } from 'lucide-react';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { Card } from '@/components/ui/card';
