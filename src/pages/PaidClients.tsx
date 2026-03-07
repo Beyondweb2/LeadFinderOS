@@ -527,6 +527,12 @@ const PaidClientsPage = () => {
           />
         </div>
         <div className="flex items-center gap-3">
+          {totalRevenue > 0 && (
+            <span className="text-xs sm:text-sm font-bold text-emerald-500 flex items-center gap-1 whitespace-nowrap">
+              <DollarSign className="h-3.5 w-3.5" />
+              £{totalRevenue.toLocaleString()}
+            </span>
+          )}
           {overdueCount > 0 && (
             <span className="text-xs font-medium text-destructive flex items-center gap-1">
               <AlertCircle className="h-3.5 w-3.5" />
