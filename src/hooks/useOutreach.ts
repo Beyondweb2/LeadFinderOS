@@ -33,6 +33,8 @@ export function useOutreach() {
   const [phoneFetchStatus, setPhoneFetchStatus] = useState<Record<string, PhoneFetchStatus>>({});
   const { toast } = useToast();
   const { user } = useAuth();
+  // Stable user ID ref to prevent refetches on auth token refreshes
+  const userIdRef = useRef<string | null>(null);
 
   // Parallel phone fetch queue — processes up to 3 leads concurrently for speed
   const phoneQueueRef = useRef<Array<{ outreachLeadId: string; placeId: string; businessName: string }>>([]);
@@ -121,7 +123,8 @@ export function useOutreach() {
   }, [processPhoneQueue]);
 
   const fetchLeads = useCallback(async () => {
-    if (!user) return;
+    const uid = userIdRef.current;
+    if (!uid) return;
     
     // Only show loading spinner on initial load
     if (!hasLoadedOnceRef.current) {
@@ -161,10 +164,11 @@ export function useOutreach() {
 
     setLeads((activeData || []) as OutreachLead[]);
     setArchivedLeads((archivedData || []) as OutreachLead[]);
-  }, [user]);
+  }, []);
 
   const fetchOutreachHistory = useCallback(async () => {
-    if (!user) return;
+    const uid = userIdRef.current;
+    if (!uid) return;
 
     const { data, error } = await supabase
       .from('outreach_history')
@@ -176,7 +180,7 @@ export function useOutreach() {
     }
 
     setOutreachHistory(data as OutreachHistoryEntry[]);
-  }, [user]);
+  }, []);
 
   const fetchActivities = useCallback(async (leadId: string) => {
     const { data, error } = await supabase
@@ -196,10 +200,16 @@ export function useOutreach() {
   // Auto-enrich leads missing phone numbers on load
   const hasEnrichedRef = useRef(false);
 
+  // Only refetch when user ID changes (login/logout), not on token refresh
   useEffect(() => {
-    fetchLeads();
-    fetchOutreachHistory();
-  }, [fetchLeads, fetchOutreachHistory]);
+    const currentUserId = user?.id ?? null;
+    if (currentUserId === userIdRef.current) return;
+    userIdRef.current = currentUserId;
+    if (currentUserId) {
+      fetchLeads();
+      fetchOutreachHistory();
+    }
+  }, [user?.id, fetchLeads, fetchOutreachHistory]);
 
   // After leads are loaded, enqueue phone fetches for leads without phone but with place_id
   useEffect(() => {
