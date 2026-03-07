@@ -1256,15 +1256,48 @@ const PotentialWorkPage = () => {
   return (
     <div className="space-y-3 sm:space-y-4 lg:space-y-6 max-w-[1280px] mx-auto">
       {/* Header */}
-      <div className="text-center sm:text-left">
-        <h1 className="text-lg sm:text-xl font-bold tracking-tight flex items-center justify-center sm:justify-start gap-1.5">
-          <Briefcase className="h-4 w-4 sm:h-5 sm:w-5" />
-          Track Leads
-        </h1>
-        <p className="text-xs text-muted-foreground">
-          Manage your deal pipeline from first interest to closed deal.
-        </p>
+      <div className="flex items-center justify-between">
+        <div className="text-center sm:text-left">
+          <h1 className="text-lg sm:text-xl font-bold tracking-tight flex items-center justify-center sm:justify-start gap-1.5">
+            <Briefcase className="h-4 w-4 sm:h-5 sm:w-5" />
+            Track Leads
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Manage your deal pipeline from first interest to closed deal.
+          </p>
+        </div>
+        <AddCustomLeadDialog onLeadAdded={refetch} />
       </div>
+
+      {/* Pipeline Stage Counter */}
+      {allPotentialLeads.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {DEFAULT_POTENTIAL_WORK_STATUSES.map(s => {
+            const count = stageCounts[s.value] || 0;
+            const isActive = stageFilter === s.value;
+            const colorCls = STATUS_COLORS[s.value] || 'bg-muted text-muted-foreground border-border/50';
+            return (
+              <button
+                key={s.value}
+                onClick={() => { setStageFilter(f => f === s.value ? null : s.value); setMetricFilter(null); }}
+                className={cn(
+                  'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all',
+                  isActive ? cn(colorCls, 'ring-2 ring-primary/30') : count > 0 ? colorCls : 'bg-muted/30 text-muted-foreground/50 border-border/30'
+                )}
+              >
+                {s.label}
+                <span className="font-bold">{count}</span>
+              </button>
+            );
+          })}
+          {totalPotentialRevenue > 0 && (
+            <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-500/10 text-green-500 border border-green-500/30 ml-auto">
+              <DollarSign className="h-3 w-3" />
+              Pipeline: £{totalPotentialRevenue.toLocaleString()}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search + Sort + Count */}
       <div className="flex items-center gap-2">
