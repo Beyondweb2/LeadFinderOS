@@ -723,12 +723,20 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 if (v === '__add_custom__') { onAddCustomStatus(); return; }
                 onStatusChange(lead.id, v as LeadStatus);
                 // Auto-clear next action when moving to terminal statuses
-                if (v === 'paid' || v === 'closed_lost') {
+                if (v === 'paid' || v === 'closed_lost' || v === 'payment_received') {
                   setNextAction('none');
                   setNextActionDate(undefined);
                   setTrackActionForLead(lead.id, null);
                   setLeadCustomAction(lead.id, null);
                   await onNextActionChange(lead.id, 'none' as NextActionType);
+                }
+                // Show popup when moving to Payment Received
+                if (v === 'payment_received') {
+                  const seenKey = 'leadfinder_seen_paid_popup';
+                  if (!localStorage.getItem(seenKey)) {
+                    localStorage.setItem(seenKey, '1');
+                    setShowPaidPopup(true);
+                  }
                 }
                 window.dispatchEvent(new CustomEvent('demo-checklist-track-status-changed'));
                 window.dispatchEvent(new CustomEvent('demo-checklist-track-status-update'));
