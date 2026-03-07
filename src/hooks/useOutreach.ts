@@ -123,7 +123,8 @@ export function useOutreach() {
   }, [processPhoneQueue]);
 
   const fetchLeads = useCallback(async () => {
-    if (!user) return;
+    const uid = userIdRef.current;
+    if (!uid) return;
     
     // Only show loading spinner on initial load
     if (!hasLoadedOnceRef.current) {
@@ -163,7 +164,7 @@ export function useOutreach() {
 
     setLeads((activeData || []) as OutreachLead[]);
     setArchivedLeads((archivedData || []) as OutreachLead[]);
-  }, [user]);
+  }, []);
 
   const fetchOutreachHistory = useCallback(async () => {
     if (!user) return;
