@@ -167,7 +167,8 @@ export function useOutreach() {
   }, []);
 
   const fetchOutreachHistory = useCallback(async () => {
-    if (!user) return;
+    const uid = userIdRef.current;
+    if (!uid) return;
 
     const { data, error } = await supabase
       .from('outreach_history')
@@ -179,7 +180,7 @@ export function useOutreach() {
     }
 
     setOutreachHistory(data as OutreachHistoryEntry[]);
-  }, [user]);
+  }, []);
 
   const fetchActivities = useCallback(async (leadId: string) => {
     const { data, error } = await supabase
