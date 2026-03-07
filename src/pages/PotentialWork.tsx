@@ -296,6 +296,13 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const [newCustomAction, setNewCustomAction] = useState('');
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
   const expandRef = useRef<HTMLDivElement>(null);
+  const [potentialRevenue, setPotentialRevenue] = useState<string>(lead.potential_revenue?.toString() || '');
+  const [serviceDeliveryOpen, setServiceDeliveryOpen] = useState(false);
+  const [projectOverview, setProjectOverview] = useState(lead.project_overview || '');
+  const [servicesIncluded, setServicesIncluded] = useState<string[]>(lead.services_included || []);
+  const [projectValue, setProjectValue] = useState<string>(lead.project_value?.toString() || lead.potential_revenue?.toString() || '');
+  const [projectStatus, setProjectStatus] = useState(lead.project_status || 'not_started');
+  const [deliveryNotes, setDeliveryNotes] = useState(lead.delivery_notes || '');
 
   useEffect(() => {
     setNotes(lead.notes || '');
