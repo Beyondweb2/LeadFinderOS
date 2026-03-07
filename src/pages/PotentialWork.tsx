@@ -1095,6 +1095,7 @@ const PotentialWorkPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'action_date' | 'recent' | 'alpha'>('action_date');
   const [metricFilter, setMetricFilter] = useState<'overdue' | 'today' | 'upcoming' | 'no_action' | null>(null);
+  const [stageFilter, setStageFilter] = useState<string | null>(null);
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
