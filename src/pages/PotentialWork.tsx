@@ -1261,10 +1261,10 @@ const PotentialWorkPage = () => {
   return (
     <div className="space-y-3 sm:space-y-4 lg:space-y-6 max-w-[1280px] mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="text-center sm:text-left">
-          <h1 className="text-lg sm:text-xl font-bold tracking-tight flex items-center justify-center sm:justify-start gap-1.5">
-            <Briefcase className="h-4 w-4 sm:h-5 sm:w-5" />
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-1.5">
+            <Briefcase className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
             Track Leads
           </h1>
           <p className="text-xs text-muted-foreground">
@@ -1276,32 +1276,57 @@ const PotentialWorkPage = () => {
 
       {/* Pipeline Stage Counter */}
       {allPotentialLeads.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {DEFAULT_POTENTIAL_WORK_STATUSES.map(s => {
-            const count = stageCounts[s.value] || 0;
-            const isActive = stageFilter === s.value;
-            const colorCls = STATUS_COLORS[s.value] || 'bg-muted text-muted-foreground border-border/50';
-            return (
-              <button
-                key={s.value}
-                onClick={() => { setStageFilter(f => f === s.value ? null : s.value); setMetricFilter(null); }}
-                className={cn(
-                  'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all',
-                  isActive ? cn(colorCls, 'ring-2 ring-primary/30') : count > 0 ? colorCls : 'bg-muted/30 text-muted-foreground/50 border-border/30'
-                )}
-              >
-                {s.label}
-                <span className="font-bold">{count}</span>
-              </button>
-            );
-          })}
-          {totalPotentialRevenue > 0 && (
-            <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-500/10 text-green-500 border border-green-500/30 ml-auto">
-              <DollarSign className="h-3 w-3" />
-              Pipeline: £{totalPotentialRevenue.toLocaleString()}
-            </div>
-          )}
-        </div>
+        <>
+          {/* Mobile: dropdown */}
+          <div className="sm:hidden flex items-center gap-2">
+            <Select value={stageFilter || '__all__'} onValueChange={(v) => { setStageFilter(v === '__all__' ? null : v); setMetricFilter(null); }}>
+              <SelectTrigger className="h-8 text-xs border-border/50 flex-1">
+                <SelectValue placeholder="All stages" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Stages ({allPotentialLeads.length})</SelectItem>
+                {DEFAULT_POTENTIAL_WORK_STATUSES.map(s => (
+                  <SelectItem key={s.value} value={s.value}>
+                    {s.label} ({stageCounts[s.value] || 0})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {totalPotentialRevenue > 0 && (
+              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-500/10 text-green-500 border border-green-500/30 whitespace-nowrap shrink-0">
+                <DollarSign className="h-3 w-3" />
+                £{totalPotentialRevenue.toLocaleString()}
+              </div>
+            )}
+          </div>
+          {/* Desktop: pills */}
+          <div className="hidden sm:flex flex-wrap gap-1.5">
+            {DEFAULT_POTENTIAL_WORK_STATUSES.map(s => {
+              const count = stageCounts[s.value] || 0;
+              const isActive = stageFilter === s.value;
+              const colorCls = STATUS_COLORS[s.value] || 'bg-muted text-muted-foreground border-border/50';
+              return (
+                <button
+                  key={s.value}
+                  onClick={() => { setStageFilter(f => f === s.value ? null : s.value); setMetricFilter(null); }}
+                  className={cn(
+                    'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all',
+                    isActive ? cn(colorCls, 'ring-2 ring-primary/30') : count > 0 ? colorCls : 'bg-muted/30 text-muted-foreground/50 border-border/30'
+                  )}
+                >
+                  {s.label}
+                  <span className="font-bold">{count}</span>
+                </button>
+              );
+            })}
+            {totalPotentialRevenue > 0 && (
+              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-500/10 text-green-500 border border-green-500/30 ml-auto">
+                <DollarSign className="h-3 w-3" />
+                Pipeline: £{totalPotentialRevenue.toLocaleString()}
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {/* Search + Sort + Count */}
