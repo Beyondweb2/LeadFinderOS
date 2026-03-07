@@ -520,6 +520,12 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                     <span className="text-muted-foreground/50">via {contactMethodDisplay}</span>
                   </>
                 )}
+                {(lead as any).potential_revenue > 0 && (
+                  <>
+                    {(lead.category || contactMethodDisplay) && <span className="text-muted-foreground/20">·</span>}
+                    <span className="text-green-500/70 font-semibold">£{(lead as any).potential_revenue.toLocaleString()}</span>
+                  </>
+                )}
               </div>
 
               {/* Status pill + action + due */}
