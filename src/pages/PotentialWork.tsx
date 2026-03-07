@@ -1079,6 +1079,24 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Payment Received popup */}
+      <Dialog open={showPaidPopup} onOpenChange={setShowPaidPopup}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-500">
+              <CheckCircle className="h-5 w-5" />
+              Client Moved to Paid Clients
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            This lead has been moved to your <strong>Paid Clients</strong> page where you can track payments, project details, and schedule check-ins.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowPaidPopup(false)}>Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
