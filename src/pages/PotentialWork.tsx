@@ -515,9 +515,14 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 )}
               </div>
 
+              {/* Phone number */}
+              {lead.phone && (
+                <p className="text-[11px] text-muted-foreground/50 leading-none truncate">{lead.phone}</p>
+              )}
+
               {/* Meta line */}
-              <div className="flex items-center gap-1 text-[10px] lg:text-[11px] text-muted-foreground/60">
-                {lead.category && <span className="truncate">{lead.category}</span>}
+              <div className="flex items-center gap-1 text-[10px] lg:text-[11px] text-muted-foreground/60 flex-wrap">
+                {lead.category && <span className="truncate max-w-[120px]">{lead.category}</span>}
                 {contactMethodDisplay && (
                   <>
                     {lead.category && <span className="text-muted-foreground/20">·</span>}
@@ -528,6 +533,18 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   <>
                     {(lead.category || contactMethodDisplay) && <span className="text-muted-foreground/20">·</span>}
                     <span className="text-green-500/70 font-semibold">£{(lead as any).potential_revenue.toLocaleString()}</span>
+                  </>
+                )}
+                {/* Services summary on collapsed card */}
+                {!isExpanded && lead.services_included && lead.services_included.length > 0 && (
+                  <>
+                    {(lead.category || contactMethodDisplay || (lead as any).potential_revenue > 0) && <span className="text-muted-foreground/20">·</span>}
+                    <span className="text-primary/50 truncate max-w-[180px]">
+                      {lead.services_included.length <= 2
+                        ? lead.services_included.join(', ')
+                        : `${lead.services_included.slice(0, 2).join(', ')} +${lead.services_included.length - 2}`
+                      }
+                    </span>
                   </>
                 )}
               </div>
