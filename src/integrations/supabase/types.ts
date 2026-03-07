@@ -386,8 +386,10 @@ export type Database = {
           category: string | null
           checkin_notes: string | null
           contact_method: string | null
+          contact_name: string | null
           country: string | null
           created_at: string
+          delivery_notes: string | null
           email: string | null
           facebook_confidence: number | null
           facebook_last_checked_at: string | null
@@ -409,10 +411,16 @@ export type Database = {
           payment_date: string | null
           phone: string | null
           place_id: string | null
+          potential_revenue: number | null
           project_duration: string | null
+          project_overview: string | null
+          project_status: string | null
+          project_value: number | null
+          services_included: string[] | null
           status: string
           updated_at: string
           user_id: string
+          website: string | null
           whatsapp_checked_at: string | null
           whatsapp_status: string | null
         }
@@ -423,8 +431,10 @@ export type Database = {
           category?: string | null
           checkin_notes?: string | null
           contact_method?: string | null
+          contact_name?: string | null
           country?: string | null
           created_at?: string
+          delivery_notes?: string | null
           email?: string | null
           facebook_confidence?: number | null
           facebook_last_checked_at?: string | null
@@ -446,10 +456,16 @@ export type Database = {
           payment_date?: string | null
           phone?: string | null
           place_id?: string | null
+          potential_revenue?: number | null
           project_duration?: string | null
+          project_overview?: string | null
+          project_status?: string | null
+          project_value?: number | null
+          services_included?: string[] | null
           status?: string
           updated_at?: string
           user_id: string
+          website?: string | null
           whatsapp_checked_at?: string | null
           whatsapp_status?: string | null
         }
@@ -460,8 +476,10 @@ export type Database = {
           category?: string | null
           checkin_notes?: string | null
           contact_method?: string | null
+          contact_name?: string | null
           country?: string | null
           created_at?: string
+          delivery_notes?: string | null
           email?: string | null
           facebook_confidence?: number | null
           facebook_last_checked_at?: string | null
@@ -483,10 +501,16 @@ export type Database = {
           payment_date?: string | null
           phone?: string | null
           place_id?: string | null
+          potential_revenue?: number | null
           project_duration?: string | null
+          project_overview?: string | null
+          project_status?: string | null
+          project_value?: number | null
+          services_included?: string[] | null
           status?: string
           updated_at?: string
           user_id?: string
+          website?: string | null
           whatsapp_checked_at?: string | null
           whatsapp_status?: string | null
         }

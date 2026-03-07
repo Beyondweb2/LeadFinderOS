@@ -7,8 +7,11 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { AddCustomLeadDialog } from '@/components/AddCustomLeadDialog';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   Select,
   SelectContent,
@@ -44,6 +47,8 @@ import {
   Plus,
   Tag,
   ChevronDown,
+  DollarSign,
+  Package,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -251,6 +256,23 @@ interface LeadCardProps {
   userId: string | undefined;
 }
 
+const SERVICE_OPTIONS = [
+  'Website Design',
+  'Website Development',
+  'SEO',
+  'Google Business Setup',
+  'Hosting',
+  'Maintenance',
+  'Copywriting',
+];
+
+const PROJECT_STATUS_OPTIONS = [
+  { value: 'not_started', label: 'Not Started' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'waiting_on_client', label: 'Waiting On Client' },
+  { value: 'completed', label: 'Completed' },
+];
+
 const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
@@ -274,6 +296,13 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const [newCustomAction, setNewCustomAction] = useState('');
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
   const expandRef = useRef<HTMLDivElement>(null);
+  const [potentialRevenue, setPotentialRevenue] = useState<string>(lead.potential_revenue?.toString() || '');
+  const [serviceDeliveryOpen, setServiceDeliveryOpen] = useState(false);
+  const [projectOverview, setProjectOverview] = useState(lead.project_overview || '');
+  const [servicesIncluded, setServicesIncluded] = useState<string[]>(lead.services_included || []);
+  const [projectValue, setProjectValue] = useState<string>(lead.project_value?.toString() || lead.potential_revenue?.toString() || '');
+  const [projectStatus, setProjectStatus] = useState(lead.project_status || 'not_started');
+  const [deliveryNotes, setDeliveryNotes] = useState(lead.delivery_notes || '');
 
   useEffect(() => {
     setNotes(lead.notes || '');
@@ -489,6 +518,12 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   <>
                     {lead.category && <span className="text-muted-foreground/20">·</span>}
                     <span className="text-muted-foreground/50">via {contactMethodDisplay}</span>
+                  </>
+                )}
+                {(lead as any).potential_revenue > 0 && (
+                  <>
+                    {(lead.category || contactMethodDisplay) && <span className="text-muted-foreground/20">·</span>}
+                    <span className="text-green-500/70 font-semibold">£{(lead as any).potential_revenue.toLocaleString()}</span>
                   </>
                 )}
               </div>
@@ -780,6 +815,29 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </Popover>
             </div>
 
+            {/* Potential Revenue */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-muted-foreground w-12 shrink-0">Revenue</span>
+              <div className="relative flex-1">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">£</span>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={potentialRevenue}
+                  onChange={(e) => setPotentialRevenue(e.target.value)}
+                  onBlur={async () => {
+                    const val = potentialRevenue ? parseFloat(potentialRevenue) : null;
+                    if (val !== (lead.potential_revenue ?? null)) {
+                      await onUpdateLead(lead.id, { potential_revenue: val } as any);
+                    }
+                  }}
+                  className="h-8 text-xs border-border/50 pl-6"
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
             {/* Notes */}
             <div className="pt-1" data-walkthrough="notes">
               {isEditingNotes ? (
@@ -824,6 +882,105 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               )}
             </div>
 
+            {/* Service Delivery Section — collapsible, shown when status is payment_received/paid */}
+            <Collapsible open={serviceDeliveryOpen} onOpenChange={setServiceDeliveryOpen}>
+              <CollapsibleTrigger asChild>
+                <button className="flex items-center gap-2 w-full text-left py-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors" data-no-expand onClick={(e) => e.stopPropagation()}>
+                  <Package className="h-3.5 w-3.5" />
+                  Service Delivery
+                  <ChevronDown className={cn('h-3 w-3 ml-auto transition-transform', serviceDeliveryOpen && 'rotate-180')} />
+                </button>
+              </CollapsibleTrigger>
+              <CollapsibleContent className="space-y-3 pt-2 border-t border-border/30">
+                <div>
+                  <label className="text-[11px] text-muted-foreground block mb-1">Project Overview</label>
+                  <Textarea
+                    value={projectOverview}
+                    onChange={(e) => setProjectOverview(e.target.value)}
+                    onBlur={async () => {
+                      if (projectOverview !== (lead.project_overview || '')) {
+                        await onUpdateLead(lead.id, { project_overview: projectOverview || null } as any);
+                      }
+                    }}
+                    rows={2}
+                    className="resize-none text-xs border-border/50"
+                    placeholder="Describe what you'll deliver..."
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground block mb-1.5">Services Included</label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {SERVICE_OPTIONS.map(service => (
+                      <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <Checkbox
+                          checked={servicesIncluded.includes(service)}
+                          onCheckedChange={(checked) => {
+                            const updated = checked
+                              ? [...servicesIncluded, service]
+                              : servicesIncluded.filter(s => s !== service);
+                            setServicesIncluded(updated);
+                            onUpdateLead(lead.id, { services_included: updated } as any);
+                          }}
+                          className="h-3.5 w-3.5"
+                        />
+                        {service}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] text-muted-foreground block mb-1">Project Value (£)</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={projectValue}
+                      onChange={(e) => setProjectValue(e.target.value)}
+                      onBlur={async () => {
+                        const val = projectValue ? parseFloat(projectValue) : null;
+                        if (val !== (lead.project_value ?? null)) {
+                          await onUpdateLead(lead.id, { project_value: val } as any);
+                        }
+                      }}
+                      className="h-8 text-xs border-border/50"
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground block mb-1">Project Status</label>
+                    <Select value={projectStatus} onValueChange={async (v) => {
+                      setProjectStatus(v);
+                      await onUpdateLead(lead.id, { project_status: v } as any);
+                    }}>
+                      <SelectTrigger className="h-8 text-xs border-border/50">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROJECT_STATUS_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground block mb-1">Delivery Notes</label>
+                  <Textarea
+                    value={deliveryNotes}
+                    onChange={(e) => setDeliveryNotes(e.target.value)}
+                    onBlur={async () => {
+                      if (deliveryNotes !== (lead.delivery_notes || '')) {
+                        await onUpdateLead(lead.id, { delivery_notes: deliveryNotes || null } as any);
+                      }
+                    }}
+                    rows={2}
+                    className="resize-none text-xs border-border/50"
+                    placeholder="Notes about delivery..."
+                  />
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
 
           </div>
 
@@ -944,6 +1101,7 @@ const PotentialWorkPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'action_date' | 'recent' | 'alpha'>('action_date');
   const [metricFilter, setMetricFilter] = useState<'overdue' | 'today' | 'upcoming' | 'no_action' | null>(null);
+  const [stageFilter, setStageFilter] = useState<string | null>(null);
   const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
@@ -1045,17 +1203,45 @@ const PotentialWorkPage = () => {
   }, [leads, archivedLeads, searchQuery, sortOrder]);
 
   const potentialWorkLeads = useMemo(() => {
-    if (!metricFilter) return allPotentialLeads;
-    return allPotentialLeads.filter(l => {
-      if (!l.next_action_date || !l.next_action || l.next_action === 'none') {
-        return metricFilter === 'no_action';
-      }
-      const d = new Date(l.next_action_date);
-      if (isPast(startOfDay(d)) && !isToday(d)) return metricFilter === 'overdue';
-      if (isToday(d)) return metricFilter === 'today';
-      return metricFilter === 'upcoming';
+    let filtered = allPotentialLeads;
+    // Stage filter
+    if (stageFilter) {
+      filtered = filtered.filter(l => mapLegacyStatus(l.status) === stageFilter);
+    }
+    // Metric filter
+    if (metricFilter) {
+      filtered = filtered.filter(l => {
+        if (!l.next_action_date || !l.next_action || l.next_action === 'none') {
+          return metricFilter === 'no_action';
+        }
+        const d = new Date(l.next_action_date);
+        if (isPast(startOfDay(d)) && !isToday(d)) return metricFilter === 'overdue';
+        if (isToday(d)) return metricFilter === 'today';
+        return metricFilter === 'upcoming';
+      });
+    }
+    return filtered;
+  }, [allPotentialLeads, metricFilter, stageFilter]);
+
+  // Pipeline stage counts for the counter
+  const stageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    DEFAULT_POTENTIAL_WORK_STATUSES.forEach(s => { counts[s.value] = 0; });
+    allPotentialLeads.forEach(l => {
+      const mapped = mapLegacyStatus(l.status);
+      if (counts[mapped] !== undefined) counts[mapped]++;
+      else if (counts[l.status] !== undefined) counts[l.status]++;
     });
-  }, [allPotentialLeads, metricFilter]);
+    return counts;
+  }, [allPotentialLeads]);
+
+  // Total potential revenue
+  const totalPotentialRevenue = useMemo(() => {
+    const excludeStatuses = ['closed_lost', 'not_interested'];
+    return allPotentialLeads
+      .filter(l => !excludeStatuses.includes(mapLegacyStatus(l.status)) && !l.is_archived)
+      .reduce((sum, l) => sum + ((l as any).potential_revenue || 0), 0);
+  }, [allPotentialLeads]);
 
   // Auto-expand first card during walkthrough (only once, not re-triggered on collapse)
   useEffect(() => {
@@ -1076,15 +1262,48 @@ const PotentialWorkPage = () => {
   return (
     <div className="space-y-3 sm:space-y-4 lg:space-y-6 max-w-[1280px] mx-auto">
       {/* Header */}
-      <div className="text-center sm:text-left">
-        <h1 className="text-lg sm:text-xl font-bold tracking-tight flex items-center justify-center sm:justify-start gap-1.5">
-          <Briefcase className="h-4 w-4 sm:h-5 sm:w-5" />
-          Track Leads
-        </h1>
-        <p className="text-xs text-muted-foreground">
-          Manage your deal pipeline from first interest to closed deal.
-        </p>
+      <div className="flex items-center justify-between">
+        <div className="text-center sm:text-left">
+          <h1 className="text-lg sm:text-xl font-bold tracking-tight flex items-center justify-center sm:justify-start gap-1.5">
+            <Briefcase className="h-4 w-4 sm:h-5 sm:w-5" />
+            Track Leads
+          </h1>
+          <p className="text-xs text-muted-foreground">
+            Manage your deal pipeline from first interest to closed deal.
+          </p>
+        </div>
+        <AddCustomLeadDialog onLeadAdded={refetch} />
       </div>
+
+      {/* Pipeline Stage Counter */}
+      {allPotentialLeads.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {DEFAULT_POTENTIAL_WORK_STATUSES.map(s => {
+            const count = stageCounts[s.value] || 0;
+            const isActive = stageFilter === s.value;
+            const colorCls = STATUS_COLORS[s.value] || 'bg-muted text-muted-foreground border-border/50';
+            return (
+              <button
+                key={s.value}
+                onClick={() => { setStageFilter(f => f === s.value ? null : s.value); setMetricFilter(null); }}
+                className={cn(
+                  'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all',
+                  isActive ? cn(colorCls, 'ring-2 ring-primary/30') : count > 0 ? colorCls : 'bg-muted/30 text-muted-foreground/50 border-border/30'
+                )}
+              >
+                {s.label}
+                <span className="font-bold">{count}</span>
+              </button>
+            );
+          })}
+          {totalPotentialRevenue > 0 && (
+            <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-500/10 text-green-500 border border-green-500/30 ml-auto">
+              <DollarSign className="h-3 w-3" />
+              Pipeline: £{totalPotentialRevenue.toLocaleString()}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Search + Sort + Count */}
       <div className="flex items-center gap-2">
