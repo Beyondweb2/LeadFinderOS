@@ -468,20 +468,28 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           }}
         >
           <div className="flex items-start gap-3 lg:gap-4">
-            {/* Left: Avatar */}
-            <div className="shrink-0 relative group/avatar cursor-pointer pt-0.5" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
-              {lead.image_url ? (
-                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-lg overflow-hidden bg-muted/40 ring-1 ring-border/40">
-                  <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
+            {/* Left: Avatar + contact method + revenue */}
+            <div className="shrink-0 flex flex-col items-center gap-1 pt-0.5">
+              <div className="relative group/avatar cursor-pointer" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
+                {lead.image_url ? (
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-lg overflow-hidden bg-muted/40 ring-1 ring-border/40">
+                    <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-xs sm:text-sm lg:text-base font-bold text-primary">
+                    {getInitials(lead.business_name)}
+                  </div>
+                )}
+                <div className="absolute inset-0 rounded-lg bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
+                  <Pencil className="h-2.5 w-2.5 text-white" />
                 </div>
-              ) : (
-                <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-xs sm:text-sm lg:text-base font-bold text-primary">
-                  {getInitials(lead.business_name)}
-                </div>
-              )}
-              <div className="absolute inset-0 rounded-lg bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
-                <Pencil className="h-2.5 w-2.5 text-white" />
               </div>
+              {contactMethodDisplay && (
+                <span className="text-[9px] text-muted-foreground/50 leading-none whitespace-nowrap">via {contactMethodDisplay}</span>
+              )}
+              {(lead as any).potential_revenue > 0 && (
+                <span className="text-[9px] text-green-500/70 font-semibold leading-none whitespace-nowrap">£{(lead as any).potential_revenue.toLocaleString()}</span>
+              )}
             </div>
 
             {/* Middle: Name + Status + Action */}
@@ -523,22 +531,10 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               {/* Meta line */}
               <div className="flex items-center gap-1 text-[10px] lg:text-[11px] text-muted-foreground/60 flex-wrap">
                 {lead.category && <span className="truncate max-w-[120px]">{lead.category}</span>}
-                {contactMethodDisplay && (
-                  <>
-                    {lead.category && <span className="text-muted-foreground/20">·</span>}
-                    <span className="text-muted-foreground/50">via {contactMethodDisplay}</span>
-                  </>
-                )}
-                {(lead as any).potential_revenue > 0 && (
-                  <>
-                    {(lead.category || contactMethodDisplay) && <span className="text-muted-foreground/20">·</span>}
-                    <span className="text-green-500/70 font-semibold">£{(lead as any).potential_revenue.toLocaleString()}</span>
-                  </>
-                )}
                 {/* Services summary on collapsed card */}
                 {!isExpanded && lead.services_included && lead.services_included.length > 0 && (
                   <>
-                    {(lead.category || contactMethodDisplay || (lead as any).potential_revenue > 0) && <span className="text-muted-foreground/20">·</span>}
+                    {lead.category && <span className="text-muted-foreground/20">·</span>}
                     <span className="text-primary/50 truncate max-w-[180px]">
                       {lead.services_included.length <= 2
                         ? lead.services_included.join(', ')
@@ -578,7 +574,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 {lead.next_action && lead.next_action !== 'none' && !isExpanded && (
                   <button
                     className="inline-flex items-center gap-0.5 text-[10px] font-bold text-green-400 hover:text-green-300 transition-colors"
-                    onClick={(e) => { e.stopPropagation(); setNextAction('none'); setNextActionDate(undefined); onNextActionChange(lead.id, 'none' as NextActionType); }}
+                    onClick={(e) => { e.stopPropagation(); setNextAction('none'); setNextActionDate(undefined); setTrackActionForLead(lead.id, null); setLeadCustomAction(lead.id, null); onNextActionChange(lead.id, 'none' as NextActionType); }}
                     title="Mark as done"
                   >
                     <Check className="h-3 w-3" /> Done
