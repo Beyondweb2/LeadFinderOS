@@ -1197,17 +1197,45 @@ const PotentialWorkPage = () => {
   }, [leads, archivedLeads, searchQuery, sortOrder]);
 
   const potentialWorkLeads = useMemo(() => {
-    if (!metricFilter) return allPotentialLeads;
-    return allPotentialLeads.filter(l => {
-      if (!l.next_action_date || !l.next_action || l.next_action === 'none') {
-        return metricFilter === 'no_action';
-      }
-      const d = new Date(l.next_action_date);
-      if (isPast(startOfDay(d)) && !isToday(d)) return metricFilter === 'overdue';
-      if (isToday(d)) return metricFilter === 'today';
-      return metricFilter === 'upcoming';
+    let filtered = allPotentialLeads;
+    // Stage filter
+    if (stageFilter) {
+      filtered = filtered.filter(l => mapLegacyStatus(l.status) === stageFilter);
+    }
+    // Metric filter
+    if (metricFilter) {
+      filtered = filtered.filter(l => {
+        if (!l.next_action_date || !l.next_action || l.next_action === 'none') {
+          return metricFilter === 'no_action';
+        }
+        const d = new Date(l.next_action_date);
+        if (isPast(startOfDay(d)) && !isToday(d)) return metricFilter === 'overdue';
+        if (isToday(d)) return metricFilter === 'today';
+        return metricFilter === 'upcoming';
+      });
+    }
+    return filtered;
+  }, [allPotentialLeads, metricFilter, stageFilter]);
+
+  // Pipeline stage counts for the counter
+  const stageCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    DEFAULT_POTENTIAL_WORK_STATUSES.forEach(s => { counts[s.value] = 0; });
+    allPotentialLeads.forEach(l => {
+      const mapped = mapLegacyStatus(l.status);
+      if (counts[mapped] !== undefined) counts[mapped]++;
+      else if (counts[l.status] !== undefined) counts[l.status]++;
     });
-  }, [allPotentialLeads, metricFilter]);
+    return counts;
+  }, [allPotentialLeads]);
+
+  // Total potential revenue
+  const totalPotentialRevenue = useMemo(() => {
+    const excludeStatuses = ['closed_lost', 'not_interested'];
+    return allPotentialLeads
+      .filter(l => !excludeStatuses.includes(mapLegacyStatus(l.status)) && !l.is_archived)
+      .reduce((sum, l) => sum + ((l as any).potential_revenue || 0), 0);
+  }, [allPotentialLeads]);
 
   // Auto-expand first card during walkthrough (only once, not re-triggered on collapse)
   useEffect(() => {
