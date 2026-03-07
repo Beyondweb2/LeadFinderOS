@@ -33,6 +33,8 @@ export function useOutreach() {
   const [phoneFetchStatus, setPhoneFetchStatus] = useState<Record<string, PhoneFetchStatus>>({});
   const { toast } = useToast();
   const { user } = useAuth();
+  // Stable user ID ref to prevent refetches on auth token refreshes
+  const userIdRef = useRef<string | null>(null);
 
   // Parallel phone fetch queue — processes up to 3 leads concurrently for speed
   const phoneQueueRef = useRef<Array<{ outreachLeadId: string; placeId: string; businessName: string }>>([]);
