@@ -307,6 +307,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const [projectOverview, setProjectOverview] = useState(lead.project_overview || '');
   const [servicesIncluded, setServicesIncluded] = useState<string[]>(lead.services_included || []);
   const [projectStatus, setProjectStatus] = useState(lead.project_status || 'not_started');
+  const [showPaidPopup, setShowPaidPopup] = useState(false);
 
   useEffect(() => {
     setNotes(lead.notes || '');
@@ -722,12 +723,20 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 if (v === '__add_custom__') { onAddCustomStatus(); return; }
                 onStatusChange(lead.id, v as LeadStatus);
                 // Auto-clear next action when moving to terminal statuses
-                if (v === 'paid' || v === 'closed_lost') {
+                if (v === 'paid' || v === 'closed_lost' || v === 'payment_received') {
                   setNextAction('none');
                   setNextActionDate(undefined);
                   setTrackActionForLead(lead.id, null);
                   setLeadCustomAction(lead.id, null);
                   await onNextActionChange(lead.id, 'none' as NextActionType);
+                }
+                // Show popup when moving to Payment Received
+                if (v === 'payment_received') {
+                  const seenKey = 'leadfinder_seen_paid_popup';
+                  if (!localStorage.getItem(seenKey)) {
+                    localStorage.setItem(seenKey, '1');
+                    setShowPaidPopup(true);
+                  }
                 }
                 window.dispatchEvent(new CustomEvent('demo-checklist-track-status-changed'));
                 window.dispatchEvent(new CustomEvent('demo-checklist-track-status-update'));
@@ -1070,6 +1079,24 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Payment Received popup */}
+      <Dialog open={showPaidPopup} onOpenChange={setShowPaidPopup}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-500">
+              <Check className="h-5 w-5" />
+              Client Moved to Paid Clients
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground leading-relaxed">
+            This lead has been moved to your <strong>Paid Clients</strong> page where you can track payments, project details, and schedule check-ins.
+          </p>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setShowPaidPopup(false)}>Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

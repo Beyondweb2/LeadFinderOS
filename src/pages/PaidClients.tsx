@@ -464,7 +464,7 @@ const PaidClientsPage = () => {
 
   // Filter to only show completed/paid clients
   const paidClients = useMemo(() => {
-    const paidStatuses: LeadStatus[] = ['completed', 'paid_for_draft'];
+    const paidStatuses = ['completed', 'paid_for_draft', 'payment_received'];
     
     let result = leads.filter((lead) => paidStatuses.includes(lead.status));
     
@@ -488,6 +488,10 @@ const PaidClientsPage = () => {
       const d = new Date(c.next_checkin_date);
       return isPast(d) && !isToday(d);
     }).length;
+  }, [paidClients]);
+
+  const totalRevenue = useMemo(() => {
+    return paidClients.reduce((sum, c) => sum + (c.amount_paid || 0), 0);
   }, [paidClients]);
 
   if (isLoading) {
@@ -523,6 +527,12 @@ const PaidClientsPage = () => {
           />
         </div>
         <div className="flex items-center gap-3">
+          {totalRevenue > 0 && (
+            <span className="text-xs sm:text-sm font-bold text-emerald-500 flex items-center gap-1 whitespace-nowrap">
+              <DollarSign className="h-3.5 w-3.5" />
+              £{totalRevenue.toLocaleString()}
+            </span>
+          )}
           {overdueCount > 0 && (
             <span className="text-xs font-medium text-destructive flex items-center gap-1">
               <AlertCircle className="h-3.5 w-3.5" />
