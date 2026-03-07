@@ -578,7 +578,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 {lead.next_action && lead.next_action !== 'none' && !isExpanded && (
                   <button
                     className="inline-flex items-center gap-0.5 text-[10px] font-bold text-green-400 hover:text-green-300 transition-colors"
-                    onClick={(e) => { e.stopPropagation(); setNextAction('none'); setNextActionDate(undefined); onNextActionChange(lead.id, 'none' as NextActionType); }}
+                    onClick={(e) => { e.stopPropagation(); setNextAction('none'); setNextActionDate(undefined); setTrackActionForLead(lead.id, null); setLeadCustomAction(lead.id, null); onNextActionChange(lead.id, 'none' as NextActionType); }}
                     title="Mark as done"
                   >
                     <Check className="h-3 w-3" /> Done
