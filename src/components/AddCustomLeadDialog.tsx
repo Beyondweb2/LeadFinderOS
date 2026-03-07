@@ -10,11 +10,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { LeadStatus, NextActionType } from '@/types/outreach';
+
+const CONTACT_METHOD_OPTIONS = [
+  { value: 'whatsapp', label: 'WhatsApp' },
+  { value: 'sms', label: 'SMS' },
+  { value: 'contacted', label: 'Call' },
+  { value: 'facebook_msg', label: 'Facebook' },
+];
 
 interface AddCustomLeadDialogProps {
   onLeadAdded: () => void;
@@ -37,6 +51,7 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
     contact_name: '',
     potential_revenue: '',
     notes: '',
+    contact_method: '',
   });
 
   const updateField = (field: string, value: string) => {
@@ -55,6 +70,7 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
       contact_name: '',
       potential_revenue: '',
       notes: '',
+      contact_method: '',
     });
   };
 
@@ -96,6 +112,7 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
         contact_name: form.contact_name.trim() || null,
         potential_revenue: revenueValue,
         notes: form.notes.trim() || null,
+        contact_method: form.contact_method || null,
         status: 'interested' as LeadStatus,
         is_potential_work: true,
         next_action: 'none' as NextActionType,
@@ -139,7 +156,7 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
         <DialogHeader>
           <DialogTitle>Add Custom Lead</DialogTitle>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+        <form onSubmit={handleSubmit} className="space-y-3 pt-2">
           <div className="space-y-1.5">
             <Label htmlFor="business_name">Business Name *</Label>
             <Input
@@ -159,18 +176,20 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
                 value={form.phone}
                 onChange={(e) => updateField('phone', e.target.value)}
                 placeholder="+44 7123 456789"
-                type="tel"
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                value={form.email}
-                onChange={(e) => updateField('email', e.target.value)}
-                placeholder="info@business.com"
-                type="email"
-              />
+              <Label htmlFor="contact_method">Contact Method</Label>
+              <Select value={form.contact_method} onValueChange={(v) => updateField('contact_method', v)}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Select..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {CONTACT_METHOD_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -195,25 +214,14 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="address">Address / Location</Label>
-            <Input
-              id="address"
-              value={form.address}
-              onChange={(e) => updateField('address', e.target.value)}
-              placeholder="123 High St, London"
-            />
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="website">Website</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="website"
-                value={form.website}
-                onChange={(e) => updateField('website', e.target.value)}
-                placeholder="https://example.com"
-                type="url"
+                id="email"
+                value={form.email}
+                onChange={(e) => updateField('email', e.target.value)}
+                placeholder="info@business.com"
               />
             </div>
             <div className="space-y-1.5">
@@ -231,14 +239,34 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="google_maps_url">Google Maps URL</Label>
+            <Label htmlFor="address">Address / Location</Label>
             <Input
-              id="google_maps_url"
-              value={form.google_maps_url}
-              onChange={(e) => updateField('google_maps_url', e.target.value)}
-              placeholder="https://maps.google.com/..."
-              type="url"
+              id="address"
+              value={form.address}
+              onChange={(e) => updateField('address', e.target.value)}
+              placeholder="123 High St, London"
             />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="website">Website</Label>
+              <Input
+                id="website"
+                value={form.website}
+                onChange={(e) => updateField('website', e.target.value)}
+                placeholder="example.com or any text"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="google_maps_url">Google Maps</Label>
+              <Input
+                id="google_maps_url"
+                value={form.google_maps_url}
+                onChange={(e) => updateField('google_maps_url', e.target.value)}
+                placeholder="Link or location note"
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -248,7 +276,7 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
               value={form.notes}
               onChange={(e) => updateField('notes', e.target.value)}
               placeholder="Any details about this lead..."
-              rows={3}
+              rows={2}
               className="resize-none"
             />
           </div>

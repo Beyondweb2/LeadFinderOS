@@ -11,7 +11,12 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { AddCustomLeadDialog } from '@/components/AddCustomLeadDialog';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import {
   Select,
   SelectContent,
@@ -300,9 +305,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const [serviceDeliveryOpen, setServiceDeliveryOpen] = useState(false);
   const [projectOverview, setProjectOverview] = useState(lead.project_overview || '');
   const [servicesIncluded, setServicesIncluded] = useState<string[]>(lead.services_included || []);
-  const [projectValue, setProjectValue] = useState<string>(lead.project_value?.toString() || lead.potential_revenue?.toString() || '');
   const [projectStatus, setProjectStatus] = useState(lead.project_status || 'not_started');
-  const [deliveryNotes, setDeliveryNotes] = useState(lead.delivery_notes || '');
 
   useEffect(() => {
     setNotes(lead.notes || '');
@@ -694,7 +697,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           ref={expandRef}
           className={cn(
             'overflow-hidden transition-all duration-300 ease-out',
-            isExpanded ? 'max-h-[600px] opacity-100' : 'max-h-0 opacity-0'
+            isExpanded ? 'max-h-[450px] opacity-100' : 'max-h-0 opacity-0'
           )}
         >
           <div className="border-t border-border/50 px-3.5 sm:px-5 py-3.5 space-y-3">
@@ -882,105 +885,16 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               )}
             </div>
 
-            {/* Service Delivery Section — collapsible, shown when status is payment_received/paid */}
-            <Collapsible open={serviceDeliveryOpen} onOpenChange={setServiceDeliveryOpen}>
-              <CollapsibleTrigger asChild>
-                <button className="flex items-center gap-2 w-full text-left py-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors" data-no-expand onClick={(e) => e.stopPropagation()}>
-                  <Package className="h-3.5 w-3.5" />
-                  Service Delivery
-                  <ChevronDown className={cn('h-3 w-3 ml-auto transition-transform', serviceDeliveryOpen && 'rotate-180')} />
-                </button>
-              </CollapsibleTrigger>
-              <CollapsibleContent className="space-y-3 pt-2 border-t border-border/30">
-                <div>
-                  <label className="text-[11px] text-muted-foreground block mb-1">Project Overview</label>
-                  <Textarea
-                    value={projectOverview}
-                    onChange={(e) => setProjectOverview(e.target.value)}
-                    onBlur={async () => {
-                      if (projectOverview !== (lead.project_overview || '')) {
-                        await onUpdateLead(lead.id, { project_overview: projectOverview || null } as any);
-                      }
-                    }}
-                    rows={2}
-                    className="resize-none text-xs border-border/50"
-                    placeholder="Describe what you'll deliver..."
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] text-muted-foreground block mb-1.5">Services Included</label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {SERVICE_OPTIONS.map(service => (
-                      <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <Checkbox
-                          checked={servicesIncluded.includes(service)}
-                          onCheckedChange={(checked) => {
-                            const updated = checked
-                              ? [...servicesIncluded, service]
-                              : servicesIncluded.filter(s => s !== service);
-                            setServicesIncluded(updated);
-                            onUpdateLead(lead.id, { services_included: updated } as any);
-                          }}
-                          className="h-3.5 w-3.5"
-                        />
-                        {service}
-                      </label>
-                    ))}
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] text-muted-foreground block mb-1">Project Value (£)</label>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={projectValue}
-                      onChange={(e) => setProjectValue(e.target.value)}
-                      onBlur={async () => {
-                        const val = projectValue ? parseFloat(projectValue) : null;
-                        if (val !== (lead.project_value ?? null)) {
-                          await onUpdateLead(lead.id, { project_value: val } as any);
-                        }
-                      }}
-                      className="h-8 text-xs border-border/50"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-muted-foreground block mb-1">Project Status</label>
-                    <Select value={projectStatus} onValueChange={async (v) => {
-                      setProjectStatus(v);
-                      await onUpdateLead(lead.id, { project_status: v } as any);
-                    }}>
-                      <SelectTrigger className="h-8 text-xs border-border/50">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {PROJECT_STATUS_OPTIONS.map(opt => (
-                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[11px] text-muted-foreground block mb-1">Delivery Notes</label>
-                  <Textarea
-                    value={deliveryNotes}
-                    onChange={(e) => setDeliveryNotes(e.target.value)}
-                    onBlur={async () => {
-                      if (deliveryNotes !== (lead.delivery_notes || '')) {
-                        await onUpdateLead(lead.id, { delivery_notes: deliveryNotes || null } as any);
-                      }
-                    }}
-                    rows={2}
-                    className="resize-none text-xs border-border/50"
-                    placeholder="Notes about delivery..."
-                  />
-                </div>
-              </CollapsibleContent>
-            </Collapsible>
+            {/* Service Delivery — opens in a side sheet */}
+            <button
+              className="flex items-center gap-2 w-full text-left py-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+              data-no-expand
+              onClick={(e) => { e.stopPropagation(); setServiceDeliveryOpen(true); }}
+            >
+              <Package className="h-3.5 w-3.5" />
+              Service Delivery
+              <ChevronDown className="h-3 w-3 ml-auto -rotate-90" />
+            </button>
 
           </div>
 
@@ -1075,6 +989,73 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Service Delivery Sheet */}
+      <Sheet open={serviceDeliveryOpen} onOpenChange={setServiceDeliveryOpen}>
+        <SheetContent side="right" className="w-[340px] sm:w-[400px] overflow-y-auto">
+          <SheetHeader className="pb-4">
+            <SheetTitle className="flex items-center gap-2 text-base">
+              <Package className="h-4 w-4 text-primary" />
+              Service Delivery
+            </SheetTitle>
+            <p className="text-xs text-muted-foreground">{lead.business_name}</p>
+          </SheetHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-[11px] text-muted-foreground block mb-1">Project Overview</label>
+              <Textarea
+                value={projectOverview}
+                onChange={(e) => setProjectOverview(e.target.value)}
+                onBlur={async () => {
+                  if (projectOverview !== (lead.project_overview || '')) {
+                    await onUpdateLead(lead.id, { project_overview: projectOverview || null } as any);
+                  }
+                }}
+                rows={3}
+                className="resize-none text-xs border-border/50"
+                placeholder="Describe what you'll deliver..."
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-muted-foreground block mb-1.5">Services Included</label>
+              <div className="grid grid-cols-2 gap-1.5">
+                {SERVICE_OPTIONS.map(service => (
+                  <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <Checkbox
+                      checked={servicesIncluded.includes(service)}
+                      onCheckedChange={(checked) => {
+                        const updated = checked
+                          ? [...servicesIncluded, service]
+                          : servicesIncluded.filter(s => s !== service);
+                        setServicesIncluded(updated);
+                        onUpdateLead(lead.id, { services_included: updated } as any);
+                      }}
+                      className="h-3.5 w-3.5"
+                    />
+                    {service}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <label className="text-[11px] text-muted-foreground block mb-1">Project Status</label>
+              <Select value={projectStatus} onValueChange={async (v) => {
+                setProjectStatus(v);
+                await onUpdateLead(lead.id, { project_status: v } as any);
+              }}>
+                <SelectTrigger className="h-8 text-xs border-border/50">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROJECT_STATUS_OPTIONS.map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 };
