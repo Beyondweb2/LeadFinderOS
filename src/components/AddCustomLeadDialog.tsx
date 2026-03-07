@@ -33,6 +33,9 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
     category: '',
     address: '',
     google_maps_url: '',
+    website: '',
+    contact_name: '',
+    potential_revenue: '',
     notes: '',
   });
 
@@ -48,6 +51,9 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
       category: '',
       address: '',
       google_maps_url: '',
+      website: '',
+      contact_name: '',
+      potential_revenue: '',
       notes: '',
     });
   };
@@ -76,6 +82,8 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
         return;
       }
 
+      const revenueValue = form.potential_revenue ? parseFloat(form.potential_revenue) : null;
+
       const { error } = await supabase.from('outreach_leads').insert({
         user_id: user.id,
         business_name: form.business_name.trim(),
@@ -84,6 +92,9 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
         category: form.category.trim() || null,
         address: form.address.trim() || null,
         google_maps_url: form.google_maps_url.trim() || null,
+        website: form.website.trim() || null,
+        contact_name: form.contact_name.trim() || null,
+        potential_revenue: revenueValue,
         notes: form.notes.trim() || null,
         status: 'interested' as LeadStatus,
         is_potential_work: true,
@@ -101,8 +112,6 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
         google_maps_url: form.google_maps_url.trim() || null,
         phone: form.phone.trim() || null,
       });
-
-      // Lead added — no toast
 
       resetForm();
       setOpen(false);
@@ -167,6 +176,15 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
+              <Label htmlFor="contact_name">Contact Name</Label>
+              <Input
+                id="contact_name"
+                value={form.contact_name}
+                onChange={(e) => updateField('contact_name', e.target.value)}
+                placeholder="John Smith"
+              />
+            </div>
+            <div className="space-y-1.5">
               <Label htmlFor="category">Category</Label>
               <Input
                 id="category"
@@ -175,13 +193,39 @@ export const AddCustomLeadDialog = ({ onLeadAdded }: AddCustomLeadDialogProps) =
                 placeholder="e.g. Plumber"
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="address">Address / Location</Label>
+            <Input
+              id="address"
+              value={form.address}
+              onChange={(e) => updateField('address', e.target.value)}
+              placeholder="123 High St, London"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="address">Address</Label>
+              <Label htmlFor="website">Website</Label>
               <Input
-                id="address"
-                value={form.address}
-                onChange={(e) => updateField('address', e.target.value)}
-                placeholder="123 High St, London"
+                id="website"
+                value={form.website}
+                onChange={(e) => updateField('website', e.target.value)}
+                placeholder="https://example.com"
+                type="url"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="potential_revenue">Potential Revenue (£)</Label>
+              <Input
+                id="potential_revenue"
+                value={form.potential_revenue}
+                onChange={(e) => updateField('potential_revenue', e.target.value)}
+                placeholder="1500"
+                type="number"
+                min="0"
+                step="0.01"
               />
             </div>
           </div>
