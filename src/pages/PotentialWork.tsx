@@ -307,6 +307,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const [projectOverview, setProjectOverview] = useState(lead.project_overview || '');
   const [servicesIncluded, setServicesIncluded] = useState<string[]>(lead.services_included || []);
   const [projectStatus, setProjectStatus] = useState(lead.project_status || 'not_started');
+  const [showPaidPopup, setShowPaidPopup] = useState(false);
 
   useEffect(() => {
     setNotes(lead.notes || '');
