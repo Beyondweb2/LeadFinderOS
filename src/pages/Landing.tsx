@@ -334,11 +334,18 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
   return (
     <div className="text-center px-4">
       <div key={current} className="animate-fade-in max-w-[300px] mx-auto">
+        <div className="w-10 h-10 rounded-full mx-auto mb-3 flex items-center justify-center text-sm font-semibold" style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}>
+          {t.initials}
+        </div>
+        <p className="text-foreground/90 text-[13px] font-semibold">{t.name}</p>
+        <p className="text-muted-foreground/50 text-[11px] mt-0.5">{t.role} · {t.region}</p>
+        <div className="flex gap-0.5 justify-center mt-2 mb-3">
+          {[...Array(t.stars)].map((_, si) => (
+            <Star key={si} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+          ))}
+        </div>
         <p className="text-foreground/70 text-[13px] leading-[1.7] italic font-normal">
           "{t.quote}"
-        </p>
-        <p className="text-muted-foreground/50 text-[11px] mt-5 font-medium">
-          {t.name} · {t.role} – {t.region}
         </p>
       </div>
       <div className="flex items-center justify-center gap-1.5 mt-5">
@@ -348,7 +355,7 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
             onClick={() => setCurrent(index)}
             className={`rounded-full transition-all duration-300 ${
               index === current
-                ? 'w-6 h-2 bg-[hsl(210_100%_50%)]'
+                ? 'w-6 h-2 bg-primary'
                 : 'w-2 h-2 bg-muted-foreground/25'
             }`}
           />
