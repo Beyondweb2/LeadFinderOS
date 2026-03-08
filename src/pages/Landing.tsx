@@ -520,19 +520,17 @@ const Landing = () => {
               style={{ border: '1px solid hsl(210 100% 50% / 0.2)', background: 'hsl(210 100% 50% / 0.08)', color: 'hsl(210 100% 70%)' }}
             >
               <Zap className="h-3 w-3" />
-              <span>Lead discovery + outreach + tracking — all in one place</span>
+              <span>Lead generation and outreach in one system</span>
             </div>
 
             <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
-              <span className="tracking-[0.02em]">Find the Right Businesses.</span>{' '}
+              <span className="tracking-[0.02em]">Find the Right Businesses</span>{' '}
               <br className="hidden sm:block" />
-              <span className="text-gradient-primary">Contact Them Instantly.</span>
-              <br />
-              <span className="tracking-[0.02em]">Close More Clients.</span>
+              <span className="text-gradient-primary whitespace-nowrap">Contact Them Instantly</span>
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              LeadFinder helps freelancers, agencies and SaaS founders discover businesses, reach out directly, and track every conversation in one simple system.
+              LeadFinder helps freelancers, agencies and SaaS founders discover businesses, reach out directly and track every conversation in one simple system.
             </p>
             
             {/* CTA */}
