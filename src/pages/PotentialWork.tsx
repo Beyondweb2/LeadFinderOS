@@ -473,11 +473,11 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             <div className="shrink-0 flex flex-col items-center gap-1 pt-0.5">
               <div className="relative group/avatar cursor-pointer" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
                 {lead.image_url ? (
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-lg overflow-hidden bg-muted/40 ring-1 ring-border/40">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-lg overflow-hidden bg-muted/40 ring-1 ring-border/40">
                     <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
                   </div>
                 ) : (
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-xs sm:text-sm lg:text-base font-bold text-primary">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-sm sm:text-base lg:text-lg font-bold text-primary">
                     {getInitials(lead.business_name)}
                   </div>
                 )}
@@ -695,7 +695,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           {!isExpanded && (
             <div className="flex items-end gap-2 mt-2 lg:mt-3">
               <div
-                className="flex-1 min-w-0 ml-[50px] sm:ml-[56px] lg:ml-[72px] cursor-pointer rounded-md p-1 -m-1 hover:bg-muted/20 transition-colors"
+                className="flex-1 min-w-0 ml-[60px] sm:ml-[68px] lg:ml-[80px] cursor-pointer rounded-md p-1 -m-1 hover:bg-muted/20 transition-colors"
                 data-walkthrough-step="track-notes-edit" data-walkthrough="notes"
                 onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
               >

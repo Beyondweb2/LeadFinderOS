@@ -152,7 +152,7 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
         <div className="flex items-start gap-3 lg:gap-4">
           {/* Left: Avatar + payment amount */}
           <div className="shrink-0 flex flex-col items-center gap-1 pt-0.5">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-xs sm:text-sm lg:text-base font-bold text-emerald-500">
+            <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-lg bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-sm sm:text-base lg:text-lg font-bold text-emerald-500">
               {getInitials(lead.business_name)}
             </div>
             {lead.amount_paid && (
@@ -325,7 +325,7 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
 
         {/* Notes preview + expand button when collapsed */}
         {!isExpanded && (
-          <div className="flex items-center gap-2 mt-2 lg:mt-3 ml-[52px] sm:ml-[60px] lg:ml-[72px]">
+          <div className="flex items-center gap-2 mt-2 lg:mt-3 ml-[60px] sm:ml-[68px] lg:ml-[80px]">
             <div className="flex-1 min-w-0">
               {(lead.notes || lead.checkin_notes) && (
                 <p className="text-[11px] lg:text-xs text-muted-foreground/50 line-clamp-1 leading-relaxed">
