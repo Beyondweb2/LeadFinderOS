@@ -663,14 +663,29 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   >
                     <MessageSquare className="h-3.5 w-3.5" />
                   </a>
-                  <a
-                    href={`tel:${lead.phone}`}
-                    onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('contacted'); }}
-                    className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500 hover:bg-amber-500/10 transition-colors"
-                    title="Call"
-                  >
-                    <PhoneCall className="h-3.5 w-3.5" />
-                  </a>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500 hover:bg-amber-500/10 transition-colors"
+                        title="Call"
+                      >
+                        <PhoneCall className="h-3.5 w-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-[160px]">
+                      <DropdownMenuItem asChild>
+                        <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
+                          <Phone className="h-4 w-4 text-amber-500" /> Normal Call
+                        </a>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
+                          <MessageCircle className="h-4 w-4 text-green-500" /> WhatsApp Call
+                        </a>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               )}
             </div>
