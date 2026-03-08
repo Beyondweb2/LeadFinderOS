@@ -974,95 +974,90 @@ const Landing = () => {
           }}
         />
         <div className="container mx-auto max-w-5xl">
-          {/* Positioning line above testimonials */}
-          <p className="text-center text-xs sm:text-sm text-muted-foreground/50 font-medium uppercase tracking-wider mb-6 sm:mb-8">
-            Trusted by freelancers, agencies and founders
+          <p className="text-center text-[11px] sm:text-xs text-muted-foreground/40 font-medium tracking-wide mb-8 sm:mb-10">
+            Real feedback from early LeadFinder users
           </p>
-          <div className="flex gap-0.5 justify-center mb-6 sm:mb-8">
-            {[...Array(5)].map((_, i) => (
-              <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-            ))}
-          </div>
 
           {(() => {
-            const testimonials = [
+            const testimonials: Testimonial[] = [
               {
                 name: 'Chris P.',
+                initials: 'CP',
                 role: 'Freelance Designer',
                 region: 'UK',
-                quote: "Within 10 minutes I found 30 real businesses without websites. Ten minutes later I had already messaged them directly inside the app. That alone sold me.",
-                boldPhrase: "found 30 real businesses without websites",
+                quote: "Found 30 businesses without websites in 10 minutes. Messaged them right inside the app. That alone sold me.",
                 stars: 5,
               },
               {
                 name: 'Tom H.',
+                initials: 'TH',
                 role: 'Web Developer',
                 region: 'Australia',
-                quote: "What I like most is being able to tweak the outreach templates quickly. I can adjust the message slightly and send it out without rewriting everything each time.",
-                boldPhrase: "send it out without rewriting everything each time",
+                quote: "The templates save me so much time. Tweak the message slightly and send it out without rewriting everything.",
                 stars: 5,
               },
               {
                 name: 'Alex M.',
+                initials: 'AM',
                 role: 'WordPress Freelancer',
                 region: 'Canada',
-                quote: "I used to bounce between Google Maps, notes and WhatsApp. Now I can search, message and track everything in one place and it just feels organised.",
-                boldPhrase: "search, message and track everything in one place",
+                quote: "I used to bounce between Maps, notes and WhatsApp. Now everything is in one place and it actually feels organised.",
                 stars: 5,
               },
               {
                 name: 'Daniel S.',
+                initials: 'DS',
                 role: 'Agency Owner',
                 region: 'US',
-                quote: "Fair play, this is well built. Finding leads fast and keeping all my outreach tracked properly makes it way easier to stay consistent.",
-                boldPhrase: "way easier to stay consistent",
+                quote: "Well built. Finding leads fast and keeping outreach tracked makes it way easier to stay consistent.",
                 stars: 5,
               },
             ];
 
-            const renderQuoteWithBold = (quote: string, boldPhrase: string) => {
-              const idx = quote.indexOf(boldPhrase);
-              if (idx === -1) return `"${quote}"`;
-              return (
-                <>
-                  "{quote.slice(0, idx)}
-                  <strong className="text-foreground font-semibold">{boldPhrase}</strong>
-                  {quote.slice(idx + boldPhrase.length)}"
-                </>
-              );
-            };
-
             return isMobile ? (
               <MobileTestimonialSlider testimonials={testimonials} />
             ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                {testimonials.map((r, i) => (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6 items-start">
+                {testimonials.map((r, i) => {
+                  // Stagger: odd cards get slight top margin for organic feel
+                  const staggerClass = i % 2 === 1 ? 'lg:mt-6' : '';
+                  return (
                   <ScrollReveal key={i} delay={i * 100}>
                     <div 
-                      className="h-full flex flex-col justify-between text-center px-5 py-6 sm:px-6 sm:py-7 rounded-xl"
+                      className={`flex flex-col text-left px-5 py-6 sm:px-6 sm:py-7 rounded-xl ${staggerClass}`}
                       style={{
                         background: 'hsl(220 30% 8% / 0.6)',
                         border: '1px solid hsl(0 0% 100% / 0.06)',
                         boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
                       }}
                     >
-                      <div>
-                        <div className="flex gap-0.5 mb-3 justify-center">
-                          {[...Array(r.stars)].map((_, si) => (
-                            <Star key={si} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                          ))}
+                      {/* Avatar + identity */}
+                      <div className="flex items-center gap-3 mb-4">
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                          style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}
+                        >
+                          {r.initials}
                         </div>
-                        <p className="text-foreground/80 text-[15px] leading-[1.7] italic font-normal">
-                          {renderQuoteWithBold(r.quote, r.boldPhrase)}
-                        </p>
+                        <div>
+                          <p className="text-foreground/90 text-sm font-semibold leading-tight">{r.name}</p>
+                          <p className="text-muted-foreground/50 text-[11px]">{r.role} · {r.region}</p>
+                        </div>
                       </div>
-                      <div className="mt-4 text-center">
-                        <p className="text-foreground/70 text-xs font-semibold">{r.role}</p>
-                        <p className="text-muted-foreground/50 text-[11px] mt-0.5">{r.name} – {r.region}</p>
+                      {/* Stars */}
+                      <div className="flex gap-0.5 mb-3">
+                        {[...Array(r.stars)].map((_, si) => (
+                          <Star key={si} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                        ))}
                       </div>
+                      {/* Quote */}
+                      <p className="text-foreground/75 text-[14px] leading-[1.7] font-normal">
+                        "{r.quote}"
+                      </p>
                     </div>
                   </ScrollReveal>
-                ))}
+                  );
+                })}
               </div>
             );
           })()}
