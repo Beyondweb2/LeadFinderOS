@@ -468,8 +468,8 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   return (
     <>
       <div className={cn(
-        'border-l-2 trastatusBsition-all',
-        borderColor,
+        'border-l-2 transition-all',
+        statusBorderColor,
         isExpanded ? 'ring-1 ring-primary/20 ring-inset' : ''
       )}>
         {/* ═══ COLLAPSED (always visible) ═══ */}
