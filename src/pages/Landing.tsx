@@ -839,8 +839,8 @@ const Landing = () => {
                 name: 'Chris P.',
                 role: 'Freelance Designer',
                 region: 'UK',
-                quote: "Within about 10 minutes I had found 30 solid businesses without websites. It took me another 10 minutes to message them all inside the app. That alone sold me.",
-                boldPhrase: "found 30 solid businesses without websites",
+                quote: "Within 10 minutes I found 30 real businesses without websites. Ten minutes later I had already messaged them directly inside the app. That alone sold me.",
+                boldPhrase: "found 30 real businesses without websites",
                 stars: 5,
               },
               {
