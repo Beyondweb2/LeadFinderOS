@@ -102,14 +102,16 @@
       let subscriptionStatus: string | null = null;
       let trialEnd: string | null = null;
 
-      // Check local DB for payment failure count and trial history
+      // Check local DB for payment failure state and trial history
       let paymentFailureCount = 0;
       let lastPaymentFailedAt: string | null = null;
+      let firstPaymentFailedAt: string | null = null;
       let hasUsedTrial = false;
+      let gracePeriodExpired = false;
       
       const { data: localSub } = await supabaseClient
         .from('subscriptions')
-        .select('payment_failure_count, last_payment_failed_at, status')
+        .select('payment_failure_count, last_payment_failed_at, first_payment_failed_at, status')
         .eq('user_id', user.id)
         .order('updated_at', { ascending: false })
         .limit(1)
@@ -118,10 +120,22 @@
       if (localSub) {
         paymentFailureCount = localSub.payment_failure_count || 0;
         lastPaymentFailedAt = localSub.last_payment_failed_at || null;
+        firstPaymentFailedAt = (localSub as any).first_payment_failed_at || null;
         
         // If local status is 'paused', override subscription status
         if (localSub.status === 'paused') {
           subscriptionStatus = 'paused';
+          gracePeriodExpired = true;
+        }
+        
+        // Check if grace period has expired (7 days from first failure)
+        if (firstPaymentFailedAt && localSub.status === 'past_due') {
+          const gracePeriodMs = 7 * 24 * 60 * 60 * 1000;
+          const elapsed = Date.now() - new Date(firstPaymentFailedAt).getTime();
+          if (elapsed > gracePeriodMs) {
+            gracePeriodExpired = true;
+            subscriptionStatus = 'paused';
+          }
         }
       }
 
@@ -176,6 +190,8 @@
         trial_end: trialEnd,
         payment_failure_count: paymentFailureCount,
         last_payment_failed_at: lastPaymentFailedAt,
+        first_payment_failed_at: firstPaymentFailedAt,
+        grace_period_expired: gracePeriodExpired,
         has_used_trial: hasUsedTrial,
      }), {
        headers: { ...corsHeaders, "Content-Type": "application/json" },

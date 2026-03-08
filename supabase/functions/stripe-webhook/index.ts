@@ -355,56 +355,74 @@
          }
          // ─── END DUPLICATE GUARD ───
 
-         // ─── PAYMENT FAILURE TRACKING ───
-         // Get current failure count for this subscription
+         // ─── PAYMENT FAILURE TRACKING (7-day grace period) ───
+         // Get current failure state for this subscription
          let currentFailureCount = 0;
+         let existingFirstFailedAt: string | null = null;
          const { data: existingSub } = await supabaseAdmin
            .from("subscriptions")
-           .select("payment_failure_count")
+           .select("payment_failure_count, first_payment_failed_at, last_payment_failed_at")
            .eq("stripe_subscription_id", subscription.id)
            .maybeSingle();
          
          if (existingSub) {
            currentFailureCount = existingSub.payment_failure_count || 0;
+           existingFirstFailedAt = existingSub.first_payment_failed_at || null;
          }
 
-         // If payment failed, increment counter. If payment succeeded (active), reset it.
+         // Build failure tracking fields
          let newFailureCount = currentFailureCount;
          let lastPaymentFailedAt: string | null = null;
+         let firstPaymentFailedAt: string | null | undefined = undefined; // undefined = don't change
          
          if (isPaymentFailure) {
            newFailureCount = currentFailureCount + 1;
            lastPaymentFailedAt = new Date().toISOString();
+           // Set first_payment_failed_at only on the first failure (grace period start)
+           if (!existingFirstFailedAt) {
+             firstPaymentFailedAt = new Date().toISOString();
+           }
            logStep("Payment failure tracked", { userId: user.id, failureCount: newFailureCount });
          } else if (status === 'active') {
-           // Payment succeeded — reset failure count
+           // Payment succeeded — reset all failure tracking
            newFailureCount = 0;
-           logStep("Payment succeeded, resetting failure count", { userId: user.id });
+           firstPaymentFailedAt = null; // clear grace period
+           logStep("Payment succeeded, resetting failure tracking", { userId: user.id });
          }
 
-         // If 2+ failures, override status to 'paused' to block access
-         if (newFailureCount >= 2) {
-           status = "paused";
-           logStep("Account PAUSED due to 2+ payment failures", { userId: user.id, failureCount: newFailureCount });
+         // Check if grace period (7 days) has expired
+         const effectiveFirstFailed = firstPaymentFailedAt !== undefined ? firstPaymentFailedAt : existingFirstFailedAt;
+         if (effectiveFirstFailed && status === 'past_due') {
+           const gracePeriodMs = 7 * 24 * 60 * 60 * 1000;
+           const elapsed = Date.now() - new Date(effectiveFirstFailed).getTime();
+           if (elapsed > gracePeriodMs) {
+             status = "paused";
+             logStep("Account PAUSED — 7-day grace period expired", { userId: user.id, firstFailedAt: effectiveFirstFailed });
+           } else {
+             logStep("Grace period active", { userId: user.id, daysRemaining: Math.ceil((gracePeriodMs - elapsed) / (24*60*60*1000)) });
+           }
          }
 
          // Upsert subscription record (normal path)
+         const upsertPayload: Record<string, unknown> = {
+           user_id: user.id,
+           stripe_customer_id: customerId,
+           stripe_subscription_id: subscription.id,
+           status: status,
+           current_period_end: subscription.current_period_end
+             ? new Date(subscription.current_period_end * 1000).toISOString()
+             : (subscription.trial_end
+               ? new Date(subscription.trial_end * 1000).toISOString()
+               : null),
+           updated_at: new Date().toISOString(),
+           payment_failure_count: newFailureCount,
+         };
+         if (lastPaymentFailedAt) upsertPayload.last_payment_failed_at = lastPaymentFailedAt;
+         if (firstPaymentFailedAt !== undefined) upsertPayload.first_payment_failed_at = firstPaymentFailedAt;
+
          const { error: upsertError } = await supabaseAdmin
            .from("subscriptions")
-           .upsert({
-             user_id: user.id,
-             stripe_customer_id: customerId,
-             stripe_subscription_id: subscription.id,
-             status: status,
-             current_period_end: subscription.current_period_end
-               ? new Date(subscription.current_period_end * 1000).toISOString()
-               : (subscription.trial_end
-                 ? new Date(subscription.trial_end * 1000).toISOString()
-                 : null),
-             updated_at: new Date().toISOString(),
-             payment_failure_count: newFailureCount,
-             ...(lastPaymentFailedAt ? { last_payment_failed_at: lastPaymentFailedAt } : {}),
-           }, {
+           .upsert(upsertPayload, {
              onConflict: "stripe_subscription_id",
            });
 

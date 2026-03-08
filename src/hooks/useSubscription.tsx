@@ -15,7 +15,10 @@ interface SubscriptionState {
   isStripeTrialing: boolean;  // true when status is 'trialing'
   paymentFailureCount: number;
   lastPaymentFailedAt: string | null;
-  isPaymentPaused: boolean;   // true when 2+ failures — blocks access
+  firstPaymentFailedAt: string | null;
+  isPaymentPaused: boolean;   // true when grace period expired — blocks features
+  isInGracePeriod: boolean;   // true when payment failed but within 7-day grace
+  isGracePeriodExpired: boolean; // true when 7-day grace period has passed
 }
 
 interface SubscriptionContextType extends SubscriptionState {
@@ -41,7 +44,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     isStripeTrialing: false,
     paymentFailureCount: 0,
     lastPaymentFailedAt: null,
+    firstPaymentFailedAt: null,
     isPaymentPaused: false,
+    isInGracePeriod: false,
+    isGracePeriodExpired: false,
   });
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   
@@ -74,7 +80,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         if (prev.subscribed || prev.status) {
           return { ...prev, isLoading: false };
         }
-        return { ...prev, isLoading: false, subscribed: false, status: null, trialEnd: null, isPaidSubscriber: false, isStripeTrialing: false, paymentFailureCount: 0, lastPaymentFailedAt: null, isPaymentPaused: false };
+        return { ...prev, isLoading: false, subscribed: false, status: null, trialEnd: null, isPaidSubscriber: false, isStripeTrialing: false, paymentFailureCount: 0, lastPaymentFailedAt: null, firstPaymentFailedAt: null, isPaymentPaused: false, isInGracePeriod: false, isGracePeriodExpired: false };
       });
       return;
     }
@@ -97,7 +103,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           isStripeTrialing: false,
           paymentFailureCount: 0,
           lastPaymentFailedAt: null,
+          firstPaymentFailedAt: null,
           isPaymentPaused: false,
+          isInGracePeriod: false,
+          isGracePeriodExpired: false,
         });
         return;
       }
@@ -129,7 +138,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
             isStripeTrialing: isTrialing,
             paymentFailureCount: 0,
             lastPaymentFailedAt: null,
+            firstPaymentFailedAt: null,
             isPaymentPaused: false,
+            isInGracePeriod: false,
+            isGracePeriodExpired: false,
           });
           
           if (!isValid) return;
@@ -176,7 +188,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const isPaid = subStatus === 'active';
       const isTrialing = subStatus === 'trialing';
       const failureCount = data.payment_failure_count ?? 0;
-      const isPaused = subStatus === 'paused' || subStatus === 'past_due' || subStatus === 'unpaid' || failureCount >= 2;
+      const firstFailedAt = data.first_payment_failed_at ?? null;
+      const graceExpired = data.grace_period_expired === true;
+      const isPaused = graceExpired || subStatus === 'paused' || subStatus === 'unpaid';
+      const inGracePeriod = failureCount > 0 && !graceExpired && !isPaused && (subStatus === 'past_due' || subStatus === 'active');
       
       setState({
         subscribed: data.subscribed ?? false,
@@ -191,7 +206,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         isStripeTrialing: isTrialing,
         paymentFailureCount: failureCount,
         lastPaymentFailedAt: data.last_payment_failed_at ?? null,
+        firstPaymentFailedAt: firstFailedAt,
         isPaymentPaused: isPaused,
+        isInGracePeriod: inGracePeriod,
+        isGracePeriodExpired: graceExpired,
       });
     } catch (err) {
       console.error('Subscription check failed:', err);
@@ -224,7 +242,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           isStripeTrialing: false,
           paymentFailureCount: 0,
           lastPaymentFailedAt: null,
+          firstPaymentFailedAt: null,
           isPaymentPaused: false,
+          isInGracePeriod: false,
+          isGracePeriodExpired: false,
         });
       }
     } else if (newAccessToken !== accessTokenRef.current) {

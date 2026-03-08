@@ -636,6 +636,7 @@ export type Database = {
         Row: {
           created_at: string
           current_period_end: string | null
+          first_payment_failed_at: string | null
           id: string
           last_payment_failed_at: string | null
           payment_failure_count: number
@@ -648,6 +649,7 @@ export type Database = {
         Insert: {
           created_at?: string
           current_period_end?: string | null
+          first_payment_failed_at?: string | null
           id?: string
           last_payment_failed_at?: string | null
           payment_failure_count?: number
@@ -660,6 +662,7 @@ export type Database = {
         Update: {
           created_at?: string
           current_period_end?: string | null
+          first_payment_failed_at?: string | null
           id?: string
           last_payment_failed_at?: string | null
           payment_failure_count?: number

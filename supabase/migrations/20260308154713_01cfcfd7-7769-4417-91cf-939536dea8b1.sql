@@ -1,0 +1,1 @@
+ALTER TABLE public.subscriptions ADD COLUMN IF NOT EXISTS first_payment_failed_at TIMESTAMPTZ DEFAULT NULL;
