@@ -32,6 +32,13 @@ const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
 const STORAGE_KEY = 'leadfinder_whatsapp_template';
 
 export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: SingleWhatsAppDialogProps) {
+  const handleOpenChange = (v: boolean) => {
+    onOpenChange(v);
+    if (!v) {
+      // Notify walkthrough that the contact panel was closed
+      window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
+    }
+  };
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
   const [isModified, setIsModified] = useState(false);
   const [showTemplateNudge, setShowTemplateNudge] = useState(false);
