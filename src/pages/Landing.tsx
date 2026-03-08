@@ -36,6 +36,7 @@ import featureTemplates from '@/assets/feature-templates.png';
 import featureContactTracking from '@/assets/feature-contact-tracking.png';
 import featureCustomization from '@/assets/feature-customization-new.png';
 import featureExport from '@/assets/feature-export.png';
+import featureLeadManagement from '@/assets/feature-lead-management.png';
 
 import {
   Carousel,
