@@ -621,7 +621,7 @@ const Landing = () => {
             {[
               {
                 num: 1,
-                title: 'Find Leads Instantly',
+                title: 'Find Leads',
                 body: "Search any business type anywhere and instantly see which ones don't have a website.",
                 img: step2Results,
                 alt: 'Find leads results list',
