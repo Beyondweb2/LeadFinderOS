@@ -300,7 +300,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                               <Check className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Already in CRM</TooltipContent>
+                          <TooltipContent>Already in Outreach</TooltipContent>
                         </Tooltip>
                       ) : (
                         <Tooltip>

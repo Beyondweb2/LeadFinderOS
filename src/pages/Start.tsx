@@ -41,7 +41,7 @@ const TRUST_POINTS = [
 const SCREENSHOTS = [
   { src: featureClassification, alt: 'Lead search results', label: 'Search Results' },
   { src: featureTemplates, alt: 'WhatsApp & SMS templates', label: 'Message Templates' },
-  { src: featureDashboard, alt: 'CRM tracking dashboard', label: 'CRM Dashboard' },
+  { src: featureDashboard, alt: 'Outreach tracking dashboard', label: 'Outreach Dashboard' },
 ];
 
 const Start = () => {
