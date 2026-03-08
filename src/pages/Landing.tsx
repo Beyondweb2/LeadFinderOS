@@ -565,11 +565,8 @@ const Landing = () => {
               </div>
             </div>
 
-
-
-
             {/* Feature bullets */}
-            <div className="flex sm:hidden flex-col items-center justify-center gap-3 text-[12px] text-foreground/60 font-medium">
+            <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/60 font-medium">
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses without websites</span>
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Contact them instantly</span>
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every follow-up</span>
@@ -726,10 +723,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Built for line */}
-      <p className="text-xs text-muted-foreground/50 font-medium uppercase tracking-widest text-center mb-6">
-        Built for freelance web devs, agencies and SaaS founders
-      </p>
 
       {/* Your Complete Lead Toolkit — carousel */}
       <section className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
