@@ -520,7 +520,7 @@ const Landing = () => {
               style={{ border: '1px solid hsl(210 100% 50% / 0.2)', background: 'hsl(210 100% 50% / 0.08)', color: 'hsl(210 100% 70%)' }}
             >
               <Zap className="h-3 w-3" />
-              <span>Lead generation for web professionals</span>
+              <span>Lead discovery + outreach + tracking — all in one place</span>
             </div>
 
             <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
