@@ -62,7 +62,6 @@ export function PaymentWarningBanner() {
             <span className="font-medium text-foreground">Payment issue detected</span>
             <span className="text-muted-foreground ml-2 hidden sm:inline">
               We couldn't process your subscription payment. Please update your card to avoid losing access.
-              {daysRemaining > 0 && ` (${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining)`}
             </span>
           </div>
         </div>
