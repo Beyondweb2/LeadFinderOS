@@ -98,7 +98,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, t
 
           {/* Value description */}
           <p className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5">
-            Start your 5-day free trial to unlock full details, contact businesses, and manage your outreach
+            Start your 5-day free trial to unlock contact details and start your outreach
           </p>
 
           {/* Benefits */}
