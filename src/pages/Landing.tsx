@@ -814,15 +814,14 @@ const Landing = () => {
               <ScrollReveal>
                 <div className="grid grid-cols-2 gap-10 lg:gap-12 max-w-6xl mx-auto">
                   {toolkitFeatures.map((feature, i) => (
-                    <div key={i} className="text-center group">
+                    <div key={i} className="flex flex-col group">
                       <div 
-                        className="relative cursor-pointer w-full mb-7"
+                        className="relative cursor-pointer w-full flex-shrink-0 mb-7"
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.02] group-hover:-translate-y-1"
+                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.02] group-hover:-translate-y-1 aspect-[16/10]"
                           style={{ 
-                            height: '280px',
                             border: '1px solid hsl(210 100% 50% / 0.2)',
                             boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 4px 16px hsl(220 40% 4% / 0.3)',
                           }}
@@ -834,16 +833,18 @@ const Landing = () => {
                               border: '1px solid hsl(210 100% 50% / 0.3)',
                             }}
                           />
-                          <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" className="w-full h-full object-cover" />
+                          <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" className="w-full h-full object-cover object-top" />
                           <div className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
                             <Search className="h-3.5 w-3.5 text-foreground/70" />
                           </div>
                         </div>
                       </div>
-                      <h3 className="text-lg lg:text-[22px] font-extrabold tracking-tight mb-1.5">{feature.title}</h3>
-                      <p className="text-muted-foreground/70 text-sm lg:text-[15px] leading-[1.7] max-w-md mx-auto">
-                        {feature.description}
-                      </p>
+                      <div className="text-center">
+                        <h3 className="text-lg lg:text-[22px] font-extrabold tracking-tight mb-1.5">{feature.title}</h3>
+                        <p className="text-muted-foreground/70 text-sm lg:text-[15px] leading-[1.7] max-w-md mx-auto">
+                          {feature.description}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
