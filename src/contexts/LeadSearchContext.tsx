@@ -430,7 +430,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     freeSearchExhausted,
     searchError,
     expanded,
-  }), [leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded]);
+    gated,
+  }), [leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded, gated]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>
