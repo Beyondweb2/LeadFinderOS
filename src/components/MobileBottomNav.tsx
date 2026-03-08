@@ -122,6 +122,11 @@ export function MobileBottomNav() {
             const isActive = location.pathname === item.url;
             return (
               <Link key={item.url} to={item.url}
+                onClick={() => {
+                  if (item.url === '/potential-work') {
+                    window.dispatchEvent(new CustomEvent('demo-checklist-track-pressed'));
+                  }
+                }}
                 data-walkthrough-step={item.url === '/potential-work' ? 'track-leads' : item.url === '/outreach' ? 'outreach-crm' : undefined}
                 data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : item.url === '/potential-work' ? 'track-nav' : undefined}
                 className={cn(
