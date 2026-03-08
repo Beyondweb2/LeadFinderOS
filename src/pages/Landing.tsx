@@ -856,6 +856,7 @@ const Landing = () => {
                 region: 'Australia',
                 quote: "The templates save me so much time. Tweak the message slightly and send it out without rewriting everything.",
                 stars: 5,
+                photo: avatarTom,
               },
               {
                 name: 'Alex M.',
