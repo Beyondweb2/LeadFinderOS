@@ -83,9 +83,9 @@ export function MobileBottomNav() {
   } catch {}
 
   useEffect(() => {
-    const crmHandler = () => { setCrmGlow(true); setTimeout(() => setCrmGlow(false), 800); };
-    const trackHandler = () => { setTrackGlow(true); setTimeout(() => setTrackGlow(false), 2000); };
-    const searchHandler = () => { setSearchGlow(true); setSearchTooltip(true); setTimeout(() => setSearchGlow(false), 4000); setTimeout(() => setSearchTooltip(false), 6000); };
+    const crmHandler = () => { setCrmGlow(true); setTimeout(() => setCrmGlow(false), 600); };
+    const trackHandler = () => { setTrackGlow(true); setTimeout(() => setTrackGlow(false), 600); };
+    const searchHandler = () => { setSearchGlow(true); setSearchTooltip(true); setTimeout(() => setSearchGlow(false), 1200); setTimeout(() => setSearchTooltip(false), 2500); };
     window.addEventListener('crm-lead-added', crmHandler);
     window.addEventListener('track-lead-added', trackHandler);
     window.addEventListener('pulse-search-nav', searchHandler);
