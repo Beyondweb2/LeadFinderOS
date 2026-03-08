@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
-import { PostWalkthroughTipsModal } from '@/components/PostWalkthroughTipsModal';
+
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import appLogo from '@/assets/logo.png';
@@ -38,20 +38,11 @@ export function DemoChecklistPanel() {
 
   const dismissKey = user?.id ? `demo_walkthrough_dismissed_${user.id}` : null;
   const [dismissed, setDismissed] = useState(false);
-  const [showTipsModal, setShowTipsModal] = useState(false);
-  const tipsModalShownRef = useRef(false);
   const prevAllDoneRef = useRef(allDone);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [metrics, setMetrics] = useState({ noWebsite: 0, added: 0, messages: 0 });
 
   const isFreeUser = !isPaidSubscriber && !isStripeTrialing;
-  const tipsDismissedKey = user?.id ? `post_walkthrough_tips_dismissed_${user.id}` : null;
-  const [tipsDismissed, setTipsDismissed] = useState(false);
-
-  useEffect(() => {
-    if (!tipsDismissedKey) return;
-    try { setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true'); } catch {}
-  }, [tipsDismissedKey]);
 
   useEffect(() => {
     if (!dismissKey) { setDismissed(false); return; }
@@ -80,13 +71,6 @@ export function DemoChecklistPanel() {
     prevAllDoneRef.current = allDone;
   }, [allDone, user?.id]);
 
-  useEffect(() => {
-    if (!isFreeUser || tipsDismissed || tipsModalShownRef.current) return;
-    if (allDone && !showCompletionModal && !prevAllDoneRef.current) {
-      tipsModalShownRef.current = true;
-      setShowTipsModal(true);
-    }
-  }, [allDone, isFreeUser, tipsDismissed, showCompletionModal]);
 
   const handleDismiss = () => {
     setDismissed(true);
@@ -97,20 +81,8 @@ export function DemoChecklistPanel() {
   const handleCompletionDismiss = () => {
     setShowCompletionModal(false);
     handleDismiss();
-    window.dispatchEvent(new CustomEvent('pulse-search-nav'));
-    if (tipsDismissed || !isFreeUser) {
-      window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
-    }
+    window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
   };
-
-  const handleTipsModalClose = useCallback((open: boolean) => {
-    setShowTipsModal(open);
-    if (!open) {
-      tipsModalShownRef.current = true;
-      if (tipsDismissedKey) { try { setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true'); } catch {} }
-      window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
-    }
-  }, [tipsDismissedKey, isFreeUser]);
 
   if (!isDemoUser || dismissed) return null;
 
@@ -168,7 +140,7 @@ export function DemoChecklistPanel() {
         </DialogContent>
       </Dialog>
 
-      <PostWalkthroughTipsModal open={showTipsModal} onOpenChange={handleTipsModalClose} />
+      
     </>
   );
 }
