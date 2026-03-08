@@ -1043,7 +1043,8 @@ const Landing = () => {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/[0.06] py-8 sm:py-10 md:py-12 mt-410 sm:py-12 md:py-16ssName="container mx-auto">
+      <footer className="relative z-10 border-t border-white/[0.06] py-10 sm:py-12 md:py-16 px-4">
+        <div className="container mx-auto">
           <div className="flex flex-col items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
             <span className="font-bold tracking-tight text-sm sm:text-base">
               Lead<span className="text-gradient-primary">Finder</span> Pro
