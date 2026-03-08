@@ -28,11 +28,11 @@ export function PaymentPausedScreen() {
               <AlertTriangle className="h-7 w-7 text-destructive" />
             </div>
           </div>
-          <CardTitle className="text-xl">Your Access is Paused</CardTitle>
+          <CardTitle className="text-xl">Subscription Payment Required</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-center">
           <p className="text-sm text-muted-foreground">
-            Your subscription payment failed. Please update your payment method to continue using LeadFinder.
+            Your subscription payment couldn't be processed. Update your payment method to restore full access.
           </p>
           <Button onClick={handleUpdateCard} disabled={portalLoading} className="w-full" size="lg">
             {portalLoading ? (
