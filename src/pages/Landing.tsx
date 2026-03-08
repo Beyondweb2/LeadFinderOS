@@ -730,7 +730,7 @@ const Landing = () => {
               How SaaS Founders Use <span className="text-gradient-primary">LeadFinder</span>
             </h2>
             <p className="text-xs sm:text-base md:text-lg text-foreground/60 max-w-xl mx-auto leading-relaxed mt-3 sm:mt-4">
-              Find web developers, agencies, and target users,en contact them directly without waiting for inbound.
+              Find web developers, agencies, and target users,contact them directly without waiting for inbound.
             </p>
           </ScrollReveal>
 
@@ -820,7 +820,7 @@ const Landing = () => {
                     <Phone className="h-5 w-5 text-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-foreground mb-1.5">Contact directly</h3>
-                  <p className="text-sm text-foreground/55 leading-relaxed">Get personal numbers, WhatsApp, SMS, or call â€. Rh decision-makers without gatekeepers.</p>
+                  <p className="text-sm text-foreground/55 leading-relaxed">Get personal numbers, WhatsApp, SMS, or call â€. R. Rsion-makers without gatekeepers.</p>
                 </div>
               </ScrollReveal>
 
