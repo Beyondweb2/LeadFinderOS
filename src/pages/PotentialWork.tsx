@@ -588,9 +588,9 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             <div className="flex flex-col items-end gap-1 flex-shrink-0" data-no-expand onClick={(e) => e.stopPropagation()}>
               {/* Row 1: Maps / Facebook / Menu */}
               <div className="flex items-center gap-0.5">
-                {lead.google_maps_url && (
+                {(lead.google_maps_url || ((lead as any).place_id ? `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}` : null)) && (
                   <a
-                    href={lead.google_maps_url}
+                    href={lead.google_maps_url || `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500 hover:bg-blue-500/10 transition-colors"
