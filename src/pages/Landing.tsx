@@ -856,7 +856,7 @@ const Landing = () => {
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[4/3] transition-transform duration-300 group-hover:scale-[1.02]"
+                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[3/2] transition-transform duration-300 group-hover:scale-[1.02]"
                           style={{ 
                             border: '1px solid hsl(210 100% 50% / 0.2)',
                             boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
