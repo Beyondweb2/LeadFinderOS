@@ -1012,7 +1012,7 @@ const Landing = () => {
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-3">
-              Questions About <span className="text-gradient-primary">LeadFinder</span>?
+              Question About <span className="text-gradient-primary">LeadFinder</span>?
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground/70 mb-5 leading-[1.6]">
               Message us on WhatsApp and speak to a real person. Usually replies within a few minutes.
