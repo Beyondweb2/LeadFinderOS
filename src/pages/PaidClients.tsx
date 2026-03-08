@@ -90,6 +90,7 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
     try {
       await saveDetails();
       await onNotesChange(lead.id, notes);
+      setIsExpanded(false);
     } finally {
       setIsSaving(false);
     }
