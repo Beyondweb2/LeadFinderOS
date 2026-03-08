@@ -730,7 +730,7 @@ const Landing = () => {
 
 
       {/* How SaaS Founders Use LeadFinder */}
-      <section className="relative z-10 py-12 sm:py-16 md:py-2444 px-3 sm:px-4">
+      <section className="relative z-10 py-12 sm:py-16 md:py-24444 px-3 sm:px-4">
         <div className="container mx-auto max-w-5xl">
           <ScrollReveal className="text-center mb-6 sm:mb-10">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.15]">
@@ -880,7 +880,7 @@ const Landing = () => {
 
 
       {/* Your Complete Lead Toolkit */}
-      <section className="relative z-10 py4 sm:py-18 md:py-2440 px-3 sm:px-4">
+      <section className="relative z-10 p4 sm:py-18 md:py-24440 px-3 sm:px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
@@ -966,7 +966,7 @@ const Landing = () => {
       </section>
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-4 sm:py-18 md:py-240 px-4">
+      <ScrollReveal className="relative z-10 py4 sm:py-18 md:py-2440 px-4">
         {/* Subtle background */}
         <div
           className="absolute inset-0 -z-10"
@@ -1137,7 +1137,7 @@ const Landing = () => {
       </section>
 
       {/* Got Questions Section */}
-      <section className="relative z-10 py-10 sm:py-14 md:py-16 px-4">
+      <section className="relative z-10 py-2 sm:py-16 md:py-206 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
