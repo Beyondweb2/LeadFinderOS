@@ -515,7 +515,7 @@ const Landing = () => {
 
           <div className="max-w-3xl mx-auto lg:max-w-2xl">
             <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight leading-tight">
-              <span className="tracking-[0.02em]">Lead Discovery</span>
+              <span className="tracking-[0.02em]">Find Customers</span>
               <br />
               <span className="text-gradient-primary whitespace-nowrap">Direct Outreach</span>
             </h1>
