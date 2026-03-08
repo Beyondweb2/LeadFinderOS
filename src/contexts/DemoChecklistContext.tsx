@@ -111,6 +111,10 @@ export function DemoChecklistProvider({
       allDoneRef.current = true;
       setIsOpen(false);
       setIsReplay(false);
+      // Clear simulate-new-user flag
+      if (user?.id) {
+        try { localStorage.removeItem(`simulate_new_user_${user.id}`); } catch {}
+      }
     };
     window.addEventListener('start-walkthrough', onStart);
     window.addEventListener('skip-walkthrough', onSkip);
