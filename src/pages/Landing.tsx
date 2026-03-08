@@ -514,19 +514,19 @@ const Landing = () => {
           </div>
 
           <div className="max-w-3xl mx-auto lg:max-w-2xl">
-            {/* Positioning line — desktop only */}
-            <p className="hidden sm:block text-xs text-muted-foreground/50 font-medium uppercase tracking-widest mb-5">
+            {/* Positioning line */}
+            <p className="text-xs text-muted-foreground/50 font-medium uppercase tracking-widest mb-5">
               Lead discovery and outreach in one system
             </p>
 
-            <h1 className="text-[1.6rem] leading-[1.15] sm:text-5xl sm:leading-[1.05] md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight">
-              <span className="tracking-[0.02em]">Find the Right Businesses</span>
+            <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight leading-tight">
+              <span className="tracking-[0.02em]">Find Businesses</span>
               <br />
-              <span className="text-gradient-primary whitespace-nowrap">Contact Them Instantly</span>
+              <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              LeadFinder helps freelancers, agencies and SaaS founders discover businesses, reach out instantly and track every conversation in one place.
+              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
             </p>
             
             {/* CTA */}
@@ -550,11 +550,14 @@ const Landing = () => {
                   </Link>
                 </Button>
               </div>
+              <p className="text-[11px] sm:text-xs text-muted-foreground/40 mt-3 font-medium">
+                5-day free trial · £0 today · Cancel anytime
+              </p>
             </div>
 
             {/* Metrics row */}
-            <div className="grid grid-cols-3 gap-4 sm:gap-5 md:gap-14 max-w-[280px] sm:max-w-xl mx-auto mt-10 sm:mt-8">
-              <CountUpStat target={100000} suffix="+" label="Businesses" />
+            <div className="grid grid-cols-3 gap-4 sm:gap-5 md:gap-14 max-w-[280px] sm:max-w-xl mx-auto mt-8">
+              <CountUpStat target={80000} suffix="+" label="Businesses" />
               <div className="text-center">
                 <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
                 <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
@@ -565,11 +568,11 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Feature bullets — mobile only */}
-            <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/50 font-medium">
-              <span className="flex items-center gap-2.5"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Discover businesses ready for outreach</span>
-              <span className="flex items-center gap-2.5"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Contact via WhatsApp, SMS or call</span>
-              <span className="flex items-center gap-2.5"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every conversation and follow-up</span>
+            {/* Feature bullets */}
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 mt-5 text-[12px] sm:text-sm text-foreground/50 font-medium">
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Contact them instantly</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every follow-up</span>
             </div>
           </div>
         </div>
