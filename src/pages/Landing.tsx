@@ -564,7 +564,7 @@ const Landing = () => {
             </div>
 
             {/* Feature bullets */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 mt-5 text-[12px] sm:text-sm text-foreground/50 font-medium">
+            <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/50 font-medium">
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Contact them instantly</span>
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every follow-up</span>
