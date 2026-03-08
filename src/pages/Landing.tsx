@@ -92,7 +92,7 @@ const goToStartTrial = (navigate: ReturnType<typeof useNavigate>) => () => {
   navigate('/start-free-trial');
 };
 
-// Inline CTA band — desktop only, inserted between sections
+// Inline CTA band - desktop only, inserted between sections
 const InlineCTA = ({ text = 'Ready to find your next client?', onCTA }: { text?: string; onCTA: () => void }) => (
   <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
@@ -561,7 +561,6 @@ const Landing = () => {
               </p>
             </div>
 
-
             {/* Metrics row */}
             <div className="grid grid-cols-3 gap-4 sm:gap-5 md:gap-14 max-w-[280px] sm:max-w-xl mx-auto mt-8">
               <CountUpStat target={80000} suffix="+" label="Businesses" />
@@ -597,7 +596,7 @@ const Landing = () => {
         <VideoSection />
       </div>
 
-      {/* How LeadFinder Works — 4-step section */}
+      {/* How LeadFinder Works - 4-step section */}
       <section id="how-it-works" className="relative z-10 py-10 sm:py-14 md:py-24 px-3 sm:px-4">
         <div className="container mx-auto max-w-7xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-16">
@@ -672,7 +671,7 @@ const Landing = () => {
                   </div>
                 </div>
 
-                {/* Desktop: alternating layout — large image with aligned text */}
+                {/* Desktop: alternating layout with large image */}
                 <div className={`hidden md:grid grid-cols-12 gap-10 lg:gap-14 items-center`}>
                   {/* Text column */}
                   <div className={`col-span-4 ${isEven ? 'order-2 text-left' : 'order-1 text-left'}`}>
@@ -687,7 +686,7 @@ const Landing = () => {
                       {step.body}
                     </p>
                   </div>
-                  {/* Image column — larger */}
+                  {/* Image column */}
                   <div className={`col-span-8 ${isEven ? 'order-1' : 'order-2'}`}>
                     <div 
                       className="relative group cursor-pointer w-full"
@@ -730,7 +729,7 @@ const Landing = () => {
               How SaaS Founders Use <span className="text-gradient-primary">LeadFinder</span>
             </h2>
             <p className="text-xs sm:text-base md:text-lg text-foreground/60 max-w-xl mx-auto leading-relaxed mt-3 sm:mt-4">
-              Find web developers, agencies, and target users — then contact them directly without waiting for inbound.
+              Find web developers, agencies, and target users, then contact them directly without waiting for inbound.
             </p>
           </ScrollReveal>
 
@@ -762,7 +761,7 @@ const Landing = () => {
               </div>
             </ScrollReveal>
 
-            {/* Mock search UI — interactive feel */}
+            {/* Mock search UI - interactive feel */}
             <ScrollReveal delay={180}>
               <div
                 className="max-w-xl mx-auto mb-10 rounded-xl px-5 py-3.5 flex items-center gap-3 transition-all duration-300 hover:scale-[1.01]"
@@ -787,7 +786,7 @@ const Landing = () => {
               </div>
             </ScrollReveal>
 
-            {/* Asymmetric 3-card layout — middle card emphasized */}
+            {/* Asymmetric 3-card layout, middle card emphasized */}
             <div className="grid grid-cols-7 gap-4 md:gap-5 items-start max-w-6xl mx-auto">
               {/* Card 1 */}
               <ScrollReveal delay={200} className="col-span-2">
@@ -806,7 +805,7 @@ const Landing = () => {
                 </div>
               </ScrollReveal>
 
-              {/* Card 2 — emphasized */}
+              {/* Card 2, emphasized */}
               <ScrollReveal delay={280} className="col-span-3">
                 <div
                   className="flex flex-col items-center text-center p-7 md:p-8 rounded-2xl h-full relative"
@@ -820,7 +819,7 @@ const Landing = () => {
                     <Phone className="h-5 w-5 text-primary" />
                   </div>
                   <h3 className="text-lg font-semibold text-foreground mb-1.5">Contact directly</h3>
-                  <p className="text-sm text-foreground/55 leading-relaxed">Get personal numbers, WhatsApp, SMS, or call — reach decision-makers without gatekeepers.</p>
+                  <p className="text-sm text-foreground/55 leading-relaxed">Get personal numbers, WhatsApp, SMS, or call. Reach decision-makers without gatekeepers.</p>
                 </div>
               </ScrollReveal>
 
@@ -843,7 +842,7 @@ const Landing = () => {
             </div>
           </div>
 
-          {/* Mobile: compact rows (unchanged) */}
+          {/* Mobile: compact rows */}
           <div className="flex sm:hidden flex-col gap-3 max-w-sm mx-auto">
             {[
               { icon: Search, title: 'Find web developers', text: 'Search by business type and location to find developers, agencies, and other niche audiences.' },
@@ -872,7 +871,7 @@ const Landing = () => {
       </section>
 
 
-      {/* Your Complete Lead Toolkit — carousel */}
+      {/* Your Complete Lead Toolkit */}
       <section className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
         <div
           className="absolute inset-0 -z-10"
@@ -903,7 +902,7 @@ const Landing = () => {
               },
               {
                 title: 'Make It Yours',
-                description: 'Choose your accent colour, switch between themes, and add your own profile picture — so it feels like your app.',
+                description: 'Choose your accent colour, switch between themes, and add your profile picture. Make it feel like your app.',
                 img: featureCustomization,
               },
               {
@@ -959,7 +958,7 @@ const Landing = () => {
 
       {/* Testimonials */}
       <ScrollReveal className="relative z-10 py-12 sm:py-16 md:py-20 px-4">
-        {/* Subtle background — reduced opacity */}
+        {/* Subtle background */}
         <div
           className="absolute inset-0 -z-10"
           style={{
@@ -1060,7 +1059,6 @@ const Landing = () => {
             );
           })()}
 
-
           {/* Leave a Review button */}
           <div className="text-center mt-8 sm:mt-10">
             <Button
@@ -1077,7 +1075,7 @@ const Landing = () => {
         </div>
       </ScrollReveal>
 
-      {/* Final CTA — Free Access Card */}
+      {/* Final CTA - Free Access Card */}
       <section id="pricing" className="relative z-10 pb-16 sm:pb-20 md:pb-24 px-4">
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
