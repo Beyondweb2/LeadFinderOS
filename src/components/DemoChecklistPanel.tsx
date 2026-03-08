@@ -43,13 +43,6 @@ export function DemoChecklistPanel() {
   const [metrics, setMetrics] = useState({ noWebsite: 0, added: 0, messages: 0 });
 
   const isFreeUser = !isPaidSubscriber && !isStripeTrialing;
-  const tipsDismissedKey = user?.id ? `post_walkthrough_tips_dismissed_${user.id}` : null;
-  const [tipsDismissed, setTipsDismissed] = useState(false);
-
-  useEffect(() => {
-    if (!tipsDismissedKey) return;
-    try { setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true'); } catch {}
-  }, [tipsDismissedKey]);
 
   useEffect(() => {
     if (!dismissKey) { setDismissed(false); return; }
