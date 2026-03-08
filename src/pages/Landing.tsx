@@ -1008,6 +1008,9 @@ const Landing = () => {
                 5-day free trial · £0 today · Cancel anytime
               </p>
               <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 mt-1">
+                Cancel anytime. No contracts.
+              </p>
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground/40 mt-0.5">
                 After trial · £19.99/month · Secure payment via Stripe
               </p>
             </div>
