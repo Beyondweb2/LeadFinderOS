@@ -66,7 +66,7 @@ const Index = () => {
       const timer = setTimeout(() => {
         setShowConversionModal(true);
         setConversionModalShownThisSession(true);
-      }, 2000);
+      }, 4000);
       return () => clearTimeout(timer);
     }
     if (!isLoading && leads.length > 0 && !gated) {

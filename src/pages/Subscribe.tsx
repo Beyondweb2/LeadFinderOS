@@ -77,15 +77,7 @@ const Subscribe = () => {
       });
       if (error) throw error;
       if (data?.url) {
-        window.open(data.url, '_blank');
-        setWaitingForPayment(true);
-        pollRef.current = setInterval(async () => {
-          try {
-            await checkSubscription(true);
-          } catch {
-            // ignore polling errors
-          }
-        }, 3000);
+        window.location.href = data.url;
       }
     } catch (error) {
       toast({
