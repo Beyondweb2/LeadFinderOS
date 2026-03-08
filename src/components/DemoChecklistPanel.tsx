@@ -140,7 +140,7 @@ export function DemoChecklistPanel() {
         </DialogContent>
       </Dialog>
 
-      <PostWalkthroughTipsModal open={showTipsModal} onOpenChange={handleTipsModalClose} />
+      
     </>
   );
 }
