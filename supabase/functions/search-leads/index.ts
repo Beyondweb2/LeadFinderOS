@@ -99,6 +99,16 @@ function isDirectoryUrl(url: string): boolean {
   return false;
 }
 
+// Strip sensitive fields for non-subscribed (gated) users
+function stripGatedFields(leads: SearchLead[]): SearchLead[] {
+  return leads.map(lead => ({
+    ...lead,
+    phone: undefined,
+    address: undefined,
+    googleMapsUrl: '',
+  }));
+}
+
 async function generateCacheKey(keyword: string, location: string, radius: number): Promise<string> {
   const input = `v3-expand|${keyword.toLowerCase()}|${location.toLowerCase()}|${radius}`;
   const data = new TextEncoder().encode(input);
@@ -729,7 +739,7 @@ serve(async (req) => {
       } catch {}
 
       return jsonResponse({
-        leads: cachedLeads,
+        leads: isGated ? stripGatedFields(cachedLeads) : cachedLeads,
         totalFound: cachedLeads.length,
         searchId: crypto.randomUUID(),
         source: 'google',
@@ -766,7 +776,7 @@ serve(async (req) => {
     }
 
     return jsonResponse({
-      leads,
+      leads: isGated ? stripGatedFields(leads) : leads,
       totalFound: leads.length,
       searchId: crypto.randomUUID(),
       source: 'google',
