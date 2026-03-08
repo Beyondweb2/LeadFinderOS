@@ -811,7 +811,7 @@ const Landing = () => {
             background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.25) 20%, hsl(220 30% 6% / 0.35) 50%, hsl(220 30% 6% / 0.25) 80%, transparent 100%)',
           }}
         />
-        <div className="container mx-auto max-w-5xl">
+        <div className="container mx-auto max-w-6xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15]">
               Your Complete
