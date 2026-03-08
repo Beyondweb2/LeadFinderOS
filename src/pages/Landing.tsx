@@ -576,9 +576,9 @@ const Landing = () => {
 
             {/* Feature bullets — mobile only */}
             <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-6 text-[12px] text-foreground/50 font-medium">
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Discover businesses ready to be contacted</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Message via WhatsApp, SMS or call in one click</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every conversation and follow-up</span>
             </div>
 
             {/* Desktop trust badges */}
