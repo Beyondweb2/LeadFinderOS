@@ -337,9 +337,13 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
   return (
     <div className="text-center px-4">
       <div key={current} className="animate-fade-in max-w-[300px] mx-auto">
-        <div className="w-10 h-10 rounded-full mx-auto mb-3 flex items-center justify-center text-sm font-semibold" style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}>
-          {t.initials}
-        </div>
+        {t.photo ? (
+          <img src={t.photo} alt={t.name} className="w-12 h-12 rounded-full mx-auto mb-3 object-cover" />
+        ) : (
+          <div className="w-10 h-10 rounded-full mx-auto mb-3 flex items-center justify-center text-sm font-semibold" style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}>
+            {t.initials}
+          </div>
+        )}
         <p className="text-foreground/90 text-[13px] font-semibold">{t.name}</p>
         <p className="text-muted-foreground/50 text-[11px] mt-0.5">{t.role} · {t.region}</p>
         <div className="flex gap-0.5 justify-center mt-2 mb-3">
