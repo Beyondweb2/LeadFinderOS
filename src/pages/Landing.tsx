@@ -607,7 +607,7 @@ const Landing = () => {
       </div>
 
       {/* How LeadFinder Works - 4-step section */}
-      <section id="how-it-works" className="relative z-10 py-12 sm:py-16 md:py-28 px-3 sm:px-4">
+      <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
         <div className="container mx-auto max-w-7xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-16">
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15]">
@@ -748,7 +748,7 @@ const Landing = () => {
       </div>
 
       {/* Your Complete Lead Toolkit */}
-      <section className="relative z-10 py-12 sm:py-18 md:py-24 px-3 sm:px-4">
+      <section className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
@@ -834,14 +834,14 @@ const Landing = () => {
       </section>
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 pt-20 sm:pt-28 md:pt-32 pb-12 sm:pb-20 md:pb-24 px-4">
+      <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
             background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.2) 20%, hsl(220 30% 6% / 0.3) 50%, hsl(220 30% 6% / 0.2) 80%, transparent 100%)',
           }}
         />
-        <div className="container mx-auto max-w-5xl">
+        <div className="container mx-auto max-w-6xl">
           <h2 className="text-center text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-12 sm:mb-14">
             Trusted by freelancers
             <br className="sm:hidden" />
@@ -953,7 +953,7 @@ const Landing = () => {
       </ScrollReveal>
 
       {/* Final CTA - Free Access Card */}
-      <section id="pricing" className="relative z-10 pb-16 sm:pb-20 md:pb-24 px-4">
+      <section id="pricing" className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
             <div
@@ -1010,7 +1010,7 @@ const Landing = () => {
       </section>
 
       {/* Got Questions Section */}
-      <section className="relative z-10 py-2 sm:py-16 md:py-206 px-4">
+      <section className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
@@ -1043,7 +1043,7 @@ const Landing = () => {
       </section>
 
       {/* Footer */}
-      <footer className="relative z-10 border-t border-white/[0.06] py-8 sm:py-10 md:py-12 mt-4 sm:mt-12 px-4">
+      <footer className="relative z-10 border-t border-white/[0.06] py-10 sm:py-12 md:py-16 px-4">
         <div className="container mx-auto">
           <div className="flex flex-col items-center gap-4 sm:gap-6 mb-6 sm:mb-8">
             <span className="font-bold tracking-tight text-sm sm:text-base">
