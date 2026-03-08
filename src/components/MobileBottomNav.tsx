@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText, Star,
   DollarSign, MoreHorizontal, Palette, LogOut, HelpCircle,
-  MessageSquare, Users, ShieldCheck
+  MessageSquare, Users, ShieldCheck, CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
@@ -51,7 +51,7 @@ export function MobileBottomNav() {
   const { t } = useTranslation();
   const location = useLocation();
   const { signOut } = useAuth();
-  const { isAdmin } = useSubscription();
+  const { isAdmin, openCustomerPortal } = useSubscription();
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
   const [crmGlow, setCrmGlow] = useState(false);
   const [trackGlow, setTrackGlow] = useState(false);
@@ -181,6 +181,12 @@ export function MobileBottomNav() {
                 );
               })}
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => {
+                try { openCustomerPortal(); } catch { }
+              }} className="flex items-center gap-3 cursor-pointer">
+                <CreditCard className="h-4 w-4" />
+                <span>{t('userMenu.manageSubscription')}</span>
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setThemeSheetOpen(true)} className="flex items-center gap-3 cursor-pointer">
                 <Palette className="h-4 w-4" />
                 <span>{t('theme.themeColor')}</span>
