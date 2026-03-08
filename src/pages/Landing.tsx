@@ -906,9 +906,9 @@ const Landing = () => {
                 img: featureCustomization,
               },
               {
-                title: 'Export & Reports',
-                description: 'Download leads and data as CSV anytime.',
-                img: featureExport,
+                title: 'Lead Management',
+                description: 'Keep every conversation organised and track deals from first message to payment.',
+                img: featureLeadManagement,
               },
             ];
 
