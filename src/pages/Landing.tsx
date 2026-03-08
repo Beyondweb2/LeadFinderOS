@@ -637,7 +637,7 @@ const Landing = () => {
               },
               {
                 num: 3,
-                title: 'Close Deals',
+                title: 'Track & Close Deals',
                 body: 'Track conversations, follow-ups and deals so you never lose track of potential clients.',
                 img: step4Dashboard,
                 alt: 'Dashboard revenue overview',
