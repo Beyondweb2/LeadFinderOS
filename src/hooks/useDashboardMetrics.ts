@@ -258,16 +258,13 @@ export function useDashboardMetrics() {
 
     const trackedLeads = allLeads.filter(l => l.is_potential_work && !l.is_archived);
 
-    // Potential revenue: sum for active pipeline leads (exclude lost/archived)
-    const excludeFromPipeline = ['not_interested', 'completed'];
+    // Potential revenue: sum of potential_revenue from tracked leads (is_potential_work)
     const totalPotentialRevenue = allLeads
-      .filter(l => !l.is_archived && !excludeFromPipeline.includes(l.status))
+      .filter(l => l.is_potential_work && !l.is_archived)
       .reduce((sum, l) => sum + ((l as any).potential_revenue || 0), 0);
 
-    // Closed revenue: sum of potential_revenue for "won" leads
-    const closedRevenue = allLeads
-      .filter(l => ['paid_for_draft', 'completed'].includes(l.status))
-      .reduce((sum, l) => sum + ((l as any).potential_revenue || 0), 0);
+    // Closed revenue: actual amount_paid from paid clients
+    const closedRevenue = totalRevenue;
 
     return {
       totalRevenue, revenueThisMonth, revenueLastMonth,
