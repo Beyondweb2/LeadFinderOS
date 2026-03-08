@@ -726,6 +726,11 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Built for line */}
+      <p className="text-xs text-muted-foreground/50 font-medium uppercase tracking-widest text-center mb-6">
+        Built for freelance web devs, agencies and SaaS founders
+      </p>
+
       {/* Your Complete Lead Toolkit — carousel */}
       <section className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
         <div
