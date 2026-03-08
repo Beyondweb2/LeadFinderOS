@@ -874,6 +874,7 @@ const Landing = () => {
                 region: 'US',
                 quote: "Well built. Finding leads fast and keeping outreach tracked makes it way easier to stay consistent.",
                 stars: 5,
+                photo: avatarDaniel,
               },
             ];
 
