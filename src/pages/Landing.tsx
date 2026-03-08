@@ -967,100 +967,98 @@ const Landing = () => {
 
       {/* Testimonials */}
       <ScrollReveal className="relative z-10 pt-20 sm:pt-28 md:pt-32 pb-12 sm:pb-20 md:pb-24 px-4">
-        {/* Subtle background */}
-        <div
-          className="absolute inset-0 -z-10"
-          style={{
-            background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.2) 20%, hsl(220 30% 6% / 0.3) 50%, hsl(220 30% 6% / 0.2) 80%, transparent 100%)',
-          }}
-        />
-        <div className="container mx-auto max-w-5xl">
-          <h2 className="text-center text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground mb-12 sm:mb-14">
-            Trusted by freelancers and agencies using LeadFinder
-          </h2>
+        <div className="container mx-auto max-w-4xl">
+          <div
+            className="rounded-2xl px-6 py-10 sm:px-10 sm:py-12"
+            style={{
+              background: 'hsl(220 30% 7% / 0.7)',
+              border: '1px solid hsl(0 0% 100% / 0.04)',
+            }}
+          >
+            <h2 className="text-center text-lg sm:text-xl font-semibold tracking-tight text-foreground/80 mb-10">
+              Real feedback from LeadFinder users
+            </h2>
 
-          {(() => {
-            const testimonials: Testimonial[] = [
-              {
-                name: 'Chris P.',
-                initials: 'CP',
-                role: 'Freelance Designer',
-                region: 'UK',
-                quote: "Found 30 solid leads in 10 minutes and messaged them all inside the app. That alone sold me.",
-                stars: 5,
-              },
-              {
-                name: 'Alex M.',
-                initials: 'AM',
-                role: 'WordPress Freelancer',
-                region: 'Canada',
-                quote: "No more bouncing between Maps, notes and WhatsApp. Everything in one place — finally feels organised.",
-                stars: 5,
-              },
-              {
-                name: 'Daniel S.',
-                initials: 'DS',
-                role: 'Agency Owner',
-                region: 'US',
-                quote: "Finding leads fast and keeping outreach tracked properly. Makes staying consistent way easier.",
-                stars: 5,
-              },
-            ];
+            {(() => {
+              const testimonials: Testimonial[] = [
+                {
+                  name: 'Chris P.',
+                  initials: 'CP',
+                  role: 'Freelance Designer',
+                  region: 'UK',
+                  quote: "Found 30 solid leads in 10 minutes and messaged them all inside the app. That alone sold me.",
+                  stars: 5,
+                },
+                {
+                  name: 'Alex M.',
+                  initials: 'AM',
+                  role: 'WordPress Freelancer',
+                  region: 'Canada',
+                  quote: "No more bouncing between Maps, notes and WhatsApp. Everything in one place, finally feels organised.",
+                  stars: 5,
+                },
+                {
+                  name: 'Daniel S.',
+                  initials: 'DS',
+                  role: 'Agency Owner',
+                  region: 'US',
+                  quote: "Finding leads fast and keeping outreach tracked properly. Makes staying consistent way easier.",
+                  stars: 5,
+                },
+              ];
 
-            return isMobile ? (
-              <MobileTestimonialSlider testimonials={testimonials} />
-            ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10 items-start">
-                {testimonials.map((r, i) => (
-                  <ScrollReveal key={i} delay={i * 120}>
-                    <div 
-                      className="flex flex-col text-center items-center px-7 py-8 sm:px-8 sm:py-9 rounded-2xl"
-                      style={{
-                        background: 'hsl(220 25% 9% / 0.5)',
-                        border: '1px solid hsl(0 0% 100% / 0.04)',
-                        boxShadow: '0 1px 8px hsl(220 40% 4% / 0.2)',
-                      }}
-                    >
-                      {/* Avatar */}
-                      <div
-                        className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold mb-3"
-                        style={{ background: 'hsl(var(--primary)/0.12)', color: 'hsl(var(--primary))' }}
-                      >
-                        {r.initials}
+              return isMobile ? (
+                <MobileTestimonialSlider testimonials={testimonials} />
+              ) : (
+                <div className="space-y-7">
+                  {testimonials.map((r, i) => (
+                    <ScrollReveal key={i} delay={i * 100}>
+                      <div className="flex items-start gap-4">
+                        {/* Avatar */}
+                        <div
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
+                          style={{ background: 'hsl(var(--primary)/0.12)', color: 'hsl(var(--primary))' }}
+                        >
+                          {r.initials}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {/* Name + role */}
+                          <p className="text-foreground/90 text-[14px] font-semibold leading-tight">{r.name}</p>
+                          <p className="text-muted-foreground/45 text-[12px] mt-0.5">{r.role}, {r.region}</p>
+                          {/* Stars */}
+                          <div className="flex gap-0.5 mt-1.5 mb-2.5">
+                            {[...Array(r.stars)].map((_, si) => (
+                              <Star key={si} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+                            ))}
+                          </div>
+                          {/* Quote */}
+                          <p className="text-foreground/60 text-[14px] leading-[1.7] font-normal">
+                            "{r.quote}"
+                          </p>
+                        </div>
                       </div>
-                      {/* Name */}
-                      <p className="text-foreground/90 text-[15px] font-semibold leading-tight">{r.name}</p>
-                      {/* Role + region */}
-                      <p className="text-muted-foreground/45 text-xs mt-0.5">{r.role} · {r.region}</p>
-                      {/* Stars */}
-                      <div className="flex gap-0.5 mt-3 mb-4">
-                        {[...Array(r.stars)].map((_, si) => (
-                          <Star key={si} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                        ))}
-                      </div>
-                      {/* Quote */}
-                      <p className="text-foreground/65 text-[14px] leading-[1.75] font-normal max-w-[280px]">
-                        "{r.quote}"
-                      </p>
-                    </div>
-                  </ScrollReveal>
-                ))}
-              </div>
-            );
-          })()}
+                      {i < testimonials.length - 1 && (
+                        <div className="ml-14 mt-7" style={{ borderBottom: '1px solid hsl(0 0% 100% / 0.04)' }} />
+                      )}
+                    </ScrollReveal>
+                  ))}
+                </div>
+              );
+            })()}
 
-          {/* Leave a Review button */}
-          <div className="text-center mt-10 sm:mt-12">
-            <Button
-              variant="outline"
-              className="border-border/30 hover:border-border/50 text-sm rounded-full px-6"
-              asChild
-            >
-              <Link to="/feedback">
-                <MessageSquare className="mr-2 h-4 w-4" />
-                Leave a Review
-              </Link>
-            </Button>
+            {/* Leave a Review button */}
+            <div className="text-center mt-10">
+              <Button
+                variant="outline"
+                className="border-border/30 hover:border-border/50 text-sm rounded-full px-6"
+                asChild
+              >
+                <Link to="/feedback">
+                  <MessageSquare className="mr-2 h-4 w-4" />
+                  Leave a Review
+                </Link>
+              </Button>
+            </div>
           </div>
         </div>
       </ScrollReveal>
