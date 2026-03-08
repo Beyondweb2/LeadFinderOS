@@ -64,10 +64,7 @@ function getActiveStep(state: any, pathname: string, t: any): StepDef | null {
   }
 
   if (!state.trackPressed) {
-    if (pathname === '/outreach') {
-      return { step: 5, selector: '[data-walkthrough="track"]', tooltip: t('walkthrough.step5Track'), noDim: true };
-    }
-    return { step: 5, selector: '[data-walkthrough="crm-nav"]', tooltip: t('walkthrough.step5NavToOutreach') };
+    return { step: 5, selector: '[data-walkthrough="track-nav"]', tooltip: t('walkthrough.step5NavToOutreach'), tooltipPosition: 'top' };
   }
 
   if (!state.viewedProgress) {
