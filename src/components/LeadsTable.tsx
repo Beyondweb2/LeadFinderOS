@@ -169,19 +169,26 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   </div>
                   <div className="mt-1"><StatusBadge status={lead.websiteStatus} compact /></div>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className={`h-8 w-8 ${gated ? 'text-muted-foreground/50' : checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
-                        onClick={gated ? (e: any) => { e.preventDefault(); onGatedAction?.(); } : undefined}
-                        asChild={!gated}
-                      >
-                        {gated ? (
-                          <span><Lock className="h-3.5 w-3.5" /></span>
-                        ) : (
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {gated ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2.5 text-xs text-muted-foreground/60 gap-1.5"
+                      onClick={(e) => { e.preventDefault(); onGatedAction?.(); }}
+                    >
+                      <Lock className="h-3 w-3" />
+                      <span>View Details</span>
+                    </Button>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className={`h-8 px-2.5 text-xs gap-1.5 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
+                          asChild
+                        >
                           <a
                             href={lead.googleMapsUrl}
                             target="_blank"
@@ -189,12 +196,13 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
                           >
                             <EyeIcon checked={!!checked} small />
+                            <span>View Details</span>
                           </a>
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>{gated ? '🔒 Start trial to view' : checked ? 'Already viewed' : 'View business info'}</TooltipContent>
-                  </Tooltip>
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{checked ? 'Already viewed' : 'View business info'}</TooltipContent>
+                    </Tooltip>
+                  )}
                   {onAddToOutreach && (
                     inOutreach ? (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
