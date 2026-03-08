@@ -85,16 +85,6 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const origin = resolveOrigin(req.headers.get("origin"));
-    const returnTo = resolveReturnPath(bodyReturnTo, req.headers.get("referer"));
-    logStep("Resolved origin", {
-      requestOrigin: req.headers.get("origin"),
-      checkoutOrigin: origin,
-      referer: req.headers.get("referer"),
-      returnTo,
-    });
-
     // Parse body for customer_email and affiliate tracking (email-first flow)
     let bodyEmail: string | null = null;
     let bodyAffiliateCode: string | null = null;
@@ -119,6 +109,16 @@ serve(async (req) => {
     } catch {
       // No body or invalid JSON — that's fine
     }
+
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const origin = resolveOrigin(req.headers.get("origin"));
+    const returnTo = resolveReturnPath(bodyReturnTo, req.headers.get("referer"));
+    logStep("Resolved origin", {
+      requestOrigin: req.headers.get("origin"),
+      checkoutOrigin: origin,
+      referer: req.headers.get("referer"),
+      returnTo,
+    });
 
     // Check if there's an authenticated user (existing user re-subscribing)
     const authHeader = req.headers.get("Authorization");
