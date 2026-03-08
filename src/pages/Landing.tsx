@@ -391,7 +391,7 @@ const Landing = () => {
   useLandingTheme();
 
   const handleCTA = useCallback(() => {
-    navigate('/auth?mode=signup');
+    navigate('/auth?intent=signup');
   }, [navigate]);
 
   // Track scroll to show/hide sticky CTA and adjust header button
