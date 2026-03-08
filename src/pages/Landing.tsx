@@ -555,7 +555,7 @@ const Landing = () => {
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                 <Button 
                   size="lg" 
-                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-8 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-autoprimary/20 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-8 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-autohadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                   onClick={handleCTA}
                 >
                   Try it free
@@ -776,7 +776,7 @@ const Landing = () => {
               },
               {
                 title: 'Smart Dashboard',
-                description: 'Track outreach andSee your revenue, conversion rate and activity all in one place  img: featureDashboard,
+                description: 'Track outreach andSee your revenue, See your revenue, conversion rate and activity all in one place place  img: featureDashboard,
               },
               {
                 title: 'Full Customization',
@@ -785,7 +785,7 @@ const Landing = () => {
               },
               {
                 title: 'Lead Management',
-                description: 'Keep every conversation organised and track deals from first message to payment.',
+                descriptTrack every lead from first message to closed deal so nothing slips throughayment.',
                 img: featureLeadManagement,
               },
             ];
