@@ -453,7 +453,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     handleNextActionChange(`custom::${trimmed}`);
   };
 
-  const statusBorderColor = STATUS_BORDER_COLORS[mapLegacyStatus(lead.status)] || 'border-l-border/40';
+  const statusBorderColor = STATUS_BORDER_COLORS[mapLegacyStatus(lead.status)] || 'border-l-border/40'| 'border-l-border/40';
   const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
   const contactMethodDisplay = lead.contact_method ? CONTACT_METHOD_LABELS[lead.contact_method] || lead.contact_method : null;
   const nextActionLabel = getNextActionLabel(lead.next_action, lead.id);
@@ -468,7 +468,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   return (
     <>
       <div className={cn(
-        'border-l-2 transition-all',
+        'border-l-2 trastatusBsition-all',
         borderColor,
         isExpanded ? 'ring-1 ring-primary/20 ring-inset' : ''
       )}>
