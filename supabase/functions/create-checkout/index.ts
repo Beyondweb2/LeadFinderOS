@@ -263,7 +263,14 @@ serve(async (req) => {
       logStep("Creating checkout without trial (trial already used)");
     }
 
-    logStep("Creating checkout session", { hasCustomer: !!customerId, hasUser: !!user, trialUsed });
+    logStep("Creating checkout session", {
+      hasCustomer: !!customerId,
+      hasUser: !!user,
+      trialUsed,
+      successUrl: sessionConfig.success_url,
+      cancelUrl: sessionConfig.cancel_url,
+      returnTo,
+    });
     const session = await stripe.checkout.sessions.create(sessionConfig as Stripe.Checkout.SessionCreateParams);
 
     logStep("Checkout session created", { sessionId: session.id });
