@@ -35,6 +35,10 @@ import featureContactTracking from '@/assets/feature-contact-tracking.png';
 import featureCustomization from '@/assets/feature-customization-new.png';
 import featureExport from '@/assets/feature-export.png';
 import featureLeadManagement from '@/assets/feature-lead-management.png';
+import avatarChris from '@/assets/avatar-chris.jpg';
+import avatarTom from '@/assets/avatar-tom.jpg';
+import avatarAlex from '@/assets/avatar-alex.jpg';
+import avatarDaniel from '@/assets/avatar-daniel.jpg';
 
 import {
   Carousel,
@@ -315,6 +319,7 @@ interface Testimonial {
   region: string;
   quote: string;
   stars: number;
+  photo?: string;
 }
 
 const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[] }) => {
@@ -332,9 +337,13 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
   return (
     <div className="text-center px-4">
       <div key={current} className="animate-fade-in max-w-[300px] mx-auto">
-        <div className="w-10 h-10 rounded-full mx-auto mb-3 flex items-center justify-center text-sm font-semibold" style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}>
-          {t.initials}
-        </div>
+        {t.photo ? (
+          <img src={t.photo} alt={t.name} className="w-12 h-12 rounded-full mx-auto mb-3 object-cover" />
+        ) : (
+          <div className="w-10 h-10 rounded-full mx-auto mb-3 flex items-center justify-center text-sm font-semibold" style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}>
+            {t.initials}
+          </div>
+        )}
         <p className="text-foreground/90 text-[13px] font-semibold">{t.name}</p>
         <p className="text-muted-foreground/50 text-[11px] mt-0.5">{t.role} · {t.region}</p>
         <div className="flex gap-0.5 justify-center mt-2 mb-3">
@@ -838,6 +847,7 @@ const Landing = () => {
                 region: 'UK',
                 quote: "Found 30 businesses without websites in 10 minutes. Messaged them right inside the app. That alone sold me.",
                 stars: 5,
+                photo: avatarChris,
               },
               {
                 name: 'Tom H.',
@@ -846,6 +856,7 @@ const Landing = () => {
                 region: 'Australia',
                 quote: "The templates save me so much time. Tweak the message slightly and send it out without rewriting everything.",
                 stars: 5,
+                photo: avatarTom,
               },
               {
                 name: 'Alex M.',
@@ -854,6 +865,7 @@ const Landing = () => {
                 region: 'Canada',
                 quote: "I used to bounce between Maps, notes and WhatsApp. Now everything is in one place and it actually feels organised.",
                 stars: 5,
+                photo: avatarAlex,
               },
               {
                 name: 'Daniel S.',
@@ -862,6 +874,7 @@ const Landing = () => {
                 region: 'US',
                 quote: "Well built. Finding leads fast and keeping outreach tracked makes it way easier to stay consistent.",
                 stars: 5,
+                photo: avatarDaniel,
               },
             ];
 
