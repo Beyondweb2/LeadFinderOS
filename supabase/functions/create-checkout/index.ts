@@ -170,7 +170,7 @@ serve(async (req) => {
         try {
           const portalSession = await stripe.billingPortal.sessions.create({
             customer: existingSub.stripe_customer_id,
-            return_url: `${origin}/`,
+            return_url: `${origin}${returnTo}`,
           });
           return new Response(JSON.stringify({ url: portalSession.url, redirectedToPortal: true }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
