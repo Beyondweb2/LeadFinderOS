@@ -106,6 +106,59 @@ serve(async (req) => {
       });
     }
 
+    // Handle mark_setup_completed action
+    if (action === 'mark_setup_completed') {
+      const { data: existingTrial, error: trialCheckErr } = await supabaseClient
+        .from('user_trials')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (trialCheckErr) {
+        logStep("Error checking user_trials before setup completion", { error: trialCheckErr.message });
+        throw new Error(`Failed to check setup state: ${trialCheckErr.message}`);
+      }
+
+      if (!existingTrial) {
+        const now = new Date();
+        const trialEndDate = new Date(now.getTime() + 1 * 24 * 60 * 60 * 1000);
+        const { error: insertErr } = await supabaseClient
+          .from('user_trials')
+          .insert({
+            user_id: user.id,
+            trial_started_at: now.toISOString(),
+            trial_days: 1,
+            searches_used: 0,
+            plan_status: 'trial',
+            trial_end_date: trialEndDate.toISOString(),
+            searches_today: 0,
+            last_search_date: now.toISOString().split('T')[0],
+            setup_completed: true,
+          });
+
+        if (insertErr) {
+          logStep("Error creating user_trials while marking setup completed", { error: insertErr.message });
+          throw new Error(`Failed to create setup state: ${insertErr.message}`);
+        }
+      } else {
+        const { error: updateErr } = await supabaseClient
+          .from('user_trials')
+          .update({ setup_completed: true })
+          .eq('user_id', user.id);
+
+        if (updateErr) {
+          logStep("Error updating setup_completed", { error: updateErr.message });
+          throw new Error(`Failed to mark setup complete: ${updateErr.message}`);
+        }
+      }
+
+      logStep("Setup marked complete", { userId: user.id });
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
     logStep("Tracking params", { affiliateCode, refSource });
 
     // Check if trial record exists
