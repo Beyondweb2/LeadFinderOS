@@ -141,8 +141,8 @@ const Auth = () => {
             title: t('auth.accountCreated'),
             description: t('auth.welcomeRedirecting'),
           });
-          // New users go to landing to start checkout
-          navigate('/landing');
+          // New users go directly into the app
+          navigate('/', { replace: true });
           return;
         }
       }
@@ -242,13 +242,8 @@ const Auth = () => {
               ? 'You already have Pro — sign in to continue.'
               : isLogin 
                 ? t('auth.signInToFind')
-                : t('auth.createAccountDesc')}
+                : 'Create an account and start finding clients'}
           </CardDescription>
-          {!isLogin && !existingParam && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Start with a 5-day free trial · £0 today
-            </p>
-          )}
         </CardHeader>
         
         <form onSubmit={handleSubmit}>
