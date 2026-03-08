@@ -546,7 +546,7 @@ const Landing = () => {
                   </Link>
                 </Button>
               </div>
-              <p className="text-[11px] sm:text-xs text-muted-foreground/40 mt-3 font-medium">
+              <p className="text-[11px] sm:text-xs text-muted-foreground/55 mt-3 font-medium">
                 No card required · Instant access · Cancel anytime
               </p>
             </div>
@@ -566,8 +566,8 @@ const Landing = () => {
             </div>
 
             {/* Feature bullets */}
-            <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/50 font-medium">
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
+            <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/60 font-medium">
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses without websites</span>
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Contact them instantly</span>
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every follow-up</span>
             </div>
