@@ -730,11 +730,25 @@ const Landing = () => {
         </div>
       </section>
 
-
-
+      {/* Section divider */}
+      <div className="relative z-10 py-10 sm:py-14 md:py-16">
+        <div
+          className="mx-auto h-px"
+          style={{
+            width: '45%',
+            background: 'linear-gradient(90deg, transparent 0%, hsl(210 100% 50% / 0.12) 30%, hsl(210 100% 50% / 0.18) 50%, hsl(210 100% 50% / 0.12) 70%, transparent 100%)',
+          }}
+        />
+        <div
+          className="absolute inset-0 -z-10"
+          style={{
+            background: 'radial-gradient(ellipse 60% 100% at 50% 50%, hsl(220 30% 5% / 0.5), transparent 70%)',
+          }}
+        />
+      </div>
 
       {/* Your Complete Lead Toolkit */}
-      <section className="relative z-10 p4 sm:py-18 md:py-24440 px-3 sm:px-4">
+      <section className="relative z-10 py-12 sm:py-18 md:py-24 px-3 sm:px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
