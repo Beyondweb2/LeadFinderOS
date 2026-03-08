@@ -3,8 +3,8 @@ import { Link, useLocation } from 'react-router-dom';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 
-import { UpgradePromptDialog } from '@/components/UpgradePromptDialog';
 import { TrialLimitDialog } from '@/components/TrialLimitDialog';
+import { TrialConversionModal } from '@/components/TrialConversionModal';
 
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 
@@ -15,52 +15,17 @@ import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
 import { supabase } from '@/integrations/supabase/client';
-import { Flame, Target, Zap, Search, CreditCard, AlertTriangle, Sparkles, Lock, Loader2, RefreshCw, MapPin, Info } from 'lucide-react';
+import { Flame, Target, Zap, Search, AlertTriangle, MapPin, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, Country } from '@/types/lead';
 
-const FREE_SEARCH_LIMIT = 2;
-const PAYWALL_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 24 hours
-const SEARCH_COUNT_KEY = 'leadfinder_free_search_count';
-const BLUR_KEY = 'leadfinder_blur_active';
-
-function getPersistedSearchCount(userId?: string): number {
-  try {
-    const key = userId ? `${SEARCH_COUNT_KEY}_${userId}` : SEARCH_COUNT_KEY;
-    const val = localStorage.getItem(key);
-    return val ? parseInt(val, 10) : 0;
-  } catch { return 0; }
-}
-
-function persistSearchCount(count: number, userId?: string) {
-  try {
-    const key = userId ? `${SEARCH_COUNT_KEY}_${userId}` : SEARCH_COUNT_KEY;
-    localStorage.setItem(key, count.toString());
-  } catch {}
-}
-
-function isBlurPersisted(userId?: string): boolean {
-  try {
-    const key = userId ? `${BLUR_KEY}_${userId}` : BLUR_KEY;
-    return localStorage.getItem(key) === 'true';
-  } catch { return false; }
-}
-
-function persistBlur(active: boolean, userId?: string) {
-  try {
-    const key = userId ? `${BLUR_KEY}_${userId}` : BLUR_KEY;
-    if (active) localStorage.setItem(key, 'true');
-    else localStorage.removeItem(key);
-  } catch {}
-}
-
 const Index = () => {
   const location = useLocation();
-  const { leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded } = useLeadSearchContext();
+  const { leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded, gated } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
-  const { searchesUsed, shouldShowUpgradePrompt, checkTrial, isOnTrial, searchesRemaining, dailyLimit, isStripeTrialing, isLoading: isTrialLoading, demoSearchUsed, freeSearchCount } = useTrial();
+  const { checkTrial, isStripeTrialing, isLoading: isTrialLoading, freeSearchCount } = useTrial();
   const { subscribed, isLoading: isSubscriptionLoading, status: subStatus, isPaidSubscriber } = useSubscription();
   const { session, user } = useAuth();
   const { walkthroughCompleted } = useWalkthroughStatus();
@@ -68,6 +33,7 @@ const Index = () => {
 
   // Pro access = active, past_due, admin, or trialing (Stripe trial)
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
+  const isFreeUser = !hasProAccess;
 
   // Trigger challenge modal on first search page visit after walkthrough completion (only for subscribed users)
   useEffect(() => {
@@ -84,142 +50,45 @@ const Index = () => {
   }, [user?.id, hasProAccess]);
   
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
-  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
-  const [isCheckoutLoading] = useState(false);
-  const [showUpgradeAfterLimit, setShowUpgradeAfterLimit] = useState(false);
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
-  // Session-level dismissal tracking
-  const [paywallDismissedThisSession, setPaywallDismissedThisSession] = useState(false);
-  
-  // Persisted search count and blur state
-  const [localSearchCount, setLocalSearchCount] = useState(() => getPersistedSearchCount(user?.id));
-  const [buttonExhausted, setButtonExhausted] = useState(() => isBlurPersisted(user?.id));
-  // CTA swap only after results have loaded with blur
-  const [ctaSwapped, setCtaSwapped] = useState(() => isBlurPersisted(user?.id));
-  
-  // Determine if still loading access status
-  const isAccessLoading = isTrialLoading || isSubscriptionLoading;
-
-  // Free user = not paid
-  const isFreeUser = !hasProAccess;
-
-  // Re-initialize from localStorage when user changes (sign-in/sign-out)
-  useEffect(() => {
-    const count = getPersistedSearchCount(user?.id);
-    const blur = isBlurPersisted(user?.id);
-    setLocalSearchCount(count);
-    setButtonExhausted(blur);
-    setCtaSwapped(blur);
-  }, [user?.id]);
-
-  // Initialize search count based on walkthrough completion — only if the user
-  // actually performed a search during the walkthrough (freeSearchCount > 0 from DB).
-  // If they skipped the walkthrough they should still get their 1 free search.
-  useEffect(() => {
-    if (walkthroughCompleted && isFreeUser && localSearchCount < 1 && freeSearchCount >= 1) {
-      setLocalSearchCount(1);
-      persistSearchCount(1, user?.id);
-    }
-  }, [walkthroughCompleted, isFreeUser, localSearchCount, freeSearchCount, user?.id]);
-
-
-  // Free search exhausted — after 2nd search completes, block further searches
-  const freeSearchesExhausted = isFreeUser && localSearchCount >= 1;
-
-  // Check if paywall was dismissed within cooldown period
-  const isWithinCooldown = useCallback(() => {
-    try {
-      const dismissed = localStorage.getItem('paywallDismissedAt');
-      if (!dismissed) return false;
-      return Date.now() - parseInt(dismissed, 10) < PAYWALL_COOLDOWN_MS;
-    } catch {
-      return false;
-    }
-  }, []);
-
-  // Refetch trial data and fire tip event after search completes
-  useEffect(() => {
-    if (!isLoading && leads.length > 0) {
-      checkTrial();
-      if (isFreeUser) {
-        setTimeout(() => window.dispatchEvent(new CustomEvent('post-search-tip')), 300);
-        
-        // Track cumulative businesses found
-        setTotalBusinessesFound(prev => prev + leads.length);
-
-        // Swap CTA and show paywall after results load with blur
-        if (buttonExhausted) {
-          setCtaSwapped(true);
-          setTimeout(() => setShowUpgradeAfterLimit(true), 100);
-        }
-      }
-    }
-  }, [isLoading, leads.length, checkTrial, isFreeUser, buttonExhausted]);
-
-  // When server blocks a search (freeSearchExhausted), auto-show upgrade modal
-  // Only show for free users after access status is resolved (prevents flash for admins/subscribers)
-  useEffect(() => {
-    if (freeSearchExhausted && !isAccessLoading && isFreeUser) {
-      setShowUpgradeAfterLimit(true);
-    }
-  }, [freeSearchExhausted, isAccessLoading, isFreeUser]);
+  const [showConversionModal, setShowConversionModal] = useState(false);
+  const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
 
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
-  // "Unlock Unlimited" button on search form now opens the modal instead of going to Stripe directly
-  const handleUnlockClick = useCallback(async () => {
-    try {
-      const { data, error } = await supabase.functions.invoke('create-checkout', {
-        headers: { Authorization: `Bearer ${session?.access_token}` },
-      });
-      if (error) throw error;
-      if (data?.url) window.open(data.url, '_blank');
-    } catch (err) {
-      toast({ title: 'Error', description: 'Failed to start checkout', variant: 'destructive' });
+  // Show conversion modal after first gated search results load
+  useEffect(() => {
+    if (!isLoading && leads.length > 0 && gated && !conversionModalShownThisSession) {
+      checkTrial();
+      setTotalBusinessesFound(prev => prev + leads.length);
+      // Short delay so user sees results first
+      const timer = setTimeout(() => {
+        setShowConversionModal(true);
+        setConversionModalShownThisSession(true);
+      }, 2000);
+      return () => clearTimeout(timer);
     }
-  }, [session?.access_token, toast]);
+    if (!isLoading && leads.length > 0 && !gated) {
+      checkTrial();
+      setTimeout(() => window.dispatchEvent(new CustomEvent('post-search-tip')), 300);
+    }
+  }, [isLoading, leads.length, gated, checkTrial, conversionModalShownThisSession]);
 
-  // Handle search attempt
+  // Handle search attempt — unlimited for all users
   const handleSearch = useCallback((filters: any) => {
-    // If already exhausted, just show paywall
-    if (isFreeUser && localSearchCount >= 1) {
-      setShowUpgradeAfterLimit(true);
-      return;
-    }
     setLastSearchCountry(filters.country || 'UK');
     search(filters, false, false);
-    if (isFreeUser) {
-      const newCount = localSearchCount + 1;
-      setLocalSearchCount(newCount);
-      persistSearchCount(newCount, user?.id);
-      // Flag first search for blur
-      if (newCount >= 1) {
-        setButtonExhausted(true);
-        persistBlur(true, user?.id);
-      }
-    }
-  }, [search, isFreeUser, localSearchCount, user?.id]);
-
-  // Handle paywall dismissal
-  const handlePaywallDismiss = useCallback((open: boolean) => {
-    if (!open) {
-      setShowUpgradeAfterLimit(false);
-      setPaywallDismissedThisSession(true);
-      try {
-        localStorage.setItem('paywallDismissedAt', Date.now().toString());
-      } catch {}
-    }
-  }, []);
+  }, [search]);
 
   return (
     <div className="space-y-4 md:space-y-8">
-      {/* Page Header - Compact on mobile */}
+      {/* Page Header */}
       <div className="flex flex-col gap-2 sm:gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-center sm:text-left">
           <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Find Leads</h1>
           <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
-            Find businesses without websites in any area. Search by business type and location, then add hot leads to your CRM.
+            Find businesses without websites in any area. Search by business type and location, then add hot leads to your Outreach.
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
@@ -241,12 +110,6 @@ const Index = () => {
             <AlertTriangle className="h-4 w-4 shrink-0" />
             <span className="font-medium">You're one step away from unlimited leads.</span>
           </div>
-          <Button asChild size="sm" className="shrink-0">
-            <Link to="/subscribe">
-              <CreditCard className="mr-2 h-4 w-4" />
-              Resume Checkout
-            </Link>
-          </Button>
         </div>
       )}
 
@@ -258,11 +121,8 @@ const Index = () => {
           isOnTrial={false}
           searchesRemaining={Infinity}
           dailyLimit={Infinity}
-          isPaidSubscriber={isAccessLoading || hasProAccess}
-          disabled={postAbandonExhausted && !hasProAccess}
-          isUpgradeLoading={isCheckoutLoading}
-          onUpgrade={handleUnlockClick}
-          freeSearchesExhausted={ctaSwapped && isFreeUser}
+          isPaidSubscriber={true}
+          disabled={false}
         />
       </section>
 
@@ -274,10 +134,7 @@ const Index = () => {
           <p className="text-[11px] text-muted-foreground/60 font-mono">Error ID: {searchError.errorId}</p>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={retryLastSearch} className="gap-2">
-              <RefreshCw className="h-4 w-4" /> Retry
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => window.history.back()} className="gap-2">
-              Go back
+              Retry
             </Button>
           </div>
         </div>
@@ -331,33 +188,21 @@ const Index = () => {
       {/* Results Section */}
       {leads.length > 0 && (
         <section data-walkthrough="results-header">
-          <div className="relative">
-            {buttonExhausted && isFreeUser && (
-              <div className="absolute top-[20%] left-0 right-0 z-20 flex justify-center pointer-events-none">
-                <div className="flex flex-col items-center gap-3 text-center px-4 pointer-events-auto">
-                  <Lock className="h-8 w-8 text-primary" />
-                  <p className="text-sm font-semibold text-foreground">Start your free trial to unlock these leads</p>
-                  <Button size="sm" onClick={() => setShowUpgradeAfterLimit(true)} className="gap-2">
-                    <Sparkles className="h-4 w-4" /> Unlock Access
-                  </Button>
-                </div>
-              </div>
-            )}
-            <LeadsTable 
-              leads={leads} 
-              onExport={exportToCsv}
-              onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
-              isInOutreach={isInOutreach}
-              onMapLinkClick={markAsChecked}
-              isChecked={isChecked}
-              blurred={buttonExhausted && isFreeUser}
-            />
-          </div>
+          <LeadsTable 
+            leads={leads} 
+            onExport={exportToCsv}
+            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
+            isInOutreach={isInOutreach}
+            onMapLinkClick={markAsChecked}
+            isChecked={isChecked}
+            gated={gated}
+            onGatedAction={() => setShowConversionModal(true)}
+          />
         </section>
       )}
 
       {/* Empty State */}
-      {leads.length === 0 && !isLoading && !freeSearchesExhausted && (
+      {leads.length === 0 && !isLoading && (
         <section className="text-center py-16">
           <div className="inline-flex p-4 rounded-full bg-muted/50 mb-6">
             <Search className="h-12 w-12 text-muted-foreground" />
@@ -378,17 +223,13 @@ const Index = () => {
         noWebsiteCount={noWebsiteCount}
       />
 
-      {/* Upgrade After Limit Popup — action-triggered only */}
-      <TrialLimitDialog
-        open={showUpgradeAfterLimit}
-        onOpenChange={handlePaywallDismiss}
-        searchesToday={FREE_SEARCH_LIMIT}
-        dailyLimit={FREE_SEARCH_LIMIT}
-        totalBusinessesFound={totalBusinessesFound}
+      {/* Conversion Modal for gated users */}
+      <TrialConversionModal
+        open={showConversionModal}
+        onOpenChange={setShowConversionModal}
         noWebsiteCount={noWebsiteCount}
+        totalFound={leads.length}
       />
-
-
     </div>
   );
 };

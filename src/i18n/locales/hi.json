@@ -44,7 +44,7 @@
     "dashboardDesc": "अवलोकन और आज के कार्य",
     "findLeads": "लीड खोजें",
     "findLeadsDesc": "व्यवसाय खोजें",
-    "outreachCRM": "आउटरीच CRM",
+    "outreachCRM": "आउटरीच",
     "outreachCRMDesc": "कॉल करें और नंबर इकट्ठा करें",
     "trackLeads": "लीड ट्रैक करें",
     "trackLeadsDesc": "काम करने को तैयार लीड",
@@ -59,7 +59,7 @@
     "search": "खोजें",
     "outreach": "आउटरीच",
     "track": "ट्रैक",
-    "allInOneCRM": "ऑल-इन-वन CRM",
+    "allInOneCRM": "ऑल-इन-वन आउटरीच",
     "affiliates": "सहयोगी",
     "affiliatesDesc": "सहयोगी भागीदारों का प्रबंधन",
     "adminDashboard": "डैशबोर्ड",
@@ -117,7 +117,7 @@
     "alreadyViewed": "पहले ही देखा गया",
     "viewBusinessInfo": "व्यवसाय जानकारी देखें",
     "addToOutreach": "आउटरीच में जोड़ें",
-    "alreadyInCRM": "पहले से CRM में है",
+    "alreadyInCRM": "पहले से आउटरीच में है",
     "nearby": "आसपास",
     "tapInstructions": "विवरण देखने के लिए 👁 टैप करें · आउटरीच में जोड़ने के लिए 📋",
     "clickInstructions": "विवरण के लिए 👁 क्लिक करें, आउटरीच में जोड़ने के लिए 📋"
@@ -146,7 +146,7 @@
     "resetFailed": "पूर्ण रीसेट करने में विफल।"
   },
   "outreach": {
-    "title": "आउटरीच CRM",
+    "title": "आउटरीच",
     "subtitle": "WhatsApp, SMS या कॉल के ज़रिए व्यवसायों से संपर्क करें। उनकी स्थिति अपडेट करें, फिर आशाजनक लीड को ट्रैक लीड में ट्रैक करें।",
     "noPhone": "कोई फ़ोन नंबर नहीं",
     "noPhoneDesc": "चयनित लीड में कोई फ़ोन नंबर नहीं मिला।",

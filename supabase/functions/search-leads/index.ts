@@ -639,7 +639,7 @@ serve(async (req) => {
 
     // ─── SUBSCRIPTION / TRIAL CHECK ──────────────
     let hasActiveSubscription = false;
-    let isOnAppTrial = false;
+    let isGated = false;
 
     if (!isAdmin) {
       const { data: subscription } = await serviceClient
@@ -656,68 +656,27 @@ serve(async (req) => {
       if (hasActiveSubscription) {
         console.log(`User ${userId} has Stripe subscription (${subscription.status}) — unlimited searches`);
       } else {
-        // Free search limit check
+        // Free user — allow search but mark results as gated
+        isGated = true;
+        console.log(`User ${userId} is free user — search allowed, results gated`);
+
+        // Track free search count for analytics
         const { data: trial } = await serviceClient
           .from('user_trials')
-          .select('*')
+          .select('free_search_count, searches_used')
           .eq('user_id', userId)
           .maybeSingle();
 
         if (trial) {
           const currentFreeCount = trial.free_search_count || 0;
-
-          if (currentFreeCount < FREE_SEARCH_LIMIT) {
-            console.log(`User ${userId} free search (${currentFreeCount + 1} of ${FREE_SEARCH_LIMIT})`);
-            await serviceClient
-              .from('user_trials')
-              .update({
-                free_search_count: currentFreeCount + 1,
-                searches_used: trial.searches_used + 1,
-                demo_search_used: true,
-              })
-              .eq('user_id', userId);
-            isOnAppTrial = true;
-          } else {
-            console.log(`User ${userId} exhausted ${FREE_SEARCH_LIMIT} free searches`);
-          }
-        }
-
-        if (!isOnAppTrial) {
-          // Post-abandon single search
-          const { data: abandonTrial } = await serviceClient
+          await serviceClient
             .from('user_trials')
-            .select('checkout_abandoned, post_abandon_search_used')
-            .eq('user_id', userId)
-            .maybeSingle();
-
-          if (abandonTrial?.checkout_abandoned && !abandonTrial?.post_abandon_search_used) {
-            console.log(`User ${userId} using post-abandon search`);
-            await serviceClient
-              .from('user_trials')
-              .update({ post_abandon_search_used: true })
-              .eq('user_id', userId);
-            isOnAppTrial = true;
-          } else {
-          // Fetch last search summary for the trial modal
-          const { data: lastSearch } = await serviceClient
-            .from('search_history')
-            .select('results_count, no_website_count')
-            .eq('user_id', userId)
-            .order('searched_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          return jsonResponse({
-              error: "Start your free trial to unlock unlimited searches.",
-              code: 'FREE_SEARCH_EXHAUSTED',
-              trial_required: true,
-              lastSearchSummary: lastSearch ? {
-                totalBusinessesFound: lastSearch.results_count || 0,
-                businessesWithoutWebsite: lastSearch.no_website_count || 0,
-              } : null,
-              _debug: debug,
-            }, 402);
-          }
+            .update({
+              free_search_count: currentFreeCount + 1,
+              searches_used: (trial.searches_used || 0) + 1,
+              demo_search_used: true,
+            })
+            .eq('user_id', userId);
         }
       }
     } else {
@@ -776,6 +735,7 @@ serve(async (req) => {
         source: 'google',
         cached: true,
         expanded: hasExpanded,
+        gated: isGated,
         _debug: debug,
       });
     }
@@ -812,6 +772,7 @@ serve(async (req) => {
       source: 'google',
       cached: false,
       expanded,
+      gated: isGated,
       _debug: { ...debug, ...selectionDebug },
     });
 

@@ -40,4 +40,5 @@ export interface SearchResponse {
   source?: string;
   cached?: boolean;
   expanded?: boolean;
+  gated?: boolean;
 }

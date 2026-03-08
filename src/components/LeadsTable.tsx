@@ -1,41 +1,24 @@
 import { useState, useMemo, useCallback, memo } from 'react';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from './StatusBadge';
 import {
-  Download,
-  Filter,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardList,
-  Check,
-  Eye,
+  Download, Filter, ChevronLeft, ChevronRight, ClipboardList, Check, Eye, Lock,
 } from 'lucide-react';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuCheckboxItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
+  Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { Lead, WebsiteStatus } from '@/types/lead';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 
 const ITEMS_PER_PAGE = 25;
 
-// Memoized icon to prevent re-render flicker
 const EyeIcon = memo(({ checked, small }: { checked: boolean; small?: boolean }) => (
   <Eye className={`${small ? 'h-3.5 w-3.5' : 'h-4 w-4'} ${checked ? '' : 'text-muted-foreground'}`} />
 ));
@@ -49,15 +32,19 @@ interface LeadsTableProps {
   onMapLinkClick?: (businessName: string, googleMapsUrl?: string) => void;
   isChecked?: (businessName: string, googleMapsUrl?: string) => boolean;
   blurred?: boolean;
+  gated?: boolean;
+  onGatedAction?: () => void;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false }: LeadsTableProps) {
-  const handleExport = blurred ? undefined : onExport;
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction }: LeadsTableProps) {
+  const isLocked = blurred || gated;
+  const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
   const shouldPulseCrm = isDemoUser && !state.addedToCrm;
   const handleAddToOutreach = useCallback((lead: Lead) => {
+    if (gated) { onGatedAction?.(); return; }
     return onAddToOutreach?.(lead);
-  }, [onAddToOutreach]);
+  }, [onAddToOutreach, gated, onGatedAction]);
 
   const checkIsInOutreach = useCallback((name: string, url?: string) => {
     return isInOutreach?.(name, url) ?? false;
@@ -75,7 +62,6 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     });
   }, [leads, statusFilters]);
 
-  // Reset page on filter/data change
   useMemo(() => { setCurrentPage(1); }, [statusFilters, leads]);
 
   const totalPages = Math.ceil(filteredLeads.length / ITEMS_PER_PAGE);
@@ -113,6 +99,10 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     </DropdownMenu>
   ), [statusFilters, toggleFilter, statusFilterOptions]);
 
+  const handleGatedViewInfo = useCallback((e: React.MouseEvent) => {
+    if (gated) { e.preventDefault(); onGatedAction?.(); }
+  }, [gated, onGatedAction]);
+
   return (
     <Card className="border-border/50 bg-card shadow-sm">
       <CardHeader className="pb-3 md:pb-4">
@@ -129,8 +119,8 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           </div>
           <div className="flex items-center gap-2">
             {renderFilterMenu('start')}
-            <Button onClick={handleExport} size="sm" className="h-8 px-2.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
-              <Download className="h-3.5 w-3.5 mr-1.5" />Export
+            <Button onClick={isLocked ? () => onGatedAction?.() : handleExport} size="sm" className="h-8 px-2.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
+              {gated ? <Lock className="h-3.5 w-3.5 mr-1.5" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}Export
             </Button>
           </div>
         </div>
@@ -147,8 +137,8 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           </div>
           <div className="flex items-center gap-2">
             {renderFilterMenu('end')}
-            <Button onClick={handleExport} className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
-              <Download className="mr-2 h-4 w-4" />Export CSV
+            <Button onClick={isLocked ? () => onGatedAction?.() : handleExport} className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
+              {gated ? <Lock className="mr-2 h-4 w-4" /> : <Download className="mr-2 h-4 w-4" />}Export CSV
             </Button>
           </div>
         </div>
@@ -185,20 +175,25 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                       <Button
                         variant="ghost"
                         size="icon"
-                        className={`h-8 w-8 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
-                        asChild
+                        className={`h-8 w-8 ${gated ? 'text-muted-foreground/50' : checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
+                        onClick={gated ? (e: any) => { e.preventDefault(); onGatedAction?.(); } : undefined}
+                        asChild={!gated}
                       >
-                        <a
-                          href={lead.googleMapsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
-                        >
-                          <EyeIcon checked={!!checked} small />
-                        </a>
+                        {gated ? (
+                          <span><Lock className="h-3.5 w-3.5" /></span>
+                        ) : (
+                          <a
+                            href={lead.googleMapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                          >
+                            <EyeIcon checked={!!checked} small />
+                          </a>
+                        )}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent>{checked ? 'Already viewed' : 'View business info'}</TooltipContent>
+                    <TooltipContent>{gated ? '🔒 Start trial to view' : checked ? 'Already viewed' : 'View business info'}</TooltipContent>
                   </Tooltip>
                   {onAddToOutreach && (
                     inOutreach ? (
@@ -206,16 +201,21 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                         <Check className="h-3.5 w-3.5" />
                       </Button>
                     ) : (
-                      <Button
-                        variant="default"
-                        size="icon"
-                        className={`h-8 w-8 bg-primary hover:bg-primary/90 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
-                        onClick={() => handleAddToOutreach(lead)}
-                        data-walkthrough-step="add-to-crm"
-                        data-walkthrough="add-crm"
-                      >
-                        <ClipboardList className="h-3.5 w-3.5" />
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant={gated ? "ghost" : "default"}
+                            size="icon"
+                            className={`h-8 w-8 ${gated ? 'text-muted-foreground/50' : `bg-primary hover:bg-primary/90 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}`}
+                            onClick={() => handleAddToOutreach(lead)}
+                            data-walkthrough-step="add-to-crm"
+                            data-walkthrough="add-crm"
+                          >
+                            {gated ? <Lock className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{gated ? '🔒 Start trial to add' : 'Add to Outreach'}</TooltipContent>
+                      </Tooltip>
                     )
                   )}
                 </div>
@@ -266,30 +266,41 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     </Tooltip>
                   </TableCell>
                   <TableCell>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={isChecked?.(lead.name, lead.googleMapsUrl) ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}
-                          asChild
-                        >
-                          <a
-                            href={lead.googleMapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                    {gated ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-muted-foreground/50"
+                        onClick={() => onGatedAction?.()}
+                      >
+                        <Lock className="h-4 w-4 mr-1.5" />Locked
+                      </Button>
+                    ) : (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className={isChecked?.(lead.name, lead.googleMapsUrl) ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}
+                            asChild
                           >
-                            {isChecked?.(lead.name, lead.googleMapsUrl)
-                              ? <><Eye className="h-4 w-4 mr-1.5" />Viewed</>
-                              : <><Eye className="h-4 w-4 mr-1.5 text-muted-foreground" />View Info</>}
-                          </a>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {isChecked?.(lead.name, lead.googleMapsUrl) ? 'Already viewed' : 'View business info'}
-                      </TooltipContent>
-                    </Tooltip>
+                            <a
+                              href={lead.googleMapsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                            >
+                              {isChecked?.(lead.name, lead.googleMapsUrl)
+                                ? <><Eye className="h-4 w-4 mr-1.5" />Viewed</>
+                                : <><Eye className="h-4 w-4 mr-1.5 text-muted-foreground" />View Info</>}
+                            </a>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {isChecked?.(lead.name, lead.googleMapsUrl) ? 'Already viewed' : 'View business info'}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
                   </TableCell>
                   <TableCell>
                     {onAddToOutreach && (
@@ -300,7 +311,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                               <Check className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Already in CRM</TooltipContent>
+                          <TooltipContent>Already in Outreach</TooltipContent>
                         </Tooltip>
                       ) : (
                         <Tooltip>
@@ -308,15 +319,15 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             <Button
                               variant="ghost"
                               size="icon"
-                              className={`h-8 w-8 text-green-500 hover:bg-muted hover:text-green-400 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
+                              className={`h-8 w-8 ${gated ? 'text-muted-foreground/50' : `text-green-500 hover:bg-muted hover:text-green-400 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}`}
                               onClick={() => handleAddToOutreach(lead)}
                               data-walkthrough-step="add-to-crm"
                               data-walkthrough="add-crm"
                             >
-                              <ClipboardList className="h-4 w-4" />
+                              {gated ? <Lock className="h-4 w-4" /> : <ClipboardList className="h-4 w-4" />}
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Add to Outreach</TooltipContent>
+                          <TooltipContent>{gated ? '🔒 Start trial to add' : 'Add to Outreach'}</TooltipContent>
                         </Tooltip>
                       )
                     )}

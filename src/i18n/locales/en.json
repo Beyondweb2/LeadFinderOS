@@ -44,7 +44,7 @@
     "dashboardDesc": "Overview & today's tasks",
     "findLeads": "Find Leads",
     "findLeadsDesc": "Search for businesses",
-    "outreachCRM": "Outreach CRM",
+    "outreachCRM": "Outreach",
     "outreachCRMDesc": "Cold call & gather numbers",
     "trackLeads": "Track Leads",
     "trackLeadsDesc": "Leads who want to work",
@@ -59,7 +59,7 @@
     "search": "Search",
     "outreach": "Outreach",
     "track": "Track",
-    "allInOneCRM": "All-in-one CRM",
+    "allInOneCRM": "All-in-one Outreach",
     "affiliates": "Affiliates",
     "affiliatesDesc": "Manage affiliate partners",
     "adminDashboard": "Dashboard",
@@ -117,7 +117,7 @@
     "alreadyViewed": "Already viewed",
     "viewBusinessInfo": "View business info",
     "addToOutreach": "Add to Outreach",
-    "alreadyInCRM": "Already in CRM",
+    "alreadyInCRM": "Already in Outreach",
     "nearby": "Nearby",
     "tapInstructions": "Tap 👁 to view details · 📋 to add to Outreach",
     "clickInstructions": "Click 👁 to view details, 📋 to add to Outreach"
@@ -146,7 +146,7 @@
     "resetFailed": "Failed to perform full reset."
   },
   "outreach": {
-    "title": "Outreach CRM",
+    "title": "Outreach",
     "subtitle": "Contact businesses via WhatsApp, SMS or call. Update their status, then track promising ones in Track Leads.",
     "noPhone": "No phone numbers",
     "noPhoneDesc": "No phone numbers found in selected leads.",
@@ -302,7 +302,7 @@
     "headline1": "You've just found businesses",
     "headline2": "that may need your services",
     "clickEye": "Click the eye icon to view full details",
-    "addToCrm": "When you find one you want to contact, add it to your CRM",
+    "addToCrm": "When you find one you want to contact, add it to your Outreach",
     "save3Leads": "Save <accent>1 lead</accent> to unlock outreach",
     "andContinue": "and continue the walkthrough",
     "gotItSave3": "Got it – I'll save a lead"

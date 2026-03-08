@@ -56,7 +56,7 @@ const STEPS = [
     number: 4,
     icon: CheckCircle,
     title: 'Track Interested Leads to Closing',
-    description: 'When a lead shows interest, they move to Track Leads — your mini CRM. Set deal stages like "Sent Quote" or "Call Booked", schedule follow-ups, add notes, and manage each lead through to payment. Everything auto-saves as you go.',
+    description: 'When a lead shows interest, they move to Track Leads — your pipeline tracker. Set deal stages like "Sent Quote" or "Call Booked", schedule follow-ups, add notes, and manage each lead through to payment. Everything auto-saves as you go.',
     image: step4TrackLeads,
     tip: 'Use next actions and dates to stay on top of follow-ups. Leads with clear next steps are far more likely to convert.',
   },

@@ -27,6 +27,7 @@ interface LeadSearchContextType {
   freeSearchExhausted: boolean;
   searchError: { message: string; errorId: string } | null;
   expanded: boolean;
+  gated: boolean;
 }
 
 const LeadSearchContext = createContext<LeadSearchContextType | null>(null);
@@ -40,6 +41,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [freeSearchExhausted, setFreeSearchExhausted] = useState(false);
   const [searchError, setSearchError] = useState<{ message: string; errorId: string } | null>(null);
   const [expanded, setExpanded] = useState(false);
+  const [gated, setGated] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const lastSearchRef = useRef<{ filters: SearchFilters; skipTrialCount: boolean; isDemo: boolean } | null>(null);
   const { toast } = useToast();
@@ -166,6 +168,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     setFreeSearchExhausted(false);
     setSearchError(null);
     setExpanded(false);
+    setGated(false);
     
     // Refresh excluded businesses before searching (skip for demo)
     if (!isDemo) await fetchExcludedBusinesses();
@@ -304,6 +307,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           setLeads(filteredLeads);
           setSearchError(null);
           setExpanded(!!data.expanded);
+          setGated(!!data.gated);
 
           // Persist demo leads to localStorage so they survive navigation
           if (storageKeys) {
@@ -426,7 +430,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     freeSearchExhausted,
     searchError,
     expanded,
-  }), [leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded]);
+    gated,
+  }), [leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded, gated]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>
