@@ -463,15 +463,26 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
               <Trash2 className="h-3.5 w-3.5 mr-1" />
               Remove
             </Button>
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="h-8 text-xs"
-            >
-              <Save className="h-3.5 w-3.5 mr-1" />
-              {isSaving ? 'Saving...' : 'Save Changes'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsExpanded(false)}
+                className="h-8 text-xs"
+              >
+                <ChevronUp className="h-3.5 w-3.5 mr-1" />
+                Collapse
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="h-8 text-xs"
+              >
+                <Save className="h-3.5 w-3.5 mr-1" />
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
