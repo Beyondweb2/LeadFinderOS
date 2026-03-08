@@ -204,15 +204,15 @@
     "step11Collapse": "Collapse the card to finish. You're all set!"
   },
   "welcome": {
-    "headline": "Let's Get Your",
-    "headlineAccent": "First Clients",
+    "headline": "Quick",
+    "headlineAccent": "Walkthrough",
     "headlineEmoji": "👋",
-    "body": "Contact 3 real businesses in under 2 minutes.",
-    "step1": "Find businesses with no website",
-    "step2": "Message them instantly",
-    "step3": "Start real conversations",
-    "step4": "Track progress",
-    "cta": "Start Getting Clients",
+    "body": "We'll guide you through a few quick steps to show how LeadFinder helps you find businesses that could become your next clients.",
+    "step1": "Search for businesses without a website",
+    "step2": "Add promising leads to your outreach",
+    "step3": "Send your first message",
+    "step4": "Track and follow up",
+    "cta": "Let's Get Started",
     "skip": "I'll explore on my own"
   },
   "completion": {
