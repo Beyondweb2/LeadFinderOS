@@ -622,7 +622,7 @@ const Landing = () => {
           }}
         />
         <p className="text-center text-lg sm:text-xl md:text-2xl font-semibold tracking-tight text-foreground/70">
-          Trusted by 120+ freelancers and agencies using <span className="text-gradient-primary">LeadFinder</span>
+          Trusted by 120+ freelancers and agencies worldwide
         </p>
         <div
           className="mx-auto h-px mt-12 sm:mt-16"
