@@ -80,11 +80,28 @@
   * {
     @apply border-border;
     --tw-ring-offset-color: hsl(var(--background));
-    outline-color: hsl(var(--border));
+    outline: none !important;
+    outline-color: transparent !important;
   }
   
-  *:focus-visible {
-    outline-color: hsl(var(--border));
+  *:focus,
+  *:focus-visible,
+  *:focus-within {
+    outline: none !important;
+    outline-color: transparent !important;
+    box-shadow: none;
+  }
+
+  [data-radix-popper-content-wrapper] *,
+  [role="dialog"] *,
+  [role="listbox"] *,
+  [role="menu"] *,
+  [role="option"],
+  select,
+  button,
+  input,
+  textarea {
+    outline: none !important;
   }
 
   body {
