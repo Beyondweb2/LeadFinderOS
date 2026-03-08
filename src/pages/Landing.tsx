@@ -605,7 +605,7 @@ const Landing = () => {
       </div>
 
       {/* How LeadFinder Works - 4-step section */}
-      <section id="how-it-works" className="relative z-10 py-10 sm:py-14 md:py-24 px-3 sm:px-4">
+      <section id="how-it-works" className="relative z-10 py-12 sm:py-16 md:py-28 px-3 sm:px-4">
         <div className="container mx-auto max-w-7xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-16">
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15]">
