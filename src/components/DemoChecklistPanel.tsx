@@ -134,7 +134,10 @@ export function DemoChecklistPanel() {
             </h3>
 
             <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5 space-y-3">
-              <p>{t('completion.contacted').replace('<bold>', '').replace('</bold>', '')}</p>
+              <p>{(state.contactsMadeCount === 1
+                ? t('completion.contacted', { count: state.contactsMadeCount })
+                : t('completion.contactedPlural', { count: state.contactsMadeCount })
+              ).replace('<bold>', '').replace('</bold>', '')}</p>
               <p>{t('completion.mostFreelancers')}<br />{t('completion.keepStacking')}</p>
             </div>
 

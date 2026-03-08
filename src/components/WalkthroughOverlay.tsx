@@ -67,7 +67,7 @@ function getActiveStep(state: any, pathname: string, t: any): StepDef | null {
     if (pathname === '/outreach') {
       const trackEl = document.querySelector('[data-walkthrough="track"]');
       if (trackEl) {
-        return { step: 5, selector: '[data-walkthrough="track"]', tooltip: t('walkthrough.step5NavToOutreach'), noDim: true };
+        return { step: 5, selector: '[data-walkthrough="track"]', tooltip: t('walkthrough.step5Track'), noDim: true };
       }
     }
     return { step: 5, selector: '[data-walkthrough="track-nav"]', tooltip: t('walkthrough.step5NavToOutreach'), tooltipPosition: 'top' };

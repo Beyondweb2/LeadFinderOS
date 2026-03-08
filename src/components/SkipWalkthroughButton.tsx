@@ -8,9 +8,9 @@ export function SkipWalkthroughButton() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { isDemoUser } = useDemoChecklist();
-  const { walkthroughOpen } = useWalkthroughStatus();
+  const { walkthroughOpen, walkthroughCompleted } = useWalkthroughStatus();
 
-  if (!walkthroughOpen || !isDemoUser) return null;
+  if (!walkthroughOpen || !isDemoUser || walkthroughCompleted || walkthroughCompleted) return null;
 
   const handleSkip = () => {
     if (!user?.id) return;
