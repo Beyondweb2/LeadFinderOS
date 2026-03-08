@@ -93,6 +93,7 @@ serve(async (req) => {
     let bodyEmail: string | null = null;
     let bodyAffiliateCode: string | null = null;
     let bodyRefSource: string | null = null;
+    let bodyReturnTo: string | null = null;
     try {
       const body = await req.json();
       if (body?.customer_email && typeof body.customer_email === "string") {
@@ -104,6 +105,9 @@ serve(async (req) => {
       }
       if (body?.ref_source && typeof body.ref_source === "string") {
         bodyRefSource = body.ref_source.trim();
+      }
+      if (body?.return_to && typeof body.return_to === "string") {
+        bodyReturnTo = body.return_to.trim();
       }
       if (bodyAffiliateCode) logStep("Affiliate code from body", { code: bodyAffiliateCode });
     } catch {
