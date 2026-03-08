@@ -59,9 +59,9 @@ export function AppSidebar() {
   const [searchTooltip, setSearchTooltip] = useState(false);
 
   useEffect(() => {
-    const onCRMAdded = () => { setFlashCRM(true); setTimeout(() => setFlashCRM(false), 800); };
-    const onTrackAdded = () => { setFlashTrack(true); setTimeout(() => setFlashTrack(false), 2000); };
-    const onSearchPulse = () => { setFlashSearch(true); setSearchTooltip(true); setTimeout(() => setFlashSearch(false), 4000); setTimeout(() => setSearchTooltip(false), 6000); };
+    const onCRMAdded = () => { setFlashCRM(true); setTimeout(() => setFlashCRM(false), 600); };
+    const onTrackAdded = () => { setFlashTrack(true); setTimeout(() => setFlashTrack(false), 600); };
+    const onSearchPulse = () => { setFlashSearch(true); setSearchTooltip(true); setTimeout(() => setFlashSearch(false), 1200); setTimeout(() => setSearchTooltip(false), 2500); };
     window.addEventListener('crm-lead-added', onCRMAdded);
     window.addEventListener('track-lead-added', onTrackAdded);
     window.addEventListener('pulse-search-nav', onSearchPulse);
