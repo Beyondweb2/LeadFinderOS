@@ -762,32 +762,33 @@ const Landing = () => {
               </div>
             </ScrollReveal>
 
-            {/* Mock search UI */}
+            {/* Mock search UI — interactive feel */}
             <ScrollReveal delay={180}>
               <div
-                className="max-w-md mx-auto mb-10 rounded-xl px-4 py-3 flex items-center gap-3"
+                className="max-w-xl mx-auto mb-10 rounded-xl px-5 py-3.5 flex items-center gap-3 transition-all duration-300 hover:scale-[1.01]"
                 style={{
                   background: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border)/0.5)',
-                  boxShadow: '0 2px 16px hsl(220 40% 4% / 0.3)',
+                  border: '1px solid hsl(var(--primary)/0.25)',
+                  boxShadow: '0 0 20px hsl(var(--primary)/0.08), 0 0 40px hsl(var(--primary)/0.04), 0 2px 16px hsl(220 40% 4% / 0.3)',
                 }}
               >
-                <Search className="h-4 w-4 text-primary/60 shrink-0" />
-                <div className="flex-1">
-                  <span className="text-sm text-foreground/80 font-medium">Web Developers</span>
-                  <span className="text-xs text-foreground/35 ml-2">· London, UK</span>
+                <Search className="h-4.5 w-4.5 text-primary/70 shrink-0" />
+                <div className="flex-1 flex items-center gap-2">
+                  <span className="text-sm text-foreground font-medium">Web Developers</span>
+                  <span className="w-px h-4 bg-border/50" />
+                  <span className="text-sm text-foreground/40">London, UK</span>
                 </div>
-                <span
-                  className="text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md"
-                  style={{ background: 'hsl(var(--primary)/0.12)', color: 'hsl(var(--primary))' }}
+                <button
+                  className="text-[11px] font-semibold uppercase tracking-wider px-3.5 py-1.5 rounded-lg transition-all"
+                  style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
                 >
                   Search
-                </span>
+                </button>
               </div>
             </ScrollReveal>
 
             {/* Asymmetric 3-card layout — middle card emphasized */}
-            <div className="grid grid-cols-7 gap-5 md:gap-6 items-start">
+            <div className="grid grid-cols-7 gap-4 md:gap-5 items-start max-w-6xl mx-auto">
               {/* Card 1 */}
               <ScrollReveal delay={200} className="col-span-2">
                 <div
@@ -811,8 +812,8 @@ const Landing = () => {
                   className="flex flex-col items-center text-center p-7 md:p-8 rounded-2xl h-full relative"
                   style={{
                     background: 'linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--card)/0.85) 100%)',
-                    border: '1px solid hsl(210 100% 50% / 0.25)',
-                    boxShadow: '0 0 30px hsl(210 100% 50% / 0.08), 0 4px 20px hsl(220 40% 4% / 0.3)',
+                    border: '1px solid hsl(var(--primary)/0.2)',
+                    boxShadow: '0 0 30px hsl(var(--primary)/0.08), 0 4px 20px hsl(220 40% 4% / 0.3)',
                   }}
                 >
                   <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: 'hsl(var(--primary)/0.15)' }}>
