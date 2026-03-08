@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from './StatusBadge';
 import {
-  Download, Filter, ChevronLeft, ChevronRight, ClipboardList, Check, Eye, Lock,
+  Download, Filter, ChevronLeft, ChevronRight, ClipboardList, Check, Eye, Lock, MapPin,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger,
