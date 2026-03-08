@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { PaymentPausedScreen } from '@/components/PaymentPausedScreen';
+import { SubscriptionCancelledScreen } from '@/components/SubscriptionCancelledScreen';
 
 interface SubscriptionGateProps {
   children: ReactNode;
