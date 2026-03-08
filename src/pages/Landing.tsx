@@ -578,10 +578,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Built for line - desktop */}
-      <p className="hidden sm:block text-xs text-muted-foreground/50 font-medium uppercase tracking-widest text-center mb-6">
-        Built for freelance web devs, agencies and SaaS founders
-      </p>
 
       {/* Video Demo Section - desktop only */}
       <div className="hidden sm:block">
