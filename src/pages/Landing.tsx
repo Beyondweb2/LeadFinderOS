@@ -557,7 +557,7 @@ const Landing = () => {
                 </Button>
               </div>
               <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
-                5-day free trial · £0 today · Cancel anytime
+                Lead discovery + outreach + tracking — all in one place.
               </p>
             </div>
 
