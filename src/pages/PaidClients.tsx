@@ -325,7 +325,7 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
 
         {/* Notes preview + expand button when collapsed */}
         {!isExpanded && (
-          <div className="flex items-center gap-2 mt-2 lg:mt-3 ml-[52px] sm:ml-[60px] lg:ml-[72px]">
+          <div className="flex items-center gap-2 mt-2 lg:mt-3 ml-[60px] sm:ml-[68px] lg:ml-[80px]">
             <div className="flex-1 min-w-0">
               {(lead.notes || lead.checkin_notes) && (
                 <p className="text-[11px] lg:text-xs text-muted-foreground/50 line-clamp-1 leading-relaxed">

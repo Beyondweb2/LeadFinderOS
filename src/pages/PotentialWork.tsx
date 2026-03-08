@@ -695,7 +695,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           {!isExpanded && (
             <div className="flex items-end gap-2 mt-2 lg:mt-3">
               <div
-                className="flex-1 min-w-0 ml-[50px] sm:ml-[56px] lg:ml-[72px] cursor-pointer rounded-md p-1 -m-1 hover:bg-muted/20 transition-colors"
+                className="flex-1 min-w-0 ml-[60px] sm:ml-[68px] lg:ml-[80px] cursor-pointer rounded-md p-1 -m-1 hover:bg-muted/20 transition-colors"
                 data-walkthrough-step="track-notes-edit" data-walkthrough="notes"
                 onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
               >
