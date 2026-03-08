@@ -3,9 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead } from '@/types/outreach';
 
-// Revenue constants
-const DRAFT_REVENUE = 49;
-const COMPLETION_REVENUE = 450;
+// No hardcoded revenue constants — uses actual amount_paid from leads
 
 interface ActivityMetrics {
   phonesCopiedToday: number;
