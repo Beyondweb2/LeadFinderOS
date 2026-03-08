@@ -68,21 +68,41 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
   const [checkinNotes, setCheckinNotes] = useState(lead.checkin_notes || '');
   const [notes, setNotes] = useState(lead.notes || '');
 
+  const saveDetails = async (overrides: Partial<{ amountPaid: string; paidFor: string; paymentDate: Date | undefined; projectDuration: string; nextCheckinDate: Date | undefined; checkinNotes: string }> = {}) => {
+    const ap = overrides.amountPaid ?? amountPaid;
+    const pf = overrides.paidFor ?? paidFor;
+    const pd = overrides.paymentDate !== undefined ? overrides.paymentDate : paymentDate;
+    const dur = overrides.projectDuration ?? projectDuration;
+    const ncd = overrides.nextCheckinDate !== undefined ? overrides.nextCheckinDate : nextCheckinDate;
+    const cn2 = overrides.checkinNotes ?? checkinNotes;
+    await onUpdateClientDetails(lead.id, {
+      amount_paid: ap ? parseFloat(ap) : null,
+      paid_for: pf || null,
+      payment_date: pd ? format(pd, 'yyyy-MM-dd') : null,
+      project_duration: dur || null,
+      next_checkin_date: ncd ? format(ncd, 'yyyy-MM-dd') : null,
+      checkin_notes: cn2 || null,
+    });
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await onUpdateClientDetails(lead.id, {
-        amount_paid: amountPaid ? parseFloat(amountPaid) : null,
-        paid_for: paidFor || null,
-        payment_date: paymentDate ? format(paymentDate, 'yyyy-MM-dd') : null,
-        project_duration: projectDuration || null,
-        next_checkin_date: nextCheckinDate ? format(nextCheckinDate, 'yyyy-MM-dd') : null,
-        checkin_notes: checkinNotes || null,
-      });
+      await saveDetails();
       await onNotesChange(lead.id, notes);
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const handlePaymentDateChange = (date: Date | undefined) => {
+    setPaymentDate(date);
+    saveDetails({ paymentDate: date });
+  };
+
+  const handleCheckinDateChange = (date: Date | undefined) => {
+    setNextCheckinDate(date);
+    saveDetails({ nextCheckinDate: date });
   };
 
   const handleSaveName = async () => {
