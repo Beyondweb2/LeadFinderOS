@@ -228,7 +228,7 @@ const Index = () => {
         open={showConversionModal}
         onOpenChange={setShowConversionModal}
         noWebsiteCount={noWebsiteCount}
-        totalFound={leads.length}
+        contactedCount={0}
       />
     </div>
   );

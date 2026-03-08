@@ -11,10 +11,10 @@ interface TrialConversionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   noWebsiteCount?: number;
-  totalFound?: number;
+  contactedCount?: number;
 }
 
-export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, totalFound = 0 }: TrialConversionModalProps) {
+export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, contactedCount = 0 }: TrialConversionModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [delayedOpen, setDelayedOpen] = useState(false);
   const { session } = useAuth();
@@ -73,7 +73,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, t
           </p>
 
           {/* Metrics */}
-          {(noWebsiteCount > 0 || totalFound > 0) && (
+          {(noWebsiteCount > 0 || contactedCount >= 0) && (
             <div className="w-full grid grid-cols-2 gap-3 mb-5">
               {noWebsiteCount > 0 && (
                 <div className="flex flex-col items-center gap-1.5 py-3.5 px-3 rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
@@ -84,15 +84,13 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, t
                   </div>
                 </div>
               )}
-              {totalFound > 0 && (
-                <div className="flex flex-col items-center gap-1.5 py-3.5 px-3 rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
-                  <span className="text-2xl font-bold text-foreground">{totalFound}</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-                    <span className="text-xs text-muted-foreground font-medium">Hot leads found</span>
-                  </div>
+              <div className="flex flex-col items-center gap-1.5 py-3.5 px-3 rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
+                <span className="text-2xl font-bold text-foreground">{contactedCount}</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full bg-muted-foreground/40" />
+                  <span className="text-xs text-muted-foreground font-medium">Businesses contacted</span>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
