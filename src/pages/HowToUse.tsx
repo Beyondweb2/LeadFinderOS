@@ -125,10 +125,18 @@ const HowToUse = () => {
           reach out via WhatsApp, SMS or calls, track interested leads, and close deals.
         </p>
         {!isPublicGuide && (
-          <Button onClick={handleRestartWalkthrough} variant="outline" size="sm" className="gap-1.5">
-            <Play className="h-3.5 w-3.5" />
-            Run Interactive Walkthrough
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={handleRestartWalkthrough} variant="outline" size="sm" className="gap-1.5">
+              <Play className="h-3.5 w-3.5" />
+              Run Interactive Walkthrough
+            </Button>
+            {isAdmin && (
+              <Button onClick={handleSimulateNewUser} variant="outline" size="sm" className="gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
+                <UserPlus className="h-3.5 w-3.5" />
+                Simulate New User
+              </Button>
+            )}
+          </div>
         )}
       </div>
 
