@@ -730,7 +730,7 @@ const Landing = () => {
 
 
       {/* How SaaS Founders Use LeadFinder */}
-      <section className="relative z-10 py-8 sm:py-12 md:py-16 px-3 sm:px-4">
+      <section className="relative z-10 py-12 sm:py-16 md:py-24 px-3 sm:px-4">
         <div className="container mx-auto max-w-5xl">
           <ScrollReveal className="text-center mb-6 sm:mb-10">
             <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.15]">
