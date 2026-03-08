@@ -117,9 +117,12 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, t
 
           {/* Trust line */}
           <div className="w-full rounded-xl border border-border/30 bg-muted/20 px-4 py-3 mb-5">
-            <div className="flex items-center justify-center gap-2 text-[12px] text-muted-foreground">
-              <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-              <span>Card required to start your trial · <strong className="text-foreground/80">£0 today</strong> · Cancel anytime</span>
+            <div className="flex flex-col items-center gap-1.5 text-[12px] text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <span><strong className="text-foreground/80">£0 today</strong> · Cancel anytime before your trial ends</span>
+              </div>
+              <span className="text-[11px] text-muted-foreground/50">Your card is only used to verify your account</span>
             </div>
           </div>
 
@@ -135,13 +138,13 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, t
 
           <Button
             variant="ghost"
-            className="w-full mt-2 text-sm text-muted-foreground/60 hover:text-foreground"
+            className="w-full mt-2 text-xs text-muted-foreground/50 hover:text-foreground/60 h-9"
             onClick={() => onOpenChange(false)}
           >
             Maybe later
           </Button>
 
-          <p className="text-[11px] text-muted-foreground/50 text-center mt-3 flex items-center justify-center gap-1.5">
+          <p className="text-[11px] text-muted-foreground/50 text-center mt-2 flex items-center justify-center gap-1.5">
             <ShieldCheck className="h-3 w-3" />
             Secure payment via Stripe · No charge today
           </p>
