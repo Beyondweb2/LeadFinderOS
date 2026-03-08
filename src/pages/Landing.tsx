@@ -923,7 +923,7 @@ const Landing = () => {
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.03] group-hover:-translate-y-1"
+                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm l duration-300 group-hover:scale-[1.03] group-hover:-translate-y-1"
                           style={{ 
                             border: '1px solid hsl(210 100% 50% / 0.15)',
                             boxShadow: '0 0 20px hsl(210 100% 50% / 0.08), 0 4px 16px hsl(220 40% 4% / 0.3)',
@@ -936,8 +936,7 @@ const Landing = () => {
                               border: '1px solid hsl(210 100% 50% / 0.3)',
                             }}
                           />
-                          <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" width={640} height={800} className="w-full h-full object-cover" />
-                          <div className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                          <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" width={640} hclassName="w-full h-auto block                  <div className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
                             <Search className="h-3.5 w-3.5 text-foreground/70" />
                           </div>
                         </div>
