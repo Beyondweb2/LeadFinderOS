@@ -621,14 +621,13 @@ const Landing = () => {
             {[
               {
                 num: 1,
-                title: 'Find Leads',
-                body: "Search any business type anywhere and instantly see which ones don't have a website.",
+                title: 'Find Leads         body: "Search any business type anywhere and instantly see which ones don't have a website.",
                 img: step2Results,
                 alt: 'Find leads results list',
               },
               {
                 num: 2,
-                title: 'Run Your Outreach',
+                title: 'Run Your OStart,
                 body: 'Call, SMS or WhatsApp businesses in one click and manage every follow-up in one place.',
                 img: step3Outreach,
                 alt: 'Outreach and contact management',
