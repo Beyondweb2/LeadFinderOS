@@ -1010,7 +1010,8 @@ const Landing = () => {
       </section>
 
       {/* Got Questions Section */}
-      <section className="relative z-10 py-2 sm:py-16 md:py-206 px-16 sm:py-20 md:py-28ssNa16 sm:py-20 md:py-28o">
+      <section className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
+        <div className="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-2">
