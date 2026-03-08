@@ -128,7 +128,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
             disabled={isLoading}
           >
             <Lock className="h-4 w-4" />
-            {isLoading ? 'Opening checkout...' : 'Start My 5-Day Free Trial'}
+            {isLoading ? 'Opening checkout...' : 'Start 5-Day Free Trial'}
           </Button>
 
           <Button
