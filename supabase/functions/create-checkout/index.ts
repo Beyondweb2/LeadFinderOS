@@ -87,7 +87,13 @@ serve(async (req) => {
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const origin = resolveOrigin(req.headers.get("origin"));
-    logStep("Resolved origin", { requestOrigin: req.headers.get("origin"), checkoutOrigin: origin });
+    const returnTo = resolveReturnPath(bodyReturnTo, req.headers.get("referer"));
+    logStep("Resolved origin", {
+      requestOrigin: req.headers.get("origin"),
+      checkoutOrigin: origin,
+      referer: req.headers.get("referer"),
+      returnTo,
+    });
 
     // Parse body for customer_email and affiliate tracking (email-first flow)
     let bodyEmail: string | null = null;
