@@ -551,6 +551,10 @@ const Landing = () => {
               </p>
             </div>
 
+            <p className="text-xs text-muted-foreground/50 font-medium uppercase tracking-widest mt-8 mb-4 text-center">
+              Built for freelance web devs, agencies and SaaS founders
+            </p>
+
             {/* Metrics row */}
             <div className="grid grid-cols-3 gap-4 sm:gap-5 md:gap-14 max-w-[280px] sm:max-w-xl mx-auto mt-8">
               <CountUpStat target={80000} suffix="+" label="Businesses" />
