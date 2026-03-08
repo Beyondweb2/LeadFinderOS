@@ -606,33 +606,6 @@ const Landing = () => {
         <VideoSection />
       </div>
 
-      {/* Social proof band */}
-      <div className="relative z-10 py-16 sm:py-20 md:py-24 px-4">
-        <div
-          className="absolute inset-0 -z-10"
-          style={{
-            background: 'radial-gradient(ellipse 60% 100% at 50% 50%, hsl(220 30% 5% / 0.5), transparent 70%)',
-          }}
-        />
-        <div
-          className="mx-auto h-px mb-12 sm:mb-16"
-          style={{
-            width: '40%',
-            background: 'linear-gradient(90deg, transparent 0%, hsl(210 100% 50% / 0.12) 30%, hsl(210 100% 50% / 0.18) 50%, hsl(210 100% 50% / 0.12) 70%, transparent 100%)',
-          }}
-        />
-        <p className="text-center text-lg sm:text-xl md:text-2xl font-semibold tracking-tight text-foreground/70">
-          Trusted by 120+ freelancers and agencies worldwide
-        </p>
-        <div
-          className="mx-auto h-px mt-12 sm:mt-16"
-          style={{
-            width: '40%',
-            background: 'linear-gradient(90deg, transparent 0%, hsl(210 100% 50% / 0.12) 30%, hsl(210 100% 50% / 0.18) 50%, hsl(210 100% 50% / 0.12) 70%, transparent 100%)',
-          }}
-        />
-      </div>
-
       {/* How LeadFinder Works - 4-step section */}
       <section id="how-it-works" className="relative z-10 py-12 sm:py-16 md:py-28 px-3 sm:px-4">
         <div className="container mx-auto max-w-7xl">
@@ -757,8 +730,22 @@ const Landing = () => {
         </div>
       </section>
 
-
-
+      {/* Section divider */}
+      <div className="relative z-10 py-10 sm:py-14 md:py-16">
+        <div
+          className="mx-auto h-px"
+          style={{
+            width: '45%',
+            background: 'linear-gradient(90deg, transparent 0%, hsl(210 100% 50% / 0.12) 30%, hsl(210 100% 50% / 0.18) 50%, hsl(210 100% 50% / 0.12) 70%, transparent 100%)',
+          }}
+        />
+        <div
+          className="absolute inset-0 -z-10"
+          style={{
+            background: 'radial-gradient(ellipse 60% 100% at 50% 50%, hsl(220 30% 5% / 0.5), transparent 70%)',
+          }}
+        />
+      </div>
 
       {/* Your Complete Lead Toolkit */}
       <section className="relative z-10 py-12 sm:py-18 md:py-24 px-3 sm:px-4">
