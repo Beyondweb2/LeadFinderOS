@@ -12,6 +12,15 @@ import { useToast } from '@/hooks/use-toast';
 import { LANGUAGE_OPTIONS, type SupportedLanguage } from '@/hooks/useLanguage';
 import appLogo from '@/assets/logo.png';
 
+const DEFAULT_IN_APP_ROUTE = '/find-leads';
+
+const sanitizeReturnTo = (raw: string | null): string => {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return DEFAULT_IN_APP_ROUTE;
+  const blockedPrefixes = ['/billing/success', '/complete-setup', '/billing/cancel', '/landing', '/auth', '/start', '/start-free-trial', '/subscribe'];
+  if (blockedPrefixes.some((prefix) => raw.startsWith(prefix))) return DEFAULT_IN_APP_ROUTE;
+  return raw;
+};
+
 const CompleteSetup = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -19,6 +28,7 @@ const CompleteSetup = () => {
   const { toast } = useToast();
 
   const sessionId = searchParams.get('session_id');
+  const returnTo = sanitizeReturnTo(searchParams.get('return_to'));
 
   const [email, setEmail] = useState('');
   const [emailLoading, setEmailLoading] = useState(true);
