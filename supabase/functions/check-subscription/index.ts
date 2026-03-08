@@ -190,6 +190,8 @@
         trial_end: trialEnd,
         payment_failure_count: paymentFailureCount,
         last_payment_failed_at: lastPaymentFailedAt,
+        first_payment_failed_at: firstPaymentFailedAt,
+        grace_period_expired: gracePeriodExpired,
         has_used_trial: hasUsedTrial,
      }), {
        headers: { ...corsHeaders, "Content-Type": "application/json" },
