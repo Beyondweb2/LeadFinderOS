@@ -527,8 +527,7 @@ const Landing = () => {
           <div className="max-w-3xl mx-auto lg:max-w-2xl">
 
             <span
-              className="hidden sm:inline-block text-xs font-semibold uppercase tracking-widest mb-4"
-              style={{ color: 'hsl(210 100% 65%)' }}
+              className="hidden sm:inline-block text-xs font-semibold uppercase tracking-widest mb-4 text-muted-foreground/60"
             >
               Built for web devs, agencies & founders
             </span>
