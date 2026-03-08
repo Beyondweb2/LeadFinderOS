@@ -728,23 +728,6 @@ const Landing = () => {
             })}
           </div>
 
-          {/* Section closer */}
-          <ScrollReveal className="text-center mt-14 sm:mt-16 md:mt-20" delay={300} direction="up">
-            <p className="text-muted-foreground/60 text-sm sm:text-base mb-5">
-              Outreach made <span className="text-gradient-primary font-semibold">easy</span>
-            </p>
-            <a 
-              href="#pricing"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-sm sm:text-base transition-all duration-300 hover:scale-[1.03]"
-              style={{
-                background: 'linear-gradient(135deg, hsl(210 100% 50%), hsl(220 80% 45%))',
-                color: '#fff',
-                boxShadow: '0 4px 20px hsl(210 100% 50% / 0.3)',
-              }}
-            >
-              Start free trial
-            </a>
-          </ScrollReveal>
 
 
         </div>
