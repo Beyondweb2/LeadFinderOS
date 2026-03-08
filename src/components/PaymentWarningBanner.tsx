@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, CreditCard, X, Loader2 } from 'lucide-react';
 
 export function PaymentWarningBanner() {
-  const { isInGracePeriod, isGracePeriodExpired, firstPaymentFailedAt, openCustomerPortal, isLoading } = useSubscription();
+  const { isInGracePeriod, isGracePeriodExpired, openCustomerPortal, isLoading } = useSubscription();
   const [dismissed, setDismissed] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
 
@@ -20,12 +20,6 @@ export function PaymentWarningBanner() {
     }
   };
 
-  // Calculate days remaining in grace period
-  let daysRemaining = 7;
-  if (firstPaymentFailedAt) {
-    const elapsed = Date.now() - new Date(firstPaymentFailedAt).getTime();
-    daysRemaining = Math.max(0, Math.ceil((7 * 24 * 60 * 60 * 1000 - elapsed) / (24 * 60 * 60 * 1000)));
-  }
 
   if (isGracePeriodExpired) {
     return (
@@ -68,7 +62,6 @@ export function PaymentWarningBanner() {
             <span className="font-medium text-foreground">Payment issue detected</span>
             <span className="text-muted-foreground ml-2 hidden sm:inline">
               We couldn't process your subscription payment. Please update your card to avoid losing access.
-              {daysRemaining > 0 && ` (${daysRemaining} day${daysRemaining !== 1 ? 's' : ''} remaining)`}
             </span>
           </div>
         </div>

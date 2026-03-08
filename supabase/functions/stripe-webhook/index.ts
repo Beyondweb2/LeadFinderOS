@@ -375,14 +375,52 @@
          let lastPaymentFailedAt: string | null = null;
          let firstPaymentFailedAt: string | null | undefined = undefined; // undefined = don't change
          
-         if (isPaymentFailure) {
-           newFailureCount = currentFailureCount + 1;
-           lastPaymentFailedAt = new Date().toISOString();
-           // Set first_payment_failed_at only on the first failure (grace period start)
-           if (!existingFirstFailedAt) {
-             firstPaymentFailedAt = new Date().toISOString();
-           }
-           logStep("Payment failure tracked", { userId: user.id, failureCount: newFailureCount });
+          if (isPaymentFailure) {
+            newFailureCount = currentFailureCount + 1;
+            lastPaymentFailedAt = new Date().toISOString();
+            // Set first_payment_failed_at only on the first failure (grace period start)
+            if (!existingFirstFailedAt) {
+              firstPaymentFailedAt = new Date().toISOString();
+            }
+            logStep("Payment failure tracked", { userId: user.id, failureCount: newFailureCount });
+
+            // Send email reminder on FIRST failure only
+            if (currentFailureCount === 0) {
+              const resendKey = Deno.env.get("RESEND_API_KEY");
+              if (resendKey) {
+                const customerEmail = customer.email!;
+                const firstName = customerEmail.split('@')[0].split(/[._-]/)[0];
+                const displayName = firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase() || "there";
+
+                const htmlBody = `<div style="font-family: sans-serif; font-size: 15px; line-height: 1.6; color: #1a1a1a; max-width: 600px; margin: 0 auto;">
+<p>Hey ${displayName},</p>
+<p>We couldn't process your subscription payment for LeadFinder.</p>
+<p>Please update your payment method to avoid losing access.</p>
+<p>👉 <a href="https://lead-finder-app.com/dashboard" style="color: #2563eb;">Update payment method</a></p>
+<p>If you've already updated your card, you can ignore this email.</p>
+<p>– Paul<br/>LeadFinder</p>
+<hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0 12px;" />
+<p style="font-size: 12px; color: #6b7280;">LeadFinder · <a href="https://lead-finder-app.com/" style="color: #6b7280;">https://lead-finder-app.com</a><br/>You're receiving this email because you have an active subscription on LeadFinder.</p>
+</div>`;
+
+                // Fire-and-forget
+                fetch("https://api.resend.com/emails", {
+                  method: "POST",
+                  headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    from: "Paul from LeadFinder <paul@lead-finder-app.com>",
+                    to: [customerEmail],
+                    subject: "Action needed: update your payment method",
+                    html: htmlBody,
+                  }),
+                }).then(res => {
+                  if (!res.ok) res.text().then(t => logStep("Payment failure email send failed", { status: res.status, body: t }));
+                  else logStep("Payment failure email sent", { email: customerEmail });
+                }).catch(err => logStep("Payment failure email error", { error: String(err) }));
+              } else {
+                logStep("RESEND_API_KEY not set, skipping payment failure email");
+              }
+            }
          } else if (status === 'active') {
            // Payment succeeded — reset all failure tracking
            newFailureCount = 0;
