@@ -100,12 +100,12 @@ function isDirectoryUrl(url: string): boolean {
 }
 
 // Strip sensitive fields for non-subscribed (gated) users
+// Keep googleMapsUrl — it's a public link and needed for outreach cards
 function stripGatedFields(leads: SearchLead[]): SearchLead[] {
   return leads.map(lead => ({
     ...lead,
     phone: undefined,
     address: undefined,
-    googleMapsUrl: '',
   }));
 }
 
