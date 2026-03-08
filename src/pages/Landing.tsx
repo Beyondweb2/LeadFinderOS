@@ -583,14 +583,14 @@ const Landing = () => {
 
             {/* Desktop trust badges */}
             <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-10">
-              <CountUpStat target={100000} suffix="+" label="Businesses" />
+              <CountUpStat target={100000} suffix="+" label="Businesses Indexed" />
               <div className="text-center">
                 <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Business Coverage</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Lead Searches</div>
               </div>
             </div>
           </div>
