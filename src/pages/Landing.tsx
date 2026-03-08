@@ -754,7 +754,7 @@ const Landing = () => {
         />
         <div className="container mx-auto max-w-6xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15]">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.15]">
               Your Complete
               <br />
               <span className="text-gradient-primary">Lead Toolkit</span>
