@@ -966,18 +966,18 @@ const Landing = () => {
       </section>
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py4 sm:py-18 md:py-2440 px-4">
+      <ScrollReveal className="relative z-10 pt-20 sm:pt-28 md:pt-32 pb-12 sm:pb-20 md:pb-24 px-4">
         {/* Subtle background */}
         <div
           className="absolute inset-0 -z-10"
           style={{
-            background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.25) 20%, hsl(220 30% 6% / 0.35) 50%, hsl(220 30% 6% / 0.25) 80%, transparent 100%)',
+            background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.2) 20%, hsl(220 30% 6% / 0.3) 50%, hsl(220 30% 6% / 0.2) 80%, transparent 100%)',
           }}
         />
         <div className="container mx-auto max-w-5xl">
-          <p className="text-center text-[11px] sm:text-xs text-muted-foreground/40 font-medium tracking-wide mb-8 sm:mb-10">
-            Real feedback from early LeadFinder users
-          </p>
+          <h2 className="text-center text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground mb-12 sm:mb-14">
+            Trusted by freelancers and agencies using LeadFinder
+          </h2>
 
           {(() => {
             const testimonials: Testimonial[] = [
@@ -986,15 +986,7 @@ const Landing = () => {
                 initials: 'CP',
                 role: 'Freelance Designer',
                 region: 'UK',
-                quote: "Found 30 businesses without websites in 10 minutes. Messaged them right inside the app. That alone sold me.",
-                stars: 5,
-              },
-              {
-                name: 'Tom H.',
-                initials: 'TH',
-                role: 'Web Developer',
-                region: 'Australia',
-                quote: "The templates save me so much time. Tweak the message slightly and send it out without rewriting everything.",
+                quote: "Found 30 solid leads in 10 minutes and messaged them all inside the app. That alone sold me.",
                 stars: 5,
               },
               {
@@ -1002,7 +994,7 @@ const Landing = () => {
                 initials: 'AM',
                 role: 'WordPress Freelancer',
                 region: 'Canada',
-                quote: "I used to bounce between Maps, notes and WhatsApp. Now everything is in one place and it actually feels organised.",
+                quote: "No more bouncing between Maps, notes and WhatsApp. Everything in one place — finally feels organised.",
                 stars: 5,
               },
               {
@@ -1010,7 +1002,7 @@ const Landing = () => {
                 initials: 'DS',
                 role: 'Agency Owner',
                 region: 'US',
-                quote: "Well built. Finding leads fast and keeping outreach tracked makes it way easier to stay consistent.",
+                quote: "Finding leads fast and keeping outreach tracked properly. Makes staying consistent way easier.",
                 stars: 5,
               },
             ];
@@ -1018,53 +1010,47 @@ const Landing = () => {
             return isMobile ? (
               <MobileTestimonialSlider testimonials={testimonials} />
             ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6 items-start">
-                {testimonials.map((r, i) => {
-                  // Stagger: odd cards get slight top margin for organic feel
-                  const staggerClass = i % 2 === 1 ? 'lg:mt-6' : '';
-                  return (
-                  <ScrollReveal key={i} delay={i * 100}>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 lg:gap-10 items-start">
+                {testimonials.map((r, i) => (
+                  <ScrollReveal key={i} delay={i * 120}>
                     <div 
-                      className={`flex flex-col text-left px-5 py-6 sm:px-6 sm:py-7 rounded-xl ${staggerClass}`}
+                      className="flex flex-col text-center items-center px-7 py-8 sm:px-8 sm:py-9 rounded-2xl"
                       style={{
-                        background: 'hsl(220 30% 8% / 0.6)',
-                        border: '1px solid hsl(0 0% 100% / 0.06)',
-                        boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
+                        background: 'hsl(220 25% 9% / 0.5)',
+                        border: '1px solid hsl(0 0% 100% / 0.04)',
+                        boxShadow: '0 1px 8px hsl(220 40% 4% / 0.2)',
                       }}
                     >
-                      {/* Avatar + identity */}
-                      <div className="flex items-center gap-3 mb-4">
-                        <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                          style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}
-                        >
-                          {r.initials}
-                        </div>
-                        <div>
-                          <p className="text-foreground/90 text-sm font-semibold leading-tight">{r.name}</p>
-                          <p className="text-muted-foreground/50 text-[11px]">{r.role} · {r.region}</p>
-                        </div>
+                      {/* Avatar */}
+                      <div
+                        className="w-11 h-11 rounded-full flex items-center justify-center text-sm font-bold mb-3"
+                        style={{ background: 'hsl(var(--primary)/0.12)', color: 'hsl(var(--primary))' }}
+                      >
+                        {r.initials}
                       </div>
+                      {/* Name */}
+                      <p className="text-foreground/90 text-[15px] font-semibold leading-tight">{r.name}</p>
+                      {/* Role + region */}
+                      <p className="text-muted-foreground/45 text-xs mt-0.5">{r.role} · {r.region}</p>
                       {/* Stars */}
-                      <div className="flex gap-0.5 mb-3">
+                      <div className="flex gap-0.5 mt-3 mb-4">
                         {[...Array(r.stars)].map((_, si) => (
                           <Star key={si} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
                         ))}
                       </div>
                       {/* Quote */}
-                      <p className="text-foreground/75 text-[14px] leading-[1.7] font-normal">
+                      <p className="text-foreground/65 text-[14px] leading-[1.75] font-normal max-w-[280px]">
                         "{r.quote}"
                       </p>
                     </div>
                   </ScrollReveal>
-                  );
-                })}
+                ))}
               </div>
             );
           })()}
 
           {/* Leave a Review button */}
-          <div className="text-center mt-8 sm:mt-10">
+          <div className="text-center mt-10 sm:mt-12">
             <Button
               variant="outline"
               className="border-border/30 hover:border-border/50 text-sm rounded-full px-6"
