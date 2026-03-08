@@ -312,6 +312,7 @@ const ToolkitCarousel = ({ features, onExpand }: { features: ToolkitFeature[]; o
 
 interface Testimonial {
   name: string;
+  initials: string;
   role: string;
   region: string;
   quote: string;
