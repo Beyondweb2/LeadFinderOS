@@ -181,6 +181,12 @@ export function MobileBottomNav() {
                 );
               })}
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => {
+                try { openCustomerPortal(); } catch { }
+              }} className="flex items-center gap-3 cursor-pointer">
+                <CreditCard className="h-4 w-4" />
+                <span>{t('userMenu.manageSubscription')}</span>
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setThemeSheetOpen(true)} className="flex items-center gap-3 cursor-pointer">
                 <Palette className="h-4 w-4" />
                 <span>{t('theme.themeColor')}</span>
