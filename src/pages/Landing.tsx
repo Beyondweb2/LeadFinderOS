@@ -823,8 +823,10 @@ const Landing = () => {
           }}
         />
         <div className="container mx-auto max-w-5xl">
-          <h2 className="text-center text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground mb-12 sm:mb-14">
-            Trusted by freelancers and agencies using LeadFinder
+          <h2 className="text-center text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15] mb-12 sm:mb-14">
+            Trusted by freelancers and agencies
+            <br />
+            using <span className="text-gradient-primary">LeadFinder</span>
           </h2>
 
           {(() => {
