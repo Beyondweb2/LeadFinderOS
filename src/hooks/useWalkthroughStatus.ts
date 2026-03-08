@@ -21,7 +21,7 @@ export function useWalkthroughStatus() {
     setWalkthroughCompleted(dismissed || completed);
   }, [user?.id]);
 
-  // Listen for storage changes and skip-walkthrough events
+  // Listen for custom events instead of polling localStorage every second
   useEffect(() => {
     if (!user?.id) return;
     const check = () => {
@@ -35,14 +35,17 @@ export function useWalkthroughStatus() {
     const onStart = () => {
       setWalkthroughCompleted(false);
     };
+    // Listen for walkthrough dismissed event (fired by DemoChecklistPanel/WalkthroughOverlay)
+    const onDismissed = () => check();
     window.addEventListener('skip-walkthrough', onSkip);
     window.addEventListener('start-walkthrough', onStart);
-    // Poll briefly since localStorage events don't fire in same tab
-    const interval = setInterval(check, 1000);
+    window.addEventListener('walkthrough-dismissed', onDismissed);
+    window.addEventListener('walkthrough-status-changed', check);
     return () => {
-      clearInterval(interval);
       window.removeEventListener('skip-walkthrough', onSkip);
       window.removeEventListener('start-walkthrough', onStart);
+      window.removeEventListener('walkthrough-dismissed', onDismissed);
+      window.removeEventListener('walkthrough-status-changed', check);
     };
   }, [user?.id]);
 

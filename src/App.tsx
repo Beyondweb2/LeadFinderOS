@@ -1,4 +1,4 @@
-import { useEffect, Component, type ReactNode } from "react";
+import { useEffect, Component, type ReactNode, lazy, Suspense } from "react";
 
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -13,32 +13,43 @@ import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 import { RefSourceCapture } from "@/components/RefSourceCapture";
-import Index from "./pages/Index";
+import { LeadSearchProvider } from "./contexts/LeadSearchContext";
+import { Loader2 } from "lucide-react";
+
+// Eagerly loaded routes (critical path)
 import Auth from "./pages/Auth";
-// Subscribe page removed — checkout happens directly from landing
-import BillingSuccess from "./pages/BillingSuccess";
-import CompleteSetup from "./pages/CompleteSetup";
-import BillingCancel from "./pages/BillingCancel";
-import Outreach from "./pages/Outreach";
-import Dashboard from "./pages/Dashboard";
-import Templates from "./pages/Templates";
 import NotFound from "./pages/NotFound";
 
-import PotentialWorkPage from "./pages/PotentialWork";
-import PaidClientsPage from "./pages/PaidClients";
-import HowToUse from "./pages/HowToUse";
-import AdminAffiliates from "./pages/AdminAffiliates";
-import AdminDashboard from "./pages/AdminDashboard";
-import AdminFunnel from "./pages/AdminFunnel";
-import { LeadSearchProvider } from "./contexts/LeadSearchContext";
-import Landing from "./pages/Landing";
-import Terms from "./pages/Terms";
-import Feedback from "./pages/Feedback";
-import AffiliateProgram from "./pages/AffiliateProgram";
-import Playbook from "./pages/Playbook";
-import UnlockAccess from "./pages/UnlockAccess";
-import Start from "./pages/Start";
-import StartFreeTrial from "./pages/StartFreeTrial";
+// Lazy loaded routes — reduces initial bundle size
+const Index = lazy(() => import("./pages/Index"));
+const BillingSuccess = lazy(() => import("./pages/BillingSuccess"));
+const CompleteSetup = lazy(() => import("./pages/CompleteSetup"));
+const BillingCancel = lazy(() => import("./pages/BillingCancel"));
+const Outreach = lazy(() => import("./pages/Outreach"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Templates = lazy(() => import("./pages/Templates"));
+const PotentialWorkPage = lazy(() => import("./pages/PotentialWork"));
+const PaidClientsPage = lazy(() => import("./pages/PaidClients"));
+const HowToUse = lazy(() => import("./pages/HowToUse"));
+const AdminAffiliates = lazy(() => import("./pages/AdminAffiliates"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AdminFunnel = lazy(() => import("./pages/AdminFunnel"));
+const Landing = lazy(() => import("./pages/Landing"));
+const Terms = lazy(() => import("./pages/Terms"));
+const Feedback = lazy(() => import("./pages/Feedback"));
+const AffiliateProgram = lazy(() => import("./pages/AffiliateProgram"));
+const Playbook = lazy(() => import("./pages/Playbook"));
+const UnlockAccess = lazy(() => import("./pages/UnlockAccess"));
+const Start = lazy(() => import("./pages/Start"));
+const StartFreeTrial = lazy(() => import("./pages/StartFreeTrial"));
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
