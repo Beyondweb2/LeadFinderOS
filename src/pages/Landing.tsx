@@ -565,10 +565,8 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Built for line - mobile */}
-            <p className="sm:hidden text-xs text-muted-foreground/50 font-medium uppercase tracking-widest mt-6 mb-4 text-center">
-              Built for freelance web devs, agencies and SaaS founders
-            </p>
+
+
 
             {/* Feature bullets */}
             <div className="flex sm:hidden flex-col items-center justify-center gap-3 text-[12px] text-foreground/60 font-medium">
