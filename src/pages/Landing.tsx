@@ -702,7 +702,7 @@ const Landing = () => {
                         style={{ background: 'linear-gradient(to bottom right, hsl(var(--primary) / 0.2), hsl(220 80% 45% / 0.1))' }}
                       />
                       <div 
-                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] max-h-[320px] transition-transform duration-300 group-hover:scale-[1.01]"
+                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.01]"
                         style={{ 
                           border: '1px solid hsl(var(--primary) / 0.2)',
                           boxShadow: '0 0 24px hsl(var(--primary) / 0.1), 0 0 48px hsl(var(--primary) / 0.05)'
@@ -823,8 +823,10 @@ const Landing = () => {
           }}
         />
         <div className="container mx-auto max-w-5xl">
-          <h2 className="text-center text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground mb-12 sm:mb-14">
-            Trusted by freelancers and agencies using LeadFinder
+          <h2 className="text-center text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15] mb-12 sm:mb-14">
+            Trusted by freelancers and agencies
+            <br />
+            using <span className="text-gradient-primary">LeadFinder</span>
           </h2>
 
           {(() => {
