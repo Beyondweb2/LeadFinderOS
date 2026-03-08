@@ -409,7 +409,7 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
                     <Calendar
                       mode="single"
                       selected={nextCheckinDate}
-                      ohandleCheckinDateChangheckinDate}
+                      onSelect={handleCheckinDateChange}
                       initialFocus
                       className={cn("p-3 pointer-events-auto")}
                     />
