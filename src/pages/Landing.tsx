@@ -563,14 +563,14 @@ const Landing = () => {
 
             {/* Mobile trust badges */}
             <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-8">
-              <CountUpStat target={100000} suffix="+" label="Businesses" />
+              <CountUpStat target={100000} suffix="+" label="Businesses Indexed" />
               <div className="text-center">
                 <div className="text-base font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Coverage</div>
+                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Business Coverage</div>
               </div>
               <div className="text-center">
                 <div className="text-base font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Searches</div>
+                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Lead Searches</div>
               </div>
             </div>
 
