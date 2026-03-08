@@ -311,34 +311,53 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     )}
                   </TableCell>
                   <TableCell>
-                    {onAddToOutreach && (
-                      checkIsInOutreach(lead.name, lead.googleMapsUrl) ? (
+                    <div className="flex items-center gap-1">
+                      {!gated && lead.googleMapsUrl && (
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
-                              <Check className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" asChild>
+                              <a
+                                href={lead.googleMapsUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                              >
+                                <MapPin className="h-4 w-4 text-muted-foreground" />
+                              </a>
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent>Already in Outreach</TooltipContent>
+                          <TooltipContent>Open in Google Maps</TooltipContent>
                         </Tooltip>
-                      ) : (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className={`h-8 w-8 ${gated ? 'text-muted-foreground/50' : `text-green-500 hover:bg-muted hover:text-green-400 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}`}
-                              onClick={() => handleAddToOutreach(lead)}
-                              data-walkthrough-step="add-to-crm"
-                              data-walkthrough="add-crm"
-                            >
-                              {gated ? <Lock className="h-4 w-4" /> : <ClipboardList className="h-4 w-4" />}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>{gated ? '🔒 Start trial to add' : 'Add to Outreach'}</TooltipContent>
-                        </Tooltip>
-                      )
-                    )}
+                      )}
+                      {onAddToOutreach && (
+                        checkIsInOutreach(lead.name, lead.googleMapsUrl) ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
+                                <Check className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Already in Outreach</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className={`h-8 w-8 ${gated ? 'text-muted-foreground/50' : `text-green-500 hover:bg-muted hover:text-green-400 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}`}
+                                onClick={() => handleAddToOutreach(lead)}
+                                data-walkthrough-step="add-to-crm"
+                                data-walkthrough="add-crm"
+                              >
+                                {gated ? <Lock className="h-4 w-4" /> : <ClipboardList className="h-4 w-4" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{gated ? '🔒 Start trial to add' : 'Add to Outreach'}</TooltipContent>
+                          </Tooltip>
+                        )
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
