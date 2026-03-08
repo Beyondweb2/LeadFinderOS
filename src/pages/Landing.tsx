@@ -546,7 +546,7 @@ const Landing = () => {
                   </Link>
                 </Button>
               </div>
-              <p className="text-[11px] sm:text-xs text-muted-foreground/40 mt-3 font-medium">
+              <p className="text-[11px] sm:text-xs text-muted-foreground/55 mt-3 font-medium">
                 No card required · Instant access · Cancel anytime
               </p>
             </div>
