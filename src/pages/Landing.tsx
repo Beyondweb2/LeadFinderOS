@@ -593,8 +593,8 @@ const Landing = () => {
             {[
               {
                 num: 1,
-                title: 'Find the Right Businesses Instantly',
-                body: 'Search for businesses in seconds and discover real opportunities — including companies without websites and businesses ready to be contacted.',
+                title: 'Find Leads Instantly',
+                body: 'Search any business type anywhere globally and instantly see which businesses are missing a website.',
                 img: step2Results,
                 alt: 'Find leads results list',
               },
