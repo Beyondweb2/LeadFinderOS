@@ -79,7 +79,7 @@ export function MobileBottomNav() {
     const { state, isDemoUser, isOpen: walkthroughActive } = useDemoChecklist();
     searchPulse = isDemoUser && walkthroughActive && !state.searchDone;
     crmPulseWalkthrough = isDemoUser && walkthroughActive && state.addedToCrm && !state.firstContactMade;
-    trackPulseWalkthrough = isDemoUser && walkthroughActive && state.firstContactMade && !state.viewedProgress;
+    trackPulseWalkthrough = isDemoUser && walkthroughActive && state.contactPanelClosed && !state.viewedProgress;
   } catch {}
 
   useEffect(() => {

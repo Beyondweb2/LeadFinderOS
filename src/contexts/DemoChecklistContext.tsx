@@ -297,7 +297,7 @@ export function DemoChecklistProvider({
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
-    state.firstContactMade,
+    state.contactPanelClosed,
     state.trackPressed,
     state.viewedProgress,
     state.noteAdded,
