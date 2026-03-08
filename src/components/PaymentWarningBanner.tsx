@@ -20,12 +20,6 @@ export function PaymentWarningBanner() {
     }
   };
 
-  // Calculate days remaining in grace period
-  let daysRemaining = 7;
-  if (firstPaymentFailedAt) {
-    const elapsed = Date.now() - new Date(firstPaymentFailedAt).getTime();
-    daysRemaining = Math.max(0, Math.ceil((7 * 24 * 60 * 60 * 1000 - elapsed) / (24 * 60 * 60 * 1000)));
-  }
 
   if (isGracePeriodExpired) {
     return (
