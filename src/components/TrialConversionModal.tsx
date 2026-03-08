@@ -11,10 +11,10 @@ interface TrialConversionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   noWebsiteCount?: number;
-  totalFound?: number;
+  contactedCount?: number;
 }
 
-export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, totalFound = 0 }: TrialConversionModalProps) {
+export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, contactedCount = 0 }: TrialConversionModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [delayedOpen, setDelayedOpen] = useState(false);
   const { session } = useAuth();
