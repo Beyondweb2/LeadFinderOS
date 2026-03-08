@@ -44,7 +44,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     isStripeTrialing: false,
     paymentFailureCount: 0,
     lastPaymentFailedAt: null,
+    firstPaymentFailedAt: null,
     isPaymentPaused: false,
+    isInGracePeriod: false,
+    isGracePeriodExpired: false,
   });
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   
