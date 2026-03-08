@@ -518,8 +518,8 @@ const Landing = () => {
           <div className="max-w-3xl mx-auto lg:max-w-2xl">
 
             <span
-              className="hidden sm:inline-block text-xs font-semibold uppercase tracking-widest px-5 py-1.5 rounded-full mb-6"
-              style={{ background: 'hsl(210 100% 50% / 0.12)', color: 'hsl(210 100% 65%)' }}
+              className="hidden sm:inline-block text-xs font-semibold uppercase tracking-widest mb-6"
+              style={{ color: 'hsl(210 100% 65%)' }}
             >
               Built for web devs, agencies & founders
             </span>
@@ -869,24 +869,6 @@ const Landing = () => {
         </div>
       </section>
 
-      <ScrollReveal className="relative z-10 w-full" delay={200} direction="up">
-        <div className="flex flex-col items-center justify-center py-8 sm:py-10">
-          <button
-            onClick={handleCTA}
-            className="inline-flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-semibold text-sm sm:text-base transition-all duration-300 hover:scale-[1.04] active:scale-[0.98] cursor-pointer"
-            style={{
-              background: 'hsl(210 100% 50%)',
-              color: 'hsl(220 40% 4%)',
-              boxShadow: '0 4px 20px hsl(210 100% 50% / 0.35), 0 0 40px hsl(210 100% 50% / 0.1)',
-            }}
-          >
-            Try it free →
-          </button>
-          <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
-            5-day free trial · £0 today · Cancel anytime
-          </p>
-        </div>
-      </ScrollReveal>
 
       {/* Your Complete Lead Toolkit — carousel */}
       <section className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
