@@ -307,6 +307,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           setLeads(filteredLeads);
           setSearchError(null);
           setExpanded(!!data.expanded);
+          setGated(!!data.gated);
 
           // Persist demo leads to localStorage so they survive navigation
           if (storageKeys) {
