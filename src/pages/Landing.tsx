@@ -565,10 +565,8 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Built for line - mobile */}
-            <p className="sm:hidden text-xs text-muted-foreground/50 font-medium uppercase tracking-widest mt-6 mb-4 text-center">
-              Built for freelance web devs, agencies and SaaS founders
-            </p>
+
+
 
             {/* Feature bullets */}
             <div className="flex sm:hidden flex-col items-center justify-center gap-3 text-[12px] text-foreground/60 font-medium">
@@ -580,10 +578,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Built for line - desktop */}
-      <p className="hidden sm:block text-xs text-muted-foreground/50 font-medium uppercase tracking-widest text-center mb-6">
-        Built for freelance web devs, agencies and SaaS founders
-      </p>
 
       {/* Video Demo Section - desktop only */}
       <div className="hidden sm:block">
@@ -731,6 +725,11 @@ const Landing = () => {
 
         </div>
       </section>
+
+      {/* Built for line */}
+      <p className="text-xs text-muted-foreground/50 font-medium uppercase tracking-widest text-center mb-6">
+        Built for freelance web devs, agencies and SaaS founders
+      </p>
 
       {/* Your Complete Lead Toolkit — carousel */}
       <section className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
