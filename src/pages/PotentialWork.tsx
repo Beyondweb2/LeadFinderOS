@@ -1286,7 +1286,7 @@ const PotentialWorkPage = () => {
       {/* Header */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex-1 min-w-0">
-          <h1 className="text-lg sm:text-xl font-bold tracking-tight flex items-center gap-1.5">
+          <h1 className="text-lg sm:text-2xl font-bold tracking-tight flex items-center gap-1.5">
             <Briefcase className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
             Track Leads
           </h1>
