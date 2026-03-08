@@ -16,8 +16,18 @@ interface TrialConversionModalProps {
 
 export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, totalFound = 0 }: TrialConversionModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [delayedOpen, setDelayedOpen] = useState(false);
   const { session } = useAuth();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => setDelayedOpen(true), 2000);
+      return () => clearTimeout(timer);
+    } else {
+      setDelayedOpen(false);
+    }
+  }, [open]);
 
   const handleStartTrial = async () => {
     setIsLoading(true);
