@@ -551,9 +551,6 @@ const Landing = () => {
               </p>
             </div>
 
-            <p className="text-xs text-muted-foreground/50 font-medium uppercase tracking-widest mt-8 mb-4 text-center">
-              Built for freelance web devs, agencies and SaaS founders
-            </p>
 
             {/* Metrics row */}
             <div className="grid grid-cols-3 gap-4 sm:gap-5 md:gap-14 max-w-[280px] sm:max-w-xl mx-auto mt-8">
@@ -574,9 +571,18 @@ const Landing = () => {
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Contact them instantly</span>
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every follow-up</span>
             </div>
+            {/* Built for line - mobile */}
+            <p className="sm:hidden text-xs text-muted-foreground/50 font-medium uppercase tracking-widest mt-6 text-center">
+              Built for freelance web devs, agencies and SaaS founders
+            </p>
           </div>
         </div>
       </section>
+
+      {/* Built for line - desktop */}
+      <p className="hidden sm:block text-xs text-muted-foreground/50 font-medium uppercase tracking-widest text-center mb-6">
+        Built for freelance web devs, agencies and SaaS founders
+      </p>
 
       {/* Video Demo Section - desktop only */}
       <div className="hidden sm:block">
