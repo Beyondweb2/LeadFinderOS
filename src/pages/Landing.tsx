@@ -681,7 +681,7 @@ const Landing = () => {
                 {/* Desktop: alternating layout with large image */}
                 <div className={`hidden md:grid grid-cols-12 gap-10 lg:gap-14 items-center`}>
                   {/* Text column */}
-                  <div className={`col-span-4 ${isEven ? 'order-2 text-left' : 'order-1 text-left'}`}>
+                  <div className={`col-span-5 ${isEven ? 'order-2 text-left' : 'order-1 text-left'}`}>
                     <span 
                       className="font-bold text-xl mb-2 block"
                       style={{ color: 'hsl(var(--primary))' }}
