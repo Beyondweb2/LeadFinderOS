@@ -65,11 +65,11 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, t
           {/* Heading */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-2">
             <span className="text-foreground">Unlock </span>
-            <span className="text-primary">Full Access</span>
+            <span className="text-primary">These Leads</span>
           </DialogTitle>
 
           <p className="text-center text-sm text-muted-foreground leading-relaxed mb-5">
-            You've found real businesses that need a website
+            You've already found businesses that need a website
           </p>
 
           {/* Metrics */}
@@ -98,7 +98,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, t
 
           {/* Value description */}
           <p className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5">
-            Start your 5-day free trial to unlock full details, contact businesses, and manage your outreach
+            Start your 5-day free trial to unlock contact details and start your outreach
           </p>
 
           {/* Benefits */}
