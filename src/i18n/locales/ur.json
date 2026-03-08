@@ -66,6 +66,7 @@
     "adminDashboardDesc": "صارف میٹرکس اور تجزیات"
   },
   "auth": {
+    "back": "واپس",
     "signIn": "سائن ان",
     "signUp": "سائن اپ",
     "createAccount": "اکاؤنٹ بنائیں",

@@ -179,7 +179,7 @@ const Auth = () => {
           className="text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-4 w-4 mr-1" />
-          {t('auth.back') || 'Back'}
+          {t('auth.back')}
         </Button>
       </div>
       <AffiliateCapture />
