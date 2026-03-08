@@ -80,7 +80,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         if (prev.subscribed || prev.status) {
           return { ...prev, isLoading: false };
         }
-        return { ...prev, isLoading: false, subscribed: false, status: null, trialEnd: null, isPaidSubscriber: false, isStripeTrialing: false, paymentFailureCount: 0, lastPaymentFailedAt: null, isPaymentPaused: false };
+        return { ...prev, isLoading: false, subscribed: false, status: null, trialEnd: null, isPaidSubscriber: false, isStripeTrialing: false, paymentFailureCount: 0, lastPaymentFailedAt: null, firstPaymentFailedAt: null, isPaymentPaused: false, isInGracePeriod: false, isGracePeriodExpired: false };
       });
       return;
     }
