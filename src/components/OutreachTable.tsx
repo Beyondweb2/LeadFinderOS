@@ -749,11 +749,12 @@ export function OutreachTable({
     currentPage * ITEMS_PER_PAGE
   );
 
-  // Fallback: if no lead was contacted yet (e.g. skipped walkthrough contact step),
-  // highlight the first untracked lead's star button for the walkthrough
-  const walkthroughTrackLeadId = lastContactedLeadId
+  // Always point walkthrough Step 5 to a visible, actionable track button
+  const walkthroughTrackLeadId = (
+    paginatedLeads.find(l => l.id === lastContactedLeadId && !l.is_potential_work)?.id
     || paginatedLeads.find(l => !l.is_potential_work)?.id
-    || null;
+    || null
+  );
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
