@@ -608,7 +608,7 @@ const Landing = () => {
           </ScrollReveal>
 
           <div className="space-y-16 sm:space-y-20 md:space-y-28">
-            [
+            {[
               {
                 num: 1,
                 title: 'Find Leads Instantly',
