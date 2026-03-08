@@ -891,22 +891,22 @@ const Landing = () => {
             const toolkitFeatures = [
               {
                 title: 'Templates',
-                description: 'Ready-to-send WhatsApp, SMS and call scripts. Personalise quickly and start conversations with potential clients faster.',
+                description: 'WhatsApp, SMS and call scripts ready to send.',
                 img: featureTemplates,
               },
               {
                 title: 'Smart Dashboard',
-                description: 'Track outreach activity, conversations and pipeline progress in one clear view.',
+                description: 'Track outreach and pipeline in one view.',
                 img: featureDashboard,
               },
               {
                 title: 'Customisation',
-                description: 'Personalise templates, statuses and workflow so LeadFinder fits how you sell.',
+                description: 'Personalise templates and workflow to fit you.',
                 img: featureCustomization,
               },
               {
                 title: 'Export & Reports',
-                description: 'Download leads and outreach data anytime with simple CSV exports.',
+                description: 'Download leads and data as CSV anytime.',
                 img: featureExport,
               },
             ];
@@ -915,28 +915,35 @@ const Landing = () => {
               <ToolkitCarousel features={toolkitFeatures} onExpand={(src, title) => setExpandedImage({ src, title })} />
             ) : (
               <ScrollReveal>
-                <div className="grid grid-cols-4 gap-6 max-w-7xl mx-auto">
+                <div className="grid grid-cols-4 gap-8 lg:gap-10 max-w-7xl mx-auto">
                   {toolkitFeatures.map((feature, i) => (
-                    <div key={i} className="text-center">
+                    <div key={i} className="text-center group">
                       <div 
-                        className="relative group cursor-pointer w-full mb-4"
+                        className="relative cursor-pointer w-full mb-5"
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[3/2] transition-transform duration-300 group-hover:scale-[1.02]"
+                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[4/5] transition-all duration-300 group-hover:scale-[1.03] group-hover:-translate-y-1"
                           style={{ 
-                            border: '1px solid hsl(210 100% 50% / 0.2)',
-                            boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                            border: '1px solid hsl(210 100% 50% / 0.15)',
+                            boxShadow: '0 0 20px hsl(210 100% 50% / 0.08), 0 4px 16px hsl(220 40% 4% / 0.3)',
                           }}
                         >
-                          <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" width={640} height={400} className="w-full h-full object-cover" />
+                          <div
+                            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl pointer-events-none"
+                            style={{
+                              boxShadow: '0 0 30px hsl(210 100% 50% / 0.15), 0 8px 32px hsl(220 40% 4% / 0.4)',
+                              border: '1px solid hsl(210 100% 50% / 0.3)',
+                            }}
+                          />
+                          <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" width={640} height={800} className="w-full h-full object-cover" />
                           <div className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
                             <Search className="h-3.5 w-3.5 text-foreground/70" />
                           </div>
                         </div>
                       </div>
-                      <h3 className="text-base lg:text-lg font-bold tracking-tight mb-1.5">{feature.title}</h3>
-                      <p className="text-muted-foreground/70 text-xs lg:text-sm leading-[1.6]">
+                      <h3 className="text-base lg:text-lg font-bold tracking-tight mb-1">{feature.title}</h3>
+                      <p className="text-muted-foreground/70 text-xs lg:text-sm leading-relaxed">
                         {feature.description}
                       </p>
                     </div>
