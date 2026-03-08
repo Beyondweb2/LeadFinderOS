@@ -116,13 +116,10 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, t
           </div>
 
           {/* Trust line */}
-          <div className="w-full rounded-xl border border-border/30 bg-muted/20 px-4 py-3 mb-5">
-            <div className="flex flex-col items-center gap-1.5 text-[12px] text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                <span><strong className="text-foreground/80">£0 today</strong> · Cancel anytime before your trial ends</span>
-              </div>
-              <span className="text-[11px] text-muted-foreground/50">Your card is only used to verify your account</span>
+          <div className="w-full rounded-xl border border-border/30 bg-muted/20 px-4 py-3.5 mb-5">
+            <div className="flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
+              <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
+              <span><strong className="text-foreground text-[15px]">£0 today</strong> · Cancel anytime</span>
             </div>
           </div>
 
