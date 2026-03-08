@@ -598,9 +598,9 @@ const Landing = () => {
       </div>
 
       {/* How LeadFinder Works — 4-step section */}
-      <section id="how-it-works" className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
-        <div className="container mx-auto max-w-5xl">
-          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
+      <section id="how-it-works" className="relative z-10 py-10 sm:py-14 md:py-24 px-3 sm:px-4">
+        <div className="container mx-auto max-w-7xl">
+          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-16">
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15]">
               How Lead<span className="text-gradient-primary">Finder</span>
               <br />
@@ -608,7 +608,7 @@ const Landing = () => {
             </h2>
           </ScrollReveal>
 
-          <div className="space-y-12 sm:space-y-16 md:space-y-20">
+          <div className="space-y-16 sm:space-y-20 md:space-y-28">
             {[
               {
                 num: 1,
@@ -672,39 +672,39 @@ const Landing = () => {
                   </div>
                 </div>
 
-                {/* Desktop: alternating 12-col grid */}
-                <div className={`hidden md:grid grid-cols-12 gap-8 lg:gap-12 items-center`}>
+                {/* Desktop: alternating layout — large image with aligned text */}
+                <div className={`hidden md:grid grid-cols-12 gap-10 lg:gap-14 items-center`}>
                   {/* Text column */}
-                  <div className={`col-span-5 ${isEven ? 'order-2 text-left' : 'order-1 text-left'}`}>
+                  <div className={`col-span-4 ${isEven ? 'order-2 text-left' : 'order-1 text-left'}`}>
                     <span 
-                      className="font-bold text-lg mb-2 block"
-                      style={{ color: 'hsl(210 100% 60%)' }}
+                      className="font-bold text-xl mb-2 block"
+                      style={{ color: 'hsl(var(--primary))' }}
                     >{step.num}.</span>
-                    <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-3">
+                    <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-4">
                       {step.title}
                     </h3>
-                    <p className="text-muted-foreground/70 text-base md:text-lg leading-[1.6]">
+                    <p className="text-muted-foreground/70 text-base md:text-lg leading-[1.7]">
                       {step.body}
                     </p>
                   </div>
-                  {/* Image column */}
-                  <div className={`col-span-7 ${isEven ? 'order-1' : 'order-2'}`}>
+                  {/* Image column — larger */}
+                  <div className={`col-span-8 ${isEven ? 'order-1' : 'order-2'}`}>
                     <div 
-                      className="relative group cursor-pointer w-full lg:w-[95%] mx-auto"
+                      className="relative group cursor-pointer w-full"
                       onClick={() => setExpandedImage({ src: step.img, title: step.title })}
                     >
                       <div 
-                        className="absolute -inset-2 rounded-2xl blur-xl opacity-30 group-hover:opacity-40 transition-opacity duration-300"
-                        style={{ background: 'linear-gradient(to bottom right, hsl(210 100% 50% / 0.2), hsl(220 80% 45% / 0.1))' }}
+                        className="absolute -inset-3 rounded-2xl blur-xl opacity-25 group-hover:opacity-40 transition-opacity duration-300"
+                        style={{ background: 'linear-gradient(to bottom right, hsl(var(--primary) / 0.2), hsl(220 80% 45% / 0.1))' }}
                       />
                       <div 
                         className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.01]"
                         style={{ 
-                          border: '1px solid hsl(210 100% 50% / 0.2)',
-                          boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
+                          border: '1px solid hsl(var(--primary) / 0.2)',
+                          boxShadow: '0 0 24px hsl(var(--primary) / 0.1), 0 0 48px hsl(var(--primary) / 0.05)'
                         }}
                       >
-                        <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={640} height={400} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
+                        <img src={step.img} alt={step.alt} loading="lazy" decoding="async" width={800} height={500} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
                         <div className="absolute bottom-3 right-3 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm">
                           <Search className="h-3.5 w-3.5 text-foreground/70" />
                         </div>
