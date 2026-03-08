@@ -980,8 +980,11 @@ const Landing = () => {
           <p className="text-center text-xs sm:text-sm text-muted-foreground/50 font-medium uppercase tracking-wider mb-6 sm:mb-8">
             Trusted by freelancers, agencies and founders
           </p>
-
-          {(() => {
+          <div className="flex gap-0.5 justify-center mb-6 sm:mb-8">
+            {[...Array(5)].map((_, i) => (
+              <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+            ))}
+          </div>
             const testimonials = [
               {
                 name: 'Chris P.',
