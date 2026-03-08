@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Loader2, CreditCard, Sparkles, Gift, Check } from 'lucide-react';
+import { Loader2, CreditCard, Sparkles, Gift, Check, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
@@ -170,7 +170,18 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md mb-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/landing')}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          {t('auth.back') || 'Back'}
+        </Button>
+      </div>
       <AffiliateCapture />
       {/* Free Trial Loading Modal */}
       <Dialog open={showTrialModal} onOpenChange={() => {}}>
