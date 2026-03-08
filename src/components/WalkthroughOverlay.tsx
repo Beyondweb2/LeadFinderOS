@@ -48,15 +48,14 @@ function getActiveStep(state: any, pathname: string, t: any): StepDef | null {
     };
   }
 
-  if (!state.threeContactsMade) {
-    const contacted = state.contactsMadeCount || 0;
+  if (!state.firstContactMade) {
     if (pathname === '/outreach') {
       // Wait for the contact target to render before showing tooltip (prevents flicker on navigation)
       const contactEl = document.querySelector('[data-walkthrough="contact"]');
       if (!contactEl) return null;
-      return { step: 3, selector: '[data-walkthrough="contact"]', tooltip: t('walkthrough.step3Contact', { count: contacted }), noDim: true };
+      return { step: 3, selector: '[data-walkthrough="contact"]', tooltip: t('walkthrough.step3Contact'), noDim: true };
     }
-    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: t('walkthrough.step3NavToOutreach', { count: contacted }) };
+    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: t('walkthrough.step3NavToOutreach') };
   }
 
   if (!state.trackPressed) {
