@@ -7,6 +7,7 @@ import { CheckoutActivationOverlay } from '@/components/CheckoutActivationOverla
 import { DemoChecklistProvider } from '@/contexts/DemoChecklistContext';
 import { DemoChecklistPanel } from '@/components/DemoChecklistPanel';
 import { PaymentFailureDialog } from '@/components/PaymentFailureDialog';
+import { PaymentWarningBanner } from '@/components/PaymentWarningBanner';
 import { WalkthroughOverlay } from '@/components/WalkthroughOverlay';
 import { SkipWalkthroughButton } from '@/components/SkipWalkthroughButton';
 import { WelcomeWalkthroughModal } from '@/components/WelcomeWalkthroughModal';
