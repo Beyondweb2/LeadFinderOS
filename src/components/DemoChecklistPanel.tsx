@@ -38,8 +38,6 @@ export function DemoChecklistPanel() {
 
   const dismissKey = user?.id ? `demo_walkthrough_dismissed_${user.id}` : null;
   const [dismissed, setDismissed] = useState(false);
-  const [showTipsModal, setShowTipsModal] = useState(false);
-  const tipsModalShownRef = useRef(false);
   const prevAllDoneRef = useRef(allDone);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [metrics, setMetrics] = useState({ noWebsite: 0, added: 0, messages: 0 });
