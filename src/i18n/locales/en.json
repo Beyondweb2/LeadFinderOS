@@ -191,16 +191,16 @@
     "step1BusinessType": "Type a business type or tap a quick option.",
     "step1Location": "Type a location or pick one from Quick Locations.",
     "step1Search": "Press Find Leads to search.",
-    "step2Select": "Select 3 businesses you might want to contact.\n{{count}} / 3",
-    "step3Contact": "Contact businesses via Call, SMS or WhatsApp.\n{{count}}/3",
-    "step3NavToOutreach": "Open Outreach to contact businesses.",
-    "step5Track": "Track businesses that are interested.",
+    "step2Select": "Select a business that looks like a good opportunity.",
+    "step3Contact": "Press Contact to see how you can reach businesses.\n{{count}}/3",
+    "step3NavToOutreach": "Open Outreach to see contact options.",
+    "step5Track": "Track businesses that show interest.",
     "step5NavToOutreach": "Open Outreach and press ⭐ Track on a lead.",
-    "step6Pipeline": "Manage your pipeline here.",
-    "step7Status": "Update the status for this lead.",
-    "step8NextAction": "Now set a next action for this lead.",
-    "step9Date": "Pick a date for this action.",
-    "step10Note": "Add a note to remember key details about this lead.",
+    "step6Pipeline": "Your tracked leads appear here.",
+    "step7Status": "Set the status for this lead.",
+    "step8NextAction": "Set the next step for this lead.",
+    "step9Date": "Pick when you want to follow up.",
+    "step10Note": "Add a note for this lead.",
     "step11Collapse": "Collapse the card to finish. You're all set!"
   },
   "welcome": {
@@ -303,9 +303,9 @@
     "headline2": "that may need your services",
     "clickEye": "Click the eye icon to view full details",
     "addToCrm": "When you find one you want to contact, add it to your CRM",
-    "save3Leads": "Save <accent>3 leads</accent> to unlock outreach",
+    "save3Leads": "Save <accent>1 lead</accent> to unlock outreach",
     "andContinue": "and continue the walkthrough",
-    "gotItSave3": "Got it – I'll save 3 leads"
+    "gotItSave3": "Got it – I'll save a lead"
   },
   "outreachTips": {
     "headline1": "4 Tips Before",
