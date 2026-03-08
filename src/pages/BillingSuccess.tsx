@@ -12,7 +12,7 @@ const DEFAULT_IN_APP_ROUTE = '/find-leads';
 const sanitizeReturnTo = (raw: string | null): string => {
   if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return DEFAULT_IN_APP_ROUTE;
 
-  const blockedPrefixes = ['/billing/success', '/complete-setup', '/billing/cancel', '/landing', '/auth'];
+  const blockedPrefixes = ['/billing/success', '/complete-setup', '/billing/cancel', '/landing', '/auth', '/start', '/start-free-trial', '/subscribe'];
   if (blockedPrefixes.some((prefix) => raw.startsWith(prefix))) return DEFAULT_IN_APP_ROUTE;
 
   return raw;

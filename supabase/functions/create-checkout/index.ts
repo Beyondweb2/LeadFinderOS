@@ -43,7 +43,7 @@ const sanitizeReturnPath = (rawPath?: string | null): string => {
   if (!rawPath) return DEFAULT_RETURN_PATH;
   if (!rawPath.startsWith('/') || rawPath.startsWith('//')) return DEFAULT_RETURN_PATH;
 
-  const blockedPrefixes = ['/billing/success', '/complete-setup', '/billing/cancel', '/landing', '/auth'];
+  const blockedPrefixes = ['/billing/success', '/complete-setup', '/billing/cancel', '/landing', '/auth', '/start', '/start-free-trial', '/subscribe'];
   if (blockedPrefixes.some((prefix) => rawPath.startsWith(prefix))) return DEFAULT_RETURN_PATH;
 
   return rawPath;
