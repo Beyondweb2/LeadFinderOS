@@ -1,21 +1,42 @@
 
-## Problem
 
-When a logged-in user lands on `/landing` (e.g. because their subscription is blocked, or they were redirected by `SubscriptionGate`), the "Sign In" buttons are hidden because they're wrapped in `{!user && ...}`. The header CTA also changes from "Try it free" to "Subscribe". This means a user who signed out and back in, or whose session is stale, loses access to the Sign In button.
+## Plan: Add payment failure email reminder via Resend
 
-There are 3 places in `Landing.tsx` where Sign In is conditionally hidden:
-1. **Header** (line 558): `{!user && <Button>Sign In</Button>}`
-2. **Hero CTA** (line 616): `{!user && <Button>Sign in</Button>}`
-3. **Footer** (line 1173): `{!user && <Link>Sign In</Link>}`
+### Changes
 
-And the header CTA button (line 567) shows `user ? 'Subscribe' : 'Try it free'`.
+#### 1. `supabase/functions/stripe-webhook/index.ts` — Send email on first payment failure
 
-## Plan
+After the payment failure tracking block (around line 385), add a fire-and-forget email send via Resend when `isPaymentFailure && currentFailureCount === 0` (first failure only).
 
-**Single file change: `src/pages/Landing.tsx`**
+**Email style** — matches existing lifecycle emails from `Paul from LeadFinder <paul@lead-finder-app.com>`:
+- Casual, personal tone signed by "Paul"
+- Same HTML structure (sans-serif, 15px, `#1a1a1a`, max-width 600px)
+- Footer with LeadFinder branding and `https://lead-finder-app.com`
+- Link to `https://lead-finder-app.com/dashboard` (not the Lovable preview URL)
 
-1. **Always show the Sign In links** — remove the `!user &&` guards from all three locations so the Sign In button is always visible regardless of auth state.
+**Subject:** "Action needed: update your payment method"
 
-2. **Keep the CTA button text as "Try it free"** always (remove the ternary that switches to "Subscribe" when logged in). Logged-in users who need to subscribe will still scroll to pricing and go through the normal checkout flow.
+**Body (no 7-day mention, just "update or lose access"):**
+> Hey [name],
+>
+> We couldn't process your subscription payment for LeadFinder.
+>
+> Please update your payment method to avoid losing access.
+>
+> [Update payment method] → https://lead-finder-app.com/dashboard
+>
+> If you've already updated your card, you can ignore this email.
+>
+> – Paul, LeadFinder
 
-These are purely display changes — no routing, Stripe, or auth logic is modified.
+Uses `fetch("https://api.resend.com/emails")` with `RESEND_API_KEY` (same pattern as lifecycle-emails). Fire-and-forget — failure is logged but doesn't block the webhook response.
+
+#### 2. `src/components/PaymentWarningBanner.tsx` — Remove days remaining countdown
+
+Remove the `daysRemaining` calculation and the `(X days remaining)` text from the grace period banner. Update copy to just say "update your card to avoid losing access" without mentioning a timeframe.
+
+### What stays unchanged
+- All other webhook logic, subscription gate, payment paused screen
+- Database schema
+- Existing email templates
+
