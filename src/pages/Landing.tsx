@@ -724,6 +724,71 @@ const Landing = () => {
       </section>
 
 
+      {/* SaaS Founder Use Case */}
+      <section className="relative z-10 py-8 sm:py-12 md:py-16 px-3 sm:px-4">
+        <div className="container mx-auto max-w-4xl">
+          <ScrollReveal className="text-center mb-6 sm:mb-10">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.15]">
+              SaaS Founder <span className="text-gradient-primary">Use Case</span>
+            </h2>
+            <p className="text-xs sm:text-base md:text-lg text-foreground/60 max-w-xl mx-auto leading-relaxed mt-3 sm:mt-4">
+              Use LeadFinder to find web developers, agencies, and other target users you want to reach — then contact them directly without waiting for inbound.
+            </p>
+          </ScrollReveal>
+
+          {/* Mobile: compact rows */}
+          <div className="flex sm:hidden flex-col gap-3 max-w-sm mx-auto">
+            {[
+              { icon: Search, title: 'Find web developers', text: 'Search by business type and location to find developers, agencies, and other niche audiences.' },
+              { icon: MessageSquare, title: 'Contact directly', text: 'Get contact details and reach out through personal numbers, WhatsApp, SMS, or call.' },
+              { icon: Zap, title: 'Track replies', text: 'Manage conversations, follow-ups, and outreach in one place.' },
+            ].map((item, i) => (
+              <div
+                key={i}
+                className="flex items-start gap-3 p-4 rounded-xl"
+                style={{
+                  background: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border)/0.5)',
+                }}
+              >
+                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'hsl(var(--primary)/0.1)' }}>
+                  <item.icon className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground mb-0.5">{item.title}</h3>
+                  <p className="text-[11px] text-foreground/55 leading-snug">{item.text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop: 3-column grid */}
+          <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-6">
+            {[
+              { icon: Search, title: 'Find web developers', text: 'Search by business type and location to find developers, agencies, and other niche audiences.' },
+              { icon: MessageSquare, title: 'Contact directly', text: 'Get contact details and reach out through personal numbers, WhatsApp, SMS, or call.' },
+              { icon: Zap, title: 'Track replies', text: 'Manage conversations, follow-ups, and outreach in one place.' },
+            ].map((item, i) => (
+              <ScrollReveal key={i} delay={i * 100}>
+                <div
+                  className="flex flex-col items-center text-center p-6 md:p-7 rounded-2xl h-full"
+                  style={{
+                    background: 'linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--card)/0.8) 100%)',
+                    border: '1px solid hsl(var(--border)/0.5)',
+                  }}
+                >
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: 'hsl(var(--primary)/0.1)' }}>
+                    <item.icon className="h-5 w-5 text-primary" />
+                  </div>
+                  <h3 className="text-base font-semibold text-foreground mb-1.5">{item.title}</h3>
+                  <p className="text-sm text-foreground/55 leading-relaxed">{item.text}</p>
+                </div>
+              </ScrollReveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Your Complete Lead Toolkit — carousel */}
       <section className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
         <div
