@@ -71,13 +71,6 @@ export function DemoChecklistPanel() {
     prevAllDoneRef.current = allDone;
   }, [allDone, user?.id]);
 
-  useEffect(() => {
-    if (!isFreeUser || tipsDismissed || tipsModalShownRef.current) return;
-    if (allDone && !showCompletionModal && !prevAllDoneRef.current) {
-      tipsModalShownRef.current = true;
-      setShowTipsModal(true);
-    }
-  }, [allDone, isFreeUser, tipsDismissed, showCompletionModal]);
 
   const handleDismiss = () => {
     setDismissed(true);
