@@ -724,15 +724,8 @@ const Landing = () => {
       </section>
 
 
-      {/* Audience tag */}
-      <div className="relative z-10 flex justify-center pt-8 sm:pt-10 px-3">
-        <span className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-[10px] sm:text-xs font-medium uppercase tracking-widest text-muted-foreground/60 border border-border/40 bg-card/50">
-          Built for freelance web devs, agencies &amp; SaaS founders
-        </span>
-      </div>
-
       {/* Your Complete Lead Toolkit — carousel */}
-      <section className="relative z-10 pt-5 sm:pt-10 pb-10 sm:pb-14 md:py-20 px-3 sm:px-4">
+      <section className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
