@@ -223,7 +223,7 @@ serve(async (req) => {
       line_items: [{ price: "price_1SxN38Gi4ps7kJ7R8UE1kYGS", quantity: 1 }],
       mode: "subscription",
       payment_method_types: ['card'],
-      success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}&return_to=${encodeURIComponent(returnTo)}`,
       cancel_url: `${origin}/billing/cancel`,
     };
 
