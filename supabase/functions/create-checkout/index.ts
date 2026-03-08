@@ -18,6 +18,7 @@ const ALLOWED_ORIGINS = [
   'https://leadfinderapp.lovable.app',
 ];
 const DEFAULT_ORIGIN = 'https://leadfinderapp.lovable.app';
+const DEFAULT_RETURN_PATH = '/find-leads';
 
 const isTrustedOrigin = (origin: string): boolean => {
   try {
@@ -36,6 +37,29 @@ const isTrustedOrigin = (origin: string): boolean => {
 const resolveOrigin = (raw: string | null): string => {
   if (!raw) return DEFAULT_ORIGIN;
   return isTrustedOrigin(raw) ? raw : DEFAULT_ORIGIN;
+};
+
+const sanitizeReturnPath = (rawPath?: string | null): string => {
+  if (!rawPath) return DEFAULT_RETURN_PATH;
+  if (!rawPath.startsWith('/') || rawPath.startsWith('//')) return DEFAULT_RETURN_PATH;
+
+  const blockedPrefixes = ['/billing/success', '/complete-setup', '/billing/cancel', '/landing', '/auth'];
+  if (blockedPrefixes.some((prefix) => rawPath.startsWith(prefix))) return DEFAULT_RETURN_PATH;
+
+  return rawPath;
+};
+
+const resolveReturnPath = (bodyReturnTo?: string | null, referer?: string | null): string => {
+  const fromBody = sanitizeReturnPath(bodyReturnTo);
+  if (fromBody !== DEFAULT_RETURN_PATH) return fromBody;
+
+  if (!referer) return fromBody;
+  try {
+    const refererUrl = new URL(referer);
+    return sanitizeReturnPath(refererUrl.pathname);
+  } catch {
+    return fromBody;
+  }
 };
 
 const logStep = (step: string, details?: unknown) => {
