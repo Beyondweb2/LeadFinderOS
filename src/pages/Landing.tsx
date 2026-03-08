@@ -546,7 +546,7 @@ const Landing = () => {
                 </Button>
               </div>
               <p className="text-[11px] sm:text-xs text-muted-foreground/40 mt-3 font-medium">
-                5-day free trial · £0 today · Cancel anytime
+                No card required · Instant access · Cancel anytime
               </p>
             </div>
 
