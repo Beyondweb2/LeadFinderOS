@@ -66,6 +66,7 @@
     "adminDashboardDesc": "उपयोगकर्ता मेट्रिक्स और एनालिटिक्स"
   },
   "auth": {
+    "back": "वापस",
     "signIn": "साइन इन करें",
     "signUp": "साइन अप करें",
     "createAccount": "खाता बनाएं",

@@ -66,6 +66,7 @@
     "adminDashboardDesc": "User metrics & analytics"
   },
   "auth": {
+    "back": "Back",
     "signIn": "Sign In",
     "signUp": "Sign up",
     "createAccount": "Create Account",
