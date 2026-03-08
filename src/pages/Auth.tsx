@@ -170,7 +170,18 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+      <div className="w-full max-w-md mb-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate('/landing')}
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          {t('auth.back') || 'Back'}
+        </Button>
+      </div>
       <AffiliateCapture />
       {/* Free Trial Loading Modal */}
       <Dialog open={showTrialModal} onOpenChange={() => {}}>
