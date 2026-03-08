@@ -196,9 +196,9 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
             <>
               {/* Row 1: Maps, Facebook, Call */}
               <div className="flex items-center gap-0.5">
-                {lead.google_maps_url && (
+                {(lead.google_maps_url || ((lead as any).place_id ? `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}` : null)) && (
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10" asChild>
-                    <a href={lead.google_maps_url} target="_blank" rel="noopener noreferrer">
+                    <a href={lead.google_maps_url || `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}`} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   </Button>

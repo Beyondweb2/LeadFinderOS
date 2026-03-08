@@ -1222,9 +1222,9 @@ export function OutreachTable({
                       )}
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1.5">
-                          {lead.google_maps_url && (
+                          {(lead.google_maps_url || ((lead as any).place_id ? `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}` : null)) && (
                             <a
-                              href={lead.google_maps_url}
+                              href={lead.google_maps_url || `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-500 hover:text-blue-400 transition-colors"
