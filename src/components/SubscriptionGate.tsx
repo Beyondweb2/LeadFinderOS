@@ -62,6 +62,12 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     return <PaymentPausedScreen />;
   }
 
+  // Block cancelled users — must resubscribe
+  const isCancelled = subStatus === 'canceled' || subStatus === 'cancelled';
+  if (isCancelled) {
+    return <SubscriptionCancelledScreen />;
+  }
+
   // Allow all authenticated users into the app — gating happens at feature level
   // (search results are gated, buttons locked, trial modal shown)
 
