@@ -188,7 +188,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const isPaid = subStatus === 'active';
       const isTrialing = subStatus === 'trialing';
       const failureCount = data.payment_failure_count ?? 0;
-      const isPaused = subStatus === 'paused' || subStatus === 'past_due' || subStatus === 'unpaid' || failureCount >= 2;
+      const firstFailedAt = data.first_payment_failed_at ?? null;
+      const graceExpired = data.grace_period_expired === true;
+      const isPaused = graceExpired || subStatus === 'paused' || subStatus === 'unpaid';
+      const inGracePeriod = failureCount > 0 && !graceExpired && !isPaused && (subStatus === 'past_due' || subStatus === 'active');
       
       setState({
         subscribed: data.subscribed ?? false,
@@ -203,7 +206,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         isStripeTrialing: isTrialing,
         paymentFailureCount: failureCount,
         lastPaymentFailedAt: data.last_payment_failed_at ?? null,
+        firstPaymentFailedAt: firstFailedAt,
         isPaymentPaused: isPaused,
+        isInGracePeriod: inGracePeriod,
+        isGracePeriodExpired: graceExpired,
       });
     } catch (err) {
       console.error('Subscription check failed:', err);
