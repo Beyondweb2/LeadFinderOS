@@ -901,8 +901,8 @@ const Landing = () => {
                 img: featureDashboard,
               },
               {
-                title: 'Customisation',
-                description: 'Personalise templates and workflow to fit you.',
+                title: 'Make It Yours',
+                description: 'Choose your accent colour, switch between themes, and add your own profile picture — so it feels like your app.',
                 img: featureCustomization,
               },
               {
