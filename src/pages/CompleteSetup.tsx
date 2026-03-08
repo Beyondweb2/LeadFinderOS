@@ -77,14 +77,28 @@ const CompleteSetup = () => {
   const isFormValid = email && password.length >= 8 && password === confirmPassword && language;
 
   if (!sessionId) {
+    if (user) {
+      return (
+        <div className="min-h-screen bg-background flex items-center justify-center p-4">
+          <Card className="w-full max-w-md bg-card border-border">
+            <CardContent className="flex flex-col items-center gap-4 py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <h2 className="text-xl font-semibold">Restoring your access…</h2>
+              <p className="text-muted-foreground text-sm text-center">Taking you back into the app now.</p>
+            </CardContent>
+          </Card>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-4">
         <Card className="w-full max-w-md bg-card border-border">
           <CardContent className="flex flex-col items-center gap-4 py-12">
             <AlertCircle className="h-12 w-12 text-destructive" />
-            <h2 className="text-xl font-semibold">Invalid link</h2>
-            <p className="text-muted-foreground text-sm text-center">This page requires a valid checkout session.</p>
-            <Button onClick={() => navigate('/landing', { replace: true })}>Go to Homepage</Button>
+            <h2 className="text-xl font-semibold">Checkout session not found</h2>
+            <p className="text-muted-foreground text-sm text-center">Please sign in to continue to your dashboard.</p>
+            <Button onClick={() => navigate('/auth', { replace: true })}>Go to sign in</Button>
           </CardContent>
         </Card>
       </div>
