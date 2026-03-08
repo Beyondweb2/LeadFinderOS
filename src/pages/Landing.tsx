@@ -448,7 +448,7 @@ const Landing = () => {
         <div 
           className="absolute inset-0"
           style={{ 
-            background: 'radial-gradient(ellipse 80% 50% at 50% -20%, hsl(210 100% 50% / 0.12), transparent 60%)',
+            background: 'radial-gradient(ellipse 80% 50% at 50% -20%, hsl(210 100% 50% / 0.07), transparent 60%)',
           }}
         />
         <div 
