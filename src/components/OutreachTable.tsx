@@ -320,6 +320,8 @@ export function OutreachTable({
     }
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'whatsapp' as ContactMethod);
+    // Treat opening contact panel as selecting this lead for next walkthrough step
+    highlightLead(lead.id);
     // Always emit walkthrough contact event on click (replay-safe)
     window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     setWalkthroughContactedIds(prev => {
@@ -335,6 +337,8 @@ export function OutreachTable({
   const handleSMSClick = useCallback((lead: OutreachLead) => {
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'sms' as ContactMethod);
+    // Treat opening contact panel as selecting this lead for next walkthrough step
+    highlightLead(lead.id);
     // Always emit walkthrough contact event on click (replay-safe)
     window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     setWalkthroughContactedIds(prev => {
