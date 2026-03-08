@@ -735,6 +735,7 @@ serve(async (req) => {
         source: 'google',
         cached: true,
         expanded: hasExpanded,
+        gated: isGated,
         _debug: debug,
       });
     }
@@ -771,6 +772,7 @@ serve(async (req) => {
       source: 'google',
       cached: false,
       expanded,
+      gated: isGated,
       _debug: { ...debug, ...selectionDebug },
     });
 
