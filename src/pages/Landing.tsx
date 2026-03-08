@@ -953,7 +953,8 @@ const Landing = () => {
       </ScrollReveal>
 
       {/* Final CTA - Free Access Card */}
-      <section id="pricing" className="relative z-10 pb-16 sm:pb-20 md:pb-24 py-16 sm:py-20 md:py-28ssy-16 sm:py-20 md:py-28o y-16 sm:py-20 md:py-28
+      <section id="pricing" className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
+        <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
             <div
               className="rounded-2xl px-6 py-9 sm:p-12 text-center"
