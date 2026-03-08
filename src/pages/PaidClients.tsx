@@ -23,6 +23,8 @@ import {
   MessageCircle,
   PhoneCall,
   MoreVertical,
+  ChevronDown,
+  ChevronUp,
   Pencil,
   Check,
   X,
