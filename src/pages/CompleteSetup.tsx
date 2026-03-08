@@ -118,7 +118,7 @@ const CompleteSetup = () => {
       }
 
       setStatus('success');
-      setTimeout(() => navigate('/', { replace: true }), 2000);
+      setTimeout(() => navigate(returnTo, { replace: true }), 2000);
     } catch (err) {
       console.error('Complete signup error:', err);
       setStatus('error');
@@ -259,7 +259,7 @@ const CompleteSetup = () => {
               <CheckCircle2 className="h-12 w-12" style={{ color: 'hsl(142 76% 50%)' }} />
               <h2 className="text-xl font-semibold">You're all set!</h2>
               <p className="text-sm text-muted-foreground text-center">Your 5-day free trial is active. Redirecting...</p>
-              <Button onClick={() => navigate('/', { replace: true })} className="btn-premium">
+              <Button onClick={() => navigate(returnTo, { replace: true })} className="btn-premium">
                 Continue to app →
               </Button>
             </div>
