@@ -573,6 +573,16 @@ const Landing = () => {
             </div>
           </div>
 
+          {/* Scroll indicator — mobile/tablet only */}
+          <div className="flex lg:hidden flex-col items-center mt-8 sm:mt-10 animate-bounce">
+            <span className="text-[10px] sm:text-xs text-muted-foreground/30 tracking-widest uppercase mb-2">Scroll</span>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/30">
+              <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
+            </svg>
+          </div>
+        </div>
+      </section>
+
       {/* Video Demo Section - desktop only */}
       <div className="hidden sm:block">
         <VideoSection />
