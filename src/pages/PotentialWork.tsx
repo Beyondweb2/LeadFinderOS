@@ -477,7 +477,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                     <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
                   </div>
                 ) : (
-                  <div className="w-10 h-10 sm:w-12 sm:h-12 lg:w-14 lg:h-14 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-xs sm:text-sm lg:text-base font-bold text-primary">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-sm sm:text-base lg:text-lg font-bold text-primary">
                     {getInitials(lead.business_name)}
                   </div>
                 )}
