@@ -125,9 +125,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
   const hasPhone = Boolean(lead.phone);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => {
-      onOpenChange(v);
-    }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -225,7 +223,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
 
         <DialogFooter className="gap-2 flex-row justify-end sm:justify-end">
           <Button variant="outline" onClick={() => {
-            onOpenChange(false);
+            handleOpenChange(false);
           }}>
             Cancel
           </Button>
