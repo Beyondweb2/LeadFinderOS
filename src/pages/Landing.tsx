@@ -936,7 +936,8 @@ const Landing = () => {
                               border: '1px solid hsl(210 100% 50% / 0.3)',
                             }}
                           />
-                          <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" width={640} hclassName="w-full h-auto block                  <div className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
+                          <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" className="w-full h-auto block" />
+                          <div className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
                             <Search className="h-3.5 w-3.5 text-foreground/70" />
                           </div>
                         </div>
