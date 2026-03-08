@@ -565,16 +565,17 @@ const Landing = () => {
               </div>
             </div>
 
+            {/* Built for line - mobile */}
+            <p className="sm:hidden text-xs text-muted-foreground/50 font-medium uppercase tracking-widest mt-6 mb-4 text-center">
+              Built for freelance web devs, agencies and SaaS founders
+            </p>
+
             {/* Feature bullets */}
-            <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/60 font-medium">
+            <div className="flex sm:hidden flex-col items-center justify-center gap-3 text-[12px] text-foreground/60 font-medium">
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses without websites</span>
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Contact them instantly</span>
               <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every follow-up</span>
             </div>
-            {/* Built for line - mobile */}
-            <p className="sm:hidden text-xs text-muted-foreground/50 font-medium uppercase tracking-widest mt-6 text-center">
-              Built for freelance web devs, agencies and SaaS founders
-            </p>
           </div>
         </div>
       </section>
