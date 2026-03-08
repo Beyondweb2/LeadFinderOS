@@ -573,6 +573,10 @@ const Landing = () => {
                 <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every follow-up</span>
               </div>
             </ScrollReveal>
+            {/* Scroll down indicator - mobile only */}
+            <div className="sm:hidden flex flex-col items-center mt-6 animate-bounce">
+              <ChevronDown className="h-5 w-5 text-foreground/30" />
+            </div>
           </div>
         </div>
       </section>
