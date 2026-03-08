@@ -1064,6 +1064,18 @@ const Landing = () => {
             );
           })()}
 
+          {/* Stars and rating */}
+          <div className="text-center mt-8 sm:mt-10 mb-4">
+            <div className="flex gap-0.5 justify-center mb-2.5">
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
+              ))}
+            </div>
+            <p className="text-sm sm:text-base text-foreground/60 font-medium">
+              Rated 4.9/5 from real users
+            </p>
+          </div>
+
           {/* Leave a Review button */}
           <div className="text-center mt-8 sm:mt-10">
             <Button
