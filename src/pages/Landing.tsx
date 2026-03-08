@@ -514,6 +514,11 @@ const Landing = () => {
           </div>
 
           <div className="max-w-3xl mx-auto lg:max-w-2xl">
+            {/* Positioning line */}
+            <p className="text-[11px] sm:text-xs text-muted-foreground/50 font-medium uppercase tracking-widest mb-4 sm:mb-5">
+              Lead discovery and outreach in one system
+            </p>
+
             <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
               <span className="tracking-[0.02em]">Find the Right Businesses</span>{' '}
               <br className="hidden sm:block" />
@@ -525,7 +530,7 @@ const Landing = () => {
             </p>
             
             {/* CTA */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-8">
+            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-6 sm:mt-8">
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                 <Button 
                   size="lg" 
@@ -546,39 +551,34 @@ const Landing = () => {
                 </Button>
               </div>
             </div>
+
+            {/* Metrics row */}
+            <div className="grid grid-cols-3 gap-4 sm:gap-5 md:gap-14 max-w-[280px] sm:max-w-xl mx-auto mt-6 sm:mt-8">
+              <CountUpStat target={100000} suffix="+" label="Businesses" />
+              <div className="text-center">
+                <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+                <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+              </div>
+              <div className="text-center">
+                <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+                <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+              </div>
+            </div>
+
+            {/* Feature bullets — mobile only */}
+            <div className="flex sm:hidden flex-col items-center justify-center gap-2.5 mt-5 text-[12px] text-foreground/50 font-medium">
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Discover businesses ready for outreach</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Contact via WhatsApp, SMS or call</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every conversation and follow-up</span>
+            </div>
           </div>
 
           {/* Scroll indicator — mobile/tablet only */}
-          <div className="flex lg:hidden flex-col items-center mt-10 sm:mt-12 animate-bounce">
+          <div className="flex lg:hidden flex-col items-center mt-8 sm:mt-10 animate-bounce">
             <span className="text-[10px] sm:text-xs text-muted-foreground/30 tracking-widest uppercase mb-2">Scroll</span>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/30">
               <path d="M7 13l5 5 5-5M7 6l5 5 5-5" />
             </svg>
-          </div>
-        </div>
-      </section>
-
-      {/* Trust metrics + benefits — below hero */}
-      <section className="relative z-10 pb-6 sm:pb-10 md:pb-14 px-4">
-        <div className="container mx-auto max-w-3xl">
-          {/* Metrics row */}
-          <div className="grid grid-cols-3 gap-4 sm:gap-5 md:gap-14 max-w-[280px] sm:max-w-xl mx-auto">
-            <CountUpStat target={100000} suffix="+" label="Businesses Indexed" />
-            <div className="text-center">
-              <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-              <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Business Coverage</div>
-            </div>
-            <div className="text-center">
-              <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-              <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Lead Searches</div>
-            </div>
-          </div>
-
-          {/* Feature bullets — mobile only */}
-          <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-6 text-[12px] text-foreground/50 font-medium">
-            <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Discover businesses ready to be contacted</span>
-            <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Message via WhatsApp, SMS or call in one click</span>
-            <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every conversation and follow-up</span>
           </div>
         </div>
       </section>
