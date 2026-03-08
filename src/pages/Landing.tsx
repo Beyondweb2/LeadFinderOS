@@ -625,22 +625,22 @@ const Landing = () => {
             {[
               {
                 num: 1,
-                title: 'Find Leads Instantly',
-                body: 'See businesses missing a website in seconds and spot easy opportunities instantly.',
+                title: 'Find the Right Businesses Instantly',
+                body: 'Search for businesses in seconds and discover real opportunities — including companies without websites and businesses ready to be contacted.',
                 img: step2Results,
                 alt: 'Find leads results list',
               },
               {
                 num: 2,
                 title: 'Run Your Outreach',
-                body: 'Message, call or WhatsApp in one click and manage every follow up in one place.',
+                body: 'Call, message or WhatsApp businesses in one click and manage every follow-up in one place.',
                 img: step3Outreach,
                 alt: 'Outreach and contact management',
               },
               {
                 num: 3,
                 title: 'Turn Outreach Into Revenue',
-                body: 'See your deals, follow ups and revenue in one place.',
+                body: 'Track conversations, follow-ups and deals so you never lose track of potential clients.',
                 img: step4Dashboard,
                 alt: 'Dashboard revenue overview',
               },
