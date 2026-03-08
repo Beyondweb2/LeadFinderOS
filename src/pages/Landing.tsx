@@ -820,9 +820,8 @@ const Landing = () => {
         <div className="container mx-auto max-w-5xl">
           {/* Positioning line above testimonials */}
           <p className="text-center text-xs sm:text-sm text-muted-foreground/50 font-medium uppercase tracking-wider mb-6 sm:mb-8">
-            Used by freelancers, agencies and founders to generate new business
+            Trusted by freelancers, agencies and founders
           </p>
-          {/* Rating moved ABOVE carousel */}
           <div className="text-center mb-8 sm:mb-10">
             <div className="flex gap-0.5 justify-center mb-2.5">
               {[...Array(5)].map((_, i) => (
@@ -830,7 +829,7 @@ const Landing = () => {
               ))}
             </div>
             <p className="text-sm sm:text-base text-foreground/60 font-medium">
-              Rated 4.9/5 by freelancers and agencies
+              Rated 4.9/5 from real users
             </p>
           </div>
 
@@ -840,8 +839,8 @@ const Landing = () => {
                 name: 'Chris P.',
                 role: 'Freelance Designer',
                 region: 'UK',
-                quote: "Within about 10 minutes I had found 30 solid businesses without websites. It took me another 10 minutes to message them all inside the app. That alone sold me.",
-                boldPhrase: "found 30 solid businesses without websites",
+                quote: "Within 10 minutes I found 30 real businesses without websites. Ten minutes later I had already messaged them directly inside the app. That alone sold me.",
+                boldPhrase: "found 30 real businesses without websites",
                 stars: 5,
               },
               {
