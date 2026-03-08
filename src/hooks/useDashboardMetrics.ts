@@ -183,33 +183,27 @@ export function useDashboardMetrics() {
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
 
-    const calcRevenue = (lead: OutreachLead) => {
-      if (lead.status === 'completed') return DRAFT_REVENUE + COMPLETION_REVENUE;
-      if (lead.status === 'paid_for_draft') return DRAFT_REVENUE;
-      return 0;
-    };
-
+    // Real revenue: sum of amount_paid from all leads that have payments
     const getPaymentDate = (lead: OutreachLead) => {
       if (lead.payment_date) return new Date(lead.payment_date);
       return new Date(lead.updated_at);
     };
 
-    const revenueLeads = allLeads.filter(l => l.status === 'paid_for_draft' || l.status === 'completed');
-    const totalRevenue = revenueLeads.reduce((sum, l) => sum + calcRevenue(l), 0);
+    const paidLeads = allLeads.filter(l => (l.amount_paid || 0) > 0);
+    const totalRevenue = paidLeads.reduce((sum, l) => sum + (l.amount_paid || 0), 0);
 
-    const revenueThisMonth = revenueLeads
+    const revenueThisMonth = paidLeads
       .filter(l => getPaymentDate(l) >= thisMonthStart)
-      .reduce((sum, l) => sum + calcRevenue(l), 0);
+      .reduce((sum, l) => sum + (l.amount_paid || 0), 0);
 
-    const revenueLastMonth = revenueLeads
+    const revenueLastMonth = paidLeads
       .filter(l => { const d = getPaymentDate(l); return d >= lastMonthStart && d <= lastMonthEnd; })
-      .reduce((sum, l) => sum + calcRevenue(l), 0);
+      .reduce((sum, l) => sum + (l.amount_paid || 0), 0);
 
-    const paidForDraftCount = allLeads.filter(l => l.status === 'paid_for_draft').length;
-    const completedCount = allLeads.filter(l => l.status === 'completed').length;
-    const fullyPaidClients = completedCount;
-    const draftRevenue = (paidForDraftCount + completedCount) * DRAFT_REVENUE;
-    const completionRevenue = completedCount * COMPLETION_REVENUE;
+    const fullyPaidClients = paidLeads.length;
+    const draftRevenue = 0;
+    const completionRevenue = 0;
+    const paidForDraftCount = 0;
     const activeProposals = allLeads.filter(l => ['wants_draft', 'reviewing_draft', 'awaiting_decision'].includes(l.status)).length;
 
     // Pipeline counts
