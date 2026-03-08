@@ -811,7 +811,7 @@ const Landing = () => {
             background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.25) 20%, hsl(220 30% 6% / 0.35) 50%, hsl(220 30% 6% / 0.25) 80%, transparent 100%)',
           }}
         />
-        <div className="container mx-auto max-w-5xl">
+        <div className="container mx-auto max-w-6xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15]">
               Your Complete
@@ -848,7 +848,7 @@ const Landing = () => {
               <ToolkitCarousel features={toolkitFeatures} onExpand={(src, title) => setExpandedImage({ src, title })} />
             ) : (
               <ScrollReveal>
-                <div className="grid grid-cols-4 gap-8 max-w-6xl mx-auto">
+                <div className="grid grid-cols-4 gap-6 max-w-7xl mx-auto">
                   {toolkitFeatures.map((feature, i) => (
                     <div key={i} className="text-center">
                       <div 
@@ -856,7 +856,7 @@ const Landing = () => {
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[4/3] transition-transform duration-300 group-hover:scale-[1.02]"
+                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[3/2] transition-transform duration-300 group-hover:scale-[1.02]"
                           style={{ 
                             border: '1px solid hsl(210 100% 50% / 0.2)',
                             boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
