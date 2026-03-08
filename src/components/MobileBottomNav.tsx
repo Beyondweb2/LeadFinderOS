@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText, Star,
   DollarSign, MoreHorizontal, Palette, LogOut, HelpCircle,
-  MessageSquare, Users, ShieldCheck
+  MessageSquare, Users, ShieldCheck, CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
