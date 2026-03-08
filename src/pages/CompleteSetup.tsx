@@ -38,6 +38,7 @@ const CompleteSetup = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState<'form' | 'creating' | 'success' | 'error'>('form');
   const [errorMessage, setErrorMessage] = useState('');
+  const [restoreError, setRestoreError] = useState('');
 
   // If user is already logged in and no session_id, mark setup as done and redirect
   useEffect(() => {
