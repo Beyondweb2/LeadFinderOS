@@ -38,7 +38,13 @@ export function AppLayout({ children }: AppLayoutProps) {
   const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
   const isDemoUser = isLoaded && !hasProAccess && !isStripeTrialing;
   const isTrialingUser = isLoaded && subStatus === 'trialing';
-  const showWalkthrough = isDemoUser || isTrialingUser;
+  // Allow admin to simulate new-user experience via localStorage flag
+  const isSimulatingNewUser = (() => {
+    try {
+      return user?.id ? localStorage.getItem(`simulate_new_user_${user.id}`) === 'true' : false;
+    } catch { return false; }
+  })();
+  const showWalkthrough = isDemoUser || isTrialingUser || isSimulatingNewUser;
   const challenge = useChallenge10();
   const { walkthroughOpen } = useWalkthroughStatus();
 
