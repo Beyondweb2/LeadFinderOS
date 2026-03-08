@@ -12,6 +12,15 @@ import { useToast } from '@/hooks/use-toast';
 import { LANGUAGE_OPTIONS, type SupportedLanguage } from '@/hooks/useLanguage';
 import appLogo from '@/assets/logo.png';
 
+const DEFAULT_IN_APP_ROUTE = '/find-leads';
+
+const sanitizeReturnTo = (raw: string | null): string => {
+  if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return DEFAULT_IN_APP_ROUTE;
+  const blockedPrefixes = ['/billing/success', '/complete-setup', '/billing/cancel', '/landing', '/auth', '/start', '/start-free-trial', '/subscribe'];
+  if (blockedPrefixes.some((prefix) => raw.startsWith(prefix))) return DEFAULT_IN_APP_ROUTE;
+  return raw;
+};
+
 const CompleteSetup = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -19,6 +28,7 @@ const CompleteSetup = () => {
   const { toast } = useToast();
 
   const sessionId = searchParams.get('session_id');
+  const returnTo = sanitizeReturnTo(searchParams.get('return_to'));
 
   const [email, setEmail] = useState('');
   const [emailLoading, setEmailLoading] = useState(true);
@@ -32,9 +42,9 @@ const CompleteSetup = () => {
   // If user is already logged in and setup is done, redirect
   useEffect(() => {
     if (user) {
-      navigate('/', { replace: true });
+      navigate(returnTo, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, returnTo, navigate]);
 
   // Fetch email from Stripe session
   useEffect(() => {
@@ -108,7 +118,7 @@ const CompleteSetup = () => {
       }
 
       setStatus('success');
-      setTimeout(() => navigate('/', { replace: true }), 2000);
+      setTimeout(() => navigate(returnTo, { replace: true }), 2000);
     } catch (err) {
       console.error('Complete signup error:', err);
       setStatus('error');
@@ -249,7 +259,7 @@ const CompleteSetup = () => {
               <CheckCircle2 className="h-12 w-12" style={{ color: 'hsl(142 76% 50%)' }} />
               <h2 className="text-xl font-semibold">You're all set!</h2>
               <p className="text-sm text-muted-foreground text-center">Your 5-day free trial is active. Redirecting...</p>
-              <Button onClick={() => navigate('/', { replace: true })} className="btn-premium">
+              <Button onClick={() => navigate(returnTo, { replace: true })} className="btn-premium">
                 Continue to app →
               </Button>
             </div>

@@ -18,6 +18,7 @@ const ALLOWED_ORIGINS = [
   'https://leadfinderapp.lovable.app',
 ];
 const DEFAULT_ORIGIN = 'https://leadfinderapp.lovable.app';
+const DEFAULT_RETURN_PATH = '/find-leads';
 
 const isTrustedOrigin = (origin: string): boolean => {
   try {
@@ -36,6 +37,29 @@ const isTrustedOrigin = (origin: string): boolean => {
 const resolveOrigin = (raw: string | null): string => {
   if (!raw) return DEFAULT_ORIGIN;
   return isTrustedOrigin(raw) ? raw : DEFAULT_ORIGIN;
+};
+
+const sanitizeReturnPath = (rawPath?: string | null): string => {
+  if (!rawPath) return DEFAULT_RETURN_PATH;
+  if (!rawPath.startsWith('/') || rawPath.startsWith('//')) return DEFAULT_RETURN_PATH;
+
+  const blockedPrefixes = ['/billing/success', '/complete-setup', '/billing/cancel', '/landing', '/auth', '/start', '/start-free-trial', '/subscribe'];
+  if (blockedPrefixes.some((prefix) => rawPath.startsWith(prefix))) return DEFAULT_RETURN_PATH;
+
+  return rawPath;
+};
+
+const resolveReturnPath = (bodyReturnTo?: string | null, referer?: string | null): string => {
+  const fromBody = sanitizeReturnPath(bodyReturnTo);
+  if (fromBody !== DEFAULT_RETURN_PATH) return fromBody;
+
+  if (!referer) return fromBody;
+  try {
+    const refererUrl = new URL(referer);
+    return sanitizeReturnPath(refererUrl.pathname);
+  } catch {
+    return fromBody;
+  }
 };
 
 const logStep = (step: string, details?: unknown) => {
@@ -61,14 +85,11 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const origin = resolveOrigin(req.headers.get("origin"));
-    logStep("Resolved origin", { requestOrigin: req.headers.get("origin"), checkoutOrigin: origin });
-
     // Parse body for customer_email and affiliate tracking (email-first flow)
     let bodyEmail: string | null = null;
     let bodyAffiliateCode: string | null = null;
     let bodyRefSource: string | null = null;
+    let bodyReturnTo: string | null = null;
     try {
       const body = await req.json();
       if (body?.customer_email && typeof body.customer_email === "string") {
@@ -81,10 +102,23 @@ serve(async (req) => {
       if (body?.ref_source && typeof body.ref_source === "string") {
         bodyRefSource = body.ref_source.trim();
       }
+      if (body?.return_to && typeof body.return_to === "string") {
+        bodyReturnTo = body.return_to.trim();
+      }
       if (bodyAffiliateCode) logStep("Affiliate code from body", { code: bodyAffiliateCode });
     } catch {
       // No body or invalid JSON — that's fine
     }
+
+    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const origin = resolveOrigin(req.headers.get("origin"));
+    const returnTo = resolveReturnPath(bodyReturnTo, req.headers.get("referer"));
+    logStep("Resolved origin", {
+      requestOrigin: req.headers.get("origin"),
+      checkoutOrigin: origin,
+      referer: req.headers.get("referer"),
+      returnTo,
+    });
 
     // Check if there's an authenticated user (existing user re-subscribing)
     const authHeader = req.headers.get("Authorization");
@@ -136,7 +170,7 @@ serve(async (req) => {
         try {
           const portalSession = await stripe.billingPortal.sessions.create({
             customer: existingSub.stripe_customer_id,
-            return_url: `${origin}/`,
+            return_url: `${origin}${returnTo}`,
           });
           return new Response(JSON.stringify({ url: portalSession.url, redirectedToPortal: true }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -189,7 +223,7 @@ serve(async (req) => {
       line_items: [{ price: "price_1SxN38Gi4ps7kJ7R8UE1kYGS", quantity: 1 }],
       mode: "subscription",
       payment_method_types: ['card'],
-      success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${origin}/billing/success?session_id={CHECKOUT_SESSION_ID}&return_to=${encodeURIComponent(returnTo)}`,
       cancel_url: `${origin}/billing/cancel`,
     };
 
@@ -229,7 +263,14 @@ serve(async (req) => {
       logStep("Creating checkout without trial (trial already used)");
     }
 
-    logStep("Creating checkout session", { hasCustomer: !!customerId, hasUser: !!user, trialUsed });
+    logStep("Creating checkout session", {
+      hasCustomer: !!customerId,
+      hasUser: !!user,
+      trialUsed,
+      successUrl: sessionConfig.success_url,
+      cancelUrl: sessionConfig.cancel_url,
+      returnTo,
+    });
     const session = await stripe.checkout.sessions.create(sessionConfig as Stripe.Checkout.SessionCreateParams);
 
     logStep("Checkout session created", { sessionId: session.id });
