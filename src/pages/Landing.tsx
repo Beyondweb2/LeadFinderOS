@@ -840,6 +840,10 @@ const Landing = () => {
           }}
         />
         <div className="container mx-auto max-w-5xl">
+          {/* Positioning line above testimonials */}
+          <p className="text-center text-xs sm:text-sm text-muted-foreground/50 font-medium uppercase tracking-wider mb-6 sm:mb-8">
+            Used by freelancers, agencies and founders to generate new business
+          </p>
           {/* Rating moved ABOVE carousel */}
           <div className="text-center mb-8 sm:mb-10">
             <div className="flex gap-0.5 justify-center mb-2.5">
