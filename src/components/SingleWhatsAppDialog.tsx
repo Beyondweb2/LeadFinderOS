@@ -88,7 +88,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
         title: 'Not on WhatsApp',
         description: `${lead.business_name} was previously marked as not on WhatsApp. Try SMS or Call instead.`,
       });
-      onOpenChange(false);
+      handleOpenChange(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, lead?.whatsapp_status]);
@@ -133,7 +133,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
       onSent(lead.id, 'whatsapp');
     }
 
-    onOpenChange(false);
+    handleOpenChange(false);
 
     supabase.rpc('log_usage_event', {
       p_event_type: 'message_sent',

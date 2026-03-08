@@ -108,7 +108,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
       onSent(lead.id, 'sms');
     }
 
-    onOpenChange(false);
+    handleOpenChange(false);
 
     supabase.rpc('log_usage_event', {
       p_event_type: 'message_sent',
