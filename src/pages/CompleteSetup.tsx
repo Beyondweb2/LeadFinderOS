@@ -100,6 +100,10 @@ const CompleteSetup = () => {
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <h2 className="text-xl font-semibold">Restoring your access…</h2>
               <p className="text-muted-foreground text-sm text-center">Taking you back into the app now.</p>
+              {restoreError ? <p className="text-sm text-destructive text-center">{restoreError}</p> : null}
+              {restoreError ? (
+                <Button onClick={() => window.location.reload()} size="sm">Try again</Button>
+              ) : null}
             </CardContent>
           </Card>
         </div>
