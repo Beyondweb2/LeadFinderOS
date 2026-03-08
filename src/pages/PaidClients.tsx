@@ -551,7 +551,7 @@ const PaidClientsPage = () => {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 sm:gap-4">
+        <div className="rounded-xl border border-border bg-card divide-y divide-border/40">
           {paidClients.map((lead) => (
             <ClientCard
               key={lead.id}
