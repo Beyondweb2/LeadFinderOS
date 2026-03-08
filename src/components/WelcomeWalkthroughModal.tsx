@@ -103,7 +103,7 @@ export function WelcomeWalkthroughModal() {
           </button>
 
           <p className="text-center text-[12px] text-muted-foreground/60">
-            It only takes a moment and will help you get started with confidence.
+            Takes less than a minute.
           </p>
         </div>
       </DialogContent>
