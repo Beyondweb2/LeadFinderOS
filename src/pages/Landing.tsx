@@ -748,7 +748,7 @@ const Landing = () => {
       </div>
 
       {/* Your Complete Lead Toolkit */}
-      <section className="relative z-10 py-12 sm:py-18 md:py-24 px-3 sm:px-4">
+      <section className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
