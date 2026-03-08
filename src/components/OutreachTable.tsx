@@ -320,12 +320,12 @@ export function OutreachTable({
     }
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'whatsapp' as ContactMethod);
-    // Count for walkthrough immediately on button click (not on dialog CTA)
+    // Always emit walkthrough contact event on click (replay-safe)
+    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     setWalkthroughContactedIds(prev => {
       if (prev.has(lead.id)) return prev;
       const next = new Set(prev);
       next.add(lead.id);
-      window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
       return next;
     });
     setWhatsappDialogLead(lead);
@@ -335,11 +335,12 @@ export function OutreachTable({
   const handleSMSClick = useCallback((lead: OutreachLead) => {
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'sms' as ContactMethod);
+    // Always emit walkthrough contact event on click (replay-safe)
+    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     setWalkthroughContactedIds(prev => {
       if (prev.has(lead.id)) return prev;
       const next = new Set(prev);
       next.add(lead.id);
-      window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
       return next;
     });
     setSmsDialogLead(lead);
@@ -349,15 +350,16 @@ export function OutreachTable({
   const handleCallClick = useCallback((lead: OutreachLead) => {
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'call' as ContactMethod);
+    // Always emit walkthrough contact event on click (replay-safe)
+    window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
     setWalkthroughContactedIds(prev => {
       if (prev.has(lead.id)) return prev;
       const next = new Set(prev);
       next.add(lead.id);
-      window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
-      // Call has no dialog panel, so mark panel as closed immediately
-      window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
       return next;
     });
+    // Call has no dialog panel, so mark panel as closed immediately
+    window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
     highlightLead(lead.id);
     executeContact(lead, 'call');
   }, [executeContact, onContactMethodChange]);
