@@ -81,11 +81,7 @@ export function DemoChecklistPanel() {
   const handleCompletionDismiss = () => {
     setShowCompletionModal(false);
     handleDismiss();
-    window.dispatchEvent(new CustomEvent('pulse-search-nav'));
-    if (tipsDismissed || !isFreeUser) {
-      window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
-    }
-  };
+    window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
 
   const handleTipsModalClose = useCallback((open: boolean) => {
     setShowTipsModal(open);
