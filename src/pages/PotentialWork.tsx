@@ -167,6 +167,19 @@ const STATUS_COLORS: Record<string, string> = {
   not_interested: 'bg-zinc-500/20 text-zinc-400 border-zinc-500/40',
 };
 
+const STATUS_BORDER_COLORS: Record<string, string> = {
+  qualified: 'border-l-blue-500',
+  discovery_call_booked: 'border-l-cyan-500',
+  proposal_sent: 'border-l-purple-500',
+  reviewing_proposal: 'border-l-sky-500',
+  revision_requested: 'border-l-amber-500',
+  paid: 'border-l-emerald-500',
+  payment_received: 'border-l-green-500',
+  closed_lost: 'border-l-zinc-500',
+  interested: 'border-l-blue-500',
+  not_interested: 'border-l-zinc-500',
+};
+
 /* ───────── helpers ───────── */
 
 const getInitials = (name: string) =>
