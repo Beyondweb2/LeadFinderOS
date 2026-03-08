@@ -848,7 +848,7 @@ const Landing = () => {
               <ToolkitCarousel features={toolkitFeatures} onExpand={(src, title) => setExpandedImage({ src, title })} />
             ) : (
               <ScrollReveal>
-                <div className="grid grid-cols-4 gap-8 max-w-6xl mx-auto">
+                <div className="grid grid-cols-4 gap-6 max-w-7xl mx-auto">
                   {toolkitFeatures.map((feature, i) => (
                     <div key={i} className="text-center">
                       <div 
