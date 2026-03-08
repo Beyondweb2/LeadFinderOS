@@ -845,9 +845,8 @@ const Landing = () => {
           <h2 className="text-center text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-12 sm:mb-14">
             Trusted by freelancers
             <br className="sm:hidden" />
-            {' '}and agencies
-            <br />
-            using <span className="text-gradient-primary">LeadFinder</span>
+            {' '}and agencies{' '}
+            <span className="text-gradient-primary">worldwide</span>
           </h2>
 
           {(() => {
