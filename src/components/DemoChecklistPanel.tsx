@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
-import { PostWalkthroughTipsModal } from '@/components/PostWalkthroughTipsModal';
+
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import appLogo from '@/assets/logo.png';
