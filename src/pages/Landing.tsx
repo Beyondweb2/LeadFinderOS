@@ -515,13 +515,13 @@ const Landing = () => {
 
           <div className="max-w-3xl mx-auto lg:max-w-2xl">
             <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight leading-tight">
-              <span className="tracking-[0.02em]">Find Customers</span>
+              <span className="tracking-[0.02em]">Find Businesses</span>
               <br />
-              <span className="text-gradient-primary whitespace-nowrap">Direct Outreach</span>
+              <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              The all-in-one system to discover potential customers, contact them instantly, and track every follow-up in one place.
+              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
             </p>
             
             {/* CTA */}
@@ -546,7 +546,7 @@ const Landing = () => {
                 </Button>
               </div>
               <p className="text-[11px] sm:text-xs text-muted-foreground/40 mt-3 font-medium">
-                5-day free trial · £0 today · Cancel anytime
+                No card required · Instant access · Cancel anytime
               </p>
             </div>
 
