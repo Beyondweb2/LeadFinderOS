@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
