@@ -42,9 +42,9 @@ const CompleteSetup = () => {
   // If user is already logged in and setup is done, redirect
   useEffect(() => {
     if (user) {
-      navigate('/', { replace: true });
+      navigate(returnTo, { replace: true });
     }
-  }, [user, navigate]);
+  }, [user, returnTo, navigate]);
 
   // Fetch email from Stripe session
   useEffect(() => {
