@@ -1402,7 +1402,12 @@ export function OutreachTable({
       {/* WhatsApp Template Dialog */}
       <SingleWhatsAppDialog
         open={!!whatsappDialogLead}
-        onOpenChange={(open) => { if (!open) setWhatsappDialogLead(null); }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWhatsappDialogLead(null);
+            window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
+          }
+        }}
         lead={whatsappDialogLead}
         onSent={handleDialogSent}
       />
@@ -1410,7 +1415,12 @@ export function OutreachTable({
       {/* SMS Template Dialog */}
       <SingleSMSDialog
         open={!!smsDialogLead}
-        onOpenChange={(open) => { if (!open) setSmsDialogLead(null); }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSmsDialogLead(null);
+            window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
+          }
+        }}
         lead={smsDialogLead}
         onSent={handleDialogSent}
       />
