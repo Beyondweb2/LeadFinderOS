@@ -629,7 +629,7 @@ const Landing = () => {
               {
                 num: 2,
                 title: 'Run Your Outreach',
-                body: 'Call, message or WhatsApp businesses in one click and manage every follow-up in one place.',
+                body: 'Call, SMS or WhatsApp businesses in one click and manage every follow-up in one place.',
                 img: step3Outreach,
                 alt: 'Outreach and contact management',
               },
