@@ -607,7 +607,7 @@ const Landing = () => {
       <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
         <div className="container mx-auto max-w-7xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-16">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15]">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.15]">
               How Lead<span className="text-gradient-primary">Finder</span>
               <br />
               <span className="text-foreground">Works</span>
@@ -681,12 +681,12 @@ const Landing = () => {
                 {/* Desktop: alternating layout with large image */}
                 <div className={`hidden md:grid grid-cols-12 gap-10 lg:gap-14 items-center`}>
                   {/* Text column */}
-                  <div className={`col-span-4 ${isEven ? 'order-2 text-left' : 'order-1 text-left'}`}>
+                  <div className={`col-span-5 ${isEven ? 'order-2 text-left' : 'order-1 text-left'}`}>
                     <span 
                       className="font-bold text-xl mb-2 block"
                       style={{ color: 'hsl(var(--primary))' }}
                     >{step.num}.</span>
-                    <h3 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight mb-4">
+                    <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
                       {step.title}
                     </h3>
                     <p className="text-muted-foreground/70 text-base md:text-lg leading-[1.7]">
@@ -694,7 +694,7 @@ const Landing = () => {
                     </p>
                   </div>
                   {/* Image column */}
-                  <div className={`col-span-8 ${isEven ? 'order-1' : 'order-2'}`}>
+                  <div className={`col-span-7 ${isEven ? 'order-1' : 'order-2'}`}>
                     <div 
                       className="relative group cursor-pointer w-full"
                       onClick={() => setExpandedImage({ src: step.img, title: step.title })}
@@ -754,7 +754,7 @@ const Landing = () => {
         />
         <div className="container mx-auto max-w-6xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15]">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.15]">
               Your Complete
               <br />
               <span className="text-gradient-primary">Lead Toolkit</span>
@@ -839,7 +839,7 @@ const Landing = () => {
           }}
         />
         <div className="container mx-auto max-w-6xl">
-          <h2 className="text-center text-2xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-12 sm:mb-14">
+          <h2 className="text-center text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-12 sm:mb-14">
             Trusted by freelancers
             <br className="sm:hidden" />
             {' '}and agencies{' '}
