@@ -928,12 +928,13 @@ const Landing = () => {
                   {toolkitFeatures.map((feature, i) => (
                     <div key={i} className="text-center group">
                       <div 
-                        className="relative cursor-pointer w-full mb-5"
+                        className="relative cursor-pointer w-full mb-7"
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-all duration-300 group-hover:scale-[1.02] group-hover:-translate-y-1"
+                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.02] group-hover:-translate-y-1"
                           style={{ 
+                            height: '280px',
                             border: '1px solid hsl(210 100% 50% / 0.15)',
                             boxShadow: '0 0 20px hsl(210 100% 50% / 0.08), 0 4px 16px hsl(220 40% 4% / 0.3)',
                           }}
@@ -951,8 +952,8 @@ const Landing = () => {
                           </div>
                         </div>
                       </div>
-                      <h3 className="text-base lg:text-lg font-bold tracking-tight mb-1">{feature.title}</h3>
-                      <p className="text-muted-foreground/70 text-xs lg:text-sm leading-relaxed">
+                      <h3 className="text-lg lg:text-[22px] font-extrabold tracking-tight mb-1.5">{feature.title}</h3>
+                      <p className="text-muted-foreground/70 text-sm lg:text-[15px] leading-[1.7] max-w-md mx-auto">
                         {feature.description}
                       </p>
                     </div>
