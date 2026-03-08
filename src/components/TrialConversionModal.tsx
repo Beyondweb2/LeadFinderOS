@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Search, MessageSquare, BarChart3, ShieldCheck, Lock } from 'lucide-react';
@@ -16,8 +16,18 @@ interface TrialConversionModalProps {
 
 export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, totalFound = 0 }: TrialConversionModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [delayedOpen, setDelayedOpen] = useState(false);
   const { session } = useAuth();
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (open) {
+      const timer = setTimeout(() => setDelayedOpen(true), 2000);
+      return () => clearTimeout(timer);
+    } else {
+      setDelayedOpen(false);
+    }
+  }, [open]);
 
   const handleStartTrial = async () => {
     setIsLoading(true);
@@ -35,7 +45,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, t
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={delayedOpen} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[420px] p-0 overflow-hidden rounded-2xl border-border/40 bg-[hsl(220_50%_5%)]">
         {/* Accent bar */}
         <div className="h-1.5 bg-gradient-to-r from-primary to-primary/60" />
