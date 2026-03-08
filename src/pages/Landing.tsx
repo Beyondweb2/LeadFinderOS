@@ -865,6 +865,7 @@ const Landing = () => {
                 region: 'Canada',
                 quote: "I used to bounce between Maps, notes and WhatsApp. Now everything is in one place and it actually feels organised.",
                 stars: 5,
+                photo: avatarAlex,
               },
               {
                 name: 'Daniel S.',
