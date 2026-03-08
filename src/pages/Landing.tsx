@@ -932,11 +932,11 @@ const Landing = () => {
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.02] group-hover:-translate-y-1"
+                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.02] group-hover:-translate-y-1"
                           style={{ 
                             height: '280px',
-                            border: '1px solid hsl(210 100% 50% / 0.15)',
-                            boxShadow: '0 0 20px hsl(210 100% 50% / 0.08), 0 4px 16px hsl(220 40% 4% / 0.3)',
+                            border: '1px solid hsl(210 100% 50% / 0.2)',
+                            boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 4px 16px hsl(220 40% 4% / 0.3)',
                           }}
                         >
                           <div
