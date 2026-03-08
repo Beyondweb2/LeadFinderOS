@@ -39,12 +39,20 @@ const CompleteSetup = () => {
   const [status, setStatus] = useState<'form' | 'creating' | 'success' | 'error'>('form');
   const [errorMessage, setErrorMessage] = useState('');
 
-  // If user is already logged in and setup is done, redirect
+  // If user is already logged in and no session_id, mark setup as done and redirect
   useEffect(() => {
-    if (user) {
+    if (!user || sessionId) return;
+    // User is authenticated but arrived here without a checkout session — auto-complete setup
+    (async () => {
+      try {
+        await supabase
+          .from('user_trials')
+          .update({ setup_completed: true } as any)
+          .eq('user_id', user.id);
+      } catch {}
       navigate(returnTo, { replace: true });
-    }
-  }, [user, returnTo, navigate]);
+    })();
+  }, [user, sessionId, returnTo, navigate]);
 
   // Fetch email from Stripe session
   useEffect(() => {
