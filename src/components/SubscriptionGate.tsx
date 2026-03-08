@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
@@ -15,9 +15,17 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const { user } = useAuth();
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
   const [setupLoading, setSetupLoading] = useState(true);
+  // Cache setup_completed per user to avoid refetching on every mount/route change
+  const lastCheckedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!user?.id) {
+      setSetupLoading(false);
+      return;
+    }
+
+    // Skip refetch if we already checked for this user
+    if (lastCheckedUserIdRef.current === user.id && setupCompleted !== null) {
       setSetupLoading(false);
       return;
     }
@@ -30,6 +38,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
           .eq('user_id', user.id)
           .maybeSingle();
         setSetupCompleted((data as any)?.setup_completed ?? false);
+        lastCheckedUserIdRef.current = user.id;
       } catch {
         setSetupCompleted(false);
       } finally {

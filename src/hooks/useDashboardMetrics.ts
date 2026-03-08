@@ -107,8 +107,12 @@ export function useDashboardMetrics() {
   const hasLoadedOnceRef = useRef(false);
   const { user } = useAuth();
 
+  // Stable user ID ref to prevent refetches on auth token refreshes
+  const userIdRef = useRef<string | null>(null);
+
   const fetchAllData = useCallback(async () => {
-    if (!user) return;
+    const uid = userIdRef.current;
+    if (!uid) return;
     if (!hasLoadedOnceRef.current) setIsLoading(true);
     const dates = getDateRanges();
 
@@ -117,11 +121,11 @@ export function useDashboardMetrics() {
 
     const [leadsResult, copiedPhonesResult, activitiesResult, contactsResult, searchHistoryResult, eventsResult] = await Promise.all([
       supabase.from('outreach_leads').select('*').order('created_at', { ascending: true }),
-      supabase.from('copied_phones').select('copied_at').eq('user_id', user.id),
-      supabase.from('outreach_activities').select('created_at').eq('user_id', user.id),
-      supabase.from('lead_contacts').select('contacted_at').eq('user_id', user.id),
-      supabase.from('search_history').select('no_website_count').eq('user_id', user.id),
-      supabase.from('outreach_events').select('channel, created_at').eq('user_id', user.id).gte('created_at', sevenDaysAgo.toISOString()),
+      supabase.from('copied_phones').select('copied_at').eq('user_id', uid),
+      supabase.from('outreach_activities').select('created_at').eq('user_id', uid),
+      supabase.from('lead_contacts').select('contacted_at').eq('user_id', uid),
+      supabase.from('search_history').select('no_website_count').eq('user_id', uid),
+      supabase.from('outreach_events').select('channel, created_at').eq('user_id', uid).gte('created_at', sevenDaysAgo.toISOString()),
     ]);
 
     hasLoadedOnceRef.current = true;
@@ -157,9 +161,17 @@ export function useDashboardMetrics() {
       totalPhonesCopied: copiedPhones.length,
       totalLeadsContacted: contacts.length,
     });
-  }, [user]);
+  }, []);
 
-  useEffect(() => { fetchAllData(); }, [fetchAllData]);
+  // Only refetch when user ID changes (login/logout), not on token refresh
+  useEffect(() => {
+    const newUserId = user?.id ?? null;
+    if (newUserId === userIdRef.current) return;
+    userIdRef.current = newUserId;
+    if (newUserId) {
+      fetchAllData();
+    }
+  }, [user?.id, fetchAllData]);
 
   const metrics = useMemo<DashboardMetrics>(() => {
     const totalBusinessesAdded = allLeads.length;
