@@ -37,8 +37,9 @@ export function RevenueCard({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 sm:space-y-4 p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
-        {/* This Month - Hero */}
+        {/* Real Revenue - Hero */}
         <div>
+          <p className="text-[10px] sm:text-xs text-muted-foreground mb-0.5">Paid Revenue</p>
           <div className="text-xl sm:text-2xl md:text-3xl font-bold text-green-500">
             £{revenueThisMonth.toLocaleString()}
           </div>
@@ -55,20 +56,14 @@ export function RevenueCard({
               </span>
             </div>
           </div>
-          {revenueThisMonth === 0 && pipelineDeals > 0 && (
-            <p className="text-[10px] text-muted-foreground/60 mt-0.5">{pipelineDeals} deal{pipelineDeals !== 1 ? 's' : ''} in pipeline</p>
-          )}
-          {revenueThisMonth > 0 && (
-            <p className="text-[10px] text-green-500/70 mt-0.5">+£{revenueThisMonth.toLocaleString()} added this month</p>
-          )}
         </div>
 
-        {/* Potential Revenue */}
+        {/* Potential Revenue from Track Leads */}
         {totalPotentialRevenue > 0 && (
           <div className="flex items-center justify-between py-1.5 px-2 rounded-md bg-amber-500/5 border border-amber-500/20">
             <div className="flex items-center gap-1.5">
               <Target className="h-3 w-3 text-amber-500" />
-              <span className="text-[10px] sm:text-xs text-muted-foreground">Pipeline Value</span>
+              <span className="text-[10px] sm:text-xs text-muted-foreground">Potential Revenue</span>
             </div>
             <span className="text-xs sm:text-sm font-semibold text-amber-500">£{totalPotentialRevenue.toLocaleString()}</span>
           </div>
@@ -92,18 +87,12 @@ export function RevenueCard({
           </div>
         </div>
 
-        {/* Lifetime + Closed */}
+        {/* Lifetime */}
         <div className="pt-2 border-t border-border/50 space-y-1">
           <div className="flex items-center justify-between">
-            <span className="text-xs sm:text-sm text-muted-foreground">Lifetime</span>
-            <span className="text-xs sm:text-sm font-medium text-muted-foreground/70">£{totalRevenue.toLocaleString()}</span>
+            <span className="text-xs sm:text-sm text-muted-foreground">Lifetime Paid</span>
+            <span className="text-xs sm:text-sm font-medium text-green-500/70">£{totalRevenue.toLocaleString()}</span>
           </div>
-          {closedRevenue > 0 && (
-            <div className="flex items-center justify-between">
-              <span className="text-xs sm:text-sm text-muted-foreground">Closed Revenue</span>
-              <span className="text-xs sm:text-sm font-medium text-green-500/70">£{closedRevenue.toLocaleString()}</span>
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>
