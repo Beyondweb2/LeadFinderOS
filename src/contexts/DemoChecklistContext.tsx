@@ -165,7 +165,7 @@ export function DemoChecklistProvider({
     const onCrmAdd = () => {
       setState(prev => {
         const newCount = prev.crmAddCount + 1;
-        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 3 };
+        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 1 };
         saveState(next, user?.id);
         return next;
       });
@@ -174,7 +174,7 @@ export function DemoChecklistProvider({
     const onCrmPurged = () => {
       setState(prev => {
         const newCount = Math.max(0, prev.crmAddCount - 1);
-        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 3 };
+        const next = { ...prev, crmAddCount: newCount, addedToCrm: newCount >= 1 };
         saveState(next, user?.id);
         return next;
       });

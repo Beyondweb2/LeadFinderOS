@@ -1,39 +1,21 @@
 
+## Problem
 
-## Plan: Update Walkthrough Copy & Reduce Step 2 Threshold to 1
+When a logged-in user lands on `/landing` (e.g. because their subscription is blocked, or they were redirected by `SubscriptionGate`), the "Sign In" buttons are hidden because they're wrapped in `{!user && ...}`. The header CTA also changes from "Try it free" to "Subscribe". This means a user who signed out and back in, or whose session is stale, loses access to the Sign In button.
 
-### Changes Required
+There are 3 places in `Landing.tsx` where Sign In is conditionally hidden:
+1. **Header** (line 558): `{!user && <Button>Sign In</Button>}`
+2. **Hero CTA** (line 616): `{!user && <Button>Sign in</Button>}`
+3. **Footer** (line 1173): `{!user && <Link>Sign In</Link>}`
 
-**1. Threshold change — `src/contexts/DemoChecklistContext.tsx`** (line ~168, ~177)
-- Change `addedToCrm: newCount >= 3` → `addedToCrm: newCount >= 1` in both `onCrmAdd` and `onCrmPurged` handlers.
+And the header CTA button (line 567) shows `user ? 'Subscribe' : 'Try it free'`.
 
-**2. Translation updates — all 3 locale files**
+## Plan
 
-Update these keys in `en.json`, `hi.json`, and `ur.json`:
+**Single file change: `src/pages/Landing.tsx`**
 
-| Key | New English text |
-|---|---|
-| `step2Select` | `"Select a business that looks like a good opportunity."` (remove counter) |
-| `step3Contact` | `"Press Contact to see how you can reach businesses.\n{{count}}/3"` |
-| `step3NavToOutreach` | `"Open Outreach to see contact options."` |
-| `step5Track` | `"Track businesses that show interest."` |
-| `step5NavToOutreach` | `"Open Outreach and press ⭐ Track on a lead."` |
-| `step6Pipeline` | `"Your tracked leads appear here."` |
-| `step7Status` | `"Set the status for this lead."` |
-| `step8NextAction` | `"Set the next step for this lead."` |
-| `step9Date` | `"Pick when you want to follow up."` |
-| `step10Note` | `"Add a note for this lead."` |
-| `save3Leads` | `"Save <accent>1 lead</accent> to unlock outreach"` |
-| `gotItSave3` | `"Got it – I'll save a lead"` |
+1. **Always show the Sign In links** — remove the `!user &&` guards from all three locations so the Sign In button is always visible regardless of auth state.
 
-Hindi and Urdu will get equivalent translations for all changed keys.
+2. **Keep the CTA button text as "Try it free"** always (remove the ternary that switches to "Subscribe" when logged in). Logged-in users who need to subscribe will still scroll to pricing and go through the normal checkout flow.
 
-**3. PostFirstSearchModal — `src/components/PostFirstSearchModal.tsx`**
-- No code changes needed; it reads from i18n keys already updated above.
-
-**4. No changes to:**
-- `TOTAL_STEPS` (stays 11)
-- Step order, selectors, highlighting, or progression logic
-- `WalkthroughOverlay.tsx` step definitions (Step 1 text unchanged, steps 5-11 read from i18n)
-- Any walkthrough triggers or UI layout
-
+These are purely display changes — no routing, Stripe, or auth logic is modified.
