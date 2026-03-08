@@ -17,10 +17,25 @@ const ALLOWED_ORIGINS = [
   'https://www.lead-finder-app.com',
   'https://leadfinderapp.lovable.app',
 ];
-const DEFAULT_ORIGIN = 'https://lead-finder-app.com';
+const DEFAULT_ORIGIN = 'https://leadfinderapp.lovable.app';
+
+const isTrustedOrigin = (origin: string): boolean => {
+  try {
+    const { hostname } = new URL(origin);
+    return (
+      ALLOWED_ORIGINS.includes(origin) ||
+      hostname.endsWith('.lovable.app') ||
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1'
+    );
+  } catch {
+    return false;
+  }
+};
 
 const resolveOrigin = (raw: string | null): string => {
-  return raw && ALLOWED_ORIGINS.includes(raw) ? raw : DEFAULT_ORIGIN;
+  if (!raw) return DEFAULT_ORIGIN;
+  return isTrustedOrigin(raw) ? raw : DEFAULT_ORIGIN;
 };
 
 const logStep = (step: string, details?: unknown) => {
@@ -48,6 +63,7 @@ serve(async (req) => {
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const origin = resolveOrigin(req.headers.get("origin"));
+    logStep("Resolved origin", { requestOrigin: req.headers.get("origin"), checkoutOrigin: origin });
 
     // Parse body for customer_email and affiliate tracking (email-first flow)
     let bodyEmail: string | null = null;

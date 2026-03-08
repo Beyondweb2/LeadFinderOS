@@ -1,4 +1,4 @@
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -12,8 +12,9 @@ const BillingSuccess = () => {
   const navigate = useNavigate();
   const { user, session } = useAuth();
   const syncAttempted = useRef(false);
+  const [isValidatingReturn, setIsValidatingReturn] = useState(false);
 
-  const sessionId = searchParams.get('session_id');
+  const sessionId = searchParams.get('session_id') || searchParams.get('sessionId');
   const isAuthenticated = !!(user && session?.access_token);
 
   // Authenticated user: sync subscription and redirect
@@ -30,6 +31,32 @@ const BillingSuccess = () => {
       })();
     }
   }, [isAuthenticated, sessionId, navigate]);
+
+  // Fallback: if Stripe returned without session_id, re-check access and recover to app
+  useEffect(() => {
+    if (!isAuthenticated || sessionId || !session?.access_token) return;
+
+    let cancelled = false;
+    setIsValidatingReturn(true);
+
+    (async () => {
+      try {
+        const { data } = await supabase.functions.invoke('check-subscription', {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!cancelled && data?.subscribed) {
+          navigate('/', { replace: true });
+          return;
+        }
+      } catch {}
+
+      if (!cancelled) setIsValidatingReturn(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, sessionId, session?.access_token, navigate]);
 
   // New user (not authenticated): redirect to complete-setup
   useEffect(() => {
@@ -55,6 +82,19 @@ const BillingSuccess = () => {
             <h2 className="text-xl font-semibold">You're in!</h2>
             <p className="text-muted-foreground text-sm text-center">Activating your trial...</p>
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isValidatingReturn) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-card border-border">
+          <CardContent className="flex flex-col items-center gap-4 py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground text-center">Finalizing your access...</p>
           </CardContent>
         </Card>
       </div>
