@@ -56,8 +56,8 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     );
   }
 
-  // Block access if payment is paused, past_due, unpaid, or any non-active/trialing status
-  const isPaymentBlocked = isPaymentPaused || subStatus === 'past_due' || subStatus === 'unpaid';
+  // Block access if grace period expired (payment failing >7 days) or account paused
+  const isPaymentBlocked = isPaymentPaused || subStatus === 'unpaid';
   if (isPaymentBlocked) {
     return <PaymentPausedScreen />;
   }

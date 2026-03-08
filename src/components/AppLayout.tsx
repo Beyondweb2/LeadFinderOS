@@ -119,6 +119,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* Main content area */}
           <div className="flex-1 flex flex-col min-w-0 relative z-10">
+            {/* Payment warning banner — persistent during grace period */}
+            <PaymentWarningBanner />
             {/* Skip walkthrough link — top-right, outside modals */}
             <div className="flex items-center justify-end gap-2 px-4 sm:px-6 lg:px-8 pt-2 pb-1">
               <SkipWalkthroughButton />
