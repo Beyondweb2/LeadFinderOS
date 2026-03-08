@@ -83,14 +83,6 @@ export function DemoChecklistPanel() {
     handleDismiss();
     window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
 
-  const handleTipsModalClose = useCallback((open: boolean) => {
-    setShowTipsModal(open);
-    if (!open) {
-      tipsModalShownRef.current = true;
-      if (tipsDismissedKey) { try { setTipsDismissed(localStorage.getItem(tipsDismissedKey) === 'true'); } catch {} }
-      window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
-    }
-  }, [tipsDismissedKey, isFreeUser]);
 
   if (!isDemoUser || dismissed) return null;
 
