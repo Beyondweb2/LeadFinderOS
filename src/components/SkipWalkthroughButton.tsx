@@ -10,7 +10,7 @@ export function SkipWalkthroughButton() {
   const { isDemoUser } = useDemoChecklist();
   const { walkthroughOpen } = useWalkthroughStatus();
 
-  if (!walkthroughOpen || !isDemoUser) return null;
+  if (!walkthroughOpen || !isDemoUser || walkthroughCompleted) return null;
 
   const handleSkip = () => {
     if (!user?.id) return;
