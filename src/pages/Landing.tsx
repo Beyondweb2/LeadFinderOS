@@ -773,22 +773,22 @@ const Landing = () => {
             const toolkitFeatures = [
               {
                 title: 'Templates',
-                description: 'Ready-to-send WhatsApp, SMS, and call scripts - just pick a template, personalise, and hit send.',
+                description: 'Ready-to-send WhatsApp, SMS and call scripts. Personalise quickly and start conversations with potential clients faster.',
                 img: featureTemplates,
               },
               {
                 title: 'Smart Dashboard',
-                description: 'See your full pipeline at a glance - revenue, conversion rate, activity, and quick actions all in one place.',
+                description: 'Track outreach activity, conversations and pipeline progress in one clear view.',
                 img: featureDashboard,
               },
               {
                 title: 'Customisation',
-                description: 'Make the app yours - accent colours, custom statuses, and personalised templates that match your workflow.',
+                description: 'Personalise templates, statuses and workflow so LeadFinder fits how you sell.',
                 img: featureCustomization,
               },
               {
                 title: 'Export & Reports',
-                description: 'Download your leads and outreach data anytime - CSV exports for easy reporting and backup.',
+                description: 'Download leads and outreach data anytime with simple CSV exports.',
                 img: featureExport,
               },
             ];
