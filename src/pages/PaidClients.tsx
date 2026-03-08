@@ -23,6 +23,8 @@ import {
   MessageCircle,
   PhoneCall,
   MoreVertical,
+  ChevronDown,
+  ChevronUp,
   Pencil,
   Check,
   X,
@@ -90,6 +92,7 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
     try {
       await saveDetails();
       await onNotesChange(lead.id, notes);
+      setIsExpanded(false);
     } finally {
       setIsSaving(false);
     }
@@ -320,14 +323,22 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
           </div>
         </div>
 
-        {/* Notes preview when collapsed */}
-        {!isExpanded && (lead.notes || lead.checkin_notes) && (
-          <div className="flex items-end gap-2 mt-2 lg:mt-3">
-            <div className="flex-1 min-w-0 ml-[52px] sm:ml-[60px] lg:ml-[72px]">
-              <p className="text-[11px] lg:text-xs text-muted-foreground/50 line-clamp-1 leading-relaxed">
-                {lead.checkin_notes || lead.notes}
-              </p>
+        {/* Notes preview + expand button when collapsed */}
+        {!isExpanded && (
+          <div className="flex items-center gap-2 mt-2 lg:mt-3 ml-[52px] sm:ml-[60px] lg:ml-[72px]">
+            <div className="flex-1 min-w-0">
+              {(lead.notes || lead.checkin_notes) && (
+                <p className="text-[11px] lg:text-xs text-muted-foreground/50 line-clamp-1 leading-relaxed">
+                  {lead.checkin_notes || lead.notes}
+                </p>
+              )}
             </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }}
+              className="shrink-0 text-[10px] text-muted-foreground/50 hover:text-foreground transition-colors flex items-center gap-0.5"
+            >
+              <ChevronDown className="h-3 w-3" /> Edit
+            </button>
           </div>
         )}
       </div>
@@ -452,15 +463,26 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
               <Trash2 className="h-3.5 w-3.5 mr-1" />
               Remove
             </Button>
-            <Button
-              size="sm"
-              onClick={handleSave}
-              disabled={isSaving}
-              className="h-8 text-xs"
-            >
-              <Save className="h-3.5 w-3.5 mr-1" />
-              {isSaving ? 'Saving...' : 'Save Changes'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsExpanded(false)}
+                className="h-8 text-xs"
+              >
+                <ChevronUp className="h-3.5 w-3.5 mr-1" />
+                Collapse
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={isSaving}
+                className="h-8 text-xs"
+              >
+                <Save className="h-3.5 w-3.5 mr-1" />
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </div>
           </div>
         </div>
       )}
