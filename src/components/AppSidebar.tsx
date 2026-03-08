@@ -50,7 +50,7 @@ export function AppSidebar() {
     const { state: demoState, isDemoUser, isOpen: walkthroughActive } = useDemoChecklist();
     searchPulse = isDemoUser && walkthroughActive && !demoState.searchDone;
     crmPulseWalkthrough = isDemoUser && walkthroughActive && demoState.addedToCrm && !demoState.firstContactMade;
-    trackPulseWalkthrough = isDemoUser && walkthroughActive && demoState.threeContactsMade && !demoState.viewedProgress;
+    trackPulseWalkthrough = isDemoUser && walkthroughActive && demoState.firstContactMade && !demoState.viewedProgress;
   } catch {}
 
   const [flashCRM, setFlashCRM] = useState(false);

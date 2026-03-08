@@ -286,11 +286,11 @@ export function DemoChecklistProvider({
     }
   }, [isDemoUser, isReplay, location.pathname, completeStep]);
 
-  // 10 steps (merged contact steps 3+4 into one)
+  // 10 steps
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
-    state.threeContactsMade,
+    state.firstContactMade,
     state.trackPressed,
     state.viewedProgress,
     state.noteAdded,
