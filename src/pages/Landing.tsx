@@ -922,6 +922,56 @@ const Landing = () => {
         </div>
       </ScrollReveal>
 
+      {/* For SaaS Founders Section */}
+      <section className="relative z-10 py-10 sm:py-14 md:py-20 px-3 sm:px-4">
+        <div className="container mx-auto max-w-5xl">
+          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.15]">
+              For <span className="text-gradient-primary">SaaS Founders</span>
+            </h2>
+            <p className="text-sm sm:text-lg md:text-xl text-foreground/60 max-w-2xl mx-auto leading-relaxed mt-4 sm:mt-5">
+              If you're building a SaaS product, LeadFinder helps you find the right audience and contact them directly instead of waiting for inbound traffic.
+            </p>
+          </ScrollReveal>
+
+          <ScrollReveal>
+            <div
+              className="rounded-2xl px-6 py-8 sm:p-10 md:p-12"
+              style={{
+                background: 'linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--card)/0.8) 100%)',
+                border: '1px solid hsl(var(--border)/0.5)',
+              }}
+            >
+              <p className="text-sm sm:text-base md:text-lg text-foreground/60 leading-relaxed sm:leading-[1.8] max-w-3xl mx-auto mb-8">
+                Search for businesses that match your target customer profile, discover potential users, and reach out instantly. Many founders use LeadFinder to find early adopters and start conversations with companies that could benefit from their product.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 max-w-3xl mx-auto">
+                {[
+                  { icon: Search, text: 'Find businesses that match your target audience' },
+                  { icon: MessageSquare, text: 'Contact decision-makers directly with high reply rates' },
+                  { icon: Zap, text: 'Track conversations and follow-ups in one place' },
+                ].map((item, i) => (
+                  <div
+                    key={i}
+                    className="flex flex-col items-center text-center p-5 sm:p-6 rounded-xl"
+                    style={{
+                      background: 'hsl(var(--background)/0.5)',
+                      border: '1px solid hsl(var(--border)/0.3)',
+                    }}
+                  >
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center mb-3" style={{ background: 'hsl(var(--primary)/0.1)' }}>
+                      <item.icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <p className="text-xs sm:text-sm text-foreground/70 font-medium leading-relaxed">{item.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </ScrollReveal>
+        </div>
+      </section>
+
       {/* Final CTA — Free Access Card */}
       <section id="pricing" className="relative z-10 pb-16 sm:pb-20 md:pb-24 px-4">
         <div className="container mx-auto max-w-lg text-center">
