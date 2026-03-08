@@ -915,7 +915,7 @@ const Landing = () => {
               <ToolkitCarousel features={toolkitFeatures} onExpand={(src, title) => setExpandedImage({ src, title })} />
             ) : (
               <ScrollReveal>
-                <div className="grid grid-cols-4 gap-8 lg:gap-10 max-w-7xl mx-auto">
+                <div className="grid grid-cols-2 gap-10 lg:gap-12 max-w-6xl mx-auto">
                   {toolkitFeatures.map((feature, i) => (
                     <div key={i} className="text-center group">
                       <div 
@@ -923,7 +923,7 @@ const Landing = () => {
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm l duration-300 group-hover:scale-[1.03] group-hover:-translate-y-1"
+                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-all duration-300 group-hover:scale-[1.02] group-hover:-translate-y-1"
                           style={{ 
                             border: '1px solid hsl(210 100% 50% / 0.15)',
                             boxShadow: '0 0 20px hsl(210 100% 50% / 0.08), 0 4px 16px hsl(220 40% 4% / 0.3)',
