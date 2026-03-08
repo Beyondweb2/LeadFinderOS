@@ -68,6 +68,23 @@ serve(async (req) => {
       });
     }
 
+    // Handle reset_walkthrough_prompt action (admin simulate new user)
+    if (action === 'reset_walkthrough_prompt') {
+      const { error: updateErr } = await supabaseClient
+        .from('user_trials')
+        .update({ has_seen_walkthrough_prompt: false })
+        .eq('user_id', user.id);
+      if (updateErr) {
+        logStep("Error resetting walkthrough prompt", { error: updateErr.message });
+        throw new Error(`Failed to update: ${updateErr.message}`);
+      }
+      logStep("Walkthrough prompt reset", { userId: user.id });
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
     // Handle set_language action
     if (action === 'set_language' && language) {
       const allowedLangs = ['en', 'hi', 'ur'];
