@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { AlertTriangle, CreditCard, X, Loader2 } from 'lucide-react';
 
 export function PaymentWarningBanner() {
-  const { isInGracePeriod, isGracePeriodExpired, firstPaymentFailedAt, openCustomerPortal, isLoading } = useSubscription();
+  const { isInGracePeriod, isGracePeriodExpired, openCustomerPortal, isLoading } = useSubscription();
   const [dismissed, setDismissed] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
 
