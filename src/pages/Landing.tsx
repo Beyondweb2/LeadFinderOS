@@ -521,7 +521,7 @@ const Landing = () => {
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
+              The all-in-one system to discover potential customers, contact them instantly, and track every follow-up in one place.
             </p>
             
             {/* CTA */}
