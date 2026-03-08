@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { PaymentPausedScreen } from '@/components/PaymentPausedScreen';
+import { SubscriptionCancelledScreen } from '@/components/SubscriptionCancelledScreen';
 
 interface SubscriptionGateProps {
   children: ReactNode;
@@ -59,6 +60,12 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const isPaymentBlocked = isPaymentPaused || subStatus === 'past_due' || subStatus === 'unpaid';
   if (isPaymentBlocked) {
     return <PaymentPausedScreen />;
+  }
+
+  // Block cancelled users — must resubscribe
+  const isCancelled = subStatus === 'canceled' || subStatus === 'cancelled';
+  if (isCancelled) {
+    return <SubscriptionCancelledScreen />;
   }
 
   // Allow all authenticated users into the app — gating happens at feature level
