@@ -520,17 +520,19 @@ const Landing = () => {
               style={{ border: '1px solid hsl(210 100% 50% / 0.2)', background: 'hsl(210 100% 50% / 0.08)', color: 'hsl(210 100% 70%)' }}
             >
               <Zap className="h-3 w-3" />
-              <span>Lead generation for web professionals</span>
+              <span>Lead discovery + outreach + tracking — all in one place</span>
             </div>
 
             <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
-              <span className="tracking-[0.02em]">Find Businesses</span>{' '}
+              <span className="tracking-[0.02em]">Find the Right Businesses.</span>{' '}
               <br className="hidden sm:block" />
-              <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
+              <span className="text-gradient-primary">Contact Them Instantly.</span>
+              <br />
+              <span className="tracking-[0.02em]">Close More Clients.</span>
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
+              LeadFinder helps freelancers, agencies and SaaS founders discover businesses, reach out directly, and track every conversation in one simple system.
             </p>
             
             {/* CTA */}
@@ -555,40 +557,40 @@ const Landing = () => {
                 </Button>
               </div>
               <p className="text-[9px] sm:text-[11px] text-foreground/[0.30] font-medium mt-2 sm:mt-3">
-                5-day free trial · £0 today · Cancel anytime
+                Lead discovery + outreach + tracking — all in one place.
               </p>
             </div>
 
             {/* Mobile trust badges */}
             <div className="sm:hidden grid grid-cols-3 gap-4 max-w-[280px] mx-auto mt-8">
-              <CountUpStat target={100000} suffix="+" label="Businesses" />
+              <CountUpStat target={100000} suffix="+" label="Businesses Indexed" />
               <div className="text-center">
                 <div className="text-base font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Coverage</div>
+                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Business Coverage</div>
               </div>
               <div className="text-center">
                 <div className="text-base font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Searches</div>
+                <div className="text-[8px] text-foreground/55 mt-1 font-medium uppercase tracking-wider">Lead Searches</div>
               </div>
             </div>
 
             {/* Feature bullets — mobile only */}
             <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-6 text-[12px] text-foreground/50 font-medium">
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find businesses that need a website</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Build your outreach list in seconds</span>
-              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every business you contact</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Discover businesses ready to be contacted</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Message via WhatsApp, SMS or call in one click</span>
+              <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Track every conversation and follow-up</span>
             </div>
 
             {/* Desktop trust badges */}
             <div className="hidden sm:grid grid-cols-3 gap-5 md:gap-14 max-w-xl mx-auto mt-10">
-              <CountUpStat target={100000} suffix="+" label="Businesses" />
+              <CountUpStat target={100000} suffix="+" label="Businesses Indexed" />
               <div className="text-center">
                 <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Business Coverage</div>
               </div>
               <div className="text-center">
                 <div className="text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+                <div className="text-xs text-foreground/55 mt-1.5 font-medium uppercase tracking-wider">Lead Searches</div>
               </div>
             </div>
           </div>
@@ -623,22 +625,22 @@ const Landing = () => {
             {[
               {
                 num: 1,
-                title: 'Find Leads Instantly',
-                body: 'See businesses missing a website in seconds and spot easy opportunities instantly.',
+                title: 'Find the Right Businesses Instantly',
+                body: 'Search for businesses in seconds and discover real opportunities — including companies without websites and businesses ready to be contacted.',
                 img: step2Results,
                 alt: 'Find leads results list',
               },
               {
                 num: 2,
                 title: 'Run Your Outreach',
-                body: 'Message, call or WhatsApp in one click and manage every follow up in one place.',
+                body: 'Call, message or WhatsApp businesses in one click and manage every follow-up in one place.',
                 img: step3Outreach,
                 alt: 'Outreach and contact management',
               },
               {
                 num: 3,
                 title: 'Turn Outreach Into Revenue',
-                body: 'See your deals, follow ups and revenue in one place.',
+                body: 'Track conversations, follow-ups and deals so you never lose track of potential clients.',
                 img: step4Dashboard,
                 alt: 'Dashboard revenue overview',
               },
@@ -771,22 +773,22 @@ const Landing = () => {
             const toolkitFeatures = [
               {
                 title: 'Templates',
-                description: 'Ready-to-send WhatsApp, SMS, and call scripts - just pick a template, personalise, and hit send.',
+                description: 'Ready-to-send WhatsApp, SMS and call scripts. Personalise quickly and start conversations with potential clients faster.',
                 img: featureTemplates,
               },
               {
                 title: 'Smart Dashboard',
-                description: 'See your full pipeline at a glance - revenue, conversion rate, activity, and quick actions all in one place.',
+                description: 'Track outreach activity, conversations and pipeline progress in one clear view.',
                 img: featureDashboard,
               },
               {
                 title: 'Customisation',
-                description: 'Make the app yours - accent colours, custom statuses, and personalised templates that match your workflow.',
+                description: 'Personalise templates, statuses and workflow so LeadFinder fits how you sell.',
                 img: featureCustomization,
               },
               {
                 title: 'Export & Reports',
-                description: 'Download your leads and outreach data anytime - CSV exports for easy reporting and backup.',
+                description: 'Download leads and outreach data anytime with simple CSV exports.',
                 img: featureExport,
               },
             ];
@@ -838,6 +840,10 @@ const Landing = () => {
           }}
         />
         <div className="container mx-auto max-w-5xl">
+          {/* Positioning line above testimonials */}
+          <p className="text-center text-xs sm:text-sm text-muted-foreground/50 font-medium uppercase tracking-wider mb-6 sm:mb-8">
+            Used by freelancers, agencies and founders to generate new business
+          </p>
           {/* Rating moved ABOVE carousel */}
           <div className="text-center mb-8 sm:mb-10">
             <div className="flex gap-0.5 justify-center mb-2.5">
@@ -1002,6 +1008,9 @@ const Landing = () => {
                 5-day free trial · £0 today · Cancel anytime
               </p>
               <p className="text-[10px] sm:text-[11px] text-muted-foreground/50 mt-1">
+                Cancel anytime. No contracts.
+              </p>
+              <p className="text-[10px] sm:text-[11px] text-muted-foreground/40 mt-0.5">
                 After trial · £19.99/month · Secure payment via Stripe
               </p>
             </div>
@@ -1015,13 +1024,13 @@ const Landing = () => {
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-2">
-              Got Any <span className="text-gradient-primary">Questions?</span>
+              Talk to a <span className="text-gradient-primary">Real Person</span>
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground/70 mb-1.5 leading-[1.6]">
-              Fast responses from a real person - no bots, no waiting.
+              Have questions about LeadFinder?
             </p>
             <p className="text-xs text-muted-foreground/50 mb-5">
-              We typically reply within minutes.
+              Message us on WhatsApp and get a response within minutes.
             </p>
             <a
               href="https://wa.me/66645468692?text=Hi%2C%20I%20have%20a%20question%20about%20LeadFinder%20Pro"
