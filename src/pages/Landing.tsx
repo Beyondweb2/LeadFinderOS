@@ -985,6 +985,8 @@ const Landing = () => {
               <Star key={i} className="h-5 w-5 fill-yellow-400 text-yellow-400" />
             ))}
           </div>
+
+          {(() => {
             const testimonials = [
               {
                 name: 'Chris P.',
