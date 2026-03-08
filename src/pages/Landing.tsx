@@ -15,8 +15,6 @@ import {
   Star,
   Zap,
   ChevronDown,
-  Phone,
-  BarChart3,
 } from 'lucide-react';
 import demoVideo from '@/assets/leadfinder-advert-2.mp4';
 import appLogo from '@/assets/logo.png';
@@ -704,7 +702,7 @@ const Landing = () => {
                         style={{ background: 'linear-gradient(to bottom right, hsl(var(--primary) / 0.2), hsl(220 80% 45% / 0.1))' }}
                       />
                       <div 
-                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.01]"
+                        className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/9] max-h-[320px] transition-transform duration-300 group-hover:scale-[1.01]"
                         style={{ 
                           border: '1px solid hsl(var(--primary) / 0.2)',
                           boxShadow: '0 0 24px hsl(var(--primary) / 0.1), 0 0 48px hsl(var(--primary) / 0.05)'
@@ -728,154 +726,6 @@ const Landing = () => {
       </section>
 
 
-      {/* How SaaS Founders Use LeadFinder */}
-      <section className="relative z-10 py-12 sm:py-16 md:py-24444 px-3 sm:px-4">
-        <div className="container mx-auto max-w-5xl">
-          <ScrollReveal className="text-center mb-6 sm:mb-10">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight leading-[1.15]">
-              How SaaS Founders Use <span className="text-gradient-primary">LeadFinder</span>
-            </h2>
-            <p className="text-xs sm:text-base md:text-lg text-foreground/60 max-w-xl mx-auto leading-relaxed mt-3 sm:mt-4">
-              Find web developers, agencies, and target users, then contact them directly without waiting for inbound.
-            </p>
-          </ScrollReveal>
-
-          {/* Desktop: workflow visual + asymmetric cards */}
-          <div className="hidden sm:block">
-            {/* Workflow strip */}
-            <ScrollReveal delay={100}>
-              <div className="flex items-center justify-center gap-3 md:gap-4 mb-8">
-                {[
-                  { icon: Search, label: 'Search developers' },
-                  { icon: Phone, label: 'Contact directly' },
-                  { icon: BarChart3, label: 'Track replies' },
-                ].map((step, i) => (
-                  <div key={i} className="flex items-center gap-3 md:gap-4">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="w-8 h-8 rounded-lg flex items-center justify-center"
-                        style={{ background: 'hsl(var(--primary)/0.12)' }}
-                      >
-                        <step.icon className="h-4 w-4 text-primary" />
-                      </div>
-                      <span className="text-xs md:text-sm font-medium text-foreground/70">{step.label}</span>
-                    </div>
-                    {i < 2 && (
-                      <ArrowRight className="h-3.5 w-3.5 text-primary/40" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </ScrollReveal>
-
-            {/* Mock search UI - interactive feel */}
-            <ScrollReveal delay={180}>
-              <div
-                className="max-w-xl mx-auto mb-10 rounded-xl px-5 py-3.5 flex items-center gap-3 transition-all duration-300 hover:scale-[1.01]"
-                style={{
-                  background: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--primary)/0.25)',
-                  boxShadow: '0 0 20px hsl(var(--primary)/0.08), 0 0 40px hsl(var(--primary)/0.04), 0 2px 16px hsl(220 40% 4% / 0.3)',
-                }}
-              >
-                <Search className="h-4.5 w-4.5 text-primary/70 shrink-0" />
-                <div className="flex-1 flex items-center gap-2">
-                  <span className="text-sm text-foreground font-medium">Web Developers</span>
-                  <span className="w-px h-4 bg-border/50" />
-                  <span className="text-sm text-foreground/40">London, UK</span>
-                </div>
-                <button
-                  className="text-[11px] font-semibold uppercase tracking-wider px-3.5 py-1.5 rounded-lg transition-all"
-                  style={{ background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))' }}
-                >
-                  Search
-                </button>
-              </div>
-            </ScrollReveal>
-
-            {/* Asymmetric 3-card layout, middle card emphasized */}
-            <div className="grid grid-cols-7 gap-4 md:gap-5 items-start max-w-6xl mx-auto">
-              {/* Card 1 */}
-              <ScrollReveal delay={200} className="col-span-2">
-                <div
-                  className="flex flex-col items-center text-center p-6 md:p-7 rounded-2xl h-full"
-                  style={{
-                    background: 'linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--card)/0.8) 100%)',
-                    border: '1px solid hsl(var(--border)/0.5)',
-                  }}
-                >
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: 'hsl(var(--primary)/0.1)' }}>
-                    <Search className="h-5 w-5 text-primary" />
-                  </div>
-                  <h3 className="text-base font-semibold text-foreground mb-1.5">Find web developers</h3>
-                  <p className="text-sm text-foreground/55 leading-relaxed">Search by business type and location to find developers, agencies, and niche audiences.</p>
-                </div>
-              </ScrollReveal>
-
-              {/* Card 2, emphasized */}
-              <ScrollReveal delay={280} className="col-span-3">
-                <div
-                  className="flex flex-col items-center text-center p-7 md:p-8 rounded-2xl h-full relative"
-                  style={{
-                    background: 'linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--card)/0.85) 100%)',
-                    border: '1px solid hsl(var(--primary)/0.2)',
-                    boxShadow: '0 0 30px hsl(var(--primary)/0.08), 0 4px 20px hsl(220 40% 4% / 0.3)',
-                  }}
-                >
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-3" style={{ background: 'hsl(var(--primary)/0.15)' }}>
-                    <Phone className="h-5 w-5 text-primary" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-foreground mb-1.5">Contact directly</h3>
-                  <p className="text-sm text-foreground/55 leading-relaxed">Get personal numbers, WhatsApp, SMS, or call. Reach decision-makers without gatekeepers.</p>
-                </div>
-              </ScrollReveal>
-
-              {/* Card 3 */}
-              <ScrollReveal delay={360} className="col-span-2">
-                <div
-                  className="flex flex-col items-center text-center p-6 md:p-7 rounded-2xl h-full"
-                  style={{
-                    background: 'linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--card)/0.8) 100%)',
-                    border: '1px solid hsl(var(--border)/0.5)',
-                  }}
-                >
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-3" style={{ background: 'hsl(var(--primary)/0.1)' }}>
-                    <BarChart3 className="h-5 w-5 text-primary" />
-                  </div>
-                  <h3 className="text-base font-semibold text-foreground mb-1.5">Track replies</h3>
-                  <p className="text-sm text-foreground/55 leading-relaxed">Manage conversations, follow-ups, and outreach in one place.</p>
-                </div>
-              </ScrollReveal>
-            </div>
-          </div>
-
-          {/* Mobile: compact rows */}
-          <div className="flex sm:hidden flex-col gap-3 max-w-sm mx-auto">
-            {[
-              { icon: Search, title: 'Find web developers', text: 'Search by business type and location to find developers, agencies, and other niche audiences.' },
-              { icon: Phone, title: 'Contact directly', text: 'Get contact details and reach out through personal numbers, WhatsApp, SMS, or call.' },
-              { icon: BarChart3, title: 'Track replies', text: 'Manage conversations, follow-ups, and outreach in one place.' },
-            ].map((item, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-3 p-4 rounded-xl"
-                style={{
-                  background: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border)/0.5)',
-                }}
-              >
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'hsl(var(--primary)/0.1)' }}>
-                  <item.icon className="h-4 w-4 text-primary" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-semibold text-foreground mb-0.5">{item.title}</h3>
-                  <p className="text-[11px] text-foreground/55 leading-snug">{item.text}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
 
 
       {/* Your Complete Lead Toolkit */}
@@ -966,98 +816,112 @@ const Landing = () => {
 
       {/* Testimonials */}
       <ScrollReveal className="relative z-10 pt-20 sm:pt-28 md:pt-32 pb-12 sm:pb-20 md:pb-24 px-4">
-        <div className="container mx-auto max-w-4xl">
-          <div
-            className="rounded-2xl px-6 py-10 sm:px-10 sm:py-12"
-            style={{
-              background: 'hsl(220 30% 7% / 0.7)',
-              border: '1px solid hsl(0 0% 100% / 0.04)',
-            }}
-          >
-            <h2 className="text-center text-lg sm:text-xl font-semibold tracking-tight text-foreground/80 mb-10">
-              Real feedback from LeadFinder users
-            </h2>
+        <div
+          className="absolute inset-0 -z-10"
+          style={{
+            background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.2) 20%, hsl(220 30% 6% / 0.3) 50%, hsl(220 30% 6% / 0.2) 80%, transparent 100%)',
+          }}
+        />
+        <div className="container mx-auto max-w-5xl">
+          <h2 className="text-center text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground mb-12 sm:mb-14">
+            Trusted by freelancers and agencies using LeadFinder
+          </h2>
 
-            {(() => {
-              const testimonials: Testimonial[] = [
-                {
-                  name: 'Chris P.',
-                  initials: 'CP',
-                  role: 'Freelance Designer',
-                  region: 'UK',
-                  quote: "Found 30 solid leads in 10 minutes and messaged them all inside the app. That alone sold me.",
-                  stars: 5,
-                },
-                {
-                  name: 'Alex M.',
-                  initials: 'AM',
-                  role: 'WordPress Freelancer',
-                  region: 'Canada',
-                  quote: "No more bouncing between Maps, notes and WhatsApp. Everything in one place, finally feels organised.",
-                  stars: 5,
-                },
-                {
-                  name: 'Daniel S.',
-                  initials: 'DS',
-                  role: 'Agency Owner',
-                  region: 'US',
-                  quote: "Finding leads fast and keeping outreach tracked properly. Makes staying consistent way easier.",
-                  stars: 5,
-                },
-              ];
+          {(() => {
+            const testimonials: Testimonial[] = [
+              {
+                name: 'Chris P.',
+                initials: 'CP',
+                role: 'Freelance Designer',
+                region: 'UK',
+                quote: "Found 30 businesses without websites in 10 minutes. Messaged them right inside the app. That alone sold me.",
+                stars: 5,
+              },
+              {
+                name: 'Tom H.',
+                initials: 'TH',
+                role: 'Web Developer',
+                region: 'Australia',
+                quote: "The templates save me so much time. Tweak the message slightly and send it out without rewriting everything.",
+                stars: 5,
+              },
+              {
+                name: 'Alex M.',
+                initials: 'AM',
+                role: 'WordPress Freelancer',
+                region: 'Canada',
+                quote: "I used to bounce between Maps, notes and WhatsApp. Now everything is in one place and it actually feels organised.",
+                stars: 5,
+              },
+              {
+                name: 'Daniel S.',
+                initials: 'DS',
+                role: 'Agency Owner',
+                region: 'US',
+                quote: "Well built. Finding leads fast and keeping outreach tracked makes it way easier to stay consistent.",
+                stars: 5,
+              },
+            ];
 
-              return isMobile ? (
-                <MobileTestimonialSlider testimonials={testimonials} />
-              ) : (
-                <div className="space-y-7">
-                  {testimonials.map((r, i) => (
-                    <ScrollReveal key={i} delay={i * 100}>
-                      <div className="flex items-start gap-4">
-                        {/* Avatar */}
+            return isMobile ? (
+              <MobileTestimonialSlider testimonials={testimonials} />
+            ) : (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6 items-start">
+                {testimonials.map((r, i) => {
+                  const staggerClass = i % 2 === 1 ? 'lg:mt-6' : '';
+                  return (
+                  <ScrollReveal key={i} delay={i * 100}>
+                    <div 
+                      className={`flex flex-col text-left px-5 py-6 sm:px-6 sm:py-7 rounded-xl ${staggerClass}`}
+                      style={{
+                        background: 'hsl(220 30% 8% / 0.6)',
+                        border: '1px solid hsl(0 0% 100% / 0.06)',
+                        boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
+                      }}
+                    >
+                      {/* Avatar + identity */}
+                      <div className="flex items-center gap-3 mb-4">
                         <div
-                          className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5"
-                          style={{ background: 'hsl(var(--primary)/0.12)', color: 'hsl(var(--primary))' }}
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                          style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}
                         >
                           {r.initials}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          {/* Name + role */}
-                          <p className="text-foreground/90 text-[14px] font-semibold leading-tight">{r.name}</p>
-                          <p className="text-muted-foreground/45 text-[12px] mt-0.5">{r.role}, {r.region}</p>
-                          {/* Stars */}
-                          <div className="flex gap-0.5 mt-1.5 mb-2.5">
-                            {[...Array(r.stars)].map((_, si) => (
-                              <Star key={si} className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                            ))}
-                          </div>
-                          {/* Quote */}
-                          <p className="text-foreground/60 text-[14px] leading-[1.7] font-normal">
-                            "{r.quote}"
-                          </p>
+                        <div>
+                          <p className="text-foreground/90 text-sm font-semibold leading-tight">{r.name}</p>
+                          <p className="text-muted-foreground/50 text-[11px]">{r.role} · {r.region}</p>
                         </div>
                       </div>
-                      {i < testimonials.length - 1 && (
-                        <div className="ml-14 mt-7" style={{ borderBottom: '1px solid hsl(0 0% 100% / 0.04)' }} />
-                      )}
-                    </ScrollReveal>
-                  ))}
-                </div>
-              );
-            })()}
+                      {/* Stars */}
+                      <div className="flex gap-0.5 mb-3">
+                        {[...Array(r.stars)].map((_, si) => (
+                          <Star key={si} className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                        ))}
+                      </div>
+                      {/* Quote */}
+                      <p className="text-foreground/75 text-[14px] leading-[1.7] font-normal">
+                        "{r.quote}"
+                      </p>
+                    </div>
+                  </ScrollReveal>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
-            {/* Leave a Review button */}
-            <div className="text-center mt-10">
-              <Button
-                variant="outline"
-                className="border-border/30 hover:border-border/50 text-sm rounded-full px-6"
-                asChild
-              >
-                <Link to="/feedback">
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  Leave a Review
-                </Link>
-              </Button>
-            </div>
+          {/* Leave a Review button */}
+          <div className="text-center mt-8 sm:mt-10">
+            <Button
+              variant="outline"
+              className="border-border/30 hover:border-border/50 text-sm rounded-full px-6"
+              asChild
+            >
+              <Link to="/feedback">
+                <MessageSquare className="mr-2 h-4 w-4" />
+                Leave a Review
+              </Link>
+            </Button>
           </div>
         </div>
       </ScrollReveal>
