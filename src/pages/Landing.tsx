@@ -36,6 +36,7 @@ import featureTemplates from '@/assets/feature-templates.png';
 import featureContactTracking from '@/assets/feature-contact-tracking.png';
 import featureCustomization from '@/assets/feature-customization-new.png';
 import featureExport from '@/assets/feature-export.png';
+import featureLeadManagement from '@/assets/feature-lead-management.png';
 
 import {
   Carousel,
@@ -905,9 +906,9 @@ const Landing = () => {
                 img: featureCustomization,
               },
               {
-                title: 'Export & Reports',
-                description: 'Download leads and data as CSV anytime.',
-                img: featureExport,
+                title: 'Lead Management',
+                description: 'Keep every conversation organised and track deals from first message to payment.',
+                img: featureLeadManagement,
               },
             ];
 
