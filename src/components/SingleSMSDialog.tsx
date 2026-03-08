@@ -31,6 +31,13 @@ const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
 const STORAGE_KEY = 'leadfinder_sms_template';
 
 export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSDialogProps) {
+  const handleOpenChange = (v: boolean) => {
+    onOpenChange(v);
+    if (!v) {
+      // Notify walkthrough that the contact panel was closed
+      window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
+    }
+  };
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
   const [isModified, setIsModified] = useState(false);
   const [showTemplateNudge, setShowTemplateNudge] = useState(false);
@@ -101,7 +108,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
       onSent(lead.id, 'sms');
     }
 
-    onOpenChange(false);
+    handleOpenChange(false);
 
     supabase.rpc('log_usage_event', {
       p_event_type: 'message_sent',
@@ -118,9 +125,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
   const hasPhone = Boolean(lead.phone);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => {
-      onOpenChange(v);
-    }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -218,7 +223,7 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
 
         <DialogFooter className="gap-2 flex-row justify-end sm:justify-end">
           <Button variant="outline" onClick={() => {
-            onOpenChange(false);
+            handleOpenChange(false);
           }}>
             Cancel
           </Button>

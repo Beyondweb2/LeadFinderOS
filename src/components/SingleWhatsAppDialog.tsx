@@ -32,6 +32,13 @@ const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
 const STORAGE_KEY = 'leadfinder_whatsapp_template';
 
 export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: SingleWhatsAppDialogProps) {
+  const handleOpenChange = (v: boolean) => {
+    onOpenChange(v);
+    if (!v) {
+      // Notify walkthrough that the contact panel was closed
+      window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
+    }
+  };
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
   const [isModified, setIsModified] = useState(false);
   const [showTemplateNudge, setShowTemplateNudge] = useState(false);
@@ -81,7 +88,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
         title: 'Not on WhatsApp',
         description: `${lead.business_name} was previously marked as not on WhatsApp. Try SMS or Call instead.`,
       });
-      onOpenChange(false);
+      handleOpenChange(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, lead?.whatsapp_status]);
@@ -126,7 +133,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
       onSent(lead.id, 'whatsapp');
     }
 
-    onOpenChange(false);
+    handleOpenChange(false);
 
     supabase.rpc('log_usage_event', {
       p_event_type: 'message_sent',
@@ -143,9 +150,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
   const hasPhone = Boolean(lead.phone);
 
   return (
-    <Dialog open={open} onOpenChange={(v) => {
-      onOpenChange(v);
-    }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -245,7 +250,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
 
         <DialogFooter className="gap-2 flex-row justify-end">
           <Button variant="outline" onClick={() => {
-            onOpenChange(false);
+            handleOpenChange(false);
           }}>
             Cancel
           </Button>

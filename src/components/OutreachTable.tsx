@@ -347,6 +347,8 @@ export function OutreachTable({
       const next = new Set(prev);
       next.add(lead.id);
       window.dispatchEvent(new CustomEvent('demo-checklist-contact'));
+      // Call has no dialog panel, so mark panel as closed immediately
+      window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
       return next;
     });
     highlightLead(lead.id);

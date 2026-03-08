@@ -58,6 +58,11 @@ function getActiveStep(state: any, pathname: string, t: any): StepDef | null {
     return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: t('walkthrough.step3NavToOutreach') };
   }
 
+  // Contact button was clicked but panel is still open — hide walkthrough until panel closes
+  if (!state.contactPanelClosed) {
+    return null;
+  }
+
   if (!state.trackPressed) {
     if (pathname === '/outreach') {
       return { step: 5, selector: '[data-walkthrough="track"]', tooltip: t('walkthrough.step5Track'), noDim: true };

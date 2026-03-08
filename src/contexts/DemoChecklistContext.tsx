@@ -8,6 +8,7 @@ export interface DemoChecklistState {
   addedToCrm: boolean;
   crmAddCount: number;
   firstContactMade: boolean;
+  contactPanelClosed: boolean;
   threeContactsMade: boolean;
   contactsMadeCount: number;
   viewedProgress: boolean;
@@ -49,6 +50,7 @@ const defaultState: DemoChecklistState = {
   addedToCrm: false,
   crmAddCount: 0,
   firstContactMade: false,
+  contactPanelClosed: false,
   threeContactsMade: false,
   contactsMadeCount: 0,
   viewedProgress: false,
@@ -198,6 +200,8 @@ export function DemoChecklistProvider({
 
 
 
+    const onContactPanelClosed = () => completeStep('contactPanelClosed');
+
     const onNoteSaved = () => completeStep('noteAdded');
 
     const onTrackStatusChanged = () => completeStep('trackStatusSet');
@@ -218,6 +222,7 @@ export function DemoChecklistProvider({
         const next = {
           ...prev,
           firstContactMade: true,
+          contactPanelClosed: true,
           threeContactsMade: true,
           contactsMadeCount: Math.max(prev.contactsMadeCount, 3),
           contactAttempted: true,
@@ -233,6 +238,7 @@ export function DemoChecklistProvider({
     window.addEventListener('crm-lead-added', onCrmAdd);
     window.addEventListener('crm-lead-purged', onCrmPurged);
     window.addEventListener('demo-checklist-contact', onContact);
+    window.addEventListener('demo-checklist-contact-panel-closed', onContactPanelClosed);
     
     window.addEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
     window.addEventListener('demo-checklist-track-note-saved', onNoteSaved);
@@ -263,6 +269,7 @@ export function DemoChecklistProvider({
       window.removeEventListener('crm-lead-added', onCrmAdd);
       window.removeEventListener('crm-lead-purged', onCrmPurged);
       window.removeEventListener('demo-checklist-contact', onContact);
+      window.removeEventListener('demo-checklist-contact-panel-closed', onContactPanelClosed);
       
       window.removeEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
       window.removeEventListener('demo-checklist-track-note-saved', onNoteSaved);
@@ -290,7 +297,7 @@ export function DemoChecklistProvider({
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
-    state.firstContactMade,
+    state.contactPanelClosed,
     state.trackPressed,
     state.viewedProgress,
     state.noteAdded,
