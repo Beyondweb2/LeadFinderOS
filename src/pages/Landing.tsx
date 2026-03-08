@@ -1011,14 +1011,11 @@ const Landing = () => {
         <div className="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-2">
-              Talk to a <span className="text-gradient-primary">Real Person</span>
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-3">
+              Questions About <span className="text-gradient-primary">LeadFinder</span>?
             </h2>
-            <p className="text-sm sm:text-base text-muted-foreground/70 mb-1.5 leading-[1.6]">
-              Have questions about LeadFinder?
-            </p>
-            <p className="text-xs text-muted-foreground/50 mb-5">
-              Message us on WhatsApp and get a response within minutes.
+            <p className="text-sm sm:text-base text-muted-foreground/70 mb-5 leading-[1.6]">
+              Message us on WhatsApp and speak to a real person. Usually replies within a few minutes.
             </p>
             <a
               href="https://wa.me/66645468692?text=Hi%2C%20I%20have%20a%20question%20about%20LeadFinder%20Pro"
