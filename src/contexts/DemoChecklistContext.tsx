@@ -313,6 +313,10 @@ export function DemoChecklistProvider({
   useEffect(() => {
     if (allDone && !allDoneRef.current) {
       allDoneRef.current = true;
+      // Clear simulate-new-user flag
+      if (user?.id) {
+        try { localStorage.removeItem(`simulate_new_user_${user.id}`); } catch {}
+      }
       Promise.resolve(supabase.rpc('log_walkthrough_event' as any, {
         p_event_type: 'walkthrough_complete',
         p_meta: { walkthrough_id: 'main' },
@@ -324,7 +328,7 @@ export function DemoChecklistProvider({
         window.dispatchEvent(new CustomEvent('walkthrough-all-done'));
       }
     }
-  }, [allDone, isReplay]);
+  }, [allDone, isReplay, user?.id]);
 
   return (
     <DemoChecklistContext.Provider value={{
