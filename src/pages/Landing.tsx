@@ -524,13 +524,15 @@ const Landing = () => {
             </div>
 
             <h1 className="text-[1.75rem] leading-[1.05] sm:text-5xl md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight" style={{ lineHeight: '1.05' }}>
-              <span className="tracking-[0.02em]">Find Businesses</span>{' '}
+              <span className="tracking-[0.02em]">Find the Right Businesses.</span>{' '}
               <br className="hidden sm:block" />
-              <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
+              <span className="text-gradient-primary">Contact Them Instantly.</span>
+              <br />
+              <span className="tracking-[0.02em]">Close More Clients.</span>
             </h1>
             
             <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
+              LeadFinder helps freelancers, agencies and SaaS founders discover businesses, reach out directly, and track every conversation in one simple system.
             </p>
             
             {/* CTA */}
