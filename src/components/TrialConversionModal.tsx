@@ -117,7 +117,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
           <div className="w-full rounded-xl border border-border/30 bg-muted/20 px-4 py-3.5 mb-5">
             <div className="flex items-center justify-center gap-2 text-[13px] text-muted-foreground">
               <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
-              <span><strong className="text-foreground text-[15px]">£0 today</strong> · Cancel anytime</span>
+              <span><strong className="text-foreground text-[15px]">£0 today</strong> · Cancel anytime · Card required</span>
             </div>
           </div>
 
