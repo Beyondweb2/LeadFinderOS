@@ -155,10 +155,11 @@ const App = () => {
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <LeadSearchProvider>
+           <LeadSearchProvider>
             <BrowserRouter>
               <RefSourceCapture />
               <ScrollToTop />
+              <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
              <Route path="/billing/success" element={<BillingSuccess />} />
@@ -323,6 +324,7 @@ const App = () => {
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
+              </Suspense>
             </BrowserRouter>
           </LeadSearchProvider>
         </TooltipProvider>
