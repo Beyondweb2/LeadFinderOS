@@ -834,13 +834,12 @@ const Landing = () => {
       </section>
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28te inset-0 -z-10"
-          style={{
+      <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28    style={{
             background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.2) 20%, hsl(220 30% 6% / 0.3) 50%, hsl(220 30% 6% / 0.2) 80%, transparent 100%)',
           }}
         />
         <div className="container mx-auto max-w-5xl">
-          <h2 clas6Name="text-center text-6xl sm:text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-12 sm:mb-14">
+          <h2 clas6Name="text-center text-6xl sm:text-4xl md:text-6xl lg:text-6xl font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-12 sm:mb-14">
             Trusted by freelancers
             <br className="sm:hidden" />
             {' '}and agencies{' '}
@@ -951,7 +950,7 @@ const Landing = () => {
       </ScrollReveal>
 
       {/* Final CTA - Free Access Card */}
-      <section id="pricing" className="relative z-10 pb-16 sm:pb-20 md:pb-24 py-16 sm:py-20 md:py-28ssName="container mx-auto max-w-lg text-center">
+      <section id="pricing" className="relative z-10 pb-16 sm:pb-20 md:pb-24 py-16 sm:py-20 md:py-28ssy-16 sm:py-20 md:py-28o max-w-lg text-center">
           <ScrollReveal>
             <div
               className="rounded-2xl px-6 py-9 sm:p-12 text-center"
@@ -1007,8 +1006,7 @@ const Landing = () => {
       </section>
 
       {/* Got Questions Section */}
-      <section className="relative z-10 py-2 sm:py-16 md:py-206 px-4">
-        <div className="container mx-auto">
+      <section className="relative z-10 py-2 sm:py-16 md:py-206 px-16 sm:py-20 md:py-28ssName="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-2">
