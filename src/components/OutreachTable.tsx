@@ -149,6 +149,13 @@ export function OutreachTable({
   // Track leads contacted during walkthrough (so highlight moves to next business)
   const [walkthroughContactedIds, setWalkthroughContactedIds] = useState<Set<string>>(new Set());
 
+  // Reset walkthroughContactedIds when walkthrough is restarted (replay)
+  useEffect(() => {
+    const onReset = () => setWalkthroughContactedIds(new Set());
+    window.addEventListener('start-walkthrough', onReset);
+    return () => window.removeEventListener('start-walkthrough', onReset);
+  }, []);
+
   // Contact action hook: immediate persist, no undo
   const { executeContact } = useContactAction({
     onUpdate: useCallback((leadId: string, updates: Record<string, any>) => {
