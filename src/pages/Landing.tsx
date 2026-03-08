@@ -776,7 +776,8 @@ const Landing = () => {
               },
               {
                 title: 'Smart Dashboard',
-                description: 'Track outreach andSee your revenue, See your revenue, conversion rate and activity all in one place place  img: featureDashboard,
+                description: 'See your revenue, conversion rate and activity all in one place.',
+                img: featureDashboard,
               },
               {
                 title: 'Full Customization',
@@ -785,7 +786,7 @@ const Landing = () => {
               },
               {
                 title: 'Lead Management',
-                descriptTrack every lead from first message to closed deal so nothing slips throughayment.',
+                description: 'Track every lead from first message to closed deal so nothing slips through.',
                 img: featureLeadManagement,
               },
             ];
