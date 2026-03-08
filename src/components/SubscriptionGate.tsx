@@ -54,10 +54,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
   // Allow all authenticated users into the app — gating happens at feature level
   // (search results are gated, buttons locked, trial modal shown)
-  const hasAccess = isPaidSubscriber || isStripeTrialing || isAdmin || !!user;
 
   // If subscribed but setup not completed, redirect to complete-setup
-  if (!isAdmin && !setupCompleted) {
+  // Only enforce for paying/trialing users, not free users exploring
+  const hasPaidAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
+  if (hasPaidAccess && !isAdmin && !setupCompleted) {
     return <Navigate to="/complete-setup" replace />;
   }
 
