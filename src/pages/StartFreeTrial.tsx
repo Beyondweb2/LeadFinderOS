@@ -66,7 +66,7 @@ const StartFreeTrial = () => {
       });
       if (checkoutError) throw checkoutError;
       if (checkoutData?.url) {
-        window.open(checkoutData.url, '_blank') || (window.location.href = checkoutData.url);
+        window.location.href = checkoutData.url;
       } else {
         throw new Error('No checkout URL received');
       }

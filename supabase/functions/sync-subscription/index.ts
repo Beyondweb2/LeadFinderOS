@@ -121,12 +121,14 @@ serve(async (req) => {
     }
     logStep("Subscription saved successfully");
 
-    // Update user_trials to mark as paid if transitioning from trial
+    // Update user_trials to mark as paid/setup-complete after successful checkout return
+    const hasPaidAccess = subscriptionStatus === 'trialing' || subscriptionStatus === 'active';
     const { error: trialUpdateError } = await supabaseClient
       .from('user_trials')
       .update({
         plan_status: subscriptionStatus === 'trialing' ? 'trial' : 'active',
         paid_at: subscriptionStatus === 'active' ? new Date().toISOString() : null,
+        ...(hasPaidAccess ? { setup_completed: true, lifecycle_stage: 99, checkout_started_at: null } : {}),
       })
       .eq('user_id', user.id);
 
