@@ -102,12 +102,9 @@ export function WelcomeWalkthroughModal() {
             <ArrowRight className="h-4 w-4" />
           </button>
 
-          <button
-            onClick={() => dismiss(false)}
-            className="w-full h-10 rounded-xl text-[13px] font-medium text-muted-foreground/70 hover:text-foreground transition-colors"
-          >
-            {t('welcome.skip')}
-          </button>
+          <p className="text-center text-[12px] text-muted-foreground/60">
+            It only takes a moment and will help you get started with confidence.
+          </p>
         </div>
       </DialogContent>
     </Dialog>

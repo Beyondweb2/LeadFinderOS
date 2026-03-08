@@ -218,7 +218,8 @@
   "completion": {
     "headline": "More Outreach. More",
     "headlineAccent": "Clients",
-    "contacted": "You've contacted <bold>3 businesses</bold>.",
+    "contacted": "You've contacted <bold>{{count}} business</bold>.",
+    "contactedPlural": "You've contacted <bold>{{count}} businesses</bold>.",
     "mostFreelancers": "Most freelancers stop here.",
     "keepStacking": "The ones who land clients keep stacking outreach.",
     "businessesFound": "Businesses Found",
