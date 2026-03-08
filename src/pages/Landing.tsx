@@ -576,7 +576,7 @@ const Landing = () => {
             </div>
 
             {/* Metrics row */}
-            <div className="grid grid-cols-3 gap-4 sm:gap-5 md:gap-14 max-w-[280px] sm:max-w-xl mx-auto mt-8">
+            <div className="grid grid-cols-3 gap-2 sm:gap-5 md:gap-14 max-w-[260px] sm:max-w-xl mx-auto mt-8">
               <CountUpStat target={80000} suffix="+" label="Businesses" />
               <div className="text-center">
                 <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
