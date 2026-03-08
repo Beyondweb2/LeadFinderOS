@@ -52,17 +52,13 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     return <PaymentPausedScreen />;
   }
 
-  // Only allow access for active subscribers, trialing users, or admins
-  const hasAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
-
-  if (!hasAccess) {
-    // Route non-paying authenticated users to checkout, not back to landing
-    // This prevents the sign-in loop where landing → auth → / → landing
-    return <Navigate to="/unlock" replace />;
-  }
+  // Allow all authenticated users into the app — gating happens at feature level
+  // (search results are gated, buttons locked, trial modal shown)
 
   // If subscribed but setup not completed, redirect to complete-setup
-  if (!isAdmin && !setupCompleted) {
+  // Only enforce for paying/trialing users, not free users exploring
+  const hasPaidAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
+  if (hasPaidAccess && !isAdmin && !setupCompleted) {
     return <Navigate to="/complete-setup" replace />;
   }
 

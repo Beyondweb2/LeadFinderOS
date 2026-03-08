@@ -253,15 +253,6 @@ const UnlockAccess = () => {
                 <p className="text-[11px] text-muted-foreground/60 text-center">
                   Secure payment via Stripe · Cancel anytime
                 </p>
-                {!hasUsedTrial && (
-                  <Link
-                    to="/find-leads"
-                    className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-primary transition-colors mt-1"
-                  >
-                    <Search className="h-3 w-3" />
-                    Skip — try 1 free search, no card required
-                  </Link>
-                )}
               </>
             )}
           </CardFooter>
