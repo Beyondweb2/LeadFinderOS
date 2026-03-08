@@ -319,6 +319,7 @@ interface Testimonial {
   region: string;
   quote: string;
   stars: number;
+  photo?: string;
 }
 
 const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[] }) => {
