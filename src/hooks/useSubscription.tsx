@@ -15,7 +15,10 @@ interface SubscriptionState {
   isStripeTrialing: boolean;  // true when status is 'trialing'
   paymentFailureCount: number;
   lastPaymentFailedAt: string | null;
-  isPaymentPaused: boolean;   // true when 2+ failures — blocks access
+  firstPaymentFailedAt: string | null;
+  isPaymentPaused: boolean;   // true when grace period expired — blocks features
+  isInGracePeriod: boolean;   // true when payment failed but within 7-day grace
+  isGracePeriodExpired: boolean; // true when 7-day grace period has passed
 }
 
 interface SubscriptionContextType extends SubscriptionState {
