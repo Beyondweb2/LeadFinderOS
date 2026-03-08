@@ -694,7 +694,7 @@ const Landing = () => {
                     </p>
                   </div>
                   {/* Image column */}
-                  <div className={`col-span-8 ${isEven ? 'order-1' : 'order-2'}`}>
+                  <div className={`col-span-7 ${isEven ? 'order-1' : 'order-2'}`}>
                     <div 
                       className="relative group cursor-pointer w-full"
                       onClick={() => setExpandedImage({ src: step.img, title: step.title })}
