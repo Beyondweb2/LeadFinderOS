@@ -847,6 +847,7 @@ const Landing = () => {
                 region: 'UK',
                 quote: "Found 30 businesses without websites in 10 minutes. Messaged them right inside the app. That alone sold me.",
                 stars: 5,
+                photo: avatarChris,
               },
               {
                 name: 'Tom H.',
