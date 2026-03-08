@@ -82,7 +82,7 @@ export function DemoChecklistPanel() {
     setShowCompletionModal(false);
     handleDismiss();
     window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
-
+  };
 
   if (!isDemoUser || dismissed) return null;
 
