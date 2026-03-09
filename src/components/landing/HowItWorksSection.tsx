@@ -219,10 +219,10 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
           <div className="max-w-4xl mx-auto space-y-16 md:space-y-20">
             {STEPS.map((step, index) => (
               <ScrollReveal key={step.title} className="w-full" delay={(index + 1) * 100} direction="up">
-                <div className="text-center mb-6 sm:mb-8">
-                  <div className="flex items-center gap-3 justify-center mb-3 sm:mb-4">
+                <div className="text-center mb-5 sm:mb-6">
+                  <div className="flex items-center gap-3 justify-center mb-2 sm:mb-2.5">
                     <span 
-                      className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg font-semibold text-sm sm:text-base"
+                      className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-bold text-base sm:text-lg"
                       style={{ 
                         background: 'hsl(210 100% 50% / 0.15)',
                         color: 'hsl(210 100% 60%)',
@@ -231,9 +231,9 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                     >
                       {index + 1}
                     </span>
-                    <h3 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{renderTitle(step.title, step.blueWord)}</h3>
+                    <h3 className="text-xl sm:text-2xl md:text-4xl lg:text-[2.75rem] font-bold tracking-tight">{renderTitle(step.title, step.blueWord)}</h3>
                   </div>
-                  <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg leading-[1.6] max-w-lg mx-auto">
+                  <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg lg:text-xl leading-[1.5] max-w-xl mx-auto">
                     {step.description}
                   </p>
                 </div>
