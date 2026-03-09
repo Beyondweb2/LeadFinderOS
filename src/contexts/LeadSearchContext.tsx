@@ -321,6 +321,13 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           setExpanded(!!data.expanded);
           setGated(!!data.gated);
 
+          // Persist gated flag so it survives refresh
+          if (user?.id) {
+            try {
+              localStorage.setItem(`leadfinder_gated:${user.id}`, data.gated ? 'true' : 'false');
+            } catch {}
+          }
+
           // Persist demo leads to localStorage so they survive navigation
           if (storageKeys) {
             try {
