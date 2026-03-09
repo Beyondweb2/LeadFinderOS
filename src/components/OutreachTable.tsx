@@ -172,12 +172,7 @@ export function OutreachTable({
         next.delete(leadId);
         return next;
       });
-      // Highlight next uncontacted lead
-      const currentLeads = leadsRef.current;
-      const nextLead = currentLeads.find(l => l.id !== leadId && l.phone && l.outreach_attempts === 0 && l.status === 'not_contacted');
-      if (nextLead) {
-        highlightLead(nextLead.id);
-      }
+      // Keep the contacted lead highlighted (don't auto-advance)
     }, []),
   });
 
