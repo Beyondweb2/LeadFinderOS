@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useSubscription } from '@/hooks/useSubscription';
 import { reportClientError } from '@/lib/errorReporting';
 import type { Lead, SearchFilters, SearchResponse } from '@/types/lead';
 
@@ -42,12 +43,28 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [searchError, setSearchError] = useState<{ message: string; errorId: string } | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [gated, setGated] = useState(false);
+  const [freeSearchExhaustedPersisted, setFreeSearchExhaustedPersisted] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const lastSearchRef = useRef<{ filters: SearchFilters; skipTrialCount: boolean; isDemo: boolean } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { isPaidSubscriber, isStripeTrialing, isAdmin } = useSubscription();
+  const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
 
   const clearTrialLimitError = useCallback(() => setTrialLimitError(null), []);
+
+  // Clear persisted gating flags when user becomes a subscriber
+  useEffect(() => {
+    if (hasProAccess && user?.id) {
+      setGated(false);
+      setFreeSearchExhausted(false);
+      setFreeSearchExhaustedPersisted(false);
+      try {
+        localStorage.removeItem(`leadfinder_gated:${user.id}`);
+        localStorage.removeItem(`leadfinder_free_exhausted:${user.id}`);
+      } catch {}
+    }
+  }, [hasProAccess, user?.id]);
 
   const storageKeys = useMemo(() => {
     if (!user?.id) return null;
@@ -67,6 +84,17 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     }
 
     try {
+      // Restore persisted gated flag
+      const gatedFlag = localStorage.getItem(`leadfinder_gated:${user?.id}`);
+      if (gatedFlag === 'true') {
+        setGated(true);
+      }
+      // Restore persisted free search exhausted flag
+      const exhaustedFlag = localStorage.getItem(`leadfinder_free_exhausted:${user?.id}`);
+      if (exhaustedFlag === 'true') {
+        setFreeSearchExhausted(true);
+        setFreeSearchExhaustedPersisted(true);
+      }
       // Try demo leads from localStorage first
       const demoRaw = localStorage.getItem(storageKeys.demoLeads);
       if (demoRaw) {
@@ -258,6 +286,10 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           }
           if (body?.code === 'FREE_SEARCH_EXHAUSTED') {
             setFreeSearchExhausted(true);
+            setFreeSearchExhaustedPersisted(true);
+            if (user?.id) {
+              try { localStorage.setItem(`leadfinder_free_exhausted:${user.id}`, 'true'); } catch {}
+            }
             try { supabase.rpc('log_usage_event', { p_event_type: 'search_2_blocked' }); } catch {}
             setIsLoading(false);
             return;
@@ -308,6 +340,13 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           setSearchError(null);
           setExpanded(!!data.expanded);
           setGated(!!data.gated);
+
+          // Persist gated flag so it survives refresh
+          if (user?.id) {
+            try {
+              localStorage.setItem(`leadfinder_gated:${user.id}`, data.gated ? 'true' : 'false');
+            } catch {}
+          }
 
           // Persist demo leads to localStorage so they survive navigation
           if (storageKeys) {
