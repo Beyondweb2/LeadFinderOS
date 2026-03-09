@@ -550,11 +550,10 @@ const Landing = () => {
             </p>
             
             {/* CTA */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-6 sm:mt-8">
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                 <Button 
                   size="lg" 
-                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-8 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-autohadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                   onClick={handleCTA}
                 >
                   Try it free
@@ -570,7 +569,6 @@ const Landing = () => {
                   </Link>
                 </Button>
               </div>
-            </div>
 
             {/* Metrics row */}
             <div className="grid grid-cols-3 gap-2 sm:gap-5 md:gap-14 max-w-[260px] sm:max-w-xl mx-auto mt-10">
@@ -587,10 +585,10 @@ const Landing = () => {
 
             {/* Feature bullets */}
             <ScrollReveal>
-              <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/60 font-medium">
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Get a steady flow of new clients</span>
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find leads in minutes, not hours</span>
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Start more conversations</span>
+              <div className="flex flex-col items-center justify-center gap-3 mt-5 text-[12px] sm:text-[13px] text-foreground/60 font-medium">
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Stop wasting hours searching manually</span>
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find leads faster</span>
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Stay consistent with outreach</span>
               </div>
             </ScrollReveal>
             {/* Scroll down indicator - mobile only */}
