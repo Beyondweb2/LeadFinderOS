@@ -222,7 +222,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                 <div className="text-center mb-5 sm:mb-6">
                   <div className="flex items-center gap-3 justify-center mb-2 sm:mb-2.5">
                     <span 
-                      className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-lg font-bold text-base sm:text-lg"
+                      className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-lg font-bold text-base sm:text-lg lg:text-xl"
                       style={{ 
                         background: 'hsl(210 100% 50% / 0.15)',
                         color: 'hsl(210 100% 60%)',
