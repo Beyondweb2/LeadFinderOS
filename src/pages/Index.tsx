@@ -75,6 +75,17 @@ const Index = () => {
     }
   }, [isLoading, leads.length, gated, checkTrial, conversionModalShownThisSession]);
 
+  // On mount/refresh: if cached leads exist and user is gated, show conversion modal
+  useEffect(() => {
+    if (leads.length > 0 && gated && isFreeUser && !conversionModalShownThisSession && !isSubscriptionLoading) {
+      const timer = setTimeout(() => {
+        setShowConversionModal(true);
+        setConversionModalShownThisSession(true);
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [leads.length, gated, isFreeUser, isSubscriptionLoading, conversionModalShownThisSession]);
+
   // Handle search attempt — unlimited for all users
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
