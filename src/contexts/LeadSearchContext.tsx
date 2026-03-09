@@ -270,6 +270,10 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           }
           if (body?.code === 'FREE_SEARCH_EXHAUSTED') {
             setFreeSearchExhausted(true);
+            setFreeSearchExhaustedPersisted(true);
+            if (user?.id) {
+              try { localStorage.setItem(`leadfinder_free_exhausted:${user.id}`, 'true'); } catch {}
+            }
             try { supabase.rpc('log_usage_event', { p_event_type: 'search_2_blocked' }); } catch {}
             setIsLoading(false);
             return;
