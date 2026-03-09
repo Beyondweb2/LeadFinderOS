@@ -42,6 +42,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [searchError, setSearchError] = useState<{ message: string; errorId: string } | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [gated, setGated] = useState(false);
+  const [freeSearchExhaustedPersisted, setFreeSearchExhaustedPersisted] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const lastSearchRef = useRef<{ filters: SearchFilters; skipTrialCount: boolean; isDemo: boolean } | null>(null);
   const { toast } = useToast();
