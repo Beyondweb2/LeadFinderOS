@@ -528,7 +528,7 @@ const Landing = () => {
         />
         <div className="container mx-auto text-center lg:max-w-[1040px]">
           {/* Mobile: Video at top */}
-          <div className="sm:hidden mb-5">
+          <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
 
@@ -545,15 +545,16 @@ const Landing = () => {
               <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-3 sm:mt-5">
+            <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
               The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
             </p>
             
             {/* CTA */}
-              <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto mt-4 sm:mt-0">
+            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-6 sm:mt-8">
+              <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                 <Button 
                   size="lg" 
-                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-10 sm:px-12 h-[46px] sm:h-[52px] rounded-xl w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-8 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-autohadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                   onClick={handleCTA}
                 >
                   Try it free
@@ -569,9 +570,10 @@ const Landing = () => {
                   </Link>
                 </Button>
               </div>
+            </div>
 
             {/* Metrics row */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-5 md:gap-14 max-w-[260px] sm:max-w-xl mx-auto mt-7 sm:mt-10">
+            <div className="grid grid-cols-3 gap-2 sm:gap-5 md:gap-14 max-w-[260px] sm:max-w-xl mx-auto mt-10">
               <CountUpStat target={80000} suffix="+" label="Businesses" />
               <div className="text-center">
                 <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
@@ -583,16 +585,16 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Feature bullets - tapering width */}
+            {/* Feature bullets */}
             <ScrollReveal>
-              <div className="flex flex-col items-center mt-5 sm:mt-5 text-[11.5px] sm:text-[13px] text-foreground/60 font-medium">
-                <span className="flex items-center justify-center gap-2 py-1.5"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Stop wasting hours searching manually</span>
-                <span className="flex items-center justify-center gap-2 py-1.5 max-w-[85%]"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find leads faster</span>
-                <span className="flex items-center justify-center gap-2 py-1.5 max-w-[72%]"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Stay consistent with outreach</span>
+              <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/60 font-medium">
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Get a steady flow of new clients</span>
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find leads in minutes, not hours</span>
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Start more conversations</span>
               </div>
             </ScrollReveal>
             {/* Scroll down indicator - mobile only */}
-            <div className="sm:hidden flex flex-col items-center mt-5 animate-bounce">
+            <div className="sm:hidden flex flex-col items-center mt-6 animate-bounce">
               <ChevronDown className="h-5 w-5 text-foreground/30" />
             </div>
           </div>
