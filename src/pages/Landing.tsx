@@ -608,17 +608,17 @@ const Landing = () => {
       </div>
 
       {/* How LeadFinder Works - 4-step section */}
-      <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
-        <div className="container mx-auto max-w-7xl">
-          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-16">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.15]">
+      <section id="how-it-works" className="relative z-10 py-16 sm:py-18 md:py-20 px-3 sm:px-4">
+        <div className="container mx-auto max-w-6xl">
+          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
+            <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
               How Lead<span className="text-gradient-primary">Finder</span>
               <br />
               <span className="text-foreground">Works</span>
             </h2>
           </ScrollReveal>
 
-          <div className="space-y-16 sm:space-y-20 md:space-y-28">
+          <div className="space-y-16 sm:space-y-20 md:space-y-20">
             {[
               {
                 num: 1,
