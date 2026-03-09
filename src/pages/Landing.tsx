@@ -750,16 +750,16 @@ const Landing = () => {
       </div>
 
       {/* Your Complete Lead Toolkit */}
-      <section className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
+      <section className="relative z-10 py-16 sm:py-18 md:py-20 px-3 sm:px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
             background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.25) 20%, hsl(220 30% 6% / 0.35) 50%, hsl(220 30% 6% / 0.25) 80%, transparent 100%)',
           }}
         />
-        <div className="container mx-auto max-w-6xl">
-          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.15]">
+        <div className="container mx-auto max-w-5xl">
+          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
+            <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
               Your Complete
               <br />
               <span className="text-gradient-primary">Lead Toolkit</span>
