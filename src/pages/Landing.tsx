@@ -837,15 +837,15 @@ const Landing = () => {
       </section>
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
+      <ScrollReveal className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
             background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.2) 20%, hsl(220 30% 6% / 0.3) 50%, hsl(220 30% 6% / 0.2) 80%, transparent 100%)',
           }}
         />
-        <div className="container mx-auto max-w-6xl">
-          <h2 className="text-center text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-12 sm:mb-14">
+        <div className="container mx-auto max-w-5xl">
+          <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-10 sm:mb-12">
             Trusted by freelancers
             <br className="sm:hidden" />
             {' '}and agencies{' '}
