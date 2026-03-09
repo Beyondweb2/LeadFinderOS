@@ -68,6 +68,17 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     }
 
     try {
+      // Restore persisted gated flag
+      const gatedFlag = localStorage.getItem(`leadfinder_gated:${user?.id}`);
+      if (gatedFlag === 'true') {
+        setGated(true);
+      }
+      // Restore persisted free search exhausted flag
+      const exhaustedFlag = localStorage.getItem(`leadfinder_free_exhausted:${user?.id}`);
+      if (exhaustedFlag === 'true') {
+        setFreeSearchExhausted(true);
+        setFreeSearchExhaustedPersisted(true);
+      }
       // Try demo leads from localStorage first
       const demoRaw = localStorage.getItem(storageKeys.demoLeads);
       if (demoRaw) {
