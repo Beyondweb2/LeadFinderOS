@@ -195,9 +195,9 @@ const VideoSection = () => {
   };
 
   return (
-    <ScrollReveal className="relative z-10 pb-10 sm:pb-14 md:pb-20 px-2 sm:px-4">
+    <ScrollReveal className="relative z-10 pb-8 sm:pb-12 md:pb-16 px-2 sm:px-4">
       <div className="container mx-auto">
-        <div className="max-w-5xl mx-auto relative rounded-2xl overflow-hidden border border-border">
+        <div className="max-w-4xl mx-auto relative rounded-2xl overflow-hidden border border-border">
           <video
             ref={videoRef}
             src={demoVideo}
@@ -521,32 +521,31 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:min-h-[calc(100vh-64px)] lg:flex lg:items-center lg:pt-0 lg:pb-0 px-4">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-14 sm:pb-16 md:pt-20 md:pb-24 lg:min-h-[calc(100vh-64px)] lg:flex lg:items-center lg:pt-0 lg:pb-0 px-4">
         <div 
           className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[800px] pointer-events-none"
           style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.06), transparent 70%)' }}
         />
-        <div className="container mx-auto text-center lg:max-w-[1140px]">
+        <div className="container mx-auto text-center lg:max-w-[1040px]">
           {/* Mobile: Video at top */}
           <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
 
-          <div className="max-w-3xl mx-auto lg:max-w-2xl">
-
+          <div className="max-w-3xl mx-auto lg:max-w-xl">
             <span
               className="hidden sm:inline-block text-xs font-semibold uppercase tracking-widest mb-4 text-muted-foreground/60"
             >
               Built for web devs, agencies & founders
             </span>
 
-            <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight leading-tight">
+            <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-[3.5rem] lg:text-[3.75rem] font-extrabold lg:font-bold tracking-tight leading-tight">
               <span className="tracking-[0.02em]">Find Businesses</span>
               <br />
               <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-xl lg:text-[1.15rem] text-foreground/60 max-w-2xl lg:max-w-[36rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
+            <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
               The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
             </p>
             
@@ -609,17 +608,17 @@ const Landing = () => {
       </div>
 
       {/* How LeadFinder Works - 4-step section */}
-      <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
-        <div className="container mx-auto max-w-7xl">
-          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-16">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.15]">
+      <section id="how-it-works" className="relative z-10 py-16 sm:py-18 md:py-20 px-3 sm:px-4">
+        <div className="container mx-auto max-w-6xl">
+          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
+            <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
               How Lead<span className="text-gradient-primary">Finder</span>
               <br />
               <span className="text-foreground">Works</span>
             </h2>
           </ScrollReveal>
 
-          <div className="space-y-16 sm:space-y-20 md:space-y-28">
+          <div className="space-y-16 sm:space-y-20 md:space-y-20">
             {[
               {
                 num: 1,
@@ -684,17 +683,17 @@ const Landing = () => {
                 </div>
 
                 {/* Desktop: alternating layout with large image */}
-                <div className={`hidden md:grid grid-cols-12 gap-10 lg:gap-14 items-center`}>
+                <div className={`hidden md:grid grid-cols-12 gap-8 lg:gap-12 items-center`}>
                   {/* Text column */}
                   <div className={`col-span-5 ${isEven ? 'order-2 text-left' : 'order-1 text-left'}`}>
                     <span 
-                      className="font-bold text-xl mb-2 block"
+                      className="font-bold text-lg mb-2 block"
                       style={{ color: 'hsl(var(--primary))' }}
                     >{step.num}.</span>
-                    <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-4">
+                    <h3 className="text-xl md:text-2xl font-bold tracking-tight mb-3">
                       {step.title}
                     </h3>
-                    <p className="text-muted-foreground/70 text-base md:text-lg leading-[1.7]">
+                    <p className="text-muted-foreground/70 text-sm md:text-base leading-[1.7]">
                       {step.body}
                     </p>
                   </div>
@@ -734,7 +733,7 @@ const Landing = () => {
       </section>
 
       {/* Section divider */}
-      <div className="relative z-10 py-10 sm:py-14 md:py-16">
+      <div className="relative z-10 py-8 sm:py-10 md:py-12">
         <div
           className="mx-auto h-px"
           style={{
@@ -751,16 +750,16 @@ const Landing = () => {
       </div>
 
       {/* Your Complete Lead Toolkit */}
-      <section className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
+      <section className="relative z-10 py-16 sm:py-18 md:py-20 px-3 sm:px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
             background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.25) 20%, hsl(220 30% 6% / 0.35) 50%, hsl(220 30% 6% / 0.25) 80%, transparent 100%)',
           }}
         />
-        <div className="container mx-auto max-w-6xl">
-          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.15]">
+        <div className="container mx-auto max-w-5xl">
+          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
+            <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
               Your Complete
               <br />
               <span className="text-gradient-primary">Lead Toolkit</span>
@@ -795,25 +794,25 @@ const Landing = () => {
               <ToolkitCarousel features={toolkitFeatures} onExpand={(src, title) => setExpandedImage({ src, title })} />
             ) : (
               <ScrollReveal>
-                <div className="grid grid-cols-2 gap-10 lg:gap-12 max-w-6xl mx-auto">
+                <div className="grid grid-cols-2 gap-7 lg:gap-8 max-w-5xl mx-auto">
                   {toolkitFeatures.map((feature, i) => (
                     <div key={i} className="flex flex-col group">
                       <div 
-                        className="relative cursor-pointer w-full flex-shrink-0 mb-7"
+                        className="relative cursor-pointer w-full flex-shrink-0 mb-5"
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.02] group-hover:-translate-y-1 aspect-[16/10]"
+                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.015] group-hover:-translate-y-0.5 aspect-[16/10]"
                           style={{ 
-                            border: '1px solid hsl(210 100% 50% / 0.2)',
-                            boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 4px 16px hsl(220 40% 4% / 0.3)',
+                            border: '1px solid hsl(210 100% 50% / 0.15)',
+                            boxShadow: '0 0 16px hsl(210 100% 50% / 0.08), 0 4px 12px hsl(220 40% 4% / 0.25)',
                           }}
                         >
                           <div
                             className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl pointer-events-none"
                             style={{
-                              boxShadow: '0 0 30px hsl(210 100% 50% / 0.15), 0 8px 32px hsl(220 40% 4% / 0.4)',
-                              border: '1px solid hsl(210 100% 50% / 0.3)',
+                              boxShadow: '0 0 24px hsl(210 100% 50% / 0.12), 0 6px 24px hsl(220 40% 4% / 0.35)',
+                              border: '1px solid hsl(210 100% 50% / 0.25)',
                             }}
                           />
                           <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" className="w-full h-full object-cover object-top" />
@@ -823,8 +822,8 @@ const Landing = () => {
                         </div>
                       </div>
                       <div className="text-center">
-                        <h3 className="text-lg lg:text-[22px] font-extrabold tracking-tight mb-1.5">{feature.title}</h3>
-                        <p className="text-muted-foreground/70 text-sm lg:text-[15px] leading-[1.7] max-w-md mx-auto">
+                        <h3 className="text-base lg:text-lg font-extrabold tracking-tight mb-1">{feature.title}</h3>
+                        <p className="text-muted-foreground/70 text-sm leading-[1.7] max-w-sm mx-auto">
                           {feature.description}
                         </p>
                       </div>
@@ -838,15 +837,15 @@ const Landing = () => {
       </section>
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
+      <ScrollReveal className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
             background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.2) 20%, hsl(220 30% 6% / 0.3) 50%, hsl(220 30% 6% / 0.2) 80%, transparent 100%)',
           }}
         />
-        <div className="container mx-auto max-w-6xl">
-          <h2 className="text-center text-2xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-12 sm:mb-14">
+        <div className="container mx-auto max-w-5xl">
+          <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-10 sm:mb-12">
             Trusted by freelancers
             <br className="sm:hidden" />
             {' '}and agencies{' '}
@@ -957,7 +956,7 @@ const Landing = () => {
       </ScrollReveal>
 
       {/* Final CTA - Free Access Card */}
-      <section id="pricing" className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
+      <section id="pricing" className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
             <div
@@ -1014,12 +1013,12 @@ const Landing = () => {
       </section>
 
       {/* Got Questions Section */}
-      <section className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
+      <section className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
-            <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
+            <MessageSquare className="h-7 w-7 md:h-8 md:w-8 mx-auto mb-3 text-muted-foreground/60" />
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-3">
-              Question About <span className="text-gradient-primary">LeadFinder</span>?
+              Question About<br className="hidden md:inline" /> <span className="text-gradient-primary">LeadFinder</span>?
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground/70 mb-5 leading-[1.6]">
               Message us on WhatsApp and speak to a real person. Usually replies within a few minutes.
