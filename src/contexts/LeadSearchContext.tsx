@@ -75,13 +75,16 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     };
   }, [user?.id]);
 
-  // Restore cached state after reloads so users don't lose progress
-  // Use localStorage for demo leads (survives navigation), sessionStorage for regular
+  // Restore cached state after reloads — but only full results for subscribers
+  // Non-subscribers get gated flag restored so the block persists
   useEffect(() => {
     if (!storageKeys) {
       setLeads([]);
       return;
     }
+
+    // Wait for subscription status to resolve before restoring leads
+    if (isSubLoading) return;
 
     try {
       // Restore persisted gated flag
@@ -95,6 +98,18 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
         setFreeSearchExhausted(true);
         setFreeSearchExhaustedPersisted(true);
       }
+
+      // For non-subscribers: clear cached leads entirely so they can't access old results
+      if (!hasProAccess) {
+        try {
+          localStorage.removeItem(storageKeys.demoLeads);
+          sessionStorage.removeItem(storageKeys.leads);
+        } catch {}
+        setLeads([]);
+        return;
+      }
+
+      // Subscribers: restore cached leads normally
       // Try demo leads from localStorage first
       const demoRaw = localStorage.getItem(storageKeys.demoLeads);
       if (demoRaw) {
@@ -113,7 +128,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     } catch {
       // ignore cache parse errors
     }
-  }, [storageKeys]);
+  }, [storageKeys, isSubLoading, hasProAccess]);
 
   // Persist leads whenever they change
   useEffect(() => {
