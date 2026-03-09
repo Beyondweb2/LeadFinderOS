@@ -231,7 +231,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                     >
                       {index + 1}
                     </span>
-                    <h3 className="text-xl sm:text-2xl md:text-4xl lg:text-[2.75rem] font-bold tracking-tight">{renderTitle(step.title, step.blueWord)}</h3>
+                    <h3 className="text-xl sm:text-2xl md:text-4xl lg:text-[3.25rem] font-bold tracking-tight leading-[1.1]">{renderTitle(step.title, step.blueWord)}</h3>
                   </div>
                   <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg lg:text-xl leading-[1.5] max-w-xl mx-auto">
                     {step.description}
