@@ -521,19 +521,18 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-16 sm:pb-20 md:pt-24 md:pb-32 lg:min-h-[calc(100vh-64px)] lg:flex lg:items-center lg:pt-0 lg:pb-0 px-4">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-14 sm:pb-16 md:pt-20 md:pb-24 lg:min-h-[calc(100vh-64px)] lg:flex lg:items-center lg:pt-0 lg:pb-0 px-4">
         <div 
           className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[800px] pointer-events-none"
           style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.06), transparent 70%)' }}
         />
-        <div className="container mx-auto text-center lg:max-w-[1140px]">
+        <div className="container mx-auto text-center lg:max-w-[1040px]">
           {/* Mobile: Video at top */}
           <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
 
-          <div className="max-w-3xl mx-auto lg:max-w-2xl">
-
+          <div className="max-w-3xl mx-auto lg:max-w-xl">
             <span
               className="hidden sm:inline-block text-xs font-semibold uppercase tracking-widest mb-4 text-muted-foreground/60"
             >
