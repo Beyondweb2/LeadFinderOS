@@ -48,7 +48,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const lastSearchRef = useRef<{ filters: SearchFilters; skipTrialCount: boolean; isDemo: boolean } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
-  const { isPaidSubscriber, isStripeTrialing, isAdmin } = useSubscription();
+  const { isPaidSubscriber, isStripeTrialing, isAdmin, isLoading: isSubLoading } = useSubscription();
   const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
 
   const clearTrialLimitError = useCallback(() => setTrialLimitError(null), []);
