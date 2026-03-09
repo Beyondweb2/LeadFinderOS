@@ -539,7 +539,7 @@ const Landing = () => {
               Built for web devs, agencies & founders
             </span>
 
-            <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-6xl lg:text-[4.25rem] font-extrabold lg:font-bold tracking-tight leading-tight">
+            <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-[3.5rem] lg:text-[3.75rem] font-extrabold lg:font-bold tracking-tight leading-tight">
               <span className="tracking-[0.02em]">Find Businesses</span>
               <br />
               <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
