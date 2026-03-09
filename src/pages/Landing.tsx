@@ -195,9 +195,9 @@ const VideoSection = () => {
   };
 
   return (
-    <ScrollReveal className="relative z-10 pb-10 sm:pb-14 md:pb-20 px-2 sm:px-4">
+    <ScrollReveal className="relative z-10 pb-8 sm:pb-12 md:pb-16 px-2 sm:px-4">
       <div className="container mx-auto">
-        <div className="max-w-5xl mx-auto relative rounded-2xl overflow-hidden border border-border">
+        <div className="max-w-4xl mx-auto relative rounded-2xl overflow-hidden border border-border">
           <video
             ref={videoRef}
             src={demoVideo}
