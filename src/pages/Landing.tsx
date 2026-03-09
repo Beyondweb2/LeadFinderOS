@@ -733,7 +733,7 @@ const Landing = () => {
       </section>
 
       {/* Section divider */}
-      <div className="relative z-10 py-10 sm:py-14 md:py-16">
+      <div className="relative z-10 py-8 sm:py-10 md:py-12">
         <div
           className="mx-auto h-px"
           style={{
