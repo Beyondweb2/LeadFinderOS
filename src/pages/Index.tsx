@@ -119,9 +119,9 @@ const Index = () => {
           onSearch={handleSearch} 
           isLoading={isLoading}
           isOnTrial={false}
-          searchesRemaining={Infinity}
-          dailyLimit={Infinity}
-          isPaidSubscriber={true}
+          searchesRemaining={hasProAccess ? Infinity : 0}
+          dailyLimit={hasProAccess ? Infinity : 0}
+          isPaidSubscriber={hasProAccess}
           disabled={false}
         />
       </section>
