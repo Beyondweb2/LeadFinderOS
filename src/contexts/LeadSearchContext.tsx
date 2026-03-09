@@ -48,8 +48,23 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const lastSearchRef = useRef<{ filters: SearchFilters; skipTrialCount: boolean; isDemo: boolean } | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { isPaidSubscriber, isStripeTrialing, isAdmin } = useSubscription();
+  const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
 
   const clearTrialLimitError = useCallback(() => setTrialLimitError(null), []);
+
+  // Clear persisted gating flags when user becomes a subscriber
+  useEffect(() => {
+    if (hasProAccess && user?.id) {
+      setGated(false);
+      setFreeSearchExhausted(false);
+      setFreeSearchExhaustedPersisted(false);
+      try {
+        localStorage.removeItem(`leadfinder_gated:${user.id}`);
+        localStorage.removeItem(`leadfinder_free_exhausted:${user.id}`);
+      } catch {}
+    }
+  }, [hasProAccess, user?.id]);
 
   const storageKeys = useMemo(() => {
     if (!user?.id) return null;
