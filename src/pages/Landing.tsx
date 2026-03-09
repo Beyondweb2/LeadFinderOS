@@ -794,25 +794,25 @@ const Landing = () => {
               <ToolkitCarousel features={toolkitFeatures} onExpand={(src, title) => setExpandedImage({ src, title })} />
             ) : (
               <ScrollReveal>
-                <div className="grid grid-cols-2 gap-10 lg:gap-12 max-w-6xl mx-auto">
+                <div className="grid grid-cols-2 gap-7 lg:gap-8 max-w-5xl mx-auto">
                   {toolkitFeatures.map((feature, i) => (
                     <div key={i} className="flex flex-col group">
                       <div 
-                        className="relative cursor-pointer w-full flex-shrink-0 mb-7"
+                        className="relative cursor-pointer w-full flex-shrink-0 mb-5"
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.02] group-hover:-translate-y-1 aspect-[16/10]"
+                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.015] group-hover:-translate-y-0.5 aspect-[16/10]"
                           style={{ 
-                            border: '1px solid hsl(210 100% 50% / 0.2)',
-                            boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 4px 16px hsl(220 40% 4% / 0.3)',
+                            border: '1px solid hsl(210 100% 50% / 0.15)',
+                            boxShadow: '0 0 16px hsl(210 100% 50% / 0.08), 0 4px 12px hsl(220 40% 4% / 0.25)',
                           }}
                         >
                           <div
                             className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl pointer-events-none"
                             style={{
-                              boxShadow: '0 0 30px hsl(210 100% 50% / 0.15), 0 8px 32px hsl(220 40% 4% / 0.4)',
-                              border: '1px solid hsl(210 100% 50% / 0.3)',
+                              boxShadow: '0 0 24px hsl(210 100% 50% / 0.12), 0 6px 24px hsl(220 40% 4% / 0.35)',
+                              border: '1px solid hsl(210 100% 50% / 0.25)',
                             }}
                           />
                           <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" className="w-full h-full object-cover object-top" />
@@ -822,8 +822,8 @@ const Landing = () => {
                         </div>
                       </div>
                       <div className="text-center">
-                        <h3 className="text-lg lg:text-[22px] font-extrabold tracking-tight mb-1.5">{feature.title}</h3>
-                        <p className="text-muted-foreground/70 text-sm lg:text-[15px] leading-[1.7] max-w-md mx-auto">
+                        <h3 className="text-base lg:text-lg font-extrabold tracking-tight mb-1">{feature.title}</h3>
+                        <p className="text-muted-foreground/70 text-sm leading-[1.7] max-w-sm mx-auto">
                           {feature.description}
                         </p>
                       </div>
