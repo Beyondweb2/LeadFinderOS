@@ -46,11 +46,10 @@ export function useContactAction({ onUpdate, onPersisted }: UseContactActionOpti
       p_meta: { channel, lead_id: lead.id, business_name: lead.business_name },
     })).catch(() => {});
 
-    // Persist to DB immediately
-    logAttempt(lead.id, channel, previousStatus).catch(() => {});
-    // DB persistence handled by logAttempt (includes contact_method + status)
-
-    onPersisted(lead.id, channel);
+    // Persist to DB, then clear optimistic state
+    logAttempt(lead.id, channel, previousStatus)
+      .then(() => onPersisted(lead.id, channel))
+      .catch(() => onPersisted(lead.id, channel));
   }, [onUpdate, onPersisted, logAttempt]);
 
   return { executeContact };
