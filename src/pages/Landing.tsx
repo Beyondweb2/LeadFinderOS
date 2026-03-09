@@ -550,11 +550,10 @@ const Landing = () => {
             </p>
             
             {/* CTA */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-6 sm:mt-8">
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                 <Button 
                   size="lg" 
-                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-8 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-autohadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                   onClick={handleCTA}
                 >
                   Try it free
@@ -570,7 +569,6 @@ const Landing = () => {
                   </Link>
                 </Button>
               </div>
-            </div>
 
             {/* Metrics row */}
             <div className="grid grid-cols-3 gap-2 sm:gap-5 md:gap-14 max-w-[260px] sm:max-w-xl mx-auto mt-10">
