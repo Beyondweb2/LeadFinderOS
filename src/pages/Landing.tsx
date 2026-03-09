@@ -1013,12 +1013,12 @@ const Landing = () => {
       </section>
 
       {/* Got Questions Section */}
-      <section className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
+      <section className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
-            <MessageSquare className="h-8 w-8 mx-auto mb-3 text-muted-foreground/60" />
+            <MessageSquare className="h-7 w-7 md:h-8 md:w-8 mx-auto mb-3 text-muted-foreground/60" />
             <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-3">
-              Question About <span className="text-gradient-primary">LeadFinder</span>?
+              Question About<br className="hidden md:inline" /> <span className="text-gradient-primary">LeadFinder</span>?
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground/70 mb-5 leading-[1.6]">
               Message us on WhatsApp and speak to a real person. Usually replies within a few minutes.
