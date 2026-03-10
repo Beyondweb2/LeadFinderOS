@@ -211,7 +211,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     setFreeSearchExhausted(false);
     setSearchError(null);
     setExpanded(false);
-    setGated(false);
+    // Only clear gated flag if user has pro access; free users stay gated until checkout
+    if (hasProAccess) setGated(false);
     
     // Refresh excluded businesses before searching (skip for demo)
     if (!isDemo) await fetchExcludedBusinesses();
