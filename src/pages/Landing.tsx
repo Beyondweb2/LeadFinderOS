@@ -753,16 +753,16 @@ const Landing = () => {
       </div>
 
       {/* Your Complete Lead Toolkit */}
-      <section className="relative z-10 py-14 sm:py-16 md:py-20 px-3 sm:px-4">
+      <section className="relative z-10 py-16 sm:py-18 md:py-20 px-3 sm:px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
             background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.25) 20%, hsl(220 30% 6% / 0.35) 50%, hsl(220 30% 6% / 0.25) 80%, transparent 100%)',
           }}
         />
-        <div className="container mx-auto max-w-[960px]">
-          <ScrollReveal className="text-center mb-10 md:mb-14">
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.15]">
+        <div className="container mx-auto max-w-5xl">
+          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
+            <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
               Your Complete
               <br />
               <span className="text-gradient-primary">Lead Toolkit</span>
@@ -797,25 +797,25 @@ const Landing = () => {
               <ToolkitCarousel features={toolkitFeatures} onExpand={(src, title) => setExpandedImage({ src, title })} />
             ) : (
               <ScrollReveal>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-10 lg:gap-x-8 lg:gap-y-12">
+                <div className="grid grid-cols-2 gap-7 lg:gap-8 max-w-5xl mx-auto">
                   {toolkitFeatures.map((feature, i) => (
                     <div key={i} className="flex flex-col group">
                       <div 
-                        className="relative cursor-pointer w-full flex-shrink-0 mb-4"
+                        className="relative cursor-pointer w-full flex-shrink-0 mb-5"
                         onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
                       >
                         <div 
-                          className="relative rounded-xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.015] group-hover:-translate-y-0.5 aspect-[16/10]"
+                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.015] group-hover:-translate-y-0.5 aspect-[16/10]"
                           style={{ 
-                            border: '1px solid hsl(210 100% 50% / 0.12)',
-                            boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
+                            border: '1px solid hsl(210 100% 50% / 0.15)',
+                            boxShadow: '0 0 16px hsl(210 100% 50% / 0.08), 0 4px 12px hsl(220 40% 4% / 0.25)',
                           }}
                         >
                           <div
                             className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl pointer-events-none"
                             style={{
-                              boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 4px 20px hsl(220 40% 4% / 0.35)',
-                              border: '1px solid hsl(210 100% 50% / 0.2)',
+                              boxShadow: '0 0 24px hsl(210 100% 50% / 0.12), 0 6px 24px hsl(220 40% 4% / 0.35)',
+                              border: '1px solid hsl(210 100% 50% / 0.25)',
                             }}
                           />
                           <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" className="w-full h-full object-cover object-top" />
@@ -825,8 +825,8 @@ const Landing = () => {
                         </div>
                       </div>
                       <div className="text-center">
-                        <h3 className="text-[15px] lg:text-base font-bold tracking-tight mb-1">{feature.title}</h3>
-                        <p className="text-muted-foreground/60 text-[13px] leading-[1.65] max-w-[320px] mx-auto">
+                        <h3 className="text-base lg:text-lg font-extrabold tracking-tight mb-1">{feature.title}</h3>
+                        <p className="text-muted-foreground/70 text-sm leading-[1.7] max-w-sm mx-auto">
                           {feature.description}
                         </p>
                       </div>
@@ -840,16 +840,18 @@ const Landing = () => {
       </section>
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
+      <ScrollReveal className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
             background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.2) 20%, hsl(220 30% 6% / 0.3) 50%, hsl(220 30% 6% / 0.2) 80%, transparent 100%)',
           }}
         />
-        <div className="container mx-auto max-w-[960px]">
-          <h2 className="text-center text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.15] mb-10 md:mb-14">
-            Trusted by freelancers and agencies{' '}
+        <div className="container mx-auto max-w-5xl">
+          <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-10 sm:mb-12">
+            Trusted by freelancers
+            <br className="sm:hidden" />
+            {' '}and agencies{' '}
             <span className="text-gradient-primary">worldwide</span>
           </h2>
 
@@ -896,28 +898,30 @@ const Landing = () => {
             return isMobile ? (
               <MobileTestimonialSlider testimonials={testimonials} />
             ) : (
-              <div className="grid grid-cols-4 gap-5">
-                {testimonials.map((r, i) => (
-                  <ScrollReveal key={i} delay={i * 80}>
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6 items-start">
+                {testimonials.map((r, i) => {
+                  const staggerClass = i % 2 === 1 ? 'lg:mt-6' : '';
+                  return (
+                  <ScrollReveal key={i} delay={i * 100}>
                     <div 
-                      className="flex flex-col text-left h-full px-5 py-5 rounded-xl"
+                      className={`flex flex-col text-left px-5 py-6 sm:px-6 sm:py-7 rounded-xl ${staggerClass}`}
                       style={{
                         background: 'hsl(220 30% 8% / 0.6)',
                         border: '1px solid hsl(0 0% 100% / 0.06)',
-                        boxShadow: '0 2px 12px hsl(220 40% 4% / 0.25)',
+                        boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
                       }}
                     >
                       {/* Avatar + identity */}
-                      <div className="flex items-center gap-2.5 mb-3.5">
+                      <div className="flex items-center gap-3 mb-4">
                         <div
-                          className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
                           style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}
                         >
                           {r.initials}
                         </div>
-                        <div className="min-w-0">
-                          <p className="text-foreground/90 text-[13px] font-semibold leading-tight">{r.name}</p>
-                          <p className="text-muted-foreground/45 text-[11px] leading-tight mt-0.5">{r.role} · {r.region}</p>
+                        <div>
+                          <p className="text-foreground/90 text-sm font-semibold leading-tight">{r.name}</p>
+                          <p className="text-muted-foreground/50 text-[11px]">{r.role} · {r.region}</p>
                         </div>
                       </div>
                       {/* Stars */}
@@ -927,25 +931,26 @@ const Landing = () => {
                         ))}
                       </div>
                       {/* Quote */}
-                      <p className="text-foreground/70 text-[13px] leading-[1.7] font-normal flex-1">
+                      <p className="text-foreground/75 text-[14px] leading-[1.7] font-normal">
                         "{r.quote}"
                       </p>
                     </div>
                   </ScrollReveal>
-                ))}
+                  );
+                })}
               </div>
             );
           })()}
 
           {/* Leave a Review button */}
-          <div className="text-center mt-8 md:mt-10">
+          <div className="text-center mt-8 sm:mt-10">
             <Button
               variant="outline"
-              className="border-border/20 hover:border-border/40 text-[13px] rounded-full px-5 h-9 text-muted-foreground/70 hover:text-foreground/80"
+              className="border-border/30 hover:border-border/50 text-sm rounded-full px-6"
               asChild
             >
               <Link to="/feedback">
-                <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
+                <MessageSquare className="mr-2 h-4 w-4" />
                 Leave a Review
               </Link>
             </Button>
