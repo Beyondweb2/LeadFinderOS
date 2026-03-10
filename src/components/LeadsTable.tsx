@@ -237,16 +237,15 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="w-[40%]">Business Name</TableHead>
-                <TableHead className="w-[25%]">Website Status</TableHead>
-                <TableHead className="w-[20%]">Business Info</TableHead>
-                <TableHead className="w-[15%]" data-walkthrough="actions-column-header">Actions</TableHead>
+                <TableHead className="w-[45%]">Business Name</TableHead>
+                <TableHead className="w-[30%]">Website Status</TableHead>
+                <TableHead className="w-[25%]" data-walkthrough="actions-column-header">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
                     No leads match your current filters.
                   </TableCell>
                 </TableRow>
@@ -272,43 +271,6 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                         <p className="text-sm">{lead.reason}</p>
                       </TooltipContent>
                     </Tooltip>
-                  </TableCell>
-                  <TableCell>
-                    {gated ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-muted-foreground/50"
-                        onClick={() => onGatedAction?.()}
-                      >
-                        <Lock className="h-4 w-4 mr-1.5" />Locked
-                      </Button>
-                    ) : (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={isChecked?.(lead.name, lead.googleMapsUrl) ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}
-                            asChild
-                          >
-                            <a
-                              href={lead.googleMapsUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
-                            >
-                              {isChecked?.(lead.name, lead.googleMapsUrl)
-                                ? <><Eye className="h-4 w-4 mr-1.5" />Viewed</>
-                                : <><Eye className="h-4 w-4 mr-1.5 text-muted-foreground" />View Info</>}
-                            </a>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {isChecked?.(lead.name, lead.googleMapsUrl) ? 'Already viewed' : 'View business info'}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
