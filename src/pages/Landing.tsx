@@ -552,14 +552,19 @@ const Landing = () => {
             {/* CTA */}
             <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-6 sm:mt-8">
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-                <Button 
-                  size="lg" 
-                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
-                  onClick={handleCTA}
-                >
-                  Find leads now
-                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
-                </Button>
+                <div className="flex flex-col items-center w-full sm:w-auto">
+                  <Button 
+                    size="lg" 
+                    className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                    onClick={handleCTA}
+                  >
+                    Find leads now
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
+                  </Button>
+                  <p className="text-[11px] sm:text-xs text-muted-foreground/50 mt-2 tracking-wide">
+                    £0 today · 5-day free trial · Cancel anytime
+                  </p>
+                </div>
                 <Button 
                   variant="ghost" 
                   className="hidden sm:inline-flex text-[14px] font-medium text-foreground/40 hover:text-foreground/70 h-[52px] px-5 rounded-xl transition-all duration-200" 
