@@ -273,43 +273,6 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     </Tooltip>
                   </TableCell>
                   <TableCell>
-                    {gated ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-muted-foreground/50"
-                        onClick={() => onGatedAction?.()}
-                      >
-                        <Lock className="h-4 w-4 mr-1.5" />Locked
-                      </Button>
-                    ) : (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className={isChecked?.(lead.name, lead.googleMapsUrl) ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}
-                            asChild
-                          >
-                            <a
-                              href={lead.googleMapsUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
-                            >
-                              {isChecked?.(lead.name, lead.googleMapsUrl)
-                                ? <><Eye className="h-4 w-4 mr-1.5" />Viewed</>
-                                : <><Eye className="h-4 w-4 mr-1.5 text-muted-foreground" />View Info</>}
-                            </a>
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          {isChecked?.(lead.name, lead.googleMapsUrl) ? 'Already viewed' : 'View business info'}
-                        </TooltipContent>
-                      </Tooltip>
-                    )}
-                  </TableCell>
-                  <TableCell>
                     <div className="flex items-center gap-1">
                       {!gated && lead.googleMapsUrl && (
                         <Tooltip>
