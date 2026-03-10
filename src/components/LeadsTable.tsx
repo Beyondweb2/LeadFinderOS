@@ -245,7 +245,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <TableBody>
               {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
                     No leads match your current filters.
                   </TableCell>
                 </TableRow>
