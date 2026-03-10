@@ -514,7 +514,7 @@ const Landing = () => {
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
               onClick={handleCTA}
             >
-              Try it free
+              Find leads now
             </Button>
           </div>
         </div>
