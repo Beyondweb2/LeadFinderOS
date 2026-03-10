@@ -41,7 +41,7 @@ const STEPS: StepData[] = [
   {
     icon: Search,
     title: 'Find Businesses That Actually Need You',
-    description: 'Instantly uncover businesses without websites so you\'re never pitching blind.',
+    description: 'Search any business type, anywhere globally, and instantly see which ones don\'t have a website.',
     images: [step1Image],
     badge: '20+ Countries',
     blueWord: 'Businesses',
@@ -222,7 +222,7 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                 <div className="text-center mb-5 sm:mb-6">
                   <div className="flex items-center gap-3 justify-center mb-2 sm:mb-2.5">
                     <span 
-                      className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-lg font-bold text-base sm:text-lg lg:text-xl"
+                      className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 lg:w-14 lg:h-14 rounded-lg font-bold text-base sm:text-lg lg:text-2xl"
                       style={{ 
                         background: 'hsl(210 100% 50% / 0.15)',
                         color: 'hsl(210 100% 60%)',
@@ -231,9 +231,9 @@ export const HowItWorksSection = ({ ScrollReveal }: { ScrollReveal: React.Compon
                     >
                       {index + 1}
                     </span>
-                    <h3 className="text-xl sm:text-2xl md:text-4xl lg:text-[3.25rem] font-bold tracking-tight leading-[1.1]">{renderTitle(step.title, step.blueWord)}</h3>
+                    <h3 className="text-xl sm:text-2xl md:text-4xl lg:text-[3.75rem] font-bold tracking-tight leading-[1.1]">{renderTitle(step.title, step.blueWord)}</h3>
                   </div>
-                  <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg lg:text-[1.35rem] leading-[1.5] max-w-2xl mx-auto">
+                  <p className="text-muted-foreground/70 text-sm sm:text-base md:text-lg lg:text-[1.5rem] leading-[1.5] max-w-2xl mx-auto">
                     {step.description}
                   </p>
                 </div>

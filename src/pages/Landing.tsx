@@ -99,7 +99,7 @@ const InlineCTA = ({ text = 'Ready to find your next client?', onCTA }: { text?:
   <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
     <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={onCTA}>
-      Try it free
+      Find leads now
       <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
   </div>
@@ -514,7 +514,7 @@ const Landing = () => {
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
               onClick={handleCTA}
             >
-              Try it free
+              Find leads now
             </Button>
           </div>
         </div>
@@ -554,10 +554,10 @@ const Landing = () => {
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                 <Button 
                   size="lg" 
-                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-8 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-autohadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                   onClick={handleCTA}
                 >
-                  Try it free
+                  Find leads now
                   <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                 </Button>
                 <Button 
@@ -1000,7 +1000,7 @@ const Landing = () => {
                 className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
                 onClick={handleCTA}
               >
-                Try it free
+                Find leads now
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
 
@@ -1090,7 +1090,7 @@ const Landing = () => {
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
           <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={handleCTA}>
-              Try it free
+              Find leads now
               <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
