@@ -413,7 +413,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
         return;
       }
     }
-  }, [toast, fetchExcludedBusinesses, isExcluded, storageKeys]);
+  }, [toast, fetchExcludedBusinesses, isExcluded, storageKeys, hasProAccess]);
 
   const retryLastSearch = useCallback(() => {
     if (lastSearchRef.current) {
