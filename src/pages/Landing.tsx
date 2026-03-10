@@ -99,7 +99,7 @@ const InlineCTA = ({ text = 'Ready to find your next client?', onCTA }: { text?:
   <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
     <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={onCTA}>
-      Find leads now
+      Try for free
       <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
   </div>
@@ -514,7 +514,7 @@ const Landing = () => {
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
               onClick={handleCTA}
             >
-              Find leads now
+              Try for free
             </Button>
           </div>
         </div>
@@ -552,14 +552,19 @@ const Landing = () => {
             {/* CTA */}
             <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-6 sm:mt-8">
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
-                <Button 
-                  size="lg" 
-                  className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
-                  onClick={handleCTA}
-                >
-                  Find leads now
-                  <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
-                </Button>
+                <div className="flex flex-col items-center w-full sm:w-auto">
+                  <Button 
+                    size="lg" 
+                    className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                    onClick={handleCTA}
+                  >
+                    Find leads now
+                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
+                  </Button>
+                  <p className="text-[11px] sm:text-xs text-muted-foreground/50 mt-2 tracking-wide">
+                    £0 today · 5-day free trial · Cancel anytime
+                  </p>
+                </div>
                 <Button 
                   variant="ghost" 
                   className="hidden sm:inline-flex text-[14px] font-medium text-foreground/40 hover:text-foreground/70 h-[52px] px-5 rounded-xl transition-all duration-200" 
@@ -1000,7 +1005,7 @@ const Landing = () => {
                 className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
                 onClick={handleCTA}
               >
-                Find leads now
+                Try for free
                 <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
 
@@ -1090,7 +1095,7 @@ const Landing = () => {
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
           <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={handleCTA}>
-              Find leads now
+              Try for free
               <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
