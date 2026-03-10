@@ -237,10 +237,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="w-[40%]">Business Name</TableHead>
-                <TableHead className="w-[25%]">Website Status</TableHead>
-                <TableHead className="w-[20%]">Business Info</TableHead>
-                <TableHead className="w-[15%]" data-walkthrough="actions-column-header">Actions</TableHead>
+                <TableHead className="w-[45%]">Business Name</TableHead>
+                <TableHead className="w-[30%]">Website Status</TableHead>
+                <TableHead className="w-[25%]" data-walkthrough="actions-column-header">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
