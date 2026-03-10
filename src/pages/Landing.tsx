@@ -840,18 +840,16 @@ const Landing = () => {
       </section>
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
+      <ScrollReveal className="relative z-10 py-14 sm:py-16 md:py-20 px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
             background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.2) 20%, hsl(220 30% 6% / 0.3) 50%, hsl(220 30% 6% / 0.2) 80%, transparent 100%)',
           }}
         />
-        <div className="container mx-auto max-w-5xl">
-          <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-10 sm:mb-12">
-            Trusted by freelancers
-            <br className="sm:hidden" />
-            {' '}and agencies{' '}
+        <div className="container mx-auto max-w-[960px]">
+          <h2 className="text-center text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight leading-[1.15] mb-10 md:mb-14">
+            Trusted by freelancers and agencies{' '}
             <span className="text-gradient-primary">worldwide</span>
           </h2>
 
@@ -898,30 +896,28 @@ const Landing = () => {
             return isMobile ? (
               <MobileTestimonialSlider testimonials={testimonials} />
             ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6 items-start">
-                {testimonials.map((r, i) => {
-                  const staggerClass = i % 2 === 1 ? 'lg:mt-6' : '';
-                  return (
-                  <ScrollReveal key={i} delay={i * 100}>
+              <div className="grid grid-cols-4 gap-5">
+                {testimonials.map((r, i) => (
+                  <ScrollReveal key={i} delay={i * 80}>
                     <div 
-                      className={`flex flex-col text-left px-5 py-6 sm:px-6 sm:py-7 rounded-xl ${staggerClass}`}
+                      className="flex flex-col text-left h-full px-5 py-5 rounded-xl"
                       style={{
                         background: 'hsl(220 30% 8% / 0.6)',
                         border: '1px solid hsl(0 0% 100% / 0.06)',
-                        boxShadow: '0 2px 12px hsl(220 40% 4% / 0.3)',
+                        boxShadow: '0 2px 12px hsl(220 40% 4% / 0.25)',
                       }}
                     >
                       {/* Avatar + identity */}
-                      <div className="flex items-center gap-3 mb-4">
+                      <div className="flex items-center gap-2.5 mb-3.5">
                         <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                          className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0"
                           style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}
                         >
                           {r.initials}
                         </div>
-                        <div>
-                          <p className="text-foreground/90 text-sm font-semibold leading-tight">{r.name}</p>
-                          <p className="text-muted-foreground/50 text-[11px]">{r.role} · {r.region}</p>
+                        <div className="min-w-0">
+                          <p className="text-foreground/90 text-[13px] font-semibold leading-tight">{r.name}</p>
+                          <p className="text-muted-foreground/45 text-[11px] leading-tight mt-0.5">{r.role} · {r.region}</p>
                         </div>
                       </div>
                       {/* Stars */}
@@ -931,26 +927,25 @@ const Landing = () => {
                         ))}
                       </div>
                       {/* Quote */}
-                      <p className="text-foreground/75 text-[14px] leading-[1.7] font-normal">
+                      <p className="text-foreground/70 text-[13px] leading-[1.7] font-normal flex-1">
                         "{r.quote}"
                       </p>
                     </div>
                   </ScrollReveal>
-                  );
-                })}
+                ))}
               </div>
             );
           })()}
 
           {/* Leave a Review button */}
-          <div className="text-center mt-8 sm:mt-10">
+          <div className="text-center mt-8 md:mt-10">
             <Button
               variant="outline"
-              className="border-border/30 hover:border-border/50 text-sm rounded-full px-6"
+              className="border-border/20 hover:border-border/40 text-[13px] rounded-full px-5 h-9 text-muted-foreground/70 hover:text-foreground/80"
               asChild
             >
               <Link to="/feedback">
-                <MessageSquare className="mr-2 h-4 w-4" />
+                <MessageSquare className="mr-1.5 h-3.5 w-3.5" />
                 Leave a Review
               </Link>
             </Button>
