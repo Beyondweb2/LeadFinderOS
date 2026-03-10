@@ -1090,7 +1090,7 @@ const Landing = () => {
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
           <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={handleCTA}>
-              Try it free
+              Find leads now
               <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
