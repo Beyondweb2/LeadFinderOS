@@ -54,6 +54,7 @@ export function MobileBottomNav() {
   const { signOut } = useAuth();
   const { isAdmin, openCustomerPortal } = useSubscription();
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
+  const [notepadOpen, setNotepadOpen] = useState(false);
   const [crmGlow, setCrmGlow] = useState(false);
   const [trackGlow, setTrackGlow] = useState(false);
   const [searchGlow, setSearchGlow] = useState(false);
