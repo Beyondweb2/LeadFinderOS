@@ -617,28 +617,28 @@ const Landing = () => {
             </p>
           </ScrollReveal>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 md:gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-2 gap-3 sm:gap-6 md:gap-8 max-w-2xl mx-auto">
             <ScrollReveal delay={100}>
               <div className="rounded-2xl overflow-hidden border border-border/40 shadow-lg">
                 <img 
                   src={demoSearchInput} 
                   alt="Search for electricians in Manchester" 
-                  className="w-full h-auto" 
+                  className="w-full h-auto max-h-[340px] sm:max-h-[400px] object-cover object-top" 
                   loading="lazy" 
                 />
               </div>
-              <p className="text-xs sm:text-sm text-muted-foreground/60 text-center mt-2.5 font-medium">Search any business type and location</p>
+              <p className="text-[10px] sm:text-sm text-muted-foreground/60 text-center mt-2 sm:mt-2.5 font-medium">Search any business type and location</p>
             </ScrollReveal>
             <ScrollReveal delay={200}>
               <div className="rounded-2xl overflow-hidden border border-border/40 shadow-lg">
                 <img 
                   src={demoSearchResults} 
                   alt="Results showing businesses without websites" 
-                  className="w-full h-auto" 
+                  className="w-full h-auto max-h-[340px] sm:max-h-[400px] object-cover object-top" 
                   loading="lazy" 
                 />
               </div>
-              <p className="text-xs sm:text-sm text-muted-foreground/60 text-center mt-2.5 font-medium">Instantly see results with hot leads highlighted</p>
+              <p className="text-[10px] sm:text-sm text-muted-foreground/60 text-center mt-2 sm:mt-2.5 font-medium">Instantly see results with hot leads highlighted</p>
             </ScrollReveal>
           </div>
         </div>
@@ -771,6 +771,47 @@ const Landing = () => {
 
 
 
+        </div>
+      </section>
+
+      {/* Find Leads From Anywhere - Mobile Section */}
+      <section className="relative z-10 py-14 sm:py-16 md:py-20 px-3 sm:px-4">
+        <div className="container mx-auto max-w-[1100px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
+            {/* Text Column */}
+            <ScrollReveal className="text-center md:text-left order-1">
+              <h2 className="text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
+                Find leads{' '}
+                <span className="text-gradient-primary">from anywhere</span>
+              </h2>
+              <p className="text-sm sm:text-base text-muted-foreground/70 mt-4 sm:mt-5 leading-relaxed max-w-lg mx-auto md:mx-0">
+                LeadFinder works perfectly on mobile so you can search for businesses, review leads and plan outreach wherever you are. Whether you're at your desk, in a café or travelling, your lead pipeline is always with you.
+              </p>
+            </ScrollReveal>
+
+            {/* Phone Mockup Column */}
+            <ScrollReveal delay={150} className="order-2 flex justify-center md:justify-end">
+              <div 
+                className="relative w-[220px] sm:w-[260px] md:w-[300px]"
+                style={{ transform: 'rotate(2deg)' }}
+              >
+                {/* Phone frame */}
+                <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
+                  {/* Notch */}
+                  <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[60px] sm:w-[80px] h-[18px] sm:h-[22px] bg-foreground/15 rounded-b-2xl z-10" />
+                  {/* Screen content */}
+                  <div className="relative">
+                    <img 
+                      src={demoSearchResults} 
+                      alt="LeadFinder results on mobile" 
+                      className="w-full h-auto" 
+                      loading="lazy" 
+                    />
+                  </div>
+                </div>
+              </div>
+            </ScrollReveal>
+          </div>
         </div>
       </section>
 
