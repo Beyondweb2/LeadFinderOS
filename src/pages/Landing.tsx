@@ -239,9 +239,9 @@ const productPreviewSlides = [
     title: 'Dashboard',
     desc: 'Get a full overview of your pipeline. Track revenue, active leads and upcoming follow-ups.',
     annotations: [
-      { top: '12%', startX: '82%', label: 'Revenue stats', side: 'right' as const },
-      { top: '38%', startX: '18%', label: 'Pipeline stages', side: 'left' as const },
-      { top: '65%', startX: '78%', label: 'Next actions', side: 'right' as const },
+      { top: '15%', startX: '80%', label: 'Revenue overview', side: 'right' as const },
+      { top: '42%', startX: '20%', label: 'Pipeline stages', side: 'left' as const },
+      { top: '70%', startX: '75%', label: 'Upcoming follow-ups', side: 'right' as const },
     ],
   },
   {
@@ -249,9 +249,9 @@ const productPreviewSlides = [
     title: 'Search',
     desc: 'Search any business type in any location and instantly find leads that need your service.',
     annotations: [
-      { top: '18%', startX: '50%', label: 'Business type input', side: 'right' as const },
-      { top: '38%', startX: '45%', label: 'Location selector', side: 'left' as const },
-      { top: '60%', startX: '55%', label: 'Quick country select', side: 'right' as const },
+      { top: '22%', startX: '75%', label: 'Business type input', side: 'right' as const },
+      { top: '42%', startX: '20%', label: 'Location selector', side: 'left' as const },
+      { top: '68%', startX: '78%', label: 'Quick country select', side: 'right' as const },
     ],
   },
   {
@@ -259,9 +259,9 @@ const productPreviewSlides = [
     title: 'Results',
     desc: 'Instantly see which businesses need your services and add them to your outreach list.',
     annotations: [
-      { top: '18%', startX: '75%', label: 'No website badge', side: 'right' as const },
-      { top: '40%', startX: '25%', label: 'Business details', side: 'left' as const },
-      { top: '62%', startX: '80%', label: 'Add to outreach', side: 'right' as const },
+      { top: '25%', startX: '20%', label: 'Business details', side: 'left' as const },
+      { top: '45%', startX: '78%', label: 'No website badge', side: 'right' as const },
+      { top: '68%', startX: '22%', label: 'Add to outreach', side: 'left' as const },
     ],
   },
   {
@@ -269,9 +269,9 @@ const productPreviewSlides = [
     title: 'Outreach',
     desc: 'Contact businesses via SMS, WhatsApp or phone and manage all conversations in one place.',
     annotations: [
-      { top: '16%', startX: '22%', label: 'Lead status', side: 'left' as const },
-      { top: '40%', startX: '78%', label: 'WhatsApp / SMS', side: 'right' as const },
-      { top: '64%', startX: '25%', label: 'Follow-up date', side: 'left' as const },
+      { top: '20%', startX: '22%', label: 'Lead status', side: 'left' as const },
+      { top: '44%', startX: '78%', label: 'WhatsApp / SMS', side: 'right' as const },
+      { top: '68%', startX: '25%', label: 'Follow-up date', side: 'left' as const },
     ],
   },
   {
@@ -279,88 +279,56 @@ const productPreviewSlides = [
     title: 'Track',
     desc: 'Track deals, notes and follow-ups so no opportunity gets forgotten.',
     annotations: [
-      { top: '16%', startX: '75%', label: 'Deal stage', side: 'right' as const },
-      { top: '42%', startX: '22%', label: 'Notes & history', side: 'left' as const },
-      { top: '66%', startX: '70%', label: 'Next action', side: 'right' as const },
+      { top: '18%', startX: '75%', label: 'Deal stage', side: 'right' as const },
+      { top: '45%', startX: '20%', label: 'Notes & history', side: 'left' as const },
+      { top: '70%', startX: '72%', label: 'Next action', side: 'right' as const },
     ],
   },
 ];
 
 type Annotation = typeof productPreviewSlides[0]['annotations'][0];
 
-const SlideAnnotations = ({ annotations, isActive, phoneWidth }: { annotations: Annotation[]; isActive: boolean; phoneWidth: number }) => {
-  return (
-    <>
-      {annotations.map((ann, i) => {
-        const isRight = ann.side === 'right';
-
-        return (
-          <div
-            key={i}
-            className="absolute z-30 pointer-events-none"
-            style={{
-              top: ann.top,
-              left: isRight ? `${ann.startX}` : 'auto',
-              right: isRight ? 'auto' : `${100 - parseFloat(ann.startX)}%`,
-              opacity: isActive ? 1 : 0,
-              transform: isActive ? 'translateY(0)' : 'translateY(10px)',
-              transition: `opacity 0.6s ease ${i * 200 + 300}ms, transform 0.6s ease ${i * 200 + 300}ms`,
-            }}
-          >
-            <div className={`flex items-center ${isRight ? 'flex-row' : 'flex-row-reverse'}`}>
-              {/* Glowing anchor dot */}
-              <div className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0 shadow-[0_0_8px_hsl(var(--primary)/0.7),0_0_16px_hsl(var(--primary)/0.3)]" />
-              {/* Connector line */}
-              <div
-                className="h-[1.5px] flex-shrink-0 w-8 sm:w-12 md:w-16"
-                style={{
-                  background: isRight
-                    ? 'linear-gradient(90deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))'
-                    : 'linear-gradient(270deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))',
-                }}
-              />
-              {/* Label */}
-              <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-primary whitespace-nowrap bg-background/90 backdrop-blur-md rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 border border-primary/30 shadow-[0_0_16px_hsl(var(--primary)/0.12),0_2px_8px_hsl(0_0%_0%/0.3)] flex-shrink-0">
-                {ann.label}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </>
-  );
-};
-
 const ProductPhoneCarousel = () => {
-  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
   const isMobile = useIsMobile();
 
-  useEffect(() => {
-    if (!carouselApi) return;
-    const onSelect = () => setCurrentSlide(carouselApi.selectedScrollSnap());
-    carouselApi.on('select', onSelect);
-    onSelect();
-    return () => { carouselApi.off('select', onSelect); };
-  }, [carouselApi]);
+  const goNext = useCallback(() => {
+    setCurrentSlide((prev) => (prev + 1) % productPreviewSlides.length);
+  }, []);
 
-  // Keyboard arrow navigation
+  const goPrev = useCallback(() => {
+    setCurrentSlide((prev) => (prev - 1 + productPreviewSlides.length) % productPreviewSlides.length);
+  }, []);
+
+  // Keyboard arrow navigation (desktop)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') carouselApi?.scrollPrev();
-      if (e.key === 'ArrowRight') carouselApi?.scrollNext();
+      if (e.key === 'ArrowLeft') goPrev();
+      if (e.key === 'ArrowRight') goNext();
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [carouselApi]);
+  }, [goNext, goPrev]);
 
-  const phoneWidth = isMobile ? 220 : 280;
-  const workflowSteps = ['Find', 'Contact', 'Track'];
+  // Touch swipe support (mobile)
+  const touchStartX = useRef(0);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) goNext();
+      else goPrev();
+    }
+  };
+
+  const slide = productPreviewSlides[currentSlide];
 
   return (
-    <div className="flex flex-col items-center gap-5">
+    <div className="flex flex-col items-center gap-5 sm:gap-6">
       {/* Workflow headline */}
-      <div className="flex items-center gap-3 sm:gap-4 mb-2">
+      <div className="flex items-center gap-3 sm:gap-4 mb-1">
         {['Find', 'Contact', 'Track'].map((step, i) => (
           <div key={step} className="flex items-center gap-3 sm:gap-4">
             <span className="text-sm sm:text-base font-bold text-primary tracking-wide uppercase">{step}</span>
@@ -372,75 +340,108 @@ const ProductPhoneCarousel = () => {
       {/* Slide title + description */}
       <div className="text-center">
         <p className="text-sm sm:text-base font-bold tracking-widest uppercase text-primary mb-1.5">
-          {productPreviewSlides[currentSlide]?.title}
+          {slide.title}
         </p>
         <p className="text-sm sm:text-base text-muted-foreground/80 leading-relaxed max-w-md mx-auto">
-          {productPreviewSlides[currentSlide]?.desc}
+          {slide.desc}
         </p>
       </div>
 
-      {/* Phone */}
-      <div className="relative w-[220px] sm:w-[280px] mx-auto">
-        {/* Background glow */}
-        <div className="absolute -inset-8 rounded-full opacity-20 blur-3xl -z-10" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.25), transparent 70%)' }} />
+      {/* Phone with annotations and arrows */}
+      <div className="relative flex items-center justify-center w-full max-w-[600px] sm:max-w-[700px]">
+        {/* Left arrow - desktop only */}
+        {!isMobile && (
+          <button
+            onClick={goPrev}
+            className="absolute left-0 sm:left-4 z-40 p-2.5 sm:p-3 rounded-full border border-border/40 bg-background/70 backdrop-blur-sm hover:bg-background hover:border-primary/40 transition-all text-muted-foreground hover:text-primary"
+            aria-label="Previous slide"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+        )}
 
-        {/* Annotations */}
-        {productPreviewSlides[currentSlide]?.annotations.map((ann, i) => {
-          const isRight = ann.side === 'right';
-          return (
-            <div
-              key={`${currentSlide}-${i}`}
-              className="absolute z-30 pointer-events-none"
-              style={{
-                top: ann.top,
-                left: isRight ? ann.startX : 'auto',
-                right: isRight ? 'auto' : `${100 - parseFloat(ann.startX)}%`,
-                opacity: 1,
-                transition: 'opacity 0.4s ease',
-              }}
-            >
-              <div className={`flex items-center ${isRight ? 'flex-row' : 'flex-row-reverse'}`}>
-                <div className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0 shadow-[0_0_8px_hsl(var(--primary)/0.7)]" />
-                <div className="h-[1.5px] w-8 sm:w-12 md:w-16 flex-shrink-0" style={{ background: isRight ? 'linear-gradient(90deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))' : 'linear-gradient(270deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))' }} />
-                <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-primary whitespace-nowrap bg-background/90 backdrop-blur-md rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 border border-primary/30 shadow-[0_0_16px_hsl(var(--primary)/0.12)] flex-shrink-0">
-                  {ann.label}
-                </span>
+        {/* Phone container */}
+        <div
+          className="relative w-[200px] sm:w-[260px] mx-auto"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Background glow */}
+          <div className="absolute -inset-10 rounded-full opacity-20 blur-3xl -z-10" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.3), transparent 70%)' }} />
+
+          {/* Annotations */}
+          {slide.annotations.map((ann, i) => {
+            const isRight = ann.side === 'right';
+            return (
+              <div
+                key={`${currentSlide}-${i}`}
+                className="absolute z-30 pointer-events-none"
+                style={{
+                  top: ann.top,
+                  ...(isRight
+                    ? { left: ann.startX, right: 'auto' }
+                    : { right: `${100 - parseFloat(ann.startX)}%`, left: 'auto' }),
+                  opacity: 1,
+                  animation: `fadeSlideIn 0.5s ease ${i * 150 + 200}ms both`,
+                }}
+              >
+                <div className={`flex items-center gap-0 ${isRight ? 'flex-row' : 'flex-row-reverse'}`}>
+                  {/* Anchor dot */}
+                  <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-primary flex-shrink-0 shadow-[0_0_8px_hsl(var(--primary)/0.6),0_0_16px_hsl(var(--primary)/0.25)]" />
+                  {/* Line */}
+                  <div
+                    className="h-[1.5px] flex-shrink-0 w-6 sm:w-10 md:w-14"
+                    style={{
+                      background: isRight
+                        ? 'linear-gradient(90deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.1))'
+                        : 'linear-gradient(270deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.1))',
+                    }}
+                  />
+                  {/* Label */}
+                  <span className="text-[9px] sm:text-[11px] md:text-xs font-semibold text-primary whitespace-nowrap bg-background/90 backdrop-blur-md rounded-md px-1.5 py-0.5 sm:px-2.5 sm:py-1 border border-primary/25 shadow-[0_0_12px_hsl(var(--primary)/0.1),0_2px_6px_hsl(0_0%_0%/0.25)] flex-shrink-0">
+                    {ann.label}
+                  </span>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
 
-        {/* Phone frame */}
-        <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden aspect-[9/16] max-h-[500px]">
-          <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
-          <Carousel setApi={setCarouselApi} opts={{ loop: true }} className="w-full">
-            <CarouselContent className="-ml-0">
-              {productPreviewSlides.map((slide, i) => (
-                <CarouselItem key={i} className="pl-0">
-                  <img src={slide.image} alt={`${slide.title} screen`} className="w-full h-auto" />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            {!isMobile && (
-              <>
-                <CarouselPrevious className="-left-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-                <CarouselNext className="-right-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-              </>
-            )}
-          </Carousel>
+          {/* Phone frame */}
+          <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
+            {/* Notch */}
+            <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
+            {/* Image */}
+            <img
+              src={slide.image}
+              alt={`${slide.title} screen`}
+              className="w-full h-auto block"
+              draggable={false}
+            />
+          </div>
         </div>
+
+        {/* Right arrow - desktop only */}
+        {!isMobile && (
+          <button
+            onClick={goNext}
+            className="absolute right-0 sm:right-4 z-40 p-2.5 sm:p-3 rounded-full border border-border/40 bg-background/70 backdrop-blur-sm hover:bg-background hover:border-primary/40 transition-all text-muted-foreground hover:text-primary"
+            aria-label="Next slide"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        )}
       </div>
 
       {/* Dots */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         {productPreviewSlides.map((_, i) => (
           <button
             key={i}
-            onClick={() => carouselApi?.scrollTo(i)}
+            onClick={() => setCurrentSlide(i)}
             className={`rounded-full transition-all duration-300 ease-out ${
               i === currentSlide
-                ? 'h-3.5 w-9 bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.5)]'
-                : 'h-3.5 w-3.5 bg-foreground/20 hover:bg-foreground/30'
+                ? 'h-3 w-8 bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.5)]'
+                : 'h-3 w-3 bg-foreground/20 hover:bg-foreground/30'
             }`}
             aria-label={`Go to slide ${i + 1}`}
           />
@@ -452,15 +453,11 @@ const ProductPhoneCarousel = () => {
         {isMobile ? (
           <>
             <ChevronDown className="h-5 w-5 rotate-90 animate-pulse" />
-            <span className="text-lg font-bold tracking-tight">Swipe</span>
+            <span className="text-base font-bold tracking-tight">Swipe</span>
             <ChevronDown className="h-5 w-5 rotate-[-90deg] animate-pulse" />
           </>
         ) : (
-          <>
-            <ChevronDown className="h-5 w-5 rotate-90" />
-            <span className="text-lg font-bold tracking-tight">Use arrows</span>
-            <ChevronDown className="h-5 w-5 rotate-[-90deg]" />
-          </>
+          <span className="text-sm text-muted-foreground/30">Use arrow keys or click arrows</span>
         )}
       </div>
     </div>
