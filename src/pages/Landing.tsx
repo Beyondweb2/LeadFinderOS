@@ -918,8 +918,8 @@ const Landing = () => {
         <div className="container mx-auto max-w-[1150px]">
           <ScrollReveal className="text-center mb-6 sm:mb-8 md:mb-10">
             <h2 className="text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
-              Your complete{' '}
-              <span className="text-gradient-primary">lead generation system</span>
+              The{' '}
+              <span className="text-gradient-primary">LeadFinder</span> system
             </h2>
           </ScrollReveal>
 
