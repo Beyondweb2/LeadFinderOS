@@ -13,10 +13,11 @@ import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText, Star,
-  DollarSign, HelpCircle, Users, MessageSquare, ShieldCheck, Lightbulb
+  DollarSign, HelpCircle, Users, MessageSquare, ShieldCheck, Lightbulb, StickyNote
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
+import { NotepadModal } from '@/components/NotepadModal';
 import appLogo from '@/assets/logo.png';
 
 export function AppSidebar() {
