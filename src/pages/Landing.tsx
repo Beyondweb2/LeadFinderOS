@@ -418,16 +418,20 @@ const ProductPhoneCarousel = () => {
   );
 };
 
-const FeaturePoint = ({ text, align, delay }: { text: string; align: 'left' | 'right'; delay: number }) => (
+const FeaturePoint = ({ text, align, delay }: { text: string; align: 'left' | 'right' | 'center'; delay: number }) => (
   <div
-    className={`flex items-start gap-2 ${align === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}
+    className={`flex items-start gap-2 ${
+      align === 'right' ? 'justify-end text-right' :
+      align === 'center' ? 'justify-center text-center' :
+      'justify-start text-left'
+    }`}
     style={{ animation: `fadeSlideIn 0.4s ease ${delay + 200}ms both` }}
   >
     {align === 'right' && (
       <span className="text-xs sm:text-sm text-muted-foreground/90 leading-snug">{text}</span>
     )}
     <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0 shadow-[0_0_6px_hsl(var(--primary)/0.5)]" />
-    {align === 'left' && (
+    {(align === 'left' || align === 'center') && (
       <span className="text-xs sm:text-sm text-muted-foreground/90 leading-snug">{text}</span>
     )}
   </div>
