@@ -774,6 +774,47 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Find Leads From Anywhere - Mobile Section */}
+      <section className="relative z-10 py-14 sm:py-16 md:py-20 px-3 sm:px-4">
+        <div className="container mx-auto max-w-[1100px]">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
+            {/* Text Column */}
+            <ScrollReveal className="text-center md:text-left order-1">
+              <h2 className="text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
+                Find leads{' '}
+                <span className="text-gradient-primary">from anywhere</span>
+              </h2>
+              <p className="text-sm sm:text-base text-muted-foreground/70 mt-4 sm:mt-5 leading-relaxed max-w-lg mx-auto md:mx-0">
+                LeadFinder works perfectly on mobile so you can search for businesses, review leads and plan outreach wherever you are. Whether you're at your desk, in a café or travelling, your lead pipeline is always with you.
+              </p>
+            </ScrollReveal>
+
+            {/* Phone Mockup Column */}
+            <ScrollReveal delay={150} className="order-2 flex justify-center md:justify-end">
+              <div 
+                className="relative w-[220px] sm:w-[260px] md:w-[300px]"
+                style={{ transform: 'rotate(2deg)' }}
+              >
+                {/* Phone frame */}
+                <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
+                  {/* Notch */}
+                  <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[60px] sm:w-[80px] h-[18px] sm:h-[22px] bg-foreground/15 rounded-b-2xl z-10" />
+                  {/* Screen content */}
+                  <div className="relative">
+                    <img 
+                      src={demoSearchResults} 
+                      alt="LeadFinder results on mobile" 
+                      className="w-full h-auto" 
+                      loading="lazy" 
+                    />
+                  </div>
+                </div>
+              </div>
+            </ScrollReveal>
+          </div>
+        </div>
+      </section>
+
       {/* Section divider */}
       <div className="relative z-10 py-8 sm:py-10 md:py-12">
         <div
