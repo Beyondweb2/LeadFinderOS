@@ -289,10 +289,6 @@ const productPreviewSlides = [
 type Annotation = typeof productPreviewSlides[0]['annotations'][0];
 
 const SlideAnnotations = ({ annotations, isActive, phoneWidth }: { annotations: Annotation[]; isActive: boolean; phoneWidth: number }) => {
-  const isMobile = useIsMobile();
-  // Line extends from the phone edge out to the label
-  const lineLength = isMobile ? Math.max(phoneWidth * 0.35, 50) : Math.max(phoneWidth * 0.55, 80);
-
   return (
     <>
       {annotations.map((ann, i) => {
@@ -312,20 +308,19 @@ const SlideAnnotations = ({ annotations, isActive, phoneWidth }: { annotations: 
             }}
           >
             <div className={`flex items-center ${isRight ? 'flex-row' : 'flex-row-reverse'}`}>
-              {/* Glowing anchor dot on the phone */}
+              {/* Glowing anchor dot */}
               <div className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0 shadow-[0_0_8px_hsl(var(--primary)/0.7),0_0_16px_hsl(var(--primary)/0.3)]" />
               {/* Connector line */}
               <div
-                className="h-[1.5px] flex-shrink-0"
+                className="h-[1.5px] flex-shrink-0 w-8 sm:w-12 md:w-16"
                 style={{
-                  width: `${lineLength}px`,
                   background: isRight
                     ? 'linear-gradient(90deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))'
                     : 'linear-gradient(270deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))',
                 }}
               />
-              {/* Label outside the phone */}
-              <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-primary whitespace-nowrap bg-background/90 backdrop-blur-md rounded-lg px-2.5 py-1.5 border border-primary/30 shadow-[0_0_16px_hsl(var(--primary)/0.12),0_2px_8px_hsl(0_0%_0%/0.3)] flex-shrink-0">
+              {/* Label */}
+              <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-primary whitespace-nowrap bg-background/90 backdrop-blur-md rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 border border-primary/30 shadow-[0_0_16px_hsl(var(--primary)/0.12),0_2px_8px_hsl(0_0%_0%/0.3)] flex-shrink-0">
                 {ann.label}
               </span>
             </div>
@@ -359,13 +354,11 @@ const ProductPhoneCarousel = () => {
     return () => window.removeEventListener('keydown', handleKey);
   }, [carouselApi]);
 
-  const phoneWidth = isMobile ? 240 : 300;
-
-  // Workflow steps
+  const phoneWidth = isMobile ? 220 : 280;
   const workflowSteps = ['Find', 'Contact', 'Track'];
 
   return (
-    <div className="flex flex-col items-center gap-5 overflow-visible">
+    <div className="flex flex-col items-center gap-5">
       {/* Workflow headline */}
       <div className="flex items-center gap-3 sm:gap-4 mb-2">
         {workflowSteps.map((step, i) => (
@@ -396,45 +389,43 @@ const ProductPhoneCarousel = () => {
           style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.25), transparent 70%)' }}
         />
 
-        {/* Wide wrapper for annotations to extend outside phone */}
-        <div className="relative" style={{ width: `${phoneWidth + (isMobile ? 260 : 380)}px`, marginLeft: 'auto', marginRight: 'auto' }}>
-          <div className="mx-auto" style={{ width: `${phoneWidth}px` }}>
-            {/* Annotations */}
-            <SlideAnnotations
-              annotations={productPreviewSlides[currentSlide]?.annotations || []}
-              isActive={true}
-              phoneWidth={phoneWidth}
-            />
+        {/* Phone container */}
+        <div className="relative mx-auto" style={{ width: `${phoneWidth}px` }}>
+          {/* Annotations positioned relative to phone */}
+          <SlideAnnotations
+            annotations={productPreviewSlides[currentSlide]?.annotations || []}
+            isActive={true}
+            phoneWidth={phoneWidth}
+          />
 
-            {/* Phone frame */}
-            <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden max-h-[440px] sm:max-h-[500px] md:max-h-[560px]">
-              {/* Notch */}
-              <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
-              <Carousel
-                setApi={setCarouselApi}
-                opts={{ loop: true }}
-                className="w-full"
-              >
-                <CarouselContent className="-ml-0">
-                  {productPreviewSlides.map((slide, i) => (
-                    <CarouselItem key={i} className="pl-0">
-                      <img
-                        src={slide.image}
-                        alt={`${slide.title} screen`}
-                        className="w-full h-auto"
-                        loading="lazy"
-                      />
-                    </CarouselItem>
-                  ))}
-                </CarouselContent>
-                {!isMobile && (
-                  <>
-                    <CarouselPrevious className="-left-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-                    <CarouselNext className="-right-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-                  </>
-                )}
-              </Carousel>
-            </div>
+          {/* Phone frame */}
+          <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden max-h-[440px] sm:max-h-[500px] md:max-h-[560px]">
+            {/* Notch */}
+            <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
+            <Carousel
+              setApi={setCarouselApi}
+              opts={{ loop: true }}
+              className="w-full"
+            >
+              <CarouselContent className="-ml-0">
+                {productPreviewSlides.map((slide, i) => (
+                  <CarouselItem key={i} className="pl-0">
+                    <img
+                      src={slide.image}
+                      alt={`${slide.title} screen`}
+                      className="w-full h-auto"
+                      loading="lazy"
+                    />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              {!isMobile && (
+                <>
+                  <CarouselPrevious className="-left-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
+                  <CarouselNext className="-right-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
+                </>
+              )}
+            </Carousel>
           </div>
         </div>
       </div>
