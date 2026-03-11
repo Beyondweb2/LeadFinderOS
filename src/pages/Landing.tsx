@@ -873,16 +873,14 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Inside LeadFinder - Product Preview */}
-      <section className="relative z-10 py-14 sm:py-16 md:py-20 px-3 sm:px-4">
+      {/* Product Preview - Mobile Section */}
+      <section className="relative z-10 py-10 sm:py-14 md:py-16 px-3 sm:px-4">
         <div className="container mx-auto max-w-[1000px]">
-          <ScrollReveal className="text-center mb-8 sm:mb-10">
+          <ScrollReveal className="text-center mb-5 sm:mb-6">
             <h2 className="text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
-              Inside <span className="text-gradient-primary">LeadFinder</span>
+              LeadFinder works on{' '}
+              <span className="text-gradient-primary">mobile too</span>
             </h2>
-            <p className="text-sm text-muted-foreground/60 mt-3">
-              A quick preview of the LeadFinder system.
-            </p>
           </ScrollReveal>
 
           <ScrollReveal delay={100} className="flex flex-col items-center">
