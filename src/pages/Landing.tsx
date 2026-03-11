@@ -411,7 +411,7 @@ const ProductPhoneCarousel = () => {
         })}
 
         {/* Phone frame */}
-        <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
+        <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden aspect-[9/16] max-h-[500px]">
           <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
           <Carousel setApi={setCarouselApi} opts={{ loop: true }} className="w-full">
             <CarouselContent className="-ml-0">
