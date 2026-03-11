@@ -26,6 +26,7 @@ export function AppSidebar() {
   const { isAdmin } = useSubscription();
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
+  const [notepadOpen, setNotepadOpen] = useState(false);
 
   const navItems = [
     { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard, description: t('nav.dashboardDesc') },
