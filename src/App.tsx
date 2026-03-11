@@ -45,6 +45,14 @@ const StartFreeTrial = lazy(() => import("./pages/StartFreeTrial"));
 
 function PageLoader() {
   return (
+    <div className="flex items-center justify-center py-32">
+      <Loader2 className="h-8 w-8 animate-spin text-primary" />
+    </div>
+  );
+}
+
+function FullPageLoader() {
+  return (
     <div className="min-h-screen flex items-center justify-center bg-background">
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
@@ -159,7 +167,7 @@ const App = () => {
             <BrowserRouter>
               <RefSourceCapture />
               <ScrollToTop />
-              <Suspense fallback={<PageLoader />}>
+              <Suspense fallback={<FullPageLoader />}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
              <Route path="/billing/success" element={<BillingSuccess />} />

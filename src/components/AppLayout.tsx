@@ -1,4 +1,4 @@
-import { useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect, Suspense } from 'react';
 import { useLocation } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import { AppSidebar } from '@/components/AppSidebar';
@@ -127,7 +127,13 @@ export function AppLayout({ children }: AppLayoutProps) {
             </div>
             <main ref={mainRef} className="flex-1 overflow-auto pb-20 md:pb-0">
               <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-                {children}
+                <Suspense fallback={
+                  <div className="flex items-center justify-center py-32">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  </div>
+                }>
+                  {children}
+                </Suspense>
               </div>
             </main>
           </div>

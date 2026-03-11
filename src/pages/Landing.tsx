@@ -7,7 +7,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import {
   Search,
   Check,
-  ArrowRight,
+  
   X,
   Volume2,
   VolumeX,
@@ -29,6 +29,8 @@ import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
 import step3Outreach from '@/assets/howto-step3-outreach-crm.png';
 import step4Dashboard from '@/assets/howto-step4-dashboard.png';
+import demoSearchInput from '@/assets/demo-search-input.jpg';
+import demoSearchResults from '@/assets/demo-search-results.jpg';
 
 import featureTemplates from '@/assets/feature-templates.png';
 import featureContactTracking from '@/assets/feature-contact-tracking.png';
@@ -100,7 +102,6 @@ const InlineCTA = ({ text = 'Ready to find your next client?', onCTA }: { text?:
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
     <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={onCTA}>
       Try for free
-      <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
   </div>
 );
@@ -558,7 +559,6 @@ const Landing = () => {
                     onClick={handleCTA}
                   >
                     Find leads now
-                    <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
                   </Button>
                 <Button 
                   variant="ghost" 
@@ -604,6 +604,45 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Search Demo Section */}
+      <section className="relative z-10 py-12 sm:py-16 md:py-20 px-3 sm:px-4">
+        <div className="container mx-auto max-w-5xl">
+          <ScrollReveal className="text-center mb-8 sm:mb-12">
+            <h2 className="text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
+              Find businesses without websites{' '}
+              <span className="text-gradient-primary">in seconds</span>
+            </h2>
+            <p className="text-sm sm:text-base text-muted-foreground/70 mt-3 sm:mt-4 max-w-2xl mx-auto leading-relaxed">
+              Search any business type in any location and instantly see which ones need a website.
+            </p>
+          </ScrollReveal>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 md:gap-8 max-w-4xl mx-auto">
+            <ScrollReveal delay={100}>
+              <div className="rounded-2xl overflow-hidden border border-border/40 shadow-lg">
+                <img 
+                  src={demoSearchInput} 
+                  alt="Search for electricians in Manchester" 
+                  className="w-full h-auto" 
+                  loading="lazy" 
+                />
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground/60 text-center mt-2.5 font-medium">Search any business type and location</p>
+            </ScrollReveal>
+            <ScrollReveal delay={200}>
+              <div className="rounded-2xl overflow-hidden border border-border/40 shadow-lg">
+                <img 
+                  src={demoSearchResults} 
+                  alt="Results showing businesses without websites" 
+                  className="w-full h-auto" 
+                  loading="lazy" 
+                />
+              </div>
+              <p className="text-xs sm:text-sm text-muted-foreground/60 text-center mt-2.5 font-medium">Instantly see results with hot leads highlighted</p>
+            </ScrollReveal>
+          </div>
+        </div>
+      </section>
 
       {/* Video Demo Section - desktop only */}
       <div className="hidden sm:block">
@@ -1004,7 +1043,6 @@ const Landing = () => {
                 onClick={handleCTA}
               >
                 Try for free
-                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
 
               <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
@@ -1094,7 +1132,6 @@ const Landing = () => {
         >
           <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={handleCTA}>
               Try for free
-              <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
             5-day free trial · £0 today · Cancel anytime
