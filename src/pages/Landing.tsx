@@ -36,6 +36,7 @@ import previewDashboard from '@/assets/preview-dashboard.jpg';
 import previewSearch from '@/assets/preview-search.jpg';
 import previewOutreach from '@/assets/preview-outreach.jpg';
 import previewTrack from '@/assets/preview-track.jpg';
+import previewResults from '@/assets/preview-results.jpg';
 
 import featureTemplates from '@/assets/feature-templates.png';
 import featureContactTracking from '@/assets/feature-contact-tracking.png';
