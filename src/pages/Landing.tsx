@@ -361,12 +361,10 @@ const ProductPhoneCarousel = () => {
     <div className="flex flex-col items-center gap-5">
       {/* Workflow headline */}
       <div className="flex items-center gap-3 sm:gap-4 mb-2">
-        {workflowSteps.map((step, i) => (
+        {['Find', 'Contact', 'Track'].map((step, i) => (
           <div key={step} className="flex items-center gap-3 sm:gap-4">
             <span className="text-sm sm:text-base font-bold text-primary tracking-wide uppercase">{step}</span>
-            {i < workflowSteps.length - 1 && (
-              <span className="text-muted-foreground/40 text-lg">→</span>
-            )}
+            {i < 2 && <span className="text-muted-foreground/40 text-lg">→</span>}
           </div>
         ))}
       </div>
@@ -381,51 +379,55 @@ const ProductPhoneCarousel = () => {
         </p>
       </div>
 
-      {/* Phone with annotations */}
-      <div className="relative">
+      {/* Phone */}
+      <div className="relative w-[220px] sm:w-[280px] mx-auto">
         {/* Background glow */}
-        <div
-          className="absolute -inset-8 sm:-inset-12 rounded-full opacity-20 blur-3xl -z-10"
-          style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.25), transparent 70%)' }}
-        />
+        <div className="absolute -inset-8 rounded-full opacity-20 blur-3xl -z-10" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.25), transparent 70%)' }} />
 
-        {/* Phone container */}
-        <div className="relative mx-auto" style={{ width: `${phoneWidth}px` }}>
-          {/* Annotations positioned relative to phone */}
-          <SlideAnnotations
-            annotations={productPreviewSlides[currentSlide]?.annotations || []}
-            isActive={true}
-            phoneWidth={phoneWidth}
-          />
-
-          {/* Phone frame */}
-          <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden" style={{ minHeight: '380px' }}>
-            {/* Notch */}
-            <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
-            <Carousel
-              setApi={setCarouselApi}
-              opts={{ loop: true }}
-              className="w-full"
+        {/* Annotations */}
+        {productPreviewSlides[currentSlide]?.annotations.map((ann, i) => {
+          const isRight = ann.side === 'right';
+          return (
+            <div
+              key={`${currentSlide}-${i}`}
+              className="absolute z-30 pointer-events-none"
+              style={{
+                top: ann.top,
+                left: isRight ? ann.startX : 'auto',
+                right: isRight ? 'auto' : `${100 - parseFloat(ann.startX)}%`,
+                opacity: 1,
+                transition: 'opacity 0.4s ease',
+              }}
             >
-              <CarouselContent className="-ml-0">
-                {productPreviewSlides.map((slide, i) => (
-                  <CarouselItem key={i} className="pl-0">
-                    <img
-                      src={slide.image}
-                      alt={`${slide.title} screen`}
-                      className="w-full h-auto"
-                    />
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              {!isMobile && (
-                <>
-                  <CarouselPrevious className="-left-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-                  <CarouselNext className="-right-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-                </>
-              )}
-            </Carousel>
-          </div>
+              <div className={`flex items-center ${isRight ? 'flex-row' : 'flex-row-reverse'}`}>
+                <div className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0 shadow-[0_0_8px_hsl(var(--primary)/0.7)]" />
+                <div className="h-[1.5px] w-8 sm:w-12 md:w-16 flex-shrink-0" style={{ background: isRight ? 'linear-gradient(90deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))' : 'linear-gradient(270deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))' }} />
+                <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-primary whitespace-nowrap bg-background/90 backdrop-blur-md rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 border border-primary/30 shadow-[0_0_16px_hsl(var(--primary)/0.12)] flex-shrink-0">
+                  {ann.label}
+                </span>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Phone frame */}
+        <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
+          <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
+          <Carousel setApi={setCarouselApi} opts={{ loop: true }} className="w-full">
+            <CarouselContent className="-ml-0">
+              {productPreviewSlides.map((slide, i) => (
+                <CarouselItem key={i} className="pl-0">
+                  <img src={slide.image} alt={`${slide.title} screen`} className="w-full h-auto" />
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            {!isMobile && (
+              <>
+                <CarouselPrevious className="-left-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
+                <CarouselNext className="-right-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
+              </>
+            )}
+          </Carousel>
         </div>
       </div>
 
@@ -435,7 +437,7 @@ const ProductPhoneCarousel = () => {
           <button
             key={i}
             onClick={() => carouselApi?.scrollTo(i)}
-            className={`rounded-full transition-all duration-400 ease-out ${
+            className={`rounded-full transition-all duration-300 ease-out ${
               i === currentSlide
                 ? 'h-3.5 w-9 bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.5)]'
                 : 'h-3.5 w-3.5 bg-foreground/20 hover:bg-foreground/30'
