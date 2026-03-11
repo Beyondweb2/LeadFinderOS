@@ -239,9 +239,9 @@ const productPreviewSlides = [
     title: 'Dashboard',
     desc: 'Get a full overview of your pipeline. Track revenue, active leads and upcoming follow-ups.',
     annotations: [
-      { top: '12%', left: '8%', label: 'Revenue stats', side: 'right' as const },
-      { top: '45%', left: '60%', label: 'Active leads', side: 'left' as const },
-      { top: '75%', left: '15%', label: 'Follow-ups', side: 'right' as const },
+      { top: '15%', startX: '80%', label: 'Revenue overview', side: 'right' as const },
+      { top: '42%', startX: '20%', label: 'Pipeline stages', side: 'left' as const },
+      { top: '68%', startX: '75%', label: 'Upcoming follow-ups', side: 'right' as const },
     ],
   },
   {
@@ -249,9 +249,9 @@ const productPreviewSlides = [
     title: 'Search',
     desc: 'Search any business type in any location and instantly find businesses that could need your service.',
     annotations: [
-      { top: '18%', left: '50%', label: 'Business type', side: 'left' as const },
-      { top: '40%', left: '20%', label: 'Location', side: 'right' as const },
-      { top: '70%', left: '60%', label: 'One-tap search', side: 'left' as const },
+      { top: '25%', startX: '50%', label: 'Search bar', side: 'right' as const },
+      { top: '45%', startX: '40%', label: 'Location input', side: 'left' as const },
+      { top: '65%', startX: '60%', label: 'Country flags', side: 'right' as const },
     ],
   },
   {
@@ -259,9 +259,9 @@ const productPreviewSlides = [
     title: 'Results',
     desc: 'Instantly see which businesses need your services and add them to your outreach list.',
     annotations: [
-      { top: '20%', left: '70%', label: 'Hot leads', side: 'left' as const },
-      { top: '50%', left: '15%', label: 'Business info', side: 'right' as const },
-      { top: '78%', left: '55%', label: 'Save to pipeline', side: 'left' as const },
+      { top: '22%', startX: '70%', label: 'No website badge', side: 'right' as const },
+      { top: '48%', startX: '30%', label: 'Business details', side: 'left' as const },
+      { top: '72%', startX: '65%', label: 'Add to outreach', side: 'right' as const },
     ],
   },
   {
@@ -269,9 +269,9 @@ const productPreviewSlides = [
     title: 'Outreach',
     desc: 'Contact businesses using SMS, WhatsApp or phone and manage conversations in one place.',
     annotations: [
-      { top: '15%', left: '25%', label: 'Contact channels', side: 'right' as const },
-      { top: '50%', left: '65%', label: 'Message status', side: 'left' as const },
-      { top: '80%', left: '20%', label: 'Follow-up reminders', side: 'right' as const },
+      { top: '20%', startX: '25%', label: 'Lead status', side: 'left' as const },
+      { top: '45%', startX: '75%', label: 'WhatsApp / SMS', side: 'right' as const },
+      { top: '72%', startX: '30%', label: 'Follow-up date', side: 'left' as const },
     ],
   },
   {
@@ -279,50 +279,64 @@ const productPreviewSlides = [
     title: 'Track',
     desc: 'Track deals, notes and follow-ups so no opportunity gets forgotten.',
     annotations: [
-      { top: '18%', left: '60%', label: 'Deal status', side: 'left' as const },
-      { top: '48%', left: '15%', label: 'Notes & history', side: 'right' as const },
-      { top: '75%', left: '55%', label: 'Next actions', side: 'left' as const },
+      { top: '20%', startX: '70%', label: 'Deal stage', side: 'right' as const },
+      { top: '48%', startX: '25%', label: 'Notes & history', side: 'left' as const },
+      { top: '73%', startX: '65%', label: 'Next action', side: 'right' as const },
     ],
   },
 ];
 
-const SlideAnnotations = ({ annotations, isActive }: { annotations: typeof productPreviewSlides[0]['annotations']; isActive: boolean }) => (
-  <>
-    {annotations.map((ann, i) => (
-      <div
-        key={i}
-        className="absolute z-20 pointer-events-none flex items-center gap-1"
-        style={{
-          top: ann.top,
-          left: ann.side === 'right' ? ann.left : 'auto',
-          right: ann.side === 'left' ? `${100 - parseFloat(ann.left)}%` : 'auto',
-          opacity: isActive ? 1 : 0,
-          transform: isActive ? 'translateY(0)' : 'translateY(6px)',
-          transition: `opacity 0.5s ease ${i * 150 + 300}ms, transform 0.5s ease ${i * 150 + 300}ms`,
-        }}
-      >
-        {ann.side === 'left' && (
-          <>
-            <span className="text-[8px] sm:text-[9px] font-semibold text-primary/90 whitespace-nowrap bg-background/70 backdrop-blur-sm rounded px-1.5 py-0.5 border border-primary/20">
-              {ann.label}
-            </span>
-            <div className="w-4 sm:w-6 h-px bg-primary/40" />
-            <div className="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0" />
-          </>
-        )}
-        {ann.side === 'right' && (
-          <>
-            <div className="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0" />
-            <div className="w-4 sm:w-6 h-px bg-primary/40" />
-            <span className="text-[8px] sm:text-[9px] font-semibold text-primary/90 whitespace-nowrap bg-background/70 backdrop-blur-sm rounded px-1.5 py-0.5 border border-primary/20">
-              {ann.label}
-            </span>
-          </>
-        )}
-      </div>
-    ))}
-  </>
-);
+type Annotation = typeof productPreviewSlides[0]['annotations'][0];
+
+const SlideAnnotations = ({ annotations, isActive, phoneWidth }: { annotations: Annotation[]; isActive: boolean; phoneWidth: number }) => {
+  // How far outside the phone the label sits
+  const lineLength = Math.max(phoneWidth * 0.45, 60);
+
+  return (
+    <>
+      {annotations.map((ann, i) => {
+        const startPx = (parseFloat(ann.startX) / 100) * phoneWidth;
+
+        // For right-side: line starts at startX on phone, extends right outside phone
+        // For left-side: line starts at startX on phone, extends left outside phone
+        const isRight = ann.side === 'right';
+
+        return (
+          <div
+            key={i}
+            className="absolute z-30 pointer-events-none"
+            style={{
+              top: ann.top,
+              // Position the whole annotation group starting from the dot on the phone
+              left: isRight ? `${ann.startX}` : 'auto',
+              right: isRight ? 'auto' : `${100 - parseFloat(ann.startX)}%`,
+              opacity: isActive ? 1 : 0,
+              transform: isActive ? 'translateY(0)' : 'translateY(8px)',
+              transition: `opacity 0.5s ease ${i * 200 + 400}ms, transform 0.5s ease ${i * 200 + 400}ms`,
+            }}
+          >
+            <div className={`flex items-center ${isRight ? 'flex-row' : 'flex-row-reverse'}`}>
+              {/* Dot on the phone */}
+              <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0 shadow-[0_0_6px_hsl(var(--primary)/0.6)]" />
+              {/* Line extending outward */}
+              <div
+                className="h-px bg-gradient-to-r from-primary/60 to-primary/20 flex-shrink-0"
+                style={{
+                  width: `${lineLength}px`,
+                  ...(isRight ? {} : { transform: 'scaleX(-1)' }),
+                }}
+              />
+              {/* Label outside the phone */}
+              <span className="text-[9px] sm:text-[10px] md:text-xs font-semibold text-primary whitespace-nowrap bg-background/80 backdrop-blur-sm rounded-md px-2 py-1 border border-primary/25 shadow-[0_0_12px_hsl(var(--primary)/0.15)] flex-shrink-0">
+                {ann.label}
+              </span>
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+};
 
 const ProductPhoneCarousel = () => {
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
@@ -337,6 +351,9 @@ const ProductPhoneCarousel = () => {
     return () => { carouselApi.off('select', onSelect); };
   }, [carouselApi]);
 
+  // Get phone width for annotation line calculations
+  const phoneWidth = isMobile ? 230 : 300;
+
   const phoneCarousel = (
     <div className="relative">
       {/* Background glow */}
@@ -345,41 +362,46 @@ const ProductPhoneCarousel = () => {
         style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.25), transparent 70%)' }}
       />
 
-      <div className="relative w-[230px] sm:w-[260px] md:w-[300px]">
-        {/* Feature annotations */}
-        <SlideAnnotations
-          annotations={productPreviewSlides[currentSlide]?.annotations || []}
-          isActive={true}
-        />
+      {/* Annotation + phone wrapper — wide enough for labels to extend outside */}
+      <div className="relative" style={{ width: `${phoneWidth + 320}px`, marginLeft: 'auto', marginRight: 'auto' }}>
+        {/* The phone centered within the wider container */}
+        <div className="mx-auto" style={{ width: `${phoneWidth}px` }}>
+          {/* Annotations positioned relative to phone */}
+          <SlideAnnotations
+            annotations={productPreviewSlides[currentSlide]?.annotations || []}
+            isActive={true}
+            phoneWidth={phoneWidth}
+          />
 
-        <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden max-h-[440px] sm:max-h-[500px] md:max-h-[560px]">
-          {/* Notch */}
-          <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
-          <Carousel
-            setApi={setCarouselApi}
-            opts={{ loop: true }}
-            className="w-full"
-          >
-            <CarouselContent className="-ml-0">
-              {productPreviewSlides.map((slide, i) => (
-                <CarouselItem key={i} className="pl-0">
-                  <img
-                    src={slide.image}
-                    alt={`${slide.title} screen`}
-                    className="w-full h-auto"
-                    loading="lazy"
-                  />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            {/* Desktop arrows */}
-            {!isMobile && (
-              <>
-                <CarouselPrevious className="-left-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-                <CarouselNext className="-right-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-              </>
-            )}
-          </Carousel>
+          <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden max-h-[440px] sm:max-h-[500px] md:max-h-[560px]">
+            {/* Notch */}
+            <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
+            <Carousel
+              setApi={setCarouselApi}
+              opts={{ loop: true }}
+              className="w-full"
+            >
+              <CarouselContent className="-ml-0">
+                {productPreviewSlides.map((slide, i) => (
+                  <CarouselItem key={i} className="pl-0">
+                    <img
+                      src={slide.image}
+                      alt={`${slide.title} screen`}
+                      className="w-full h-auto"
+                      loading="lazy"
+                    />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              {/* Desktop arrows inside carousel */}
+              {!isMobile && (
+                <>
+                  <CarouselPrevious className="-left-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
+                  <CarouselNext className="-right-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
+                </>
+              )}
+            </Carousel>
+          </div>
         </div>
       </div>
     </div>
@@ -413,19 +435,29 @@ const ProductPhoneCarousel = () => {
     </div>
   );
 
-  const swipeLabel = (
+  const navHint = (
     <div className="flex items-center gap-2 text-muted-foreground/40">
-      <span className="text-lg sm:text-xl font-bold tracking-tight">Swipe</span>
-      <ChevronDown className="h-5 w-5 sm:h-6 sm:w-6 rotate-[-90deg]" />
+      {isMobile ? (
+        <>
+          <span className="text-lg font-bold tracking-tight">Swipe</span>
+          <ChevronDown className="h-5 w-5 rotate-[-90deg]" />
+        </>
+      ) : (
+        <>
+          <ChevronDown className="h-5 w-5 rotate-90" />
+          <span className="text-lg font-bold tracking-tight">Use arrows</span>
+          <ChevronDown className="h-5 w-5 rotate-[-90deg]" />
+        </>
+      )}
     </div>
   );
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-4 overflow-visible">
       {caption}
       {phoneCarousel}
       {dots}
-      {swipeLabel}
+      {navHint}
     </div>
   );
 };
