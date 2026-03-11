@@ -38,6 +38,7 @@ export function AppSidebar() {
     { title: 'Playbook', url: '/playbook', icon: Lightbulb, description: 'Closing tips & tactics' },
     { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle, description: t('nav.howToUseDesc') },
     { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare, description: t('nav.feedbackDesc') },
+    { title: 'Notepad', url: '#notepad', icon: StickyNote, description: 'Personal actions & notes' },
   ];
 
   const adminItems = [
@@ -93,7 +94,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
-                const isActive = location.pathname === item.url;
+                const isActive = item.url !== '#notepad' && location.pathname === item.url;
                 const isFlashing = 
                   (item.url === '/outreach' && (flashCRM || crmPulseWalkthrough)) || 
                   (item.url === '/potential-work' && (flashTrack || trackPulseWalkthrough)) ||
@@ -102,9 +103,13 @@ export function AppSidebar() {
                 return (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild isActive={isActive}>
-                      <Link 
-                        to={item.url}
-                        onClick={() => {
+                    <Link 
+                        to={item.url === '#notepad' ? '#' : item.url}
+                        onClick={(e) => {
+                          if (item.url === '#notepad') {
+                            e.preventDefault();
+                            setNotepadOpen(true);
+                          }
                           if (item.url === '/potential-work') {
                             window.dispatchEvent(new CustomEvent('demo-checklist-track-pressed'));
                           }
@@ -171,13 +176,6 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3 mt-auto shrink-0 space-y-2">
-        <button
-          onClick={() => setNotepadOpen(true)}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground w-full"
-        >
-          <StickyNote className="h-5 w-5 shrink-0" />
-          <span className="text-sm">Notepad</span>
-        </button>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
