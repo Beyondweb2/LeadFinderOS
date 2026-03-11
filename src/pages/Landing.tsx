@@ -399,7 +399,7 @@ const ProductPhoneCarousel = () => {
           />
 
           {/* Phone frame */}
-          <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden max-h-[440px] sm:max-h-[500px] md:max-h-[560px]">
+          <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden" style={{ minHeight: '380px' }}>
             {/* Notch */}
             <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
             <Carousel
@@ -414,7 +414,6 @@ const ProductPhoneCarousel = () => {
                       src={slide.image}
                       alt={`${slide.title} screen`}
                       className="w-full h-auto"
-                      loading="lazy"
                     />
                   </CarouselItem>
                 ))}
