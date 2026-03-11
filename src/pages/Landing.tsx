@@ -617,28 +617,28 @@ const Landing = () => {
             </p>
           </ScrollReveal>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 md:gap-8 max-w-4xl mx-auto">
+          <div className="grid grid-cols-2 gap-3 sm:gap-6 md:gap-8 max-w-2xl mx-auto">
             <ScrollReveal delay={100}>
               <div className="rounded-2xl overflow-hidden border border-border/40 shadow-lg">
                 <img 
                   src={demoSearchInput} 
                   alt="Search for electricians in Manchester" 
-                  className="w-full h-auto" 
+                  className="w-full h-auto max-h-[340px] sm:max-h-[400px] object-cover object-top" 
                   loading="lazy" 
                 />
               </div>
-              <p className="text-xs sm:text-sm text-muted-foreground/60 text-center mt-2.5 font-medium">Search any business type and location</p>
+              <p className="text-[10px] sm:text-sm text-muted-foreground/60 text-center mt-2 sm:mt-2.5 font-medium">Search any business type and location</p>
             </ScrollReveal>
             <ScrollReveal delay={200}>
               <div className="rounded-2xl overflow-hidden border border-border/40 shadow-lg">
                 <img 
                   src={demoSearchResults} 
                   alt="Results showing businesses without websites" 
-                  className="w-full h-auto" 
+                  className="w-full h-auto max-h-[340px] sm:max-h-[400px] object-cover object-top" 
                   loading="lazy" 
                 />
               </div>
-              <p className="text-xs sm:text-sm text-muted-foreground/60 text-center mt-2.5 font-medium">Instantly see results with hot leads highlighted</p>
+              <p className="text-[10px] sm:text-sm text-muted-foreground/60 text-center mt-2 sm:mt-2.5 font-medium">Instantly see results with hot leads highlighted</p>
             </ScrollReveal>
           </div>
         </div>
