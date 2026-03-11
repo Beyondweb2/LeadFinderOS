@@ -103,9 +103,13 @@ export function AppSidebar() {
                 return (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild isActive={isActive}>
-                      <Link 
-                        to={item.url}
-                        onClick={() => {
+                    <Link 
+                        to={item.url === '#notepad' ? '#' : item.url}
+                        onClick={(e) => {
+                          if (item.url === '#notepad') {
+                            e.preventDefault();
+                            setNotepadOpen(true);
+                          }
                           if (item.url === '/potential-work') {
                             window.dispatchEvent(new CustomEvent('demo-checklist-track-pressed'));
                           }
