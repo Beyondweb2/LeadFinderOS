@@ -105,27 +105,22 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
             <span className="truncate">Next Actions</span>
           </CardTitle>
           {/* Toggle */}
-          <div className="flex bg-muted/50 rounded-md p-0.5 gap-0.5">
-            <button
-              onClick={() => setViewMode('business')}
-              className={cn(
-                'text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded transition-colors font-medium',
-                viewMode === 'business' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              Business
-            </button>
-            <button
-              onClick={() => setViewMode('personal')}
-              className={cn(
-                'text-[9px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 rounded transition-colors font-medium flex items-center gap-0.5',
-                viewMode === 'personal' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <StickyNote className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
-              My Actions
-            </button>
-          </div>
+          <button
+            onClick={() => setViewMode(v => v === 'business' ? 'personal' : 'business')}
+            className="text-[9px] sm:text-[10px] px-2 py-0.5 rounded bg-muted/50 text-muted-foreground hover:text-foreground transition-colors font-medium flex items-center gap-1"
+          >
+            {viewMode === 'business' ? (
+              <>
+                <StickyNote className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                My Actions
+              </>
+            ) : (
+              <>
+                <CalendarClock className="h-2.5 w-2.5 sm:h-3 sm:w-3" />
+                Business
+              </>
+            )}
+          </button>
         </div>
       </CardHeader>
       <CardContent className="space-y-2 sm:space-y-3 p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
