@@ -256,15 +256,30 @@ const productPreviewSlides = [
 
 const ProductPhoneCarousel = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const isMobile = useIsMobile();
 
-  const goNext = useCallback(() => {
-    setCurrentSlide((prev) => (prev + 1) % productPreviewSlides.length);
+  // Preload all slide images on mount for smooth swiping
+  useEffect(() => {
+    productPreviewSlides.forEach((slide) => {
+      const img = new Image();
+      img.src = slide.image;
+    });
   }, []);
 
+  const goNext = useCallback(() => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setCurrentSlide((prev) => (prev + 1) % productPreviewSlides.length);
+    setTimeout(() => setIsTransitioning(false), 350);
+  }, [isTransitioning]);
+
   const goPrev = useCallback(() => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
     setCurrentSlide((prev) => (prev - 1 + productPreviewSlides.length) % productPreviewSlides.length);
-  }, []);
+    setTimeout(() => setIsTransitioning(false), 350);
+  }, [isTransitioning]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -297,7 +312,7 @@ const ProductPhoneCarousel = () => {
       </div>
 
       {/* Slide title + description */}
-      <div className="text-center max-w-lg mx-auto">
+      <div className="text-center max-w-lg mx-auto px-4">
         <p className="text-sm sm:text-base font-bold tracking-widest uppercase text-primary mb-1.5">
           {slide.title}
         </p>
@@ -307,7 +322,7 @@ const ProductPhoneCarousel = () => {
       </div>
 
       {/* Phone + feature boxes + arrows */}
-      <div className="relative flex items-center justify-center w-full max-w-[750px]">
+      <div className="relative flex items-center justify-center w-full max-w-[900px]">
         {/* Left arrow */}
         {!isMobile && (
           <button
@@ -320,35 +335,41 @@ const ProductPhoneCarousel = () => {
         )}
 
         {/* Layout: boxes - phone - boxes */}
-        <div className="flex flex-col sm:flex-row items-center sm:items-stretch justify-center gap-4 sm:gap-6 w-full">
+        <div className="flex flex-col sm:flex-row items-center sm:items-stretch justify-center gap-4 sm:gap-8 w-full">
           {/* Left feature box (desktop) */}
-          <div className="hidden sm:flex flex-col justify-center gap-3 flex-1 max-w-[180px]" style={{ animation: `fadeSlideIn 0.5s ease 200ms both` }}>
+          <div className="hidden sm:flex flex-col justify-center gap-3 flex-1 max-w-[200px]" key={`left-${currentSlide}`} style={{ animation: `fadeSlideIn 0.5s ease 200ms both` }}>
             <FeaturePoint text={slide.points[0]} align="right" delay={0} />
             <FeaturePoint text={slide.points[1]} align="right" delay={150} />
           </div>
 
-          {/* Phone */}
+          {/* Phone - 20% bigger on desktop */}
           <div
-            className="relative w-[220px] sm:w-[260px] flex-shrink-0"
+            className="relative w-[220px] sm:w-[310px] flex-shrink-0"
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
           >
             <div className="absolute -inset-10 rounded-full opacity-20 blur-3xl -z-10" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.3), transparent 70%)' }} />
             <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
               <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
-              <img src={slide.image} alt={`${slide.title} screen`} className="w-full h-auto block" draggable={false} />
+              <img
+                src={slide.image}
+                alt={`${slide.title} screen`}
+                className="w-full h-auto block transition-opacity duration-300"
+                style={{ opacity: isTransitioning ? 0.6 : 1 }}
+                draggable={false}
+              />
             </div>
           </div>
 
           {/* Right feature box (desktop) */}
-          <div className="hidden sm:flex flex-col justify-center gap-3 flex-1 max-w-[180px]" style={{ animation: `fadeSlideIn 0.5s ease 350ms both` }}>
+          <div className="hidden sm:flex flex-col justify-center gap-3 flex-1 max-w-[200px]" key={`right-${currentSlide}`} style={{ animation: `fadeSlideIn 0.5s ease 350ms both` }}>
             <FeaturePoint text={slide.points[2]} align="left" delay={300} />
           </div>
 
-          {/* Mobile: all points below phone */}
-          <div className="flex sm:hidden flex-col gap-2.5 w-full max-w-[280px]">
+          {/* Mobile: all points below phone, centered */}
+          <div className="flex sm:hidden flex-col items-center gap-2.5 w-full max-w-[280px]">
             {slide.points.map((pt, i) => (
-              <FeaturePoint key={i} text={pt} align="left" delay={i * 100} />
+              <FeaturePoint key={i} text={pt} align="center" delay={i * 100} />
             ))}
           </div>
         </div>
@@ -397,16 +418,20 @@ const ProductPhoneCarousel = () => {
   );
 };
 
-const FeaturePoint = ({ text, align, delay }: { text: string; align: 'left' | 'right'; delay: number }) => (
+const FeaturePoint = ({ text, align, delay }: { text: string; align: 'left' | 'right' | 'center'; delay: number }) => (
   <div
-    className={`flex items-start gap-2 ${align === 'right' ? 'justify-end text-right' : 'justify-start text-left'}`}
+    className={`flex items-start gap-2 ${
+      align === 'right' ? 'justify-end text-right' :
+      align === 'center' ? 'justify-center text-center' :
+      'justify-start text-left'
+    }`}
     style={{ animation: `fadeSlideIn 0.4s ease ${delay + 200}ms both` }}
   >
     {align === 'right' && (
       <span className="text-xs sm:text-sm text-muted-foreground/90 leading-snug">{text}</span>
     )}
     <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 flex-shrink-0 shadow-[0_0_6px_hsl(var(--primary)/0.5)]" />
-    {align === 'left' && (
+    {(align === 'left' || align === 'center') && (
       <span className="text-xs sm:text-sm text-muted-foreground/90 leading-snug">{text}</span>
     )}
   </div>
@@ -836,7 +861,7 @@ const Landing = () => {
         <div className="container mx-auto max-w-5xl">
           <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-10 sm:mb-12">
             Trusted by freelancers
-            <br className="sm:hidden" />
+            <br />
             {' '}and agencies{' '}
             <span className="text-gradient-primary">worldwide</span>
           </h2>
