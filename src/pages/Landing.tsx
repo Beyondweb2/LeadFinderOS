@@ -28,9 +28,8 @@ import { useLandingTheme } from '@/hooks/useLandingTheme';
 import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
 import step3Outreach from '@/assets/howto-step3-outreach-crm.png';
-import step4Dashboard from '@/assets/howto-step4-dashboard.png';
-import demoSearchInput from '@/assets/demo-search-input.jpg';
-import demoSearchResults from '@/assets/demo-search-results.jpg';
+
+
 
 import previewDashboard from '@/assets/preview-dashboard.jpg';
 import previewSearch from '@/assets/preview-search.jpg';
