@@ -213,7 +213,7 @@ const VideoSection = () => {
             {isMuted ? <VolumeX className="h-4 w-4 md:h-5 md:w-5" /> : <Volume2 className="h-4 w-4 md:h-5 md:w-5" />}
           </button>
         </div>
-        <p className="text-center text-xs sm:text-sm text-muted-foreground/60 mt-6 sm:mt-10">
+        <p className="text-center text-xs sm:text-sm text-muted-foreground/60 mt-6 sm:mt-10 sm:hidden">
           See the difference for yourself.
         </p>
       </div>
