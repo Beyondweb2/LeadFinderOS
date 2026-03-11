@@ -19,8 +19,8 @@ import {
 import demoVideo from '@/assets/leadfinder-advert-2.mp4';
 import appLogo from '@/assets/logo.png';
 
-import featureDashboard from '@/assets/howto-step4-dashboard.png';
-import featureClassification from '@/assets/feature-classification.png';
+
+
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
