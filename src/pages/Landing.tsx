@@ -973,8 +973,8 @@ const Landing = () => {
       </section>
 
       {/* Product Preview Section */}
-      <section className="relative z-10 py-10 sm:py-14 md:py-16 px-3 sm:px-4">
-        <div className="container mx-auto max-w-[1150px]">
+      <section className="relative z-10 py-10 sm:py-14 md:py-16 px-3 sm:px-4 overflow-visible">
+        <div className="container mx-auto max-w-[1150px] overflow-visible">
           <ScrollReveal className="text-center mb-6 sm:mb-8 md:mb-10">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
               The{' '}
