@@ -38,11 +38,8 @@ import previewOutreach from '@/assets/preview-outreach.jpg';
 import previewTrack from '@/assets/preview-track.jpg';
 import previewResults from '@/assets/preview-results.jpg';
 
-import featureTemplates from '@/assets/feature-templates.png';
-import featureContactTracking from '@/assets/feature-contact-tracking.png';
-import featureCustomization from '@/assets/feature-customization-new.png';
-import featureExport from '@/assets/feature-export.png';
-import featureLeadManagement from '@/assets/feature-lead-management.png';
+
+
 import avatarChris from '@/assets/avatar-chris.jpg';
 import avatarTom from '@/assets/avatar-tom.jpg';
 import avatarAlex from '@/assets/avatar-alex.jpg';
