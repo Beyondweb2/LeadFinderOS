@@ -100,7 +100,6 @@ const InlineCTA = ({ text = 'Ready to find your next client?', onCTA }: { text?:
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
     <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={onCTA}>
       Try for free
-      <ArrowRight className="ml-2 h-4 w-4" />
     </Button>
   </div>
 );
