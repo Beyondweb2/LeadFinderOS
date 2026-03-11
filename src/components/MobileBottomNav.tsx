@@ -207,6 +207,7 @@ export function MobileBottomNav() {
         </div>
       </nav>
 
+      <NotepadModal open={notepadOpen} onOpenChange={setNotepadOpen} />
       <Sheet open={themeSheetOpen} onOpenChange={setThemeSheetOpen}>
         <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl bg-card border-border p-0">
           <SheetHeader className="p-6 pb-4">
