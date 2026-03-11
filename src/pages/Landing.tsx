@@ -32,6 +32,11 @@ import step4Dashboard from '@/assets/howto-step4-dashboard.png';
 import demoSearchInput from '@/assets/demo-search-input.jpg';
 import demoSearchResults from '@/assets/demo-search-results.jpg';
 
+import previewDashboard from '@/assets/preview-dashboard.jpg';
+import previewSearch from '@/assets/preview-search.jpg';
+import previewOutreach from '@/assets/preview-outreach.jpg';
+import previewTrack from '@/assets/preview-track.jpg';
+
 import featureTemplates from '@/assets/feature-templates.png';
 import featureContactTracking from '@/assets/feature-contact-tracking.png';
 import featureCustomization from '@/assets/feature-customization-new.png';
