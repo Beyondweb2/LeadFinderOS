@@ -167,7 +167,7 @@ const App = () => {
             <BrowserRouter>
               <RefSourceCapture />
               <ScrollToTop />
-              <Suspense fallback={<PageLoader />}>
+              <Suspense fallback={<FullPageLoader />}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
              <Route path="/billing/success" element={<BillingSuccess />} />
