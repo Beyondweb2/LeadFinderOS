@@ -743,45 +743,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Search Demo Section */}
-      <section className="relative z-10 py-12 sm:py-16 md:py-20 px-3 sm:px-4">
-        <div className="container mx-auto max-w-5xl">
-          <ScrollReveal className="text-center mb-8 sm:mb-12">
-            <h2 className="text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
-              Find businesses without websites{' '}
-              <span className="text-gradient-primary">in seconds</span>
-            </h2>
-            <p className="text-sm sm:text-base text-muted-foreground/70 mt-3 sm:mt-4 max-w-2xl mx-auto leading-relaxed">
-              Search any business type in any location and instantly see which ones need a website.
-            </p>
-          </ScrollReveal>
-
-          <div className="grid grid-cols-2 gap-3 sm:gap-6 md:gap-8 max-w-2xl mx-auto">
-            <ScrollReveal delay={100}>
-              <div className="rounded-2xl overflow-hidden border border-border/40 shadow-lg">
-                <img 
-                  src={demoSearchInput} 
-                  alt="Search for electricians in Manchester" 
-                  className="w-full h-auto max-h-[340px] sm:max-h-[400px] object-cover object-top" 
-                  loading="lazy" 
-                />
-              </div>
-              <p className="text-[10px] sm:text-sm text-muted-foreground/60 text-center mt-2 sm:mt-2.5 font-medium">Search any business type and location</p>
-            </ScrollReveal>
-            <ScrollReveal delay={200}>
-              <div className="rounded-2xl overflow-hidden border border-border/40 shadow-lg">
-                <img 
-                  src={demoSearchResults} 
-                  alt="Results showing businesses without websites" 
-                  className="w-full h-auto max-h-[340px] sm:max-h-[400px] object-cover object-top" 
-                  loading="lazy" 
-                />
-              </div>
-              <p className="text-[10px] sm:text-sm text-muted-foreground/60 text-center mt-2 sm:mt-2.5 font-medium">Instantly see results with hot leads highlighted</p>
-            </ScrollReveal>
-          </div>
-        </div>
-      </section>
 
       {/* Video Demo Section - desktop only */}
       <div className="hidden sm:block">
