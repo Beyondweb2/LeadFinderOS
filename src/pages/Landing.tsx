@@ -234,16 +234,17 @@ const VideoSection = () => {
 };
 
 const productPreviewSlides = [
-  { image: previewDashboard, title: 'Dashboard', desc: 'Track revenue, pipeline and performance' },
-  { image: previewSearch, title: 'Search', desc: 'Find businesses without websites in seconds' },
-  { image: previewResults, title: 'Results', desc: 'See hot leads instantly after searching' },
-  { image: previewOutreach, title: 'Outreach', desc: 'Contact leads and manage conversations' },
-  { image: previewTrack, title: 'Track', desc: 'Stay on top of deals and follow-ups' },
+  { image: previewDashboard, title: 'Dashboard', desc: 'Get a full overview of your pipeline. Track revenue, active leads and upcoming follow-ups.' },
+  { image: previewSearch, title: 'Search', desc: 'Find businesses without websites by searching any business type in any location.' },
+  { image: previewResults, title: 'Results', desc: 'Instantly see which businesses need a website and add them to your outreach list.' },
+  { image: previewOutreach, title: 'Outreach', desc: 'Contact businesses using SMS, WhatsApp or phone and manage conversations in one place.' },
+  { image: previewTrack, title: 'Track', desc: 'Track deals, notes and follow-ups so no opportunity gets forgotten.' },
 ];
 
 const ProductPhoneCarousel = () => {
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (!carouselApi) return;
@@ -253,28 +254,19 @@ const ProductPhoneCarousel = () => {
     return () => { carouselApi.off('select', onSelect); };
   }, [carouselApi]);
 
-  return (
-    <div className="flex flex-col items-center gap-4 sm:gap-5">
-      {/* Swipe hint */}
-      <p className="text-[11px] text-muted-foreground/40 tracking-wide flex items-center gap-1.5">
-        <span>←</span> Swipe to explore <span>→</span>
-      </p>
-
+  const phoneAndControls = (
+    <div className="flex flex-col items-center gap-4">
       {/* Phone frame with glow */}
       <div className="relative">
         {/* Background glow */}
-        <div 
-          className="absolute -inset-8 sm:-inset-12 rounded-full opacity-30 blur-3xl -z-10"
-          style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.15), transparent 70%)' }}
+        <div
+          className="absolute -inset-8 sm:-inset-12 rounded-full opacity-25 blur-3xl -z-10"
+          style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.2), transparent 70%)' }}
         />
-        <div 
-          className="relative w-[220px] sm:w-[280px] md:w-[380px]"
-          style={{ transform: 'rotate(-3deg)' }}
-        >
-          <div className="rounded-[2rem] sm:rounded-[2.5rem] md:rounded-[3rem] border-[6px] sm:border-[8px] md:border-[10px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden max-h-[420px] sm:max-h-[500px] md:max-h-[620px]">
+        <div className="relative w-[230px] sm:w-[260px] md:w-[300px]">
+          <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden max-h-[440px] sm:max-h-[500px] md:max-h-[560px]">
             {/* Notch */}
-            <div className="absolute top-[6px] sm:top-[8px] md:top-[10px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[70px] md:w-[90px] h-[16px] sm:h-[20px] md:h-[24px] bg-foreground/15 rounded-b-xl z-10" />
-            {/* Carousel inside phone */}
+            <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
             <Carousel
               setApi={setCarouselApi}
               opts={{ loop: true }}
@@ -292,19 +284,16 @@ const ProductPhoneCarousel = () => {
                   </CarouselItem>
                 ))}
               </CarouselContent>
+              {/* Desktop arrows */}
+              {!isMobile && (
+                <>
+                  <CarouselPrevious className="-left-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
+                  <CarouselNext className="-right-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
+                </>
+              )}
             </Carousel>
           </div>
         </div>
-      </div>
-
-      {/* Caption */}
-      <div className="text-center min-h-[44px] transition-opacity duration-300">
-        <p className="text-sm sm:text-base font-semibold text-foreground">
-          {productPreviewSlides[currentSlide]?.title}
-        </p>
-        <p className="text-xs sm:text-sm text-muted-foreground/60 mt-0.5">
-          {productPreviewSlides[currentSlide]?.desc}
-        </p>
       </div>
 
       {/* Dots */}
@@ -313,7 +302,7 @@ const ProductPhoneCarousel = () => {
           <button
             key={i}
             onClick={() => carouselApi?.scrollTo(i)}
-            className={`rounded-full transition-all duration-400 ease-out ${
+            className={`rounded-full transition-all duration-300 ease-out ${
               i === currentSlide
                 ? 'h-2.5 w-7 bg-primary'
                 : 'h-2.5 w-2.5 bg-foreground/20 hover:bg-foreground/30'
@@ -322,7 +311,41 @@ const ProductPhoneCarousel = () => {
           />
         ))}
       </div>
+
+      {/* Mobile swipe hint */}
+      {isMobile && (
+        <p className="text-[11px] text-muted-foreground/40 tracking-wide">
+          ← Swipe to explore →
+        </p>
+      )}
     </div>
+  );
+
+  const textContent = (
+    <div className="text-center md:text-left">
+      <p className="text-xs font-medium tracking-widest uppercase text-primary/70 mb-2">
+        {productPreviewSlides[currentSlide]?.title}
+      </p>
+      <p className="text-sm sm:text-base text-muted-foreground/70 leading-relaxed max-w-sm mx-auto md:mx-0">
+        {productPreviewSlides[currentSlide]?.desc}
+      </p>
+    </div>
+  );
+
+  // Desktop: two-column | Mobile: stacked
+  return (
+    <>
+      {/* Desktop layout */}
+      <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-12 items-center">
+        <div className="flex flex-col justify-center">{textContent}</div>
+        {phoneAndControls}
+      </div>
+      {/* Mobile layout */}
+      <div className="flex flex-col items-center gap-4 md:hidden">
+        {phoneAndControls}
+        {textContent}
+      </div>
+    </>
   );
 };
 
