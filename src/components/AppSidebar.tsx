@@ -13,10 +13,11 @@ import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText, Star,
-  DollarSign, HelpCircle, Users, MessageSquare, ShieldCheck, Lightbulb
+  DollarSign, HelpCircle, Users, MessageSquare, ShieldCheck, Lightbulb, StickyNote
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
+import { NotepadModal } from '@/components/NotepadModal';
 import appLogo from '@/assets/logo.png';
 
 export function AppSidebar() {
@@ -25,6 +26,7 @@ export function AppSidebar() {
   const { isAdmin } = useSubscription();
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
+  const [notepadOpen, setNotepadOpen] = useState(false);
 
   const navItems = [
     { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard, description: t('nav.dashboardDesc') },
@@ -168,7 +170,14 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3 mt-auto shrink-0">
+      <SidebarFooter className="border-t border-sidebar-border p-3 mt-auto shrink-0 space-y-2">
+        <button
+          onClick={() => setNotepadOpen(true)}
+          className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground w-full"
+        >
+          <StickyNote className="h-5 w-5 shrink-0" />
+          <span className="text-sm">Notepad</span>
+        </button>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Avatar className="h-8 w-8">
@@ -182,6 +191,7 @@ export function AppSidebar() {
           <AccentColorPicker />
         </div>
       </SidebarFooter>
+      <NotepadModal open={notepadOpen} onOpenChange={setNotepadOpen} />
     </Sidebar>
   );
 }

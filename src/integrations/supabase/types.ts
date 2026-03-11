@@ -551,6 +551,33 @@ export type Database = {
           },
         ]
       }
+      personal_actions: {
+        Row: {
+          completed: boolean
+          created_at: string
+          due_date: string | null
+          id: string
+          text: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          text: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          due_date?: string | null
+          id?: string
+          text?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       phone_cache: {
         Row: {
           address: string | null

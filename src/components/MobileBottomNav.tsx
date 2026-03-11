@@ -15,6 +15,7 @@ import {
 import {
   Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle,
 } from '@/components/ui/sheet';
+import { NotepadModal } from '@/components/NotepadModal';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -23,7 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAccentColor, hexToHSL, hslToHex, ThemePreset } from '@/hooks/useAccentColor';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
-import { Check, Sparkles, Sun, Moon, RotateCcw } from 'lucide-react';
+import { Check, Sparkles, Sun, Moon, RotateCcw, StickyNote } from 'lucide-react';
 
 function MobileThemeGrid({ themes, activeThemeId, onSelect }: { themes: ThemePreset[]; activeThemeId: string; onSelect: (id: string) => void; }) {
   return (
@@ -53,6 +54,7 @@ export function MobileBottomNav() {
   const { signOut } = useAuth();
   const { isAdmin, openCustomerPortal } = useSubscription();
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
+  const [notepadOpen, setNotepadOpen] = useState(false);
   const [crmGlow, setCrmGlow] = useState(false);
   const [trackGlow, setTrackGlow] = useState(false);
   const [searchGlow, setSearchGlow] = useState(false);
@@ -181,6 +183,10 @@ export function MobileBottomNav() {
                 );
               })}
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setNotepadOpen(true)} className="flex items-center gap-3 cursor-pointer">
+                <StickyNote className="h-4 w-4" />
+                <span>Notepad</span>
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => {
                 try { openCustomerPortal(); } catch { }
               }} className="flex items-center gap-3 cursor-pointer">
@@ -201,6 +207,7 @@ export function MobileBottomNav() {
         </div>
       </nav>
 
+      <NotepadModal open={notepadOpen} onOpenChange={setNotepadOpen} />
       <Sheet open={themeSheetOpen} onOpenChange={setThemeSheetOpen}>
         <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl bg-card border-border p-0">
           <SheetHeader className="p-6 pb-4">
