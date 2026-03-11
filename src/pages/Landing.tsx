@@ -555,10 +555,10 @@ const Landing = () => {
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                   <Button 
                     size="lg" 
-                    className="btn-premium text-[13px] sm:text-[16px] font-semibold px-6 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                    className="btn-premium text-[13px] sm:text-[16px] font-semibold px-8 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                     onClick={handleCTA}
                   >
-                    Find leads now
+                    Try it free
                   </Button>
                 <Button 
                   variant="ghost" 
@@ -570,8 +570,8 @@ const Landing = () => {
                   </Link>
                 </Button>
               </div>
-              <p className="text-[11px] text-muted-foreground/50 mt-2 tracking-wide sm:hidden">
-                £0 today · 5-day free trial · Cancel anytime
+              <p className="text-[11px] text-muted-foreground/50 mt-2.5 tracking-wide">
+                £0 today • Find leads in seconds
               </p>
             </div>
 
