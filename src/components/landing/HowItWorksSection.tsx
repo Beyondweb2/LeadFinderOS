@@ -41,7 +41,7 @@ const STEPS: StepData[] = [
   {
     icon: Search,
     title: 'Find Businesses That Actually Need You',
-    description: 'Search any business type, anywhere globally, and instantly see which ones don\'t have a website.',
+    description: 'Search any business type in any location and instantly find businesses that could need your service.',
     images: [step1Image],
     badge: '20+ Countries',
     blueWord: 'Businesses',
