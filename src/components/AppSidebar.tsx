@@ -94,7 +94,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
-                const isActive = location.pathname === item.url;
+                const isActive = item.url !== '#notepad' && location.pathname === item.url;
                 const isFlashing = 
                   (item.url === '/outreach' && (flashCRM || crmPulseWalkthrough)) || 
                   (item.url === '/potential-work' && (flashTrack || trackPulseWalkthrough)) ||
