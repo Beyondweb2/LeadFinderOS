@@ -841,7 +841,7 @@ const Landing = () => {
 
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
+      <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
