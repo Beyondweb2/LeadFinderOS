@@ -1091,7 +1091,6 @@ const Landing = () => {
         >
           <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={handleCTA}>
               Try for free
-              <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
             5-day free trial · £0 today · Cancel anytime
