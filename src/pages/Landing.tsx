@@ -230,6 +230,87 @@ const VideoSection = () => {
   );
 };
 
+const productPreviewSlides = [
+  { image: previewDashboard, title: 'Dashboard', desc: 'Track your performance and pipeline' },
+  { image: previewSearch, title: 'Search', desc: 'Find businesses that don\'t have websites' },
+  { image: previewOutreach, title: 'Outreach', desc: 'Contact businesses and manage conversations' },
+  { image: previewTrack, title: 'Track', desc: 'Keep track of deals and follow-ups' },
+];
+
+const ProductPhoneCarousel = () => {
+  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  useEffect(() => {
+    if (!carouselApi) return;
+    const onSelect = () => setCurrentSlide(carouselApi.selectedScrollSnap());
+    carouselApi.on('select', onSelect);
+    onSelect();
+    return () => { carouselApi.off('select', onSelect); };
+  }, [carouselApi]);
+
+  return (
+    <div className="flex flex-col items-center gap-5 sm:gap-6">
+      {/* Phone frame */}
+      <div 
+        className="relative w-[240px] sm:w-[280px] md:w-[320px]"
+        style={{ transform: 'rotate(1.5deg)' }}
+      >
+        <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
+          {/* Notch */}
+          <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[70px] h-[16px] sm:h-[20px] bg-foreground/15 rounded-b-xl z-10" />
+          {/* Carousel inside phone */}
+          <Carousel
+            setApi={setCarouselApi}
+            opts={{ loop: true }}
+            plugins={[Autoplay({ delay: 4000, stopOnInteraction: true })]}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-0">
+              {productPreviewSlides.map((slide, i) => (
+                <CarouselItem key={i} className="pl-0">
+                  <img
+                    src={slide.image}
+                    alt={`${slide.title} screen`}
+                    className="w-full h-auto"
+                    loading="lazy"
+                  />
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
+        </div>
+      </div>
+
+      {/* Caption */}
+      <div className="text-center min-h-[48px] transition-opacity duration-300">
+        <p className="text-sm sm:text-base font-semibold text-foreground">
+          {productPreviewSlides[currentSlide]?.title}
+        </p>
+        <p className="text-xs sm:text-sm text-muted-foreground/60 mt-0.5">
+          {productPreviewSlides[currentSlide]?.desc}
+        </p>
+      </div>
+
+      {/* Dots */}
+      <div className="flex items-center gap-2">
+        {productPreviewSlides.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => carouselApi?.scrollTo(i)}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              i === currentSlide
+                ? 'w-6 bg-primary'
+                : 'w-2 bg-foreground/20 hover:bg-foreground/30'
+            }`}
+            aria-label={`Go to slide ${i + 1}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 
 interface ToolkitFeature {
   title: string;
