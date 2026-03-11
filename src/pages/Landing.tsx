@@ -977,7 +977,7 @@ const Landing = () => {
       </section>
 
       {/* Product Preview Section */}
-      <section id="product-preview-debug" className="relative z-10 py-10 sm:py-14 md:py-16 px-3 sm:px-4" style={{ border: '2px solid red', minHeight: '200px' }}>
+      <section className="relative z-10 py-10 sm:py-14 md:py-16 px-3 sm:px-4">
         <div className="container mx-auto max-w-[1150px]">
           <div className="text-center mb-6 sm:mb-8 md:mb-10">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
