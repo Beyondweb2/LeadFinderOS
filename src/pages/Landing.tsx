@@ -979,8 +979,9 @@ const Landing = () => {
         <div className="container mx-auto max-w-[1150px]">
           <div className="text-center mb-6 sm:mb-8 md:mb-10">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
-              The{' '}
-              <span className="text-gradient-primary">LeadFinder</span> system
+              Your Complete
+              <br />
+              <span className="text-gradient-primary">Lead Toolkit</span>
             </h2>
           </div>
 
