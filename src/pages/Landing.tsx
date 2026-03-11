@@ -301,16 +301,6 @@ const ProductPhoneCarousel = () => {
 
   return (
     <div className="flex flex-col items-center gap-5 sm:gap-6">
-      {/* Workflow headline */}
-      <div className="flex items-center gap-3 sm:gap-4 mb-1">
-        {['Find', 'Contact', 'Track'].map((step, i) => (
-          <div key={step} className="flex items-center gap-3 sm:gap-4">
-            <span className="text-sm sm:text-base font-bold text-primary tracking-wide uppercase">{step}</span>
-            {i < 2 && <span className="text-muted-foreground/40 text-lg">→</span>}
-          </div>
-        ))}
-      </div>
-
       {/* Slide title + description */}
       <div className="text-center max-w-lg mx-auto px-4">
         <p className="text-sm sm:text-base font-bold tracking-widest uppercase text-primary mb-1.5">
