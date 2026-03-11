@@ -234,12 +234,95 @@ const VideoSection = () => {
 };
 
 const productPreviewSlides = [
-  { image: previewDashboard, title: 'Dashboard', desc: 'Get a full overview of your pipeline. Track revenue, active leads and upcoming follow-ups.' },
-  { image: previewSearch, title: 'Search', desc: 'Find businesses without websites by searching any business type in any location.' },
-  { image: previewResults, title: 'Results', desc: 'Instantly see which businesses need a website and add them to your outreach list.' },
-  { image: previewOutreach, title: 'Outreach', desc: 'Contact businesses using SMS, WhatsApp or phone and manage conversations in one place.' },
-  { image: previewTrack, title: 'Track', desc: 'Track deals, notes and follow-ups so no opportunity gets forgotten.' },
+  {
+    image: previewDashboard,
+    title: 'Dashboard',
+    desc: 'Get a full overview of your pipeline. Track revenue, active leads and upcoming follow-ups.',
+    annotations: [
+      { top: '12%', left: '8%', label: 'Revenue stats', side: 'right' as const },
+      { top: '45%', left: '60%', label: 'Active leads', side: 'left' as const },
+      { top: '75%', left: '15%', label: 'Follow-ups', side: 'right' as const },
+    ],
+  },
+  {
+    image: previewSearch,
+    title: 'Search',
+    desc: 'Search any business type in any location and instantly find businesses that could need your service.',
+    annotations: [
+      { top: '18%', left: '50%', label: 'Business type', side: 'left' as const },
+      { top: '40%', left: '20%', label: 'Location', side: 'right' as const },
+      { top: '70%', left: '60%', label: 'One-tap search', side: 'left' as const },
+    ],
+  },
+  {
+    image: previewResults,
+    title: 'Results',
+    desc: 'Instantly see which businesses need your services and add them to your outreach list.',
+    annotations: [
+      { top: '20%', left: '70%', label: 'Hot leads', side: 'left' as const },
+      { top: '50%', left: '15%', label: 'Business info', side: 'right' as const },
+      { top: '78%', left: '55%', label: 'Save to pipeline', side: 'left' as const },
+    ],
+  },
+  {
+    image: previewOutreach,
+    title: 'Outreach',
+    desc: 'Contact businesses using SMS, WhatsApp or phone and manage conversations in one place.',
+    annotations: [
+      { top: '15%', left: '25%', label: 'Contact channels', side: 'right' as const },
+      { top: '50%', left: '65%', label: 'Message status', side: 'left' as const },
+      { top: '80%', left: '20%', label: 'Follow-up reminders', side: 'right' as const },
+    ],
+  },
+  {
+    image: previewTrack,
+    title: 'Track',
+    desc: 'Track deals, notes and follow-ups so no opportunity gets forgotten.',
+    annotations: [
+      { top: '18%', left: '60%', label: 'Deal status', side: 'left' as const },
+      { top: '48%', left: '15%', label: 'Notes & history', side: 'right' as const },
+      { top: '75%', left: '55%', label: 'Next actions', side: 'left' as const },
+    ],
+  },
 ];
+
+const SlideAnnotations = ({ annotations, isActive }: { annotations: typeof productPreviewSlides[0]['annotations']; isActive: boolean }) => (
+  <>
+    {annotations.map((ann, i) => (
+      <div
+        key={i}
+        className="absolute z-20 pointer-events-none flex items-center gap-1"
+        style={{
+          top: ann.top,
+          left: ann.side === 'right' ? ann.left : 'auto',
+          right: ann.side === 'left' ? `${100 - parseFloat(ann.left)}%` : 'auto',
+          opacity: isActive ? 1 : 0,
+          transform: isActive ? 'translateY(0)' : 'translateY(6px)',
+          transition: `opacity 0.5s ease ${i * 150 + 300}ms, transform 0.5s ease ${i * 150 + 300}ms`,
+        }}
+      >
+        {ann.side === 'left' && (
+          <>
+            <span className="text-[8px] sm:text-[9px] font-semibold text-primary/90 whitespace-nowrap bg-background/70 backdrop-blur-sm rounded px-1.5 py-0.5 border border-primary/20">
+              {ann.label}
+            </span>
+            <div className="w-4 sm:w-6 h-px bg-primary/40" />
+            <div className="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0" />
+          </>
+        )}
+        {ann.side === 'right' && (
+          <>
+            <div className="w-1.5 h-1.5 rounded-full bg-primary/60 flex-shrink-0" />
+            <div className="w-4 sm:w-6 h-px bg-primary/40" />
+            <span className="text-[8px] sm:text-[9px] font-semibold text-primary/90 whitespace-nowrap bg-background/70 backdrop-blur-sm rounded px-1.5 py-0.5 border border-primary/20">
+              {ann.label}
+            </span>
+          </>
+        )}
+      </div>
+    ))}
+  </>
+);
 
 const ProductPhoneCarousel = () => {
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
@@ -262,15 +345,13 @@ const ProductPhoneCarousel = () => {
         style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.25), transparent 70%)' }}
       />
 
-      {/* Edge swipe arrows */}
-      <div className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-20 pointer-events-none">
-        <ChevronDown className="h-5 w-5 sm:h-6 sm:w-6 -rotate-90 text-foreground/15 animate-pulse-slow" />
-      </div>
-      <div className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-20 pointer-events-none">
-        <ChevronDown className="h-5 w-5 sm:h-6 sm:w-6 rotate-90 text-foreground/15 animate-pulse-slow" />
-      </div>
-
       <div className="relative w-[230px] sm:w-[260px] md:w-[300px]">
+        {/* Feature annotations */}
+        <SlideAnnotations
+          annotations={productPreviewSlides[currentSlide]?.annotations || []}
+          isActive={true}
+        />
+
         <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden max-h-[440px] sm:max-h-[500px] md:max-h-[560px]">
           {/* Notch */}
           <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
@@ -322,45 +403,30 @@ const ProductPhoneCarousel = () => {
   );
 
   const caption = (
-    <div className="text-center md:text-left">
+    <div className="text-center">
       <p className="text-xs font-semibold tracking-widest uppercase text-primary mb-1.5">
         {productPreviewSlides[currentSlide]?.title}
       </p>
-      <p className="text-sm sm:text-base text-muted-foreground/80 leading-relaxed max-w-md mx-auto md:mx-0">
+      <p className="text-sm sm:text-base text-muted-foreground/80 leading-relaxed max-w-md mx-auto">
         {productPreviewSlides[currentSlide]?.desc}
       </p>
     </div>
   );
 
-  const swipeHint = (
-    <p className="text-[11px] text-muted-foreground/40 tracking-wide flex items-center gap-1.5">
-      <span>←</span>
-      <span>Swipe to explore</span>
-      <span>→</span>
-    </p>
+  const swipeLabel = (
+    <div className="flex items-center gap-2 text-muted-foreground/40">
+      <span className="text-lg sm:text-xl font-bold tracking-tight">Swipe</span>
+      <ChevronDown className="h-5 w-5 sm:h-6 sm:w-6 rotate-[-90deg]" />
+    </div>
   );
 
   return (
-    <>
-      {/* Desktop layout: text left, phone+dots+caption right */}
-      <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-16 items-center">
-        <div className="flex flex-col justify-center gap-3 max-w-md">
-          {caption}
-        </div>
-        <div className="flex flex-col items-center gap-4">
-          {phoneCarousel}
-          {dots}
-        </div>
-      </div>
-
-      {/* Mobile layout: title/desc → phone → dots */}
-      <div className="flex flex-col items-center gap-4 md:hidden">
-        {caption}
-        {swipeHint}
-        {phoneCarousel}
-        {dots}
-      </div>
-    </>
+    <div className="flex flex-col items-center gap-4">
+      {caption}
+      {phoneCarousel}
+      {dots}
+      {swipeLabel}
+    </div>
   );
 };
 
@@ -743,45 +809,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Search Demo Section */}
-      <section className="relative z-10 py-12 sm:py-16 md:py-20 px-3 sm:px-4">
-        <div className="container mx-auto max-w-5xl">
-          <ScrollReveal className="text-center mb-8 sm:mb-12">
-            <h2 className="text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
-              Find businesses without websites{' '}
-              <span className="text-gradient-primary">in seconds</span>
-            </h2>
-            <p className="text-sm sm:text-base text-muted-foreground/70 mt-3 sm:mt-4 max-w-2xl mx-auto leading-relaxed">
-              Search any business type in any location and instantly see which ones need a website.
-            </p>
-          </ScrollReveal>
-
-          <div className="grid grid-cols-2 gap-3 sm:gap-6 md:gap-8 max-w-2xl mx-auto">
-            <ScrollReveal delay={100}>
-              <div className="rounded-2xl overflow-hidden border border-border/40 shadow-lg">
-                <img 
-                  src={demoSearchInput} 
-                  alt="Search for electricians in Manchester" 
-                  className="w-full h-auto max-h-[340px] sm:max-h-[400px] object-cover object-top" 
-                  loading="lazy" 
-                />
-              </div>
-              <p className="text-[10px] sm:text-sm text-muted-foreground/60 text-center mt-2 sm:mt-2.5 font-medium">Search any business type and location</p>
-            </ScrollReveal>
-            <ScrollReveal delay={200}>
-              <div className="rounded-2xl overflow-hidden border border-border/40 shadow-lg">
-                <img 
-                  src={demoSearchResults} 
-                  alt="Results showing businesses without websites" 
-                  className="w-full h-auto max-h-[340px] sm:max-h-[400px] object-cover object-top" 
-                  loading="lazy" 
-                />
-              </div>
-              <p className="text-[10px] sm:text-sm text-muted-foreground/60 text-center mt-2 sm:mt-2.5 font-medium">Instantly see results with hot leads highlighted</p>
-            </ScrollReveal>
-          </div>
-        </div>
-      </section>
 
       {/* Video Demo Section - desktop only */}
       <div className="hidden sm:block">
@@ -917,7 +944,7 @@ const Landing = () => {
       <section className="relative z-10 py-10 sm:py-14 md:py-16 px-3 sm:px-4">
         <div className="container mx-auto max-w-[1150px]">
           <ScrollReveal className="text-center mb-6 sm:mb-8 md:mb-10">
-            <h2 className="text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
+            <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
               The{' '}
               <span className="text-gradient-primary">LeadFinder</span> system
             </h2>
