@@ -48,15 +48,8 @@ import avatarTom from '@/assets/avatar-tom.jpg';
 import avatarAlex from '@/assets/avatar-alex.jpg';
 import avatarDaniel from '@/assets/avatar-daniel.jpg';
 
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselPrevious,
-  CarouselNext,
-  type CarouselApi,
-} from '@/components/ui/carousel';
-import Autoplay from 'embla-carousel-autoplay';
+
+
 
 import { AffiliateCapture } from '@/components/AffiliateCapture';
 
