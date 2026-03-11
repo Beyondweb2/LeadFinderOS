@@ -206,20 +206,20 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
           </>
         ) : (
           /* Personal actions view */
-          <div className="space-y-1 pt-1">
+          <div className="space-y-0.5 pt-1">
             {personalTop3.length > 0 ? (
               personalTop3.map(action => (
-                <div key={action.id} className="flex items-start gap-2 p-2 rounded-md hover:bg-muted/50 transition-colors">
+                <div key={action.id} className="flex items-start gap-1.5 px-1.5 py-1 rounded hover:bg-muted/50 transition-colors">
                   <Checkbox
                     checked={false}
                     onCheckedChange={() => toggleComplete(action.id, true)}
-                    className="mt-0.5"
+                    className="mt-0.5 h-3.5 w-3.5"
                   />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm leading-tight break-words">{action.text}</p>
+                    <p className="text-xs leading-tight break-words">{action.text}</p>
                     {action.due_date && (
                       <span className={cn(
-                        'text-[11px] font-medium mt-0.5 inline-block',
+                        'text-[10px] font-medium mt-0.5 inline-block',
                         isPersonalOverdue(action.due_date) ? 'text-red-500' : 'text-amber-500'
                       )}>
                         {formatPersonalDue(action.due_date)}
@@ -229,13 +229,13 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
                 </div>
               ))
             ) : (
-              <div className="text-center py-4">
-                <StickyNote className="h-4 w-4 text-muted-foreground/40 mx-auto mb-1" />
-                <p className="text-xs text-muted-foreground">No personal actions</p>
+              <div className="text-center py-3">
+                <StickyNote className="h-3.5 w-3.5 text-muted-foreground/40 mx-auto mb-1" />
+                <p className="text-[10px] text-muted-foreground">No personal actions</p>
               </div>
             )}
             {activeActions.length > 3 && (
-              <p className="text-[10px] text-muted-foreground text-center pt-1">
+              <p className="text-[10px] text-muted-foreground text-center pt-0.5">
                 +{activeActions.length - 3} more
               </p>
             )}
