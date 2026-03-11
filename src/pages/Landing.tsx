@@ -1002,7 +1002,6 @@ const Landing = () => {
                 onClick={handleCTA}
               >
                 Try for free
-                <ArrowRight className="ml-2 h-4 w-4 sm:h-5 sm:w-5" />
               </Button>
 
               <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4">
