@@ -38,6 +38,7 @@ export function AppSidebar() {
     { title: 'Playbook', url: '/playbook', icon: Lightbulb, description: 'Closing tips & tactics' },
     { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle, description: t('nav.howToUseDesc') },
     { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare, description: t('nav.feedbackDesc') },
+    { title: 'Notepad', url: '#notepad', icon: StickyNote, description: 'Personal actions & notes' },
   ];
 
   const adminItems = [
