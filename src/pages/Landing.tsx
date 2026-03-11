@@ -213,7 +213,7 @@ const VideoSection = () => {
             {isMuted ? <VolumeX className="h-4 w-4 md:h-5 md:w-5" /> : <Volume2 className="h-4 w-4 md:h-5 md:w-5" />}
           </button>
         </div>
-        <p className="text-center text-xs sm:text-sm text-muted-foreground/60 mt-6 sm:mt-10">
+        <p className="text-center text-xs sm:text-sm text-muted-foreground/60 mt-6 sm:mt-10 sm:hidden">
           See the difference for yourself.
         </p>
       </div>
@@ -301,16 +301,6 @@ const ProductPhoneCarousel = () => {
 
   return (
     <div className="flex flex-col items-center gap-5 sm:gap-6">
-      {/* Workflow headline */}
-      <div className="flex items-center gap-3 sm:gap-4 mb-1">
-        {['Find', 'Contact', 'Track'].map((step, i) => (
-          <div key={step} className="flex items-center gap-3 sm:gap-4">
-            <span className="text-sm sm:text-base font-bold text-primary tracking-wide uppercase">{step}</span>
-            {i < 2 && <span className="text-muted-foreground/40 text-lg">→</span>}
-          </div>
-        ))}
-      </div>
-
       {/* Slide title + description */}
       <div className="text-center max-w-lg mx-auto px-4">
         <p className="text-sm sm:text-base font-bold tracking-widest uppercase text-primary mb-1.5">
@@ -653,7 +643,7 @@ const Landing = () => {
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                   <Button 
                     size="lg" 
-                    className="btn-premium text-[13px] sm:text-[16px] font-semibold px-8 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                    className="btn-premium text-[13px] sm:text-[16px] font-semibold px-8 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                     onClick={handleCTA}
                   >
                     Try it free
@@ -709,7 +699,7 @@ const Landing = () => {
       </div>
 
       {/* How LeadFinder Works - 4-step section */}
-      <section id="how-it-works" className="relative z-10 py-16 sm:py-18 md:py-20 px-3 sm:px-4">
+      <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
         <div className="container mx-auto max-w-6xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
@@ -834,7 +824,7 @@ const Landing = () => {
       </section>
 
       {/* Product Preview Section */}
-      <section className="relative z-10 py-10 sm:py-14 md:py-16 px-3 sm:px-4">
+      <section className="relative z-10 py-10 sm:py-16 md:py-24 px-3 sm:px-4">
         <div className="container mx-auto max-w-[1150px]">
           <div className="text-center mb-6 sm:mb-8 md:mb-10">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
@@ -851,7 +841,7 @@ const Landing = () => {
 
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
+      <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
@@ -970,7 +960,7 @@ const Landing = () => {
       </ScrollReveal>
 
       {/* Final CTA - Free Access Card */}
-      <section id="pricing" className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
+      <section id="pricing" className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
         <div className="container mx-auto max-w-lg text-center">
           <ScrollReveal>
             <div
@@ -1026,7 +1016,7 @@ const Landing = () => {
       </section>
 
       {/* Got Questions Section */}
-      <section className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
+      <section className="relative z-10 py-16 sm:py-20 md:py-24 px-4">
         <div className="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-7 w-7 md:h-8 md:w-8 mx-auto mb-3 text-muted-foreground/60" />
