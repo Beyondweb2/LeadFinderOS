@@ -32,6 +32,11 @@ import step4Dashboard from '@/assets/howto-step4-dashboard.png';
 import demoSearchInput from '@/assets/demo-search-input.jpg';
 import demoSearchResults from '@/assets/demo-search-results.jpg';
 
+import previewDashboard from '@/assets/preview-dashboard.jpg';
+import previewSearch from '@/assets/preview-search.jpg';
+import previewOutreach from '@/assets/preview-outreach.jpg';
+import previewTrack from '@/assets/preview-track.jpg';
+
 import featureTemplates from '@/assets/feature-templates.png';
 import featureContactTracking from '@/assets/feature-contact-tracking.png';
 import featureCustomization from '@/assets/feature-customization-new.png';
@@ -222,6 +227,87 @@ const VideoSection = () => {
         </p>
       </div>
     </ScrollReveal>
+  );
+};
+
+const productPreviewSlides = [
+  { image: previewDashboard, title: 'Dashboard', desc: 'Track your performance and pipeline' },
+  { image: previewSearch, title: 'Search', desc: 'Find businesses that don\'t have websites' },
+  { image: previewOutreach, title: 'Outreach', desc: 'Contact businesses and manage conversations' },
+  { image: previewTrack, title: 'Track', desc: 'Keep track of deals and follow-ups' },
+];
+
+const ProductPhoneCarousel = () => {
+  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  useEffect(() => {
+    if (!carouselApi) return;
+    const onSelect = () => setCurrentSlide(carouselApi.selectedScrollSnap());
+    carouselApi.on('select', onSelect);
+    onSelect();
+    return () => { carouselApi.off('select', onSelect); };
+  }, [carouselApi]);
+
+  return (
+    <div className="flex flex-col items-center gap-5 sm:gap-6">
+      {/* Phone frame */}
+      <div 
+        className="relative w-[240px] sm:w-[280px] md:w-[320px]"
+        style={{ transform: 'rotate(1.5deg)' }}
+      >
+        <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
+          {/* Notch */}
+          <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[70px] h-[16px] sm:h-[20px] bg-foreground/15 rounded-b-xl z-10" />
+          {/* Carousel inside phone */}
+          <Carousel
+            setApi={setCarouselApi}
+            opts={{ loop: true }}
+            plugins={[Autoplay({ delay: 4000, stopOnInteraction: true })]}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-0">
+              {productPreviewSlides.map((slide, i) => (
+                <CarouselItem key={i} className="pl-0">
+                  <img
+                    src={slide.image}
+                    alt={`${slide.title} screen`}
+                    className="w-full h-auto"
+                    loading="lazy"
+                  />
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+          </Carousel>
+        </div>
+      </div>
+
+      {/* Caption */}
+      <div className="text-center min-h-[48px] transition-opacity duration-300">
+        <p className="text-sm sm:text-base font-semibold text-foreground">
+          {productPreviewSlides[currentSlide]?.title}
+        </p>
+        <p className="text-xs sm:text-sm text-muted-foreground/60 mt-0.5">
+          {productPreviewSlides[currentSlide]?.desc}
+        </p>
+      </div>
+
+      {/* Dots */}
+      <div className="flex items-center gap-2">
+        {productPreviewSlides.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => carouselApi?.scrollTo(i)}
+            className={`h-2 rounded-full transition-all duration-300 ${
+              i === currentSlide
+                ? 'w-6 bg-primary'
+                : 'w-2 bg-foreground/20 hover:bg-foreground/30'
+            }`}
+            aria-label={`Go to slide ${i + 1}`}
+          />
+        ))}
+      </div>
+    </div>
   );
 };
 
@@ -774,44 +860,21 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Find Leads From Anywhere - Mobile Section */}
+      {/* Inside LeadFinder - Product Preview */}
       <section className="relative z-10 py-14 sm:py-16 md:py-20 px-3 sm:px-4">
-        <div className="container mx-auto max-w-[1100px]">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12 items-center">
-            {/* Text Column */}
-            <ScrollReveal className="text-center md:text-left order-1">
-              <h2 className="text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
-                Find leads{' '}
-                <span className="text-gradient-primary">from anywhere</span>
-              </h2>
-              <p className="text-sm sm:text-base text-muted-foreground/70 mt-4 sm:mt-5 leading-relaxed max-w-lg mx-auto md:mx-0">
-                LeadFinder works perfectly on mobile so you can search for businesses, review leads and plan outreach wherever you are. Whether you're at your desk, in a café or travelling, your lead pipeline is always with you.
-              </p>
-            </ScrollReveal>
+        <div className="container mx-auto max-w-[1000px]">
+          <ScrollReveal className="text-center mb-8 sm:mb-10">
+            <h2 className="text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
+              Inside <span className="text-gradient-primary">LeadFinder</span>
+            </h2>
+            <p className="text-sm text-muted-foreground/60 mt-3">
+              A quick preview of the LeadFinder system.
+            </p>
+          </ScrollReveal>
 
-            {/* Phone Mockup Column */}
-            <ScrollReveal delay={150} className="order-2 flex justify-center md:justify-end">
-              <div 
-                className="relative w-[220px] sm:w-[260px] md:w-[300px]"
-                style={{ transform: 'rotate(2deg)' }}
-              >
-                {/* Phone frame */}
-                <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
-                  {/* Notch */}
-                  <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[60px] sm:w-[80px] h-[18px] sm:h-[22px] bg-foreground/15 rounded-b-2xl z-10" />
-                  {/* Screen content */}
-                  <div className="relative">
-                    <img 
-                      src={demoSearchResults} 
-                      alt="LeadFinder results on mobile" 
-                      className="w-full h-auto" 
-                      loading="lazy" 
-                    />
-                  </div>
-                </div>
-              </div>
-            </ScrollReveal>
-          </div>
+          <ScrollReveal delay={100} className="flex flex-col items-center">
+            <ProductPhoneCarousel />
+          </ScrollReveal>
         </div>
       </section>
 
