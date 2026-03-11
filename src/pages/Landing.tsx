@@ -43,9 +43,7 @@ import avatarChris from '@/assets/avatar-chris.jpg';
 import avatarTom from '@/assets/avatar-tom.jpg';
 import avatarAlex from '@/assets/avatar-alex.jpg';
 import avatarDaniel from '@/assets/avatar-daniel.jpg';
-
-
-
+import step4Dashboard from '@/assets/howto-step4-dashboard.png';
 
 import { AffiliateCapture } from '@/components/AffiliateCapture';
 
