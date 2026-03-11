@@ -24,7 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAccentColor, hexToHSL, hslToHex, ThemePreset } from '@/hooks/useAccentColor';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
-import { Check, Sparkles, Sun, Moon, RotateCcw } from 'lucide-react';
+import { Check, Sparkles, Sun, Moon, RotateCcw, StickyNote } from 'lucide-react';
 
 function MobileThemeGrid({ themes, activeThemeId, onSelect }: { themes: ThemePreset[]; activeThemeId: string; onSelect: (id: string) => void; }) {
   return (
