@@ -19,8 +19,8 @@ import {
 import demoVideo from '@/assets/leadfinder-advert-2.mp4';
 import appLogo from '@/assets/logo.png';
 
-import featureDashboard from '@/assets/howto-step4-dashboard.png';
-import featureClassification from '@/assets/feature-classification.png';
+
+
 import { useScrollReveal } from '@/hooks/useScrollReveal';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
@@ -29,8 +29,7 @@ import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
 import step3Outreach from '@/assets/howto-step3-outreach-crm.png';
 import step4Dashboard from '@/assets/howto-step4-dashboard.png';
-import demoSearchInput from '@/assets/demo-search-input.jpg';
-import demoSearchResults from '@/assets/demo-search-results.jpg';
+
 
 import previewDashboard from '@/assets/preview-dashboard.jpg';
 import previewSearch from '@/assets/preview-search.jpg';
@@ -38,25 +37,14 @@ import previewOutreach from '@/assets/preview-outreach.jpg';
 import previewTrack from '@/assets/preview-track.jpg';
 import previewResults from '@/assets/preview-results.jpg';
 
-import featureTemplates from '@/assets/feature-templates.png';
-import featureContactTracking from '@/assets/feature-contact-tracking.png';
-import featureCustomization from '@/assets/feature-customization-new.png';
-import featureExport from '@/assets/feature-export.png';
-import featureLeadManagement from '@/assets/feature-lead-management.png';
+
+
 import avatarChris from '@/assets/avatar-chris.jpg';
 import avatarTom from '@/assets/avatar-tom.jpg';
 import avatarAlex from '@/assets/avatar-alex.jpg';
 import avatarDaniel from '@/assets/avatar-daniel.jpg';
 
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselPrevious,
-  CarouselNext,
-  type CarouselApi,
-} from '@/components/ui/carousel';
-import Autoplay from 'embla-carousel-autoplay';
+
 
 import { AffiliateCapture } from '@/components/AffiliateCapture';
 
@@ -239,9 +227,9 @@ const productPreviewSlides = [
     title: 'Dashboard',
     desc: 'Get a full overview of your pipeline. Track revenue, active leads and upcoming follow-ups.',
     annotations: [
-      { top: '12%', startX: '82%', label: 'Revenue stats', side: 'right' as const },
-      { top: '38%', startX: '18%', label: 'Pipeline stages', side: 'left' as const },
-      { top: '65%', startX: '78%', label: 'Next actions', side: 'right' as const },
+      { top: '15%', startX: '80%', label: 'Revenue overview', side: 'right' as const },
+      { top: '42%', startX: '20%', label: 'Pipeline stages', side: 'left' as const },
+      { top: '70%', startX: '75%', label: 'Upcoming follow-ups', side: 'right' as const },
     ],
   },
   {
@@ -249,9 +237,9 @@ const productPreviewSlides = [
     title: 'Search',
     desc: 'Search any business type in any location and instantly find leads that need your service.',
     annotations: [
-      { top: '18%', startX: '50%', label: 'Business type input', side: 'right' as const },
-      { top: '38%', startX: '45%', label: 'Location selector', side: 'left' as const },
-      { top: '60%', startX: '55%', label: 'Quick country select', side: 'right' as const },
+      { top: '22%', startX: '75%', label: 'Business type input', side: 'right' as const },
+      { top: '42%', startX: '20%', label: 'Location selector', side: 'left' as const },
+      { top: '68%', startX: '78%', label: 'Quick country select', side: 'right' as const },
     ],
   },
   {
@@ -259,9 +247,9 @@ const productPreviewSlides = [
     title: 'Results',
     desc: 'Instantly see which businesses need your services and add them to your outreach list.',
     annotations: [
-      { top: '18%', startX: '75%', label: 'No website badge', side: 'right' as const },
-      { top: '40%', startX: '25%', label: 'Business details', side: 'left' as const },
-      { top: '62%', startX: '80%', label: 'Add to outreach', side: 'right' as const },
+      { top: '25%', startX: '20%', label: 'Business details', side: 'left' as const },
+      { top: '45%', startX: '78%', label: 'No website badge', side: 'right' as const },
+      { top: '68%', startX: '22%', label: 'Add to outreach', side: 'left' as const },
     ],
   },
   {
@@ -269,9 +257,9 @@ const productPreviewSlides = [
     title: 'Outreach',
     desc: 'Contact businesses via SMS, WhatsApp or phone and manage all conversations in one place.',
     annotations: [
-      { top: '16%', startX: '22%', label: 'Lead status', side: 'left' as const },
-      { top: '40%', startX: '78%', label: 'WhatsApp / SMS', side: 'right' as const },
-      { top: '64%', startX: '25%', label: 'Follow-up date', side: 'left' as const },
+      { top: '20%', startX: '22%', label: 'Lead status', side: 'left' as const },
+      { top: '44%', startX: '78%', label: 'WhatsApp / SMS', side: 'right' as const },
+      { top: '68%', startX: '25%', label: 'Follow-up date', side: 'left' as const },
     ],
   },
   {
@@ -279,88 +267,56 @@ const productPreviewSlides = [
     title: 'Track',
     desc: 'Track deals, notes and follow-ups so no opportunity gets forgotten.',
     annotations: [
-      { top: '16%', startX: '75%', label: 'Deal stage', side: 'right' as const },
-      { top: '42%', startX: '22%', label: 'Notes & history', side: 'left' as const },
-      { top: '66%', startX: '70%', label: 'Next action', side: 'right' as const },
+      { top: '18%', startX: '75%', label: 'Deal stage', side: 'right' as const },
+      { top: '45%', startX: '20%', label: 'Notes & history', side: 'left' as const },
+      { top: '70%', startX: '72%', label: 'Next action', side: 'right' as const },
     ],
   },
 ];
 
 type Annotation = typeof productPreviewSlides[0]['annotations'][0];
 
-const SlideAnnotations = ({ annotations, isActive, phoneWidth }: { annotations: Annotation[]; isActive: boolean; phoneWidth: number }) => {
-  return (
-    <>
-      {annotations.map((ann, i) => {
-        const isRight = ann.side === 'right';
-
-        return (
-          <div
-            key={i}
-            className="absolute z-30 pointer-events-none"
-            style={{
-              top: ann.top,
-              left: isRight ? `${ann.startX}` : 'auto',
-              right: isRight ? 'auto' : `${100 - parseFloat(ann.startX)}%`,
-              opacity: isActive ? 1 : 0,
-              transform: isActive ? 'translateY(0)' : 'translateY(10px)',
-              transition: `opacity 0.6s ease ${i * 200 + 300}ms, transform 0.6s ease ${i * 200 + 300}ms`,
-            }}
-          >
-            <div className={`flex items-center ${isRight ? 'flex-row' : 'flex-row-reverse'}`}>
-              {/* Glowing anchor dot */}
-              <div className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0 shadow-[0_0_8px_hsl(var(--primary)/0.7),0_0_16px_hsl(var(--primary)/0.3)]" />
-              {/* Connector line */}
-              <div
-                className="h-[1.5px] flex-shrink-0 w-8 sm:w-12 md:w-16"
-                style={{
-                  background: isRight
-                    ? 'linear-gradient(90deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))'
-                    : 'linear-gradient(270deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))',
-                }}
-              />
-              {/* Label */}
-              <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-primary whitespace-nowrap bg-background/90 backdrop-blur-md rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 border border-primary/30 shadow-[0_0_16px_hsl(var(--primary)/0.12),0_2px_8px_hsl(0_0%_0%/0.3)] flex-shrink-0">
-                {ann.label}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-    </>
-  );
-};
-
 const ProductPhoneCarousel = () => {
-  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [currentSlide, setCurrentSlide] = useState(0);
   const isMobile = useIsMobile();
 
-  useEffect(() => {
-    if (!carouselApi) return;
-    const onSelect = () => setCurrentSlide(carouselApi.selectedScrollSnap());
-    carouselApi.on('select', onSelect);
-    onSelect();
-    return () => { carouselApi.off('select', onSelect); };
-  }, [carouselApi]);
+  const goNext = useCallback(() => {
+    setCurrentSlide((prev) => (prev + 1) % productPreviewSlides.length);
+  }, []);
 
-  // Keyboard arrow navigation
+  const goPrev = useCallback(() => {
+    setCurrentSlide((prev) => (prev - 1 + productPreviewSlides.length) % productPreviewSlides.length);
+  }, []);
+
+  // Keyboard arrow navigation (desktop)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') carouselApi?.scrollPrev();
-      if (e.key === 'ArrowRight') carouselApi?.scrollNext();
+      if (e.key === 'ArrowLeft') goPrev();
+      if (e.key === 'ArrowRight') goNext();
     };
     window.addEventListener('keydown', handleKey);
     return () => window.removeEventListener('keydown', handleKey);
-  }, [carouselApi]);
+  }, [goNext, goPrev]);
 
-  const phoneWidth = isMobile ? 220 : 280;
-  const workflowSteps = ['Find', 'Contact', 'Track'];
+  // Touch swipe support (mobile)
+  const touchStartX = useRef(0);
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const diff = touchStartX.current - e.changedTouches[0].clientX;
+    if (Math.abs(diff) > 50) {
+      if (diff > 0) goNext();
+      else goPrev();
+    }
+  };
+
+  const slide = productPreviewSlides[currentSlide];
 
   return (
-    <div className="flex flex-col items-center gap-5">
+    <div className="flex flex-col items-center gap-5 sm:gap-6">
       {/* Workflow headline */}
-      <div className="flex items-center gap-3 sm:gap-4 mb-2">
+      <div className="flex items-center gap-3 sm:gap-4 mb-1">
         {['Find', 'Contact', 'Track'].map((step, i) => (
           <div key={step} className="flex items-center gap-3 sm:gap-4">
             <span className="text-sm sm:text-base font-bold text-primary tracking-wide uppercase">{step}</span>
@@ -372,75 +328,108 @@ const ProductPhoneCarousel = () => {
       {/* Slide title + description */}
       <div className="text-center">
         <p className="text-sm sm:text-base font-bold tracking-widest uppercase text-primary mb-1.5">
-          {productPreviewSlides[currentSlide]?.title}
+          {slide.title}
         </p>
         <p className="text-sm sm:text-base text-muted-foreground/80 leading-relaxed max-w-md mx-auto">
-          {productPreviewSlides[currentSlide]?.desc}
+          {slide.desc}
         </p>
       </div>
 
-      {/* Phone */}
-      <div className="relative w-[220px] sm:w-[280px] mx-auto">
-        {/* Background glow */}
-        <div className="absolute -inset-8 rounded-full opacity-20 blur-3xl -z-10" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.25), transparent 70%)' }} />
+      {/* Phone with annotations and arrows */}
+      <div className="relative flex items-center justify-center w-full max-w-[600px] sm:max-w-[700px]">
+        {/* Left arrow - desktop only */}
+        {!isMobile && (
+          <button
+            onClick={goPrev}
+            className="absolute left-0 sm:left-4 z-40 p-2.5 sm:p-3 rounded-full border border-border/40 bg-background/70 backdrop-blur-sm hover:bg-background hover:border-primary/40 transition-all text-muted-foreground hover:text-primary"
+            aria-label="Previous slide"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+        )}
 
-        {/* Annotations */}
-        {productPreviewSlides[currentSlide]?.annotations.map((ann, i) => {
-          const isRight = ann.side === 'right';
-          return (
-            <div
-              key={`${currentSlide}-${i}`}
-              className="absolute z-30 pointer-events-none"
-              style={{
-                top: ann.top,
-                left: isRight ? ann.startX : 'auto',
-                right: isRight ? 'auto' : `${100 - parseFloat(ann.startX)}%`,
-                opacity: 1,
-                transition: 'opacity 0.4s ease',
-              }}
-            >
-              <div className={`flex items-center ${isRight ? 'flex-row' : 'flex-row-reverse'}`}>
-                <div className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0 shadow-[0_0_8px_hsl(var(--primary)/0.7)]" />
-                <div className="h-[1.5px] w-8 sm:w-12 md:w-16 flex-shrink-0" style={{ background: isRight ? 'linear-gradient(90deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))' : 'linear-gradient(270deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.15))' }} />
-                <span className="text-[10px] sm:text-xs md:text-sm font-semibold text-primary whitespace-nowrap bg-background/90 backdrop-blur-md rounded-lg px-2 py-1 sm:px-2.5 sm:py-1.5 border border-primary/30 shadow-[0_0_16px_hsl(var(--primary)/0.12)] flex-shrink-0">
-                  {ann.label}
-                </span>
+        {/* Phone container */}
+        <div
+          className="relative w-[200px] sm:w-[260px] mx-auto"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Background glow */}
+          <div className="absolute -inset-10 rounded-full opacity-20 blur-3xl -z-10" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.3), transparent 70%)' }} />
+
+          {/* Annotations */}
+          {slide.annotations.map((ann, i) => {
+            const isRight = ann.side === 'right';
+            return (
+              <div
+                key={`${currentSlide}-${i}`}
+                className="absolute z-30 pointer-events-none"
+                style={{
+                  top: ann.top,
+                  ...(isRight
+                    ? { left: ann.startX, right: 'auto' }
+                    : { right: `${100 - parseFloat(ann.startX)}%`, left: 'auto' }),
+                  opacity: 1,
+                  animation: `fadeSlideIn 0.5s ease ${i * 150 + 200}ms both`,
+                }}
+              >
+                <div className={`flex items-center gap-0 ${isRight ? 'flex-row' : 'flex-row-reverse'}`}>
+                  {/* Anchor dot */}
+                  <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full bg-primary flex-shrink-0 shadow-[0_0_8px_hsl(var(--primary)/0.6),0_0_16px_hsl(var(--primary)/0.25)]" />
+                  {/* Line */}
+                  <div
+                    className="h-[1.5px] flex-shrink-0 w-6 sm:w-10 md:w-14"
+                    style={{
+                      background: isRight
+                        ? 'linear-gradient(90deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.1))'
+                        : 'linear-gradient(270deg, hsl(var(--primary) / 0.7), hsl(var(--primary) / 0.1))',
+                    }}
+                  />
+                  {/* Label */}
+                  <span className="text-[9px] sm:text-[11px] md:text-xs font-semibold text-primary whitespace-nowrap bg-background/90 backdrop-blur-md rounded-md px-1.5 py-0.5 sm:px-2.5 sm:py-1 border border-primary/25 shadow-[0_0_12px_hsl(var(--primary)/0.1),0_2px_6px_hsl(0_0%_0%/0.25)] flex-shrink-0">
+                    {ann.label}
+                  </span>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
 
-        {/* Phone frame */}
-        <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden aspect-[9/16] max-h-[500px]">
-          <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
-          <Carousel setApi={setCarouselApi} opts={{ loop: true }} className="w-full">
-            <CarouselContent className="-ml-0">
-              {productPreviewSlides.map((slide, i) => (
-                <CarouselItem key={i} className="pl-0">
-                  <img src={slide.image} alt={`${slide.title} screen`} className="w-full h-auto" />
-                </CarouselItem>
-              ))}
-            </CarouselContent>
-            {!isMobile && (
-              <>
-                <CarouselPrevious className="-left-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-                <CarouselNext className="-right-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-              </>
-            )}
-          </Carousel>
+          {/* Phone frame */}
+          <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
+            {/* Notch */}
+            <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
+            {/* Image */}
+            <img
+              src={slide.image}
+              alt={`${slide.title} screen`}
+              className="w-full h-auto block"
+              draggable={false}
+            />
+          </div>
         </div>
+
+        {/* Right arrow - desktop only */}
+        {!isMobile && (
+          <button
+            onClick={goNext}
+            className="absolute right-0 sm:right-4 z-40 p-2.5 sm:p-3 rounded-full border border-border/40 bg-background/70 backdrop-blur-sm hover:bg-background hover:border-primary/40 transition-all text-muted-foreground hover:text-primary"
+            aria-label="Next slide"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+        )}
       </div>
 
       {/* Dots */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         {productPreviewSlides.map((_, i) => (
           <button
             key={i}
-            onClick={() => carouselApi?.scrollTo(i)}
+            onClick={() => setCurrentSlide(i)}
             className={`rounded-full transition-all duration-300 ease-out ${
               i === currentSlide
-                ? 'h-3.5 w-9 bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.5)]'
-                : 'h-3.5 w-3.5 bg-foreground/20 hover:bg-foreground/30'
+                ? 'h-3 w-8 bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.5)]'
+                : 'h-3 w-3 bg-foreground/20 hover:bg-foreground/30'
             }`}
             aria-label={`Go to slide ${i + 1}`}
           />
@@ -452,106 +441,14 @@ const ProductPhoneCarousel = () => {
         {isMobile ? (
           <>
             <ChevronDown className="h-5 w-5 rotate-90 animate-pulse" />
-            <span className="text-lg font-bold tracking-tight">Swipe</span>
+            <span className="text-base font-bold tracking-tight">Swipe</span>
             <ChevronDown className="h-5 w-5 rotate-[-90deg] animate-pulse" />
           </>
         ) : (
-          <>
-            <ChevronDown className="h-5 w-5 rotate-90" />
-            <span className="text-lg font-bold tracking-tight">Use arrows</span>
-            <ChevronDown className="h-5 w-5 rotate-[-90deg]" />
-          </>
+          <span className="text-sm text-muted-foreground/30">Use arrow keys or click arrows</span>
         )}
       </div>
     </div>
-  );
-};
-
-
-interface ToolkitFeature {
-  title: string;
-  description: string;
-  img: string;
-}
-
-const ToolkitCarousel = ({ features, onExpand }: { features: ToolkitFeature[]; onExpand: (src: string, title: string) => void }) => {
-  const [api, setApi] = useState<CarouselApi>();
-  const [current, setCurrent] = useState(0);
-
-  useEffect(() => {
-    if (!api) return;
-    const onSelect = () => setCurrent(api.selectedScrollSnap());
-    api.on('select', onSelect);
-    onSelect();
-    return () => { api.off('select', onSelect); };
-  }, [api]);
-
-  return (
-    <ScrollReveal>
-      <Carousel
-        setApi={setApi}
-        opts={{ loop: true, align: 'center' }}
-        plugins={[Autoplay({ delay: 4000, stopOnInteraction: true })]}
-        className="max-w-xl mx-auto"
-      >
-        <CarouselContent>
-          {features.map((feature, i) => (
-            <CarouselItem key={i}>
-              <div className="text-center px-2">
-                <h3 className="text-lg sm:text-xl font-bold tracking-tight mb-2 sm:mb-3">{feature.title}</h3>
-                <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto mb-5 sm:mb-6">
-                  {feature.description}
-                </p>
-                <div 
-                  className="relative group cursor-pointer w-full"
-                  onClick={() => onExpand(feature.img, feature.title)}
-                >
-                  <div 
-                    className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm aspect-[16/10] transition-transform duration-300 group-hover:scale-[1.01]"
-                    style={{ 
-                      border: '1px solid hsl(210 100% 50% / 0.2)',
-                      boxShadow: '0 0 20px hsl(210 100% 50% / 0.1), 0 0 40px hsl(210 100% 50% / 0.05)'
-                    }}
-                  >
-                    <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" width={640} height={400} className="w-full h-full object-cover" />
-                    <div className="absolute bottom-3 right-3 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm">
-                      <Search className="h-3.5 w-3.5 text-foreground/70" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </CarouselItem>
-          ))}
-        </CarouselContent>
-
-        {/* Navigation arrows */}
-        <div className="flex items-center justify-center gap-4 mt-5">
-          <button
-            onClick={() => api?.scrollPrev()}
-            className="p-2 rounded-full border border-border/30 hover:border-border/60 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Previous feature"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>
-          </button>
-
-          <div className="flex items-center gap-1.5">
-            <ToolkitDots count={features.length} api={api} />
-          </div>
-
-          <button
-            onClick={() => api?.scrollNext()}
-            className="p-2 rounded-full border border-border/30 hover:border-border/60 text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Next feature"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 18l6-6-6-6"/></svg>
-          </button>
-        </div>
-
-        <p className="text-center text-xs text-muted-foreground/40 mt-2">
-          {current + 1} / {features.length} · Swipe to explore
-        </p>
-      </Carousel>
-    </ScrollReveal>
   );
 };
 
@@ -608,32 +505,6 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
         ))}
       </div>
     </div>
-  );
-};
-
-const ToolkitDots = ({ count, api }: { count: number; api: any }) => {
-  const [active, setActive] = useState(0);
-  useEffect(() => {
-    if (!api) return;
-    const onSelect = () => setActive(api.selectedScrollSnap());
-    api.on('select', onSelect);
-    onSelect();
-    return () => { api.off('select', onSelect); };
-  }, [api]);
-  return (
-    <>
-      {Array.from({ length: count }).map((_, i) => (
-        <button
-          key={i}
-          onClick={() => api?.scrollTo(i)}
-          className={`rounded-full transition-all duration-300 ${
-            i === active
-              ? 'w-6 h-2 bg-[hsl(210_100%_50%)]'
-              : 'w-2 h-2 bg-muted-foreground/25 hover:bg-muted-foreground/40'
-          }`}
-        />
-      ))}
-    </>
   );
 };
 
@@ -982,8 +853,9 @@ const Landing = () => {
         <div className="container mx-auto max-w-[1150px]">
           <div className="text-center mb-6 sm:mb-8 md:mb-10">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
-              The{' '}
-              <span className="text-gradient-primary">LeadFinder</span> system
+              Your Complete
+              <br />
+              <span className="text-gradient-primary">Lead Toolkit</span>
             </h2>
           </div>
 
@@ -991,109 +863,7 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Section divider */}
-      <div className="relative z-10 py-8 sm:py-10 md:py-12">
-        <div
-          className="mx-auto h-px"
-          style={{
-            width: '45%',
-            background: 'linear-gradient(90deg, transparent 0%, hsl(210 100% 50% / 0.12) 30%, hsl(210 100% 50% / 0.18) 50%, hsl(210 100% 50% / 0.12) 70%, transparent 100%)',
-          }}
-        />
-        <div
-          className="absolute inset-0 -z-10"
-          style={{
-            background: 'radial-gradient(ellipse 60% 100% at 50% 50%, hsl(220 30% 5% / 0.5), transparent 70%)',
-          }}
-        />
-      </div>
 
-      {/* Your Complete Lead Toolkit */}
-      <section className="relative z-10 py-16 sm:py-18 md:py-20 px-3 sm:px-4">
-        <div
-          className="absolute inset-0 -z-10"
-          style={{
-            background: 'linear-gradient(180deg, transparent 0%, hsl(220 30% 6% / 0.25) 20%, hsl(220 30% 6% / 0.35) 50%, hsl(220 30% 6% / 0.25) 80%, transparent 100%)',
-          }}
-        />
-        <div className="container mx-auto max-w-5xl">
-          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-12">
-            <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
-              Your Complete
-              <br />
-              <span className="text-gradient-primary">Lead Toolkit</span>
-            </h2>
-          </ScrollReveal>
-
-          {(() => {
-            const toolkitFeatures = [
-              {
-                title: 'Templates',
-                description: 'WhatsApp, SMS and call scripts ready to send.',
-                img: featureTemplates,
-              },
-              {
-                title: 'Smart Dashboard',
-                description: 'See your revenue, conversion rate and activity all in one place.',
-                img: featureDashboard,
-              },
-              {
-                title: 'Full Customization',
-                description: 'Choose your accent colour, switch between themes, and add your profile picture. Make it feel like your app.',
-                img: featureCustomization,
-              },
-              {
-                title: 'Lead Management',
-                description: 'Track every lead from first message to closed deal so nothing slips through.',
-                img: featureLeadManagement,
-              },
-            ];
-
-            return isMobile ? (
-              <ToolkitCarousel features={toolkitFeatures} onExpand={(src, title) => setExpandedImage({ src, title })} />
-            ) : (
-              <ScrollReveal>
-                <div className="grid grid-cols-2 gap-7 lg:gap-8 max-w-5xl mx-auto">
-                  {toolkitFeatures.map((feature, i) => (
-                    <div key={i} className="flex flex-col group">
-                      <div 
-                        className="relative cursor-pointer w-full flex-shrink-0 mb-5"
-                        onClick={() => setExpandedImage({ src: feature.img, title: feature.title })}
-                      >
-                        <div 
-                          className="relative rounded-2xl overflow-hidden bg-card/80 backdrop-blur-sm transition-all duration-300 group-hover:scale-[1.015] group-hover:-translate-y-0.5 aspect-[16/10]"
-                          style={{ 
-                            border: '1px solid hsl(210 100% 50% / 0.15)',
-                            boxShadow: '0 0 16px hsl(210 100% 50% / 0.08), 0 4px 12px hsl(220 40% 4% / 0.25)',
-                          }}
-                        >
-                          <div
-                            className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-xl pointer-events-none"
-                            style={{
-                              boxShadow: '0 0 24px hsl(210 100% 50% / 0.12), 0 6px 24px hsl(220 40% 4% / 0.35)',
-                              border: '1px solid hsl(210 100% 50% / 0.25)',
-                            }}
-                          />
-                          <img src={feature.img} alt={feature.title} loading="lazy" decoding="async" className="w-full h-full object-cover object-top" />
-                          <div className="absolute bottom-2 right-2 p-1.5 rounded-lg bg-background/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Search className="h-3.5 w-3.5 text-foreground/70" />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="text-center">
-                        <h3 className="text-base lg:text-lg font-extrabold tracking-tight mb-1">{feature.title}</h3>
-                        <p className="text-muted-foreground/70 text-sm leading-[1.7] max-w-sm mx-auto">
-                          {feature.description}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ScrollReveal>
-            );
-          })()}
-        </div>
-      </section>
 
       {/* Testimonials */}
       <ScrollReveal className="relative z-10 py-16 sm:py-18 md:py-20 px-4">
