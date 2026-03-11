@@ -898,17 +898,17 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Product Preview - Mobile Section */}
+      {/* Product Preview Section */}
       <section className="relative z-10 py-10 sm:py-14 md:py-16 px-3 sm:px-4">
-        <div className="container mx-auto max-w-[1000px]">
-          <ScrollReveal className="text-center mb-5 sm:mb-6">
+        <div className="container mx-auto max-w-[1150px]">
+          <ScrollReveal className="text-center mb-6 sm:mb-8 md:mb-10">
             <h2 className="text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
-              LeadFinder works on{' '}
-              <span className="text-gradient-primary">mobile too</span>
+              Your complete{' '}
+              <span className="text-gradient-primary">lead generation system</span>
             </h2>
           </ScrollReveal>
 
-          <ScrollReveal delay={100} className="flex flex-col items-center">
+          <ScrollReveal delay={100}>
             <ProductPhoneCarousel />
           </ScrollReveal>
         </div>
