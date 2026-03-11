@@ -183,6 +183,10 @@ export function MobileBottomNav() {
                 );
               })}
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setNotepadOpen(true)} className="flex items-center gap-3 cursor-pointer">
+                <StickyNote className="h-4 w-4" />
+                <span>Notepad</span>
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => {
                 try { openCustomerPortal(); } catch { }
               }} className="flex items-center gap-3 cursor-pointer">
