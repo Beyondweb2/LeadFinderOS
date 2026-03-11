@@ -254,96 +254,111 @@ const ProductPhoneCarousel = () => {
     return () => { carouselApi.off('select', onSelect); };
   }, [carouselApi]);
 
-  const phoneAndControls = (
-    <div className="flex flex-col items-center gap-4">
-      {/* Phone frame with glow */}
-      <div className="relative">
-        {/* Background glow */}
-        <div
-          className="absolute -inset-8 sm:-inset-12 rounded-full opacity-25 blur-3xl -z-10"
-          style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.2), transparent 70%)' }}
-        />
-        <div className="relative w-[230px] sm:w-[260px] md:w-[300px]">
-          <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden max-h-[440px] sm:max-h-[500px] md:max-h-[560px]">
-            {/* Notch */}
-            <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
-            <Carousel
-              setApi={setCarouselApi}
-              opts={{ loop: true }}
-              className="w-full"
-            >
-              <CarouselContent className="-ml-0">
-                {productPreviewSlides.map((slide, i) => (
-                  <CarouselItem key={i} className="pl-0">
-                    <img
-                      src={slide.image}
-                      alt={`${slide.title} screen`}
-                      className="w-full h-auto"
-                      loading="lazy"
-                    />
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              {/* Desktop arrows */}
-              {!isMobile && (
-                <>
-                  <CarouselPrevious className="-left-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-                  <CarouselNext className="-right-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
-                </>
-              )}
-            </Carousel>
-          </div>
+  const phoneCarousel = (
+    <div className="relative">
+      {/* Background glow */}
+      <div
+        className="absolute -inset-8 sm:-inset-12 rounded-full opacity-20 blur-3xl -z-10"
+        style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.25), transparent 70%)' }}
+      />
+
+      {/* Edge swipe arrows */}
+      <div className="absolute left-1 sm:left-2 top-1/2 -translate-y-1/2 z-20 pointer-events-none">
+        <ChevronDown className="h-5 w-5 sm:h-6 sm:w-6 -rotate-90 text-foreground/15 animate-pulse-slow" />
+      </div>
+      <div className="absolute right-1 sm:right-2 top-1/2 -translate-y-1/2 z-20 pointer-events-none">
+        <ChevronDown className="h-5 w-5 sm:h-6 sm:w-6 rotate-90 text-foreground/15 animate-pulse-slow" />
+      </div>
+
+      <div className="relative w-[230px] sm:w-[260px] md:w-[300px]">
+        <div className="rounded-[2rem] sm:rounded-[2.5rem] border-[6px] sm:border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden max-h-[440px] sm:max-h-[500px] md:max-h-[560px]">
+          {/* Notch */}
+          <div className="absolute top-[6px] sm:top-[8px] left-1/2 -translate-x-1/2 w-[50px] sm:w-[60px] h-[16px] sm:h-[18px] bg-foreground/15 rounded-b-xl z-10" />
+          <Carousel
+            setApi={setCarouselApi}
+            opts={{ loop: true }}
+            className="w-full"
+          >
+            <CarouselContent className="-ml-0">
+              {productPreviewSlides.map((slide, i) => (
+                <CarouselItem key={i} className="pl-0">
+                  <img
+                    src={slide.image}
+                    alt={`${slide.title} screen`}
+                    className="w-full h-auto"
+                    loading="lazy"
+                  />
+                </CarouselItem>
+              ))}
+            </CarouselContent>
+            {/* Desktop arrows */}
+            {!isMobile && (
+              <>
+                <CarouselPrevious className="-left-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
+                <CarouselNext className="-right-14 border-foreground/10 bg-background/60 backdrop-blur-sm hover:bg-background/80" />
+              </>
+            )}
+          </Carousel>
         </div>
       </div>
-
-      {/* Dots */}
-      <div className="flex items-center gap-2.5">
-        {productPreviewSlides.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => carouselApi?.scrollTo(i)}
-            className={`rounded-full transition-all duration-300 ease-out ${
-              i === currentSlide
-                ? 'h-2.5 w-7 bg-primary'
-                : 'h-2.5 w-2.5 bg-foreground/20 hover:bg-foreground/30'
-            }`}
-            aria-label={`Go to slide ${i + 1}`}
-          />
-        ))}
-      </div>
-
-      {/* Mobile swipe hint */}
-      {isMobile && (
-        <p className="text-[11px] text-muted-foreground/40 tracking-wide">
-          ← Swipe to explore →
-        </p>
-      )}
     </div>
   );
 
-  const textContent = (
+  const dots = (
+    <div className="flex items-center gap-2.5">
+      {productPreviewSlides.map((_, i) => (
+        <button
+          key={i}
+          onClick={() => carouselApi?.scrollTo(i)}
+          className={`rounded-full transition-all duration-300 ease-out ${
+            i === currentSlide
+              ? 'h-3 w-8 bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.4)]'
+              : 'h-3 w-3 bg-foreground/20 hover:bg-foreground/30'
+          }`}
+          aria-label={`Go to slide ${i + 1}`}
+        />
+      ))}
+    </div>
+  );
+
+  const caption = (
     <div className="text-center md:text-left">
-      <p className="text-xs font-medium tracking-widest uppercase text-primary/70 mb-2">
+      <p className="text-xs font-semibold tracking-widest uppercase text-primary mb-1.5">
         {productPreviewSlides[currentSlide]?.title}
       </p>
-      <p className="text-sm sm:text-base text-muted-foreground/70 leading-relaxed max-w-sm mx-auto md:mx-0">
+      <p className="text-sm sm:text-base text-muted-foreground/80 leading-relaxed max-w-md mx-auto md:mx-0">
         {productPreviewSlides[currentSlide]?.desc}
       </p>
     </div>
   );
 
-  // Desktop: two-column | Mobile: stacked
+  const swipeHint = (
+    <p className="text-[11px] text-muted-foreground/40 tracking-wide flex items-center gap-1.5">
+      <span>←</span>
+      <span>Swipe to explore</span>
+      <span>→</span>
+    </p>
+  );
+
   return (
     <>
-      {/* Desktop layout */}
-      <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-12 items-center">
-        <div className="flex flex-col justify-center">{textContent}</div>
-        {phoneAndControls}
+      {/* Desktop layout: text left, phone+dots+caption right */}
+      <div className="hidden md:grid md:grid-cols-[1fr_auto] gap-16 items-center">
+        <div className="flex flex-col justify-center gap-3 max-w-md">
+          {caption}
+        </div>
+        <div className="flex flex-col items-center gap-4">
+          {phoneCarousel}
+          {dots}
+        </div>
       </div>
-      {/* Mobile layout */}
+
+      {/* Mobile layout: title/desc → phone → dots */}
       <div className="flex flex-col items-center gap-4 md:hidden">
-        {phoneAndControls}
-        {textContent}
+        {caption}
+        {swipeHint}
+        {phoneCarousel}
+        {dots}
       </div>
     </>
   );
