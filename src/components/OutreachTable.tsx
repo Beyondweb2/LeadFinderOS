@@ -166,14 +166,20 @@ export function OutreachTable({
       });
     }, []),
     onPersisted: useCallback((leadId: string, _channel: 'whatsapp' | 'sms' | 'call') => {
-      // Clear optimistic state
+      // After DB persist, update parent lead state so optimistic can be safely cleared
+      const current = optimisticUpdates.get(leadId);
+      if (current && onStatusChange) {
+        // Sync the persisted status into the parent leads array
+        onStatusChange(leadId, current.status || 'waiting');
+      }
+      // Clear optimistic state after syncing to parent
       setOptimisticUpdates(prev => {
         const next = new Map(prev);
         next.delete(leadId);
         return next;
       });
       // Keep the contacted lead highlighted (don't auto-advance)
-    }, []),
+    }, [optimisticUpdates, onStatusChange]),
   });
 
   // Keep a ref to current leads for use in callbacks
