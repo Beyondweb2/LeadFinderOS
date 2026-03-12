@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Check, ArrowRight, Lock, Shield, Loader2 } from 'lucide-react';
 import appLogo from '@/assets/logo.png';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
+import { trackInitiateCheckout } from '@/lib/fbPixel';
+import { getStoredUtmData } from '@/lib/utmCapture';
 
 const FEATURES = [
   'Instantly find businesses that don\'t have websites',
@@ -59,13 +61,19 @@ const StartFreeTrial = () => {
       // Pass affiliate/ref tracking from localStorage
       const affiliateCode = localStorage.getItem('leadfinder_affiliate_code') || undefined;
       const refSource = localStorage.getItem('leadfinder_ref_source') || undefined;
+      const utmData = getStoredUtmData() || {};
 
       const { data: checkoutData, error: checkoutError } = await supabase.functions.invoke('create-checkout', {
         headers,
-        body: { customer_email: trimmed, affiliate_code: affiliateCode, ref_source: refSource },
+        body: { customer_email: trimmed, affiliate_code: affiliateCode, ref_source: refSource, ...utmData },
       });
       if (checkoutError) throw checkoutError;
       if (checkoutData?.url) {
+        // Fire InitiateCheckout once per session
+        if (!sessionStorage.getItem('fb_initiate_checkout_fired')) {
+          trackInitiateCheckout();
+          sessionStorage.setItem('fb_initiate_checkout_fired', '1');
+        }
         window.location.href = checkoutData.url;
       } else {
         throw new Error('No checkout URL received');

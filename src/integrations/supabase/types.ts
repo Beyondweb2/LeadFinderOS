@@ -899,6 +899,7 @@ export type Database = {
           checkout_started_at: string | null
           created_at: string
           demo_search_used: boolean
+          fbclid: string | null
           free_search_count: number
           has_seen_walkthrough_prompt: boolean
           id: string
@@ -913,11 +914,16 @@ export type Database = {
           searches_today: number
           searches_used: number
           setup_completed: boolean
+          traffic_source: string | null
           trial_days: number
           trial_end_date: string
           trial_started_at: string
           trial_used: boolean
           user_id: string
+          utm_ad: string | null
+          utm_adset: string | null
+          utm_campaign: string | null
+          utm_source: string | null
           walkthrough_completed: boolean
         }
         Insert: {
@@ -928,6 +934,7 @@ export type Database = {
           checkout_started_at?: string | null
           created_at?: string
           demo_search_used?: boolean
+          fbclid?: string | null
           free_search_count?: number
           has_seen_walkthrough_prompt?: boolean
           id?: string
@@ -942,11 +949,16 @@ export type Database = {
           searches_today?: number
           searches_used?: number
           setup_completed?: boolean
+          traffic_source?: string | null
           trial_days?: number
           trial_end_date: string
           trial_started_at?: string
           trial_used?: boolean
           user_id: string
+          utm_ad?: string | null
+          utm_adset?: string | null
+          utm_campaign?: string | null
+          utm_source?: string | null
           walkthrough_completed?: boolean
         }
         Update: {
@@ -957,6 +969,7 @@ export type Database = {
           checkout_started_at?: string | null
           created_at?: string
           demo_search_used?: boolean
+          fbclid?: string | null
           free_search_count?: number
           has_seen_walkthrough_prompt?: boolean
           id?: string
@@ -971,11 +984,16 @@ export type Database = {
           searches_today?: number
           searches_used?: number
           setup_completed?: boolean
+          traffic_source?: string | null
           trial_days?: number
           trial_end_date?: string
           trial_started_at?: string
           trial_used?: boolean
           user_id?: string
+          utm_ad?: string | null
+          utm_adset?: string | null
+          utm_campaign?: string | null
+          utm_source?: string | null
           walkthrough_completed?: boolean
         }
         Relationships: []

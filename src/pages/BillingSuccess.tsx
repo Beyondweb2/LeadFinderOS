@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import appLogo from '@/assets/logo.png';
+import { trackStartTrial } from '@/lib/fbPixel';
 
 const DEFAULT_IN_APP_ROUTE = '/find-leads';
 
@@ -82,6 +83,11 @@ const BillingSuccess = () => {
 
           if (data?.subscribed) {
             subscribed = true;
+            // Fire StartTrial pixel event once per session
+            if (!sessionStorage.getItem('fb_start_trial_fired') && sessionId) {
+              trackStartTrial(sessionId);
+              sessionStorage.setItem('fb_start_trial_fired', '1');
+            }
             break;
           }
 

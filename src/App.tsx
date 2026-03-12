@@ -184,8 +184,16 @@ const App = () => {
              <Route path="/terms" element={<Terms />} />
              <Route path="/feedback" element={<Feedback />} />
              <Route path="/partners" element={<AffiliateProgram />} />
-             <Route path="/start" element={<Start />} />
-             <Route path="/start-free-trial" element={<StartFreeTrial />} />
+              <Route path="/start" element={<Start />} />
+              <Route path="/start-free-trial" element={<StartFreeTrial />} />
+              <Route 
+                path="/ads" 
+                element={
+                  <PublicRoute>
+                    <Landing />
+                  </PublicRoute>
+                } 
+              />
              <Route path="/guide" element={<HowToUse />} />
              <Route 
                path="/unlock" 

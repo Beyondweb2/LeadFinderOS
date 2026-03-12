@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { trackInitiateCheckout } from '@/lib/fbPixel';
 
 interface SubscriptionState {
   subscribed: boolean;
@@ -319,6 +320,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
     if (error) throw error;
     if (data?.url) {
+      if (!sessionStorage.getItem('fb_initiate_checkout_fired')) {
+        trackInitiateCheckout();
+        sessionStorage.setItem('fb_initiate_checkout_fired', '1');
+      }
       window.location.href = data.url;
     }
   }, [session?.access_token]);
