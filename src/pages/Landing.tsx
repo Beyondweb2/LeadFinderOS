@@ -494,7 +494,10 @@ const Landing = () => {
   useLandingTheme();
 
   const handleCTA = useCallback(() => {
-    trackLead();
+    if (!sessionStorage.getItem('fb_lead_fired')) {
+      trackLead();
+      sessionStorage.setItem('fb_lead_fired', '1');
+    }
     if (user) {
       navigate('/start-free-trial');
     } else {
