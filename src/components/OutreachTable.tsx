@@ -166,21 +166,28 @@ export function OutreachTable({
       });
     }, []),
     onPersisted: useCallback((leadId: string, _channel: 'whatsapp' | 'sms' | 'call') => {
-      // After DB persist, update parent lead state so optimistic can be safely cleared
-      const current = optimisticUpdates.get(leadId);
-      if (current && onStatusChange) {
-        // Sync the persisted status into the parent leads array
-        onStatusChange(leadId, current.status || 'waiting');
-      }
-      // Clear optimistic state after syncing to parent
-      setOptimisticUpdates(prev => {
-        const next = new Map(prev);
-        next.delete(leadId);
-        return next;
-      });
-      // Keep the contacted lead highlighted (don't auto-advance)
-    }, [optimisticUpdates, onStatusChange]),
+      // Don't clear optimistic state here — it will be cleared when leads prop updates
+      // This prevents the status from flickering back to old value
+    }, []),
   });
+
+  // Clear optimistic updates when the leads prop catches up with the persisted values
+  useEffect(() => {
+    if (optimisticUpdates.size === 0) return;
+    setOptimisticUpdates(prev => {
+      const next = new Map(prev);
+      let changed = false;
+      for (const [leadId, updates] of prev) {
+        const lead = leads.find(l => l.id === leadId);
+        // If lead now has the status we optimistically set, clear the override
+        if (lead && updates.status && lead.status === updates.status) {
+          next.delete(leadId);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [leads, optimisticUpdates]);
 
   // Keep a ref to current leads for use in callbacks
   const leadsRef = useRef(leads);
