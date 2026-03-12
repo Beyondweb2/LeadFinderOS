@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input';
 import { Check, ArrowRight, Lock, Shield, Loader2 } from 'lucide-react';
 import appLogo from '@/assets/logo.png';
 import { useLandingTheme } from '@/hooks/useLandingTheme';
+import { trackInitiateCheckout } from '@/lib/fbPixel';
+import { getStoredUtmData } from '@/lib/utmCapture';
 
 const FEATURES = [
   'Instantly find businesses that don\'t have websites',
