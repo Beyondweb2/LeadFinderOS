@@ -1,21 +1,44 @@
 
-## Problem
 
-When a logged-in user lands on `/landing` (e.g. because their subscription is blocked, or they were redirected by `SubscriptionGate`), the "Sign In" buttons are hidden because they're wrapped in `{!user && ...}`. The header CTA also changes from "Try it free" to "Subscribe". This means a user who signed out and back in, or whose session is stale, loses access to the Sign In button.
+## Plan: Block Expired Trial Users in SubscriptionGate
 
-There are 3 places in `Landing.tsx` where Sign In is conditionally hidden:
-1. **Header** (line 558): `{!user && <Button>Sign In</Button>}`
-2. **Hero CTA** (line 616): `{!user && <Button>Sign in</Button>}`
-3. **Footer** (line 1173): `{!user && <Link>Sign In</Link>}`
+### What changes
 
-And the header CTA button (line 567) shows `user ? 'Subscribe' : 'Try it free'`.
+**1. New component: `src/components/TrialExpiredScreen.tsx`**
+- Styled consistently with `PaymentPausedScreen` and `SubscriptionCancelledScreen`
+- Title: "Your trial has ended"
+- Message: "Upgrade to continue finding leads and managing outreach."
+- Primary CTA: "Upgrade Now" → calls `createCheckout()`
+- Secondary CTA: "View Pricing" → navigates to `/landing#pricing`
 
-## Plan
+**2. Update `src/components/SubscriptionGate.tsx`**
+- Fetch `trial_used` alongside `setup_completed` from `user_trials` table (single query, no extra network call)
+- After the existing `canceled` check, add a new block:
+  - If `subStatus` is `null` (no Stripe subscription) AND `trialUsed` is `true` AND user is not an admin → render `<TrialExpiredScreen />`
+- This sits **after** all existing checks (payment paused, cancelled) so those flows remain untouched
+- Users who never started a trial (`trial_used: false`) continue through to the app for the gated discovery experience (existing behavior)
 
-**Single file change: `src/pages/Landing.tsx`**
+### Decision tree in SubscriptionGate (after change)
 
-1. **Always show the Sign In links** — remove the `!user &&` guards from all three locations so the Sign In button is always visible regardless of auth state.
+```text
+Loading?           → spinner
+isPaymentPaused?   → PaymentPausedScreen        (unchanged)
+canceled?          → SubscriptionCancelledScreen (unchanged)
+status=null + trial_used=true + !admin?
+                   → TrialExpiredScreen          (NEW)
+hasPaidAccess + !setupCompleted?
+                   → /complete-setup redirect    (unchanged)
+otherwise          → render children             (unchanged)
+```
 
-2. **Keep the CTA button text as "Try it free"** always (remove the ternary that switches to "Subscribe" when logged in). Logged-in users who need to subscribe will still scroll to pricing and go through the normal checkout flow.
+### What stays the same
+- `useSubscription` hook — no changes
+- `useTrial` hook — no changes
+- Stripe webhooks, subscription records, grace period logic — untouched
+- Active, trialing, past_due, canceled flows — identical
+- Users without `trial_used` flag — still allowed in for gated discovery
 
-These are purely display changes — no routing, Stripe, or auth logic is modified.
+### Technical details
+- The `user_trials` query already runs in `SubscriptionGate`; we just add `trial_used` to the select: `.select('setup_completed, trial_used')`
+- No new database queries, no new hooks, no schema changes
+
