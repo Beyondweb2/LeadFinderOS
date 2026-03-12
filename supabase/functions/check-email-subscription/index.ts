@@ -1,10 +1,19 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { checkRateLimit } from "../_shared/rate-limiter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
+
+// Uniform response shape — always returns the same structure regardless of outcome
+function uniformResponse(exists: boolean, hasActiveSubscription: boolean) {
+  return new Response(
+    JSON.stringify({ exists, hasActiveSubscription }),
+    { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+  );
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -14,11 +23,23 @@ serve(async (req) => {
   try {
     const { email } = await req.json();
     if (!email || typeof email !== "string") {
-      throw new Error("Missing email");
+      // Return generic "not found" instead of exposing validation errors
+      return uniformResponse(false, false);
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    console.log('[CHECK-EMAIL-SUBSCRIPTION] Checking email', normalizedEmail);
+
+    // Rate limit by IP to prevent bulk enumeration (5 requests per 60s per IP)
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() 
+      || req.headers.get("cf-connecting-ip") 
+      || "unknown";
+    const rateCheck = checkRateLimit(`check-email:${ip}`, 5, 60_000);
+    if (!rateCheck.allowed) {
+      // Return generic response instead of 429 to avoid leaking rate-limit info
+      return uniformResponse(false, false);
+    }
+
+    console.log('[CHECK-EMAIL-SUBSCRIPTION] Checking email (redacted)');
 
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -37,12 +58,8 @@ serve(async (req) => {
 
     const existingUser = usersData?.users?.find((u) => u.email?.toLowerCase() === normalizedEmail);
 
-    console.log('[CHECK-EMAIL-SUBSCRIPTION] Existing user found', { found: !!existingUser });
-
     if (!existingUser) {
-      return new Response(JSON.stringify({ exists: false, hasActiveSubscription: false }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return uniformResponse(false, false);
     }
 
     // Check if they have an active subscription
@@ -54,20 +71,10 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    return new Response(
-      JSON.stringify({
-        exists: true,
-        hasActiveSubscription: !!sub,
-      }),
-      {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
+    return uniformResponse(true, !!sub);
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    return new Response(JSON.stringify({ error: msg }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-      status: 500,
-    });
+    // Return generic response on errors to prevent information leakage
+    console.error('[CHECK-EMAIL-SUBSCRIPTION] Error:', error instanceof Error ? error.message : String(error));
+    return uniformResponse(false, false);
   }
 });
