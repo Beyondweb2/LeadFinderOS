@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, createContext, useContext, ReactNode } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { trackInitiateCheckout } from '@/lib/fbPixel';
 
 interface SubscriptionState {
   subscribed: boolean;
