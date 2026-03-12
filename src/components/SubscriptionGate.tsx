@@ -37,10 +37,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       try {
         const { data } = await supabase
           .from('user_trials')
-          .select('setup_completed')
+          .select('setup_completed, trial_used')
           .eq('user_id', user.id)
           .maybeSingle();
         setSetupCompleted((data as any)?.setup_completed ?? false);
+        setTrialUsed((data as any)?.trial_used ?? false);
         lastCheckedUserIdRef.current = user.id;
       } catch {
         setSetupCompleted(false);
