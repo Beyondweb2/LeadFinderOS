@@ -83,6 +83,11 @@ const BillingSuccess = () => {
 
           if (data?.subscribed) {
             subscribed = true;
+            // Fire StartTrial pixel event once per session
+            if (!sessionStorage.getItem('fb_start_trial_fired') && sessionId) {
+              trackStartTrial(sessionId);
+              sessionStorage.setItem('fb_start_trial_fired', '1');
+            }
             break;
           }
 

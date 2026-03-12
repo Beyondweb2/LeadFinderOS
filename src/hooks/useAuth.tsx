@@ -85,12 +85,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
         }
 
-        // On new signup, attach affiliate code and ref_source if present
+        // On new signup, attach affiliate code, ref_source, and UTM data if present
         if (event === 'SIGNED_IN' && newSession?.user) {
           const userId = newSession.user.id;
           setTimeout(async () => {
             const affiliateCode = getStoredAffiliateCode();
             const refSource = getAndClearRefSource();
+            const utmData = getAndClearUtmData();
 
             const updateData: Record<string, string> = {};
             if (affiliateCode) {
@@ -99,6 +100,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
             if (refSource) {
               updateData.ref_source = refSource;
+            }
+            // Persist UTM attribution data
+            if (utmData) {
+              if (utmData.utm_source) updateData.utm_source = utmData.utm_source;
+              if (utmData.utm_campaign) updateData.utm_campaign = utmData.utm_campaign;
+              if (utmData.utm_adset) updateData.utm_adset = utmData.utm_adset;
+              if (utmData.utm_ad) updateData.utm_ad = utmData.utm_ad;
+              if (utmData.fbclid) updateData.fbclid = utmData.fbclid;
+              if (utmData.traffic_source) updateData.traffic_source = utmData.traffic_source;
             }
 
             if (Object.keys(updateData).length > 0) {
