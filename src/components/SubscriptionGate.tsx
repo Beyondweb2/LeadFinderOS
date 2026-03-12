@@ -16,6 +16,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const { isLoading: subLoading, isPaymentPaused, isPaidSubscriber, isStripeTrialing, isAdmin, status: subStatus } = useSubscription();
   const { user } = useAuth();
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
+  const [trialUsed, setTrialUsed] = useState<boolean | null>(null);
   const [setupLoading, setSetupLoading] = useState(true);
   // Cache setup_completed per user to avoid refetching on every mount/route change
   const lastCheckedUserIdRef = useRef<string | null>(null);
