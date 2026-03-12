@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import appLogo from '@/assets/logo.png';
+import { trackStartTrial } from '@/lib/fbPixel';
 
 const DEFAULT_IN_APP_ROUTE = '/find-leads';
 
