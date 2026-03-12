@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { PaymentPausedScreen } from '@/components/PaymentPausedScreen';
 import { SubscriptionCancelledScreen } from '@/components/SubscriptionCancelledScreen';
+import { TrialExpiredScreen } from '@/components/TrialExpiredScreen';
 
 interface SubscriptionGateProps {
   children: ReactNode;
