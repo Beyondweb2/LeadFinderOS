@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { PaymentPausedScreen } from '@/components/PaymentPausedScreen';
 import { SubscriptionCancelledScreen } from '@/components/SubscriptionCancelledScreen';
+import { TrialExpiredScreen } from '@/components/TrialExpiredScreen';
 
 interface SubscriptionGateProps {
   children: ReactNode;
@@ -15,6 +16,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const { isLoading: subLoading, isPaymentPaused, isPaidSubscriber, isStripeTrialing, isAdmin, status: subStatus } = useSubscription();
   const { user } = useAuth();
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
+  const [trialUsed, setTrialUsed] = useState<boolean | null>(null);
   const [setupLoading, setSetupLoading] = useState(true);
   // Cache setup_completed per user to avoid refetching on every mount/route change
   const lastCheckedUserIdRef = useRef<string | null>(null);
@@ -35,10 +37,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       try {
         const { data } = await supabase
           .from('user_trials')
-          .select('setup_completed')
+          .select('setup_completed, trial_used')
           .eq('user_id', user.id)
           .maybeSingle();
         setSetupCompleted((data as any)?.setup_completed ?? false);
+        setTrialUsed((data as any)?.trial_used ?? false);
         lastCheckedUserIdRef.current = user.id;
       } catch {
         setSetupCompleted(false);
@@ -66,6 +69,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const isCancelled = subStatus === 'canceled' || subStatus === 'cancelled';
   if (isCancelled) {
     return <SubscriptionCancelledScreen />;
+  }
+
+  // Block expired trial users — no active subscription and trial was used
+  if (!isAdmin && subStatus === null && trialUsed === true) {
+    return <TrialExpiredScreen />;
   }
 
   // Allow all authenticated users into the app — gating happens at feature level
