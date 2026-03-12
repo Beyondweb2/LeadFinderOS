@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { captureUtmParams } from '@/lib/utmCapture';
 
 const REF_SOURCE_STORAGE_KEY = 'leadfinder_ref_source';
 const AFFILIATE_STORAGE_KEY = 'leadfinder_affiliate_code';
@@ -7,12 +8,15 @@ const AFFILIATE_EXPIRY_KEY = 'leadfinder_affiliate_expiry';
 const AFFILIATE_EXPIRY_DAYS = 30;
 
 /**
- * Unified capture for ?ref= URL parameter.
+ * Unified capture for ?ref= URL parameter and UTM/fbclid params.
  * Stores in BOTH ref_source (acquisition) and affiliate_code (affiliate attribution).
  * Records a click via the admin-affiliates edge function.
  */
 export function RefSourceCapture() {
   useEffect(() => {
+    // Capture UTM/fbclid params (separate from ref)
+    captureUtmParams();
+
     try {
       const params = new URLSearchParams(window.location.search);
       const refSource = params.get('ref');

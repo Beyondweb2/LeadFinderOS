@@ -494,8 +494,8 @@ const Landing = () => {
   useLandingTheme();
 
   const handleCTA = useCallback(() => {
+    trackLead();
     if (user) {
-      // Already authenticated — send to checkout, not back into the app
       navigate('/start-free-trial');
     } else {
       navigate('/auth?intent=signup');
