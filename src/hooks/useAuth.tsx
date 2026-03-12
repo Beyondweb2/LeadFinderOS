@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { getAndClearUtmData, type UtmData } from '@/lib/utmCapture';
 
 // Affiliate storage keys
 const AFFILIATE_STORAGE_KEY = 'leadfinder_affiliate_code';
