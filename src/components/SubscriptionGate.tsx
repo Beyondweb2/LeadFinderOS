@@ -71,6 +71,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     return <SubscriptionCancelledScreen />;
   }
 
+  // Block expired trial users — no active subscription and trial was used
+  if (!isAdmin && subStatus === null && trialUsed === true) {
+    return <TrialExpiredScreen />;
+  }
+
   // Allow all authenticated users into the app — gating happens at feature level
   // (search results are gated, buttons locked, trial modal shown)
 
