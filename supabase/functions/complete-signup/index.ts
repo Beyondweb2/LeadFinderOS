@@ -50,7 +50,7 @@ serve(async (req) => {
     // Remove null entries
     const utmData: Record<string, string> = {};
     for (const [k, v] of Object.entries(utmFields)) { if (v) utmData[k] = v; }
-    if (Object.keys(utmData).length > 0) logStep("UTM data received", utmData);
+    if (Object.keys(utmData).length > 0) logStep("UTM data from request body", utmData);
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
