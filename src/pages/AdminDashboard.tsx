@@ -674,6 +674,30 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
+        {/* Attribution Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">
+          <Card className="border-blue-500/30">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Megaphone className="h-3.5 w-3.5 text-blue-500" /> From Ads
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-2xl font-bold">{fromAds}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-purple-500/30">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-purple-500" /> From Affiliates
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-2xl font-bold">{fromAffiliates}</p>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Revenue helper text */}
         <p className="text-xs text-muted-foreground/70 flex items-center gap-1">
           <Info className="h-3 w-3" />
