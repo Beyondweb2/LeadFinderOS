@@ -73,6 +73,31 @@ serve(async (req) => {
     const planStatus = subscription.status === 'trialing' ? 'trial' : 'active';
     logStep("Checkout verified", { email, subscriptionId: subscription.id, status: subscription.status, planStatus });
 
+    // Fallback: if no UTM data from request body, try to pull from checkout_attempts
+    if (Object.keys(utmData).length === 0) {
+      const { data: attemptRow } = await supabaseAdmin
+        .from('checkout_attempts')
+        .select('utm_source, utm_campaign, utm_adset, utm_ad, fbclid, traffic_source, ref_source, affiliate_code')
+        .eq('email', email)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (attemptRow) {
+        for (const key of ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid', 'traffic_source']) {
+          if (attemptRow[key]) utmData[key] = attemptRow[key];
+        }
+        if (!cleanAffiliateCode && attemptRow.affiliate_code) {
+          // Use variable reassignment workaround since cleanAffiliateCode is const
+          Object.defineProperty(utmData, '_affiliate_fallback', { value: attemptRow.affiliate_code, enumerable: false });
+        }
+        if (!cleanRefSource && attemptRow.ref_source) {
+          Object.defineProperty(utmData, '_ref_fallback', { value: attemptRow.ref_source, enumerable: false });
+        }
+        if (Object.keys(utmData).length > 0) logStep("UTM data recovered from checkout_attempts", utmData);
+      }
+    }
+
     // Check if a user with this email already exists
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
     const existingUser = existingUsers?.users.find(u => u.email === email);
