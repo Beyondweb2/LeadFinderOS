@@ -161,11 +161,11 @@ serve(async (req) => {
         checkout_started_at: null,
         preferred_language: userLanguage,
         setup_completed: true,
-        ...(cleanAffiliateCode ? { affiliate_code: cleanAffiliateCode } : {}),
-        ...(cleanRefSource ? { ref_source: cleanRefSource } : {}),
+        ...(finalAffiliateCode ? { affiliate_code: finalAffiliateCode } : {}),
+        ...(finalRefSource ? { ref_source: finalRefSource } : {}),
         ...utmData,
       }).eq('user_id', userId);
-      logStep("Updated user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource, utmData });
+      logStep("Updated user_trials row", { affiliateCode: finalAffiliateCode, refSource: finalRefSource, utmData });
     }
 
     // Upsert subscription record
