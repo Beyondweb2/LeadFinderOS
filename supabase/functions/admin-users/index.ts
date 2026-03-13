@@ -148,7 +148,7 @@ serve(async (req) => {
           ? serviceClient.from('subscriptions').select('user_id, status, current_period_end, stripe_customer_id, stripe_subscription_id').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
-          ? serviceClient.from('user_trials').select('user_id, plan_status, demo_search_used, trial_used, checkout_abandoned, checkout_started_at, free_search_count, walkthrough_completed').in('user_id', userIds)
+          ? serviceClient.from('user_trials').select('user_id, plan_status, demo_search_used, trial_used, checkout_abandoned, checkout_started_at, free_search_count, walkthrough_completed, utm_source, utm_campaign, utm_adset, utm_ad, fbclid, traffic_source, ref_source, affiliate_code').in('user_id', userIds)
           : Promise.resolve({ data: [] }),
         userIds.length > 0
           ? serviceClient.from('funnel_events').select('user_id, event_type, created_at').in('user_id', userIds).in('event_type', ['demo_started', 'trial_started', 'subscription_active'])
