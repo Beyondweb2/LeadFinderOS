@@ -126,8 +126,9 @@ serve(async (req) => {
         setup_completed: true,
         ...(cleanAffiliateCode ? { affiliate_code: cleanAffiliateCode } : {}),
         ...(cleanRefSource ? { ref_source: cleanRefSource } : {}),
+        ...utmData,
       });
-      logStep("Created user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource });
+      logStep("Created user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource, utmData });
     } else {
       await supabaseAdmin.from('user_trials').update({
         plan_status: planStatus,
@@ -138,8 +139,9 @@ serve(async (req) => {
         setup_completed: true,
         ...(cleanAffiliateCode ? { affiliate_code: cleanAffiliateCode } : {}),
         ...(cleanRefSource ? { ref_source: cleanRefSource } : {}),
+        ...utmData,
       }).eq('user_id', userId);
-      logStep("Updated user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource });
+      logStep("Updated user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource, utmData });
     }
 
     // Upsert subscription record

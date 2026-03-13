@@ -252,6 +252,15 @@ serve(async (req) => {
           walkthrough_started_at: metrics?.walkthrough_started_at || null,
           walkthrough_completed_at: metrics?.walkthrough_completed_at || null,
           walkthrough_skipped_at: metrics?.walkthrough_skipped_at || null,
+          // Attribution
+          traffic_source: trial?.traffic_source || null,
+          utm_source: trial?.utm_source || null,
+          utm_campaign: trial?.utm_campaign || null,
+          utm_adset: trial?.utm_adset || null,
+          utm_ad: trial?.utm_ad || null,
+          fbclid: trial?.fbclid || null,
+          ref_source: trial?.ref_source || null,
+          affiliate_code: trial?.affiliate_code || null,
         };
       });
 
