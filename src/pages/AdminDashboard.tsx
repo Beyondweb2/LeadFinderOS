@@ -838,6 +838,7 @@ export default function AdminDashboard() {
                       <TableHead>Email</TableHead>
                       <TableHead>Signed Up</TableHead>
                       <TableHead>Access</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Billing</TableHead>
                       <TableHead>Messages</TableHead>
                       <TableHead>WT Status</TableHead>
