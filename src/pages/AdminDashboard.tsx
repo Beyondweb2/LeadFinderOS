@@ -162,6 +162,14 @@ interface CheckoutAttempt {
   converted: boolean;
   checkout_completed: boolean;
   created_at: string;
+  utm_source?: string | null;
+  utm_campaign?: string | null;
+  utm_adset?: string | null;
+  utm_ad?: string | null;
+  fbclid?: string | null;
+  traffic_source?: string | null;
+  ref_source?: string | null;
+  affiliate_code?: string | null;
 }
 
 function accessModeColor(mode: string): string {
