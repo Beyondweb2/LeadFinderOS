@@ -1031,6 +1031,57 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
+                {/* Attribution */}
+                {(selectedUser.traffic_source || selectedUser.affiliate_code || selectedUser.ref_source || selectedUser.utm_source) && (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-foreground">Attribution</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg border border-border p-3">
+                        <p className="text-xs text-muted-foreground">Source</p>
+                        <Badge variant="outline" className={`mt-1 ${getSourceColor(selectedUser)}`}>
+                          {getSourceLabel(selectedUser)}
+                        </Badge>
+                      </div>
+                      {selectedUser.affiliate_code && (
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs text-muted-foreground">Affiliate Code</p>
+                          <p className="text-sm font-mono font-medium mt-1">{selectedUser.affiliate_code}</p>
+                        </div>
+                      )}
+                      {selectedUser.utm_source && (
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs text-muted-foreground">utm_source</p>
+                          <p className="text-sm font-medium mt-1">{selectedUser.utm_source}</p>
+                        </div>
+                      )}
+                      {selectedUser.utm_campaign && (
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs text-muted-foreground">utm_campaign</p>
+                          <p className="text-sm font-medium mt-1">{selectedUser.utm_campaign}</p>
+                        </div>
+                      )}
+                      {selectedUser.utm_adset && (
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs text-muted-foreground">utm_adset</p>
+                          <p className="text-sm font-medium mt-1">{selectedUser.utm_adset}</p>
+                        </div>
+                      )}
+                      {selectedUser.utm_ad && (
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs text-muted-foreground">utm_ad</p>
+                          <p className="text-sm font-medium mt-1">{selectedUser.utm_ad}</p>
+                        </div>
+                      )}
+                      {selectedUser.fbclid && (
+                        <div className="rounded-lg border border-border p-3 col-span-2">
+                          <p className="text-xs text-muted-foreground">fbclid</p>
+                          <p className="text-sm font-mono font-medium mt-1 truncate">{selectedUser.fbclid}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Delete User */}
                 {selectedUser.id !== user?.id && (
                   <AlertDialog>
