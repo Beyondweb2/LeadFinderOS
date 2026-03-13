@@ -61,6 +61,8 @@ import {
   PoundSterling,
   Info,
   Percent,
+  Megaphone,
+  Link2,
 } from 'lucide-react';
 
 interface AdminUser {
