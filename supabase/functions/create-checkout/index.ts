@@ -85,11 +85,12 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Parse body for customer_email and affiliate tracking (email-first flow)
+    // Parse body for customer_email, affiliate tracking, and UTM data (email-first flow)
     let bodyEmail: string | null = null;
     let bodyAffiliateCode: string | null = null;
     let bodyRefSource: string | null = null;
     let bodyReturnTo: string | null = null;
+    let bodyUtm: Record<string, string> = {};
     try {
       const body = await req.json();
       if (body?.customer_email && typeof body.customer_email === "string") {
@@ -105,7 +106,14 @@ serve(async (req) => {
       if (body?.return_to && typeof body.return_to === "string") {
         bodyReturnTo = body.return_to.trim();
       }
+      // Capture UTM fields
+      for (const key of ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid', 'traffic_source']) {
+        if (body?.[key] && typeof body[key] === 'string' && body[key].trim()) {
+          bodyUtm[key] = body[key].trim();
+        }
+      }
       if (bodyAffiliateCode) logStep("Affiliate code from body", { code: bodyAffiliateCode });
+      if (Object.keys(bodyUtm).length > 0) logStep("UTM data from body", bodyUtm);
     } catch {
       // No body or invalid JSON — that's fine
     }
@@ -284,8 +292,16 @@ serve(async (req) => {
           email: attemptEmail,
           user_id: user?.id || null,
           converted: false,
+          ...(bodyUtm.utm_source ? { utm_source: bodyUtm.utm_source } : {}),
+          ...(bodyUtm.utm_campaign ? { utm_campaign: bodyUtm.utm_campaign } : {}),
+          ...(bodyUtm.utm_adset ? { utm_adset: bodyUtm.utm_adset } : {}),
+          ...(bodyUtm.utm_ad ? { utm_ad: bodyUtm.utm_ad } : {}),
+          ...(bodyUtm.fbclid ? { fbclid: bodyUtm.fbclid } : {}),
+          ...(bodyUtm.traffic_source ? { traffic_source: bodyUtm.traffic_source } : {}),
+          ...(bodyRefSource ? { ref_source: bodyRefSource } : {}),
+          ...(bodyAffiliateCode ? { affiliate_code: bodyAffiliateCode } : {}),
         });
-      logStep("Checkout attempt recorded", { email: attemptEmail });
+      logStep("Checkout attempt recorded", { email: attemptEmail, hasUtm: Object.keys(bodyUtm).length > 0 });
     }
 
     // Record checkout start for lifecycle email tracking

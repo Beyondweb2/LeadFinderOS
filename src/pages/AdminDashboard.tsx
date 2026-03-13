@@ -162,6 +162,14 @@ interface CheckoutAttempt {
   converted: boolean;
   checkout_completed: boolean;
   created_at: string;
+  utm_source?: string | null;
+  utm_campaign?: string | null;
+  utm_adset?: string | null;
+  utm_ad?: string | null;
+  fbclid?: string | null;
+  traffic_source?: string | null;
+  ref_source?: string | null;
+  affiliate_code?: string | null;
 }
 
 function accessModeColor(mode: string): string {
@@ -348,14 +356,14 @@ export default function AdminDashboard() {
             replies_count: 0,
             last_active_at: null,
             last_search_at: null,
-            traffic_source: null,
-            utm_source: null,
-            utm_campaign: null,
-            utm_adset: null,
-            utm_ad: null,
-            fbclid: null,
-            ref_source: null,
-            affiliate_code: null,
+            traffic_source: a.traffic_source || null,
+            utm_source: a.utm_source || null,
+            utm_campaign: a.utm_campaign || null,
+            utm_adset: a.utm_adset || null,
+            utm_ad: a.utm_ad || null,
+            fbclid: a.fbclid || null,
+            ref_source: a.ref_source || null,
+            affiliate_code: a.affiliate_code || null,
           }));
 
         const merged = [...userList, ...anonymousAttempts]

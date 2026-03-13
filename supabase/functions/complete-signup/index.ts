@@ -33,9 +33,9 @@ serve(async (req) => {
     if (!session_id) throw new Error("Missing session_id");
     if (!password || password.length < 8) throw new Error("Password must be at least 8 characters");
     const userLanguage = language || 'en';
-    const cleanAffiliateCode = typeof affiliate_code === 'string' ? affiliate_code.trim() : null;
-    const cleanRefSource = typeof ref_source === 'string' ? ref_source.trim() : null;
-    if (cleanAffiliateCode) logStep("Affiliate code received", { code: cleanAffiliateCode });
+    let finalAffiliateCode = typeof affiliate_code === 'string' ? affiliate_code.trim() : null;
+    let finalRefSource = typeof ref_source === 'string' ? ref_source.trim() : null;
+    if (finalAffiliateCode) logStep("Affiliate code received", { code: finalAffiliateCode });
 
     // Clean UTM fields
     const cleanUtm = (v: unknown) => typeof v === 'string' && v.trim() ? v.trim() : null;
@@ -50,7 +50,7 @@ serve(async (req) => {
     // Remove null entries
     const utmData: Record<string, string> = {};
     for (const [k, v] of Object.entries(utmFields)) { if (v) utmData[k] = v; }
-    if (Object.keys(utmData).length > 0) logStep("UTM data received", utmData);
+    if (Object.keys(utmData).length > 0) logStep("UTM data from request body", utmData);
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
@@ -72,6 +72,30 @@ serve(async (req) => {
 
     const planStatus = subscription.status === 'trialing' ? 'trial' : 'active';
     logStep("Checkout verified", { email, subscriptionId: subscription.id, status: subscription.status, planStatus });
+
+    // Fallback: if no UTM data from request body, try to pull from checkout_attempts
+    if (Object.keys(utmData).length === 0 || !finalAffiliateCode || !finalRefSource) {
+      const { data: attemptRow } = await supabaseAdmin
+        .from('checkout_attempts')
+        .select('utm_source, utm_campaign, utm_adset, utm_ad, fbclid, traffic_source, ref_source, affiliate_code')
+        .eq('email', email)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (attemptRow) {
+        for (const key of ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid', 'traffic_source'] as const) {
+          if (!utmData[key] && attemptRow[key]) utmData[key] = attemptRow[key];
+        }
+        if (!finalAffiliateCode && attemptRow.affiliate_code) {
+          finalAffiliateCode = attemptRow.affiliate_code;
+        }
+        if (!finalRefSource && attemptRow.ref_source) {
+          finalRefSource = attemptRow.ref_source;
+        }
+        if (Object.keys(utmData).length > 0) logStep("UTM data recovered from checkout_attempts", utmData);
+      }
+    }
 
     // Check if a user with this email already exists
     const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
@@ -124,11 +148,11 @@ serve(async (req) => {
         lifecycle_stage: 99,
         preferred_language: userLanguage,
         setup_completed: true,
-        ...(cleanAffiliateCode ? { affiliate_code: cleanAffiliateCode } : {}),
-        ...(cleanRefSource ? { ref_source: cleanRefSource } : {}),
+        ...(finalAffiliateCode ? { affiliate_code: finalAffiliateCode } : {}),
+        ...(finalRefSource ? { ref_source: finalRefSource } : {}),
         ...utmData,
       });
-      logStep("Created user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource, utmData });
+      logStep("Created user_trials row", { affiliateCode: finalAffiliateCode, refSource: finalRefSource, utmData });
     } else {
       await supabaseAdmin.from('user_trials').update({
         plan_status: planStatus,
@@ -137,11 +161,11 @@ serve(async (req) => {
         checkout_started_at: null,
         preferred_language: userLanguage,
         setup_completed: true,
-        ...(cleanAffiliateCode ? { affiliate_code: cleanAffiliateCode } : {}),
-        ...(cleanRefSource ? { ref_source: cleanRefSource } : {}),
+        ...(finalAffiliateCode ? { affiliate_code: finalAffiliateCode } : {}),
+        ...(finalRefSource ? { ref_source: finalRefSource } : {}),
         ...utmData,
       }).eq('user_id', userId);
-      logStep("Updated user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource, utmData });
+      logStep("Updated user_trials row", { affiliateCode: finalAffiliateCode, refSource: finalRefSource, utmData });
     }
 
     // Upsert subscription record

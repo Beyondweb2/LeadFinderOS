@@ -159,7 +159,7 @@ serve(async (req) => {
           .gte('created_at', dayAgoIso),
         serviceClient
           .from('checkout_attempts')
-          .select('id, email, user_id, converted, checkout_completed, created_at')
+          .select('id, email, user_id, converted, checkout_completed, created_at, utm_source, utm_campaign, utm_adset, utm_ad, fbclid, traffic_source, ref_source, affiliate_code')
           .order('created_at', { ascending: false })
           .limit(25),
       ]);
