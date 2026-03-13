@@ -8,7 +8,7 @@ const UTM_STORAGE_KEY = 'leadfinder_utm_data';
 const UTM_EXPIRY_KEY = 'leadfinder_utm_expiry';
 const UTM_EXPIRY_DAYS = 30;
 
-const UTM_PARAMS = ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid'] as const;
+const UTM_PARAMS = ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid', 'utm_medium', 'utm_content', 'utm_term'] as const;
 
 export interface UtmData {
   utm_source?: string;
