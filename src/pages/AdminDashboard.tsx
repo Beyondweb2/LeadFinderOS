@@ -101,16 +101,28 @@ interface AdminUser {
   affiliate_code: string | null;
 }
 
+function isMetaAdsUser(u: AdminUser): boolean {
+  return (
+    u.traffic_source === 'meta_ads' ||
+    u.utm_source === 'meta' ||
+    u.utm_source === 'facebook' ||
+    u.utm_source === 'instagram' ||
+    !!u.fbclid
+  );
+}
+
 function getSourceLabel(u: AdminUser): string {
-  if (u.traffic_source === 'meta_ads') return 'Meta Ads';
+  if (isMetaAdsUser(u)) return 'Meta Ads';
   if (u.affiliate_code) return 'Affiliate';
+  if (u.utm_source) return `Paid (${u.utm_source})`;
   if (u.ref_source) return u.ref_source;
   return 'Organic';
 }
 
 function getSourceColor(u: AdminUser): string {
-  if (u.traffic_source === 'meta_ads') return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+  if (isMetaAdsUser(u)) return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
   if (u.affiliate_code) return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
+  if (u.utm_source) return 'bg-teal-500/15 text-teal-400 border-teal-500/30';
   if (u.ref_source) return 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30';
   return 'bg-muted text-muted-foreground border-border';
 }
