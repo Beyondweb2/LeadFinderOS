@@ -40,6 +40,15 @@ export function captureUtmParams(): void {
 
     if (!hasAny) return;
 
+    // Map standard UTM params to our storage keys (fallback if direct keys not set)
+    // utm_content → utm_ad, utm_term → utm_adset
+    if (!captured.utm_ad && captured.utm_content) {
+      captured.utm_ad = captured.utm_content;
+    }
+    if (!captured.utm_adset && captured.utm_term) {
+      captured.utm_adset = captured.utm_term;
+    }
+
     // Derive traffic_source
     if (captured.fbclid || captured.utm_source === 'meta' || captured.utm_source === 'facebook' || captured.utm_source === 'instagram') {
       captured.traffic_source = 'meta_ads';
