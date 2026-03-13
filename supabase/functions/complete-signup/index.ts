@@ -29,13 +29,28 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    const { session_id, password, language, affiliate_code, ref_source } = await req.json();
+    const { session_id, password, language, affiliate_code, ref_source, utm_source, utm_campaign, utm_adset, utm_ad, fbclid, traffic_source } = await req.json();
     if (!session_id) throw new Error("Missing session_id");
     if (!password || password.length < 8) throw new Error("Password must be at least 8 characters");
     const userLanguage = language || 'en';
     const cleanAffiliateCode = typeof affiliate_code === 'string' ? affiliate_code.trim() : null;
     const cleanRefSource = typeof ref_source === 'string' ? ref_source.trim() : null;
     if (cleanAffiliateCode) logStep("Affiliate code received", { code: cleanAffiliateCode });
+
+    // Clean UTM fields
+    const cleanUtm = (v: unknown) => typeof v === 'string' && v.trim() ? v.trim() : null;
+    const utmFields: Record<string, string | null> = {
+      utm_source: cleanUtm(utm_source),
+      utm_campaign: cleanUtm(utm_campaign),
+      utm_adset: cleanUtm(utm_adset),
+      utm_ad: cleanUtm(utm_ad),
+      fbclid: cleanUtm(fbclid),
+      traffic_source: cleanUtm(traffic_source),
+    };
+    // Remove null entries
+    const utmData: Record<string, string> = {};
+    for (const [k, v] of Object.entries(utmFields)) { if (v) utmData[k] = v; }
+    if (Object.keys(utmData).length > 0) logStep("UTM data received", utmData);
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
@@ -111,8 +126,9 @@ serve(async (req) => {
         setup_completed: true,
         ...(cleanAffiliateCode ? { affiliate_code: cleanAffiliateCode } : {}),
         ...(cleanRefSource ? { ref_source: cleanRefSource } : {}),
+        ...utmData,
       });
-      logStep("Created user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource });
+      logStep("Created user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource, utmData });
     } else {
       await supabaseAdmin.from('user_trials').update({
         plan_status: planStatus,
@@ -123,8 +139,9 @@ serve(async (req) => {
         setup_completed: true,
         ...(cleanAffiliateCode ? { affiliate_code: cleanAffiliateCode } : {}),
         ...(cleanRefSource ? { ref_source: cleanRefSource } : {}),
+        ...utmData,
       }).eq('user_id', userId);
-      logStep("Updated user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource });
+      logStep("Updated user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource, utmData });
     }
 
     // Upsert subscription record

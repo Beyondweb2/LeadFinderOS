@@ -61,6 +61,8 @@ import {
   PoundSterling,
   Info,
   Percent,
+  Megaphone,
+  Link2,
 } from 'lucide-react';
 
 interface AdminUser {
@@ -88,6 +90,29 @@ interface AdminUser {
   replies_count: number;
   last_active_at: string | null;
   last_search_at: string | null;
+  // Attribution
+  traffic_source: string | null;
+  utm_source: string | null;
+  utm_campaign: string | null;
+  utm_adset: string | null;
+  utm_ad: string | null;
+  fbclid: string | null;
+  ref_source: string | null;
+  affiliate_code: string | null;
+}
+
+function getSourceLabel(u: AdminUser): string {
+  if (u.traffic_source === 'meta_ads') return 'Meta Ads';
+  if (u.affiliate_code) return 'Affiliate';
+  if (u.ref_source) return u.ref_source;
+  return 'Organic';
+}
+
+function getSourceColor(u: AdminUser): string {
+  if (u.traffic_source === 'meta_ads') return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+  if (u.affiliate_code) return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
+  if (u.ref_source) return 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30';
+  return 'bg-muted text-muted-foreground border-border';
 }
 
 function getWalkthroughStatus(u: AdminUser): 'completed' | 'skipped' | 'in_progress' | 'not_started' {
@@ -323,6 +348,14 @@ export default function AdminDashboard() {
             replies_count: 0,
             last_active_at: null,
             last_search_at: null,
+            traffic_source: null,
+            utm_source: null,
+            utm_campaign: null,
+            utm_adset: null,
+            utm_ad: null,
+            fbclid: null,
+            ref_source: null,
+            affiliate_code: null,
           }));
 
         const merged = [...userList, ...anonymousAttempts]
@@ -483,6 +516,10 @@ export default function AdminDashboard() {
 
   const filtered = users;
 
+  // --- Attribution metrics ---
+  const fromAds = users.filter(u => u.traffic_source === 'meta_ads').length;
+  const fromAffiliates = users.filter(u => u.affiliate_code && u.traffic_source !== 'meta_ads').length;
+
   // --- Trial-model metrics ---
   // Trials Started = anyone who has a stripe subscription (started a trial)
   const trialsStarted = users.filter(u => u.stripe_subscription_id).length;
@@ -637,6 +674,30 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
+        {/* Attribution Cards */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">
+          <Card className="border-blue-500/30">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Megaphone className="h-3.5 w-3.5 text-blue-500" /> From Ads
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-2xl font-bold">{fromAds}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-purple-500/30">
+            <CardHeader className="pb-2 pt-4 px-4">
+              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5 text-purple-500" /> From Affiliates
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-4 pb-4">
+              <p className="text-2xl font-bold">{fromAffiliates}</p>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Revenue helper text */}
         <p className="text-xs text-muted-foreground/70 flex items-center gap-1">
           <Info className="h-3 w-3" />
@@ -777,6 +838,7 @@ export default function AdminDashboard() {
                       <TableHead>Email</TableHead>
                       <TableHead>Signed Up</TableHead>
                       <TableHead>Access</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Billing</TableHead>
                       <TableHead>Messages</TableHead>
                       <TableHead>WT Status</TableHead>
@@ -792,7 +854,7 @@ export default function AdminDashboard() {
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={14} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={15} className="text-center py-8 text-muted-foreground">
                           No users found
                         </TableCell>
                       </TableRow>
@@ -820,6 +882,11 @@ export default function AdminDashboard() {
                           <TableCell>
                             <Badge variant="outline" className={accessModeColor(u.access_mode)}>
                               {accessModeLabel(u.access_mode)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={getSourceColor(u)}>
+                              {getSourceLabel(u)}
                             </Badge>
                           </TableCell>
                           <TableCell>
@@ -963,6 +1030,57 @@ export default function AdminDashboard() {
                     )}
                   </div>
                 </div>
+
+                {/* Attribution */}
+                {(selectedUser.traffic_source || selectedUser.affiliate_code || selectedUser.ref_source || selectedUser.utm_source) && (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold text-foreground">Attribution</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-lg border border-border p-3">
+                        <p className="text-xs text-muted-foreground">Source</p>
+                        <Badge variant="outline" className={`mt-1 ${getSourceColor(selectedUser)}`}>
+                          {getSourceLabel(selectedUser)}
+                        </Badge>
+                      </div>
+                      {selectedUser.affiliate_code && (
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs text-muted-foreground">Affiliate Code</p>
+                          <p className="text-sm font-mono font-medium mt-1">{selectedUser.affiliate_code}</p>
+                        </div>
+                      )}
+                      {selectedUser.utm_source && (
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs text-muted-foreground">utm_source</p>
+                          <p className="text-sm font-medium mt-1">{selectedUser.utm_source}</p>
+                        </div>
+                      )}
+                      {selectedUser.utm_campaign && (
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs text-muted-foreground">utm_campaign</p>
+                          <p className="text-sm font-medium mt-1">{selectedUser.utm_campaign}</p>
+                        </div>
+                      )}
+                      {selectedUser.utm_adset && (
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs text-muted-foreground">utm_adset</p>
+                          <p className="text-sm font-medium mt-1">{selectedUser.utm_adset}</p>
+                        </div>
+                      )}
+                      {selectedUser.utm_ad && (
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs text-muted-foreground">utm_ad</p>
+                          <p className="text-sm font-medium mt-1">{selectedUser.utm_ad}</p>
+                        </div>
+                      )}
+                      {selectedUser.fbclid && (
+                        <div className="rounded-lg border border-border p-3 col-span-2">
+                          <p className="text-xs text-muted-foreground">fbclid</p>
+                          <p className="text-sm font-mono font-medium mt-1 truncate">{selectedUser.fbclid}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Delete User */}
                 {selectedUser.id !== user?.id && (

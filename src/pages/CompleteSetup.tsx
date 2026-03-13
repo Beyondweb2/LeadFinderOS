@@ -136,8 +136,33 @@ const CompleteSetup = () => {
       const affiliateCode = localStorage.getItem('leadfinder_affiliate_code') || undefined;
       const refSource = localStorage.getItem('leadfinder_ref_source') || undefined;
 
+      // Pass UTM attribution data from localStorage
+      let utmData: Record<string, string> = {};
+      try {
+        const raw = localStorage.getItem('leadfinder_utm_data');
+        const expiry = localStorage.getItem('leadfinder_utm_expiry');
+        if (raw && expiry && new Date() <= new Date(expiry)) {
+          utmData = JSON.parse(raw);
+          // Clear after reading (one-time use)
+          localStorage.removeItem('leadfinder_utm_data');
+          localStorage.removeItem('leadfinder_utm_expiry');
+        }
+      } catch { /* silent */ }
+
       const { data, error } = await supabase.functions.invoke('complete-signup', {
-        body: { session_id: sessionId, password, language, affiliate_code: affiliateCode, ref_source: refSource },
+        body: {
+          session_id: sessionId,
+          password,
+          language,
+          affiliate_code: affiliateCode,
+          ref_source: refSource,
+          utm_source: utmData.utm_source,
+          utm_campaign: utmData.utm_campaign,
+          utm_adset: utmData.utm_adset,
+          utm_ad: utmData.utm_ad,
+          fbclid: utmData.fbclid,
+          traffic_source: utmData.traffic_source,
+        },
       });
 
       if (error) throw new Error(error.message);
