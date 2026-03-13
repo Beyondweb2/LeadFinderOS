@@ -148,11 +148,11 @@ serve(async (req) => {
         lifecycle_stage: 99,
         preferred_language: userLanguage,
         setup_completed: true,
-        ...(cleanAffiliateCode ? { affiliate_code: cleanAffiliateCode } : {}),
-        ...(cleanRefSource ? { ref_source: cleanRefSource } : {}),
+        ...(finalAffiliateCode ? { affiliate_code: finalAffiliateCode } : {}),
+        ...(finalRefSource ? { ref_source: finalRefSource } : {}),
         ...utmData,
       });
-      logStep("Created user_trials row", { affiliateCode: cleanAffiliateCode, refSource: cleanRefSource, utmData });
+      logStep("Created user_trials row", { affiliateCode: finalAffiliateCode, refSource: finalRefSource, utmData });
     } else {
       await supabaseAdmin.from('user_trials').update({
         plan_status: planStatus,
