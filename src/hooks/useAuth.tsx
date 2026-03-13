@@ -3,13 +3,6 @@ import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 
 
-// Affiliate storage keys
-const AFFILIATE_STORAGE_KEY = 'leadfinder_affiliate_code';
-const AFFILIATE_EXPIRY_KEY = 'leadfinder_affiliate_expiry';
-
-// Acquisition tracking storage key (for ads, whatsapp, etc.)
-const REF_SOURCE_STORAGE_KEY = 'leadfinder_ref_source';
-
 interface AuthContextType {
   user: User | null;
   session: Session | null;
