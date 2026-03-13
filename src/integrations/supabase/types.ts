@@ -120,37 +120,61 @@ export type Database = {
       }
       checkout_attempts: {
         Row: {
+          affiliate_code: string | null
           checkout_completed: boolean
           converted: boolean
           created_at: string
           email: string
+          fbclid: string | null
           id: string
+          ref_source: string | null
           reminder_sent_at: string | null
           stripe_customer_id: string | null
           stripe_subscription_id: string | null
+          traffic_source: string | null
           user_id: string | null
+          utm_ad: string | null
+          utm_adset: string | null
+          utm_campaign: string | null
+          utm_source: string | null
         }
         Insert: {
+          affiliate_code?: string | null
           checkout_completed?: boolean
           converted?: boolean
           created_at?: string
           email: string
+          fbclid?: string | null
           id?: string
+          ref_source?: string | null
           reminder_sent_at?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
+          traffic_source?: string | null
           user_id?: string | null
+          utm_ad?: string | null
+          utm_adset?: string | null
+          utm_campaign?: string | null
+          utm_source?: string | null
         }
         Update: {
+          affiliate_code?: string | null
           checkout_completed?: boolean
           converted?: boolean
           created_at?: string
           email?: string
+          fbclid?: string | null
           id?: string
+          ref_source?: string | null
           reminder_sent_at?: string | null
           stripe_customer_id?: string | null
           stripe_subscription_id?: string | null
+          traffic_source?: string | null
           user_id?: string | null
+          utm_ad?: string | null
+          utm_adset?: string | null
+          utm_campaign?: string | null
+          utm_source?: string | null
         }
         Relationships: []
       }
