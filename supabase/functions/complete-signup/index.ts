@@ -74,7 +74,7 @@ serve(async (req) => {
     logStep("Checkout verified", { email, subscriptionId: subscription.id, status: subscription.status, planStatus });
 
     // Fallback: if no UTM data from request body, try to pull from checkout_attempts
-    if (Object.keys(utmData).length === 0) {
+    if (Object.keys(utmData).length === 0 || !finalAffiliateCode || !finalRefSource) {
       const { data: attemptRow } = await supabaseAdmin
         .from('checkout_attempts')
         .select('utm_source, utm_campaign, utm_adset, utm_ad, fbclid, traffic_source, ref_source, affiliate_code')
@@ -84,15 +84,14 @@ serve(async (req) => {
         .maybeSingle();
 
       if (attemptRow) {
-        for (const key of ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid', 'traffic_source']) {
-          if (attemptRow[key]) utmData[key] = attemptRow[key];
+        for (const key of ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid', 'traffic_source'] as const) {
+          if (!utmData[key] && attemptRow[key]) utmData[key] = attemptRow[key];
         }
-        if (!cleanAffiliateCode && attemptRow.affiliate_code) {
-          // Use variable reassignment workaround since cleanAffiliateCode is const
-          Object.defineProperty(utmData, '_affiliate_fallback', { value: attemptRow.affiliate_code, enumerable: false });
+        if (!finalAffiliateCode && attemptRow.affiliate_code) {
+          finalAffiliateCode = attemptRow.affiliate_code;
         }
-        if (!cleanRefSource && attemptRow.ref_source) {
-          Object.defineProperty(utmData, '_ref_fallback', { value: attemptRow.ref_source, enumerable: false });
+        if (!finalRefSource && attemptRow.ref_source) {
+          finalRefSource = attemptRow.ref_source;
         }
         if (Object.keys(utmData).length > 0) logStep("UTM data recovered from checkout_attempts", utmData);
       }
