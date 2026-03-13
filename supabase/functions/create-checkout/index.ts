@@ -85,11 +85,12 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Parse body for customer_email and affiliate tracking (email-first flow)
+    // Parse body for customer_email, affiliate tracking, and UTM data (email-first flow)
     let bodyEmail: string | null = null;
     let bodyAffiliateCode: string | null = null;
     let bodyRefSource: string | null = null;
     let bodyReturnTo: string | null = null;
+    let bodyUtm: Record<string, string> = {};
     try {
       const body = await req.json();
       if (body?.customer_email && typeof body.customer_email === "string") {
@@ -105,7 +106,14 @@ serve(async (req) => {
       if (body?.return_to && typeof body.return_to === "string") {
         bodyReturnTo = body.return_to.trim();
       }
+      // Capture UTM fields
+      for (const key of ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid', 'traffic_source']) {
+        if (body?.[key] && typeof body[key] === 'string' && body[key].trim()) {
+          bodyUtm[key] = body[key].trim();
+        }
+      }
       if (bodyAffiliateCode) logStep("Affiliate code from body", { code: bodyAffiliateCode });
+      if (Object.keys(bodyUtm).length > 0) logStep("UTM data from body", bodyUtm);
     } catch {
       // No body or invalid JSON — that's fine
     }
