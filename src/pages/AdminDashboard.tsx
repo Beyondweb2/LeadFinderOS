@@ -516,6 +516,10 @@ export default function AdminDashboard() {
 
   const filtered = users;
 
+  // --- Attribution metrics ---
+  const fromAds = users.filter(u => u.traffic_source === 'meta_ads').length;
+  const fromAffiliates = users.filter(u => u.affiliate_code && u.traffic_source !== 'meta_ads').length;
+
   // --- Trial-model metrics ---
   // Trials Started = anyone who has a stripe subscription (started a trial)
   const trialsStarted = users.filter(u => u.stripe_subscription_id).length;
