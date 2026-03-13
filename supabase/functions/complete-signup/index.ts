@@ -33,9 +33,9 @@ serve(async (req) => {
     if (!session_id) throw new Error("Missing session_id");
     if (!password || password.length < 8) throw new Error("Password must be at least 8 characters");
     const userLanguage = language || 'en';
-    const cleanAffiliateCode = typeof affiliate_code === 'string' ? affiliate_code.trim() : null;
-    const cleanRefSource = typeof ref_source === 'string' ? ref_source.trim() : null;
-    if (cleanAffiliateCode) logStep("Affiliate code received", { code: cleanAffiliateCode });
+    let finalAffiliateCode = typeof affiliate_code === 'string' ? affiliate_code.trim() : null;
+    let finalRefSource = typeof ref_source === 'string' ? ref_source.trim() : null;
+    if (finalAffiliateCode) logStep("Affiliate code received", { code: finalAffiliateCode });
 
     // Clean UTM fields
     const cleanUtm = (v: unknown) => typeof v === 'string' && v.trim() ? v.trim() : null;
