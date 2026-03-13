@@ -88,6 +88,29 @@ interface AdminUser {
   replies_count: number;
   last_active_at: string | null;
   last_search_at: string | null;
+  // Attribution
+  traffic_source: string | null;
+  utm_source: string | null;
+  utm_campaign: string | null;
+  utm_adset: string | null;
+  utm_ad: string | null;
+  fbclid: string | null;
+  ref_source: string | null;
+  affiliate_code: string | null;
+}
+
+function getSourceLabel(u: AdminUser): string {
+  if (u.traffic_source === 'meta_ads') return 'Meta Ads';
+  if (u.affiliate_code) return 'Affiliate';
+  if (u.ref_source) return u.ref_source;
+  return 'Organic';
+}
+
+function getSourceColor(u: AdminUser): string {
+  if (u.traffic_source === 'meta_ads') return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+  if (u.affiliate_code) return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
+  if (u.ref_source) return 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30';
+  return 'bg-muted text-muted-foreground border-border';
 }
 
 function getWalkthroughStatus(u: AdminUser): 'completed' | 'skipped' | 'in_progress' | 'not_started' {
