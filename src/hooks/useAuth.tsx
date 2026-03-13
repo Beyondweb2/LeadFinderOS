@@ -14,39 +14,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-/**
- * Get the stored affiliate code if not expired
- */
-function getStoredAffiliateCode(): string | null {
-  const code = localStorage.getItem(AFFILIATE_STORAGE_KEY);
-  const expiry = localStorage.getItem(AFFILIATE_EXPIRY_KEY);
-  
-  if (!code || !expiry) return null;
-  
-  const expiryDate = new Date(expiry);
-  if (new Date() > expiryDate) {
-    localStorage.removeItem(AFFILIATE_STORAGE_KEY);
-    localStorage.removeItem(AFFILIATE_EXPIRY_KEY);
-    return null;
-  }
-  
-  return code;
-}
-
-/**
- * Get and clear the stored ref_source for acquisition tracking
- */
-function getAndClearRefSource(): string | null {
-  try {
-    const refSource = localStorage.getItem(REF_SOURCE_STORAGE_KEY);
-    if (refSource) {
-      localStorage.removeItem(REF_SOURCE_STORAGE_KEY);
-    }
-    return refSource;
-  } catch {
-    return null;
-  }
-}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
