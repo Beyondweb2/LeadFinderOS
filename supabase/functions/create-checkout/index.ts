@@ -292,8 +292,16 @@ serve(async (req) => {
           email: attemptEmail,
           user_id: user?.id || null,
           converted: false,
+          ...(bodyUtm.utm_source ? { utm_source: bodyUtm.utm_source } : {}),
+          ...(bodyUtm.utm_campaign ? { utm_campaign: bodyUtm.utm_campaign } : {}),
+          ...(bodyUtm.utm_adset ? { utm_adset: bodyUtm.utm_adset } : {}),
+          ...(bodyUtm.utm_ad ? { utm_ad: bodyUtm.utm_ad } : {}),
+          ...(bodyUtm.fbclid ? { fbclid: bodyUtm.fbclid } : {}),
+          ...(bodyUtm.traffic_source ? { traffic_source: bodyUtm.traffic_source } : {}),
+          ...(bodyRefSource ? { ref_source: bodyRefSource } : {}),
+          ...(bodyAffiliateCode ? { affiliate_code: bodyAffiliateCode } : {}),
         });
-      logStep("Checkout attempt recorded", { email: attemptEmail });
+      logStep("Checkout attempt recorded", { email: attemptEmail, hasUtm: Object.keys(bodyUtm).length > 0 });
     }
 
     // Record checkout start for lifecycle email tracking
