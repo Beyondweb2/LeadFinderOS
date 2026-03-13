@@ -885,6 +885,11 @@ export default function AdminDashboard() {
                             </Badge>
                           </TableCell>
                           <TableCell>
+                            <Badge variant="outline" className={getSourceColor(u)}>
+                              {getSourceLabel(u)}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
                             <Badge variant="outline" className={billingStatusColor(u.billing_status)}>
                               {billingStatusLabel(u.billing_status)}
                             </Badge>
