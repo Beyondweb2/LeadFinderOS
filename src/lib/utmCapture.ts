@@ -8,7 +8,7 @@ const UTM_STORAGE_KEY = 'leadfinder_utm_data';
 const UTM_EXPIRY_KEY = 'leadfinder_utm_expiry';
 const UTM_EXPIRY_DAYS = 30;
 
-const UTM_PARAMS = ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid'] as const;
+const UTM_PARAMS = ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid', 'utm_medium', 'utm_content', 'utm_term'] as const;
 
 export interface UtmData {
   utm_source?: string;
@@ -39,6 +39,15 @@ export function captureUtmParams(): void {
     }
 
     if (!hasAny) return;
+
+    // Map standard UTM params to our storage keys (fallback if direct keys not set)
+    // utm_content → utm_ad, utm_term → utm_adset
+    if (!captured.utm_ad && captured.utm_content) {
+      captured.utm_ad = captured.utm_content;
+    }
+    if (!captured.utm_adset && captured.utm_term) {
+      captured.utm_adset = captured.utm_term;
+    }
 
     // Derive traffic_source
     if (captured.fbclid || captured.utm_source === 'meta' || captured.utm_source === 'facebook' || captured.utm_source === 'instagram') {
