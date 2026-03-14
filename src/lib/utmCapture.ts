@@ -80,10 +80,22 @@ export function captureUtmParams(): void {
 }
 
 /**
- * Retrieve stored UTM data if not expired. Returns null if nothing stored or expired.
+ * Retrieve stored UTM data. Checks the early-capture key (traffic_attribution)
+ * first, then falls back to the legacy key (leadfinder_utm_data).
  */
 export function getStoredUtmData(): UtmData | null {
   try {
+    // 1. Try the early-capture key set by the inline <script> in index.html
+    const earlyRaw = localStorage.getItem('traffic_attribution');
+    if (earlyRaw) {
+      const parsed = JSON.parse(earlyRaw) as UtmData;
+      // Only return if it has at least one meaningful value
+      if (parsed.utm_source || parsed.fbclid || parsed.traffic_source) {
+        return parsed;
+      }
+    }
+
+    // 2. Fall back to the legacy key
     const raw = localStorage.getItem(UTM_STORAGE_KEY);
     const expiry = localStorage.getItem(UTM_EXPIRY_KEY);
     if (!raw || !expiry) return null;
