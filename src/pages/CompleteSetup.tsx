@@ -171,6 +171,10 @@ const CompleteSetup = () => {
 
       // Sign in with the new credentials
       const { error: signInError } = await signIn(data.email, password);
+
+      // Fire Meta Pixel CompleteRegistration event (critical for ad attribution)
+      trackCompleteRegistration();
+
       if (signInError) {
         setStatus('success');
         return;
