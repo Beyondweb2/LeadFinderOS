@@ -166,21 +166,10 @@ export function OutreachTable({
       });
     }, []),
     onPersisted: useCallback((leadId: string, _channel: 'whatsapp' | 'sms' | 'call') => {
-      // Clear the optimistic status override after DB persistence completes.
-      // This allows subsequent user-driven status changes to take effect.
-      // Keep other optimistic fields (contact_method, outreach_attempts) until leads prop syncs.
-      setOptimisticUpdates(prev => {
-        const existing = prev.get(leadId);
-        if (!existing) return prev;
-        const next = new Map(prev);
-        const { status, ...rest } = existing;
-        if (Object.keys(rest).length === 0) {
-          next.delete(leadId);
-        } else {
-          next.set(leadId, rest);
-        }
-        return next;
-      });
+      // Keep optimistic updates (including status) until the leads prop syncs.
+      // The useEffect below will clear them when leads catch up.
+      // We no longer strip `status` here because leads aren't re-fetched after
+      // logAttempt, which caused the status to revert to 'not_contacted'.
     }, []),
   });
 
