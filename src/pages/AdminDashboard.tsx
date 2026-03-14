@@ -101,29 +101,37 @@ interface AdminUser {
   affiliate_code: string | null;
 }
 
+function normalizeAttributionValue(value: string | null | undefined): string {
+  return (value ?? '').trim().toLowerCase();
+}
+
 function isMetaAdsUser(u: AdminUser): boolean {
+  const trafficSource = normalizeAttributionValue(u.traffic_source);
+  const utmSource = normalizeAttributionValue(u.utm_source);
+  const hasFbclid = !!normalizeAttributionValue(u.fbclid);
+
   return (
-    u.traffic_source === 'meta_ads' ||
-    u.utm_source === 'meta' ||
-    u.utm_source === 'facebook' ||
-    u.utm_source === 'instagram' ||
-    !!u.fbclid
+    hasFbclid ||
+    trafficSource === 'meta_ads' ||
+    utmSource === 'meta' ||
+    utmSource === 'facebook' ||
+    utmSource === 'instagram'
   );
+}
+
+function isAffiliateUser(u: AdminUser): boolean {
+  return !!normalizeAttributionValue(u.affiliate_code) && !isMetaAdsUser(u);
 }
 
 function getSourceLabel(u: AdminUser): string {
   if (isMetaAdsUser(u)) return 'Meta Ads';
-  if (u.affiliate_code) return 'Affiliate';
-  if (u.utm_source) return `Paid (${u.utm_source})`;
-  if (u.ref_source) return u.ref_source;
+  if (isAffiliateUser(u)) return 'Affiliate';
   return 'Organic';
 }
 
 function getSourceColor(u: AdminUser): string {
   if (isMetaAdsUser(u)) return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
-  if (u.affiliate_code) return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
-  if (u.utm_source) return 'bg-teal-500/15 text-teal-400 border-teal-500/30';
-  if (u.ref_source) return 'bg-cyan-500/15 text-cyan-400 border-cyan-500/30';
+  if (isAffiliateUser(u)) return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
   return 'bg-muted text-muted-foreground border-border';
 }
 
@@ -538,7 +546,7 @@ export default function AdminDashboard() {
 
   // --- Attribution metrics (uses same helper as row labels) ---
   const fromAds = users.filter(u => isMetaAdsUser(u)).length;
-  const fromAffiliates = users.filter(u => u.affiliate_code && !isMetaAdsUser(u)).length;
+  const fromAffiliates = users.filter(u => isAffiliateUser(u)).length;
 
   // --- Trial-model metrics ---
   // Trials Started = anyone who has a stripe subscription (started a trial)
