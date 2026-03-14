@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { trackCompleteRegistration } from '@/lib/fbPixel';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -170,6 +171,10 @@ const CompleteSetup = () => {
 
       // Sign in with the new credentials
       const { error: signInError } = await signIn(data.email, password);
+
+      // Fire Meta Pixel CompleteRegistration event (critical for ad attribution)
+      trackCompleteRegistration();
+
       if (signInError) {
         setStatus('success');
         return;
