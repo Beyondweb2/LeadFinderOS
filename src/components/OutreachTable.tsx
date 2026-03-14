@@ -1037,7 +1037,11 @@ export function OutreachTable({
                   onStatusChange={(status) => onStatusChange(lead.id, status)}
                   onNextActionChange={(action, date) => onNextActionChange(lead.id, action, date)}
                   onContactMethodChange={onContactMethodChange ? (method) => onContactMethodChange(lead.id, method) : undefined}
-                  onPipelineStatusChange={onPipelineStatusChange ? (status) => onPipelineStatusChange(lead.id, status) : undefined}
+                onPipelineStatusChange={onPipelineStatusChange ? (status) => {
+                    // Clear optimistic override so manual change isn't blocked
+                    setOptimisticUpdates(prev => { const next = new Map(prev); next.delete(lead.id); return next; });
+                    onPipelineStatusChange(lead.id, status);
+                  } : undefined}
                   onWhatsAppClick={() => handleWhatsAppClick(lead)}
                   onSMSClick={() => handleSMSClick(lead)}
                   onCallClick={() => handleCallClick(lead)}
@@ -1199,6 +1203,8 @@ export function OutreachTable({
                                 value={lead.status}
                                 onValueChange={(v) => {
                                   const status = v as PipelineStatus;
+                                  // Clear optimistic override so manual change isn't blocked
+                                  setOptimisticUpdates(prev => { const next = new Map(prev); next.delete(lead.id); return next; });
                                   onPipelineStatusChange(lead.id, status);
                                   if (status === 'interested' && onMarkAsInterested && !lead.is_potential_work) {
                                     onMarkAsInterested([lead.id]);
