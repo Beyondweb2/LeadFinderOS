@@ -1203,6 +1203,8 @@ export function OutreachTable({
                                 value={lead.status}
                                 onValueChange={(v) => {
                                   const status = v as PipelineStatus;
+                                  // Clear optimistic override so manual change isn't blocked
+                                  setOptimisticUpdates(prev => { const next = new Map(prev); next.delete(lead.id); return next; });
                                   onPipelineStatusChange(lead.id, status);
                                   if (status === 'interested' && onMarkAsInterested && !lead.is_potential_work) {
                                     onMarkAsInterested([lead.id]);
