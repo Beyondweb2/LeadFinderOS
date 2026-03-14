@@ -41,12 +41,18 @@ serve(async (req) => {
     let refSource: string | null = null;
     let action: string | null = null;
     let language: string | null = null;
+    const utmFields: Record<string, string | null> = {};
     try {
       const body = await req.json();
       affiliateCode = body?.affiliate_code || null;
       refSource = body?.ref_source || null;
       action = body?.action || null;
       language = body?.language || null;
+      // Capture UTM/attribution fields
+      const cleanUtm = (v: unknown) => typeof v === 'string' && v.trim() ? v.trim() : null;
+      for (const key of ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid', 'traffic_source']) {
+        utmFields[key] = cleanUtm(body?.[key]);
+      }
     } catch {
       // No body or invalid JSON - that's fine
     }
