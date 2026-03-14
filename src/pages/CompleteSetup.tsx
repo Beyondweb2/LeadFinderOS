@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { trackCompleteRegistration } from '@/lib/fbPixel';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
