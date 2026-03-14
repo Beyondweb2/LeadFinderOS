@@ -546,7 +546,7 @@ export default function AdminDashboard() {
 
   // --- Attribution metrics (uses same helper as row labels) ---
   const fromAds = users.filter(u => isMetaAdsUser(u)).length;
-  const fromAffiliates = users.filter(u => u.affiliate_code && !isMetaAdsUser(u)).length;
+  const fromAffiliates = users.filter(u => isAffiliateUser(u)).length;
 
   // --- Trial-model metrics ---
   // Trials Started = anyone who has a stripe subscription (started a trial)
