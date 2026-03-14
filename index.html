@@ -24,6 +24,51 @@
     <link rel="icon" type="image/png" href="/favicon.png">
     <meta name="facebook-domain-verification" content="8o1ui4jmnii1egl2efekyudww3259v" />
 
+    <script>
+      (function captureTrafficAttributionEarly() {
+        try {
+          var existing = localStorage.getItem('traffic_attribution');
+          if (existing) return;
+
+          var params = new URLSearchParams(window.location.search);
+          var fbclid = params.get('fbclid');
+          var utmSource = params.get('utm_source');
+          var utmMedium = params.get('utm_medium');
+          var utmCampaign = params.get('utm_campaign');
+          var utmContent = params.get('utm_content');
+          var utmTerm = params.get('utm_term');
+
+          if (!fbclid && !utmSource && !utmMedium && !utmCampaign && !utmContent && !utmTerm) return;
+
+          var trafficSource = null;
+          var normalizedSource = utmSource ? utmSource.toLowerCase() : '';
+          if (fbclid || normalizedSource === 'meta' || normalizedSource === 'facebook' || normalizedSource === 'instagram') {
+            trafficSource = 'meta_ads';
+          } else if (utmSource) {
+            trafficSource = 'paid_' + utmSource;
+          }
+
+          var attribution = {
+            fbclid: fbclid || undefined,
+            utm_source: utmSource || undefined,
+            utm_medium: utmMedium || undefined,
+            utm_campaign: utmCampaign || undefined,
+            utm_content: utmContent || undefined,
+            utm_term: utmTerm || undefined,
+            // Compatibility with existing backend fields/readers
+            utm_ad: utmContent || undefined,
+            utm_adset: utmTerm || undefined,
+            traffic_source: trafficSource || undefined,
+            captured_at: new Date().toISOString(),
+          };
+
+          localStorage.setItem('traffic_attribution', JSON.stringify(attribution));
+        } catch (_) {
+          // Must never block app boot
+        }
+      })();
+    </script>
+
     <!-- Meta Pixel Code — deferred until after first interaction/idle -->
     <script>
     window.__loadFBPixel = function() {
