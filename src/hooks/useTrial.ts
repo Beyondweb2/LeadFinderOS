@@ -62,15 +62,25 @@ export function useTrial() {
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session?.access_token) return false;
 
-      // Retrieve affiliate code and ref source from localStorage
+      // Retrieve affiliate code, ref source, and UTM data from localStorage
       const affiliateCode = localStorage.getItem('leadfinder_affiliate_code') || undefined;
       const refSource = localStorage.getItem('leadfinder_ref_source') || undefined;
+      const utmData = getStoredUtmData() || {};
 
       const response = await supabase.functions.invoke('ensure-trial', {
         headers: {
           Authorization: `Bearer ${session.session.access_token}`,
         },
-        body: { affiliate_code: affiliateCode, ref_source: refSource },
+        body: {
+          affiliate_code: affiliateCode,
+          ref_source: refSource,
+          utm_source: utmData.utm_source,
+          utm_campaign: utmData.utm_campaign,
+          utm_adset: utmData.utm_adset,
+          utm_ad: utmData.utm_ad,
+          fbclid: utmData.fbclid,
+          traffic_source: utmData.traffic_source,
+        },
       });
 
       if (response.error) {

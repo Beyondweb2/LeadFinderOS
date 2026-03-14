@@ -224,6 +224,8 @@ serve(async (req) => {
     if (refSource) {
       insertPayload.ref_source = refSource;
     }
+    // Include UTM attribution fields
+    Object.assign(insertPayload, utmData);
 
     const { data: newTrial, error: insertError } = await supabaseClient
       .from('user_trials')
