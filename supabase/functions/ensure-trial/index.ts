@@ -165,12 +165,15 @@ serve(async (req) => {
       });
     }
 
-    logStep("Tracking params", { affiliateCode, refSource });
+    // Build UTM data object (only non-null values)
+    const utmData: Record<string, string> = {};
+    for (const [k, v] of Object.entries(utmFields)) { if (v) utmData[k] = v; }
+    logStep("Tracking params", { affiliateCode, refSource, utmData });
 
     // Check if trial record exists
     const { data: existingTrial, error: checkError } = await supabaseClient
       .from('user_trials')
-      .select('id, plan_status, trial_end_date')
+      .select('id, plan_status, trial_end_date, utm_source, fbclid, traffic_source')
       .eq('user_id', user.id)
       .maybeSingle();
 
@@ -180,6 +183,15 @@ serve(async (req) => {
     }
 
     if (existingTrial) {
+      // Backfill attribution if the existing record has no UTM data yet
+      const needsBackfill = Object.keys(utmData).length > 0 && !existingTrial.utm_source && !existingTrial.fbclid && !existingTrial.traffic_source;
+      if (needsBackfill) {
+        await supabaseClient
+          .from('user_trials')
+          .update(utmData)
+          .eq('user_id', user.id);
+        logStep("Backfilled UTM data on existing trial", utmData);
+      }
       logStep("Trial record already exists", { trialId: existingTrial.id, status: existingTrial.plan_status });
       return new Response(JSON.stringify({ 
         created: false, 
