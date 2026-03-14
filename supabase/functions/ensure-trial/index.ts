@@ -41,12 +41,18 @@ serve(async (req) => {
     let refSource: string | null = null;
     let action: string | null = null;
     let language: string | null = null;
+    const utmFields: Record<string, string | null> = {};
     try {
       const body = await req.json();
       affiliateCode = body?.affiliate_code || null;
       refSource = body?.ref_source || null;
       action = body?.action || null;
       language = body?.language || null;
+      // Capture UTM/attribution fields
+      const cleanUtm = (v: unknown) => typeof v === 'string' && v.trim() ? v.trim() : null;
+      for (const key of ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid', 'traffic_source']) {
+        utmFields[key] = cleanUtm(body?.[key]);
+      }
     } catch {
       // No body or invalid JSON - that's fine
     }
@@ -159,12 +165,15 @@ serve(async (req) => {
       });
     }
 
-    logStep("Tracking params", { affiliateCode, refSource });
+    // Build UTM data object (only non-null values)
+    const utmData: Record<string, string> = {};
+    for (const [k, v] of Object.entries(utmFields)) { if (v) utmData[k] = v; }
+    logStep("Tracking params", { affiliateCode, refSource, utmData });
 
     // Check if trial record exists
     const { data: existingTrial, error: checkError } = await supabaseClient
       .from('user_trials')
-      .select('id, plan_status, trial_end_date')
+      .select('id, plan_status, trial_end_date, utm_source, fbclid, traffic_source')
       .eq('user_id', user.id)
       .maybeSingle();
 
@@ -174,6 +183,15 @@ serve(async (req) => {
     }
 
     if (existingTrial) {
+      // Backfill attribution if the existing record has no UTM data yet
+      const needsBackfill = Object.keys(utmData).length > 0 && !existingTrial.utm_source && !existingTrial.fbclid && !existingTrial.traffic_source;
+      if (needsBackfill) {
+        await supabaseClient
+          .from('user_trials')
+          .update(utmData)
+          .eq('user_id', user.id);
+        logStep("Backfilled UTM data on existing trial", utmData);
+      }
       logStep("Trial record already exists", { trialId: existingTrial.id, status: existingTrial.plan_status });
       return new Response(JSON.stringify({ 
         created: false, 
@@ -206,6 +224,8 @@ serve(async (req) => {
     if (refSource) {
       insertPayload.ref_source = refSource;
     }
+    // Include UTM attribution fields
+    Object.assign(insertPayload, utmData);
 
     const { data: newTrial, error: insertError } = await supabaseClient
       .from('user_trials')
