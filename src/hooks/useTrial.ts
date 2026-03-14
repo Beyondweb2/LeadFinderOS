@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
+import { getStoredUtmData } from '@/lib/utmCapture';
 import { useSubscription } from './useSubscription';
 
 interface TrialState {
