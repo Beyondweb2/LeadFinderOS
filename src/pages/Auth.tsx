@@ -26,6 +26,7 @@ const Auth = () => {
   const intentParam = searchParamsInit.get('intent');
   const emailParam = searchParamsInit.get('email');
   const existingParam = searchParamsInit.get('existing');
+  const returnToParam = searchParamsInit.get('returnTo');
   const [isLogin, setIsLogin] = useState(!intentParam || existingParam === 'true' || !intentParam);
   const [email, setEmail] = useState(emailParam || '');
   const [password, setPassword] = useState('');
