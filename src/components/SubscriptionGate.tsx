@@ -21,6 +21,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   // Cache setup_completed per user to avoid refetching on every mount/route change
   const lastCheckedUserIdRef = useRef<string | null>(null);
 
+  // Allow unauthenticated users through — gating happens at feature level
+  if (!user) {
+    return <>{children}</>;
+  }
+
   useEffect(() => {
     if (!user?.id) {
       setSetupLoading(false);
