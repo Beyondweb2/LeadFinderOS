@@ -237,15 +237,16 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="w-[45%]">Business Name</TableHead>
-                <TableHead className="w-[30%]">Website Status</TableHead>
-                <TableHead className="w-[25%]" data-walkthrough="actions-column-header">Actions</TableHead>
+                <TableHead className="w-[40%] pl-5">Business Name</TableHead>
+                <TableHead className="w-[22%]">Website Status</TableHead>
+                <TableHead className="w-[20%]">More Details</TableHead>
+                <TableHead className="w-[18%]" data-walkthrough="actions-column-header">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
                     No leads match your current filters.
                   </TableCell>
                 </TableRow>
@@ -254,7 +255,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   key={lead.id}
                   className="border-border hover:bg-muted/30"
                 >
-                  <TableCell className="font-medium">
+                  <TableCell className="font-medium pl-5">
                     <div className="flex items-center gap-2">
                       <span className="truncate block">{lead.name}</span>
                       {lead.isExpanded && (
@@ -273,40 +274,39 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     </Tooltip>
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1">
-                      {lead.googleMapsUrl && (
-                        gated ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground/50"
-                                onClick={(e) => { e.preventDefault(); onGatedAction?.(); }}
-                              >
-                                <Lock className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>🔒 Start trial to view details</TooltipContent>
-                          </Tooltip>
-                        ) : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" asChild>
-                                <a
-                                  href={lead.googleMapsUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
-                                >
-                                  <MapPin className="h-4 w-4 text-muted-foreground" />
-                                </a>
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Open in Google Maps</TooltipContent>
-                          </Tooltip>
-                        )
-                      )}
+                    {lead.googleMapsUrl && (
+                      gated ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-3 text-xs gap-1.5 text-muted-foreground/70 border-border/60"
+                          onClick={(e) => { e.preventDefault(); onGatedAction?.(); }}
+                        >
+                          <Lock className="h-3.5 w-3.5" />
+                          View Details
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-3 text-xs gap-1.5 text-muted-foreground hover:text-foreground border-border/60 hover:border-border"
+                          asChild
+                        >
+                          <a
+                            href={lead.googleMapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View Details
+                          </a>
+                        </Button>
+                      )
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center">
                       {onAddToOutreach && (
                         checkIsInOutreach(lead.name, lead.googleMapsUrl) ? (
                           <Tooltip>
