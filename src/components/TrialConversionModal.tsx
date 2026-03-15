@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Sparkles, Search, MessageSquare, BarChart3, ShieldCheck, Lock } from 'lucide-react';
@@ -17,8 +18,9 @@ interface TrialConversionModalProps {
 export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, contactedCount = 0 }: TrialConversionModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [delayedOpen, setDelayedOpen] = useState(false);
-  const { session } = useAuth();
+  const { session, user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (open) {
@@ -30,6 +32,13 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
   }, [open]);
 
   const handleStartTrial = async () => {
+    // If not authenticated, send to signup first
+    if (!user) {
+      onOpenChange(false);
+      navigate('/auth?intent=signup');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
@@ -64,12 +73,12 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
 
           {/* Heading */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-2">
-            <span className="text-foreground">Unlock </span>
-            <span className="text-primary">These Leads</span>
+            <span className="block text-foreground">Businesses That</span>
+            <span className="block text-primary">Need a Website</span>
           </DialogTitle>
 
           <p className="text-center text-sm text-muted-foreground leading-relaxed mb-5">
-            You've already found businesses that need a website
+            You've already found {noWebsiteCount > 0 ? noWebsiteCount : ''} businesses that need your help
           </p>
 
           {/* Metrics */}
