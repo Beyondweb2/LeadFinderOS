@@ -16,6 +16,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
 import { supabase } from '@/integrations/supabase/client';
 import { Flame, Target, Zap, Search, AlertTriangle, MapPin, Info } from 'lucide-react';
+import { trackFunnelEvent } from '@/lib/funnelAnalytics';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, Country } from '@/types/lead';
