@@ -32,6 +32,11 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
   }, [open]);
 
   const handleStartTrial = async () => {
+    // Guest users (no session) — redirect to signup page
+    if (!session?.access_token) {
+      window.location.href = '/start-free-trial';
+      return;
+    }
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
@@ -45,6 +50,8 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
       setIsLoading(false);
     }
   };
+
+  const isSearchLimit = reason === 'search_limit';
 
   return (
     <Dialog open={delayedOpen} onOpenChange={onOpenChange}>
