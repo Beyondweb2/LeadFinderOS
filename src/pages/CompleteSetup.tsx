@@ -138,18 +138,8 @@ const CompleteSetup = () => {
       const affiliateCode = localStorage.getItem('leadfinder_affiliate_code') || undefined;
       const refSource = localStorage.getItem('leadfinder_ref_source') || undefined;
 
-      // Pass UTM attribution data from localStorage
-      let utmData: Record<string, string> = {};
-      try {
-        const raw = localStorage.getItem('leadfinder_utm_data');
-        const expiry = localStorage.getItem('leadfinder_utm_expiry');
-        if (raw && expiry && new Date() <= new Date(expiry)) {
-          utmData = JSON.parse(raw);
-          // Clear after reading (one-time use)
-          localStorage.removeItem('leadfinder_utm_data');
-          localStorage.removeItem('leadfinder_utm_expiry');
-        }
-      } catch { /* silent */ }
+      // Pass UTM attribution data from localStorage (checks traffic_attribution first, then legacy key)
+      const utmData = getStoredUtmData() || {};
 
       const { data, error } = await supabase.functions.invoke('complete-signup', {
         body: {
