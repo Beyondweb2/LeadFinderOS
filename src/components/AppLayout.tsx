@@ -28,7 +28,7 @@ interface AppLayoutProps {
 export function AppLayout({ children }: AppLayoutProps) {
   const { user } = useAuth();
   const isGuest = !user;
-  const location = useLocation();
+  const isPreviewMode = location.pathname.startsWith('/preview');
   const mainRef = useRef<HTMLElement>(null);
   const { isStripeTrialing, isLoading: isTrialLoading } = useTrial();
   const { status: subStatus, isLoading: isSubLoading } = useSubscription();
