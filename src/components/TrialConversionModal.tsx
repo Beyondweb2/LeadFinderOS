@@ -32,6 +32,13 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
   }, [open]);
 
   const handleStartTrial = async () => {
+    // If not authenticated, send to signup first
+    if (!user) {
+      onOpenChange(false);
+      navigate('/auth?intent=signup');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
