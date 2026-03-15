@@ -50,23 +50,6 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const { user } = useAuth();
   const { isPaidSubscriber, isStripeTrialing, isAdmin, isLoading: isSubLoading } = useSubscription();
   const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
-  const FREE_SEARCH_CAP = 3;
-
-  // Get/set localStorage search count for non-pro users (works for both auth and unauth)
-  const getSearchCount = useCallback((): number => {
-    try {
-      const key = user?.id ? `leadfinder_search_count:${user.id}` : 'leadfinder_search_count_guest';
-      return parseInt(localStorage.getItem(key) || '0', 10);
-    } catch { return 0; }
-  }, [user?.id]);
-
-  const incrementSearchCount = useCallback(() => {
-    try {
-      const key = user?.id ? `leadfinder_search_count:${user.id}` : 'leadfinder_search_count_guest';
-      const current = parseInt(localStorage.getItem(key) || '0', 10);
-      localStorage.setItem(key, String(current + 1));
-    } catch {}
-  }, [user?.id]);
 
   const clearTrialLimitError = useCallback(() => setTrialLimitError(null), []);
 
@@ -222,15 +205,6 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     // Store for retry
     lastSearchRef.current = { filters, skipTrialCount, isDemo };
 
-    // 3-search cap for non-pro users
-    if (!hasProAccess) {
-      const count = getSearchCount();
-      if (count >= FREE_SEARCH_CAP) {
-        setTrialLimitError({ searchesToday: count, limit: FREE_SEARCH_CAP });
-        return;
-      }
-    }
-
     setIsLoading(true);
     setTrialLimitError(null);
     setPostAbandonExhausted(false);
@@ -383,11 +357,6 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           setExpanded(!!data.expanded);
           setGated(!!data.gated);
 
-          // Increment search count for non-pro users after successful search
-          if (!hasProAccess) {
-            incrementSearchCount();
-          }
-
           // Persist gated flag so it survives refresh
           if (user?.id) {
             try {
@@ -444,7 +413,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
         return;
       }
     }
-  }, [toast, fetchExcludedBusinesses, isExcluded, storageKeys, hasProAccess, getSearchCount, incrementSearchCount]);
+  }, [toast, fetchExcludedBusinesses, isExcluded, storageKeys, hasProAccess]);
 
   const retryLastSearch = useCallback(() => {
     if (lastSearchRef.current) {
