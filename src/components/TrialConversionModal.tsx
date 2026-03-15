@@ -73,12 +73,23 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
 
           {/* Heading */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-2">
-            <span className="text-foreground">Unlock </span>
-            <span className="text-primary">These Leads</span>
+            {isSearchLimit ? (
+              <>
+                <span className="text-foreground">Search Limit </span>
+                <span className="text-primary">Reached</span>
+              </>
+            ) : (
+              <>
+                <span className="text-foreground">Unlock </span>
+                <span className="text-primary">These Leads</span>
+              </>
+            )}
           </DialogTitle>
 
           <p className="text-center text-sm text-muted-foreground leading-relaxed mb-5">
-            You've already found businesses that need a website
+            {isSearchLimit
+              ? "You've reached the preview search limit. Start your free trial to unlock unlimited searches and outreach tools."
+              : "You've already found businesses that need a website"}
           </p>
 
           {/* Metrics */}
