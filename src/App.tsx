@@ -35,6 +35,7 @@ const AdminAffiliates = lazy(() => import("./pages/AdminAffiliates"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminFunnel = lazy(() => import("./pages/AdminFunnel"));
 const Landing = lazy(() => import("./pages/Landing"));
+const AdEntryRedirect = lazy(() => import("./components/AdEntryRedirect"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Feedback = lazy(() => import("./pages/Feedback"));
 const AffiliateProgram = lazy(() => import("./pages/AffiliateProgram"));
