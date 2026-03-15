@@ -194,6 +194,15 @@ const App = () => {
                     <Landing />
                   </PublicRoute>
                 } 
+               />
+              {/* Preview route — unauthenticated access to search */}
+              <Route 
+                path="/preview" 
+                element={
+                  <PreviewLayout>
+                    <Index />
+                  </PreviewLayout>
+                } 
               />
              <Route path="/guide" element={<HowToUse />} />
              <Route 
