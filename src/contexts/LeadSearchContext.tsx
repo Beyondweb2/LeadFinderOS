@@ -234,11 +234,9 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       }
 
       try {
-        // If no authenticated user, force demo mode so preview works without auth
-        const effectiveDemo = isDemo || !user;
         // Race the invoke against a timeout
         const invokePromise = supabase.functions.invoke<SearchResponse>('search-leads', {
-          body: { ...filters, skipTrialCount, ...(effectiveDemo ? { demo: true } : {}) },
+          body: { ...filters, skipTrialCount, ...(isDemo ? { demo: true } : {}) },
         });
 
         const timeoutPromise = new Promise<never>((_, reject) => {

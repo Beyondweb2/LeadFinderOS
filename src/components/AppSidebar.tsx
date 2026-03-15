@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -8,13 +8,12 @@ import {
 import { UserMenu } from '@/components/UserMenu';
 import { AccentColorPicker } from '@/components/AccentColorPicker';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText, Star,
-  DollarSign, HelpCircle, Users, MessageSquare, ShieldCheck, Lightbulb, StickyNote, Sparkles
+  DollarSign, HelpCircle, Users, MessageSquare, ShieldCheck, Lightbulb, StickyNote
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
@@ -24,36 +23,21 @@ import appLogo from '@/assets/logo.png';
 export function AppSidebar() {
   const { t } = useTranslation();
   const location = useLocation();
-  const navigate = useNavigate();
   const { isAdmin } = useSubscription();
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
-  const isGuest = !user;
   const [notepadOpen, setNotepadOpen] = useState(false);
 
-  // Determine if we're in preview mode based on path
-  const isPreview = location.pathname.startsWith('/preview');
-
-  // Map nav URLs — in preview mode, prefix with /preview
-  const makeUrl = (path: string) => {
-    if (path === '#notepad') return path;
-    if (isPreview) {
-      if (path === '/') return '/preview';
-      return `/preview${path}`;
-    }
-    return path;
-  };
-
   const navItems = [
-    { title: t('nav.dashboard'), url: makeUrl('/'), icon: LayoutDashboard, description: t('nav.dashboardDesc') },
-    { title: t('nav.findLeads'), url: makeUrl('/find-leads'), icon: Search, description: t('nav.findLeadsDesc') },
-    { title: t('nav.outreachCRM'), url: makeUrl('/outreach'), icon: ClipboardList, description: t('nav.outreachCRMDesc') },
-    { title: t('nav.trackLeads'), url: makeUrl('/potential-work'), icon: Star, description: t('nav.trackLeadsDesc') },
-    { title: t('nav.paidClients'), url: makeUrl('/paid-clients'), icon: DollarSign, description: t('nav.paidClientsDesc') },
-    { title: t('nav.templates'), url: makeUrl('/templates'), icon: FileText, description: t('nav.templatesDesc') },
-    { title: 'Playbook', url: makeUrl('/playbook'), icon: Lightbulb, description: 'Closing tips & tactics' },
-    { title: t('nav.howToUse'), url: makeUrl('/how-to-use'), icon: HelpCircle, description: t('nav.howToUseDesc') },
-    { title: t('nav.feedback'), url: makeUrl('/feedback'), icon: MessageSquare, description: t('nav.feedbackDesc') },
+    { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard, description: t('nav.dashboardDesc') },
+    { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: t('nav.findLeadsDesc') },
+    { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
+    { title: t('nav.trackLeads'), url: '/potential-work', icon: Star, description: t('nav.trackLeadsDesc') },
+    { title: t('nav.paidClients'), url: '/paid-clients', icon: DollarSign, description: t('nav.paidClientsDesc') },
+    { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
+    { title: 'Playbook', url: '/playbook', icon: Lightbulb, description: 'Closing tips & tactics' },
+    { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle, description: t('nav.howToUseDesc') },
+    { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare, description: t('nav.feedbackDesc') },
     { title: 'Notepad', url: '#notepad', icon: StickyNote, description: 'Personal actions & notes' },
   ];
 
@@ -91,21 +75,6 @@ export function AppSidebar() {
     };
   }, []);
 
-  // Helper to check if a nav item is active
-  const isItemActive = (itemUrl: string) => {
-    if (itemUrl === '#notepad') return false;
-    return location.pathname === itemUrl;
-  };
-
-  // Get original path for flash/walkthrough logic
-  const getOriginalPath = (itemUrl: string) => {
-    if (isPreview) {
-      if (itemUrl === '/preview') return '/';
-      return itemUrl.replace('/preview', '');
-    }
-    return itemUrl;
-  };
-
   return (
     <Sidebar className="border-r border-sidebar-border bg-sidebar" collapsible="none">
       <SidebarHeader className="border-b border-sidebar-border p-4">
@@ -125,13 +94,12 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
-                const isActive = isItemActive(item.url);
-                const origPath = getOriginalPath(item.url);
+                const isActive = item.url !== '#notepad' && location.pathname === item.url;
                 const isFlashing = 
-                  (origPath === '/outreach' && (flashCRM || crmPulseWalkthrough)) || 
-                  (origPath === '/potential-work' && (flashTrack || trackPulseWalkthrough)) ||
-                  (origPath === '/find-leads' && (searchPulse || flashSearch));
-                const flashColor = origPath === '/outreach' ? 'text-green-400' : (origPath === '/potential-work' || origPath === '/find-leads') ? 'text-yellow-400' : '';
+                  (item.url === '/outreach' && (flashCRM || crmPulseWalkthrough)) || 
+                  (item.url === '/potential-work' && (flashTrack || trackPulseWalkthrough)) ||
+                  (item.url === '/find-leads' && (searchPulse || flashSearch));
+                const flashColor = item.url === '/outreach' ? 'text-green-400' : (item.url === '/potential-work' || item.url === '/find-leads') ? 'text-yellow-400' : '';
                 return (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild isActive={isActive}>
@@ -142,12 +110,12 @@ export function AppSidebar() {
                             e.preventDefault();
                             setNotepadOpen(true);
                           }
-                          if (origPath === '/potential-work') {
+                          if (item.url === '/potential-work') {
                             window.dispatchEvent(new CustomEvent('demo-checklist-track-pressed'));
                           }
                         }}
-                        data-walkthrough-step={origPath === '/potential-work' ? 'track-leads' : origPath === '/outreach' ? 'outreach-crm' : undefined}
-                        data-walkthrough={origPath === '/find-leads' ? 'search-nav' : origPath === '/outreach' ? 'crm-nav' : origPath === '/potential-work' ? 'track-nav' : undefined}
+                        data-walkthrough-step={item.url === '/potential-work' ? 'track-leads' : item.url === '/outreach' ? 'outreach-crm' : undefined}
+                        data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : item.url === '/potential-work' ? 'track-nav' : undefined}
                         className={cn(
                           'relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
                           isActive ? 'bg-sidebar-accent text-sidebar-primary font-medium' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
@@ -161,7 +129,7 @@ export function AppSidebar() {
                           <span className="truncate">{item.title}</span>
                           <span className="text-xs text-sidebar-foreground/50 truncate">{item.description}</span>
                         </div>
-                        {origPath === '/find-leads' && searchTooltip && (
+                        {item.url === '/find-leads' && searchTooltip && (
                           <span className="absolute -top-1 right-2 whitespace-nowrap text-[10px] font-medium text-amber-400 bg-card/95 border border-amber-500/30 rounded-md px-2 py-1 shadow-lg animate-bounce z-50">
                             {t('completion.findMoreLeads')}
                           </span>
@@ -175,7 +143,7 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
 
-        {!isGuest && isAdmin && (
+        {isAdmin && (
           <SidebarGroup>
             <SidebarGroupContent>
               <div className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
@@ -208,28 +176,18 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3 mt-auto shrink-0 space-y-2">
-        {isGuest ? (
-          <Button
-            className="w-full gap-2"
-            onClick={() => navigate('/start-free-trial')}
-          >
-            <Sparkles className="h-4 w-4" />
-            Start Free Trial
-          </Button>
-        ) : (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Avatar className="h-8 w-8">
-                {avatarUrl ? <AvatarImage src={avatarUrl} alt="Profile" /> : null}
-                <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                  {user?.email?.charAt(0).toUpperCase() || 'U'}
-                </AvatarFallback>
-              </Avatar>
-              <UserMenu />
-            </div>
-            <AccentColorPicker />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Avatar className="h-8 w-8">
+              {avatarUrl ? <AvatarImage src={avatarUrl} alt="Profile" /> : null}
+              <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                {user?.email?.charAt(0).toUpperCase() || 'U'}
+              </AvatarFallback>
+            </Avatar>
+            <UserMenu />
           </div>
-        )}
+          <AccentColorPicker />
+        </div>
       </SidebarFooter>
       <NotepadModal open={notepadOpen} onOpenChange={setNotepadOpen} />
     </Sidebar>

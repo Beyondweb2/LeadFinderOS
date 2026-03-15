@@ -11,7 +11,6 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
-import { PreviewLayout } from "@/components/PreviewLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 import { RefSourceCapture } from "@/components/RefSourceCapture";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
@@ -194,18 +193,7 @@ const App = () => {
                     <Landing />
                   </PublicRoute>
                 } 
-               />
-              {/* Preview routes — unauthenticated access to full app */}
-              <Route path="/preview" element={<AppLayout><Index /></AppLayout>} />
-              <Route path="/preview/find-leads" element={<AppLayout><Index /></AppLayout>} />
-              <Route path="/preview/dashboard" element={<AppLayout><Dashboard /></AppLayout>} />
-              <Route path="/preview/outreach" element={<AppLayout><Outreach /></AppLayout>} />
-              <Route path="/preview/potential-work" element={<AppLayout><PotentialWorkPage /></AppLayout>} />
-              <Route path="/preview/paid-clients" element={<AppLayout><PaidClientsPage /></AppLayout>} />
-              <Route path="/preview/templates" element={<AppLayout><Templates /></AppLayout>} />
-              <Route path="/preview/playbook" element={<AppLayout><Playbook /></AppLayout>} />
-              <Route path="/preview/how-to-use" element={<AppLayout><HowToUse /></AppLayout>} />
-              <Route path="/preview/feedback" element={<AppLayout><Feedback /></AppLayout>} />
+              />
              <Route path="/guide" element={<HowToUse />} />
              <Route 
                path="/unlock" 

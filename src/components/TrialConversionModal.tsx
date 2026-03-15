@@ -12,11 +12,9 @@ interface TrialConversionModalProps {
   onOpenChange: (open: boolean) => void;
   noWebsiteCount?: number;
   contactedCount?: number;
-  /** When set, overrides the default heading/subheading with search-limit messaging */
-  reason?: 'search_limit' | 'gated';
 }
 
-export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, contactedCount = 0, reason }: TrialConversionModalProps) {
+export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, contactedCount = 0 }: TrialConversionModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [delayedOpen, setDelayedOpen] = useState(false);
   const { session } = useAuth();
@@ -32,11 +30,6 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
   }, [open]);
 
   const handleStartTrial = async () => {
-    // Guest users (no session) — redirect to signup page
-    if (!session?.access_token) {
-      window.location.href = '/start-free-trial';
-      return;
-    }
     setIsLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
@@ -50,8 +43,6 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
       setIsLoading(false);
     }
   };
-
-  const isSearchLimit = reason === 'search_limit';
 
   return (
     <Dialog open={delayedOpen} onOpenChange={onOpenChange}>
@@ -73,23 +64,12 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
 
           {/* Heading */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-2">
-            {isSearchLimit ? (
-              <>
-                <span className="text-foreground">Search Limit </span>
-                <span className="text-primary">Reached</span>
-              </>
-            ) : (
-              <>
-                <span className="text-foreground">Unlock </span>
-                <span className="text-primary">These Leads</span>
-              </>
-            )}
+            <span className="text-foreground">Unlock </span>
+            <span className="text-primary">These Leads</span>
           </DialogTitle>
 
           <p className="text-center text-sm text-muted-foreground leading-relaxed mb-5">
-            {isSearchLimit
-              ? "You've reached the preview search limit. Start your free trial to unlock unlimited searches and outreach tools."
-              : "You've already found businesses that need a website"}
+            You've already found businesses that need a website
           </p>
 
           {/* Metrics */}
