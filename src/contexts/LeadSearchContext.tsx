@@ -218,9 +218,20 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     setExpanded(false);
     // Only clear gated flag if user has pro access; free users stay gated until checkout
     if (hasProAccess) setGated(false);
+
+    // ─── Guest (ad-entry, no account) search cap ───
+    const isGuestNow = !user && (() => { try { return sessionStorage.getItem('adEntryAccess') === 'true'; } catch { return false; } })();
+    if (isGuestNow) {
+      const count = parseInt(localStorage.getItem(GUEST_COUNT_KEY) || '0', 10);
+      if (count >= GUEST_SEARCH_LIMIT) {
+        setTrialLimitError({ searchesToday: count, limit: GUEST_SEARCH_LIMIT });
+        setIsLoading(false);
+        return;
+      }
+    }
     
-    // Refresh excluded businesses before searching (skip for demo)
-    if (!isDemo) await fetchExcludedBusinesses();
+    // Refresh excluded businesses before searching (skip for demo and guest)
+    if (!isDemo && !isGuestNow) await fetchExcludedBusinesses();
 
     // Helper to determine if an error is retryable (network / 5xx / 429)
     const isRetryable = (err: any): boolean => {
