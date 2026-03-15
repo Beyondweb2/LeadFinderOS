@@ -16,7 +16,7 @@ interface TrialConversionModalProps {
   reason?: 'search_limit' | 'gated';
 }
 
-export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, contactedCount = 0 }: TrialConversionModalProps) {
+export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, contactedCount = 0, reason }: TrialConversionModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [delayedOpen, setDelayedOpen] = useState(false);
   const { session } = useAuth();
