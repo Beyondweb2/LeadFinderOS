@@ -1,17 +1,16 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { markAdEntryAccess } from '@/lib/adEntryAccess';
 
 /**
- * Sets adEntryAccess session flag and redirects to /find-leads.
+ * Sets adEntryAccess flag and redirects to /dashboard.
  * Only rendered on the /ads route.
  */
 export default function AdEntryRedirect() {
   const navigate = useNavigate();
 
   // Set flag synchronously during render so ProtectedRoute sees it immediately
-  try {
-    sessionStorage.setItem('adEntryAccess', 'true');
-  } catch {}
+  markAdEntryAccess();
 
   useEffect(() => {
     navigate('/dashboard', { replace: true });

@@ -1,59 +1,21 @@
 
-Goal: fix the `/ads` bypass so ad entrants no longer fall through to `/landing`, without changing any non-ad auth/subscription behavior.
+## Problem
 
-1) Root-cause focus
-- Current code already sets `sessionStorage.adEntryAccess` in `AdEntryRedirect` and checks it in `ProtectedRoute`.
-- Reproduction shows `/ads` still ends up on `/landing`, which strongly indicates the flag check can fail in some runtime contexts (timing/storage access edge cases), even though route wiring is correct.
-- We will keep the existing sessionStorage architecture, but make it resilient so the flag is always available immediately after `/ads`.
+When a logged-in user lands on `/landing` (e.g. because their subscription is blocked, or they were redirected by `SubscriptionGate`), the "Sign In" buttons are hidden because they're wrapped in `{!user && ...}`. The header CTA also changes from "Try it free" to "Subscribe". This means a user who signed out and back in, or whose session is stale, loses access to the Sign In button.
 
-2) Minimal corrective patch (frontend only)
-- Add a tiny shared helper for ad-entry access state:
-  - `markAdEntryAccess()`:
-    - sets `sessionStorage.adEntryAccess = "true"` (existing architecture)
-    - also sets an in-memory fallback flag for same-tab reliability
-  - `hasAdEntryAccess()`:
-    - returns true if sessionStorage flag exists
-    - otherwise returns true if in-memory fallback is set
-- This preserves sessionStorage as primary and only adds a fallback to avoid false negatives that currently send users to `/landing`.
+There are 3 places in `Landing.tsx` where Sign In is conditionally hidden:
+1. **Header** (line 558): `{!user && <Button>Sign In</Button>}`
+2. **Hero CTA** (line 616): `{!user && <Button>Sign in</Button>}`
+3. **Footer** (line 1173): `{!user && <Link>Sign In</Link>}`
 
-3) Wire helper into existing ad-entry checks
-- `src/components/AdEntryRedirect.tsx`
-  - Replace direct `sessionStorage.setItem(...)` with `markAdEntryAccess()`
-  - Keep redirect target as `/dashboard` (unchanged)
-- `src/components/ProtectedRoute.tsx`
-  - Replace inline sessionStorage check with `hasAdEntryAccess()`
-- `src/components/SubscriptionGate.tsx`
-  - Replace inline sessionStorage check with `hasAdEntryAccess()`
-- `src/contexts/LeadSearchContext.tsx`
-  - Replace ad guest detection checks with `hasAdEntryAccess()` so 3-search cap stays aligned with the same ad-entry state logic
+And the header CTA button (line 567) shows `user ? 'Subscribe' : 'Try it free'`.
 
-4) Scope protection (what will NOT change)
-- No changes to Stripe, billing, auth provider, onboarding, walkthrough, paywall UI/copy, or database/backend schema
-- No changes to non-ad traffic flow (`/landing`, direct `/dashboard` access without `/ads`, normal signup path)
-- No route redesign; `/ads` remains ad-entry only
+## Plan
 
-5) Verification plan (exact)
-- Should work:
-  1. Open `/ads` in fresh incognito
-  2. Confirm redirect to `/dashboard`
-  3. Confirm app opens without signup
-  4. Run searches 1, 2, 3
-  5. Confirm search 4 triggers existing paywall/modal
-- Should not work:
-  1. Open `/landing` normally → existing signup flow remains
-  2. Open `/dashboard` directly in fresh incognito (without `/ads`) → still redirected to `/landing`
-- Must remain unchanged:
-  - Normal signup walkthrough flow
-  - Existing Add to CRM paywall behavior
-  - Existing See more details paywall behavior
-  - Unlimited searches for active trial and paid users
+**Single file change: `src/pages/Landing.tsx`**
 
-Technical details
-- Files to change:
-  - `src/lib/adEntryAccess.ts` (new, tiny helper)
-  - `src/components/AdEntryRedirect.tsx`
-  - `src/components/ProtectedRoute.tsx`
-  - `src/components/SubscriptionGate.tsx`
-  - `src/contexts/LeadSearchContext.tsx`
-- No backend function edits required for this fix.
-- This is intentionally a minimal reliability patch to the existing `/ads` session flag architecture.
+1. **Always show the Sign In links** — remove the `!user &&` guards from all three locations so the Sign In button is always visible regardless of auth state.
+
+2. **Keep the CTA button text as "Try it free"** always (remove the ternary that switches to "Subscribe" when logged in). Logged-in users who need to subscribe will still scroll to pricing and go through the normal checkout flow.
+
+These are purely display changes — no routing, Stripe, or auth logic is modified.

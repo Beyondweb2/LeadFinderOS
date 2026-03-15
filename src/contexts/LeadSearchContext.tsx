@@ -4,6 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { reportClientError } from '@/lib/errorReporting';
+import { hasAdEntryAccess } from '@/lib/adEntryAccess';
 import type { Lead, SearchFilters, SearchResponse } from '@/types/lead';
 
 interface ExcludedBusiness {
@@ -52,7 +53,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
 
   // Helper: is this an ad-entry guest (no account)?
-  const isAdEntryGuest = !user && (() => { try { return sessionStorage.getItem('adEntryAccess') === 'true'; } catch { return false; } })();
+  const isAdEntryGuest = !user && hasAdEntryAccess();
   const GUEST_SEARCH_LIMIT = 3;
   const GUEST_COUNT_KEY = 'leadfinder_guest_search_count';
 
@@ -220,7 +221,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     if (hasProAccess) setGated(false);
 
     // ─── Guest (ad-entry, no account) search cap ───
-    const isGuestNow = !user && (() => { try { return sessionStorage.getItem('adEntryAccess') === 'true'; } catch { return false; } })();
+    const isGuestNow = !user && hasAdEntryAccess();
     if (isGuestNow) {
       const count = parseInt(localStorage.getItem(GUEST_COUNT_KEY) || '0', 10);
       if (count >= GUEST_SEARCH_LIMIT) {

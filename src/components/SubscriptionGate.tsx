@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 import { PaymentPausedScreen } from '@/components/PaymentPausedScreen';
 import { SubscriptionCancelledScreen } from '@/components/SubscriptionCancelledScreen';
 import { TrialExpiredScreen } from '@/components/TrialExpiredScreen';
+import { hasAdEntryAccess } from '@/lib/adEntryAccess';
 
 interface SubscriptionGateProps {
   children: ReactNode;
@@ -16,17 +17,13 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const { isLoading: subLoading, isPaymentPaused, isPaidSubscriber, isStripeTrialing, isAdmin, status: subStatus } = useSubscription();
   const { user } = useAuth();
 
-  // Ad-entry users bypass all subscription gating
-  try {
-    if (!user && sessionStorage.getItem('adEntryAccess') === 'true') {
-      return <>{children}</>;
-    }
-  } catch {}
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
   const [trialUsed, setTrialUsed] = useState<boolean | null>(null);
   const [setupLoading, setSetupLoading] = useState(true);
   // Cache setup_completed per user to avoid refetching on every mount/route change
   const lastCheckedUserIdRef = useRef<string | null>(null);
+
+  const isAdGuest = !user && hasAdEntryAccess();
 
   useEffect(() => {
     if (!user?.id) {
@@ -57,6 +54,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       }
     })();
   }, [user?.id]);
+
+  // Ad-entry users bypass all subscription gating (after all hooks)
+  if (isAdGuest) {
+    return <>{children}</>;
+  }
 
   if (subLoading || setupLoading) {
     return (
