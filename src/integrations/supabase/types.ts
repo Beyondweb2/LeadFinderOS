@@ -253,6 +253,30 @@ export type Database = {
         }
         Relationships: []
       }
+      funnel_analytics: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          is_guest_user: boolean
+          session_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          is_guest_user?: boolean
+          session_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          is_guest_user?: boolean
+          session_id?: string | null
+        }
+        Relationships: []
+      }
       funnel_events: {
         Row: {
           created_at: string

@@ -8,6 +8,7 @@ import { PipelineCard } from '@/components/dashboard/PipelineCard';
 import { OutreachCard } from '@/components/dashboard/OutreachCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
 import { TrialProgressCard } from '@/components/dashboard/TrialProgressCard';
+import { FunnelMetricsCard } from '@/components/dashboard/FunnelMetricsCard';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -112,6 +113,14 @@ const Dashboard = () => {
           <NextActionsCard trackedLeads={metrics.trackedLeads} />
         </div>
       </section>
+
+      {/* Funnel Metrics — admin only */}
+      {isAdmin && (
+        <section>
+          <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Ad Funnel</h2>
+          <FunnelMetricsCard />
+        </section>
+      )}
 
       {/* Quick Links */}
       <section>

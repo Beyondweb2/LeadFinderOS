@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
+import { trackFunnelEvent } from '@/lib/funnelAnalytics';
 
 interface TrialConversionModalProps {
   open: boolean;
@@ -32,6 +33,9 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
   }, [open]);
 
   const handleStartTrial = async () => {
+    // Track trial start for funnel analytics
+    trackFunnelEvent('trial_started', !user);
+
     // If not authenticated, send to signup first — flag so Auth continues to checkout
     if (!user) {
       onOpenChange(false);
