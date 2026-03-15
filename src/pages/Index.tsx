@@ -114,7 +114,11 @@ const Index = () => {
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
     search(filters, false, false);
-  }, [search]);
+    // Track guest search for funnel analytics
+    if (isAdEntryGuest) {
+      trackFunnelEvent('guest_search_performed', true);
+    }
+  }, [search, isAdEntryGuest]);
 
   return (
     <div className="space-y-4 md:space-y-8">

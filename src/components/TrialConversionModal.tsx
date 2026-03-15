@@ -33,6 +33,9 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
   }, [open]);
 
   const handleStartTrial = async () => {
+    // Track trial start for funnel analytics
+    trackFunnelEvent('trial_started', !user);
+
     // If not authenticated, send to signup first — flag so Auth continues to checkout
     if (!user) {
       onOpenChange(false);
