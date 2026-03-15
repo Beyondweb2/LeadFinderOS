@@ -1,53 +1,21 @@
 
+## Problem
 
-## Plan: Make Preview Mode Use the Full App Layout
+When a logged-in user lands on `/landing` (e.g. because their subscription is blocked, or they were redirected by `SubscriptionGate`), the "Sign In" buttons are hidden because they're wrapped in `{!user && ...}`. The header CTA also changes from "Try it free" to "Subscribe". This means a user who signed out and back in, or whose session is stale, loses access to the Sign In button.
 
-**What changes:** Replace the stripped-down `PreviewLayout` with the real `AppLayout` for the `/preview` route, so guest users see the exact same UI as authenticated users (sidebar, navigation, all pages).
+There are 3 places in `Landing.tsx` where Sign In is conditionally hidden:
+1. **Header** (line 558): `{!user && <Button>Sign In</Button>}`
+2. **Hero CTA** (line 616): `{!user && <Button>Sign in</Button>}`
+3. **Footer** (line 1173): `{!user && <Link>Sign In</Link>}`
 
-**How:**
+And the header CTA button (line 567) shows `user ? 'Subscribe' : 'Try it free'`.
 
-### 1. Update `/preview` route in `src/App.tsx`
-- Wrap the `/preview` route with `AppLayout` instead of `PreviewLayout`
-- Add additional preview routes for other pages (`/preview/outreach`, `/preview/dashboard`, `/preview/templates`, etc.) so guests can navigate the full app
+## Plan
 
-### 2. Make `AppLayout` guest-safe
-- Guard all auth-dependent hooks/features with `user` null-checks:
-  - `usePersistLastRoute` — already has `enabled: !!user`
-  - `usePersistedScroll` — already has `enabled: !!user`
-  - `useTrial`, `useSubscription`, `useChallenge10`, `useWalkthroughStatus` — wrap calls or default gracefully when `user` is null
-  - `PaymentWarningBanner`, `PaymentFailureDialog`, `CheckoutActivationOverlay`, `WalkthroughOverlay`, `WelcomeWalkthroughModal`, `Challenge10Modal`, `DemoChecklistPanel`, `SkipWalkthroughButton` — conditionally render only when `user` exists
+**Single file change: `src/pages/Landing.tsx`**
 
-### 3. Make `AppSidebar` guest-safe
-- Guard `useSubscription`, `useAuth`, `useAvatar`, `useDemoChecklist` calls
-- When `user` is null: hide `UserMenu`, admin items, notepad; nav links point to `/preview/...` paths instead of `/...`
-- Show a "Start Free Trial" CTA in the sidebar footer instead of the user menu
+1. **Always show the Sign In links** — remove the `!user &&` guards from all three locations so the Sign In button is always visible regardless of auth state.
 
-### 4. Add `PreviewBanner` inside `AppLayout` when `!user`
-- Show the existing `PreviewBanner` component at the top of the main content area when there's no authenticated user
+2. **Keep the CTA button text as "Try it free"** always (remove the ternary that switches to "Subscribe" when logged in). Logged-in users who need to subscribe will still scroll to pricing and go through the normal checkout flow.
 
-### 5. Keep existing behavior intact
-- `ProtectedRoute` and `SubscriptionGate` are **not touched** — authenticated routes remain guarded
-- All hooks continue working for logged-in users exactly as before
-- The preview banner + search limit + locked CTA buttons continue functioning as already implemented
-
-### Technical details
-
-The key pattern for making components guest-safe:
-
-```text
-// In AppLayout
-const { user } = useAuth();          // returns null for guests
-const isGuest = !user;
-
-// Skip auth-dependent features for guests
-{!isGuest && <PaymentWarningBanner />}
-{!isGuest && <SkipWalkthroughButton />}
-{!isGuest && <WalkthroughOverlay />}
-// etc.
-
-// Show preview banner for guests
-{isGuest && <PreviewBanner />}
-```
-
-For sidebar navigation in preview mode, links will use `/preview/outreach` etc., and corresponding routes will be added in `App.tsx` without `ProtectedRoute`/`SubscriptionGate` wrappers.
-
+These are purely display changes — no routing, Stripe, or auth logic is modified.
