@@ -73,8 +73,8 @@ serve(async (req) => {
     const planStatus = subscription.status === 'trialing' ? 'trial' : 'active';
     logStep("Checkout verified", { email, subscriptionId: subscription.id, status: subscription.status, planStatus });
 
-    // Fallback: if no UTM data from request body, try to pull from checkout_attempts
-    if (Object.keys(utmData).length === 0 || !finalAffiliateCode || !finalRefSource) {
+    // Always attempt to fill missing UTM fields from checkout_attempts (guaranteed server-side fallback)
+    {
       const { data: attemptRow } = await supabaseAdmin
         .from('checkout_attempts')
         .select('utm_source, utm_campaign, utm_adset, utm_ad, fbclid, traffic_source, ref_source, affiliate_code')
@@ -93,7 +93,7 @@ serve(async (req) => {
         if (!finalRefSource && attemptRow.ref_source) {
           finalRefSource = attemptRow.ref_source;
         }
-        if (Object.keys(utmData).length > 0) logStep("UTM data recovered from checkout_attempts", utmData);
+        if (Object.keys(utmData).length > 0) logStep("UTM data merged from checkout_attempts", utmData);
       }
     }
 
