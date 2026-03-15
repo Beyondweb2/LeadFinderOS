@@ -326,7 +326,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
             setIsLoading(false);
             return;
           }
-          if (body?.code === 'TRIAL_LIMIT_REACHED') {
+          if (body?.code === 'TRIAL_LIMIT_REACHED' || body?.code === 'GUEST_LIMIT_REACHED') {
             setTrialLimitError({
               searchesToday: body.searches_today || 3,
               limit: body.limit || 3,
