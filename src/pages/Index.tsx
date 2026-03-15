@@ -54,6 +54,9 @@ const Index = () => {
   const [showConversionModal, setShowConversionModal] = useState(false);
   const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
 
+  // Ad-entry users without auth are always gated for actions (same as unsubscribed users)
+  const effectiveGated = gated || (!user && !hasProAccess);
+
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
