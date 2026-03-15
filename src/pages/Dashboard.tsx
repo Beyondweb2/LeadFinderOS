@@ -114,6 +114,14 @@ const Dashboard = () => {
         </div>
       </section>
 
+      {/* Funnel Metrics — admin only */}
+      {isAdmin && (
+        <section>
+          <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Ad Funnel</h2>
+          <FunnelMetricsCard />
+        </section>
+      )}
+
       {/* Quick Links */}
       <section>
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3 text-center sm:text-left">Quick Actions</h2>
