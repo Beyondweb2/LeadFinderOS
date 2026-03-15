@@ -11,6 +11,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
+import { PreviewLayout } from "@/components/PreviewLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 import { RefSourceCapture } from "@/components/RefSourceCapture";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
@@ -192,6 +193,15 @@ const App = () => {
                   <PublicRoute>
                     <Landing />
                   </PublicRoute>
+                } 
+               />
+              {/* Preview route — unauthenticated access to search */}
+              <Route 
+                path="/preview" 
+                element={
+                  <PreviewLayout>
+                    <Index />
+                  </PreviewLayout>
                 } 
               />
              <Route path="/guide" element={<HowToUse />} />
