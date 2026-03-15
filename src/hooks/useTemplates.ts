@@ -106,7 +106,21 @@ export function useTemplates() {
   }, [user]);
 
   const fetchTemplates = useCallback(async () => {
-    if (!user) return;
+    if (!user) {
+      // No auth — show hardcoded defaults so ad-entry/guest users can view templates
+      const defaults = DEFAULT_TEMPLATES.map((t, i) => ({
+        ...t,
+        id: `default-${i}`,
+        user_id: '',
+        is_default: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })) as Template[];
+      setTemplates(defaults);
+      setIsLoading(false);
+      setHasFetched(true);
+      return;
+    }
 
     if (!hasLoadedTemplatesOnce.current) {
       setIsLoading(true);
@@ -172,9 +186,9 @@ export function useTemplates() {
       if (currentUserId && !hasFetched) {
         fetchTemplates();
       } else if (!currentUserId) {
-        // User logged out - clear templates
-        setTemplates([]);
+        // Guest / logged out — load default templates for viewing
         setHasFetched(false);
+        fetchTemplates();
       }
     }
   }, [user?.id, hasFetched, fetchTemplates]);

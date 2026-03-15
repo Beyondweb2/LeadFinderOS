@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Search, MapPin, Radius, Loader2, Sparkles } from 'lucide-react';
+import { Search, MapPin, Radius, Loader2 } from 'lucide-react';
+import logoIcon from '@/assets/leadfinder-logo-icon.png';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -133,7 +134,7 @@ export function SearchForm({
                     {isUpgradeLoading ? (
                       <><Loader2 className="h-3.5 w-3.5 animate-spin" />Starting...</>
                     ) : (
-                      <><Sparkles className="h-3.5 w-3.5" />Start Free Trial</>
+                      <><img src={logoIcon} alt="" className="h-4 w-4 object-contain" />Start Free Trial</>
                     )}
                   </Button>
                 </div>
