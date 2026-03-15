@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2, CheckCircle2, AlertCircle, Lock, Mail, Globe } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { LANGUAGE_OPTIONS, type SupportedLanguage } from '@/hooks/useLanguage';
+import { getStoredUtmData } from '@/lib/utmCapture';
 import appLogo from '@/assets/logo.png';
 
 const DEFAULT_IN_APP_ROUTE = '/find-leads';
