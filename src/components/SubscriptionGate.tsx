@@ -55,6 +55,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     })();
   }, [user?.id]);
 
+  // Ad-entry users bypass all subscription gating (after all hooks)
+  if (isAdGuest) {
+    return <>{children}</>;
+  }
+
   if (subLoading || setupLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
