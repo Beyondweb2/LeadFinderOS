@@ -214,13 +214,11 @@ const App = () => {
             <Route 
               path="/find-leads" 
               element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <Index />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
+                <SubscriptionGate>
+                  <AppLayout>
+                    <Index />
+                  </AppLayout>
+                </SubscriptionGate>
               } 
             />
             <Route 
