@@ -8,10 +8,12 @@ import { useNavigate } from 'react-router-dom';
 export default function AdEntryRedirect() {
   const navigate = useNavigate();
 
+  // Set flag synchronously during render so ProtectedRoute sees it immediately
+  try {
+    sessionStorage.setItem('adEntryAccess', 'true');
+  } catch {}
+
   useEffect(() => {
-    try {
-      sessionStorage.setItem('adEntryAccess', 'true');
-    } catch {}
     navigate('/dashboard', { replace: true });
   }, [navigate]);
 
