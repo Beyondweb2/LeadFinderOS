@@ -580,6 +580,88 @@ serve(async (req) => {
       });
     }
 
+    // ─── GUEST MODE (ad-entry unauthenticated users) ──
+    const isGuest = body?.guest === true;
+    if (isGuest) {
+      debug.authMethod = 'demo';
+      const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
+        || req.headers.get('cf-connecting-ip')
+        || 'unknown';
+      const guestKey = `guest:${clientIp}`;
+
+      if (!globalThis.__guestSearches) globalThis.__guestSearches = new Map();
+      const guestCount = globalThis.__guestSearches.get(guestKey) || 0;
+      if (guestCount >= FREE_SEARCH_LIMIT) {
+        return jsonResponse({ error: 'Free search limit reached.', code: 'GUEST_LIMIT_REACHED', searches_today: guestCount, limit: FREE_SEARCH_LIMIT, _debug: debug }, 402);
+      }
+      globalThis.__guestSearches.set(guestKey, guestCount + 1);
+
+      const validationResult = SearchRequestSchema.safeParse(body);
+      if (!validationResult.success) {
+        return jsonResponse({ error: 'Invalid search parameters.', _debug: debug }, 400);
+      }
+
+      const { keyword, location, radius } = validationResult.data;
+      if (!GOOGLE_MAPS_API_KEY) {
+        return jsonResponse({ error: 'Service temporarily unavailable.', _debug: debug }, 503);
+      }
+
+      console.log(`[GUEST] Searching for "${keyword}" in "${location}" within ${radius}m (search ${guestCount + 1}/${FREE_SEARCH_LIMIT})`);
+
+      // Check cache first
+      const cacheKey = await generateCacheKey(keyword, location, radius);
+      const cutoff = new Date(Date.now() - CACHE_TTL_MS).toISOString();
+      const serviceClient = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+        { auth: { persistSession: false } }
+      );
+
+      const { data: cached } = await serviceClient
+        .from('search_cache')
+        .select('results, created_at')
+        .eq('cache_key', cacheKey)
+        .gte('created_at', cutoff)
+        .maybeSingle();
+
+      if (cached?.results) {
+        debug.cached = true;
+        const cachedLeads = cached.results as SearchLead[];
+        const hasExpanded = cachedLeads.some(l => l.isExpanded);
+        return jsonResponse({
+          leads: stripGatedFields(cachedLeads),
+          totalFound: cachedLeads.length,
+          searchId: crypto.randomUUID(),
+          source: 'google',
+          cached: true,
+          expanded: hasExpanded,
+          gated: true,
+          _debug: debug,
+        });
+      }
+
+      const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug);
+
+      // Cache the results
+      try {
+        await serviceClient.from('search_cache').upsert(
+          { cache_key: cacheKey, results: leads, created_at: new Date().toISOString() },
+          { onConflict: 'cache_key' }
+        );
+      } catch {}
+
+      return jsonResponse({
+        leads: stripGatedFields(leads),
+        totalFound: leads.length,
+        searchId: crypto.randomUUID(),
+        source: 'google',
+        cached: false,
+        expanded,
+        gated: true,
+        _debug: { ...debug, ...selectionDebug },
+      });
+    }
+
     // ─── AUTHENTICATED MODE ──────────────────────
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
