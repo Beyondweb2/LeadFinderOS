@@ -224,6 +224,13 @@ export function useTrial() {
     }
   }, [user?.id, checkTrial]);
 
+  // Resolve loading state immediately for unauthenticated (ad-entry) users
+  useEffect(() => {
+    if (!user) {
+      setState(prev => prev.isLoading ? { ...prev, isLoading: false } : prev);
+    }
+  }, [user]);
+
   const shouldShowUpgradePrompt = useCallback(() => {
     return state.searchesUsed > 0 && state.searchesUsed % SEARCHES_BEFORE_PROMPT === 0;
   }, [state.searchesUsed]);

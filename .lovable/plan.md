@@ -1,89 +1,21 @@
 
+## Problem
 
-## Root Cause Analysis
+When a logged-in user lands on `/landing` (e.g. because their subscription is blocked, or they were redirected by `SubscriptionGate`), the "Sign In" buttons are hidden because they're wrapped in `{!user && ...}`. The header CTA also changes from "Try it free" to "Subscribe". This means a user who signed out and back in, or whose session is stale, loses access to the Sign In button.
 
-I traced the exact code paths that block when `user` is `null` (ad-entry guest):
+There are 3 places in `Landing.tsx` where Sign In is conditionally hidden:
+1. **Header** (line 558): `{!user && <Button>Sign In</Button>}`
+2. **Hero CTA** (line 616): `{!user && <Button>Sign in</Button>}`
+3. **Footer** (line 1173): `{!user && <Link>Sign In</Link>}`
 
-### Blocker 1: `useDashboardMetrics` — dashboard spinner never resolves
+And the header CTA button (line 567) shows `user ? 'Subscribe' : 'Try it free'`.
 
-**File:** `src/hooks/useDashboardMetrics.ts`, lines 106, 167-174
+## Plan
 
-`isLoading` initializes as `true` (line 106). The effect on line 167 compares `user?.id` (null) to `userIdRef.current` (null) — they match, so it returns early. `fetchAllData` is never called. `isLoading` is **never set to false**.
+**Single file change: `src/pages/Landing.tsx`**
 
-Dashboard.tsx line 66 checks `if (isLoading || isSubscriptionLoading)` — `isLoading` is permanently `true` → infinite spinner.
+1. **Always show the Sign In links** — remove the `!user &&` guards from all three locations so the Sign In button is always visible regardless of auth state.
 
-### Blocker 2: `useTrial` — AppLayout walkthrough logic never initializes
+2. **Keep the CTA button text as "Try it free"** always (remove the ternary that switches to "Subscribe" when logged in). Logged-in users who need to subscribe will still scroll to pricing and go through the normal checkout flow.
 
-**File:** `src/hooks/useTrial.ts`, lines 211-225
-
-Same pattern. `isLoading` starts `true` (line 46). Effect compares null to null → returns early. `isLoading` stays `true`.
-
-In `AppLayout.tsx`, `isTrialLoading` stays true → `isLoaded` stays false → `isDemoUser` / `showWalkthrough` stays false → walkthrough never starts.
-
-### Blocker 3: `useChallenge10` — competing effects
-
-**File:** `src/hooks/useChallenge10.ts`, lines 57-69
-
-Effect 1 (line 57): calls `fetchState()` which sets `isLoading = false` for null user.
-Effect 2 (line 64): when user is null, sets `isLoading = true` — overriding effect 1.
-
-Not a direct cause of the spinner but keeps challenge state stuck.
-
----
-
-## Fix (3 files, minimal changes)
-
-### 1. `src/hooks/useDashboardMetrics.ts`
-
-Add an effect (after the existing user-change effect) that resolves `isLoading` when user is null:
-
-```typescript
-// After line 174, add:
-useEffect(() => {
-  if (!user) {
-    setIsLoading(false);
-  }
-}, [user]);
-```
-
-This mirrors the existing pattern in `useSubscription` (lines 258-261).
-
-### 2. `src/hooks/useTrial.ts`
-
-Add the same null-user guard after the existing effect (after line 225):
-
-```typescript
-useEffect(() => {
-  if (!user) {
-    setState(prev => prev.isLoading ? { ...prev, isLoading: false } : prev);
-  }
-}, [user]);
-```
-
-### 3. `src/hooks/useChallenge10.ts`
-
-Fix the competing effect at line 64-69 — don't set `isLoading = true` when user is null (it was already resolved to false by fetchState):
-
-```typescript
-useEffect(() => {
-  if (!user?.id) {
-    setState(DEFAULT_STATE);
-    fetchedRef.current = false;
-    setIsLoading(false);  // was: setIsLoading(true)
-  }
-}, [user?.id]);
-```
-
----
-
-## What this fixes
-
-- Dashboard renders fully for ad-entry users (empty data, no spinner)
-- `isLoaded` resolves in AppLayout → `isDemoUser` computes correctly → walkthrough can start
-- Challenge10 doesn't get stuck in loading
-
-## What is NOT changed
-
-- No changes to ProtectedRoute, SubscriptionGate, auth flow, Stripe, billing, schema, walkthrough UI, paywall logic, 3-search cap, or any other file
-- Normal logged-in users are completely unaffected — the new effects only fire when `user` is null
-
+These are purely display changes — no routing, Stripe, or auth logic is modified.
