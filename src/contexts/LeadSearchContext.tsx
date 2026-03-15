@@ -53,7 +53,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
 
   // Helper: is this an ad-entry guest (no account)?
-  const isAdEntryGuest = !user && (() => { try { return sessionStorage.getItem('adEntryAccess') === 'true'; } catch { return false; } })();
+  const isAdEntryGuest = !user && hasAdEntryAccess();
   const GUEST_SEARCH_LIMIT = 3;
   const GUEST_COUNT_KEY = 'leadfinder_guest_search_count';
 
