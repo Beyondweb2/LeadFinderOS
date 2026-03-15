@@ -6,6 +6,7 @@ import { CreditCard, Loader2, Users, MessageSquare, Star, Search } from 'lucide-
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
+import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 
 interface OutreachProgressSummaryProps {
   businessesFound: number;
