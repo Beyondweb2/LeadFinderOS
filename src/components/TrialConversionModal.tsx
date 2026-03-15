@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
+import { trackFunnelEvent } from '@/lib/funnelAnalytics';
 
 interface TrialConversionModalProps {
   open: boolean;
