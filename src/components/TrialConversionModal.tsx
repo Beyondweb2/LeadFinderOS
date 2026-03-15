@@ -73,12 +73,12 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
 
           {/* Heading */}
           <DialogTitle className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-2">
-            <span className="text-foreground">Unlock </span>
-            <span className="text-primary">These Leads</span>
+            <span className="block text-foreground">Businesses That</span>
+            <span className="block text-primary">Need a Website</span>
           </DialogTitle>
 
           <p className="text-center text-sm text-muted-foreground leading-relaxed mb-5">
-            You've already found businesses that need a website
+            You've already found {noWebsiteCount > 0 ? noWebsiteCount : ''} businesses that need your help
           </p>
 
           {/* Metrics */}
