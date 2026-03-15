@@ -1,21 +1,29 @@
 
+
 ## Problem
 
-When a logged-in user lands on `/landing` (e.g. because their subscription is blocked, or they were redirected by `SubscriptionGate`), the "Sign In" buttons are hidden because they're wrapped in `{!user && ...}`. The header CTA also changes from "Try it free" to "Subscribe". This means a user who signed out and back in, or whose session is stale, loses access to the Sign In button.
+The `/ads` route works correctly in code — it sets `sessionStorage.setItem('adEntryAccess', 'true')` then navigates to `/dashboard`. The `ProtectedRoute` checks for that flag and bypasses auth.
 
-There are 3 places in `Landing.tsx` where Sign In is conditionally hidden:
-1. **Header** (line 558): `{!user && <Button>Sign In</Button>}`
-2. **Hero CTA** (line 616): `{!user && <Button>Sign in</Button>}`
-3. **Footer** (line 1173): `{!user && <Link>Sign In</Link>}`
+However, **you can test this right now in the preview without publishing**. The preview URL works the same way.
 
-And the header CTA button (line 567) shows `user ? 'Subscribe' : 'Try it free'`.
+## How to test
 
-## Plan
+Navigate to this URL in an **incognito/private browser window** (important — no existing session):
 
-**Single file change: `src/pages/Landing.tsx`**
+```
+https://id-preview--da9919bb-3412-438c-91f0-7b1c8b8e5d96.lovable.app/ads
+```
 
-1. **Always show the Sign In links** — remove the `!user &&` guards from all three locations so the Sign In button is always visible regardless of auth state.
+If that still redirects to `/landing`, it's likely a timing issue where React's `useEffect` in `AdEntryRedirect` hasn't fired before the navigation completes. The fix is simple:
 
-2. **Keep the CTA button text as "Try it free"** always (remove the ternary that switches to "Subscribe" when logged in). Logged-in users who need to subscribe will still scroll to pricing and go through the normal checkout flow.
+## Fix: Set sessionStorage synchronously before navigate
 
-These are purely display changes — no routing, Stripe, or auth logic is modified.
+Change `AdEntryRedirect.tsx` so the flag is set **outside** `useEffect` — directly during render — ensuring it's in sessionStorage before any route transition occurs:
+
+**File: `src/components/AdEntryRedirect.tsx`**
+- Move `sessionStorage.setItem('adEntryAccess', 'true')` out of `useEffect` and execute it at the module/render level (e.g., in the component body before the return, or use a `useMemo` with no deps)
+- Keep the `navigate('/dashboard', { replace: true })` inside `useEffect` since navigation must happen after mount
+- This guarantees the flag exists by the time `ProtectedRoute` reads it on the `/dashboard` render
+
+This is a 1-file, ~3-line change. No other files affected.
+
