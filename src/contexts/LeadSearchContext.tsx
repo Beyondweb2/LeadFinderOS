@@ -50,6 +50,23 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const { user } = useAuth();
   const { isPaidSubscriber, isStripeTrialing, isAdmin, isLoading: isSubLoading } = useSubscription();
   const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
+  const FREE_SEARCH_CAP = 3;
+
+  // Get/set localStorage search count for non-pro users (works for both auth and unauth)
+  const getSearchCount = useCallback((): number => {
+    try {
+      const key = user?.id ? `leadfinder_search_count:${user.id}` : 'leadfinder_search_count_guest';
+      return parseInt(localStorage.getItem(key) || '0', 10);
+    } catch { return 0; }
+  }, [user?.id]);
+
+  const incrementSearchCount = useCallback(() => {
+    try {
+      const key = user?.id ? `leadfinder_search_count:${user.id}` : 'leadfinder_search_count_guest';
+      const current = parseInt(localStorage.getItem(key) || '0', 10);
+      localStorage.setItem(key, String(current + 1));
+    } catch {}
+  }, [user?.id]);
 
   const clearTrialLimitError = useCallback(() => setTrialLimitError(null), []);
 
