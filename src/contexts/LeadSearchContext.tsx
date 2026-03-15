@@ -222,6 +222,15 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     // Store for retry
     lastSearchRef.current = { filters, skipTrialCount, isDemo };
 
+    // 3-search cap for non-pro users
+    if (!hasProAccess) {
+      const count = getSearchCount();
+      if (count >= FREE_SEARCH_CAP) {
+        setTrialLimitError({ searchesToday: count, limit: FREE_SEARCH_CAP });
+        return;
+      }
+    }
+
     setIsLoading(true);
     setTrialLimitError(null);
     setPostAbandonExhausted(false);
