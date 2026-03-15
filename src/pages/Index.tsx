@@ -69,6 +69,14 @@ const Index = () => {
     try { return localStorage.getItem(GUEST_CAP_KEY) === '1'; } catch { return false; }
   }, [isAdEntryGuest, trialLimitError]);
 
+  // Auto-open paywall once when guest hits cap
+  useEffect(() => {
+    if (guestSearchesExhausted && !conversionModalShownThisSession) {
+      setShowConversionModal(true);
+      setConversionModalShownThisSession(true);
+    }
+  }, [guestSearchesExhausted, conversionModalShownThisSession]);
+
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
