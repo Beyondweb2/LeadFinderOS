@@ -206,8 +206,7 @@ const Index = () => {
             leads={leads} 
             onExport={exportToCsv}
             onAddToOutreach={(lead) => {
-              // Ad-entry users (no account) should see paywall, not attempt the protected action
-              if (!user && !gated) {
+              if (!user && !effectiveGated) {
                 setShowConversionModal(true);
                 return;
               }
@@ -216,7 +215,7 @@ const Index = () => {
             isInOutreach={isInOutreach}
             onMapLinkClick={markAsChecked}
             isChecked={isChecked}
-            gated={gated}
+            gated={effectiveGated}
             onGatedAction={() => setShowConversionModal(true)}
           />
         </section>
