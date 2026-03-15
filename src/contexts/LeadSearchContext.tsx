@@ -252,7 +252,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       try {
         // Race the invoke against a timeout
         const invokePromise = supabase.functions.invoke<SearchResponse>('search-leads', {
-          body: { ...filters, skipTrialCount, ...(isDemo ? { demo: true } : {}) },
+          body: { ...filters, skipTrialCount, ...(isDemo ? { demo: true } : {}), ...(isGuestNow ? { guest: true } : {}) },
         });
 
         const timeoutPromise = new Promise<never>((_, reject) => {
