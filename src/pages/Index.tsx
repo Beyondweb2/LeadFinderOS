@@ -207,10 +207,15 @@ const Index = () => {
             isInOutreach={isInOutreach}
             onMapLinkClick={markAsChecked}
             isChecked={isChecked}
-            gated={gated}
-            onGatedAction={() => setShowConversionModal(true)}
+            gated={gated || !user}
+            onGatedAction={() => !user ? window.location.href = '/start-free-trial' : setShowConversionModal(true)}
           />
         </section>
+      )}
+
+      {/* Preview mode CTA — shown after results for unauthenticated users */}
+      {leads.length > 0 && !user && (
+        <PreviewTrialCTA />
       )}
 
       {/* Empty State */}
