@@ -249,9 +249,9 @@ const Index = () => {
         noWebsiteCount={noWebsiteCount}
       />
 
-      {/* Conversion Modal for gated users */}
+      {/* Conversion Modal for gated users + guest search cap */}
       <TrialConversionModal
-        open={showConversionModal}
+        open={showConversionModal || (guestSearchesExhausted && !showConversionModal ? false : false)}
         onOpenChange={setShowConversionModal}
         noWebsiteCount={noWebsiteCount}
         contactedCount={0}
