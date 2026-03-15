@@ -54,6 +54,9 @@ const Index = () => {
   const [showConversionModal, setShowConversionModal] = useState(false);
   const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
 
+  // Ad-entry users without auth are always gated for actions (same as unsubscribed users)
+  const effectiveGated = gated || (!user && !hasProAccess);
+
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
@@ -203,8 +206,7 @@ const Index = () => {
             leads={leads} 
             onExport={exportToCsv}
             onAddToOutreach={(lead) => {
-              // Ad-entry users (no account) should see paywall, not attempt the protected action
-              if (!user && !gated) {
+              if (!user && !effectiveGated) {
                 setShowConversionModal(true);
                 return;
               }
@@ -213,7 +215,7 @@ const Index = () => {
             isInOutreach={isInOutreach}
             onMapLinkClick={markAsChecked}
             isChecked={isChecked}
-            gated={gated}
+            gated={effectiveGated}
             onGatedAction={() => setShowConversionModal(true)}
           />
         </section>
