@@ -84,6 +84,7 @@ const Index = () => {
       setTotalBusinessesFound(prev => prev + leads.length);
       // Short delay so user sees results first
       const timer = setTimeout(() => {
+        setConversionModalReason('gated');
         setShowConversionModal(true);
         setConversionModalShownThisSession(true);
       }, 4000);
@@ -99,6 +100,7 @@ const Index = () => {
   useEffect(() => {
     if (leads.length > 0 && gated && isFreeUser && !conversionModalShownThisSession && !isSubscriptionLoading) {
       const timer = setTimeout(() => {
+        setConversionModalReason('gated');
         setShowConversionModal(true);
         setConversionModalShownThisSession(true);
       }, 1500);
