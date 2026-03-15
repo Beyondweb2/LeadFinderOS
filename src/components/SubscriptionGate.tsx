@@ -7,6 +7,7 @@ import { Loader2 } from 'lucide-react';
 import { PaymentPausedScreen } from '@/components/PaymentPausedScreen';
 import { SubscriptionCancelledScreen } from '@/components/SubscriptionCancelledScreen';
 import { TrialExpiredScreen } from '@/components/TrialExpiredScreen';
+import { hasAdEntryAccess } from '@/lib/adEntryAccess';
 
 interface SubscriptionGateProps {
   children: ReactNode;
