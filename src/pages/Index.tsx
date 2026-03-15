@@ -19,6 +19,7 @@ import { Flame, Target, Zap, Search, AlertTriangle, MapPin, Info } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead, Country } from '@/types/lead';
+import { PreviewTrialCTA } from '@/components/PreviewTrialCTA';
 
 const Index = () => {
   const location = useLocation();
