@@ -12,6 +12,8 @@ interface TrialConversionModalProps {
   onOpenChange: (open: boolean) => void;
   noWebsiteCount?: number;
   contactedCount?: number;
+  /** When set, overrides the default heading/subheading with search-limit messaging */
+  reason?: 'search_limit' | 'gated';
 }
 
 export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, contactedCount = 0 }: TrialConversionModalProps) {
