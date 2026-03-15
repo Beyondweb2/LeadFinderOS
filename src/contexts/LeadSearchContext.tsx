@@ -389,6 +389,15 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           }
 
           const noWebsiteCount = filteredLeads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
+
+          // Increment guest search count on success
+          if (isGuestNow) {
+            try {
+              const prev = parseInt(localStorage.getItem(GUEST_COUNT_KEY) || '0', 10);
+              localStorage.setItem(GUEST_COUNT_KEY, String(prev + 1));
+            } catch {}
+          }
+
           await saveSearch(filters, filteredLeads.length, noWebsiteCount);
 
           // Notify demo checklist that a search completed
