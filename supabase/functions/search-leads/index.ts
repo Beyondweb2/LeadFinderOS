@@ -652,13 +652,13 @@ serve(async (req) => {
       } catch {}
 
       return jsonResponse({
-        leads: stripGatedFields(leads),
+        leads,
         totalFound: leads.length,
         searchId: crypto.randomUUID(),
         source: 'google',
         cached: false,
         expanded,
-        gated: true,
+        gated: false,
         _debug: { ...debug, ...selectionDebug },
       });
     }
