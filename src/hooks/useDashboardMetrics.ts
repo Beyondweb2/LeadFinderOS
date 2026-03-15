@@ -173,6 +173,13 @@ export function useDashboardMetrics() {
     }
   }, [user?.id, fetchAllData]);
 
+  // Resolve loading state immediately for unauthenticated (ad-entry) users
+  useEffect(() => {
+    if (!user) {
+      setIsLoading(false);
+    }
+  }, [user]);
+
   const metrics = useMemo<DashboardMetrics>(() => {
     const totalBusinessesAdded = allLeads.length;
     const noWebsiteBusinesses = totalNoWebsiteFound;

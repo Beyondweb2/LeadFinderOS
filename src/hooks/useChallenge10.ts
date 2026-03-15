@@ -63,9 +63,9 @@ export function useChallenge10() {
   // Reset on user change
   useEffect(() => {
     if (!user?.id) {
-      setState(DEFAULT_STATE);
-      fetchedRef.current = false;
-      setIsLoading(true);
+    setState(DEFAULT_STATE);
+    fetchedRef.current = false;
+    setIsLoading(false);
     }
   }, [user?.id]);
 
