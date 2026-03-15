@@ -305,7 +305,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
                 body = { code: 'FREE_SEARCH_EXHAUSTED' };
               } else if (error.message.includes('POST_ABANDON_EXHAUSTED')) {
                 body = { code: 'POST_ABANDON_EXHAUSTED' };
-              } else if (error.message.includes('Trial limit reached') || error.message.includes('TRIAL_LIMIT_REACHED')) {
+              } else if (error.message.includes('Trial limit reached') || error.message.includes('TRIAL_LIMIT_REACHED') || error.message.includes('GUEST_LIMIT_REACHED')) {
                 body = { code: 'TRIAL_LIMIT_REACHED' };
               }
             }
