@@ -33,12 +33,10 @@ export function AppSidebar() {
 
   // Determine if we're in preview mode based on path
   const isPreview = location.pathname.startsWith('/preview');
-  const pathPrefix = isPreview ? '/preview' : '';
 
   // Map nav URLs — in preview mode, prefix with /preview
   const makeUrl = (path: string) => {
     if (path === '#notepad') return path;
-    // For preview mode, map paths like / -> /preview, /outreach -> /preview/outreach
     if (isPreview) {
       if (path === '/') return '/preview';
       return `/preview${path}`;
@@ -56,7 +54,7 @@ export function AppSidebar() {
     { title: 'Playbook', url: makeUrl('/playbook'), icon: Lightbulb, description: 'Closing tips & tactics' },
     { title: t('nav.howToUse'), url: makeUrl('/how-to-use'), icon: HelpCircle, description: t('nav.howToUseDesc') },
     { title: t('nav.feedback'), url: makeUrl('/feedback'), icon: MessageSquare, description: t('nav.feedbackDesc') },
-    ...(!isGuest ? [{ title: 'Notepad', url: '#notepad' as const, icon: StickyNote, description: 'Personal actions & notes' }] : []),
+    { title: 'Notepad', url: '#notepad', icon: StickyNote, description: 'Personal actions & notes' },
   ];
 
   const adminItems = [
@@ -93,13 +91,13 @@ export function AppSidebar() {
     };
   }, []);
 
-  // Helper to check if a nav item is active (accounting for preview prefix)
+  // Helper to check if a nav item is active
   const isItemActive = (itemUrl: string) => {
     if (itemUrl === '#notepad') return false;
     return location.pathname === itemUrl;
   };
 
-  // Helper to check flashing state using original paths
+  // Get original path for flash/walkthrough logic
   const getOriginalPath = (itemUrl: string) => {
     if (isPreview) {
       if (itemUrl === '/preview') return '/';
@@ -233,7 +231,7 @@ export function AppSidebar() {
           </div>
         )}
       </SidebarFooter>
-      {!isGuest && <NotepadModal open={notepadOpen} onOpenChange={setNotepadOpen} />}
+      <NotepadModal open={notepadOpen} onOpenChange={setNotepadOpen} />
     </Sidebar>
   );
 }

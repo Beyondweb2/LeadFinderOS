@@ -12,7 +12,6 @@ import { WalkthroughOverlay } from '@/components/WalkthroughOverlay';
 import { SkipWalkthroughButton } from '@/components/SkipWalkthroughButton';
 import { WelcomeWalkthroughModal } from '@/components/WelcomeWalkthroughModal';
 import { Challenge10Modal } from '@/components/Challenge10Modal';
-import { PreviewBanner } from '@/components/PreviewBanner';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
 import { usePersistedScroll } from '@/hooks/usePersistedScroll';
@@ -27,8 +26,7 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { user } = useAuth();
-  const isGuest = !user;
-  const isPreviewMode = location.pathname.startsWith('/preview');
+  const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const { isStripeTrialing, isLoading: isTrialLoading } = useTrial();
   const { status: subStatus, isLoading: isSubLoading } = useSubscription();
@@ -42,15 +40,16 @@ export function AppLayout({ children }: AppLayoutProps) {
       return user?.id ? localStorage.getItem(`simulate_new_user_${user.id}`) === 'true' : false;
     } catch { return false; }
   })();
-  const showWalkthrough = !isGuest && (isDemoUser || isTrialingUser || isSimulatingNewUser);
+  // Preview (guest) users get the walkthrough just like demo users
+  const isPreviewMode = location.pathname.startsWith('/preview');
+  const showWalkthrough = isDemoUser || isTrialingUser || isSimulatingNewUser || isPreviewMode;
   const challenge = useChallenge10();
   const { walkthroughOpen } = useWalkthroughStatus();
 
   // Listen for walkthrough completion — set pending flag only for subscribed users
   useEffect(() => {
-    if (isGuest) return;
     const handleReady = () => {
-      if (!hasProAccess && !isStripeTrialing) return;
+      if (!hasProAccess && !isStripeTrialing && !isPreviewMode) return;
       try {
         const key = user?.id ? `challenge_10_pending_${user.id}` : 'challenge_10_pending';
         localStorage.setItem(key, 'true');
@@ -63,15 +62,16 @@ export function AppLayout({ children }: AppLayoutProps) {
       window.removeEventListener('walkthrough-dismissed', handleReady);
       window.removeEventListener('skip-walkthrough', handleReady);
     };
-  }, [user?.id, hasProAccess, isStripeTrialing, isGuest]);
+  }, [user?.id, hasProAccess, isStripeTrialing, isPreviewMode]);
 
   // Once challenge state loads, check if there's a pending trigger
   useEffect(() => {
-    if (isGuest || challenge.isLoading || challenge.modalShown || walkthroughOpen) return;
+    if (challenge.isLoading || challenge.modalShown || walkthroughOpen) return;
 
     const key = user?.id ? `challenge_10_pending_${user.id}` : 'challenge_10_pending';
+    const targetPath = isPreviewMode ? '/preview/find-leads' : '/find-leads';
     try {
-      if (localStorage.getItem(key) === 'true' && location.pathname === '/find-leads') {
+      if (localStorage.getItem(key) === 'true' && (location.pathname === targetPath || location.pathname === '/preview')) {
         localStorage.removeItem(key);
         setTimeout(() => challenge.triggerModal(), 300);
       }
@@ -80,7 +80,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const handleTrigger = () => challenge.triggerModal();
     window.addEventListener('trigger-challenge-10-modal', handleTrigger);
     return () => window.removeEventListener('trigger-challenge-10-modal', handleTrigger);
-  }, [challenge.isLoading, challenge.modalShown, user?.id, challenge.triggerModal, location.pathname, walkthroughOpen, isGuest]);
+  }, [challenge.isLoading, challenge.modalShown, user?.id, challenge.triggerModal, location.pathname, walkthroughOpen, isPreviewMode]);
 
   const pathKey = useMemo(
     () => `${location.pathname}${location.search}${location.hash}`,
@@ -112,16 +112,12 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* Main content area */}
           <div className="flex-1 flex flex-col min-w-0 relative z-10">
-            {/* Preview banner for guests */}
-            {isGuest && <PreviewBanner />}
             {/* Payment warning banner — persistent during grace period */}
-            {!isGuest && <PaymentWarningBanner />}
+            {user && <PaymentWarningBanner />}
             {/* Skip walkthrough link — top-right, outside modals */}
-            {!isGuest && (
-              <div className="flex items-center justify-end gap-2 px-4 sm:px-6 lg:px-8 pt-2 pb-1">
-                <SkipWalkthroughButton />
-              </div>
-            )}
+            <div className="flex items-center justify-end gap-2 px-4 sm:px-6 lg:px-8 pt-2 pb-1">
+              <SkipWalkthroughButton />
+            </div>
             <main ref={mainRef} className="flex-1 overflow-auto pb-20 md:pb-0">
               <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
                 <Suspense fallback={
@@ -137,20 +133,16 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* Mobile bottom navigation */}
           <MobileBottomNav />
-          {!isGuest && (
-            <>
-              <CheckoutActivationOverlay />
-              <PaymentFailureDialog />
-              <DemoChecklistPanel />
-              <WalkthroughOverlay />
-              <WelcomeWalkthroughModal />
-              <Challenge10Modal
-                open={challenge.showModal}
-                onStart={challenge.startChallenge}
-                onSkip={challenge.skipChallenge}
-              />
-            </>
-          )}
+          <CheckoutActivationOverlay />
+          <PaymentFailureDialog />
+          <DemoChecklistPanel />
+          <WalkthroughOverlay />
+          <WelcomeWalkthroughModal />
+          <Challenge10Modal
+            open={challenge.showModal}
+            onStart={challenge.startChallenge}
+            onSkip={challenge.skipChallenge}
+          />
         </div>
       </SidebarProvider>
     </DemoChecklistProvider>
