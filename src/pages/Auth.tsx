@@ -18,6 +18,7 @@ import { type SupportedLanguage } from '@/hooks/useLanguage';
 import { LANG_STORAGE_KEY } from '@/i18n';
 import appLogo from '@/assets/logo.png';
 import { trackCompleteRegistration } from '@/lib/fbPixel';
+import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 
 const Auth = () => {
   const { t } = useTranslation();
