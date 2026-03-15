@@ -383,6 +383,11 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           setExpanded(!!data.expanded);
           setGated(!!data.gated);
 
+          // Increment search count for non-pro users after successful search
+          if (!hasProAccess) {
+            incrementSearchCount();
+          }
+
           // Persist gated flag so it survives refresh
           if (user?.id) {
             try {
