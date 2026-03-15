@@ -23,10 +23,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   // Cache setup_completed per user to avoid refetching on every mount/route change
   const lastCheckedUserIdRef = useRef<string | null>(null);
 
-  // Ad-entry users bypass all subscription gating
-  if (!user && hasAdEntryAccess()) {
-    return <>{children}</>;
-  }
+  const isAdGuest = !user && hasAdEntryAccess();
 
   useEffect(() => {
     if (!user?.id) {
