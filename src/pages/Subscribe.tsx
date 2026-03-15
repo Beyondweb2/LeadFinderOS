@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Check, Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import logoIcon from '@/assets/leadfinder-logo-icon.png';
+import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 
 const TRIAL_FEATURES = [
   'Find qualified business leads',
@@ -74,6 +75,7 @@ const Subscribe = () => {
         headers: {
           Authorization: `Bearer ${session?.access_token}`,
         },
+        body: getCheckoutAttribution(),
       });
       if (error) throw error;
       if (data?.url) {

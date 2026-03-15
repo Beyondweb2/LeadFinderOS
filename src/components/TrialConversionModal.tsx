@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
 import { trackFunnelEvent } from '@/lib/funnelAnalytics';
+import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 
 interface TrialConversionModalProps {
   open: boolean;
@@ -48,6 +49,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
     try {
       const { data, error } = await supabase.functions.invoke('create-checkout', {
         headers: { Authorization: `Bearer ${session?.access_token}` },
+        body: getCheckoutAttribution(),
       });
       if (error) throw error;
       if (data?.url) window.location.href = data.url;

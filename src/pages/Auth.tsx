@@ -18,6 +18,7 @@ import { type SupportedLanguage } from '@/hooks/useLanguage';
 import { LANG_STORAGE_KEY } from '@/i18n';
 import appLogo from '@/assets/logo.png';
 import { trackCompleteRegistration } from '@/lib/fbPixel';
+import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 
 const Auth = () => {
   const { t } = useTranslation();
@@ -159,6 +160,7 @@ const Auth = () => {
               if (token) {
                 const { data, error } = await supabase.functions.invoke('create-checkout', {
                   headers: { Authorization: `Bearer ${token}` },
+                  body: getCheckoutAttribution(),
                 });
                 if (!error && data?.url) {
                   window.location.href = data.url;

@@ -312,10 +312,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       throw new Error('Not authenticated');
     }
 
+    const attribution = (await import('@/lib/checkoutAttribution')).getCheckoutAttribution();
     const { data, error } = await supabase.functions.invoke('create-checkout', {
       headers: {
         Authorization: `Bearer ${session.access_token}`,
       },
+      body: attribution,
     });
 
     if (error) throw error;
