@@ -106,11 +106,23 @@ const Index = () => {
     }
   }, [leads.length, gated, isFreeUser, isSubscriptionLoading, conversionModalShownThisSession]);
 
-  // Handle search attempt — unlimited for all users
+  // Handle search attempt — check preview limit for non-pro users
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
+
+    // Enforce preview search limit for guest / unsubscribed users
+    if (!hasProAccess) {
+      const count = getPreviewSearchCount();
+      if (count >= PREVIEW_SEARCH_LIMIT) {
+        setConversionModalReason('search_limit');
+        setShowConversionModal(true);
+        return;
+      }
+      incrementPreviewSearchCount();
+    }
+
     search(filters, false, false);
-  }, [search]);
+  }, [search, hasProAccess, getPreviewSearchCount, incrementPreviewSearchCount]);
 
   return (
     <div className="space-y-4 md:space-y-8">
