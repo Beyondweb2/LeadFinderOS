@@ -274,22 +274,38 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      {!gated && lead.googleMapsUrl && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" asChild>
-                              <a
-                                href={lead.googleMapsUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                      {lead.googleMapsUrl && (
+                        gated ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground/50"
+                                onClick={(e) => { e.preventDefault(); onGatedAction?.(); }}
                               >
-                                <MapPin className="h-4 w-4 text-muted-foreground" />
-                              </a>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Open in Google Maps</TooltipContent>
-                        </Tooltip>
+                                <Lock className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>🔒 Start trial to view details</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" asChild>
+                                <a
+                                  href={lead.googleMapsUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                                >
+                                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                                </a>
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Open in Google Maps</TooltipContent>
+                          </Tooltip>
+                        )
                       )}
                       {onAddToOutreach && (
                         checkIsInOutreach(lead.name, lead.googleMapsUrl) ? (

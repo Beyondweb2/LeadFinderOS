@@ -58,8 +58,16 @@ const Index = () => {
   const isAdEntryGuest = !user && !hasProAccess;
   const effectiveGated = gated || isAdEntryGuest;
 
-  // Guest search cap reached?
-  const guestSearchesExhausted = isAdEntryGuest && !!trialLimitError;
+  // Guest search cap reached? Persist so it survives re-renders/navigation
+  const GUEST_CAP_KEY = 'leadfinder_guest_cap_reached';
+  const guestSearchesExhausted = useMemo(() => {
+    if (!isAdEntryGuest) return false;
+    if (trialLimitError) {
+      try { localStorage.setItem(GUEST_CAP_KEY, '1'); } catch {}
+      return true;
+    }
+    try { return localStorage.getItem(GUEST_CAP_KEY) === '1'; } catch { return false; }
+  }, [isAdEntryGuest, trialLimitError]);
 
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;

@@ -134,7 +134,7 @@ export function SearchForm({
                     {isUpgradeLoading ? (
                       <><Loader2 className="h-3.5 w-3.5 animate-spin" />Starting...</>
                     ) : (
-                      <><Sparkles className="h-3.5 w-3.5" />Start Free Trial</>
+                      <><img src={logoIcon} alt="" className="h-4 w-4 object-contain" />Start Free Trial</>
                     )}
                   </Button>
                 </div>
