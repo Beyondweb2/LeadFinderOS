@@ -12,7 +12,7 @@ export default function AdEntryRedirect() {
     try {
       sessionStorage.setItem('adEntryAccess', 'true');
     } catch {}
-    navigate('/find-leads', { replace: true });
+    navigate('/dashboard', { replace: true });
   }, [navigate]);
 
   return null;
