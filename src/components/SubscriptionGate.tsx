@@ -17,15 +17,16 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const { isLoading: subLoading, isPaymentPaused, isPaidSubscriber, isStripeTrialing, isAdmin, status: subStatus } = useSubscription();
   const { user } = useAuth();
 
-  // Ad-entry users bypass all subscription gating
-  if (!user && hasAdEntryAccess()) {
-    return <>{children}</>;
-  }
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
   const [trialUsed, setTrialUsed] = useState<boolean | null>(null);
   const [setupLoading, setSetupLoading] = useState(true);
   // Cache setup_completed per user to avoid refetching on every mount/route change
   const lastCheckedUserIdRef = useRef<string | null>(null);
+
+  // Ad-entry users bypass all subscription gating
+  if (!user && hasAdEntryAccess()) {
+    return <>{children}</>;
+  }
 
   useEffect(() => {
     if (!user?.id) {
