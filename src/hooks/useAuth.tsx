@@ -120,11 +120,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    // Clear ad-entry guest access so user lands on landing page, not guest app
-    try {
-      sessionStorage.removeItem('adEntryAccess');
-      localStorage.removeItem('leadfinder_guest_cap_reached');
-    } catch {}
+    // Clear ad-entry guest access (both in-memory and sessionStorage)
+    clearAdEntryAccess();
+    try { localStorage.removeItem('leadfinder_guest_cap_reached'); } catch {}
     await supabase.auth.signOut();
     window.location.href = '/landing';
   };
