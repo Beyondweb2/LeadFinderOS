@@ -630,13 +630,13 @@ serve(async (req) => {
         const cachedLeads = cached.results as SearchLead[];
         const hasExpanded = cachedLeads.some(l => l.isExpanded);
         return jsonResponse({
-          leads: stripGatedFields(cachedLeads),
+          leads: cachedLeads,
           totalFound: cachedLeads.length,
           searchId: crypto.randomUUID(),
           source: 'google',
           cached: true,
           expanded: hasExpanded,
-          gated: true,
+          gated: false,
           _debug: debug,
         });
       }
