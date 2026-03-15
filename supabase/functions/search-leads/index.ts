@@ -29,6 +29,7 @@ const SearchRequestSchema = z.object({
   radius: z.number().int().min(100).max(100000).default(5000),
   skipTrialCount: z.boolean().default(false),
   demo: z.boolean().default(false),
+  guest: z.boolean().default(false),
   country: z.string().max(10).optional(),
   // Legacy fields — accepted but ignored
   minRating: z.number().optional(),
