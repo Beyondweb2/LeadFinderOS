@@ -202,7 +202,14 @@ const Index = () => {
           <LeadsTable 
             leads={leads} 
             onExport={exportToCsv}
-            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
+            onAddToOutreach={(lead) => {
+              // Ad-entry users (no account) should see paywall, not attempt the protected action
+              if (!user && !gated) {
+                setShowConversionModal(true);
+                return;
+              }
+              return addToOutreach(lead, lastSearchCountry, 'no_website');
+            }}
             isInOutreach={isInOutreach}
             onMapLinkClick={markAsChecked}
             isChecked={isChecked}
