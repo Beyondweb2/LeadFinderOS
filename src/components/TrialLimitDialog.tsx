@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dialog';
 import { Loader2, ArrowRight } from 'lucide-react';
 import appLogo from '@/assets/logo.png';
+import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
