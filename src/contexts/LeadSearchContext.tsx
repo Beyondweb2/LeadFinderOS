@@ -4,6 +4,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { reportClientError } from '@/lib/errorReporting';
+import { hasAdEntryAccess } from '@/lib/adEntryAccess';
 import type { Lead, SearchFilters, SearchResponse } from '@/types/lead';
 
 interface ExcludedBusiness {
