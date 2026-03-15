@@ -37,7 +37,10 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     );
   }
 
-  // Allow unauthenticated users to use the app normally
+  if (!user) {
+    return <Navigate to="/landing" replace />;
+  }
+
   return <>{children}</>;
 }
 
