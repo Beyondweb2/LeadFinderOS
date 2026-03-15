@@ -77,28 +77,8 @@ const Index = () => {
     }
   }, [guestSearchesExhausted, conversionModalShownThisSession]);
 
-  // Count businesses without websites — accumulate across all searches in session
-  const currentNoWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
-  const [accumulatedNoWebsiteCount, setAccumulatedNoWebsiteCount] = useState(() => {
-    try {
-      return parseInt(sessionStorage.getItem('leadfinder_accumulated_no_website') || '0', 10);
-    } catch { return 0; }
-  });
-
-  // When new results load, add current batch to accumulated count
-  const prevLeadsLengthRef = useState<number>(0);
-  useEffect(() => {
-    if (!isLoading && leads.length > 0 && leads.length !== prevLeadsLengthRef[0]) {
-      prevLeadsLengthRef[0] = leads.length;
-      setAccumulatedNoWebsiteCount(prev => {
-        const next = prev + currentNoWebsiteCount;
-        try { sessionStorage.setItem('leadfinder_accumulated_no_website', String(next)); } catch {}
-        return next;
-      });
-    }
-  }, [isLoading, leads.length, currentNoWebsiteCount]);
-
-  const noWebsiteCount = accumulatedNoWebsiteCount || currentNoWebsiteCount;
+  // Count businesses without websites — only from the most recent search
+  const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
   // Show conversion modal after first gated search results load
   useEffect(() => {
