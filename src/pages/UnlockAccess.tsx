@@ -77,6 +77,7 @@ const UnlockAccess = () => {
         headers: {
           Authorization: `Bearer ${session?.access_token}`,
         },
+        body: getCheckoutAttribution(),
       });
       if (fnError) throw fnError;
       if (data?.url) {

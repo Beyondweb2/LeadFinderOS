@@ -160,6 +160,7 @@ const Auth = () => {
               if (token) {
                 const { data, error } = await supabase.functions.invoke('create-checkout', {
                   headers: { Authorization: `Bearer ${token}` },
+                  body: getCheckoutAttribution(),
                 });
                 if (!error && data?.url) {
                   window.location.href = data.url;

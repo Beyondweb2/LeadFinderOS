@@ -32,6 +32,7 @@ export function OutreachProgressSummary({
       try {
         const { data, error } = await supabase.functions.invoke('create-checkout', {
           headers: { Authorization: `Bearer ${session?.access_token}` },
+          body: getCheckoutAttribution(),
         });
         if (error) throw error;
         if (data?.url) {
