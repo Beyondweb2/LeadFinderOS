@@ -8,6 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
 import { trackFunnelEvent } from '@/lib/funnelAnalytics';
+import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 
 interface TrialConversionModalProps {
   open: boolean;
