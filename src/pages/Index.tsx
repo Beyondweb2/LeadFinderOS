@@ -239,9 +239,9 @@ const Index = () => {
         </section>
       )}
 
-      {/* Trial Limit Dialog (when daily limit reached) */}
+      {/* Trial Limit Dialog — only for authenticated users; guests use TrialConversionModal */}
       <TrialLimitDialog
-        open={!!trialLimitError}
+        open={!!trialLimitError && !isAdEntryGuest}
         onOpenChange={(open) => !open && clearTrialLimitError()}
         searchesToday={trialLimitError?.searchesToday || 3}
         dailyLimit={trialLimitError?.limit || 3}
