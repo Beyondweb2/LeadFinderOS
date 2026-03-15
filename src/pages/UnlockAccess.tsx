@@ -9,6 +9,7 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { Check, Loader2, CreditCard } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import appLogo from '@/assets/logo.png';
+import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 
 const BENEFITS = [
   'Unlimited lead searches',
