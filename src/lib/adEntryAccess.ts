@@ -8,6 +8,13 @@ export function markAdEntryAccess() {
   } catch {}
 }
 
+export function clearAdEntryAccess() {
+  inMemoryAdAccess = false;
+  try {
+    sessionStorage.removeItem('adEntryAccess');
+  } catch {}
+}
+
 export function hasAdEntryAccess(): boolean {
   if (inMemoryAdAccess) return true;
   try {
