@@ -18,13 +18,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
   const [trialUsed, setTrialUsed] = useState<boolean | null>(null);
   const [setupLoading, setSetupLoading] = useState(true);
-  // Cache setup_completed per user to avoid refetching on every mount/route change
   const lastCheckedUserIdRef = useRef<string | null>(null);
-
-  // Allow unauthenticated users through — gating happens at feature level
-  if (!user) {
-    return <>{children}</>;
-  }
 
   useEffect(() => {
     if (!user?.id) {
@@ -32,7 +26,6 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       return;
     }
 
-    // Skip refetch if we already checked for this user
     if (lastCheckedUserIdRef.current === user.id && setupCompleted !== null) {
       setSetupLoading(false);
       return;
@@ -56,6 +49,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     })();
   }, [user?.id]);
 
+  // Allow unauthenticated users through — gating happens at feature level
+  if (!user) {
+    return <>{children}</>;
+  }
+
   if (subLoading || setupLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -64,28 +62,20 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     );
   }
 
-  // Block access if grace period expired (payment failing >7 days) or account paused
   const isPaymentBlocked = isPaymentPaused || subStatus === 'unpaid';
   if (isPaymentBlocked) {
     return <PaymentPausedScreen />;
   }
 
-  // Block cancelled users — must resubscribe
   const isCancelled = subStatus === 'canceled' || subStatus === 'cancelled';
   if (isCancelled) {
     return <SubscriptionCancelledScreen />;
   }
 
-  // Block expired trial users — no active subscription and trial was used
   if (!isAdmin && subStatus === null && trialUsed === true) {
     return <TrialExpiredScreen />;
   }
 
-  // Allow all authenticated users into the app — gating happens at feature level
-  // (search results are gated, buttons locked, trial modal shown)
-
-  // If subscribed but setup not completed, redirect to complete-setup
-  // Only enforce for paying/trialing users, not free users exploring
   const hasPaidAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
   if (hasPaidAccess && !isAdmin && !setupCompleted) {
     return <Navigate to="/complete-setup" replace />;
