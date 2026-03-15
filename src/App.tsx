@@ -188,11 +188,7 @@ const App = () => {
               <Route path="/start-free-trial" element={<StartFreeTrial />} />
               <Route 
                 path="/ads" 
-                element={
-                  <PublicRoute>
-                    <Landing />
-                  </PublicRoute>
-                } 
+                element={<Navigate to="/find-leads" replace />} 
               />
              <Route path="/guide" element={<HowToUse />} />
              <Route 
