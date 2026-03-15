@@ -141,6 +141,8 @@ const Index = () => {
           dailyLimit={hasProAccess ? Infinity : 0}
           isPaidSubscriber={hasProAccess}
           disabled={false}
+          freeSearchesExhausted={guestSearchesExhausted}
+          onUpgrade={() => setShowConversionModal(true)}
         />
       </section>
 
