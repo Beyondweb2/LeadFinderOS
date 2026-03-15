@@ -259,10 +259,9 @@ const Index = () => {
 
       {/* Conversion Modal for gated users + guest search cap */}
       <TrialConversionModal
-        open={showConversionModal || guestSearchesExhausted}
+        open={showConversionModal}
         onOpenChange={(open) => {
           setShowConversionModal(open);
-          if (!open && guestSearchesExhausted) clearTrialLimitError();
         }}
         noWebsiteCount={noWebsiteCount}
         contactedCount={0}
