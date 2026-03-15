@@ -211,6 +211,13 @@ export function useOutreach() {
     }
   }, [user?.id, fetchLeads, fetchOutreachHistory]);
 
+  // Resolve loading immediately for unauthenticated (ad-entry) users
+  useEffect(() => {
+    if (!user) {
+      setIsLoading(false);
+    }
+  }, [user]);
+
   // After leads are loaded, enqueue phone fetches for leads without phone but with place_id
   useEffect(() => {
     if (hasEnrichedRef.current || leads.length === 0) return;
