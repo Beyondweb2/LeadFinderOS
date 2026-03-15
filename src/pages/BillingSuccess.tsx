@@ -61,8 +61,9 @@ const BillingSuccess = () => {
 
       try {
         if (sessionId) {
+          const attribution = getCheckoutAttribution();
           const { error } = await supabase.functions.invoke('sync-subscription', {
-            body: { session_id: sessionId },
+            body: { session_id: sessionId, attribution },
           });
           if (error) {
             console.warn('[BILLING-SUCCESS] sync-subscription failed', { message: error.message });
