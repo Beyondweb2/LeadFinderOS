@@ -350,6 +350,10 @@ const GeneralFeedbackForm = ({
 };
 
 const Feedback = () => {
+  const { user } = useAuth();
+  const isInApp = !!user || hasAdEntryAccess();
+  const backTo = isInApp ? '/dashboard' : '/landing';
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
