@@ -53,7 +53,26 @@ const Index = () => {
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   const [showConversionModal, setShowConversionModal] = useState(false);
+  const [conversionModalReason, setConversionModalReason] = useState<'search_limit' | 'gated' | undefined>(undefined);
   const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
+
+  // Preview search limit — 3 searches for guest / unsubscribed users
+  const PREVIEW_SEARCH_LIMIT = 3;
+  const getPreviewSearchCount = useCallback((): number => {
+    try {
+      const key = user?.id ? `previewSearchCount:${user.id}` : 'previewSearchCount';
+      return parseInt(localStorage.getItem(key) || '0', 10);
+    } catch { return 0; }
+  }, [user?.id]);
+
+  const incrementPreviewSearchCount = useCallback((): number => {
+    try {
+      const key = user?.id ? `previewSearchCount:${user.id}` : 'previewSearchCount';
+      const next = getPreviewSearchCount() + 1;
+      localStorage.setItem(key, String(next));
+      return next;
+    } catch { return 0; }
+  }, [user?.id, getPreviewSearchCount]);
 
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
@@ -65,6 +84,7 @@ const Index = () => {
       setTotalBusinessesFound(prev => prev + leads.length);
       // Short delay so user sees results first
       const timer = setTimeout(() => {
+        setConversionModalReason('gated');
         setShowConversionModal(true);
         setConversionModalShownThisSession(true);
       }, 4000);
@@ -80,6 +100,7 @@ const Index = () => {
   useEffect(() => {
     if (leads.length > 0 && gated && isFreeUser && !conversionModalShownThisSession && !isSubscriptionLoading) {
       const timer = setTimeout(() => {
+        setConversionModalReason('gated');
         setShowConversionModal(true);
         setConversionModalShownThisSession(true);
       }, 1500);
@@ -87,11 +108,23 @@ const Index = () => {
     }
   }, [leads.length, gated, isFreeUser, isSubscriptionLoading, conversionModalShownThisSession]);
 
-  // Handle search attempt — unlimited for all users
+  // Handle search attempt — check preview limit for non-pro users
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
+
+    // Enforce preview search limit for guest / unsubscribed users
+    if (!hasProAccess) {
+      const count = getPreviewSearchCount();
+      if (count >= PREVIEW_SEARCH_LIMIT) {
+        setConversionModalReason('search_limit');
+        setShowConversionModal(true);
+        return;
+      }
+      incrementPreviewSearchCount();
+    }
+
     search(filters, false, false);
-  }, [search]);
+  }, [search, hasProAccess, getPreviewSearchCount, incrementPreviewSearchCount]);
 
   return (
     <div className="space-y-4 md:space-y-8">
@@ -246,6 +279,7 @@ const Index = () => {
         onOpenChange={setShowConversionModal}
         noWebsiteCount={noWebsiteCount}
         contactedCount={0}
+        reason={conversionModalReason}
       />
     </div>
   );
