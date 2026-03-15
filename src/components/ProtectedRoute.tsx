@@ -40,11 +40,9 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
 
   if (!user) {
     // Allow ad-entry users to bypass auth gate
-    try {
-      if (sessionStorage.getItem('adEntryAccess') === 'true') {
-        return <>{children}</>;
-      }
-    } catch {}
+    if (hasAdEntryAccess()) {
+      return <>{children}</>;
+    }
     return <Navigate to="/landing" replace />;
   }
 

@@ -18,11 +18,9 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const { user } = useAuth();
 
   // Ad-entry users bypass all subscription gating
-  try {
-    if (!user && sessionStorage.getItem('adEntryAccess') === 'true') {
-      return <>{children}</>;
-    }
-  } catch {}
+  if (!user && hasAdEntryAccess()) {
+    return <>{children}</>;
+  }
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
   const [trialUsed, setTrialUsed] = useState<boolean | null>(null);
   const [setupLoading, setSetupLoading] = useState(true);

@@ -221,7 +221,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     if (hasProAccess) setGated(false);
 
     // ─── Guest (ad-entry, no account) search cap ───
-    const isGuestNow = !user && (() => { try { return sessionStorage.getItem('adEntryAccess') === 'true'; } catch { return false; } })();
+    const isGuestNow = !user && hasAdEntryAccess();
     if (isGuestNow) {
       const count = parseInt(localStorage.getItem(GUEST_COUNT_KEY) || '0', 10);
       if (count >= GUEST_SEARCH_LIMIT) {
