@@ -42,10 +42,11 @@ serve(async (req) => {
     if (!user?.id) throw new Error("User not authenticated");
     logStep("User authenticated", { userId: user.id });
 
-    // Get session_id from request body
-    const { session_id } = await req.json();
+    // Get session_id and optional attribution from request body
+    const body = await req.json();
+    const { session_id, attribution } = body;
     if (!session_id) throw new Error("Missing session_id");
-    logStep("Session ID received", { session_id });
+    logStep("Session ID received", { session_id, hasAttribution: !!attribution });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
