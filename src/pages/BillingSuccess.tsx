@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import appLogo from '@/assets/logo.png';
 import { trackStartTrial } from '@/lib/fbPixel';
+import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 
 const DEFAULT_IN_APP_ROUTE = '/find-leads';
 
