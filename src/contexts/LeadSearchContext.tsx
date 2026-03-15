@@ -51,6 +51,11 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const { isPaidSubscriber, isStripeTrialing, isAdmin, isLoading: isSubLoading } = useSubscription();
   const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
 
+  // Helper: is this an ad-entry guest (no account)?
+  const isAdEntryGuest = !user && (() => { try { return sessionStorage.getItem('adEntryAccess') === 'true'; } catch { return false; } })();
+  const GUEST_SEARCH_LIMIT = 3;
+  const GUEST_COUNT_KEY = 'leadfinder_guest_search_count';
+
   const clearTrialLimitError = useCallback(() => setTrialLimitError(null), []);
 
   // Clear persisted gating flags when user becomes a subscriber
