@@ -41,7 +41,8 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
     if (!user) {
       onOpenChange(false);
       try { localStorage.setItem('leadfinder_post_signup_checkout', 'true'); } catch {}
-      navigate('/auth?intent=signup');
+      const currentPath = window.location.pathname + window.location.search;
+      navigate(`/auth?intent=signup&returnTo=${encodeURIComponent(currentPath)}`);
       return;
     }
 
