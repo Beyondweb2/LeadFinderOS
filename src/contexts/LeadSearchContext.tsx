@@ -51,6 +51,11 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const { isPaidSubscriber, isStripeTrialing, isAdmin, isLoading: isSubLoading } = useSubscription();
   const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
 
+  // Helper: is this an ad-entry guest (no account)?
+  const isAdEntryGuest = !user && (() => { try { return sessionStorage.getItem('adEntryAccess') === 'true'; } catch { return false; } })();
+  const GUEST_SEARCH_LIMIT = 3;
+  const GUEST_COUNT_KEY = 'leadfinder_guest_search_count';
+
   const clearTrialLimitError = useCallback(() => setTrialLimitError(null), []);
 
   // Clear persisted gating flags when user becomes a subscriber
@@ -213,9 +218,20 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     setExpanded(false);
     // Only clear gated flag if user has pro access; free users stay gated until checkout
     if (hasProAccess) setGated(false);
+
+    // ─── Guest (ad-entry, no account) search cap ───
+    const isGuestNow = !user && (() => { try { return sessionStorage.getItem('adEntryAccess') === 'true'; } catch { return false; } })();
+    if (isGuestNow) {
+      const count = parseInt(localStorage.getItem(GUEST_COUNT_KEY) || '0', 10);
+      if (count >= GUEST_SEARCH_LIMIT) {
+        setTrialLimitError({ searchesToday: count, limit: GUEST_SEARCH_LIMIT });
+        setIsLoading(false);
+        return;
+      }
+    }
     
-    // Refresh excluded businesses before searching (skip for demo)
-    if (!isDemo) await fetchExcludedBusinesses();
+    // Refresh excluded businesses before searching (skip for demo and guest)
+    if (!isDemo && !isGuestNow) await fetchExcludedBusinesses();
 
     // Helper to determine if an error is retryable (network / 5xx / 429)
     const isRetryable = (err: any): boolean => {
@@ -236,7 +252,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       try {
         // Race the invoke against a timeout
         const invokePromise = supabase.functions.invoke<SearchResponse>('search-leads', {
-          body: { ...filters, skipTrialCount, ...(isDemo ? { demo: true } : {}) },
+          body: { ...filters, skipTrialCount, ...(isDemo ? { demo: true } : {}), ...(isGuestNow ? { guest: true } : {}) },
         });
 
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -289,7 +305,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
                 body = { code: 'FREE_SEARCH_EXHAUSTED' };
               } else if (error.message.includes('POST_ABANDON_EXHAUSTED')) {
                 body = { code: 'POST_ABANDON_EXHAUSTED' };
-              } else if (error.message.includes('Trial limit reached') || error.message.includes('TRIAL_LIMIT_REACHED')) {
+              } else if (error.message.includes('Trial limit reached') || error.message.includes('TRIAL_LIMIT_REACHED') || error.message.includes('GUEST_LIMIT_REACHED')) {
                 body = { code: 'TRIAL_LIMIT_REACHED' };
               }
             }
@@ -310,7 +326,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
             setIsLoading(false);
             return;
           }
-          if (body?.code === 'TRIAL_LIMIT_REACHED') {
+          if (body?.code === 'TRIAL_LIMIT_REACHED' || body?.code === 'GUEST_LIMIT_REACHED') {
             setTrialLimitError({
               searchesToday: body.searches_today || 3,
               limit: body.limit || 3,
@@ -373,6 +389,15 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           }
 
           const noWebsiteCount = filteredLeads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
+
+          // Increment guest search count on success
+          if (isGuestNow) {
+            try {
+              const prev = parseInt(localStorage.getItem(GUEST_COUNT_KEY) || '0', 10);
+              localStorage.setItem(GUEST_COUNT_KEY, String(prev + 1));
+            } catch {}
+          }
+
           await saveSearch(filters, filteredLeads.length, noWebsiteCount);
 
           // Notify demo checklist that a search completed
