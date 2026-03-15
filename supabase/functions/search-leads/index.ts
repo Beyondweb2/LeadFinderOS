@@ -549,11 +549,13 @@ serve(async (req) => {
         || 'unknown';
       const demoKey = `demo:${clientIp}`;
 
-      if (!globalThis.__demoSearches) globalThis.__demoSearches = new Set();
-      if (globalThis.__demoSearches.has(demoKey)) {
+      if (!globalThis.__demoSearches) globalThis.__demoSearches = new Map();
+      const demoCount = globalThis.__demoSearches.get(demoKey) || 0;
+      const DEMO_SEARCH_LIMIT = 10;
+      if (demoCount >= DEMO_SEARCH_LIMIT) {
         return jsonResponse({ error: 'Demo search limit reached. Sign up for unlimited access.', code: 'DEMO_LIMIT', _debug: debug }, 402);
       }
-      globalThis.__demoSearches.add(demoKey);
+      globalThis.__demoSearches.set(demoKey, demoCount + 1);
 
       const validationResult = SearchRequestSchema.safeParse(body);
       if (!validationResult.success) {
