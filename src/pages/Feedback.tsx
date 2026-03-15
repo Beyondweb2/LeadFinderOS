@@ -359,14 +359,14 @@ const Feedback = () => {
       {/* Header */}
       <header className="border-b">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link to="/landing" className="flex items-center gap-2">
+          <Link to={backTo} className="flex items-center gap-2">
             <img src={appLogo} alt="LeadFinder Pro" className="h-8 w-8" />
             <span className="font-semibold tracking-tight">
               Lead<span className="text-primary">Finder</span> Pro
             </span>
           </Link>
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/landing">
+            <Link to={backTo}>
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Link>
