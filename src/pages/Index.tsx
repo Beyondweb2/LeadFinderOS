@@ -55,7 +55,11 @@ const Index = () => {
   const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
 
   // Ad-entry users without auth are always gated for actions (same as unsubscribed users)
-  const effectiveGated = gated || (!user && !hasProAccess);
+  const isAdEntryGuest = !user && !hasProAccess;
+  const effectiveGated = gated || isAdEntryGuest;
+
+  // Guest search cap reached?
+  const guestSearchesExhausted = isAdEntryGuest && !!trialLimitError;
 
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
@@ -137,6 +141,8 @@ const Index = () => {
           dailyLimit={hasProAccess ? Infinity : 0}
           isPaidSubscriber={hasProAccess}
           disabled={false}
+          freeSearchesExhausted={guestSearchesExhausted}
+          onUpgrade={() => setShowConversionModal(true)}
         />
       </section>
 
@@ -233,9 +239,9 @@ const Index = () => {
         </section>
       )}
 
-      {/* Trial Limit Dialog (when daily limit reached) */}
+      {/* Trial Limit Dialog — only for authenticated users; guests use TrialConversionModal */}
       <TrialLimitDialog
-        open={!!trialLimitError}
+        open={!!trialLimitError && !isAdEntryGuest}
         onOpenChange={(open) => !open && clearTrialLimitError()}
         searchesToday={trialLimitError?.searchesToday || 3}
         dailyLimit={trialLimitError?.limit || 3}
@@ -243,10 +249,13 @@ const Index = () => {
         noWebsiteCount={noWebsiteCount}
       />
 
-      {/* Conversion Modal for gated users */}
+      {/* Conversion Modal for gated users + guest search cap */}
       <TrialConversionModal
-        open={showConversionModal}
-        onOpenChange={setShowConversionModal}
+        open={showConversionModal || guestSearchesExhausted}
+        onOpenChange={(open) => {
+          setShowConversionModal(open);
+          if (!open && guestSearchesExhausted) clearTrialLimitError();
+        }}
         noWebsiteCount={noWebsiteCount}
         contactedCount={0}
       />
