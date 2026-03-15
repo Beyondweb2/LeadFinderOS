@@ -186,9 +186,9 @@ export function useTemplates() {
       if (currentUserId && !hasFetched) {
         fetchTemplates();
       } else if (!currentUserId) {
-        // User logged out - clear templates
-        setTemplates([]);
+        // Guest / logged out — load default templates for viewing
         setHasFetched(false);
+        fetchTemplates();
       }
     }
   }, [user?.id, hasFetched, fetchTemplates]);
