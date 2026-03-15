@@ -137,11 +137,43 @@ const Auth = () => {
               body: { action: 'set_language', language: selectedLanguage },
             });
           } catch {}
+
+          // If user came from paywall CTA, continue to Stripe checkout
+          let shouldCheckout = false;
+          try {
+            shouldCheckout = localStorage.getItem('leadfinder_post_signup_checkout') === 'true';
+            if (shouldCheckout) localStorage.removeItem('leadfinder_post_signup_checkout');
+          } catch {}
+
+          if (shouldCheckout) {
+            setIsRedirectingToCheckout(true);
+            toast({
+              title: t('auth.accountCreated'),
+              description: 'Redirecting to checkout…',
+            });
+            try {
+              // Wait briefly for auth session to settle
+              await new Promise(r => setTimeout(r, 500));
+              const { data: sessionData } = await supabase.auth.getSession();
+              const token = sessionData?.session?.access_token;
+              if (token) {
+                const { data, error } = await supabase.functions.invoke('create-checkout', {
+                  headers: { Authorization: `Bearer ${token}` },
+                });
+                if (!error && data?.url) {
+                  window.location.href = data.url;
+                  return;
+                }
+              }
+            } catch {}
+            // Fallback: go to app if checkout failed
+            setIsRedirectingToCheckout(false);
+          }
+
           toast({
             title: t('auth.accountCreated'),
             description: t('auth.welcomeRedirecting'),
           });
-          // New users go directly into the app
           navigate('/', { replace: true });
           return;
         }
@@ -161,10 +193,13 @@ const Auth = () => {
     });
   };
 
-  if (isLoading) {
+  if (isLoading || isRedirectingToCheckout) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        {isRedirectingToCheckout && (
+          <p className="text-sm text-muted-foreground">Opening checkout…</p>
+        )}
       </div>
     );
   }

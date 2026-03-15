@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { hasAdEntryAccess } from '@/lib/adEntryAccess';
 import appLogo from '@/assets/logo.png';
 import { ArrowRight } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
 } from '@/components/ui/dialog';
+
+const AD_ENTRY_WELCOME_KEY = 'leadfinder_ad_welcome_shown';
 
 export function WelcomeWalkthroughModal() {
   const { t } = useTranslation();
@@ -16,29 +19,48 @@ export function WelcomeWalkthroughModal() {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
-    if (!user?.id) return;
-    let cancelled = false;
+    // For authenticated users — use DB flag
+    if (user?.id) {
+      let cancelled = false;
+      supabase
+        .from('user_trials')
+        .select('has_seen_walkthrough_prompt')
+        .eq('user_id', user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (cancelled) return;
+          setChecked(true);
+          if (data && !data.has_seen_walkthrough_prompt) {
+            setShow(true);
+            (window as any).__welcomeModalActive = true;
+          }
+        });
+      return () => { cancelled = true; };
+    }
 
-    supabase
-      .from('user_trials')
-      .select('has_seen_walkthrough_prompt')
-      .eq('user_id', user.id)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (cancelled) return;
-        setChecked(true);
-        if (data && !data.has_seen_walkthrough_prompt) {
+    // For unauthenticated ad-entry users — use localStorage
+    if (hasAdEntryAccess()) {
+      try {
+        if (!localStorage.getItem(AD_ENTRY_WELCOME_KEY)) {
           setShow(true);
           (window as any).__welcomeModalActive = true;
         }
-      });
+      } catch {}
+      setChecked(true);
+      return;
+    }
 
-    return () => { cancelled = true; };
+    setChecked(true);
   }, [user?.id]);
 
   const dismiss = async (startWalkthrough: boolean) => {
     setShow(false);
     (window as any).__welcomeModalActive = false;
+
+    // Persist dismissal for ad-entry guests
+    if (!user?.id && hasAdEntryAccess()) {
+      try { localStorage.setItem(AD_ENTRY_WELCOME_KEY, 'true'); } catch {}
+    }
 
     if (user?.id) {
       try {
