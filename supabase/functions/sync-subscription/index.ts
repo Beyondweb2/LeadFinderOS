@@ -42,10 +42,11 @@ serve(async (req) => {
     if (!user?.id) throw new Error("User not authenticated");
     logStep("User authenticated", { userId: user.id });
 
-    // Get session_id from request body
-    const { session_id } = await req.json();
+    // Get session_id and optional attribution from request body
+    const body = await req.json();
+    const { session_id, attribution } = body;
     if (!session_id) throw new Error("Missing session_id");
-    logStep("Session ID received", { session_id });
+    logStep("Session ID received", { session_id, hasAttribution: !!attribution });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
@@ -121,14 +122,50 @@ serve(async (req) => {
     }
     logStep("Subscription saved successfully");
 
+    // Build attribution fields: prefer client-sent attribution, fallback to checkout_attempts
+    let finalAttribution: Record<string, string | null> = {};
+    const attrFields = ['utm_source', 'utm_campaign', 'utm_adset', 'utm_ad', 'fbclid', 'traffic_source', 'ref_source', 'affiliate_code'] as const;
+
+    // Start with client-sent attribution
+    if (attribution && typeof attribution === 'object') {
+      for (const key of attrFields) {
+        if (attribution[key]) finalAttribution[key] = attribution[key];
+      }
+    }
+
+    // If still missing traffic_source, recover from checkout_attempts
+    if (!finalAttribution.traffic_source) {
+      const { data: checkoutRow } = await supabaseClient
+        .from('checkout_attempts')
+        .select('utm_source, utm_campaign, utm_adset, utm_ad, fbclid, traffic_source, ref_source, affiliate_code')
+        .eq('email', (checkoutSession.customer as Stripe.Customer).email ?? '')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (checkoutRow) {
+        logStep("Recovered attribution from checkout_attempts", checkoutRow);
+        for (const key of attrFields) {
+          if (!finalAttribution[key] && checkoutRow[key]) {
+            finalAttribution[key] = checkoutRow[key];
+          }
+        }
+      }
+    }
+
+    logStep("Final attribution to write", finalAttribution);
+
     // Update user_trials to mark as paid/setup-complete after successful checkout return
     const hasPaidAccess = subscriptionStatus === 'trialing' || subscriptionStatus === 'active';
+    const hasAttribution = Object.values(finalAttribution).some(v => !!v);
+
     const { error: trialUpdateError } = await supabaseClient
       .from('user_trials')
       .update({
         plan_status: subscriptionStatus === 'trialing' ? 'trial' : 'active',
         paid_at: subscriptionStatus === 'active' ? new Date().toISOString() : null,
         ...(hasPaidAccess ? { setup_completed: true, lifecycle_stage: 99, checkout_started_at: null } : {}),
+        ...(hasAttribution ? finalAttribution : {}),
       })
       .eq('user_id', user.id);
 

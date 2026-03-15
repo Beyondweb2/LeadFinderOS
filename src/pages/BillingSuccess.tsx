@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2 } from 'lucide-react';
 import appLogo from '@/assets/logo.png';
 import { trackStartTrial } from '@/lib/fbPixel';
+import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 
 const DEFAULT_IN_APP_ROUTE = '/find-leads';
 
@@ -60,8 +61,9 @@ const BillingSuccess = () => {
 
       try {
         if (sessionId) {
+          const attribution = getCheckoutAttribution();
           const { error } = await supabase.functions.invoke('sync-subscription', {
-            body: { session_id: sessionId },
+            body: { session_id: sessionId, attribution },
           });
           if (error) {
             console.warn('[BILLING-SUCCESS] sync-subscription failed', { message: error.message });
