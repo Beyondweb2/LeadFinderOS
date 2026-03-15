@@ -32,9 +32,10 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
   }, [open]);
 
   const handleStartTrial = async () => {
-    // If not authenticated, send to signup first
+    // If not authenticated, send to signup first — flag so Auth continues to checkout
     if (!user) {
       onOpenChange(false);
+      try { localStorage.setItem('leadfinder_post_signup_checkout', 'true'); } catch {}
       navigate('/auth?intent=signup');
       return;
     }

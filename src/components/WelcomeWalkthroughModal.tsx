@@ -57,6 +57,11 @@ export function WelcomeWalkthroughModal() {
     setShow(false);
     (window as any).__welcomeModalActive = false;
 
+    // Persist dismissal for ad-entry guests
+    if (!user?.id && hasAdEntryAccess()) {
+      try { localStorage.setItem(AD_ENTRY_WELCOME_KEY, 'true'); } catch {}
+    }
+
     if (user?.id) {
       try {
         await supabase.functions.invoke('ensure-trial', {
