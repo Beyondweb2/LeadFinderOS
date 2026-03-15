@@ -53,7 +53,26 @@ const Index = () => {
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   const [showConversionModal, setShowConversionModal] = useState(false);
+  const [conversionModalReason, setConversionModalReason] = useState<'search_limit' | 'gated' | undefined>(undefined);
   const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
+
+  // Preview search limit — 3 searches for guest / unsubscribed users
+  const PREVIEW_SEARCH_LIMIT = 3;
+  const getPreviewSearchCount = useCallback((): number => {
+    try {
+      const key = user?.id ? `previewSearchCount:${user.id}` : 'previewSearchCount';
+      return parseInt(localStorage.getItem(key) || '0', 10);
+    } catch { return 0; }
+  }, [user?.id]);
+
+  const incrementPreviewSearchCount = useCallback((): number => {
+    try {
+      const key = user?.id ? `previewSearchCount:${user.id}` : 'previewSearchCount';
+      const next = getPreviewSearchCount() + 1;
+      localStorage.setItem(key, String(next));
+      return next;
+    } catch { return 0; }
+  }, [user?.id, getPreviewSearchCount]);
 
   // Count businesses without websites
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
