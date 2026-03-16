@@ -183,11 +183,21 @@ const Index = () => {
 
       {/* Outcome-focused Results Header */}
       {leads.length > 0 && noWebsiteCount > 0 && (
-        <div className="flex items-center justify-center gap-1.5 sm:gap-2 py-2 sm:py-3 px-3 sm:px-4 bg-primary/5 border border-primary/10 rounded-lg">
-          <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-          <span className="text-sm sm:text-base font-medium text-foreground">
-            <span className="text-primary font-bold">{noWebsiteCount}</span> business{noWebsiteCount !== 1 ? 'es' : ''} here need{noWebsiteCount === 1 ? 's' : ''} a website
-          </span>
+        <div className="flex flex-col items-center gap-1 py-2 sm:py-3 px-3 sm:px-4 bg-primary/5 border border-primary/10 rounded-lg">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            <span className="text-sm sm:text-base font-medium text-foreground">
+              <span className="text-primary font-bold">{noWebsiteCount}</span> business{noWebsiteCount !== 1 ? 'es' : ''} here need{noWebsiteCount === 1 ? 's' : ''} a website
+            </span>
+          </div>
+          {effectiveGated && (
+            <button
+              onClick={() => setShowConversionModal(true)}
+              className="text-xs sm:text-sm text-primary hover:text-primary/80 underline underline-offset-2 cursor-pointer"
+            >
+              Click here to unlock these leads
+            </button>
+          )}
         </div>
       )}
 

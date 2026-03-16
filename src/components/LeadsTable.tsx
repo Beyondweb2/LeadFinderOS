@@ -115,14 +115,6 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <p className="text-xs text-muted-foreground mt-1">
               {leads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
             </p>
-            {gated && noWebsiteCount > 0 && (
-              <button
-                onClick={() => onGatedAction?.()}
-                className="text-xs text-primary hover:text-primary/80 underline underline-offset-2 mt-1 cursor-pointer"
-              >
-                Click here to unlock these leads
-              </button>
-            )}
             <p className="text-[11px] text-muted-foreground/70 mt-0.5">
               Tap 👁 to view details · 📋 to add to Outreach
             </p>
@@ -144,14 +136,6 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
               <span className="text-status-hot font-semibold ml-1">{noWebsiteCount} without websites</span>
               <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to add to Outreach</span>
             </p>
-            {gated && noWebsiteCount > 0 && (
-              <button
-                onClick={() => onGatedAction?.()}
-                className="text-sm text-primary hover:text-primary/80 underline underline-offset-2 mt-0.5 cursor-pointer"
-              >
-                Click here to unlock these leads
-              </button>
-            )}
           </div>
           <div className="flex items-center gap-2">
             {renderFilterMenu('end')}
