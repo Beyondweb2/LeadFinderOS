@@ -353,7 +353,7 @@ export function WalkthroughOverlay() {
             left: tooltipPos.left,
             transform: (activeStep.tooltipPosition === 'right' && window.innerWidth >= 640) ? 'translateY(-50%)' : 'translateX(-50%)',
             zIndex: 41,
-            pointerEvents: activeStep.step === 3 ? 'auto' : 'none',
+            pointerEvents: 'none',
           }}
         >
           <div className="text-[10px] font-bold uppercase tracking-widest text-amber-400/90 mb-1">
