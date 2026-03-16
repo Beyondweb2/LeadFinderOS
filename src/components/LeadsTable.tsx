@@ -152,81 +152,103 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         <div className="md:hidden space-y-1.5">
           {paginatedLeads.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground text-sm">No leads match your current filters.</div>
-          ) : paginatedLeads.map((lead) => {
+          ) : paginatedLeads.map((lead, index) => {
             const checked = isChecked?.(lead.name, lead.googleMapsUrl);
             const inOutreach = checkIsInOutreach(lead.name, lead.googleMapsUrl);
+            const isFirstRow = index === 0 && currentPage === 1;
             return (
-              <div
-                key={lead.id}
-                className="flex items-center justify-between py-2.5 px-3 rounded-md border border-border bg-background/80"
-              >
-                <div className="flex-1 min-w-0 mr-2">
-                  <div className="flex items-center gap-1.5">
-                    <p className="font-medium text-sm truncate leading-tight">{lead.name}</p>
-                    {lead.isExpanded && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
-                    )}
+              <div key={lead.id}>
+                <div
+                  className="flex items-center justify-between py-2.5 px-3 rounded-md border border-border bg-background/80"
+                >
+                  <div className="flex-1 min-w-0 mr-2">
+                    <div className="flex items-center gap-1.5">
+                      <p className="font-medium text-sm truncate leading-tight">{lead.name}</p>
+                      {lead.isExpanded && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
+                      )}
+                    </div>
+                    <div className="mt-1"><StatusBadge status={lead.websiteStatus} compact /></div>
                   </div>
-                  <div className="mt-1"><StatusBadge status={lead.websiteStatus} compact /></div>
-                </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {gated ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 px-2.5 text-xs text-muted-foreground/60 gap-1.5"
-                      onClick={(e) => { e.preventDefault(); onGatedAction?.(); }}
-                    >
-                      <Lock className="h-3 w-3" />
-                      <span>View Details</span>
-                    </Button>
-                  ) : (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`h-8 px-2.5 text-xs gap-1.5 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
-                          asChild
-                        >
-                          <a
-                            href={lead.googleMapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
-                          >
-                            <EyeIcon checked={!!checked} small />
-                            <span>View Details</span>
-                          </a>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{checked ? 'Already viewed' : 'View business info'}</TooltipContent>
-                    </Tooltip>
-                  )}
-                  {onAddToOutreach && (
-                    inOutreach ? (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
-                        <Check className="h-3.5 w-3.5" />
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {gated ? (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2.5 text-xs text-muted-foreground/60 gap-1.5"
+                        onClick={(e) => { e.preventDefault(); onGatedAction?.(); }}
+                      >
+                        <Lock className="h-3 w-3" />
+                        <span>View Details</span>
                       </Button>
                     ) : (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
-                            variant={gated ? "ghost" : "default"}
-                            size="icon"
-                            className={`h-8 w-8 ${gated ? 'text-muted-foreground/50' : `bg-primary hover:bg-primary/90 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}`}
-                            onClick={() => handleAddToOutreach(lead)}
-                            data-walkthrough-step="add-to-crm"
-                            data-walkthrough="add-crm"
+                            variant="ghost"
+                            size="sm"
+                            className={`h-8 px-2.5 text-xs gap-1.5 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
+                            asChild
                           >
-                            {gated ? <Lock className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />}
+                            <a
+                              href={lead.googleMapsUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                            >
+                              <EyeIcon checked={!!checked} small />
+                              <span>View Details</span>
+                            </a>
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>{gated ? '🔒 Start trial to add' : 'Add to Outreach'}</TooltipContent>
+                        <TooltipContent>{checked ? 'Already viewed' : 'View business info'}</TooltipContent>
                       </Tooltip>
-                    )
-                  )}
+                    )}
+                    {onAddToOutreach && (
+                      inOutreach ? (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                      ) : gated && isFirstRow ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2.5 text-xs text-muted-foreground/60 gap-1.5"
+                          onClick={() => handleAddToOutreach(lead)}
+                        >
+                          <Lock className="h-3.5 w-3.5" />
+                          <span>Start trial to add</span>
+                        </Button>
+                      ) : (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant={gated ? "ghost" : "default"}
+                              size="icon"
+                              className={`h-8 w-8 ${gated ? 'text-muted-foreground/50' : `bg-primary hover:bg-primary/90 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}`}
+                              onClick={() => handleAddToOutreach(lead)}
+                              data-walkthrough-step="add-to-crm"
+                              data-walkthrough="add-crm"
+                            >
+                              {gated ? <Lock className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{gated ? '🔒 Start trial to add' : 'Add to Outreach'}</TooltipContent>
+                        </Tooltip>
+                      )
+                    )}
+                  </div>
                 </div>
+                {/* CTA banner after first result for gated users */}
+                {gated && isFirstRow && (
+                  <div className="my-2 p-3 rounded-lg border border-primary/20 bg-primary/5">
+                    <p className="text-sm font-semibold text-foreground">Start your free trial to unlock full access</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">Add businesses to outreach, view contact details, and track leads.</p>
+                    <Button size="sm" className="mt-2 h-8 bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5" onClick={() => onGatedAction?.()}>
+                      <Rocket className="h-3.5 w-3.5" />Start Free Trial
+                    </Button>
+                  </div>
+                )}
               </div>
             );
           })}
