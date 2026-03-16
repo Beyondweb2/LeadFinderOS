@@ -277,7 +277,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     No leads match your current filters.
                   </TableCell>
                 </TableRow>
-              ) : paginatedLeads.map((lead) => (
+              ) : paginatedLeads.map((lead, index) => {
+                const isFirstRow = index === 0 && currentPage === 1;
+                return (
                 <TableRow
                   key={lead.id}
                   className="border-border hover:bg-muted/30"
@@ -344,6 +346,18 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             </TooltipTrigger>
                             <TooltipContent>Already in Outreach</TooltipContent>
                           </Tooltip>
+                        ) : gated && isFirstRow ? (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-auto py-1.5 px-4 bg-primary hover:bg-primary/90 text-primary-foreground"
+                            onClick={() => handleAddToOutreach(lead)}
+                          >
+                            <div className="flex flex-col items-center leading-tight">
+                              <span className="text-xs font-medium flex items-center gap-1.5"><ClipboardList className="h-3.5 w-3.5" /> Add to Outreach</span>
+                              <span className="text-[10px] opacity-90">Start Free Trial</span>
+                            </div>
+                          </Button>
                         ) : (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -365,7 +379,8 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              );
+              })}
             </TableBody>
           </Table>
         </div>
