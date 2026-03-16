@@ -45,7 +45,6 @@ export function DemoChecklistPanel() {
   const isFreeUser = !isPaidSubscriber && !isStripeTrialing;
 
   useEffect(() => {
-    if (!dismissKey) { setDismissed(false); return; }
     try {
       localStorage.removeItem('demo_walkthrough_dismissed');
       setDismissed(localStorage.getItem(dismissKey) === 'true');
