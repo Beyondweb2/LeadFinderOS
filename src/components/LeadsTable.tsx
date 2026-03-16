@@ -142,18 +142,6 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <Button onClick={isLocked ? () => onGatedAction?.() : handleExport} className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
               {gated ? <Lock className="mr-2 h-4 w-4" /> : <Download className="mr-2 h-4 w-4" />}Export CSV
             </Button>
-            {!user && (
-              <div className="flex flex-col items-center">
-                <Button
-                  size="sm"
-                  onClick={() => window.location.href = '/start-free-trial'}
-                  className="text-xs h-8"
-                >
-                  Start Free Trial
-                </Button>
-                <span className="text-[10px] text-muted-foreground mt-0.5">Get full access</span>
-              </div>
-            )}
           </div>
         </div>
       </CardHeader>
@@ -166,9 +154,10 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         <div className="md:hidden space-y-1.5">
           {paginatedLeads.length === 0 ? (
             <div className="text-center py-6 text-muted-foreground text-sm">No leads match your current filters.</div>
-          ) : paginatedLeads.map((lead) => {
+              ) : paginatedLeads.map((lead, index) => {
             const checked = isChecked?.(lead.name, lead.googleMapsUrl);
             const inOutreach = checkIsInOutreach(lead.name, lead.googleMapsUrl);
+            const isFirstRow = index === 0 && currentPage === 1;
             return (
               <div
                 key={lead.id}
@@ -222,6 +211,18 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
                         <Check className="h-3.5 w-3.5" />
                       </Button>
+                    ) : gated && isFirstRow ? (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        className="h-auto py-1.5 px-3 bg-primary hover:bg-primary/90 text-primary-foreground"
+                        onClick={() => handleAddToOutreach(lead)}
+                      >
+                        <div className="flex flex-col items-center leading-tight">
+                          <span className="text-xs font-medium flex items-center gap-1"><ClipboardList className="h-3 w-3" /> Add to Outreach</span>
+                          <span className="text-[10px] opacity-90">Start Free Trial</span>
+                        </div>
+                      </Button>
                     ) : (
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -264,7 +265,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     No leads match your current filters.
                   </TableCell>
                 </TableRow>
-              ) : paginatedLeads.map((lead) => (
+              ) : paginatedLeads.map((lead, index) => {
+                const isFirstRow = index === 0 && currentPage === 1;
+                return (
                 <TableRow
                   key={lead.id}
                   className="border-border hover:bg-muted/30"
@@ -331,6 +334,18 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             </TooltipTrigger>
                             <TooltipContent>Already in Outreach</TooltipContent>
                           </Tooltip>
+                        ) : gated && isFirstRow ? (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-auto py-1.5 px-4 bg-primary hover:bg-primary/90 text-primary-foreground"
+                            onClick={() => handleAddToOutreach(lead)}
+                          >
+                            <div className="flex flex-col items-center leading-tight">
+                              <span className="text-xs font-medium flex items-center gap-1.5"><ClipboardList className="h-3.5 w-3.5" /> Add to Outreach</span>
+                              <span className="text-[10px] opacity-90">Start Free Trial</span>
+                            </div>
+                          </Button>
                         ) : (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -352,7 +367,8 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+              );
+              })}
             </TableBody>
           </Table>
         </div>
