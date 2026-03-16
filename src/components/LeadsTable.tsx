@@ -269,7 +269,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   </TableCell>
                 </TableRow>
               ) : paginatedLeads.map((lead, index) => {
-                const isFirstRow = index === 0 && currentPage === 1;
+                
                 return (
                 <TableRow
                   key={lead.id}
