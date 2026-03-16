@@ -82,11 +82,11 @@ const Index = () => {
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
   // Show conversion modal after first gated search results load
+  // Only auto-popup for ad-entry guests (no account); authenticated free users see the inline CTA instead
   useEffect(() => {
-    if (!isLoading && leads.length > 0 && gated && !conversionModalShownThisSession) {
+    if (!isLoading && leads.length > 0 && gated && !conversionModalShownThisSession && isAdEntryGuest) {
       checkTrial();
       setTotalBusinessesFound(prev => prev + leads.length);
-      // Short delay so user sees results first
       const timer = setTimeout(() => {
         setShowConversionModal(true);
         setConversionModalShownThisSession(true);
@@ -97,18 +97,18 @@ const Index = () => {
       checkTrial();
       setTimeout(() => window.dispatchEvent(new CustomEvent('post-search-tip')), 300);
     }
-  }, [isLoading, leads.length, gated, checkTrial, conversionModalShownThisSession]);
+  }, [isLoading, leads.length, gated, checkTrial, conversionModalShownThisSession, isAdEntryGuest]);
 
-  // On mount/refresh: if cached leads exist and user is gated, show conversion modal
+  // On mount/refresh: only auto-popup for ad-entry guests with cached leads
   useEffect(() => {
-    if (leads.length > 0 && gated && isFreeUser && !conversionModalShownThisSession && !isSubscriptionLoading) {
+    if (leads.length > 0 && gated && isFreeUser && !conversionModalShownThisSession && !isSubscriptionLoading && isAdEntryGuest) {
       const timer = setTimeout(() => {
         setShowConversionModal(true);
         setConversionModalShownThisSession(true);
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [leads.length, gated, isFreeUser, isSubscriptionLoading, conversionModalShownThisSession]);
+  }, [leads.length, gated, isFreeUser, isSubscriptionLoading, conversionModalShownThisSession, isAdEntryGuest]);
 
   // Handle search attempt — unlimited for all users
   const handleSearch = useCallback((filters: any) => {
