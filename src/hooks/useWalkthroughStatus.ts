@@ -12,13 +12,19 @@ export function useWalkthroughStatus() {
   const [walkthroughCompleted, setWalkthroughCompleted] = useState(false);
 
   useEffect(() => {
-    if (!user?.id) {
-      setWalkthroughCompleted(false);
-      return;
+    if (user?.id) {
+      const dismissed = localStorage.getItem(`demo_walkthrough_dismissed_${user.id}`) === 'true';
+      const completed = localStorage.getItem(`walkthrough_completed_${user.id}`) === 'true';
+      setWalkthroughCompleted(dismissed || completed);
+    } else {
+      // Guest user — check guest-specific dismissal key
+      try {
+        const guestDismissed = localStorage.getItem('demo_walkthrough_dismissed_guest') === 'true';
+        setWalkthroughCompleted(guestDismissed);
+      } catch {
+        setWalkthroughCompleted(false);
+      }
     }
-    const dismissed = localStorage.getItem(`demo_walkthrough_dismissed_${user.id}`) === 'true';
-    const completed = localStorage.getItem(`walkthrough_completed_${user.id}`) === 'true';
-    setWalkthroughCompleted(dismissed || completed);
   }, [user?.id]);
 
   // Listen for custom events instead of polling localStorage every second
