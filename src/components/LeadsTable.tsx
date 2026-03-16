@@ -115,14 +115,6 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <p className="text-xs text-muted-foreground mt-1">
               {leads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
             </p>
-            {gated && noWebsiteCount > 0 && (
-              <button
-                onClick={() => onGatedAction?.()}
-                className="text-xs text-primary hover:text-primary/80 underline underline-offset-2 mt-1 cursor-pointer"
-              >
-                Click here to unlock these leads
-              </button>
-            )}
             <p className="text-[11px] text-muted-foreground/70 mt-0.5">
               Tap 👁 to view details · 📋 to add to Outreach
             </p>
