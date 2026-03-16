@@ -193,9 +193,9 @@ const Index = () => {
           {effectiveGated && (
             <button
               onClick={() => setShowConversionModal(true)}
-              className="text-xs sm:text-sm text-primary hover:text-primary/80 underline underline-offset-2 cursor-pointer"
+              className="text-xs sm:text-sm font-medium text-primary hover:text-primary/80 cursor-pointer transition-colors"
             >
-              Click here to unlock these leads
+              Unlock these leads →
             </button>
           )}
         </div>
