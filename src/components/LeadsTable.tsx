@@ -367,9 +367,11 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             >
                               <Lock className="h-4 w-4" />
                             </Button>
-                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 overflow-hidden rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md whitespace-nowrap pointer-events-none">
-                              🔒 Start trial to add
-                            </div>
+                            {index === 0 && currentPage === 1 && (
+                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 overflow-hidden rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md whitespace-nowrap pointer-events-none">
+                                🔒 Start trial to add
+                              </div>
+                            )}
                           </div>
                         ) : (
                           <Tooltip>
