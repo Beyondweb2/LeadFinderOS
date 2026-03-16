@@ -211,33 +211,37 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
                         <Check className="h-3.5 w-3.5" />
                       </Button>
-                    ) : gated && isFirstRow ? (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        className="h-auto py-1.5 px-3 bg-primary hover:bg-primary/90 text-primary-foreground"
-                        onClick={() => handleAddToOutreach(lead)}
-                      >
-                        <div className="flex flex-col items-center leading-tight">
-                          <span className="text-xs font-medium flex items-center gap-1"><ClipboardList className="h-3 w-3" /> Add to Outreach</span>
-                          <span className="text-[10px] opacity-90">Start Free Trial</span>
+                    ) : gated ? (
+                      <div className="relative">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 bg-primary/15 text-primary hover:bg-primary/25"
+                          onClick={() => handleAddToOutreach(lead)}
+                          data-walkthrough-step="add-to-crm"
+                          data-walkthrough="add-crm"
+                        >
+                          <Lock className="h-3.5 w-3.5" />
+                        </Button>
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 overflow-hidden rounded-md border bg-popover px-2 py-1 text-[11px] text-popover-foreground shadow-md whitespace-nowrap pointer-events-none">
+                          🔒 Start trial to add
                         </div>
-                      </Button>
+                      </div>
                     ) : (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
-                            variant={gated ? "ghost" : "default"}
+                            variant="default"
                             size="icon"
-                            className={`h-8 w-8 ${gated ? 'text-muted-foreground/50' : `bg-primary hover:bg-primary/90 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}`}
+                            className={`h-8 w-8 bg-primary hover:bg-primary/90 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
                             onClick={() => handleAddToOutreach(lead)}
                             data-walkthrough-step="add-to-crm"
                             data-walkthrough="add-crm"
                           >
-                            {gated ? <Lock className="h-3.5 w-3.5" /> : <ClipboardList className="h-3.5 w-3.5" />}
+                            <ClipboardList className="h-3.5 w-3.5" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>{gated ? '🔒 Start trial to add' : 'Add to Outreach'}</TooltipContent>
+                        <TooltipContent>Add to Outreach</TooltipContent>
                       </Tooltip>
                     )
                   )}
