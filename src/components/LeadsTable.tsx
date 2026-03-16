@@ -41,6 +41,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
+  const { user } = useAuth();
   const shouldPulseCrm = isDemoUser && !state.addedToCrm;
   const handleAddToOutreach = useCallback((lead: Lead) => {
     if (gated) { onGatedAction?.(); return; }
