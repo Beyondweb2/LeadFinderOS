@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/tooltip';
 import type { Lead, WebsiteStatus } from '@/types/lead';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
+import { useAuth } from '@/hooks/useAuth';
 
 const ITEMS_PER_PAGE = 25;
 
