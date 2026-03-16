@@ -36,7 +36,7 @@ export function DemoChecklistPanel() {
   const { isPaidSubscriber } = useSubscription();
   const { user } = useAuth();
 
-  const dismissKey = user?.id ? `demo_walkthrough_dismissed_${user.id}` : null;
+  const dismissKey = user?.id ? `demo_walkthrough_dismissed_${user.id}` : 'demo_walkthrough_dismissed_guest';
   const [dismissed, setDismissed] = useState(false);
   const prevAllDoneRef = useRef(allDone);
   const [showCompletionModal, setShowCompletionModal] = useState(false);
