@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/tooltip';
 import type { Lead, WebsiteStatus } from '@/types/lead';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
+import { useAuth } from '@/hooks/useAuth';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -40,6 +41,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
+  const { user } = useAuth();
   const shouldPulseCrm = isDemoUser && !state.addedToCrm;
   const handleAddToOutreach = useCallback((lead: Lead) => {
     if (gated) { onGatedAction?.(); return; }
@@ -140,6 +142,18 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <Button onClick={isLocked ? () => onGatedAction?.() : handleExport} className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
               {gated ? <Lock className="mr-2 h-4 w-4" /> : <Download className="mr-2 h-4 w-4" />}Export CSV
             </Button>
+            {!user && (
+              <div className="flex flex-col items-center">
+                <Button
+                  size="sm"
+                  onClick={() => window.location.href = '/start-free-trial'}
+                  className="text-xs h-8"
+                >
+                  Start Free Trial
+                </Button>
+                <span className="text-[10px] text-muted-foreground mt-0.5">Get full access</span>
+              </div>
+            )}
           </div>
         </div>
       </CardHeader>

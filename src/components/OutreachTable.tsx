@@ -931,18 +931,6 @@ export function OutreachTable({
               <Download className="h-3.5 w-3.5 mr-1.5" />
               <span className="hidden sm:inline">Export </span>CSV
             </Button>
-            {!user && (
-              <div className="flex flex-col items-center">
-                <Button
-                  size="sm"
-                  onClick={() => window.location.href = '/start-free-trial'}
-                  className="text-xs h-8"
-                >
-                  Start Free Trial
-                </Button>
-                <span className="text-[10px] text-muted-foreground mt-0.5">Get full access</span>
-              </div>
-            )}
             {/* Import button */}
             {!readOnly && onImportLeads && (
               <Button
