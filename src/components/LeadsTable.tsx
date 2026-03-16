@@ -157,7 +157,6 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
               ) : paginatedLeads.map((lead, index) => {
             const checked = isChecked?.(lead.name, lead.googleMapsUrl);
             const inOutreach = checkIsInOutreach(lead.name, lead.googleMapsUrl);
-            const isFirstRow = index === 0 && currentPage === 1;
             return (
               <div
                 key={lead.id}
