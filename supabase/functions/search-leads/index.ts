@@ -119,8 +119,18 @@ function stripGatedFields(leads: SearchLead[]): SearchLead[] {
   }));
 }
 
+function normalizeKeyword(kw: string): string {
+  let w = kw.toLowerCase().trim();
+  // Strip common English plural/gerund suffixes for cache grouping
+  if (w.endsWith('ies')) w = w.slice(0, -3) + 'y';       // e.g. bakeries → bakery
+  else if (w.endsWith('ses') || w.endsWith('xes') || w.endsWith('zes') || w.endsWith('ches') || w.endsWith('shes')) w = w.slice(0, -2); // e.g. churches → church
+  else if (w.endsWith('s') && !w.endsWith('ss')) w = w.slice(0, -1); // e.g. plumbers → plumber
+  return w;
+}
+
 async function generateCacheKey(keyword: string, location: string, radius: number): Promise<string> {
-  const input = `v3-expand|${keyword.toLowerCase()}|${location.toLowerCase()}|${radius}`;
+  const normKeyword = normalizeKeyword(keyword);
+  const input = `v4-norm|${normKeyword}|${location.toLowerCase().trim()}|${radius}`;
   const data = new TextEncoder().encode(input);
   const hash = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
