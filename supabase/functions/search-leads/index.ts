@@ -15,7 +15,7 @@ const corsHeaders = {
 // CONSTANTS
 // ═══════════════════════════════════════════════
 const MAX_RESULTS = 50;
-const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const CACHE_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
 const FREE_SEARCH_LIMIT = 3;
 const MIN_NO_WEBSITE_TARGET = 5;
 const MAX_EXPANSION_ATTEMPTS = 16;
@@ -52,6 +52,15 @@ const DIRECTORY_BLACKLIST = new Set([
   'ubereats.com', 'opentable.com', 'opentable.co.uk',
   'google.com', 'maps.google.com', 'business.google.com',
   'apple.com', 'bing.com',
+  // Extended directory / listing sites
+  'trustpilot.com', 'nextdoor.com', 'nextdoor.co.uk',
+  'cylex.co.uk', 'cylex-uk.co.uk', '192.com',
+  'brownbook.net', 'hotfrog.com', 'bizify.co.uk',
+  'misterwhat.co.uk', 'lacartes.com', 'findopen.co.uk',
+  'panpages.com', 'indiamart.com', 'justdial.com',
+  'sulekha.com', 'tradeindia.com',
+  'gumtree.com', 'locanto.co.uk', 'fyple.co.uk',
+  'citylocal.co.uk', 'thebestof.co.uk', 'locallife.co.uk',
 ]);
 
 const PLATFORM_PATTERNS = [
@@ -110,8 +119,18 @@ function stripGatedFields(leads: SearchLead[]): SearchLead[] {
   }));
 }
 
+function normalizeKeyword(kw: string): string {
+  let w = kw.toLowerCase().trim();
+  // Strip common English plural/gerund suffixes for cache grouping
+  if (w.endsWith('ies')) w = w.slice(0, -3) + 'y';       // e.g. bakeries → bakery
+  else if (w.endsWith('ses') || w.endsWith('xes') || w.endsWith('zes') || w.endsWith('ches') || w.endsWith('shes')) w = w.slice(0, -2); // e.g. churches → church
+  else if (w.endsWith('s') && !w.endsWith('ss')) w = w.slice(0, -1); // e.g. plumbers → plumber
+  return w;
+}
+
 async function generateCacheKey(keyword: string, location: string, radius: number): Promise<string> {
-  const input = `v3-expand|${keyword.toLowerCase()}|${location.toLowerCase()}|${radius}`;
+  const normKeyword = normalizeKeyword(keyword);
+  const input = `v4-norm|${normKeyword}|${location.toLowerCase().trim()}|${radius}`;
   const data = new TextEncoder().encode(input);
   const hash = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -381,19 +400,16 @@ async function expandSearch(
     console.log(`[EXPAND] Attempt ${attempts}: searching at (${centre.lat.toFixed(4)}, ${centre.lng.toFixed(4)})`);
 
     try {
-      // Single-page search at the expansion centre (keep it fast)
       const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri';
+      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken';
       const clampedRadius = Math.min(radius, 50000);
 
-      const res = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': FIELD_MASK,
-        },
-        body: JSON.stringify({
+      // Fetch up to 2 pages per expansion centre for a bigger candidate pool
+      let expansionPageToken: string | undefined;
+      for (let ePage = 0; ePage < 2; ePage++) {
+        if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET) break;
+
+        const body: Record<string, unknown> = {
           textQuery: keyword,
           locationBias: {
             circle: {
@@ -402,40 +418,54 @@ async function expandSearch(
             },
           },
           pageSize: 20,
-        }),
-      });
+        };
+        if (expansionPageToken) body.pageToken = expansionPageToken;
 
-      debug.googleCallsMade.textSearchPages++;
-
-      if (!res.ok) {
-        console.warn(`[EXPAND] Search failed at centre ${attempts}: ${res.status}`);
-        continue;
-      }
-
-      const data = await res.json();
-      const places = data.places || [];
-
-      for (const place of places) {
-        const placeId = (place.id || '').replace(/^places\//, '');
-        if (!placeId || seenIds.has(placeId)) continue;
-        seenIds.add(placeId);
-
-        const { status, confidence, reason } = classifyWebsite(place.websiteUri);
-        if (status !== 'NO_WEBSITE') continue; // Only collect NO_WEBSITE from expansion
-
-        expandedLeads.push({
-          id: placeId,
-          name: place.displayName?.text || 'Unknown',
-          googleMapsUrl: place.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${placeId}`,
-          websiteUrl: place.websiteUri || null,
-          websiteStatus: status,
-          confidence,
-          reason,
-          isExpanded: true,
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': apiKey,
+            'X-Goog-FieldMask': FIELD_MASK,
+          },
+          body: JSON.stringify(body),
         });
-        totalNoWebsite++;
 
-        if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET) break;
+        debug.googleCallsMade.textSearchPages++;
+
+        if (!res.ok) {
+          console.warn(`[EXPAND] Search failed at centre ${attempts} page ${ePage}: ${res.status}`);
+          break;
+        }
+
+        const data = await res.json();
+        const places = data.places || [];
+
+        for (const place of places) {
+          const placeId = (place.id || '').replace(/^places\//, '');
+          if (!placeId || seenIds.has(placeId)) continue;
+          seenIds.add(placeId);
+
+          const { status, confidence, reason } = classifyWebsite(place.websiteUri);
+          if (status !== 'NO_WEBSITE') continue;
+
+          expandedLeads.push({
+            id: placeId,
+            name: place.displayName?.text || 'Unknown',
+            googleMapsUrl: place.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+            websiteUrl: place.websiteUri || null,
+            websiteStatus: status,
+            confidence,
+            reason,
+            isExpanded: true,
+          });
+          totalNoWebsite++;
+
+          if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET) break;
+        }
+
+        expansionPageToken = data.nextPageToken;
+        if (!expansionPageToken) break; // no more pages
       }
     } catch (err) {
       console.warn(`[EXPAND] Error at centre ${attempts}:`, err);
