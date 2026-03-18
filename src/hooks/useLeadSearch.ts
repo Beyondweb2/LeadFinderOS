@@ -87,7 +87,7 @@ export function useLeadSearch() {
       if (error) {
         console.error('Search error:', error);
         
-        // Try to parse the error context for trial limit / post-abandon
+        // Try to parse the error context for trial limit / post-abandon / location
         let parsedBody: any = null;
         try {
           const errorContext = error.context;
@@ -101,6 +101,14 @@ export function useLeadSearch() {
               setTrialLimitError({
                 searchesToday: parsedBody.searches_today || 3,
                 limit: parsedBody.limit || 3,
+              });
+              return;
+            }
+            // Handle location not found — show friendly message without error ID
+            if (parsedBody?.error?.toLowerCase().includes('location not found')) {
+              setSearchError({
+                errorId: '',
+                message: 'Location not found. Please check the address or try a different location.',
               });
               return;
             }
