@@ -400,19 +400,16 @@ async function expandSearch(
     console.log(`[EXPAND] Attempt ${attempts}: searching at (${centre.lat.toFixed(4)}, ${centre.lng.toFixed(4)})`);
 
     try {
-      // Single-page search at the expansion centre (keep it fast)
       const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
-      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri';
+      const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken';
       const clampedRadius = Math.min(radius, 50000);
 
-      const res = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': apiKey,
-          'X-Goog-FieldMask': FIELD_MASK,
-        },
-        body: JSON.stringify({
+      // Fetch up to 2 pages per expansion centre for a bigger candidate pool
+      let expansionPageToken: string | undefined;
+      for (let ePage = 0; ePage < 2; ePage++) {
+        if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET) break;
+
+        const body: Record<string, unknown> = {
           textQuery: keyword,
           locationBias: {
             circle: {
@@ -421,40 +418,54 @@ async function expandSearch(
             },
           },
           pageSize: 20,
-        }),
-      });
+        };
+        if (expansionPageToken) body.pageToken = expansionPageToken;
 
-      debug.googleCallsMade.textSearchPages++;
-
-      if (!res.ok) {
-        console.warn(`[EXPAND] Search failed at centre ${attempts}: ${res.status}`);
-        continue;
-      }
-
-      const data = await res.json();
-      const places = data.places || [];
-
-      for (const place of places) {
-        const placeId = (place.id || '').replace(/^places\//, '');
-        if (!placeId || seenIds.has(placeId)) continue;
-        seenIds.add(placeId);
-
-        const { status, confidence, reason } = classifyWebsite(place.websiteUri);
-        if (status !== 'NO_WEBSITE') continue; // Only collect NO_WEBSITE from expansion
-
-        expandedLeads.push({
-          id: placeId,
-          name: place.displayName?.text || 'Unknown',
-          googleMapsUrl: place.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${placeId}`,
-          websiteUrl: place.websiteUri || null,
-          websiteStatus: status,
-          confidence,
-          reason,
-          isExpanded: true,
+        const res = await fetch(ENDPOINT, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Goog-Api-Key': apiKey,
+            'X-Goog-FieldMask': FIELD_MASK,
+          },
+          body: JSON.stringify(body),
         });
-        totalNoWebsite++;
 
-        if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET) break;
+        debug.googleCallsMade.textSearchPages++;
+
+        if (!res.ok) {
+          console.warn(`[EXPAND] Search failed at centre ${attempts} page ${ePage}: ${res.status}`);
+          break;
+        }
+
+        const data = await res.json();
+        const places = data.places || [];
+
+        for (const place of places) {
+          const placeId = (place.id || '').replace(/^places\//, '');
+          if (!placeId || seenIds.has(placeId)) continue;
+          seenIds.add(placeId);
+
+          const { status, confidence, reason } = classifyWebsite(place.websiteUri);
+          if (status !== 'NO_WEBSITE') continue;
+
+          expandedLeads.push({
+            id: placeId,
+            name: place.displayName?.text || 'Unknown',
+            googleMapsUrl: place.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+            websiteUrl: place.websiteUri || null,
+            websiteStatus: status,
+            confidence,
+            reason,
+            isExpanded: true,
+          });
+          totalNoWebsite++;
+
+          if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET) break;
+        }
+
+        expansionPageToken = data.nextPageToken;
+        if (!expansionPageToken) break; // no more pages
       }
     } catch (err) {
       console.warn(`[EXPAND] Error at centre ${attempts}:`, err);
