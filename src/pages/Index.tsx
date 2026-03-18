@@ -212,7 +212,7 @@ const Index = () => {
       )}
 
       {/* Fallback: expansion couldn't find 3 No Website leads */}
-      {leads.length > 0 && expanded && noWebsiteCount < 3 && !isLoading && (
+      {leads.length > 0 && expanded && noWebsiteCount < 5 && !isLoading && (
         <div className="flex flex-col gap-3 py-3 px-4 bg-muted/20 border border-border/40 rounded-lg">
           <div className="flex items-start gap-2">
             <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
