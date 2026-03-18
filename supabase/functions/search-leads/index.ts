@@ -17,8 +17,8 @@ const corsHeaders = {
 const MAX_RESULTS = 50;
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const FREE_SEARCH_LIMIT = 3;
-const MIN_NO_WEBSITE_TARGET = 3;
-const MAX_EXPANSION_ATTEMPTS = 12;
+const MIN_NO_WEBSITE_TARGET = 5;
+const MAX_EXPANSION_ATTEMPTS = 16;
 
 // ═══════════════════════════════════════════════
 // INPUT VALIDATION

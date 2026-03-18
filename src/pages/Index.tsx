@@ -202,7 +202,7 @@ const Index = () => {
       )}
 
       {/* Expanded search indicator */}
-      {leads.length > 0 && expanded && noWebsiteCount >= 3 && (
+      {leads.length > 0 && expanded && noWebsiteCount >= 5 && (
         <div className="flex items-center gap-2 py-2 px-3 sm:px-4 bg-muted/30 border border-border/50 rounded-lg">
           <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <span className="text-xs sm:text-sm text-muted-foreground">
@@ -212,7 +212,7 @@ const Index = () => {
       )}
 
       {/* Fallback: expansion couldn't find 3 No Website leads */}
-      {leads.length > 0 && expanded && noWebsiteCount < 3 && !isLoading && (
+      {leads.length > 0 && expanded && noWebsiteCount < 5 && !isLoading && (
         <div className="flex flex-col gap-3 py-3 px-4 bg-muted/20 border border-border/40 rounded-lg">
           <div className="flex items-start gap-2">
             <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
