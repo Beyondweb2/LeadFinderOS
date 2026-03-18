@@ -172,7 +172,7 @@ const Index = () => {
         <div className="flex flex-col items-center gap-3 p-5 bg-destructive/10 border border-destructive/20 rounded-lg text-center">
           <p className="text-base font-semibold text-destructive">Search failed</p>
           <p className="text-sm text-muted-foreground">{searchError.message}</p>
-          <p className="text-[11px] text-muted-foreground/60 font-mono">Error ID: {searchError.errorId}</p>
+          {searchError.errorId && <p className="text-[11px] text-muted-foreground/60 font-mono">Error ID: {searchError.errorId}</p>}
           <div className="flex gap-2">
             <Button size="sm" variant="outline" onClick={retryLastSearch} className="gap-2">
               Retry
