@@ -52,6 +52,15 @@ const DIRECTORY_BLACKLIST = new Set([
   'ubereats.com', 'opentable.com', 'opentable.co.uk',
   'google.com', 'maps.google.com', 'business.google.com',
   'apple.com', 'bing.com',
+  // Extended directory / listing sites
+  'trustpilot.com', 'nextdoor.com', 'nextdoor.co.uk',
+  'cylex.co.uk', 'cylex-uk.co.uk', '192.com',
+  'brownbook.net', 'hotfrog.com', 'bizify.co.uk',
+  'misterwhat.co.uk', 'lacartes.com', 'findopen.co.uk',
+  'panpages.com', 'indiamart.com', 'justdial.com',
+  'sulekha.com', 'tradeindia.com',
+  'gumtree.com', 'locanto.co.uk', 'fyple.co.uk',
+  'citylocal.co.uk', 'thebestof.co.uk', 'locallife.co.uk',
 ]);
 
 const PLATFORM_PATTERNS = [
