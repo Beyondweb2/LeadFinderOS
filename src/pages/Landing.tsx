@@ -668,12 +668,12 @@ const Landing = () => {
             <div className="grid grid-cols-3 gap-2 sm:gap-5 md:gap-14 max-w-[260px] sm:max-w-xl mx-auto mt-10">
               <CountUpStat target={2300} suffix="+" label="Found this week" />
               <div className="text-center">
-                <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+                <div className="text-lg sm:text-3xl md:text-4xl font-bold text-foreground tracking-tight">Global</div>
+                <div className="text-[9px] sm:text-xs text-foreground/60 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
               </div>
               <div className="text-center">
-                <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+                <div className="text-lg sm:text-3xl md:text-4xl font-bold text-foreground tracking-tight">Unlimited</div>
+                <div className="text-[9px] sm:text-xs text-foreground/60 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Searches</div>
               </div>
             </div>
 
