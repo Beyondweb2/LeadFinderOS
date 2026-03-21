@@ -59,7 +59,7 @@ export function InternetIdentityButton() {
     <Button
       type="button"
       variant="outline"
-      className="w-full h-9 text-sm border-0 bg-[hsl(270,30%,16%)] hover:bg-[hsl(270,30%,20%)] text-foreground shadow-[0_0_12px_hsl(270,60%,50%,0.15)]"
+      className="w-full h-11 text-sm font-semibold border-0 bg-[hsl(270,30%,16%)] hover:bg-[hsl(270,30%,20%)] text-foreground shadow-[0_0_12px_hsl(270,60%,50%,0.15)]"
       onClick={handleLogin}
       disabled={isLoading}
     >

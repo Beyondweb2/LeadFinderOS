@@ -169,7 +169,7 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 relative -mt-8">
       {/* Top bar: back + language */}
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
         <Button
@@ -243,14 +243,14 @@ const Auth = () => {
       </Dialog>
 
       {/* Auth Card */}
-      <div className="w-full max-w-[420px] relative z-10">
+      <div className="w-full max-w-[480px] relative z-10">
         {/* Header */}
         <div className="text-center mb-5">
-          <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 mx-auto mb-2" />
-          <h1 className="text-xl font-bold">
+          <img src={appLogo} alt="LeadFinder Pro" className="h-10 w-10 mx-auto mb-2" />
+          <h1 className="text-2xl font-bold">
             Lead<span className="text-gradient-primary">Finder</span> Pro
           </h1>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             {existingParam === 'true'
               ? 'You already have Pro — sign in to continue.'
               : isLogin 
@@ -260,10 +260,10 @@ const Auth = () => {
         </div>
 
         {/* Card */}
-        <div className="rounded-xl border border-border/60 bg-card p-5">
-          <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="rounded-xl border border-border/60 bg-card p-6">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-xs">{t('auth.email')}</Label>
+              <Label htmlFor="email" className="text-sm">{t('auth.email')}</Label>
               <Input
                 id="email"
                 type="email"
@@ -271,13 +271,13 @@ const Auth = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isSubmitting || (existingParam === 'true' && !!emailParam)}
-                className={`h-9 text-sm ${errors.email ? 'border-destructive' : ''} ${existingParam === 'true' && emailParam ? 'bg-muted cursor-not-allowed' : ''}`}
+                className={`h-10 ${errors.email ? 'border-destructive' : ''} ${existingParam === 'true' && emailParam ? 'bg-muted cursor-not-allowed' : ''}`}
               />
               {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
             </div>
             
             <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-xs">{t('auth.password')}</Label>
+              <Label htmlFor="password" className="text-sm">{t('auth.password')}</Label>
               <Input
                 id="password"
                 type="password"
@@ -285,28 +285,42 @@ const Auth = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isSubmitting}
-                className={`h-9 text-sm ${errors.password ? 'border-destructive' : ''}`}
+                className={`h-10 ${errors.password ? 'border-destructive' : ''}`}
               />
               {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
             </div>
 
             <Button 
               type="submit" 
-              className="w-full h-9 text-sm mt-1" 
+              className="w-full h-11 text-sm font-semibold mt-1" 
               disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   {isLogin ? t('auth.signingIn') : t('auth.creatingAccount')}
                 </>
               ) : (
                 isLogin ? t('auth.signIn') : t('auth.createAccount')
               )}
             </Button>
+          </form>
 
-            {!isLogin && (
-              <p className="text-xs text-muted-foreground text-center">
+          {/* Toggle login/signup */}
+          <p className="text-sm text-muted-foreground text-center mt-4">
+            {isLogin ? (
+              <>
+                {"Don't have an account? "}
+                <button
+                  type="button"
+                  onClick={() => { setIsLogin(false); setErrors({}); }}
+                  className="text-primary hover:underline font-medium"
+                >
+                  {t('auth.createAccount')}
+                </button>
+              </>
+            ) : (
+              <>
                 {t('auth.haveAccount') + ' '}
                 <button
                   type="button"
@@ -315,9 +329,9 @@ const Auth = () => {
                 >
                   {t('auth.signIn')}
                 </button>
-              </p>
+              </>
             )}
-          </form>
+          </p>
 
           {/* Divider */}
           <div className="relative my-4">
