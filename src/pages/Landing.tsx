@@ -501,7 +501,7 @@ const Landing = () => {
     if (user) {
       navigate('/start-free-trial');
     } else {
-      navigate('/auth?intent=signup');
+      navigate('/auth?mode=signup');
     }
   }, [navigate, user]);
 
