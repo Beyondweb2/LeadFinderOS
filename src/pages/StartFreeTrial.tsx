@@ -105,7 +105,7 @@ const StartFreeTrial = () => {
             </span>
           </Link>
           <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" asChild>
-            <Link to="/auth">Sign in</Link>
+            <Link to="/auth?mode=signin">Sign in</Link>
           </Button>
         </div>
       </header>

@@ -327,7 +327,7 @@ const AffiliateProgram = () => {
           <div className="flex items-center gap-4">
             <Link to="/landing" className="hover:text-foreground transition-colors">Home</Link>
             <Link to="/terms" className="hover:text-foreground transition-colors">Terms</Link>
-            <Link to="/auth" className="hover:text-foreground transition-colors">Sign In</Link>
+            <Link to="/auth?mode=signin" className="hover:text-foreground transition-colors">Sign In</Link>
           </div>
         </div>
       </footer>
