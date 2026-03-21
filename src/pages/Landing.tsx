@@ -628,7 +628,7 @@ const Landing = () => {
             <span
               className="hidden sm:inline-block text-xs font-semibold uppercase tracking-widest mb-4 text-muted-foreground/60"
             >
-              Built for web devs, agencies & founders
+              Join 1,200+ freelancers and agencies already using LeadFinder
             </span>
 
             <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-[3.5rem] lg:text-[3.75rem] font-extrabold lg:font-bold tracking-tight leading-tight">
@@ -637,12 +637,12 @@ const Landing = () => {
               <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
+            <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-5 sm:mt-6">
               No clients this month? Find local businesses without websites in seconds, contact them instantly, and start closing deals today.
             </p>
             
             {/* CTA */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-6 sm:mt-8">
+            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-7 sm:mt-9">
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                   <Button 
                     size="lg" 
@@ -664,7 +664,7 @@ const Landing = () => {
               <p className="text-[11px] text-muted-foreground/50 mt-2.5 tracking-wide">
                 £0 today • Find leads in seconds
               </p>
-              <p className="text-[11px] text-muted-foreground/40 mt-1.5 tracking-wide">
+              <p className="text-[11px] text-muted-foreground/40 mt-1.5 tracking-wide sm:hidden">
                 Join 1,200+ freelancers and agencies already using LeadFinder
               </p>
             </div>
@@ -702,7 +702,7 @@ const Landing = () => {
       {/* How LeadFinder Works - 4-step section */}
       <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
         <div className="container mx-auto max-w-6xl">
-          <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
+          <ScrollReveal className="text-center mb-12 sm:mb-14 md:mb-18">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
               How Lead<span className="text-gradient-primary">Finder</span>
               <br />
@@ -832,7 +832,7 @@ const Landing = () => {
       {/* Product Preview Section */}
       <section className="relative z-10 py-10 sm:py-16 md:py-24 px-3 sm:px-4">
         <div className="container mx-auto max-w-[1150px]">
-          <div className="text-center mb-6 sm:mb-8 md:mb-10">
+          <div className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
               Your Complete
               <br />
@@ -855,7 +855,7 @@ const Landing = () => {
           }}
         />
         <div className="container mx-auto max-w-5xl">
-          <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-10 sm:mb-12">
+          <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-12 sm:mb-14 md:mb-16">
             Trusted by freelancers
             <br />
             {' '}and agencies{' '}
@@ -1026,7 +1026,7 @@ const Landing = () => {
         <div className="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-7 w-7 md:h-8 md:w-8 mx-auto mb-3 text-muted-foreground/60" />
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-3">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-5">
               Question About<br className="hidden md:inline" /> <span className="text-gradient-primary">LeadFinder</span>?
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground/70 mb-5 leading-[1.6]">
