@@ -35,8 +35,7 @@ export function InternetIdentityButton() {
       if (error || !data) throw new Error(error?.message || "Login failed");
 
       const { error: otpError } = await supabase.auth.verifyOtp({
-        email: data.email,
-        token: data.token_hash,
+        token_hash: data.token_hash,
         type: "magiclink",
       });
 
