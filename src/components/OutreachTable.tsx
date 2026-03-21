@@ -93,6 +93,8 @@ interface OutreachTableProps {
   readOnly?: boolean;
   phoneFetchStatus?: Record<string, PhoneFetchStatus>;
   onRetryPhoneFetch?: (leadId: string) => void;
+  /** Called before a contact action. Return true to allow, false to block (show paywall). */
+  onContactGated?: () => boolean;
 }
 
 const ITEMS_PER_PAGE_DESKTOP = 15;
