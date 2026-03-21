@@ -659,9 +659,6 @@ const Landing = () => {
               <p className="text-[11px] text-muted-foreground/50 mt-2.5 tracking-wide">
                 £0 today • Find leads in seconds
               </p>
-              <p className="text-[11px] text-muted-foreground/40 mt-1.5 tracking-wide sm:hidden">
-                Join 1,200+ freelancers and agencies already using LeadFinder
-              </p>
             </div>
 
             {/* Metrics row */}
