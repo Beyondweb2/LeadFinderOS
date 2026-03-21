@@ -349,6 +349,7 @@ export function OutreachTable({
 
   // Handle SMS button click - open template dialog + count walkthrough contact
   const handleSMSClick = useCallback((lead: OutreachLead) => {
+    if (onContactGated && !onContactGated()) return;
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'sms' as ContactMethod);
     // Treat opening contact panel as selecting this lead for next walkthrough step
