@@ -832,7 +832,7 @@ const Landing = () => {
       {/* Product Preview Section */}
       <section className="relative z-10 py-10 sm:py-16 md:py-24 px-3 sm:px-4">
         <div className="container mx-auto max-w-[1150px]">
-          <div className="text-center mb-6 sm:mb-8 md:mb-10">
+          <div className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
               Your Complete
               <br />
