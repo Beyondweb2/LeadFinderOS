@@ -248,7 +248,7 @@ const Index = () => {
             leads={leads} 
             onExport={exportToCsv}
             onAddToOutreach={(lead) => {
-              if (!user && !effectiveGated) {
+              if (!user) {
                 setShowConversionModal(true);
                 return;
               }
@@ -256,6 +256,12 @@ const Index = () => {
               const newCount = savedLeadCount + 1;
               setSavedLeadCount(newCount);
               try { localStorage.setItem('leadfinder_saved_lead_count', String(newCount)); } catch {}
+              // Trigger paywall after exceeding free saves
+              if (effectiveGated && newCount > MAX_FREE_SAVES) {
+                setPaywallTriggeredOnce(true);
+                setShowConversionModal(true);
+                return;
+              }
               return addToOutreach(lead, lastSearchCountry, 'no_website');
             }}
             isInOutreach={isInOutreach}
