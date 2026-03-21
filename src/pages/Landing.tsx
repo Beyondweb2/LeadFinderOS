@@ -1026,7 +1026,7 @@ const Landing = () => {
         <div className="container mx-auto">
           <ScrollReveal className="text-center max-w-lg mx-auto">
             <MessageSquare className="h-7 w-7 md:h-8 md:w-8 mx-auto mb-3 text-muted-foreground/60" />
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-3">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight leading-[1.1] mb-5">
               Question About<br className="hidden md:inline" /> <span className="text-gradient-primary">LeadFinder</span>?
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground/70 mb-5 leading-[1.6]">
