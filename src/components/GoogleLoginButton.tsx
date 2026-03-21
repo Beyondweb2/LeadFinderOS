@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
 
 export function GoogleLoginButton() {
   const [isLoading, setIsLoading] = useState(false);
@@ -9,11 +9,8 @@ export function GoogleLoginButton() {
   const handleGoogleLogin = async () => {
     setIsLoading(true);
     try {
-      await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: window.location.origin,
-        },
+      await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
       });
     } catch {
       setIsLoading(false);
