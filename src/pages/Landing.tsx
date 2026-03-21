@@ -694,6 +694,11 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Video Demo Section - desktop only, right after hero */}
+      <div className="hidden sm:block">
+        <VideoSection />
+      </div>
+
 
       {/* How LeadFinder Works - 4-step section */}
       <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
