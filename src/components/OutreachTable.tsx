@@ -93,6 +93,8 @@ interface OutreachTableProps {
   readOnly?: boolean;
   phoneFetchStatus?: Record<string, PhoneFetchStatus>;
   onRetryPhoneFetch?: (leadId: string) => void;
+  /** Called before a contact action. Return true to allow, false to block (show paywall). */
+  onContactGated?: () => boolean;
 }
 
 const ITEMS_PER_PAGE_DESKTOP = 15;
@@ -122,6 +124,7 @@ export function OutreachTable({
   readOnly = false,
   phoneFetchStatus = {},
   onRetryPhoneFetch,
+  onContactGated,
 }: OutreachTableProps) {
   const { toast } = useToast();
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
@@ -321,6 +324,7 @@ export function OutreachTable({
 
   // Handle WhatsApp button click - open template dialog + count walkthrough contact
   const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
+    if (onContactGated && !onContactGated()) return;
     if (lead.whatsapp_status === 'no') {
       toast({
         description: `${lead.business_name} not on WhatsApp. Try SMS or Call.`,
@@ -345,6 +349,7 @@ export function OutreachTable({
 
   // Handle SMS button click - open template dialog + count walkthrough contact
   const handleSMSClick = useCallback((lead: OutreachLead) => {
+    if (onContactGated && !onContactGated()) return;
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'sms' as ContactMethod);
     // Treat opening contact panel as selecting this lead for next walkthrough step
@@ -362,6 +367,7 @@ export function OutreachTable({
 
   // Handle Call button click - direct open + count walkthrough contact
   const handleCallClick = useCallback((lead: OutreachLead) => {
+    if (onContactGated && !onContactGated()) return;
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'call' as ContactMethod);
     // Always emit walkthrough contact event on click (replay-safe)

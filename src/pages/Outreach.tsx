@@ -1,12 +1,16 @@
-import { useState, useMemo, useCallback, useEffect } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { OutreachTable } from '@/components/OutreachTable';
 
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
 import { PostContactModal } from '@/components/PostContactModal';
 import { Challenge10Widget } from '@/components/Challenge10Widget';
 import { Challenge10Modal } from '@/components/Challenge10Modal';
+import { TrialConversionModal } from '@/components/TrialConversionModal';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useChallenge10 } from '@/hooks/useChallenge10';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useTrial } from '@/hooks/useTrial';
+import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { OutreachLead, ContactMethod, PipelineStatus } from '@/types/outreach';
@@ -36,6 +40,31 @@ const Outreach = () => {
   
   const { toast } = useToast();
   const challenge = useChallenge10();
+  const { subscribed, status: subStatus, isPaidSubscriber } = useSubscription();
+  const { isStripeTrialing } = useTrial();
+  const { walkthroughOpen } = useWalkthroughStatus();
+  const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
+
+  // Contact gating: track contact attempts for free users
+  const contactAttemptCount = useRef(() => {
+    try { return parseInt(localStorage.getItem('leadfinder_contact_attempts') || '0', 10); } catch { return 0; }
+  });
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  const handleContactGated = useCallback((): boolean => {
+    if (hasProAccess) return true;
+    const current = (() => { try { return parseInt(localStorage.getItem('leadfinder_contact_attempts') || '0', 10); } catch { return 0; } })();
+    // During walkthrough: allow the 1st contact action free
+    if (walkthroughOpen && current === 0) {
+      const next = 1;
+      try { localStorage.setItem('leadfinder_contact_attempts', String(next)); } catch {}
+      return true;
+    }
+    // Otherwise, block and show paywall
+    setShowPaywall(true);
+    return false;
+  }, [hasProAccess, walkthroughOpen]);
+
   // Combine active and archived leads into one unified list
   const allLeads = useMemo(() => {
     return [...leads, ...archivedLeads];
@@ -154,6 +183,7 @@ const Outreach = () => {
         readOnly={isReadOnly}
         phoneFetchStatus={phoneFetchStatus}
         onRetryPhoneFetch={retryPhoneFetch}
+        onContactGated={!hasProAccess ? handleContactGated : undefined}
       />
 
 
@@ -170,6 +200,14 @@ const Outreach = () => {
         open={challenge.showModal}
         onStart={challenge.startChallenge}
         onSkip={challenge.skipChallenge}
+      />
+
+      {/* Paywall for free users attempting contact actions */}
+      <TrialConversionModal
+        open={showPaywall}
+        onOpenChange={setShowPaywall}
+        noWebsiteCount={allLeads.length}
+        contactedCount={0}
       />
 
     </div>

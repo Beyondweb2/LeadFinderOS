@@ -54,6 +54,10 @@ const Index = () => {
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   const [showConversionModal, setShowConversionModal] = useState(false);
   const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
+  const [savedLeadCount, setSavedLeadCount] = useState(() => {
+    try { return parseInt(localStorage.getItem('leadfinder_saved_lead_count') || '0', 10); } catch { return 0; }
+  });
+  const MAX_FREE_SAVES = 3;
 
   // Ad-entry users without auth are always gated for actions (same as unsubscribed users)
   const isAdEntryGuest = !user && !hasProAccess;
@@ -247,6 +251,10 @@ const Index = () => {
                 setShowConversionModal(true);
                 return;
               }
+              // Track saved lead count for free users
+              const newCount = savedLeadCount + 1;
+              setSavedLeadCount(newCount);
+              try { localStorage.setItem('leadfinder_saved_lead_count', String(newCount)); } catch {}
               return addToOutreach(lead, lastSearchCountry, 'no_website');
             }}
             isInOutreach={isInOutreach}
@@ -254,6 +262,8 @@ const Index = () => {
             isChecked={isChecked}
             gated={effectiveGated}
             onGatedAction={() => setShowConversionModal(true)}
+            savedLeadCount={savedLeadCount}
+            maxFreeSaves={MAX_FREE_SAVES}
           />
         </section>
       )}
