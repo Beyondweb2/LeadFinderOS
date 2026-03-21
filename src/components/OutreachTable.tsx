@@ -324,6 +324,7 @@ export function OutreachTable({
 
   // Handle WhatsApp button click - open template dialog + count walkthrough contact
   const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
+    if (onContactGated && !onContactGated()) return;
     if (lead.whatsapp_status === 'no') {
       toast({
         description: `${lead.business_name} not on WhatsApp. Try SMS or Call.`,
