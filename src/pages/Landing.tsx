@@ -984,7 +984,7 @@ const Landing = () => {
                 Free Trial
               </span>
 
-              <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">Land your next client <span className="text-gradient-primary">this week</span></h3>
+              <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">LeadFinder <span className="text-gradient-primary">Pro</span></h3>
               <p className="text-sm sm:text-base text-foreground/65 leading-relaxed mb-8 max-w-sm mx-auto font-medium">
                 Everything you need to find, contact and close clients - in one system.
               </p>
