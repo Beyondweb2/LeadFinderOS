@@ -318,13 +318,13 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             </TooltipTrigger>
                             <TooltipContent>Already saved</TooltipContent>
                           </Tooltip>
-                        ) : gated ? (
+                        ) : gated && !canSave ? (
                           <div className="relative">
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 bg-primary/15 text-primary hover:bg-primary/25"
-                              onClick={() => handleAddToOutreach(lead)}
+                              onClick={() => onGatedAction?.()}
                               data-walkthrough-step="add-to-crm"
                               data-walkthrough="add-crm"
                             >
