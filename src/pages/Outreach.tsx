@@ -183,6 +183,7 @@ const Outreach = () => {
         readOnly={isReadOnly}
         phoneFetchStatus={phoneFetchStatus}
         onRetryPhoneFetch={retryPhoneFetch}
+        onContactGated={!hasProAccess ? handleContactGated : undefined}
       />
 
 
