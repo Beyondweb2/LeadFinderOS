@@ -638,7 +638,7 @@ const Landing = () => {
             </h1>
             
             <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
+              No clients this month? Find local businesses without websites in seconds, contact them instantly, and start closing deals today.
             </p>
             
             {/* CTA */}
@@ -663,6 +663,9 @@ const Landing = () => {
               </div>
               <p className="text-[11px] text-muted-foreground/50 mt-2.5 tracking-wide">
                 £0 today • Find leads in seconds
+              </p>
+              <p className="text-[11px] text-muted-foreground/40 mt-1.5 tracking-wide">
+                Join 1,200+ freelancers and agencies already using LeadFinder
               </p>
             </div>
 
