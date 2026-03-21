@@ -843,10 +843,9 @@ const Landing = () => {
         />
         <div className="container mx-auto max-w-5xl">
           <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-10 sm:mb-12">
-            Trusted by freelancers
+            What freelancers and agencies
             <br />
-            {' '}and agencies{' '}
-            <span className="text-gradient-primary">worldwide</span>
+            are <span className="text-gradient-primary">saying</span>
           </h2>
 
           {(() => {
