@@ -40,6 +40,31 @@ const Outreach = () => {
   
   const { toast } = useToast();
   const challenge = useChallenge10();
+  const { subscribed, status: subStatus, isPaidSubscriber } = useSubscription();
+  const { isStripeTrialing } = useTrial();
+  const { walkthroughOpen } = useWalkthroughStatus();
+  const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
+
+  // Contact gating: track contact attempts for free users
+  const contactAttemptCount = useRef(() => {
+    try { return parseInt(localStorage.getItem('leadfinder_contact_attempts') || '0', 10); } catch { return 0; }
+  });
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  const handleContactGated = useCallback((): boolean => {
+    if (hasProAccess) return true;
+    const current = (() => { try { return parseInt(localStorage.getItem('leadfinder_contact_attempts') || '0', 10); } catch { return 0; } })();
+    // During walkthrough: allow the 1st contact action free
+    if (walkthroughOpen && current === 0) {
+      const next = 1;
+      try { localStorage.setItem('leadfinder_contact_attempts', String(next)); } catch {}
+      return true;
+    }
+    // Otherwise, block and show paywall
+    setShowPaywall(true);
+    return false;
+  }, [hasProAccess, walkthroughOpen]);
+
   // Combine active and archived leads into one unified list
   const allLeads = useMemo(() => {
     return [...leads, ...archivedLeads];
