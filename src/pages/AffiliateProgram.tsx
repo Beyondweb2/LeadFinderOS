@@ -124,7 +124,7 @@ const AffiliateProgram = () => {
               <Link to="/auth?mode=signin">Sign In</Link>
             </Button>
             <Button asChild className="btn-premium font-medium text-sm px-3 sm:px-4">
-              <Link to="/auth">Get Started</Link>
+              <Link to="/auth?mode=signup">Get Started</Link>
             </Button>
           </div>
         </div>
