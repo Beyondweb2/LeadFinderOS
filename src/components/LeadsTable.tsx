@@ -346,7 +346,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                                 <ClipboardList className="h-4 w-4" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Add to Outreach</TooltipContent>
+                            <TooltipContent>Save this lead</TooltipContent>
                           </Tooltip>
                         )
                       )}
