@@ -35,18 +35,22 @@ interface LeadsTableProps {
   blurred?: boolean;
   gated?: boolean;
   onGatedAction?: () => void;
+  savedLeadCount?: number;
+  maxFreeSaves?: number;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3 }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
   const { user } = useAuth();
   const shouldPulseCrm = isDemoUser && !state.addedToCrm;
+  // Allow saving up to maxFreeSaves leads even for gated users
+  const canSave = !gated || savedLeadCount < maxFreeSaves;
   const handleAddToOutreach = useCallback((lead: Lead) => {
-    if (gated) { onGatedAction?.(); return; }
+    if (gated && !canSave) { onGatedAction?.(); return; }
     return onAddToOutreach?.(lead);
-  }, [onAddToOutreach, gated, onGatedAction]);
+  }, [onAddToOutreach, gated, canSave, onGatedAction]);
 
   const checkIsInOutreach = useCallback((name: string, url?: string) => {
     return isInOutreach?.(name, url) ?? false;
