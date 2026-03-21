@@ -691,9 +691,9 @@ const Landing = () => {
         <div className="container mx-auto max-w-6xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
-              How Lead<span className="text-gradient-primary">Finder</span>
+              From Search To Client
               <br />
-              <span className="text-foreground">Works</span>
+              In <span className="text-gradient-primary">3 Steps</span>
             </h2>
           </ScrollReveal>
 
