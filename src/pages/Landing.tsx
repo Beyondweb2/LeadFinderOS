@@ -516,7 +516,7 @@ const Landing = () => {
   }, []);
   
   return (
-    <div className="min-h-screen bg-background overflow-hidden">
+    <div className="min-h-screen bg-background overflow-hidden" style={{ backgroundColor: 'hsl(220, 50%, 6%)' }}>
       {/* Capture affiliate codes from URL */}
       <AffiliateCapture />
 
