@@ -847,7 +847,7 @@ const Landing = () => {
           }}
         />
         <div className="container mx-auto max-w-5xl">
-          <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-12 sm:mb-14 md:mb-16">
+          <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-14 sm:mb-18 md:mb-24">
             Trusted by freelancers
             <br />
             {' '}and agencies{' '}
