@@ -1013,8 +1013,8 @@ const Landing = () => {
                 Try for free
               </Button>
 
-              <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4 sm:hidden">
-                5-day free trial · £0 today · Cancel anytime
+              <p className="text-[11px] sm:text-xs text-muted-foreground/50 mt-4">
+                £0 today · Cancel anytime
               </p>
             </div>
           </ScrollReveal>
