@@ -101,9 +101,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     </DropdownMenu>
   ), [statusFilters, toggleFilter, statusFilterOptions]);
 
-  const handleGatedViewInfo = useCallback((e: React.MouseEvent) => {
-    if (gated) { e.preventDefault(); onGatedAction?.(); }
-  }, [gated, onGatedAction]);
+  // View Details is always accessible — paywall only triggers on save/contact actions
 
   return (
     <Card className="border-border/50 bg-card shadow-sm">
