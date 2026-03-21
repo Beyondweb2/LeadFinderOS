@@ -984,19 +984,19 @@ const Landing = () => {
                 Free Trial
               </span>
 
-              <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">Lead<span className="text-gradient-primary">Finder</span> Pro</h3>
+              <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">Land your next client <span className="text-gradient-primary">this week</span></h3>
               <p className="text-sm sm:text-base text-foreground/65 leading-relaxed mb-8 max-w-sm mx-auto font-medium">
                 Everything you need to find, contact and close clients - in one system.
               </p>
 
               <ul className="space-y-2.5 sm:space-y-2.5 mb-10 sm:mb-12 text-left max-w-sm mx-auto">
                 {[
-                  'Find businesses without websites in seconds',
-                  'Add leads to your pipeline in one click',
-                  'Message instantly via WhatsApp or SMS',
-                  'Track every contact and follow-up',
-                  'Built-in templates to move faster',
-                  'Smart dashboard to monitor outreach',
+                  'Find businesses with no website in your area in 60 seconds',
+                  'Get their phone number and contact them instantly',
+                  'Track every follow-up so nothing slips through',
+                  'Templates ready to send — no writing from scratch',
+                  'See your pipeline and revenue in one dashboard',
+                  'Works for any service — web design, SEO, marketing, AI tools',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 text-[13px] sm:text-sm text-foreground/85 font-medium leading-snug">
                     <Check className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 mt-0.5 sm:mt-0" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
