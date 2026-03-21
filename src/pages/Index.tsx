@@ -251,6 +251,10 @@ const Index = () => {
                 setShowConversionModal(true);
                 return;
               }
+              // Track saved lead count for free users
+              const newCount = savedLeadCount + 1;
+              setSavedLeadCount(newCount);
+              try { localStorage.setItem('leadfinder_saved_lead_count', String(newCount)); } catch {}
               return addToOutreach(lead, lastSearchCountry, 'no_website');
             }}
             isInOutreach={isInOutreach}
@@ -258,6 +262,8 @@ const Index = () => {
             isChecked={isChecked}
             gated={effectiveGated}
             onGatedAction={() => setShowConversionModal(true)}
+            savedLeadCount={savedLeadCount}
+            maxFreeSaves={MAX_FREE_SAVES}
           />
         </section>
       )}
