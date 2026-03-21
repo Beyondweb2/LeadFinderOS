@@ -876,7 +876,7 @@ const Landing = () => {
                 initials: 'TH',
                 role: 'Web Developer',
                 region: 'Sydney',
-                quote: "I used to rewrite cold messages every time. Now I just tweak the template and send. Saves me at least an hour a week.",
+                quote: "I used to rewrite cold messages every time. Now I just tweak the template and send. Saves me hours each day.",
                 stars: 5,
                 photo: avatarTom,
               },
