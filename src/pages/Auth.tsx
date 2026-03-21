@@ -169,7 +169,7 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 relative">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 relative -mt-8">
       {/* Top bar: back + language */}
       <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
         <Button
