@@ -74,6 +74,19 @@ const Index = () => {
     try { return localStorage.getItem(GUEST_CAP_KEY) === '1'; } catch { return false; }
   }, [isAdEntryGuest, trialLimitError]);
 
+  useEffect(() => {
+    if (!savedLeadCountKey) {
+      setSavedLeadCount(0);
+      return;
+    }
+    try {
+      localStorage.removeItem('leadfinder_saved_lead_count');
+      setSavedLeadCount(parseInt(localStorage.getItem(savedLeadCountKey) || '0', 10));
+    } catch {
+      setSavedLeadCount(0);
+    }
+  }, [savedLeadCountKey]);
+
   // Auto-open paywall once when guest hits cap
   useEffect(() => {
     if (guestSearchesExhausted && !conversionModalShownThisSession) {
