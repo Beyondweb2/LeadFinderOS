@@ -53,6 +53,7 @@ const Index = () => {
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   const [showConversionModal, setShowConversionModal] = useState(false);
+  const [paywallTriggeredOnce, setPaywallTriggeredOnce] = useState(false);
   const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
   const [savedLeadCount, setSavedLeadCount] = useState(() => {
     try { return parseInt(localStorage.getItem('leadfinder_saved_lead_count') || '0', 10); } catch { return 0; }
@@ -194,7 +195,7 @@ const Index = () => {
               <span className="text-primary font-bold">{noWebsiteCount}</span> potential client{noWebsiteCount !== 1 ? 's' : ''} found in this search
             </span>
           </div>
-          {effectiveGated && (
+          {effectiveGated && paywallTriggeredOnce && (
             <button
               onClick={() => setShowConversionModal(true)}
               className="text-xs sm:text-sm font-medium text-primary hover:text-primary/80 cursor-pointer transition-colors"
@@ -261,7 +262,7 @@ const Index = () => {
             onMapLinkClick={markAsChecked}
             isChecked={isChecked}
             gated={effectiveGated}
-            onGatedAction={() => setShowConversionModal(true)}
+            onGatedAction={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
             savedLeadCount={savedLeadCount}
             maxFreeSaves={MAX_FREE_SAVES}
           />
