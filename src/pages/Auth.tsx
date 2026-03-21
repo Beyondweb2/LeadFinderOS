@@ -25,10 +25,16 @@ const Auth = () => {
   const { t } = useTranslation();
   const [searchParamsInit] = useSearchParams();
   const intentParam = searchParamsInit.get('intent');
+  const modeParam = searchParamsInit.get('mode');
   const emailParam = searchParamsInit.get('email');
   const existingParam = searchParamsInit.get('existing');
   const returnToParam = searchParamsInit.get('returnTo');
-  const [isLogin, setIsLogin] = useState(!intentParam || existingParam === 'true' || !intentParam);
+  const [isLogin, setIsLogin] = useState(() => {
+    if (modeParam === 'signup' || intentParam === 'signup') return false;
+    if (modeParam === 'signin') return true;
+    if (existingParam === 'true') return true;
+    return true;
+  });
   const [email, setEmail] = useState(emailParam || '');
   const [password, setPassword] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(() => {
