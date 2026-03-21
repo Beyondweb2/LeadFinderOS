@@ -113,9 +113,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <p className="text-xs text-muted-foreground mt-1">
               {leads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
             </p>
-            <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-              Tap 👁 to view details · 📋 to add to Outreach
-            </p>
+             <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+               Tap 👁 to view details · 📋 to save to your list
+             </p>
           </div>
           <div className="flex items-center gap-2">
             {renderFilterMenu('start')}
