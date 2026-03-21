@@ -1056,7 +1056,7 @@ const Landing = () => {
               Lead<span className="text-gradient-primary">Finder</span> Pro
             </span>
             <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 md:gap-8 text-xs sm:text-sm text-muted-foreground">
-              <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
+              <Link to="/auth?mode=signin" className="hover:text-foreground transition-colors duration-200">
                 Sign In
               </Link>
               <Link to="/start-free-trial" className="hover:text-foreground transition-colors duration-200">
