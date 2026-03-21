@@ -202,6 +202,14 @@ const Outreach = () => {
         onSkip={challenge.skipChallenge}
       />
 
+      {/* Paywall for free users attempting contact actions */}
+      <TrialConversionModal
+        open={showPaywall}
+        onOpenChange={setShowPaywall}
+        noWebsiteCount={allLeads.length}
+        contactedCount={0}
+      />
+
     </div>
   );
 };
