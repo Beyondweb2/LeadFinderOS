@@ -243,14 +243,14 @@ const Auth = () => {
       </Dialog>
 
       {/* Auth Card */}
-      <div className="w-full max-w-[420px] relative z-10">
+      <div className="w-full max-w-[480px] relative z-10">
         {/* Header */}
         <div className="text-center mb-5">
-          <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 mx-auto mb-2" />
-          <h1 className="text-xl font-bold">
+          <img src={appLogo} alt="LeadFinder Pro" className="h-10 w-10 mx-auto mb-2" />
+          <h1 className="text-2xl font-bold">
             Lead<span className="text-gradient-primary">Finder</span> Pro
           </h1>
-          <p className="text-xs text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             {existingParam === 'true'
               ? 'You already have Pro — sign in to continue.'
               : isLogin 
