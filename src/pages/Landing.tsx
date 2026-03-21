@@ -825,10 +825,7 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Video Demo Section - desktop only */}
-      <div className="hidden sm:block">
-        <VideoSection />
-      </div>
+      {/* Video section moved to after hero */}
 
       {/* Product Preview Section */}
       <section className="relative z-10 py-10 sm:py-16 md:py-24 px-3 sm:px-4">
