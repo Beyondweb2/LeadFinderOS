@@ -124,6 +124,7 @@ export function OutreachTable({
   readOnly = false,
   phoneFetchStatus = {},
   onRetryPhoneFetch,
+  onContactGated,
 }: OutreachTableProps) {
   const { toast } = useToast();
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
