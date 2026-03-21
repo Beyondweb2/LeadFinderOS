@@ -28,7 +28,7 @@ const REVIEWS: Review[] = [
     name: 'Tom H.',
     role: 'Web Developer',
     country: 'Australia',
-    content: "What I like most is being able to tweak the outreach templates quickly.\n\nI can adjust the message slightly and send it out without rewriting everything each time.",
+    content: "I used to rewrite cold messages every time. Now I just tweak the template and send.\n\nSaves me hours each day.",
     avatar: 'TH',
     stars: 5,
   },
