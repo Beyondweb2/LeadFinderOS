@@ -201,13 +201,13 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
                         <Check className="h-3.5 w-3.5" />
                       </Button>
-                    ) : gated ? (
+                    ) : gated && !canSave ? (
                       <div className="relative">
                         <Button
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 bg-primary/15 text-primary hover:bg-primary/25"
-                          onClick={() => handleAddToOutreach(lead)}
+                          onClick={() => onGatedAction?.()}
                           data-walkthrough-step="add-to-crm"
                           data-walkthrough="add-crm"
                         >
