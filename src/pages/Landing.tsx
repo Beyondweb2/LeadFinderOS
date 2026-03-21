@@ -39,10 +39,10 @@ import previewResults from '@/assets/preview-results.jpg';
 
 
 
-import avatarChris from '@/assets/avatar-chris.jpg';
-import avatarTom from '@/assets/avatar-tom.jpg';
-import avatarAlex from '@/assets/avatar-alex.jpg';
-import avatarDaniel from '@/assets/avatar-daniel.jpg';
+import avatarChris from '@/assets/review-chris.jpeg';
+import avatarTom from '@/assets/review-tom.jpeg';
+import avatarAlex from '@/assets/review-alex.jpeg';
+import avatarDaniel from '@/assets/review-daniel.jpg';
 
 
 
