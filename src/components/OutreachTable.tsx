@@ -324,7 +324,6 @@ export function OutreachTable({
 
   // Handle WhatsApp button click - open template dialog + count walkthrough contact
   const handleWhatsAppClick = useCallback((lead: OutreachLead) => {
-    if (onContactGated && !onContactGated()) return;
     if (lead.whatsapp_status === 'no') {
       toast({
         description: `${lead.business_name} not on WhatsApp. Try SMS or Call.`,
@@ -332,6 +331,7 @@ export function OutreachTable({
       });
       return;
     }
+    if (onContactGated && !onContactGated('whatsapp')) return;
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'whatsapp' as ContactMethod);
     // Treat opening contact panel as selecting this lead for next walkthrough step
@@ -345,11 +345,11 @@ export function OutreachTable({
       return next;
     });
     setWhatsappDialogLead(lead);
-  }, [toast, onContactMethodChange]);
+  }, [toast, onContactGated, onContactMethodChange]);
 
   // Handle SMS button click - open template dialog + count walkthrough contact
   const handleSMSClick = useCallback((lead: OutreachLead) => {
-    if (onContactGated && !onContactGated()) return;
+    if (onContactGated && !onContactGated('sms')) return;
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'sms' as ContactMethod);
     // Treat opening contact panel as selecting this lead for next walkthrough step
@@ -363,11 +363,11 @@ export function OutreachTable({
       return next;
     });
     setSmsDialogLead(lead);
-  }, [onContactMethodChange]);
+  }, [onContactGated, onContactMethodChange]);
 
   // Handle Call button click - direct open + count walkthrough contact
   const handleCallClick = useCallback((lead: OutreachLead) => {
-    if (onContactGated && !onContactGated()) return;
+    if (onContactGated && !onContactGated('call')) return;
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'call' as ContactMethod);
     // Always emit walkthrough contact event on click (replay-safe)
