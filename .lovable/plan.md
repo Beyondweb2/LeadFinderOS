@@ -1,21 +1,33 @@
 
+
+# Fix White Flash When Navigating Back to Landing Page
+
 ## Problem
+The `useLandingTheme` hook applies dark theme CSS variables in a `useEffect` (runs after paint). When navigating back to `/landing`, there's a visible white flash because:
+1. The cleanup from the previous unmount restores the non-dark theme
+2. The Suspense fallback and PublicRoute loading spinner render with default (light) background
+3. The landing page mounts and `useEffect` applies dark theme — but only after the first paint
 
-When a logged-in user lands on `/landing` (e.g. because their subscription is blocked, or they were redirected by `SubscriptionGate`), the "Sign In" buttons are hidden because they're wrapped in `{!user && ...}`. The header CTA also changes from "Try it free" to "Subscribe". This means a user who signed out and back in, or whose session is stale, loses access to the Sign In button.
+## Solution
 
-There are 3 places in `Landing.tsx` where Sign In is conditionally hidden:
-1. **Header** (line 558): `{!user && <Button>Sign In</Button>}`
-2. **Hero CTA** (line 616): `{!user && <Button>Sign in</Button>}`
-3. **Footer** (line 1173): `{!user && <Link>Sign In</Link>}`
+Two changes to eliminate the flash:
 
-And the header CTA button (line 567) shows `user ? 'Subscribe' : 'Try it free'`.
+### 1. `src/pages/Landing.tsx` — Add inline dark background style
+On the root `<div>` (line ~519), add an inline `style` with the dark background color so it's applied immediately on first render, before any `useEffect` runs:
+```tsx
+<div className="min-h-screen bg-background overflow-hidden" 
+     style={{ backgroundColor: 'hsl(220, 50%, 6%)' }}>
+```
 
-## Plan
+### 2. `src/components/PublicRoute.tsx` — Match dark background on loading spinner
+Change the loading spinner container (line 26) to also use the dark background inline, so the spinner doesn't flash white before the landing page mounts:
+```tsx
+<div className="min-h-screen flex items-center justify-center" 
+     style={{ backgroundColor: 'hsl(220, 50%, 6%)' }}>
+```
 
-**Single file change: `src/pages/Landing.tsx`**
+### 3. `src/App.tsx` — Dark Suspense fallback for `/landing`
+The `FullPageLoader` Suspense fallback also shows a white background during lazy chunk loading. Add inline dark background to the `FullPageLoader` component as well.
 
-1. **Always show the Sign In links** — remove the `!user &&` guards from all three locations so the Sign In button is always visible regardless of auth state.
+These three changes ensure every intermediate state between navigation and the landing page fully mounting uses the same dark background — no white flash.
 
-2. **Keep the CTA button text as "Try it free"** always (remove the ternary that switches to "Subscribe" when logged in). Logged-in users who need to subscribe will still scroll to pricing and go through the normal checkout flow.
-
-These are purely display changes — no routing, Stripe, or auth logic is modified.
