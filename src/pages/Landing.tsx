@@ -656,7 +656,7 @@ const Landing = () => {
                   className="hidden sm:inline-flex text-[14px] font-medium text-foreground/40 hover:text-foreground/70 h-[52px] px-5 rounded-xl transition-all duration-200" 
                   asChild
                 >
-                  <Link to="/auth">
+                  <Link to="/auth?mode=signin">
                     Sign in
                   </Link>
                 </Button>
