@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
 import { InternetIdentityButton } from '@/components/InternetIdentityButton';
+import { GoogleLoginButton } from '@/components/GoogleLoginButton';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { type SupportedLanguage } from '@/hooks/useLanguage';
 import { LANG_STORAGE_KEY } from '@/i18n';
