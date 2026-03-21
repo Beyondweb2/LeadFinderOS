@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.check-email-subscription]
 verify_jwt = false
+
+[functions.ii-auth]
+verify_jwt = false
