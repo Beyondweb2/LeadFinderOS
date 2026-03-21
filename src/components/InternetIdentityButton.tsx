@@ -66,7 +66,7 @@ export function InternetIdentityButton() {
       {isLoading ? (
         <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
       ) : (
-        <Shield className="mr-2 h-3.5 w-3.5 text-[hsl(270,80%,70%)]" />
+        <img src={icpLogo} alt="ICP" className="mr-2 h-4 w-4" />
       )}
       {isLoading ? "Opening Internet Identity…" : "Continue with Internet Identity"}
     </Button>
