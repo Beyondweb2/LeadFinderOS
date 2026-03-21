@@ -55,9 +55,8 @@ const Index = () => {
   const [showConversionModal, setShowConversionModal] = useState(false);
   const [paywallTriggeredOnce, setPaywallTriggeredOnce] = useState(false);
   const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
-  const [savedLeadCount, setSavedLeadCount] = useState(() => {
-    try { return parseInt(localStorage.getItem('leadfinder_saved_lead_count') || '0', 10); } catch { return 0; }
-  });
+  const savedLeadCountKey = user?.id ? `leadfinder_saved_lead_count:${user.id}` : null;
+  const [savedLeadCount, setSavedLeadCount] = useState(0);
   const MAX_FREE_SAVES = 3;
 
   // Ad-entry users without auth are always gated for actions (same as unsubscribed users)
@@ -74,6 +73,19 @@ const Index = () => {
     }
     try { return localStorage.getItem(GUEST_CAP_KEY) === '1'; } catch { return false; }
   }, [isAdEntryGuest, trialLimitError]);
+
+  useEffect(() => {
+    if (!savedLeadCountKey) {
+      setSavedLeadCount(0);
+      return;
+    }
+    try {
+      localStorage.removeItem('leadfinder_saved_lead_count');
+      setSavedLeadCount(parseInt(localStorage.getItem(savedLeadCountKey) || '0', 10));
+    } catch {
+      setSavedLeadCount(0);
+    }
+  }, [savedLeadCountKey]);
 
   // Auto-open paywall once when guest hits cap
   useEffect(() => {
@@ -255,7 +267,9 @@ const Index = () => {
               // Track saved lead count for free users
               const newCount = savedLeadCount + 1;
               setSavedLeadCount(newCount);
-              try { localStorage.setItem('leadfinder_saved_lead_count', String(newCount)); } catch {}
+              try {
+                if (savedLeadCountKey) localStorage.setItem(savedLeadCountKey, String(newCount));
+              } catch {}
               // Trigger paywall after exceeding free saves
               if (effectiveGated && newCount > MAX_FREE_SAVES) {
                 setPaywallTriggeredOnce(true);
