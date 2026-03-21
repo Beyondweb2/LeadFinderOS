@@ -625,11 +625,6 @@ const Landing = () => {
           </div>
 
           <div className="max-w-3xl mx-auto lg:max-w-xl">
-            <span
-              className="hidden sm:inline-block text-xs font-semibold uppercase tracking-widest mb-4 text-muted-foreground/60"
-            >
-              Built for web devs, agencies & founders
-            </span>
 
             <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-[3.5rem] lg:text-[3.75rem] font-extrabold lg:font-bold tracking-tight leading-tight">
               <span className="tracking-[0.02em]">Find Businesses</span>
