@@ -677,14 +677,6 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Feature bullets */}
-            <ScrollReveal>
-              <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/60 font-medium">
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Get a steady flow of new clients</span>
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find leads in minutes, not hours</span>
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Start more conversations</span>
-              </div>
-            </ScrollReveal>
             {/* Scroll down indicator - mobile only */}
             <div className="sm:hidden flex flex-col items-center mt-6 animate-bounce">
               <ChevronDown className="h-5 w-5 text-foreground/30" />
