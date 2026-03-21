@@ -367,6 +367,7 @@ export function OutreachTable({
 
   // Handle Call button click - direct open + count walkthrough contact
   const handleCallClick = useCallback((lead: OutreachLead) => {
+    if (onContactGated && !onContactGated()) return;
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'call' as ContactMethod);
     // Always emit walkthrough contact event on click (replay-safe)
