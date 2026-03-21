@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Loader2, Shield } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
+import icpLogo from "@/assets/icp-logo.png";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 
@@ -65,7 +66,7 @@ export function InternetIdentityButton() {
       {isLoading ? (
         <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
       ) : (
-        <Shield className="mr-2 h-3.5 w-3.5 text-[hsl(270,80%,70%)]" />
+        <img src={icpLogo} alt="ICP" className="mr-2 h-4 w-4" />
       )}
       {isLoading ? "Opening Internet Identity…" : "Continue with Internet Identity"}
     </Button>
