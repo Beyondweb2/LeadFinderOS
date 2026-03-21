@@ -55,24 +55,19 @@ export function InternetIdentityButton() {
   };
 
   return (
-    <div className="w-full space-y-2">
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full"
-        onClick={handleLogin}
-        disabled={isLoading}
-      >
-        {isLoading ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-        ) : (
-          <Shield className="mr-2 h-4 w-4" />
-        )}
-        {isLoading ? "Opening Internet Identity…" : "Continue with Internet Identity"}
-      </Button>
-      <p className="text-xs text-muted-foreground text-center">
-        No password needed — uses your ICP wallet
-      </p>
-    </div>
+    <Button
+      type="button"
+      variant="outline"
+      className="w-full h-9 text-sm border-0 bg-[hsl(270,30%,16%)] hover:bg-[hsl(270,30%,20%)] text-foreground shadow-[0_0_12px_hsl(270,60%,50%,0.15)]"
+      onClick={handleLogin}
+      disabled={isLoading}
+    >
+      {isLoading ? (
+        <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Shield className="mr-2 h-3.5 w-3.5 text-[hsl(270,80%,70%)]" />
+      )}
+      {isLoading ? "Opening Internet Identity…" : "Continue with Internet Identity"}
+    </Button>
   );
 }
