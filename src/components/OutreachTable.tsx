@@ -94,7 +94,7 @@ interface OutreachTableProps {
   phoneFetchStatus?: Record<string, PhoneFetchStatus>;
   onRetryPhoneFetch?: (leadId: string) => void;
   /** Called before a contact action. Return true to allow, false to block (show paywall). */
-  onContactGated?: () => boolean;
+  onContactGated?: (channel: 'call' | 'sms' | 'whatsapp') => boolean;
 }
 
 const ITEMS_PER_PAGE_DESKTOP = 15;

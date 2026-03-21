@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { OutreachTable } from '@/components/OutreachTable';
 
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
@@ -11,6 +11,7 @@ import { useChallenge10 } from '@/hooks/useChallenge10';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTrial } from '@/hooks/useTrial';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
+import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { OutreachLead, ContactMethod, PipelineStatus } from '@/types/outreach';
