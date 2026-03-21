@@ -131,8 +131,8 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <CardTitle className="text-xl font-semibold">Search Results</CardTitle>
             <p className="text-sm text-muted-foreground">
               Found {leads.length} businesses •
-              <span className="text-status-hot font-semibold ml-1">{noWebsiteCount} without websites</span>
-              <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to add to Outreach</span>
+               <span className="text-status-hot font-semibold ml-1">{noWebsiteCount} without websites</span>
+               <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to save to your list</span>
             </p>
           </div>
           <div className="flex items-center gap-2">
