@@ -138,10 +138,10 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
     <div ref={ref} className="text-center">
-      <div className="text-lg sm:text-3xl md:text-4xl font-bold text-foreground tracking-tight">
+      <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
         {count.toLocaleString()}{suffix}
       </div>
-      <div className="text-[9px] sm:text-xs text-foreground/60 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">{label}</div>
+      <div className="text-[8px] sm:text-xs text-foreground/50 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">{label}</div>
     </div>
   );
 };
@@ -625,6 +625,11 @@ const Landing = () => {
           </div>
 
           <div className="max-w-3xl mx-auto lg:max-w-xl">
+            <span
+              className="hidden sm:inline-block text-xs font-semibold uppercase tracking-widest mb-4 text-muted-foreground/60"
+            >
+              Built for web devs, agencies & founders
+            </span>
 
             <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-[3.5rem] lg:text-[3.75rem] font-extrabold lg:font-bold tracking-tight leading-tight">
               <span className="tracking-[0.02em]">Find Businesses</span>
@@ -633,7 +638,7 @@ const Landing = () => {
             </h1>
             
             <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              No clients this month? Find businesses without websites in seconds, contact them instantly, and start closing deals today.
+              No clients this month? Find local businesses without websites in seconds, contact them instantly, and start closing deals today.
             </p>
             
             {/* CTA */}
@@ -668,15 +673,23 @@ const Landing = () => {
             <div className="grid grid-cols-3 gap-2 sm:gap-5 md:gap-14 max-w-[260px] sm:max-w-xl mx-auto mt-10">
               <CountUpStat target={2300} suffix="+" label="Found this week" />
               <div className="text-center">
-                <div className="text-lg sm:text-3xl md:text-4xl font-bold text-foreground tracking-tight">Global</div>
-                <div className="text-[9px] sm:text-xs text-foreground/60 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+                <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
+                <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
               </div>
               <div className="text-center">
-                <div className="text-lg sm:text-3xl md:text-4xl font-bold text-foreground tracking-tight">Unlimited</div>
-                <div className="text-[9px] sm:text-xs text-foreground/60 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+                <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+                <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Searches</div>
               </div>
             </div>
 
+            {/* Feature bullets */}
+            <ScrollReveal>
+              <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/60 font-medium">
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Get a steady flow of new clients</span>
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find leads in minutes, not hours</span>
+                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Start more conversations</span>
+              </div>
+            </ScrollReveal>
             {/* Scroll down indicator - mobile only */}
             <div className="sm:hidden flex flex-col items-center mt-6 animate-bounce">
               <ChevronDown className="h-5 w-5 text-foreground/30" />
@@ -691,9 +704,9 @@ const Landing = () => {
         <div className="container mx-auto max-w-6xl">
           <ScrollReveal className="text-center mb-8 sm:mb-10 md:mb-14">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
-              From Search To Client
+              How Lead<span className="text-gradient-primary">Finder</span>
               <br />
-              In <span className="text-gradient-primary">3 Steps</span>
+              <span className="text-foreground">Works</span>
             </h2>
           </ScrollReveal>
 
@@ -834,7 +847,7 @@ const Landing = () => {
 
 
       {/* Testimonials */}
-      <ScrollReveal className="relative z-10 py-10 sm:py-20 md:py-28 px-4">
+      <ScrollReveal className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
         <div
           className="absolute inset-0 -z-10"
           style={{
@@ -843,9 +856,10 @@ const Landing = () => {
         />
         <div className="container mx-auto max-w-5xl">
           <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-10 sm:mb-12">
-            What freelancers and agencies
+            Trusted by freelancers
             <br />
-            are <span className="text-gradient-primary">saying</span>
+            {' '}and agencies{' '}
+            <span className="text-gradient-primary">worldwide</span>
           </h2>
 
           {(() => {
@@ -1037,28 +1051,6 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Final CTA Section */}
-      <section className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
-        <div className="container mx-auto max-w-3xl text-center">
-          <ScrollReveal>
-            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.1] mb-6">
-              Ready to find your
-              <br />
-              <span className="text-gradient-primary">next client</span>?
-            </h2>
-            <Button
-              size="lg"
-              className="btn-premium font-semibold h-14 sm:h-16 px-10 sm:px-14 text-base sm:text-lg rounded-xl shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300"
-              asChild
-            >
-              <Link to="/auth?mode=signup">
-                Start finding leads free →
-              </Link>
-            </Button>
-          </ScrollReveal>
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/[0.06] py-10 sm:py-12 md:py-16 px-4">
         <div className="container mx-auto">
@@ -1106,7 +1098,7 @@ const Landing = () => {
           }`}
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
-          <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-2xl" onClick={handleCTA}>
+          <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={handleCTA}>
               Try for free
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
