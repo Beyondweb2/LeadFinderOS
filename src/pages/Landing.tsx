@@ -638,7 +638,7 @@ const Landing = () => {
             </h1>
             
             <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
-              The all-in-one system to find businesses without websites, contact them instantly, and track every follow-up in one place.
+              No clients this month? Find local businesses without websites in seconds, contact them instantly, and start closing deals today.
             </p>
             
             {/* CTA */}
@@ -664,11 +664,14 @@ const Landing = () => {
               <p className="text-[11px] text-muted-foreground/50 mt-2.5 tracking-wide">
                 £0 today • Find leads in seconds
               </p>
+              <p className="text-[11px] text-muted-foreground/40 mt-1.5 tracking-wide">
+                Join 1,200+ freelancers and agencies already using LeadFinder
+              </p>
             </div>
 
             {/* Metrics row */}
             <div className="grid grid-cols-3 gap-2 sm:gap-5 md:gap-14 max-w-[260px] sm:max-w-xl mx-auto mt-10">
-              <CountUpStat target={80000} suffix="+" label="Businesses" />
+              <CountUpStat target={2300} suffix="+" label="Found this week" />
               <div className="text-center">
                 <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
                 <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
@@ -695,11 +698,6 @@ const Landing = () => {
         </div>
       </section>
 
-
-      {/* Video Demo Section - desktop only */}
-      <div className="hidden sm:block">
-        <VideoSection />
-      </div>
 
       {/* How LeadFinder Works - 4-step section */}
       <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
@@ -826,6 +824,11 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Video Demo Section - desktop only */}
+      <div className="hidden sm:block">
+        <VideoSection />
+      </div>
+
       {/* Product Preview Section */}
       <section className="relative z-10 py-10 sm:py-16 md:py-24 px-3 sm:px-4">
         <div className="container mx-auto max-w-[1150px]">
@@ -864,9 +867,9 @@ const Landing = () => {
               {
                 name: 'Chris P.',
                 initials: 'CP',
-                role: 'Freelance Designer',
-                region: 'UK',
-                quote: "Found about 30 businesses without websites in like 10 minutes. Messaged a few straight from the app and already had replies. Pretty mad tool honestly.",
+                role: 'Freelance Web Designer',
+                region: 'Manchester',
+                quote: "Found 30 businesses without websites in my area in about 10 minutes. Messaged 8 of them, got 3 replies same day. Closed one the next week.",
                 stars: 5,
                 photo: avatarChris,
               },
@@ -874,8 +877,8 @@ const Landing = () => {
                 name: 'Tom H.',
                 initials: 'TH',
                 role: 'Web Developer',
-                region: 'Australia',
-                quote: "The templates save me loads of time. I just tweak the message a bit and send. Way easier than rewriting outreach every time.",
+                region: 'Sydney',
+                quote: "I used to rewrite cold messages every time. Now I just tweak the template and send. Saves me at least an hour a week.",
                 stars: 5,
                 photo: avatarTom,
               },
@@ -883,8 +886,8 @@ const Landing = () => {
                 name: 'Alex M.',
                 initials: 'AM',
                 role: 'WordPress Freelancer',
-                region: 'Canada',
-                quote: "I used to jump between Maps, notes and WhatsApp trying to track outreach. This puts everything in one place. Wish I had it earlier.",
+                region: 'Toronto',
+                quote: "Went from zero leads to a full pipeline in two days. The outreach tracker means I never forget who I messaged.",
                 stars: 5,
                 photo: avatarAlex,
               },
@@ -892,8 +895,8 @@ const Landing = () => {
                 name: 'Daniel S.',
                 initials: 'DS',
                 role: 'Agency Owner',
-                region: 'US',
-                quote: "Fair play this is actually really solid. Finding leads fast and keeping outreach organised makes it way easier to stay consistent.",
+                region: 'Austin',
+                quote: "We use it as a team now. Finding leads fast and keeping outreach organised has made our whole prospecting process tighter.",
                 stars: 5,
                 photo: avatarDaniel,
               },
@@ -981,19 +984,19 @@ const Landing = () => {
                 Free Trial
               </span>
 
-              <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">Lead<span className="text-gradient-primary">Finder</span> Pro</h3>
+              <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">Land your next client <span className="text-gradient-primary">this week</span></h3>
               <p className="text-sm sm:text-base text-foreground/65 leading-relaxed mb-8 max-w-sm mx-auto font-medium">
                 Everything you need to find, contact and close clients - in one system.
               </p>
 
               <ul className="space-y-2.5 sm:space-y-2.5 mb-10 sm:mb-12 text-left max-w-sm mx-auto">
                 {[
-                  'Find businesses without websites in seconds',
-                  'Add leads to your pipeline in one click',
-                  'Message instantly via WhatsApp or SMS',
-                  'Track every contact and follow-up',
-                  'Built-in templates to move faster',
-                  'Smart dashboard to monitor outreach',
+                  'Find businesses with no website in your area in 60 seconds',
+                  'Get their phone number and contact them instantly',
+                  'Track every follow-up so nothing slips through',
+                  'Templates ready to send — no writing from scratch',
+                  'See your pipeline and revenue in one dashboard',
+                  'Works for any service — web design, SEO, marketing, AI tools',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 text-[13px] sm:text-sm text-foreground/85 font-medium leading-snug">
                     <Check className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 mt-0.5 sm:mt-0" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
