@@ -501,7 +501,7 @@ const Landing = () => {
     if (user) {
       navigate('/start-free-trial');
     } else {
-      navigate('/auth?intent=signup');
+      navigate('/auth?mode=signup');
     }
   }, [navigate, user]);
 
@@ -600,7 +600,7 @@ const Landing = () => {
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm px-2 sm:px-4" asChild>
-              <Link to="/auth">Sign In</Link>
+              <Link to="/auth?mode=signin">Sign In</Link>
             </Button>
              <Button 
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
@@ -656,7 +656,7 @@ const Landing = () => {
                   className="hidden sm:inline-flex text-[14px] font-medium text-foreground/40 hover:text-foreground/70 h-[52px] px-5 rounded-xl transition-all duration-200" 
                   asChild
                 >
-                  <Link to="/auth">
+                  <Link to="/auth?mode=signin">
                     Sign in
                   </Link>
                 </Button>
@@ -1056,7 +1056,7 @@ const Landing = () => {
               Lead<span className="text-gradient-primary">Finder</span> Pro
             </span>
             <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 md:gap-8 text-xs sm:text-sm text-muted-foreground">
-              <Link to="/auth" className="hover:text-foreground transition-colors duration-200">
+              <Link to="/auth?mode=signin" className="hover:text-foreground transition-colors duration-200">
                 Sign In
               </Link>
               <Link to="/start-free-trial" className="hover:text-foreground transition-colors duration-200">

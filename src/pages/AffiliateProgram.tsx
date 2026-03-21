@@ -121,10 +121,10 @@ const AffiliateProgram = () => {
           </Link>
           <div className="flex items-center gap-2 sm:gap-3">
             <Button variant="ghost" className="text-muted-foreground hover:text-foreground text-sm px-2 sm:px-4" asChild>
-              <Link to="/auth">Sign In</Link>
+              <Link to="/auth?mode=signin">Sign In</Link>
             </Button>
             <Button asChild className="btn-premium font-medium text-sm px-3 sm:px-4">
-              <Link to="/auth">Get Started</Link>
+              <Link to="/auth?mode=signup">Get Started</Link>
             </Button>
           </div>
         </div>
@@ -327,7 +327,7 @@ const AffiliateProgram = () => {
           <div className="flex items-center gap-4">
             <Link to="/landing" className="hover:text-foreground transition-colors">Home</Link>
             <Link to="/terms" className="hover:text-foreground transition-colors">Terms</Link>
-            <Link to="/auth" className="hover:text-foreground transition-colors">Sign In</Link>
+            <Link to="/auth?mode=signin" className="hover:text-foreground transition-colors">Sign In</Link>
           </div>
         </div>
       </footer>
