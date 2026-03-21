@@ -745,7 +745,7 @@ const Landing = () => {
                       className="font-bold text-lg mb-1.5 block"
                       style={{ color: 'hsl(210 100% 60%)' }}
                     >{step.num}.</span>
-                    <h3 className="text-xl sm:text-2xl font-bold tracking-tight mb-2 sm:mb-3">
+                    <h3 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight mb-2 sm:mb-3">
                       {step.title}
                     </h3>
                     <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto">
