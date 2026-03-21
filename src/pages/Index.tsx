@@ -53,6 +53,7 @@ const Index = () => {
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   const [showConversionModal, setShowConversionModal] = useState(false);
+  const [paywallTriggeredOnce, setPaywallTriggeredOnce] = useState(false);
   const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
   const [savedLeadCount, setSavedLeadCount] = useState(() => {
     try { return parseInt(localStorage.getItem('leadfinder_saved_lead_count') || '0', 10); } catch { return 0; }
