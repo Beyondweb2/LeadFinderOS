@@ -1,13 +1,16 @@
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 
 /**
  * Forces the dark brand theme on the landing page.
- * Saves current theme, applies brand theme, restores on unmount.
+ * Saves current theme, applies brand theme before paint, restores on unmount.
  */
 export function useLandingTheme() {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const root = document.documentElement;
-    
+    const body = document.body;
+    const savedRootBg = root.style.backgroundColor;
+    const savedBodyBg = body.style.backgroundColor;
+
     // Save current CSS variable values to restore later
     const savedVars: Record<string, string> = {};
     const varsToSave = [
@@ -20,16 +23,17 @@ export function useLandingTheme() {
       '--sidebar-border', '--sidebar-ring', '--gradient-primary', '--gradient-glow',
       '--shadow-glow', '--shadow-glow-lg', '--shadow-sm', '--shadow-md', '--shadow-lg', '--shadow-card'
     ];
-    
+
     varsToSave.forEach(varName => {
       savedVars[varName] = root.style.getPropertyValue(varName);
     });
-    
+
     const hadDarkClass = root.classList.contains('dark');
-    
-    // Apply the locked dark brand theme
+
     root.classList.add('dark');
-    
+    root.style.backgroundColor = 'hsl(220 50% 6%)';
+    body.style.backgroundColor = 'hsl(220 50% 6%)';
+
     // Dark brand foundation (Midnight theme)
     root.style.setProperty('--background', '220 50% 6%');
     root.style.setProperty('--foreground', '210 40% 98%');
@@ -43,14 +47,14 @@ export function useLandingTheme() {
     root.style.setProperty('--muted-foreground', '215 20% 50%');
     root.style.setProperty('--border', '220 35% 13%');
     root.style.setProperty('--input', '220 40% 11%');
-    
+
     // Brand blue accent (HSL 210 100% 50%)
     root.style.setProperty('--primary', '210 100% 50%');
     root.style.setProperty('--primary-foreground', '220 40% 4%');
     root.style.setProperty('--ring', '210 100% 50%');
     root.style.setProperty('--accent', '210 100% 50%');
     root.style.setProperty('--accent-foreground', '210 40% 98%');
-    
+
     // Sidebar
     root.style.setProperty('--sidebar-background', '220 45% 6%');
     root.style.setProperty('--sidebar-foreground', '210 40% 98%');
@@ -60,7 +64,7 @@ export function useLandingTheme() {
     root.style.setProperty('--sidebar-accent-foreground', '210 40% 98%');
     root.style.setProperty('--sidebar-border', '220 35% 13%');
     root.style.setProperty('--sidebar-ring', '210 100% 50%');
-    
+
     // Brand gradients and shadows
     root.style.setProperty('--gradient-primary', 'linear-gradient(135deg, hsl(210 100% 50%), hsl(210 100% 50%))');
     root.style.setProperty('--gradient-glow', 'radial-gradient(ellipse at center, hsl(210 100% 50% / 0.15), transparent 70%)');
@@ -70,8 +74,7 @@ export function useLandingTheme() {
     root.style.setProperty('--shadow-md', '0 4px 12px hsl(0 0% 0% / 0.5)');
     root.style.setProperty('--shadow-lg', '0 10px 40px hsl(0 0% 0% / 0.6)');
     root.style.setProperty('--shadow-card', 'none');
-    
-    // Cleanup: restore user's theme when leaving landing page
+
     return () => {
       varsToSave.forEach(varName => {
         if (savedVars[varName]) {
@@ -80,7 +83,10 @@ export function useLandingTheme() {
           root.style.removeProperty(varName);
         }
       });
-      
+
+      root.style.backgroundColor = savedRootBg;
+      body.style.backgroundColor = savedBodyBg;
+
       if (!hadDarkClass) {
         root.classList.remove('dark');
       } else {

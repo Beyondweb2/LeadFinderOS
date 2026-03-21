@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { OutreachTable } from '@/components/OutreachTable';
 
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
@@ -11,6 +11,7 @@ import { useChallenge10 } from '@/hooks/useChallenge10';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useTrial } from '@/hooks/useTrial';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
+import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import type { OutreachLead, ContactMethod, PipelineStatus } from '@/types/outreach';
@@ -38,32 +39,47 @@ const Outreach = () => {
   } = useOutreach();
 
   
+  const { user } = useAuth();
   const { toast } = useToast();
   const challenge = useChallenge10();
   const { subscribed, status: subStatus, isPaidSubscriber } = useSubscription();
   const { isStripeTrialing } = useTrial();
   const { walkthroughOpen } = useWalkthroughStatus();
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
-
-  // Contact gating: track contact attempts for free users
-  const contactAttemptCount = useRef(() => {
-    try { return parseInt(localStorage.getItem('leadfinder_contact_attempts') || '0', 10); } catch { return 0; }
-  });
+  const contactAttemptsKey = user?.id ? `leadfinder_contact_attempts:${user.id}` : 'leadfinder_contact_attempts';
   const [showPaywall, setShowPaywall] = useState(false);
 
-  const handleContactGated = useCallback((): boolean => {
+  const handleContactGated = useCallback((channel: 'call' | 'sms' | 'whatsapp'): boolean => {
     if (hasProAccess) return true;
-    const current = (() => { try { return parseInt(localStorage.getItem('leadfinder_contact_attempts') || '0', 10); } catch { return 0; } })();
-    // During walkthrough: allow the 1st contact action free
-    if (walkthroughOpen && current === 0) {
-      const next = 1;
-      try { localStorage.setItem('leadfinder_contact_attempts', String(next)); } catch {}
+
+    const attempts = (() => {
+      try {
+        const raw = localStorage.getItem(contactAttemptsKey);
+        if (!raw) return { call: 0, sms: 0, whatsapp: 0 };
+        const parsed = JSON.parse(raw);
+        return {
+          call: Number(parsed?.call || 0),
+          sms: Number(parsed?.sms || 0),
+          whatsapp: Number(parsed?.whatsapp || 0),
+        };
+      } catch {
+        return { call: 0, sms: 0, whatsapp: 0 };
+      }
+    })();
+
+    if (attempts[channel] < 1) {
+      try {
+        localStorage.setItem(contactAttemptsKey, JSON.stringify({
+          ...attempts,
+          [channel]: attempts[channel] + 1,
+        }));
+      } catch {}
       return true;
     }
-    // Otherwise, block and show paywall
+
     setShowPaywall(true);
     return false;
-  }, [hasProAccess, walkthroughOpen]);
+  }, [contactAttemptsKey, hasProAccess, walkthroughOpen]);
 
   // Combine active and archived leads into one unified list
   const allLeads = useMemo(() => {
