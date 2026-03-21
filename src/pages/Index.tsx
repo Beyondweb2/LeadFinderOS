@@ -267,7 +267,9 @@ const Index = () => {
               // Track saved lead count for free users
               const newCount = savedLeadCount + 1;
               setSavedLeadCount(newCount);
-              try { localStorage.setItem('leadfinder_saved_lead_count', String(newCount)); } catch {}
+              try {
+                if (savedLeadCountKey) localStorage.setItem(savedLeadCountKey, String(newCount));
+              } catch {}
               // Trigger paywall after exceeding free saves
               if (effectiveGated && newCount > MAX_FREE_SAVES) {
                 setPaywallTriggeredOnce(true);
