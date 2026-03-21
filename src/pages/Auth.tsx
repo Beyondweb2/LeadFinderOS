@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Loader2, CreditCard, Sparkles, Gift, Check, ArrowLeft } from 'lucide-react';
+import { Loader2, Sparkles, Gift, Check, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
@@ -176,16 +176,31 @@ const Auth = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 pt-14 relative">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      {/* Ambient background glow */}
+      <div
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse 60% 50% at 50% 40%, hsl(210 100% 50% / 0.04), transparent 70%)',
+        }}
+      />
+      <div
+        className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[600px] pointer-events-none"
+        style={{
+          background: 'radial-gradient(circle, hsl(210 80% 50% / 0.03), transparent 60%)',
+          filter: 'blur(40px)',
+        }}
+      />
+
       {/* Top bar: back + language */}
-      <div className="fixed top-0 left-0 right-0 z-20 flex items-center justify-between px-4 py-2 bg-background/80 backdrop-blur-sm">
+      <div className="fixed top-0 left-0 right-0 z-20 flex items-center justify-between px-4 sm:px-6 py-3 bg-background/60 backdrop-blur-md border-b border-border/10">
         <Button
           variant="ghost"
           size="sm"
           onClick={() => navigate(returnToParam || '/landing')}
-          className="text-muted-foreground hover:text-foreground h-8 px-2 text-xs"
+          className="text-muted-foreground hover:text-foreground h-8 px-2.5 text-xs transition-colors duration-200"
         >
-          <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+          <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
           {t('auth.back')}
         </Button>
         {!isLogin && (
@@ -250,27 +265,34 @@ const Auth = () => {
       </Dialog>
 
       {/* Auth Card */}
-      <div className="w-full max-w-[480px] relative z-10">
+      <div className="w-full max-w-[420px] relative z-10 -mt-6">
         {/* Header */}
-        <div className="text-center mb-5">
-          <img src={appLogo} alt="LeadFinder Pro" className="h-10 w-10 mx-auto mb-2" />
-          <h1 className="text-2xl font-bold">
+        <div className="text-center mb-8">
+          <img src={appLogo} alt="LeadFinder Pro" className="h-9 w-9 mx-auto mb-4" />
+          <h1 className="text-[1.75rem] font-bold tracking-tight">
             Lead<span className="text-gradient-primary">Finder</span> Pro
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-[13px] text-muted-foreground/70 mt-2 leading-relaxed">
             {existingParam === 'true'
-              ? 'You already have Pro — sign in to continue.'
+              ? 'You already have Pro. Sign in to continue.'
               : isLogin 
                 ? t('auth.signInToFind')
-                : 'Create an account and start finding clients'}
+                : 'Create your account to start finding clients'}
           </p>
         </div>
 
         {/* Card */}
-        <div className="rounded-xl border border-border/60 bg-card p-6">
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <div
+          className="rounded-2xl p-7 sm:p-8"
+          style={{
+            background: 'hsl(220 30% 8% / 0.8)',
+            border: '1px solid hsl(0 0% 100% / 0.06)',
+            boxShadow: '0 1px 2px hsl(0 0% 0% / 0.2), 0 8px 24px hsl(220 40% 4% / 0.4), 0 0 0 1px hsl(0 0% 100% / 0.02) inset',
+          }}
+        >
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
-              <Label htmlFor="email" className="text-sm">{t('auth.email')}</Label>
+              <Label htmlFor="email" className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wider">{t('auth.email')}</Label>
               <Input
                 id="email"
                 type="email"
@@ -278,13 +300,13 @@ const Auth = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isSubmitting || (existingParam === 'true' && !!emailParam)}
-                className={`h-10 ${errors.email ? 'border-destructive' : ''} ${existingParam === 'true' && emailParam ? 'bg-muted cursor-not-allowed' : ''}`}
+                className={`h-9 text-sm bg-background/40 border-border/30 placeholder:text-muted-foreground/30 transition-all duration-200 focus:border-primary/50 focus:bg-background/60 ${errors.email ? 'border-destructive' : ''} ${existingParam === 'true' && emailParam ? 'bg-muted cursor-not-allowed' : ''}`}
               />
               {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
             </div>
             
             <div className="space-y-1.5">
-              <Label htmlFor="password" className="text-sm">{t('auth.password')}</Label>
+              <Label htmlFor="password" className="text-xs font-medium text-muted-foreground/80 uppercase tracking-wider">{t('auth.password')}</Label>
               <Input
                 id="password"
                 type="password"
@@ -292,19 +314,19 @@ const Auth = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isSubmitting}
-                className={`h-10 ${errors.password ? 'border-destructive' : ''}`}
+                className={`h-9 text-sm bg-background/40 border-border/30 placeholder:text-muted-foreground/30 transition-all duration-200 focus:border-primary/50 focus:bg-background/60 ${errors.password ? 'border-destructive' : ''}`}
               />
               {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
             </div>
 
             <Button 
               type="submit" 
-              className="w-full h-11 text-sm font-semibold mt-1" 
+              className="w-full h-10 text-sm font-semibold rounded-lg transition-all duration-200 hover:shadow-lg hover:shadow-primary/20 hover:-translate-y-[1px]" 
               disabled={isSubmitting}
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                   {isLogin ? t('auth.signingIn') : t('auth.creatingAccount')}
                 </>
               ) : (
@@ -314,14 +336,14 @@ const Auth = () => {
           </form>
 
           {/* Toggle login/signup */}
-          <p className="text-sm text-muted-foreground text-center mt-4">
+          <p className="text-[13px] text-muted-foreground/60 text-center mt-5">
             {isLogin ? (
               <>
                 {"Don't have an account? "}
                 <button
                   type="button"
                   onClick={() => { setIsLogin(false); setErrors({}); }}
-                  className="text-primary hover:underline font-medium"
+                  className="text-primary hover:text-primary/80 font-medium transition-colors duration-200"
                 >
                   {t('auth.createAccount')}
                 </button>
@@ -332,7 +354,7 @@ const Auth = () => {
                 <button
                   type="button"
                   onClick={() => { setIsLogin(true); setErrors({}); }}
-                  className="text-primary hover:underline font-medium"
+                  className="text-primary hover:text-primary/80 font-medium transition-colors duration-200"
                 >
                   {t('auth.signIn')}
                 </button>
@@ -341,24 +363,43 @@ const Auth = () => {
           </p>
 
           {/* Divider */}
-          <div className="relative my-4">
+          <div className="relative my-6">
             <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border/40" />
+              <span className="w-full border-t border-border/20" />
             </div>
-            <div className="relative flex justify-center text-[10px] uppercase tracking-wider">
-              <span className="bg-card px-3 text-muted-foreground">or</span>
+            <div className="relative flex justify-center">
+              <span className="px-4 text-[10px] uppercase tracking-[0.15em] text-muted-foreground/40" style={{ backgroundColor: 'hsl(220 30% 8%)' }}>or</span>
             </div>
           </div>
 
           {/* Social logins */}
           <div className="space-y-3">
             <GoogleLoginButton />
-            <div className="rounded-lg border border-[hsl(270,60%,40%)]/40 bg-[hsl(270,40%,12%)]/30 p-[1px]">
-              <InternetIdentityButton />
+
+            {/* Internet Identity - premium differentiated button */}
+            <div
+              className="rounded-xl p-[1px] transition-all duration-250"
+              style={{
+                background: 'linear-gradient(135deg, hsl(270 60% 40% / 0.5), hsl(250 50% 35% / 0.3), hsl(270 60% 40% / 0.5))',
+              }}
+            >
+              <div
+                className="rounded-[11px]"
+                style={{
+                  background: 'linear-gradient(135deg, hsl(270 30% 12%), hsl(260 25% 10%))',
+                }}
+              >
+                <InternetIdentityButton />
+              </div>
             </div>
-            <p className="text-[10px] text-muted-foreground/60 text-center tracking-wide">
-              Powered by Internet Computer
-            </p>
+
+            <div className="flex items-center justify-center gap-1.5 pt-1">
+              <div className="h-[1px] w-3 bg-muted-foreground/15" />
+              <p className="text-[9px] text-muted-foreground/35 tracking-[0.12em] uppercase font-medium">
+                Powered by Internet Computer
+              </p>
+              <div className="h-[1px] w-3 bg-muted-foreground/15" />
+            </div>
           </div>
         </div>
       </div>
