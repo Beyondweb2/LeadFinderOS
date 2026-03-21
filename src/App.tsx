@@ -54,7 +54,7 @@ function PageLoader() {
 
 function FullPageLoader() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="min-h-screen flex items-center justify-center bg-background" style={{ backgroundColor: 'hsl(220, 50%, 6%)' }}>
       <Loader2 className="h-8 w-8 animate-spin text-primary" />
     </div>
   );
