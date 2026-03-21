@@ -912,12 +912,16 @@ const Landing = () => {
                     >
                       {/* Avatar + identity */}
                       <div className="flex items-center gap-3 mb-4">
-                        <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                          style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}
-                        >
-                          {r.initials}
-                        </div>
+                        {r.photo ? (
+                          <img src={r.photo} alt={r.name} className="w-9 h-9 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                            style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}
+                          >
+                            {r.initials}
+                          </div>
+                        )}
                         <div>
                           <p className="text-foreground/90 text-sm font-semibold leading-tight">{r.name}</p>
                           <p className="text-muted-foreground/50 text-[11px]">{r.role} · {r.region}</p>
