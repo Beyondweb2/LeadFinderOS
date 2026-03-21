@@ -54,6 +54,10 @@ const Index = () => {
   const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
   const [showConversionModal, setShowConversionModal] = useState(false);
   const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
+  const [savedLeadCount, setSavedLeadCount] = useState(() => {
+    try { return parseInt(localStorage.getItem('leadfinder_saved_lead_count') || '0', 10); } catch { return 0; }
+  });
+  const MAX_FREE_SAVES = 3;
 
   // Ad-entry users without auth are always gated for actions (same as unsubscribed users)
   const isAdEntryGuest = !user && !hasProAccess;
