@@ -138,10 +138,10 @@ const CountUpStat = ({ target, suffix, label }: { target: number; suffix: string
 
   return (
     <div ref={ref} className="text-center">
-      <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">
+      <div className="text-lg sm:text-3xl md:text-4xl font-bold text-foreground tracking-tight">
         {count.toLocaleString()}{suffix}
       </div>
-      <div className="text-[8px] sm:text-xs text-foreground/50 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">{label}</div>
+      <div className="text-[9px] sm:text-xs text-foreground/60 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">{label}</div>
     </div>
   );
 };
