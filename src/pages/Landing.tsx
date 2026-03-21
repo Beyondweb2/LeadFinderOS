@@ -993,12 +993,12 @@ const Landing = () => {
 
               <ul className="space-y-2.5 sm:space-y-2.5 mb-10 sm:mb-12 text-left max-w-sm mx-auto">
                 {[
-                  'Find businesses with no website in your area in 60 seconds',
-                  'Get their phone number and contact them instantly',
-                  'Track every follow-up so nothing slips through',
-                  'Templates ready to send — no writing from scratch',
-                  'See your pipeline and revenue in one dashboard',
-                  'Works for any service — web design, SEO, marketing, AI tools',
+                  'Find businesses with no website in 60 seconds',
+                  'Get phone numbers and contact them instantly',
+                  'Track every follow-up automatically',
+                  'Ready-made templates for outreach',
+                  'Pipeline and revenue dashboard',
+                  'Works for web design, SEO, marketing and more',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 text-[13px] sm:text-sm text-foreground/85 font-medium leading-snug">
                     <Check className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 mt-0.5 sm:mt-0" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
