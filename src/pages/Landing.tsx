@@ -39,10 +39,10 @@ import previewResults from '@/assets/preview-results.jpg';
 
 
 
-import avatarChris from '@/assets/avatar-chris.jpg';
-import avatarTom from '@/assets/avatar-tom.jpg';
-import avatarAlex from '@/assets/avatar-alex.jpg';
-import avatarDaniel from '@/assets/avatar-daniel.jpg';
+import avatarChris from '@/assets/review-chris.jpeg';
+import avatarTom from '@/assets/review-tom.jpeg';
+import avatarAlex from '@/assets/review-alex.jpeg';
+import avatarDaniel from '@/assets/review-daniel.jpg';
 
 
 
@@ -452,9 +452,13 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
   return (
     <div className="text-center px-4">
       <div key={current} className="animate-fade-in max-w-[300px] mx-auto">
-        <div className="w-11 h-11 rounded-full mx-auto mb-3 flex items-center justify-center text-sm font-bold" style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}>
-          {t.initials}
-        </div>
+        {t.photo ? (
+          <img src={t.photo} alt={t.name} className="w-11 h-11 rounded-full object-cover mx-auto mb-3" />
+        ) : (
+          <div className="w-11 h-11 rounded-full mx-auto mb-3 flex items-center justify-center text-sm font-bold" style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}>
+            {t.initials}
+          </div>
+        )}
         <p className="text-foreground/90 text-[13px] font-semibold">{t.name}</p>
         <p className="text-muted-foreground/50 text-[11px] mt-0.5">{t.role} · {t.region}</p>
         <div className="flex gap-0.5 justify-center mt-2 mb-3">
@@ -625,11 +629,6 @@ const Landing = () => {
           </div>
 
           <div className="max-w-3xl mx-auto lg:max-w-xl">
-            <span
-              className="hidden sm:inline-block text-xs font-semibold uppercase tracking-widest mb-4 text-muted-foreground/60"
-            >
-              Join 1,200+ freelancers and agencies already using LeadFinder
-            </span>
 
             <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-[3.5rem] lg:text-[3.75rem] font-extrabold lg:font-bold tracking-tight leading-tight">
               <span className="tracking-[0.02em]">Find Businesses</span>
@@ -638,7 +637,7 @@ const Landing = () => {
             </h1>
             
             <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-5 sm:mt-6">
-              No clients this month? Find local businesses without websites in seconds, contact them instantly, and start closing deals today.
+              No clients this month? Find businesses without websites in seconds, contact them instantly, and start closing deals today.
             </p>
             
             {/* CTA */}
@@ -663,9 +662,6 @@ const Landing = () => {
               </div>
               <p className="text-[11px] text-muted-foreground/50 mt-2.5 tracking-wide">
                 £0 today • Find leads in seconds
-              </p>
-              <p className="text-[11px] text-muted-foreground/40 mt-1.5 tracking-wide sm:hidden">
-                Join 1,200+ freelancers and agencies already using LeadFinder
               </p>
             </div>
 
@@ -702,7 +698,7 @@ const Landing = () => {
       {/* How LeadFinder Works - 4-step section */}
       <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
         <div className="container mx-auto max-w-6xl">
-          <ScrollReveal className="text-center mb-12 sm:mb-14 md:mb-18">
+          <ScrollReveal className="text-center mb-14 sm:mb-18 md:mb-24">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
               How Lead<span className="text-gradient-primary">Finder</span>
               <br />
@@ -855,7 +851,7 @@ const Landing = () => {
           }}
         />
         <div className="container mx-auto max-w-5xl">
-          <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-12 sm:mb-14 md:mb-16">
+          <h2 className="text-center text-2xl sm:text-3xl md:text-[2.75rem] font-bold tracking-tight leading-[1.2] sm:leading-[1.15] mb-14 sm:mb-18 md:mb-24">
             Trusted by freelancers
             <br />
             {' '}and agencies{' '}
@@ -920,12 +916,16 @@ const Landing = () => {
                     >
                       {/* Avatar + identity */}
                       <div className="flex items-center gap-3 mb-4">
-                        <div
-                          className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                          style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}
-                        >
-                          {r.initials}
-                        </div>
+                        {r.photo ? (
+                          <img src={r.photo} alt={r.name} className="w-9 h-9 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <div
+                            className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                            style={{ background: 'hsl(var(--primary)/0.15)', color: 'hsl(var(--primary))' }}
+                          >
+                            {r.initials}
+                          </div>
+                        )}
                         <div>
                           <p className="text-foreground/90 text-sm font-semibold leading-tight">{r.name}</p>
                           <p className="text-muted-foreground/50 text-[11px]">{r.role} · {r.region}</p>
@@ -984,7 +984,7 @@ const Landing = () => {
                 Free Trial
               </span>
 
-              <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">Land your next client <span className="text-gradient-primary">this week</span></h3>
+              <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">LeadFinder <span className="text-gradient-primary">Pro</span></h3>
               <p className="text-sm sm:text-base text-foreground/65 leading-relaxed mb-8 max-w-sm mx-auto font-medium">
                 Everything you need to find, contact and close clients - in one system.
               </p>
@@ -1013,8 +1013,8 @@ const Landing = () => {
                 Try for free
               </Button>
 
-              <p className="text-[11px] sm:text-xs text-muted-foreground/70 mt-4 sm:hidden">
-                5-day free trial · £0 today · Cancel anytime
+              <p className="text-[11px] sm:text-xs text-muted-foreground/50 mt-4">
+                £0 today · Cancel anytime
               </p>
             </div>
           </ScrollReveal>
