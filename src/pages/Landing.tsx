@@ -824,6 +824,11 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Video Demo Section - desktop only */}
+      <div className="hidden sm:block">
+        <VideoSection />
+      </div>
+
       {/* Product Preview Section */}
       <section className="relative z-10 py-10 sm:py-16 md:py-24 px-3 sm:px-4">
         <div className="container mx-auto max-w-[1150px]">
