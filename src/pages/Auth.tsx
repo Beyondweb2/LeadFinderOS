@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
 import { InternetIdentityButton } from '@/components/InternetIdentityButton';
+import { GoogleLoginButton } from '@/components/GoogleLoginButton';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { type SupportedLanguage } from '@/hooks/useLanguage';
 import { LANG_STORAGE_KEY } from '@/i18n';
@@ -343,8 +344,9 @@ const Auth = () => {
             </div>
           </div>
 
-          {/* Internet Identity - premium styled */}
-          <div className="space-y-2">
+          {/* Social logins */}
+          <div className="space-y-3">
+            <GoogleLoginButton />
             <div className="rounded-lg border border-[hsl(270,60%,40%)]/40 bg-[hsl(270,40%,12%)]/30 p-[1px]">
               <InternetIdentityButton />
             </div>
