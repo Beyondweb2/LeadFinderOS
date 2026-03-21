@@ -195,7 +195,7 @@ const Index = () => {
               <span className="text-primary font-bold">{noWebsiteCount}</span> potential client{noWebsiteCount !== 1 ? 's' : ''} found in this search
             </span>
           </div>
-          {effectiveGated && (
+          {effectiveGated && paywallTriggeredOnce && (
             <button
               onClick={() => setShowConversionModal(true)}
               className="text-xs sm:text-sm font-medium text-primary hover:text-primary/80 cursor-pointer transition-colors"
