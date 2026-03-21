@@ -783,7 +783,7 @@ const Landing = () => {
                       className="font-bold text-lg mb-2 block"
                       style={{ color: 'hsl(var(--primary))' }}
                     >{step.num}.</span>
-                    <h3 className="text-xl md:text-2xl font-bold tracking-tight mb-3">
+                    <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-3">
                       {step.title}
                     </h3>
                     <p className="text-muted-foreground/70 text-sm md:text-base leading-[1.7]">
