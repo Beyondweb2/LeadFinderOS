@@ -1037,6 +1037,28 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Final CTA Section */}
+      <section className="relative z-10 py-16 sm:py-20 md:py-28 px-4">
+        <div className="container mx-auto max-w-3xl text-center">
+          <ScrollReveal>
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold tracking-tight leading-[1.1] mb-6">
+              Ready to find your
+              <br />
+              <span className="text-gradient-primary">next client</span>?
+            </h2>
+            <Button
+              size="lg"
+              className="btn-premium font-semibold h-14 sm:h-16 px-10 sm:px-14 text-base sm:text-lg rounded-xl shadow-xl shadow-primary/25 hover:shadow-2xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300"
+              asChild
+            >
+              <Link to="/auth?mode=signup">
+                Start finding leads free →
+              </Link>
+            </Button>
+          </ScrollReveal>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="relative z-10 border-t border-white/[0.06] py-10 sm:py-12 md:py-16 px-4">
         <div className="container mx-auto">
