@@ -101,9 +101,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     </DropdownMenu>
   ), [statusFilters, toggleFilter, statusFilterOptions]);
 
-  const handleGatedViewInfo = useCallback((e: React.MouseEvent) => {
-    if (gated) { e.preventDefault(); onGatedAction?.(); }
-  }, [gated, onGatedAction]);
+  // View Details is always accessible — paywall only triggers on save/contact actions
 
   return (
     <Card className="border-border/50 bg-card shadow-sm">
@@ -115,9 +113,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <p className="text-xs text-muted-foreground mt-1">
               {leads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
             </p>
-            <p className="text-[11px] text-muted-foreground/70 mt-0.5">
-              Tap 👁 to view details · 📋 to add to Outreach
-            </p>
+             <p className="text-[11px] text-muted-foreground/70 mt-0.5">
+               Tap 👁 to view details · 📋 to save to your list
+             </p>
           </div>
           <div className="flex items-center gap-2">
             {renderFilterMenu('start')}
@@ -133,8 +131,8 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <CardTitle className="text-xl font-semibold">Search Results</CardTitle>
             <p className="text-sm text-muted-foreground">
               Found {leads.length} businesses •
-              <span className="text-status-hot font-semibold ml-1">{noWebsiteCount} without websites</span>
-              <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to add to Outreach</span>
+               <span className="text-status-hot font-semibold ml-1">{noWebsiteCount} without websites</span>
+               <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to save to your list</span>
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -171,40 +169,29 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   </div>
                   <div className="mt-1"><StatusBadge status={lead.websiteStatus} compact /></div>
                 </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {gated ? (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 px-2.5 text-xs text-muted-foreground/60 gap-1.5"
-                      onClick={(e) => { e.preventDefault(); onGatedAction?.(); }}
-                    >
-                      <Lock className="h-3 w-3" />
-                      <span>View Details</span>
-                    </Button>
-                  ) : (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={`h-8 px-2.5 text-xs gap-1.5 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
-                          asChild
-                        >
-                          <a
-                            href={lead.googleMapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
-                          >
-                            <EyeIcon checked={!!checked} small />
-                            <span>View Details</span>
-                          </a>
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{checked ? 'Already viewed' : 'View business info'}</TooltipContent>
-                    </Tooltip>
-                  )}
+                 <div className="flex items-center gap-1.5 flex-shrink-0">
+                   {/* View Details — always accessible, no gating */}
+                   <Tooltip>
+                     <TooltipTrigger asChild>
+                       <Button
+                         variant="ghost"
+                         size="sm"
+                         className={`h-8 px-2.5 text-xs gap-1.5 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
+                         asChild
+                       >
+                         <a
+                           href={lead.googleMapsUrl}
+                           target="_blank"
+                           rel="noopener noreferrer"
+                           onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                         >
+                           <EyeIcon checked={!!checked} small />
+                           <span>View Details</span>
+                         </a>
+                       </Button>
+                     </TooltipTrigger>
+                     <TooltipContent>{checked ? 'Already viewed' : 'View business info'}</TooltipContent>
+                   </Tooltip>
                   {onAddToOutreach && (
                     inOutreach ? (
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
@@ -224,8 +211,8 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                         </Button>
                         {index === 0 && currentPage === 1 && (
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 overflow-hidden rounded-md border bg-popover px-2 py-1 text-[11px] text-popover-foreground shadow-md whitespace-nowrap pointer-events-none">
-                            🔒 Start trial to add
-                          </div>
+                             🔒 Unlock to contact this business
+                           </div>
                         )}
                       </div>
                     ) : (
@@ -242,7 +229,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             <ClipboardList className="h-3.5 w-3.5" />
                           </Button>
                         </TooltipTrigger>
-                        <TooltipContent>Add to Outreach</TooltipContent>
+                         <TooltipContent>Save this lead</TooltipContent>
                       </Tooltip>
                     )
                   )}
@@ -297,34 +284,22 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   </TableCell>
                   <TableCell>
                     {lead.googleMapsUrl && (
-                      gated ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-3 text-xs gap-1.5 text-muted-foreground/70 border-border/60"
-                          onClick={(e) => { e.preventDefault(); onGatedAction?.(); }}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 px-3 text-xs gap-1.5 text-muted-foreground hover:text-foreground border-border/60 hover:border-border"
+                        asChild
+                      >
+                        <a
+                          href={lead.googleMapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
                         >
-                          <Lock className="h-3.5 w-3.5" />
+                          <Eye className="h-3.5 w-3.5" />
                           View Details
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-3 text-xs gap-1.5 text-muted-foreground hover:text-foreground border-border/60 hover:border-border"
-                          asChild
-                        >
-                          <a
-                            href={lead.googleMapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            View Details
-                          </a>
-                        </Button>
-                      )
+                        </a>
+                      </Button>
                     )}
                   </TableCell>
                   <TableCell>
@@ -337,7 +312,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                                 <Check className="h-4 w-4" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Already in Outreach</TooltipContent>
+                            <TooltipContent>Already saved</TooltipContent>
                           </Tooltip>
                         ) : gated ? (
                           <div className="relative">
@@ -353,7 +328,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             </Button>
                             {index === 0 && currentPage === 1 && (
                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 overflow-hidden rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md whitespace-nowrap pointer-events-none">
-                                🔒 Start trial to add
+                                🔒 Unlock to contact this business
                               </div>
                             )}
                           </div>
@@ -371,7 +346,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                                 <ClipboardList className="h-4 w-4" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Add to Outreach</TooltipContent>
+                            <TooltipContent>Save this lead</TooltipContent>
                           </Tooltip>
                         )
                       )}

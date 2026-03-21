@@ -187,7 +187,7 @@ const Index = () => {
           <div className="flex items-center gap-1.5 sm:gap-2">
             <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
             <span className="text-sm sm:text-base font-medium text-foreground">
-              <span className="text-primary font-bold">{noWebsiteCount}</span> business{noWebsiteCount !== 1 ? 'es' : ''} here need{noWebsiteCount === 1 ? 's' : ''} a website
+              <span className="text-primary font-bold">{noWebsiteCount}</span> potential client{noWebsiteCount !== 1 ? 's' : ''} found in this search
             </span>
           </div>
           {effectiveGated && (
