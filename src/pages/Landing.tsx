@@ -694,6 +694,11 @@ const Landing = () => {
         </div>
       </section>
 
+      {/* Video Demo Section - desktop only, right after hero */}
+      <div className="hidden sm:block">
+        <VideoSection />
+      </div>
+
 
       {/* How LeadFinder Works - 4-step section */}
       <section id="how-it-works" className="relative z-10 py-16 sm:py-20 md:py-28 px-3 sm:px-4">
@@ -740,7 +745,7 @@ const Landing = () => {
                       className="font-bold text-lg mb-1.5 block"
                       style={{ color: 'hsl(210 100% 60%)' }}
                     >{step.num}.</span>
-                    <h3 className="text-xl sm:text-2xl font-bold tracking-tight mb-2 sm:mb-3">
+                    <h3 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight mb-2 sm:mb-3">
                       {step.title}
                     </h3>
                     <p className="text-muted-foreground/70 text-sm sm:text-base leading-[1.6] max-w-md mx-auto">
@@ -778,7 +783,7 @@ const Landing = () => {
                       className="font-bold text-lg mb-2 block"
                       style={{ color: 'hsl(var(--primary))' }}
                     >{step.num}.</span>
-                    <h3 className="text-xl md:text-2xl font-bold tracking-tight mb-3">
+                    <h3 className="text-2xl md:text-3xl font-bold tracking-tight mb-3">
                       {step.title}
                     </h3>
                     <p className="text-muted-foreground/70 text-sm md:text-base leading-[1.7]">
@@ -820,10 +825,7 @@ const Landing = () => {
         </div>
       </section>
 
-      {/* Video Demo Section - desktop only */}
-      <div className="hidden sm:block">
-        <VideoSection />
-      </div>
+      {/* Video section moved to after hero */}
 
       {/* Product Preview Section */}
       <section className="relative z-10 py-10 sm:py-16 md:py-24 px-3 sm:px-4">
@@ -991,12 +993,12 @@ const Landing = () => {
 
               <ul className="space-y-2.5 sm:space-y-2.5 mb-10 sm:mb-12 text-left max-w-sm mx-auto">
                 {[
-                  'Find businesses with no website in your area in 60 seconds',
-                  'Get their phone number and contact them instantly',
-                  'Track every follow-up so nothing slips through',
-                  'Templates ready to send — no writing from scratch',
-                  'See your pipeline and revenue in one dashboard',
-                  'Works for any service — web design, SEO, marketing, AI tools',
+                  'Find businesses with no website in 60 seconds',
+                  'Get phone numbers and contact them instantly',
+                  'Track every follow-up automatically',
+                  'Ready-made templates for outreach',
+                  'Pipeline and revenue dashboard',
+                  'Works for web design, SEO, marketing and more',
                 ].map((item, i) => (
                   <li key={i} className="flex items-start gap-3 text-[13px] sm:text-sm text-foreground/85 font-medium leading-snug">
                     <Check className="h-4 w-4 sm:h-5 sm:w-5 shrink-0 mt-0.5 sm:mt-0" style={{ color: 'hsl(142 76% 50%)' }} strokeWidth={2.5} />
