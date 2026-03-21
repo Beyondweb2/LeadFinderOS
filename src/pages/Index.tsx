@@ -262,7 +262,7 @@ const Index = () => {
             onMapLinkClick={markAsChecked}
             isChecked={isChecked}
             gated={effectiveGated}
-            onGatedAction={() => setShowConversionModal(true)}
+            onGatedAction={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
             savedLeadCount={savedLeadCount}
             maxFreeSaves={MAX_FREE_SAVES}
           />
