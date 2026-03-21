@@ -13,6 +13,7 @@ import { Loader2, CreditCard, Sparkles, Gift, Check, ArrowLeft } from 'lucide-re
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { AffiliateCapture } from '@/components/AffiliateCapture';
+import { InternetIdentityButton } from '@/components/InternetIdentityButton';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { type SupportedLanguage } from '@/hooks/useLanguage';
 import { LANG_STORAGE_KEY } from '@/i18n';
@@ -372,6 +373,18 @@ const Auth = () => {
             )}
           </CardFooter>
         </form>
+
+        <div className="px-6 pb-6">
+          <div className="relative my-4">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-border" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-card px-2 text-muted-foreground">or</span>
+            </div>
+          </div>
+          <InternetIdentityButton />
+        </div>
       </Card>
     </div>
   );
