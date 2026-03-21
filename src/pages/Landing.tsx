@@ -628,7 +628,7 @@ const Landing = () => {
             <span
               className="hidden sm:inline-block text-xs font-semibold uppercase tracking-widest mb-4 text-muted-foreground/60"
             >
-              Built for web devs, agencies & founders
+              Join 1,200+ freelancers and agencies already using LeadFinder
             </span>
 
             <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-[3.5rem] lg:text-[3.75rem] font-extrabold lg:font-bold tracking-tight leading-tight">
@@ -637,12 +637,12 @@ const Landing = () => {
               <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
             </h1>
             
-            <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-4 sm:mt-5">
+            <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-5 sm:mt-6">
               No clients this month? Find local businesses without websites in seconds, contact them instantly, and start closing deals today.
             </p>
             
             {/* CTA */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-6 sm:mt-8">
+            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-7 sm:mt-9">
               <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
                   <Button 
                     size="lg" 
@@ -664,7 +664,7 @@ const Landing = () => {
               <p className="text-[11px] text-muted-foreground/50 mt-2.5 tracking-wide">
                 £0 today • Find leads in seconds
               </p>
-              <p className="text-[11px] text-muted-foreground/40 mt-1.5 tracking-wide">
+              <p className="text-[11px] text-muted-foreground/40 mt-1.5 tracking-wide sm:hidden">
                 Join 1,200+ freelancers and agencies already using LeadFinder
               </p>
             </div>
