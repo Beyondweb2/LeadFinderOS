@@ -1096,7 +1096,18 @@ const Landing = () => {
             </div>
           </div>
           
-          <div className="border-t border-white/[0.04] pt-6 sm:pt-8 text-center space-y-2 sm:space-y-3">
+          <div className="border-t border-white/[0.04] pt-6 sm:pt-8 text-center space-y-3 sm:space-y-4">
+            {/* Internal links to city pages */}
+            <div className="max-w-2xl mx-auto">
+              <p className="text-[10px] sm:text-xs text-muted-foreground/40 mb-2">Find clients in:</p>
+              <nav className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-[10px] sm:text-xs text-muted-foreground/40" aria-label="City pages">
+                {['london', 'manchester', 'new-york', 'sydney', 'toronto', 'dubai', 'miami', 'singapore'].map(city => (
+                  <Link key={city} to={`/find-clients/${city}`} className="hover:text-muted-foreground transition-colors capitalize">
+                    {city.replace(/-/g, ' ')}
+                  </Link>
+                ))}
+              </nav>
+            </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground/70 max-w-2xl mx-auto leading-relaxed px-2">
               Disclaimer: LeadFinder Pro uses AI classification and third-party data sources. 
               Results are not guaranteed to be 100% accurate and may contain errors. 
