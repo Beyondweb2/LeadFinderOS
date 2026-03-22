@@ -522,6 +522,25 @@ const Landing = () => {
   
   return (
     <div className="min-h-screen bg-background overflow-hidden" style={{ backgroundColor: 'hsl(220, 50%, 6%)' }}>
+      <SEOHead
+        title="Find Clients Who Need Websites | LeadFinder Pro"
+        description="Find businesses without websites in any city. Contact them via WhatsApp, SMS or phone and close web design deals fast. Free 5-day trial."
+        canonical="/landing"
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'SoftwareApplication',
+          name: 'LeadFinder Pro',
+          applicationCategory: 'BusinessApplication',
+          operatingSystem: 'Web',
+          description: 'Find businesses without websites and turn them into paying clients.',
+          offers: {
+            '@type': 'Offer',
+            price: '0',
+            priceCurrency: 'GBP',
+            description: '5-day free trial',
+          },
+        }}
+      />
       {/* Capture affiliate codes from URL */}
       <AffiliateCapture />
 
