@@ -657,7 +657,7 @@ const Landing = () => {
             </h1>
             
             <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-5 sm:mt-6">
-              No clients this month? Find businesses without websites in seconds, contact them instantly, and start closing deals today.
+              The fastest way for web designers and agencies to find businesses that need a website, contact them instantly via WhatsApp or SMS, and close deals — all from one dashboard.
             </p>
             
             {/* CTA */}
