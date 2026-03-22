@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SEOHead } from '@/components/SEOHead';
 import { Link } from 'react-router-dom';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { useSubscription } from '@/hooks/useSubscription';
