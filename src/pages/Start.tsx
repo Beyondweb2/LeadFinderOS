@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Check, ArrowRight, Shield, MessageCircle, CreditCard, Lock, Phone } from 'lucide-react';
+import { SEOHead } from '@/components/SEOHead';
 import appLogo from '@/assets/logo.png';
 import featureClassification from '@/assets/feature-classification.png';
 import featureTemplates from '@/assets/feature-templates.png';
