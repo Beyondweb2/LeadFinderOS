@@ -115,13 +115,13 @@ const Index = () => {
     }
   }, [savedLeadCountKey]);
 
-  // Auto-open paywall once when guest hits cap
+  // Auto-open paywall once when any search cap is hit
   useEffect(() => {
-    if (guestSearchesExhausted && !conversionModalShownThisSession) {
+    if (anySearchesExhausted && !conversionModalShownThisSession) {
       setShowConversionModal(true);
       setConversionModalShownThisSession(true);
     }
-  }, [guestSearchesExhausted, conversionModalShownThisSession]);
+  }, [anySearchesExhausted, conversionModalShownThisSession]);
 
   // Count businesses without websites — only from the most recent search
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
