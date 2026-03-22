@@ -155,15 +155,29 @@ const Index = () => {
     }
   }, [leads.length, gated, isFreeUser, isSubscriptionLoading, conversionModalShownThisSession, isAdEntryGuest]);
 
-  // Handle search attempt — unlimited for all users
+  // Handle search attempt — capped at 2 for free users
   const handleSearch = useCallback((filters: any) => {
+    // Block if free user exhausted
+    if (freeUserSearchesExhausted) {
+      setShowConversionModal(true);
+      return;
+    }
     setLastSearchCountry(filters.country || 'UK');
-    search(filters, false, false);
-    // Track guest search for funnel analytics
+    search(filters, false, false).then(() => {
+      // Increment free user search count after successful search
+      if (isFreeUser && freeUserSearchKey) {
+        try {
+          const prev = parseInt(localStorage.getItem(freeUserSearchKey) || '0', 10);
+          const next = prev + 1;
+          localStorage.setItem(freeUserSearchKey, String(next));
+          setFreeUserSearchCount(next);
+        } catch {}
+      }
+    });
     if (isAdEntryGuest) {
       trackFunnelEvent('guest_search_performed', true);
     }
-  }, [search, isAdEntryGuest]);
+  }, [search, isAdEntryGuest, freeUserSearchesExhausted, isFreeUser, freeUserSearchKey]);
 
   return (
     <div className="space-y-4 md:space-y-8">
