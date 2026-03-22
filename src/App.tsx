@@ -43,6 +43,7 @@ const Playbook = lazy(() => import("./pages/Playbook"));
 const UnlockAccess = lazy(() => import("./pages/UnlockAccess"));
 const Start = lazy(() => import("./pages/Start"));
 const StartFreeTrial = lazy(() => import("./pages/StartFreeTrial"));
+const CityLeads = lazy(() => import("./pages/CityLeads"));
 
 function PageLoader() {
   return (
