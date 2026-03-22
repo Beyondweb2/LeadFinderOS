@@ -74,6 +74,34 @@ const Index = () => {
     try { return localStorage.getItem(GUEST_CAP_KEY) === '1'; } catch { return false; }
   }, [isAdEntryGuest, trialLimitError]);
 
+  // Authenticated free user search cap (2 searches)
+  const FREE_USER_SEARCH_CAP = 2;
+  const freeUserSearchKey = user?.id ? `leadfinder_free_search_count:${user.id}` : null;
+  const [freeUserSearchCount, setFreeUserSearchCount] = useState(0);
+
+  useEffect(() => {
+    if (!freeUserSearchKey) {
+      setFreeUserSearchCount(0);
+      return;
+    }
+    try {
+      setFreeUserSearchCount(parseInt(localStorage.getItem(freeUserSearchKey) || '0', 10));
+    } catch {
+      setFreeUserSearchCount(0);
+    }
+  }, [freeUserSearchKey]);
+
+  // Clear free search cap when user becomes subscriber
+  useEffect(() => {
+    if (hasProAccess && freeUserSearchKey) {
+      try { localStorage.removeItem(freeUserSearchKey); } catch {}
+      setFreeUserSearchCount(0);
+    }
+  }, [hasProAccess, freeUserSearchKey]);
+
+  const freeUserSearchesExhausted = isFreeUser && !!user && freeUserSearchCount >= FREE_USER_SEARCH_CAP;
+  const anySearchesExhausted = guestSearchesExhausted || freeUserSearchesExhausted || freeSearchExhausted;
+
   useEffect(() => {
     if (!savedLeadCountKey) {
       setSavedLeadCount(0);
@@ -87,13 +115,13 @@ const Index = () => {
     }
   }, [savedLeadCountKey]);
 
-  // Auto-open paywall once when guest hits cap
+  // Auto-open paywall once when any search cap is hit
   useEffect(() => {
-    if (guestSearchesExhausted && !conversionModalShownThisSession) {
+    if (anySearchesExhausted && !conversionModalShownThisSession) {
       setShowConversionModal(true);
       setConversionModalShownThisSession(true);
     }
-  }, [guestSearchesExhausted, conversionModalShownThisSession]);
+  }, [anySearchesExhausted, conversionModalShownThisSession]);
 
   // Count businesses without websites — only from the most recent search
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
@@ -127,15 +155,29 @@ const Index = () => {
     }
   }, [leads.length, gated, isFreeUser, isSubscriptionLoading, conversionModalShownThisSession, isAdEntryGuest]);
 
-  // Handle search attempt — unlimited for all users
+  // Handle search attempt — capped at 2 for free users
   const handleSearch = useCallback((filters: any) => {
+    // Block if free user exhausted
+    if (freeUserSearchesExhausted) {
+      setShowConversionModal(true);
+      return;
+    }
     setLastSearchCountry(filters.country || 'UK');
-    search(filters, false, false);
-    // Track guest search for funnel analytics
+    search(filters, false, false).then(() => {
+      // Increment free user search count after successful search
+      if (isFreeUser && freeUserSearchKey) {
+        try {
+          const prev = parseInt(localStorage.getItem(freeUserSearchKey) || '0', 10);
+          const next = prev + 1;
+          localStorage.setItem(freeUserSearchKey, String(next));
+          setFreeUserSearchCount(next);
+        } catch {}
+      }
+    });
     if (isAdEntryGuest) {
       trackFunnelEvent('guest_search_performed', true);
     }
-  }, [search, isAdEntryGuest]);
+  }, [search, isAdEntryGuest, freeUserSearchesExhausted, isFreeUser, freeUserSearchKey]);
 
   return (
     <div className="space-y-4 md:space-y-8">
@@ -175,11 +217,11 @@ const Index = () => {
           onSearch={handleSearch} 
           isLoading={isLoading}
           isOnTrial={false}
-          searchesRemaining={hasProAccess ? Infinity : 0}
-          dailyLimit={hasProAccess ? Infinity : 0}
+          searchesRemaining={hasProAccess ? Infinity : Math.max(0, FREE_USER_SEARCH_CAP - freeUserSearchCount)}
+          dailyLimit={hasProAccess ? Infinity : FREE_USER_SEARCH_CAP}
           isPaidSubscriber={hasProAccess}
           disabled={false}
-          freeSearchesExhausted={guestSearchesExhausted}
+          freeSearchesExhausted={anySearchesExhausted}
           onUpgrade={() => setShowConversionModal(true)}
         />
       </section>
