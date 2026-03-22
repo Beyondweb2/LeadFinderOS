@@ -217,11 +217,11 @@ const Index = () => {
           onSearch={handleSearch} 
           isLoading={isLoading}
           isOnTrial={false}
-          searchesRemaining={hasProAccess ? Infinity : 0}
-          dailyLimit={hasProAccess ? Infinity : 0}
+          searchesRemaining={hasProAccess ? Infinity : Math.max(0, FREE_USER_SEARCH_CAP - freeUserSearchCount)}
+          dailyLimit={hasProAccess ? Infinity : FREE_USER_SEARCH_CAP}
           isPaidSubscriber={hasProAccess}
           disabled={false}
-          freeSearchesExhausted={guestSearchesExhausted}
+          freeSearchesExhausted={anySearchesExhausted}
           onUpgrade={() => setShowConversionModal(true)}
         />
       </section>
