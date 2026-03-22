@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SEOHead } from '@/components/SEOHead';
 import { Link } from 'react-router-dom';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -81,6 +82,7 @@ const Dashboard = () => {
 
   return (
     <div className="space-y-5 sm:space-y-7">
+      <SEOHead title="Dashboard | LeadFinder Pro" description="Track your outreach pipeline, revenue and follow-ups in one place." canonical="/" noindex />
       <TipBar />
 
       <div className="text-center sm:text-left">

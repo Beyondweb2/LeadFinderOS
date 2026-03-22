@@ -43,6 +43,7 @@ const Playbook = lazy(() => import("./pages/Playbook"));
 const UnlockAccess = lazy(() => import("./pages/UnlockAccess"));
 const Start = lazy(() => import("./pages/Start"));
 const StartFreeTrial = lazy(() => import("./pages/StartFreeTrial"));
+const CityLeads = lazy(() => import("./pages/CityLeads"));
 
 function PageLoader() {
   return (
@@ -187,6 +188,7 @@ const App = () => {
              <Route path="/partners" element={<AffiliateProgram />} />
               <Route path="/start" element={<Start />} />
               <Route path="/start-free-trial" element={<StartFreeTrial />} />
+              <Route path="/find-clients/:city" element={<CityLeads />} />
               <Route 
                 path="/ads" 
                 element={<AdEntryRedirect />} 

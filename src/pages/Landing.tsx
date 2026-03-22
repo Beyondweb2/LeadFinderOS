@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { trackLead } from '@/lib/fbPixel';
+import { SEOHead } from '@/components/SEOHead';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -521,6 +522,25 @@ const Landing = () => {
   
   return (
     <div className="min-h-screen bg-background overflow-hidden" style={{ backgroundColor: 'hsl(220, 50%, 6%)' }}>
+      <SEOHead
+        title="Find Clients Who Need Websites | LeadFinder Pro"
+        description="Find businesses without websites in any city. Contact them via WhatsApp, SMS or phone and close web design deals fast. Free 5-day trial."
+        canonical="/landing"
+        jsonLd={{
+          '@context': 'https://schema.org',
+          '@type': 'SoftwareApplication',
+          name: 'LeadFinder Pro',
+          applicationCategory: 'BusinessApplication',
+          operatingSystem: 'Web',
+          description: 'Find businesses without websites and turn them into paying clients.',
+          offers: {
+            '@type': 'Offer',
+            price: '0',
+            priceCurrency: 'GBP',
+            description: '5-day free trial',
+          },
+        }}
+      />
       {/* Capture affiliate codes from URL */}
       <AffiliateCapture />
 
@@ -637,7 +657,7 @@ const Landing = () => {
             </h1>
             
             <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-5 sm:mt-6">
-              No clients this month? Find businesses without websites in seconds, contact them instantly, and start closing deals today.
+              The fastest way for web designers and agencies to find businesses that need a website, contact them instantly via WhatsApp or SMS, and close deals — all from one dashboard.
             </p>
             
             {/* CTA */}
@@ -1076,7 +1096,18 @@ const Landing = () => {
             </div>
           </div>
           
-          <div className="border-t border-white/[0.04] pt-6 sm:pt-8 text-center space-y-2 sm:space-y-3">
+          <div className="border-t border-white/[0.04] pt-6 sm:pt-8 text-center space-y-3 sm:space-y-4">
+            {/* Internal links to city pages */}
+            <div className="max-w-2xl mx-auto">
+              <p className="text-[10px] sm:text-xs text-muted-foreground/40 mb-2">Find clients in:</p>
+              <nav className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-[10px] sm:text-xs text-muted-foreground/40" aria-label="City pages">
+                {['london', 'manchester', 'new-york', 'sydney', 'toronto', 'dubai', 'miami', 'singapore'].map(city => (
+                  <Link key={city} to={`/find-clients/${city}`} className="hover:text-muted-foreground transition-colors capitalize">
+                    {city.replace(/-/g, ' ')}
+                  </Link>
+                ))}
+              </nav>
+            </div>
             <p className="text-[10px] sm:text-xs text-muted-foreground/70 max-w-2xl mx-auto leading-relaxed px-2">
               Disclaimer: LeadFinder Pro uses AI classification and third-party data sources. 
               Results are not guaranteed to be 100% accurate and may contain errors. 

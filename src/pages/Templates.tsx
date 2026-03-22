@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { SEOHead } from '@/components/SEOHead';
 import { useTemplates } from '@/hooks/useTemplates';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -163,6 +164,7 @@ const Templates = () => {
 
   return (
     <div className="space-y-6">
+      <SEOHead title="Outreach Templates | LeadFinder Pro" description="Manage text and voice note templates for client outreach." noindex />
       <div>
         <h1 className="text-2xl font-bold">Templates</h1>
         <p className="text-muted-foreground">
