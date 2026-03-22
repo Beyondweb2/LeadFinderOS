@@ -12,3 +12,10 @@ Allow: /
 
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /admin/
+Disallow: /billing/
+Disallow: /complete-setup
+Disallow: /unlock
+
+Sitemap: https://leadfinderapp.lovable.app/sitemap.xml
