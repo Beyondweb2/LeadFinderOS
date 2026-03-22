@@ -74,6 +74,34 @@ const Index = () => {
     try { return localStorage.getItem(GUEST_CAP_KEY) === '1'; } catch { return false; }
   }, [isAdEntryGuest, trialLimitError]);
 
+  // Authenticated free user search cap (2 searches)
+  const FREE_USER_SEARCH_CAP = 2;
+  const freeUserSearchKey = user?.id ? `leadfinder_free_search_count:${user.id}` : null;
+  const [freeUserSearchCount, setFreeUserSearchCount] = useState(0);
+
+  useEffect(() => {
+    if (!freeUserSearchKey) {
+      setFreeUserSearchCount(0);
+      return;
+    }
+    try {
+      setFreeUserSearchCount(parseInt(localStorage.getItem(freeUserSearchKey) || '0', 10));
+    } catch {
+      setFreeUserSearchCount(0);
+    }
+  }, [freeUserSearchKey]);
+
+  // Clear free search cap when user becomes subscriber
+  useEffect(() => {
+    if (hasProAccess && freeUserSearchKey) {
+      try { localStorage.removeItem(freeUserSearchKey); } catch {}
+      setFreeUserSearchCount(0);
+    }
+  }, [hasProAccess, freeUserSearchKey]);
+
+  const freeUserSearchesExhausted = isFreeUser && !!user && freeUserSearchCount >= FREE_USER_SEARCH_CAP;
+  const anySearchesExhausted = guestSearchesExhausted || freeUserSearchesExhausted || freeSearchExhausted;
+
   useEffect(() => {
     if (!savedLeadCountKey) {
       setSavedLeadCount(0);
