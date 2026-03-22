@@ -48,6 +48,7 @@ const SCREENSHOTS = [
 const Start = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
+      <SEOHead title="Get Started | LeadFinder Pro" description="Find businesses without websites and turn them into clients. Start your free 5-day trial today." canonical="/start" />
       {/* Background glow */}
       <div
         className="fixed inset-0 pointer-events-none"
