@@ -188,6 +188,7 @@ const App = () => {
              <Route path="/partners" element={<AffiliateProgram />} />
               <Route path="/start" element={<Start />} />
               <Route path="/start-free-trial" element={<StartFreeTrial />} />
+              <Route path="/find-clients/:city" element={<CityLeads />} />
               <Route 
                 path="/ads" 
                 element={<AdEntryRedirect />} 
