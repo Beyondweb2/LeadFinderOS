@@ -115,13 +115,8 @@ const Index = () => {
     }
   }, [savedLeadCountKey]);
 
-  // Auto-open paywall once when any search cap is hit
-  useEffect(() => {
-    if (anySearchesExhausted && !conversionModalShownThisSession) {
-      setShowConversionModal(true);
-      setConversionModalShownThisSession(true);
-    }
-  }, [anySearchesExhausted, conversionModalShownThisSession]);
+  // Paywall modal is only opened when user clicks a CTA (e.g. "Start Free Trial" button or locked action)
+  // No auto-popup on search cap hit
 
   // Count businesses without websites — only from the most recent search
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
