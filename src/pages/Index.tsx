@@ -318,12 +318,17 @@ const Index = () => {
               return addToOutreach(lead, lastSearchCountry, 'no_website');
             }}
             isInOutreach={isInOutreach}
-            onMapLinkClick={markAsChecked}
+            onMapLinkClick={(name, url) => {
+              recordView();
+              markAsChecked(name, url);
+            }}
             isChecked={isChecked}
             gated={effectiveGated}
             onGatedAction={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
             savedLeadCount={savedLeadCount}
             maxFreeSaves={MAX_FREE_SAVES}
+            viewDetailsExhausted={viewDetailsExhausted && isFreeUser}
+            onViewDetailsGated={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
           />
         </section>
       )}
