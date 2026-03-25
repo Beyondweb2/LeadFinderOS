@@ -37,9 +37,11 @@ interface LeadsTableProps {
   onGatedAction?: () => void;
   savedLeadCount?: number;
   maxFreeSaves?: number;
+  onViewDetailsGated?: () => void;
+  viewDetailsExhausted?: boolean;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3 }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
@@ -174,27 +176,39 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   <div className="mt-1"><StatusBadge status={lead.websiteStatus} compact /></div>
                 </div>
                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                   {/* View Details — always accessible, no gating */}
+                   {/* View Details — gated after 5 views for free users */}
                    <Tooltip>
                      <TooltipTrigger asChild>
-                       <Button
-                         variant="ghost"
-                         size="sm"
-                         className={`h-8 px-2.5 text-xs gap-1.5 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
-                         asChild
-                       >
-                         <a
-                           href={lead.googleMapsUrl}
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                       {viewDetailsExhausted ? (
+                         <Button
+                           variant="ghost"
+                           size="sm"
+                           className="h-8 px-2.5 text-xs gap-1.5 hover:bg-muted"
+                           onClick={(e) => { e.preventDefault(); onViewDetailsGated?.(); }}
                          >
-                           <EyeIcon checked={!!checked} small />
+                           <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                            <span>View Details</span>
-                         </a>
-                       </Button>
+                         </Button>
+                       ) : (
+                         <Button
+                           variant="ghost"
+                           size="sm"
+                           className={`h-8 px-2.5 text-xs gap-1.5 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
+                           asChild
+                         >
+                           <a
+                             href={lead.googleMapsUrl}
+                             target="_blank"
+                             rel="noopener noreferrer"
+                             onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                           >
+                             <EyeIcon checked={!!checked} small />
+                             <span>View Details</span>
+                           </a>
+                         </Button>
+                       )}
                      </TooltipTrigger>
-                     <TooltipContent>{checked ? 'Already viewed' : 'View business info'}</TooltipContent>
+                     <TooltipContent>{viewDetailsExhausted ? 'Start trial to view more' : checked ? 'Already viewed' : 'View business info'}</TooltipContent>
                    </Tooltip>
                   {onAddToOutreach && (
                     inOutreach ? (
@@ -288,22 +302,34 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   </TableCell>
                   <TableCell>
                     {lead.googleMapsUrl && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-3 text-xs gap-1.5 text-muted-foreground hover:text-foreground border-border/60 hover:border-border"
-                        asChild
-                      >
-                        <a
-                          href={lead.googleMapsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                      viewDetailsExhausted ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-3 text-xs gap-1.5 text-muted-foreground border-border/60"
+                          onClick={(e) => { e.preventDefault(); onViewDetailsGated?.(); }}
                         >
-                          <Eye className="h-3.5 w-3.5" />
+                          <Lock className="h-3.5 w-3.5" />
                           View Details
-                        </a>
-                      </Button>
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-3 text-xs gap-1.5 text-muted-foreground hover:text-foreground border-border/60 hover:border-border"
+                          asChild
+                        >
+                          <a
+                            href={lead.googleMapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View Details
+                          </a>
+                        </Button>
+                      )
                     )}
                   </TableCell>
                   <TableCell>

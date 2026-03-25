@@ -13,7 +13,9 @@ import { useTrial } from '@/hooks/useTrial';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { useContactUsage } from '@/hooks/useContactUsage';
+import { Loader2, Sparkles, X } from 'lucide-react';
+import { createDemoLeads, isDemoLead, isDemoDismissed, dismissDemoLeads } from '@/lib/demoLeads';
 import type { OutreachLead, ContactMethod, PipelineStatus } from '@/types/outreach';
 
 const Outreach = () => {
@@ -46,12 +48,50 @@ const Outreach = () => {
   const { isStripeTrialing } = useTrial();
   const { walkthroughOpen } = useWalkthroughStatus();
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
-  const contactAttemptsKey = user?.id ? `leadfinder_contact_attempts:${user.id}` : 'leadfinder_contact_attempts';
+  const { hasUsedContact, markContactUsed } = useContactUsage();
   const [showPaywall, setShowPaywall] = useState(false);
 
-  const handleContactGated = useCallback((channel: 'call' | 'sms' | 'whatsapp'): boolean => {
+  // Demo leads for first-time users
+  const [showDemoLeads, setShowDemoLeads] = useState(false);
+  const [demoDismissedLocal, setDemoDismissedLocal] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    // Show demo leads only if user has no real leads and hasn't dismissed
+    if (leads.length === 0 && archivedLeads.length === 0 && !isDemoDismissed(user.id)) {
+      setShowDemoLeads(true);
+    } else {
+      setShowDemoLeads(false);
+    }
+  }, [user?.id, leads.length, archivedLeads.length]);
+
+  const handleDismissDemo = useCallback(() => {
+    if (user?.id) dismissDemoLeads(user.id);
+    setShowDemoLeads(false);
+    setDemoDismissedLocal(true);
+  }, [user?.id]);
+
+  const demoLeads = useMemo(() => {
+    if (!showDemoLeads || !user?.id) return [];
+    return createDemoLeads(user.id);
+  }, [showDemoLeads, user?.id]);
+
+  // Per-business, per-channel contact gating
+  const handleContactGated = useCallback((channel: 'call' | 'sms' | 'whatsapp', leadId?: string): boolean => {
     if (hasProAccess) return true;
 
+    // If leadId provided, check per-business usage
+    if (leadId) {
+      if (!hasUsedContact(leadId, channel)) {
+        markContactUsed(leadId, channel);
+        return true;
+      }
+      setShowPaywall(true);
+      return false;
+    }
+
+    // Fallback: global per-channel (legacy)
+    const contactAttemptsKey = user?.id ? `leadfinder_contact_attempts:${user.id}` : 'leadfinder_contact_attempts';
     const attempts = (() => {
       try {
         const raw = localStorage.getItem(contactAttemptsKey);
@@ -79,23 +119,24 @@ const Outreach = () => {
 
     setShowPaywall(true);
     return false;
-  }, [contactAttemptsKey, hasProAccess, walkthroughOpen]);
+  }, [hasProAccess, hasUsedContact, markContactUsed, user?.id]);
 
   // Combine active and archived leads into one unified list
   const allLeads = useMemo(() => {
-    return [...leads, ...archivedLeads];
-  }, [leads, archivedLeads]);
+    const real = [...leads, ...archivedLeads];
+    if (showDemoLeads && demoLeads.length > 0 && real.length === 0) {
+      return [...demoLeads, ...real];
+    }
+    return real;
+  }, [leads, archivedLeads, showDemoLeads, demoLeads]);
 
   const isReadOnly = false;
-
-  // Contact method updates are now handled directly in useContactAction + useOutreachAttempt
 
   // Listen for WhatsApp status updates from the prompt dialog
   useEffect(() => {
     const handler = (e: Event) => {
       const { leadId, status, checkedAt } = (e as CustomEvent).detail || {};
-      if (!leadId) return;
-      // Update local lead state immediately (DB already updated by the dialog)
+      if (!leadId || isDemoLead(leadId)) return;
       updateLead(leadId, { whatsapp_status: status, whatsapp_checked_at: checkedAt });
     };
     window.addEventListener('whatsapp-status-updated', handler);
@@ -107,9 +148,8 @@ const Outreach = () => {
     const handler = (e: Event) => {
       const { leadId: businessName } = (e as CustomEvent).detail || {};
       if (!businessName) return;
-      // Resolve lead ID from business name
       const lead = allLeads.find(l => l.business_name === businessName);
-      if (lead) {
+      if (lead && !isDemoLead(lead.id)) {
         challenge.recordContact(lead.id);
       }
     };
@@ -129,18 +169,18 @@ const Outreach = () => {
   }, [challenge.justCompleted, toast, challenge.dismissCompletion]);
 
   const handleContactMethodChange = useCallback(async (leadId: string, method: ContactMethod) => {
+    if (isDemoLead(leadId)) return;
     await updateLead(leadId, { contact_method: method });
     window.dispatchEvent(new CustomEvent('demo-checklist-contact-method-set'));
   }, [updateLead]);
 
   const handlePipelineStatusChange = useCallback(async (leadId: string, status: PipelineStatus) => {
+    if (isDemoLead(leadId)) return;
     await updateStatus(leadId, status as any);
     window.dispatchEvent(new CustomEvent('demo-checklist-pipeline-status-set'));
-    // Count toward challenge when status set to Attempted or Contacted
     if (status === 'waiting' || status === 'contacted') {
       challenge.recordContact(leadId);
     }
-    // Auto-track when setting to Interested
     if (status === 'interested') {
       const lead = allLeads.find(l => l.id === leadId);
       if (lead && !lead.is_potential_work) {
@@ -178,15 +218,40 @@ const Outreach = () => {
         </p>
       </div>
 
+      {/* Demo leads onboarding banner */}
+      {showDemoLeads && !demoDismissedLocal && (
+        <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-primary/20 bg-primary/5">
+          <Sparkles className="h-4 w-4 text-primary shrink-0" />
+          <p className="text-xs sm:text-sm text-muted-foreground flex-1">
+            These sample leads show how your outreach pipeline works. Add real leads from <span className="text-foreground font-medium">Find Leads</span> to get started.
+          </p>
+          <button
+            onClick={handleDismissDemo}
+            className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      )}
+
       <OutreachTable
         leads={allLeads}
         onLeadClick={() => {}}
-        onStatusChange={updateStatus}
+        onStatusChange={(leadId, status) => {
+          if (isDemoLead(leadId)) return;
+          return updateStatus(leadId, status);
+        }}
         onContactMethodChange={handleContactMethodChange}
         onPipelineStatusChange={handlePipelineStatusChange}
-        onNextActionChange={updateNextAction}
+        onNextActionChange={(leadId, action, date) => {
+          if (isDemoLead(leadId)) return;
+          return updateNextAction(leadId, action, date);
+        }}
         onRemoveAll={deleteAllLeads}
-        onArchive={archiveLead}
+        onArchive={(leadId) => {
+          if (isDemoLead(leadId)) return;
+          return archiveLead(leadId);
+        }}
         onArchiveSelected={archiveMultiple}
         onDeleteSelected={deleteMultiple}
         onMarkAsInterested={markMultipleAsInterested}
@@ -201,9 +266,6 @@ const Outreach = () => {
         onRetryPhoneFetch={retryPhoneFetch}
         onContactGated={!hasProAccess ? handleContactGated : undefined}
       />
-
-
-
 
       {/* First-time outreach tips */}
       <OutreachTipsDialog />

@@ -14,6 +14,7 @@ import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
+import { useViewDetailsLimit } from '@/hooks/useViewDetailsLimit';
 import { supabase } from '@/integrations/supabase/client';
 import { Flame, Target, Zap, Search, AlertTriangle, MapPin, Info } from 'lucide-react';
 import { trackFunnelEvent } from '@/lib/funnelAnalytics';
@@ -35,6 +36,7 @@ const Index = () => {
   // Pro access = active, past_due, admin, or trialing (Stripe trial)
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
   const isFreeUser = !hasProAccess;
+  const { recordView, isExhausted: viewDetailsExhausted } = useViewDetailsLimit(hasProAccess);
 
   // Trigger challenge modal on first search page visit after walkthrough completion (only for subscribed users)
   useEffect(() => {
@@ -75,7 +77,7 @@ const Index = () => {
   }, [isAdEntryGuest, trialLimitError]);
 
   // Authenticated free user search cap (2 searches)
-  const FREE_USER_SEARCH_CAP = 2;
+  const FREE_USER_SEARCH_CAP = 5;
   const freeUserSearchKey = user?.id ? `leadfinder_free_search_count:${user.id}` : null;
   const [freeUserSearchCount, setFreeUserSearchCount] = useState(0);
 
@@ -316,12 +318,17 @@ const Index = () => {
               return addToOutreach(lead, lastSearchCountry, 'no_website');
             }}
             isInOutreach={isInOutreach}
-            onMapLinkClick={markAsChecked}
+            onMapLinkClick={(name, url) => {
+              recordView();
+              markAsChecked(name, url);
+            }}
             isChecked={isChecked}
             gated={effectiveGated}
             onGatedAction={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
             savedLeadCount={savedLeadCount}
             maxFreeSaves={MAX_FREE_SAVES}
+            viewDetailsExhausted={viewDetailsExhausted && isFreeUser}
+            onViewDetailsGated={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
           />
         </section>
       )}

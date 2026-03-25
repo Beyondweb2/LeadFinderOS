@@ -94,7 +94,7 @@ interface OutreachTableProps {
   phoneFetchStatus?: Record<string, PhoneFetchStatus>;
   onRetryPhoneFetch?: (leadId: string) => void;
   /** Called before a contact action. Return true to allow, false to block (show paywall). */
-  onContactGated?: (channel: 'call' | 'sms' | 'whatsapp') => boolean;
+  onContactGated?: (channel: 'call' | 'sms' | 'whatsapp', leadId?: string) => boolean;
 }
 
 const ITEMS_PER_PAGE_DESKTOP = 15;
@@ -331,7 +331,7 @@ export function OutreachTable({
       });
       return;
     }
-    if (onContactGated && !onContactGated('whatsapp')) return;
+    if (onContactGated && !onContactGated('whatsapp', lead.id)) return;
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'whatsapp' as ContactMethod);
     // Treat opening contact panel as selecting this lead for next walkthrough step
@@ -349,7 +349,7 @@ export function OutreachTable({
 
   // Handle SMS button click - open template dialog + count walkthrough contact
   const handleSMSClick = useCallback((lead: OutreachLead) => {
-    if (onContactGated && !onContactGated('sms')) return;
+    if (onContactGated && !onContactGated('sms', lead.id)) return;
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'sms' as ContactMethod);
     // Treat opening contact panel as selecting this lead for next walkthrough step
@@ -367,7 +367,7 @@ export function OutreachTable({
 
   // Handle Call button click - direct open + count walkthrough contact
   const handleCallClick = useCallback((lead: OutreachLead) => {
-    if (onContactGated && !onContactGated('call')) return;
+    if (onContactGated && !onContactGated('call', lead.id)) return;
     // Auto-fill contact method
     if (onContactMethodChange) onContactMethodChange(lead.id, 'call' as ContactMethod);
     // Always emit walkthrough contact event on click (replay-safe)
