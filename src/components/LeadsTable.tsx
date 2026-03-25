@@ -302,22 +302,34 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   </TableCell>
                   <TableCell>
                     {lead.googleMapsUrl && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 px-3 text-xs gap-1.5 text-muted-foreground hover:text-foreground border-border/60 hover:border-border"
-                        asChild
-                      >
-                        <a
-                          href={lead.googleMapsUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                      viewDetailsExhausted ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-3 text-xs gap-1.5 text-muted-foreground border-border/60"
+                          onClick={(e) => { e.preventDefault(); onViewDetailsGated?.(); }}
                         >
-                          <Eye className="h-3.5 w-3.5" />
+                          <Lock className="h-3.5 w-3.5" />
                           View Details
-                        </a>
-                      </Button>
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-3 text-xs gap-1.5 text-muted-foreground hover:text-foreground border-border/60 hover:border-border"
+                          asChild
+                        >
+                          <a
+                            href={lead.googleMapsUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            View Details
+                          </a>
+                        </Button>
+                      )
                     )}
                   </TableCell>
                   <TableCell>
