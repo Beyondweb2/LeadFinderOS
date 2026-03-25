@@ -75,7 +75,7 @@ const Index = () => {
   }, [isAdEntryGuest, trialLimitError]);
 
   // Authenticated free user search cap (2 searches)
-  const FREE_USER_SEARCH_CAP = 2;
+  const FREE_USER_SEARCH_CAP = 5;
   const freeUserSearchKey = user?.id ? `leadfinder_free_search_count:${user.id}` : null;
   const [freeUserSearchCount, setFreeUserSearchCount] = useState(0);
 
