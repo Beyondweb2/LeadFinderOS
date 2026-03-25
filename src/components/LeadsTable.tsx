@@ -37,9 +37,11 @@ interface LeadsTableProps {
   onGatedAction?: () => void;
   savedLeadCount?: number;
   maxFreeSaves?: number;
+  onViewDetailsGated?: () => void;
+  viewDetailsExhausted?: boolean;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3 }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
