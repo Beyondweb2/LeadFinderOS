@@ -36,6 +36,7 @@ const Index = () => {
   // Pro access = active, past_due, admin, or trialing (Stripe trial)
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
   const isFreeUser = !hasProAccess;
+  const { recordView, isExhausted: viewDetailsExhausted } = useViewDetailsLimit(hasProAccess);
 
   // Trigger challenge modal on first search page visit after walkthrough completion (only for subscribed users)
   useEffect(() => {
