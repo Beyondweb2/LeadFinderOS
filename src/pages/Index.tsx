@@ -14,6 +14,7 @@ import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
+import { useViewDetailsLimit } from '@/hooks/useViewDetailsLimit';
 import { supabase } from '@/integrations/supabase/client';
 import { Flame, Target, Zap, Search, AlertTriangle, MapPin, Info } from 'lucide-react';
 import { trackFunnelEvent } from '@/lib/funnelAnalytics';
