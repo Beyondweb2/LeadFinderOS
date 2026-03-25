@@ -176,27 +176,39 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   <div className="mt-1"><StatusBadge status={lead.websiteStatus} compact /></div>
                 </div>
                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                   {/* View Details — always accessible, no gating */}
+                   {/* View Details — gated after 5 views for free users */}
                    <Tooltip>
                      <TooltipTrigger asChild>
-                       <Button
-                         variant="ghost"
-                         size="sm"
-                         className={`h-8 px-2.5 text-xs gap-1.5 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
-                         asChild
-                       >
-                         <a
-                           href={lead.googleMapsUrl}
-                           target="_blank"
-                           rel="noopener noreferrer"
-                           onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                       {viewDetailsExhausted ? (
+                         <Button
+                           variant="ghost"
+                           size="sm"
+                           className="h-8 px-2.5 text-xs gap-1.5 hover:bg-muted"
+                           onClick={(e) => { e.preventDefault(); onViewDetailsGated?.(); }}
                          >
-                           <EyeIcon checked={!!checked} small />
+                           <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                            <span>View Details</span>
-                         </a>
-                       </Button>
+                         </Button>
+                       ) : (
+                         <Button
+                           variant="ghost"
+                           size="sm"
+                           className={`h-8 px-2.5 text-xs gap-1.5 ${checked ? 'text-muted-foreground/50 bg-muted/30' : 'hover:bg-muted'}`}
+                           asChild
+                         >
+                           <a
+                             href={lead.googleMapsUrl}
+                             target="_blank"
+                             rel="noopener noreferrer"
+                             onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                           >
+                             <EyeIcon checked={!!checked} small />
+                             <span>View Details</span>
+                           </a>
+                         </Button>
+                       )}
                      </TooltipTrigger>
-                     <TooltipContent>{checked ? 'Already viewed' : 'View business info'}</TooltipContent>
+                     <TooltipContent>{viewDetailsExhausted ? 'Start trial to view more' : checked ? 'Already viewed' : 'View business info'}</TooltipContent>
                    </Tooltip>
                   {onAddToOutreach && (
                     inOutreach ? (
