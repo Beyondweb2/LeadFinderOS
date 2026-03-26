@@ -78,9 +78,23 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   const hasPhone = !!lead.phone;
   const showFetchingState = !hasPhone && isPhoneFetching;
 
+  // Status-based left border color
+  const statusBorderColor = (() => {
+    const s = lead.status;
+    if (s === 'not_contacted') return 'border-l-blue-400/60';
+    if (s === 'waiting' || s === 'sent_initial_text') return 'border-l-amber-500';
+    if (s === 'contacted' || s === 'sms' || s === 'whatsapp' || s === 'facebook_msg') return 'border-l-amber-400';
+    if (s === 'replied') return 'border-l-emerald-500';
+    if (s === 'call_back' || s === 'sent_voice_note') return 'border-l-purple-500';
+    if (s === 'interested') return 'border-l-yellow-500';
+    if (s === 'not_interested') return 'border-l-zinc-500';
+    if (s === 'completed') return 'border-l-green-600';
+    return 'border-l-blue-400/60';
+  })();
+
   return (
     <div 
-      className={`py-3 px-3 border-b border-border/50 ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
+      className={`py-3.5 px-3.5 border-b border-border/50 border-l-[3px] ${statusBorderColor} ${lead.is_potential_work ? 'bg-primary/5' : ''} ${isHighlighted ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
       onClick={onLeadClick}
     >
       <div className="flex items-start gap-2.5">
@@ -100,7 +114,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
             {lead.country === 'Australia' && (
               <span className="text-xs" title="Australia">🇦🇺</span>
             )}
-            <span className="font-semibold text-sm leading-tight">{lead.business_name}</span>
+            <span className="font-bold text-[15px] leading-tight">{lead.business_name}</span>
             {lead.is_potential_work && (
               <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />
             )}

@@ -1149,6 +1149,32 @@ const PotentialWorkPage = () => {
 
   const { user } = useAuth();
 
+  // Guard demo leads from triggering DB writes
+  const safeUpdateStatus = useCallback(async (leadId: string, status: LeadStatus) => {
+    if (isDemoLead(leadId)) return null;
+    return updateStatus(leadId, status);
+  }, [updateStatus]);
+  const safeUpdateNextAction = useCallback(async (leadId: string, action: NextActionType, date?: string) => {
+    if (isDemoLead(leadId)) return null;
+    return updateNextAction(leadId, action, date);
+  }, [updateNextAction]);
+  const safeUpdateNotes = useCallback(async (leadId: string, notes: string) => {
+    if (isDemoLead(leadId)) return null;
+    return updateNotes(leadId, notes);
+  }, [updateNotes]);
+  const safeUpdateBusinessName = useCallback(async (leadId: string, name: string) => {
+    if (isDemoLead(leadId)) return null;
+    return updateBusinessName(leadId, name);
+  }, [updateBusinessName]);
+  const safeUpdateLead = useCallback(async (leadId: string, updates: Partial<OutreachLead>) => {
+    if (isDemoLead(leadId)) return null;
+    return updateLead(leadId, updates);
+  }, [updateLead]);
+  const safeDeleteLead = useCallback(async (leadId: string, silent?: boolean) => {
+    if (isDemoLead(leadId)) return false;
+    return deleteLead(leadId, silent);
+  }, [deleteLead]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'action_date' | 'recent' | 'alpha'>('action_date');
   const [metricFilter, setMetricFilter] = useState<'overdue' | 'today' | 'upcoming' | 'no_action' | null>(null);
@@ -1170,6 +1196,7 @@ const PotentialWorkPage = () => {
   const [editStatusLabel, setEditStatusLabel] = useState('');
 
   const updateImageUrl = useCallback(async (leadId: string, imageUrl: string | null) => {
+    if (isDemoLead(leadId)) return null;
     const { data, error } = await supabase
       .from('outreach_leads')
       .update({ image_url: imageUrl })
@@ -1480,13 +1507,13 @@ const PotentialWorkPage = () => {
                 lead={lead}
                 isExpanded={expandedCardId === lead.id}
                 onToggleExpand={() => setExpandedCardId(prev => prev === lead.id ? null : lead.id)}
-                onStatusChange={updateStatus}
-                onNextActionChange={updateNextAction}
-                onNotesChange={updateNotes}
-                onBusinessNameChange={updateBusinessName}
+                onStatusChange={safeUpdateStatus}
+                onNextActionChange={safeUpdateNextAction}
+                onNotesChange={safeUpdateNotes}
+                onBusinessNameChange={safeUpdateBusinessName}
                 onImageChange={updateImageUrl}
-                onUpdateLead={updateLead}
-                onDelete={deleteLead}
+                onUpdateLead={safeUpdateLead}
+                onDelete={safeDeleteLead}
                 customStatuses={customStatuses}
                 onAddCustomStatus={() => setShowCustomStatusDialog(true)}
                 userId={user?.id}
@@ -1500,11 +1527,11 @@ const PotentialWorkPage = () => {
         lead={selectedLead}
         open={!!selectedLead}
         onOpenChange={(open) => !open && setSelectedLead(null)}
-        onUpdateStatus={updateStatus}
-        onUpdateNextAction={updateNextAction}
-        onUpdateNotes={updateNotes}
-        onUpdateLead={updateLead}
-        onDelete={deleteLead}
+        onUpdateStatus={safeUpdateStatus}
+        onUpdateNextAction={safeUpdateNextAction}
+        onUpdateNotes={safeUpdateNotes}
+        onUpdateLead={safeUpdateLead}
+        onDelete={safeDeleteLead}
         fetchActivities={fetchActivities}
       />
 
