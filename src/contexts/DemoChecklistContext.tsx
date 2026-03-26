@@ -248,6 +248,7 @@ export function DemoChecklistProvider({
   const allDone = completedCount === TOTAL_STEPS;
 
   const allDoneRef = useRef(false);
+  // When walkthrough completes, set a pending flag instead of firing immediately
   useEffect(() => {
     if (allDone && !allDoneRef.current) {
       allDoneRef.current = true;
@@ -267,13 +268,30 @@ export function DemoChecklistProvider({
           try {
             localStorage.setItem(`walkthrough_completed_${user.id}`, 'true');
             localStorage.setItem(`demo_walkthrough_dismissed_${user.id}`, 'true');
+            // Set pending flag — completion popup will show on next visit to /find-leads or /outreach
+            localStorage.setItem(`walkthrough_completion_pending_${user.id}`, 'true');
           } catch {}
         }
         window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
-        window.dispatchEvent(new CustomEvent('walkthrough-all-done'));
       }
     }
   }, [allDone, isReplay, user?.id]);
+
+  // Fire walkthrough-all-done when user navigates to /find-leads or /outreach AFTER completion
+  useEffect(() => {
+    if (!user?.id) return;
+    const pendingKey = `walkthrough_completion_pending_${user.id}`;
+    try {
+      if (localStorage.getItem(pendingKey) !== 'true') return;
+      if (location.pathname === '/find-leads' || location.pathname === '/outreach') {
+        localStorage.removeItem(pendingKey);
+        // Small delay so the page renders first
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('walkthrough-all-done'));
+        }, 600);
+      }
+    } catch {}
+  }, [location.pathname, user?.id]);
 
   return (
     <DemoChecklistContext.Provider value={{
