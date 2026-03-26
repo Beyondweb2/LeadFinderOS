@@ -327,7 +327,7 @@ const Index = () => {
             onGatedAction={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
             savedLeadCount={savedLeadCount}
             maxFreeSaves={MAX_FREE_SAVES}
-            viewDetailsExhausted={viewDetailsExhausted && isFreeUser}
+            viewDetailsExhausted={(viewDetailsExhausted || (isFreeUser && savedLeadCount >= MAX_FREE_SAVES)) && isFreeUser}
             onViewDetailsGated={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
           />
         </section>
