@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { OutreachTable } from '@/components/OutreachTable';
 
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
+import { OutreachIntroModal } from '@/components/OutreachIntroModal';
 import { PostContactModal } from '@/components/PostContactModal';
 import { Challenge10Widget } from '@/components/Challenge10Widget';
 import { Challenge10Modal } from '@/components/Challenge10Modal';
@@ -51,19 +52,9 @@ const Outreach = () => {
   const { hasUsedContact, markContactUsed } = useContactUsage();
   const [showPaywall, setShowPaywall] = useState(false);
 
-  // Demo leads for first-time users
-  const [showDemoLeads, setShowDemoLeads] = useState(false);
+  // Demo leads for first-time users — persist until user explicitly dismisses with X
   const [demoDismissedLocal, setDemoDismissedLocal] = useState(false);
-
-  useEffect(() => {
-    if (!user?.id) return;
-    // Show demo leads only if user has no real leads and hasn't dismissed
-    if (leads.length === 0 && archivedLeads.length === 0 && !isDemoDismissed(user.id)) {
-      setShowDemoLeads(true);
-    } else {
-      setShowDemoLeads(false);
-    }
-  }, [user?.id, leads.length, archivedLeads.length]);
+  const showDemoLeads = user?.id ? !isDemoDismissed(user.id) && !demoDismissedLocal : false;
 
   const handleDismissDemo = useCallback(() => {
     if (user?.id) dismissDemoLeads(user.id);
@@ -269,6 +260,9 @@ const Outreach = () => {
 
       {/* First-time outreach tips */}
       <OutreachTipsDialog />
+
+      {/* Outreach intro popup for walkthrough */}
+      <OutreachIntroModal />
 
       {/* Post-contact guidance modal */}
       <PostContactModal />

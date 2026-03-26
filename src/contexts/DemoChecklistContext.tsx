@@ -7,6 +7,11 @@ export interface DemoChecklistState {
   searchDone: boolean;
   addedToCrm: boolean;
   crmAddCount: number;
+  // Simplified: outreach intro popup shown & dismissed
+  outreachIntroDone: boolean;
+  // After outreach intro, user navigated to Track Leads
+  viewedTrackLeads: boolean;
+  // Legacy compat fields (unused but kept so old localStorage doesn't break parsing)
   firstContactMade: boolean;
   contactPanelClosed: boolean;
   threeContactsMade: boolean;
@@ -17,7 +22,6 @@ export interface DemoChecklistState {
   nextActionSet: boolean;
   nextDateSet: boolean;
   cardCollapsed: boolean;
-  // Legacy compat fields (unused but kept so old localStorage doesn't break parsing)
   contactAttempted: boolean;
   crmPageOpened: boolean;
   trackPressed: boolean;
@@ -39,7 +43,7 @@ interface DemoChecklistContextType {
 
 const DemoChecklistContext = createContext<DemoChecklistContextType | null>(null);
 
-const STORAGE_PREFIX = 'demo_checklist_v4';
+const STORAGE_PREFIX = 'demo_checklist_v5';
 
 function getKey(userId?: string) {
   return userId ? `${STORAGE_PREFIX}_${userId}` : STORAGE_PREFIX;
@@ -49,6 +53,9 @@ const defaultState: DemoChecklistState = {
   searchDone: false,
   addedToCrm: false,
   crmAddCount: 0,
+  outreachIntroDone: false,
+  viewedTrackLeads: false,
+  // Legacy compat
   firstContactMade: false,
   contactPanelClosed: false,
   threeContactsMade: false,
@@ -59,7 +66,6 @@ const defaultState: DemoChecklistState = {
   nextActionSet: false,
   nextDateSet: false,
   cardCollapsed: false,
-  // Legacy compat
   contactAttempted: false,
   crmPageOpened: false,
   trackPressed: false,
@@ -79,6 +85,13 @@ function saveState(state: DemoChecklistState, userId?: string) {
     localStorage.setItem(getKey(userId), JSON.stringify(state));
   } catch { /* ignore */ }
 }
+
+// The simplified walkthrough has 4 steps:
+// 1. Search for leads
+// 2. Add to CRM
+// 3. Outreach intro popup (auto-shown on outreach page)
+// 4. Navigate to Track Leads
+const TOTAL_STEPS = 4;
 
 export function DemoChecklistProvider({
   children,
@@ -111,7 +124,6 @@ export function DemoChecklistProvider({
       allDoneRef.current = true;
       setIsOpen(false);
       setIsReplay(false);
-      // Clear simulate-new-user flag
       if (user?.id) {
         try { localStorage.removeItem(`simulate_new_user_${user.id}`); } catch {}
       }
@@ -158,6 +170,7 @@ export function DemoChecklistProvider({
     if (user?.id) {
       localStorage.removeItem(`demo_walkthrough_dismissed_${user.id}`);
       localStorage.removeItem(`walkthrough_completed_${user.id}`);
+      localStorage.removeItem(`outreach_intro_shown_${user.id}`);
     }
     window.dispatchEvent(new CustomEvent('start-walkthrough'));
   }, [user?.id]);
@@ -186,72 +199,7 @@ export function DemoChecklistProvider({
       });
     };
 
-    // Single handler for contact events (used by demo-checklist-contact only)
-    const onContact = () => {
-      setState(prev => {
-        const newCount = prev.contactsMadeCount + 1;
-        const next = {
-          ...prev,
-          contactsMadeCount: newCount,
-          firstContactMade: newCount >= 1,
-          threeContactsMade: newCount >= 3,
-          contactAttempted: true,
-        };
-        saveState(next, user?.id);
-        return next;
-      });
-    };
-
-
-
-    const onContactPanelClosed = () => completeStep('contactPanelClosed');
-
-    const onNoteSaved = () => completeStep('noteAdded');
-
-    const onTrackStatusChanged = () => completeStep('trackStatusSet');
-    const onNextActionSet = () => completeStep('nextActionSet');
-    const onNextDateSet = () => completeStep('nextDateSet');
-
-    const onCardCollapsed = () => completeStep('cardCollapsed');
-
-    const onTelClick = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const anchor = target.closest('a[href^="tel:"]');
-      if (anchor) onContact();
-    };
-
-    // Skip contact steps entirely (user skipped tips dialog)
-    const onSkipContactSteps = () => {
-      setState(prev => {
-        const next = {
-          ...prev,
-          firstContactMade: true,
-          contactPanelClosed: true,
-          threeContactsMade: true,
-          contactsMadeCount: Math.max(prev.contactsMadeCount, 3),
-          contactAttempted: true,
-        };
-        saveState(next, user?.id);
-        return next;
-      });
-    };
-
-    const onTrackPressed = () => completeStep('trackPressed');
-
-    window.addEventListener('demo-checklist-search', onSearch);
-    window.addEventListener('crm-lead-added', onCrmAdd);
-    window.addEventListener('crm-lead-purged', onCrmPurged);
-    window.addEventListener('demo-checklist-contact', onContact);
-    window.addEventListener('demo-checklist-contact-panel-closed', onContactPanelClosed);
-    
-    window.addEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
-    window.addEventListener('demo-checklist-track-note-saved', onNoteSaved);
-    window.addEventListener('demo-checklist-track-pressed', onTrackPressed);
-    window.addEventListener('demo-checklist-track-status-changed', onTrackStatusChanged);
-    window.addEventListener('demo-checklist-next-action-set', onNextActionSet);
-    window.addEventListener('demo-checklist-next-date-set', onNextDateSet);
-    window.addEventListener('demo-checklist-card-collapsed', onCardCollapsed);
-    document.addEventListener('click', onTelClick, true);
+    const onOutreachIntroDismissed = () => completeStep('outreachIntroDone');
 
     // Hide walkthrough panel while Quick Locations dropdown is open
     let panelWasOpen = false;
@@ -266,69 +214,62 @@ export function DemoChecklistProvider({
         }
       }
     };
+
+    window.addEventListener('demo-checklist-search', onSearch);
+    window.addEventListener('crm-lead-added', onCrmAdd);
+    window.addEventListener('crm-lead-purged', onCrmPurged);
+    window.addEventListener('outreach-intro-dismissed', onOutreachIntroDismissed);
     window.addEventListener('quick-locations-toggle', onQuickLocToggle);
 
     return () => {
       window.removeEventListener('demo-checklist-search', onSearch);
       window.removeEventListener('crm-lead-added', onCrmAdd);
       window.removeEventListener('crm-lead-purged', onCrmPurged);
-      window.removeEventListener('demo-checklist-contact', onContact);
-      window.removeEventListener('demo-checklist-contact-panel-closed', onContactPanelClosed);
-      
-      window.removeEventListener('walkthrough-skip-contact-steps', onSkipContactSteps);
-      window.removeEventListener('demo-checklist-track-note-saved', onNoteSaved);
-      window.removeEventListener('demo-checklist-track-pressed', onTrackPressed);
-      window.removeEventListener('demo-checklist-track-status-changed', onTrackStatusChanged);
-      window.removeEventListener('demo-checklist-next-action-set', onNextActionSet);
-      window.removeEventListener('demo-checklist-next-date-set', onNextDateSet);
-      window.removeEventListener('demo-checklist-card-collapsed', onCardCollapsed);
-      document.removeEventListener('click', onTelClick, true);
+      window.removeEventListener('outreach-intro-dismissed', onOutreachIntroDismissed);
       window.removeEventListener('quick-locations-toggle', onQuickLocToggle);
     };
   }, [isDemoUser, isReplay, completeStep, isOpen]);
 
-  // Step 5: Complete "viewedProgress" when user visits /potential-work
+  // Complete viewedTrackLeads when user visits /potential-work
   useEffect(() => {
     if (!isDemoUser && !isReplay) return;
     if (location.pathname === '/potential-work') {
-      completeStep('viewedProgress');
-      // Legacy compat
-      completeStep('leadTracked');
+      completeStep('viewedTrackLeads');
     }
   }, [isDemoUser, isReplay, location.pathname, completeStep]);
 
-  // 10 steps
   const completedCount = [
     state.searchDone,
     state.addedToCrm,
-    state.contactPanelClosed,
-    state.trackPressed,
-    state.viewedProgress,
-    state.noteAdded,
-    state.trackStatusSet,
-    state.nextActionSet,
-    state.nextDateSet,
-    state.cardCollapsed,
+    state.outreachIntroDone,
+    state.viewedTrackLeads,
   ].filter(Boolean).length;
 
-  const allDone = completedCount === 10;
+  const allDone = completedCount === TOTAL_STEPS;
 
   const allDoneRef = useRef(false);
   useEffect(() => {
     if (allDone && !allDoneRef.current) {
       allDoneRef.current = true;
-      // Clear simulate-new-user flag
       if (user?.id) {
         try { localStorage.removeItem(`simulate_new_user_${user.id}`); } catch {}
       }
       Promise.resolve(supabase.rpc('log_walkthrough_event' as any, {
         p_event_type: 'walkthrough_complete',
-        p_meta: { walkthrough_id: 'main' },
+        p_meta: { walkthrough_id: 'main_v2' },
       })).catch(() => {});
       if (isReplay) {
         setIsOpen(false);
         setIsReplay(false);
       } else {
+        // Mark walkthrough as complete
+        if (user?.id) {
+          try {
+            localStorage.setItem(`walkthrough_completed_${user.id}`, 'true');
+            localStorage.setItem(`demo_walkthrough_dismissed_${user.id}`, 'true');
+          } catch {}
+        }
+        window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
         window.dispatchEvent(new CustomEvent('walkthrough-all-done'));
       }
     }
@@ -338,7 +279,7 @@ export function DemoChecklistProvider({
     <DemoChecklistContext.Provider value={{
       state,
       completedCount,
-      totalSteps: 10,
+      totalSteps: TOTAL_STEPS,
       allDone,
       completeStep,
       isOpen,
@@ -355,7 +296,7 @@ export function DemoChecklistProvider({
 const fallback: DemoChecklistContextType = {
   state: defaultState,
   completedCount: 0,
-  totalSteps: 10,
+  totalSteps: TOTAL_STEPS,
   allDone: false,
   completeStep: () => {},
   isOpen: false,
