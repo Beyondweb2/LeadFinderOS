@@ -19,6 +19,17 @@ export function WelcomeWalkthroughModal() {
   const [checked, setChecked] = useState(false);
 
   useEffect(() => {
+    // Skip if new onboarding already handled this user
+    if (user?.id) {
+      try {
+        const newOnboardingDone = localStorage.getItem(`leadfinder_onboarding_done:${user.id}`) === 'true';
+        if (newOnboardingDone) {
+          setChecked(true);
+          return;
+        }
+      } catch {}
+    }
+
     // For authenticated users — use DB flag
     if (user?.id) {
       let cancelled = false;
@@ -31,8 +42,11 @@ export function WelcomeWalkthroughModal() {
           if (cancelled) return;
           setChecked(true);
           if (data && !data.has_seen_walkthrough_prompt) {
-            setShow(true);
-            (window as any).__welcomeModalActive = true;
+            // Don't show old welcome modal — new onboarding handles this
+            // Mark as seen so it never triggers again
+            supabase.functions.invoke('ensure-trial', {
+              body: { action: 'mark_walkthrough_prompt_seen' },
+            }).catch(() => {});
           }
         });
       return () => { cancelled = true; };
