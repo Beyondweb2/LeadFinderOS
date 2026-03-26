@@ -109,12 +109,12 @@ export function createDemoTrackedLead(userId: string): OutreachLead {
     google_maps_url: null,
     address: '45 Church Street, Bristol BS1 3NE',
     category: 'Plumbing & Heating',
-    status: 'qualified',
-    next_action: 'send_draft',
+    status: 'interested' as const,
+    next_action: 'send_draft' as const,
     next_action_date: tomorrow,
     notes: 'Spoke with Dave — interested in a 5-page website with booking form. Wants to see a draft by Friday. Budget around £800.',
-    country: 'UK',
-    list_type: 'no_website',
+    country: 'UK' as const,
+    list_type: 'no_website' as const,
     created_at: twoDaysAgo,
     updated_at: now,
     is_archived: false,
@@ -127,7 +127,7 @@ export function createDemoTrackedLead(userId: string): OutreachLead {
     project_overview: '5-page brochure website with online booking form',
     project_status: 'not_started',
     contact_name: 'Dave Greenfield',
-  } as OutreachLead;
+  };
 }
 
 const DEMO_DISMISSED_KEY = 'leadfinder_demo_leads_dismissed';
