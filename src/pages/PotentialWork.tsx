@@ -298,7 +298,7 @@ const PROJECT_STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
 ];
 
-const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
+const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId, onContactGated }: LeadCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
