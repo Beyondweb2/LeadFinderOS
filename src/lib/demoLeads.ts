@@ -1,4 +1,5 @@
 import type { OutreachLead } from '@/types/outreach';
+import demoKitchenImage from '@/assets/demo-kitchen-fitters.jpg';
 
 /**
  * 3 realistic example leads shown to new users on the Outreach page.
@@ -11,11 +12,22 @@ export function isDemoLead(id: string): boolean {
   return id.startsWith('demo-');
 }
 
-export function createDemoLeads(userId: string): OutreachLead[] {
-  const now = new Date().toISOString();
-  const yesterday = new Date(Date.now() - 86400000).toISOString();
-  const twoDaysAgo = new Date(Date.now() - 172800000).toISOString();
+// Fixed dates relative to "today" so every new user sees consistent examples
+function demoDate(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  d.setHours(10, 0, 0, 0);
+  return d.toISOString();
+}
 
+function futureDate(daysAhead: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + daysAhead);
+  d.setHours(10, 0, 0, 0);
+  return d.toISOString();
+}
+
+export function createDemoLeads(userId: string): OutreachLead[] {
   return [
     {
       id: 'demo-lead-1',
@@ -28,17 +40,17 @@ export function createDemoLeads(userId: string): OutreachLead[] {
       category: 'Roofing',
       status: 'waiting',
       next_action: 'send_follow_up',
-      next_action_date: null,
+      next_action_date: futureDate(1),
       notes: null,
       country: 'UK',
       list_type: 'no_website',
-      created_at: twoDaysAgo,
-      updated_at: yesterday,
+      created_at: demoDate(2),
+      updated_at: demoDate(1),
       is_archived: false,
       is_potential_work: false,
       contact_method: 'facebook_msg',
       outreach_attempts: 1,
-      last_outreach_attempt_at: yesterday,
+      last_outreach_attempt_at: demoDate(1),
     },
     {
       id: 'demo-lead-2',
@@ -51,17 +63,17 @@ export function createDemoLeads(userId: string): OutreachLead[] {
       category: 'Landscaping',
       status: 'contacted',
       next_action: 'call',
-      next_action_date: null,
+      next_action_date: futureDate(2),
       notes: null,
       country: 'UK',
       list_type: 'no_website',
-      created_at: twoDaysAgo,
-      updated_at: yesterday,
+      created_at: demoDate(2),
+      updated_at: demoDate(1),
       is_archived: false,
       is_potential_work: false,
       contact_method: 'sms',
       outreach_attempts: 2,
-      last_outreach_attempt_at: yesterday,
+      last_outreach_attempt_at: demoDate(1),
     },
     {
       id: 'demo-lead-3',
@@ -74,17 +86,18 @@ export function createDemoLeads(userId: string): OutreachLead[] {
       category: 'Kitchen Fitting',
       status: 'replied',
       next_action: 'send_follow_up',
-      next_action_date: null,
+      next_action_date: futureDate(3),
       notes: null,
       country: 'UK',
       list_type: 'no_website',
-      created_at: twoDaysAgo,
-      updated_at: now,
+      created_at: demoDate(2),
+      updated_at: demoDate(0),
       is_archived: false,
       is_potential_work: true,
       contact_method: 'whatsapp',
       outreach_attempts: 3,
-      last_outreach_attempt_at: now,
+      last_outreach_attempt_at: demoDate(0),
+      image_url: demoKitchenImage,
     },
   ];
 }

@@ -51,8 +51,9 @@ export function DemoChecklistPanel() {
     } catch { setDismissed(false); }
   }, [dismissKey]);
 
+  // Listen for walkthrough-all-done event (fired when user navigates to /find-leads or /outreach AFTER completion)
   useEffect(() => {
-    if (allDone && !prevAllDoneRef.current) {
+    const handler = () => {
       setShowCompletionModal(true);
       if (user?.id) {
         Promise.all([
@@ -66,9 +67,10 @@ export function DemoChecklistPanel() {
           setMetrics({ noWebsite, added, messages });
         });
       }
-    }
-    prevAllDoneRef.current = allDone;
-  }, [allDone, user?.id]);
+    };
+    window.addEventListener('walkthrough-all-done', handler);
+    return () => window.removeEventListener('walkthrough-all-done', handler);
+  }, [user?.id]);
 
 
   const handleDismiss = () => {
@@ -100,39 +102,35 @@ export function DemoChecklistPanel() {
               <div />
             </div>
 
-            <h3 className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-4 text-foreground">
-              {t('completion.headline')} <span className="text-primary">{t('completion.headlineAccent')}</span>.
+            <h3 className="text-center text-[22px] sm:text-2xl font-bold leading-[1.2] tracking-tight mb-3 text-foreground">
+              Build Your <span className="text-primary">Pipeline</span>
             </h3>
 
-            <div className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5 space-y-3">
-              <p>{(state.contactsMadeCount === 1
-                ? t('completion.contacted', { count: state.contactsMadeCount })
-                : t('completion.contactedPlural', { count: state.contactsMadeCount })
-              ).replace('<bold>', '').replace('</bold>', '')}</p>
-              <p>{t('completion.mostFreelancers')}<br />{t('completion.keepStacking')}</p>
-            </div>
+            <p className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5">
+              Add more leads, use templates, and start outreach
+            </p>
 
             <div className="w-full rounded-xl border border-primary/15 bg-gradient-to-br from-primary/[0.06] to-primary/[0.02] px-5 py-4 mb-4 shadow-[inset_0_1px_1px_rgba(255,255,255,0.04)]">
               <div className="flex items-center justify-around">
                 <div className="text-center">
                   <CountUp value={metrics.noWebsite} />
-                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">{t('completion.businessesFound')}</div>
+                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Businesses Found</div>
                 </div>
                 <div className="text-center">
                   <CountUp value={metrics.added} />
-                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">{t('completion.leadsAdded')}</div>
+                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Leads Added</div>
                 </div>
                 <div className="text-center">
                   <CountUp value={metrics.messages} />
-                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">{t('completion.conversations')}</div>
+                  <div className="text-[10px] text-muted-foreground/70 leading-tight mt-0.5">Conversations</div>
                 </div>
               </div>
             </div>
 
-            <p className="text-center text-[12px] text-foreground font-medium mb-5">{t('completion.volumeQuote')}</p>
+            <p className="text-center text-[12px] text-foreground font-medium mb-5">More leads = more chances to land clients</p>
 
             <button onClick={handleCompletionDismiss} className="btn-premium w-full h-12 rounded-xl text-[15px] font-semibold text-white flex items-center justify-center gap-2 transition-all">
-              {t('completion.cta')}
+              Find More Leads
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
