@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { isDemoLead } from '@/lib/demoLeads';
+import { isDemoLead, createDemoTrackedLead } from '@/lib/demoLeads';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -1240,7 +1240,6 @@ const PotentialWorkPage = () => {
 
   const demoTrackedLead = useMemo(() => {
     if (!showDemoTracked || !user?.id) return null;
-    const { createDemoTrackedLead } = require('@/lib/demoLeads');
     return createDemoTrackedLead(user.id);
   }, [showDemoTracked, user?.id]);
 
