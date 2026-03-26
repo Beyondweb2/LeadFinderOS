@@ -49,7 +49,7 @@ const Outreach = () => {
   const { isStripeTrialing } = useTrial();
   const { walkthroughOpen } = useWalkthroughStatus();
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
-  const { hasUsedContact, markContactUsed } = useContactUsage();
+  const { tryContact, isContactLocked } = useContactUsage();
   const [showPaywall, setShowPaywall] = useState(false);
 
   // Demo leads for first-time users — persist until user explicitly dismisses with X
@@ -67,50 +67,13 @@ const Outreach = () => {
     return createDemoLeads(user.id);
   }, [showDemoLeads, demoDismissedLocal, user?.id]);
 
-  // Per-business, per-channel contact gating
-  const handleContactGated = useCallback((channel: 'call' | 'sms' | 'whatsapp', leadId?: string): boolean => {
+  // Global 3-business contact gating for free users
+  const handleContactGated = useCallback((_channel: 'call' | 'sms' | 'whatsapp', leadId?: string): boolean => {
     if (hasProAccess) return true;
-
-    // If leadId provided, check per-business usage
-    if (leadId) {
-      if (!hasUsedContact(leadId, channel)) {
-        markContactUsed(leadId, channel);
-        return true;
-      }
-      setShowPaywall(true);
-      return false;
-    }
-
-    // Fallback: global per-channel (legacy)
-    const contactAttemptsKey = user?.id ? `leadfinder_contact_attempts:${user.id}` : 'leadfinder_contact_attempts';
-    const attempts = (() => {
-      try {
-        const raw = localStorage.getItem(contactAttemptsKey);
-        if (!raw) return { call: 0, sms: 0, whatsapp: 0 };
-        const parsed = JSON.parse(raw);
-        return {
-          call: Number(parsed?.call || 0),
-          sms: Number(parsed?.sms || 0),
-          whatsapp: Number(parsed?.whatsapp || 0),
-        };
-      } catch {
-        return { call: 0, sms: 0, whatsapp: 0 };
-      }
-    })();
-
-    if (attempts[channel] < 1) {
-      try {
-        localStorage.setItem(contactAttemptsKey, JSON.stringify({
-          ...attempts,
-          [channel]: attempts[channel] + 1,
-        }));
-      } catch {}
-      return true;
-    }
-
+    if (leadId && tryContact(leadId)) return true;
     setShowPaywall(true);
     return false;
-  }, [hasProAccess, hasUsedContact, markContactUsed, user?.id]);
+  }, [hasProAccess, tryContact]);
 
   // Combine active and archived leads into one unified list
   const allLeads = useMemo(() => {

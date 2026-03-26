@@ -70,6 +70,10 @@ import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach'
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { FacebookSection } from '@/components/FacebookSection';
 import { cn } from '@/lib/utils';
+import { useContactUsage } from '@/hooks/useContactUsage';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useTrial } from '@/hooks/useTrial';
+import { TrialConversionModal } from '@/components/TrialConversionModal';
 
 /* ───────── constants ───────── */
 
@@ -274,6 +278,7 @@ interface LeadCardProps {
   customStatuses: { value: string; label: string }[];
   onAddCustomStatus: () => void;
   userId: string | undefined;
+  onContactGated?: () => boolean;
 }
 
 const SERVICE_OPTIONS = [
@@ -293,7 +298,7 @@ const PROJECT_STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
 ];
 
-const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId }: LeadCardProps) => {
+const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId, onContactGated }: LeadCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
@@ -440,6 +445,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   };
 
   const handleContactMethodUpdate = async (method: string) => {
+    if (onContactGated && !onContactGated()) return;
     await onUpdateLead(lead.id, { contact_method: method } as Partial<OutreachLead>);
   };
 
