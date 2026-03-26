@@ -115,11 +115,11 @@ const Outreach = () => {
   // Combine active and archived leads into one unified list
   const allLeads = useMemo(() => {
     const real = [...leads, ...archivedLeads];
-    if (showDemoLeads && demoLeads.length > 0 && real.length === 0) {
+    if (!demoDismissedLocal && showDemoLeads && demoLeads.length > 0) {
       return [...demoLeads, ...real];
     }
     return real;
-  }, [leads, archivedLeads, showDemoLeads, demoLeads]);
+  }, [leads, archivedLeads, showDemoLeads, demoDismissedLocal, demoLeads]);
 
   const isReadOnly = false;
 
@@ -210,7 +210,7 @@ const Outreach = () => {
       </div>
 
       {/* Demo leads onboarding banner */}
-      {showDemoLeads && !demoDismissedLocal && (
+      {showDemoLeads && !demoDismissedLocal && demoLeads.length > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-primary/20 bg-primary/5">
           <Sparkles className="h-4 w-4 text-primary shrink-0" />
           <p className="text-xs sm:text-sm text-muted-foreground flex-1">
