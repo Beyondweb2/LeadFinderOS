@@ -1149,6 +1149,32 @@ const PotentialWorkPage = () => {
 
   const { user } = useAuth();
 
+  // Guard demo leads from triggering DB writes
+  const safeUpdateStatus = useCallback(async (leadId: string, status: LeadStatus) => {
+    if (isDemoLead(leadId)) return null;
+    return updateStatus(leadId, status);
+  }, [updateStatus]);
+  const safeUpdateNextAction = useCallback(async (leadId: string, action: NextActionType, date?: string) => {
+    if (isDemoLead(leadId)) return null;
+    return updateNextAction(leadId, action, date);
+  }, [updateNextAction]);
+  const safeUpdateNotes = useCallback(async (leadId: string, notes: string) => {
+    if (isDemoLead(leadId)) return null;
+    return updateNotes(leadId, notes);
+  }, [updateNotes]);
+  const safeUpdateBusinessName = useCallback(async (leadId: string, name: string) => {
+    if (isDemoLead(leadId)) return null;
+    return updateBusinessName(leadId, name);
+  }, [updateBusinessName]);
+  const safeUpdateLead = useCallback(async (leadId: string, updates: Partial<OutreachLead>) => {
+    if (isDemoLead(leadId)) return null;
+    return updateLead(leadId, updates);
+  }, [updateLead]);
+  const safeDeleteLead = useCallback(async (leadId: string, silent?: boolean) => {
+    if (isDemoLead(leadId)) return false;
+    return deleteLead(leadId, silent);
+  }, [deleteLead]);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'action_date' | 'recent' | 'alpha'>('action_date');
   const [metricFilter, setMetricFilter] = useState<'overdue' | 'today' | 'upcoming' | 'no_action' | null>(null);
