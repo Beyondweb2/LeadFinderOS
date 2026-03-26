@@ -139,7 +139,7 @@ export function WalkthroughOverlay() {
   }, [state.outreachIntroDone]);
 
   useEffect(() => {
-    if (!isActive || allDone || !walkthroughOpen) {
+    if (!isActive || allDone || !walkthroughOpen || initialDelay) {
       setActiveStep(null);
       return;
     }
@@ -159,7 +159,7 @@ export function WalkthroughOverlay() {
         }
       });
     }
-  }, [state, isActive, allDone, walkthroughOpen, location.pathname, tick, logStepView]);
+  }, [state, isActive, allDone, walkthroughOpen, initialDelay, location.pathname, tick, logStepView]);
 
   useEffect(() => {
     const onModalOpen = () => setPaused(true);
