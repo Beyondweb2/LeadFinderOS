@@ -445,6 +445,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   };
 
   const handleContactMethodUpdate = async (method: string) => {
+    if (onContactGated && !onContactGated()) return;
     await onUpdateLead(lead.id, { contact_method: method } as Partial<OutreachLead>);
   };
 
