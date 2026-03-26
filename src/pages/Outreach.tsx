@@ -49,7 +49,7 @@ const Outreach = () => {
   const { isStripeTrialing } = useTrial();
   const { walkthroughOpen } = useWalkthroughStatus();
   const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
-  const { hasUsedContact, markContactUsed } = useContactUsage();
+  const { tryContact, isContactLocked } = useContactUsage();
   const [showPaywall, setShowPaywall] = useState(false);
 
   // Demo leads for first-time users — persist until user explicitly dismisses with X

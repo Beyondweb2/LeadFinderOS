@@ -3,60 +3,71 @@ import { useAuth } from './useAuth';
 
 /**
  * Centralised contact-action usage tracking.
- * Tracks per-lead, per-channel usage in localStorage.
- * Shared across Outreach and Track Leads pages.
+ * Free users can contact up to MAX_FREE_BUSINESSES unique businesses.
+ * After that, all contact buttons are locked across Outreach + Track Leads.
  */
-const STORAGE_KEY_PREFIX = 'leadfinder_contact_usage';
-
-interface ContactUsageMap {
-  [leadId: string]: {
-    call?: boolean;
-    sms?: boolean;
-    whatsapp?: boolean;
-  };
-}
+const STORAGE_KEY_PREFIX = 'leadfinder_contacted_businesses';
+const MAX_FREE_BUSINESSES = 3;
 
 function getStorageKey(userId?: string | null) {
   return userId ? `${STORAGE_KEY_PREFIX}:${userId}` : STORAGE_KEY_PREFIX;
 }
 
-function readUsage(key: string): ContactUsageMap {
+function readContactedSet(key: string): Set<string> {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : {};
+    return raw ? new Set(JSON.parse(raw)) : new Set();
   } catch {
-    return {};
+    return new Set();
   }
 }
 
-function writeUsage(key: string, usage: ContactUsageMap) {
+function writeContactedSet(key: string, set: Set<string>) {
   try {
-    localStorage.setItem(key, JSON.stringify(usage));
+    localStorage.setItem(key, JSON.stringify([...set]));
   } catch {}
 }
 
 export function useContactUsage() {
   const { user } = useAuth();
   const key = getStorageKey(user?.id);
-  const [usage, setUsage] = useState<ContactUsageMap>(() => readUsage(key));
+  const [contactedBusinesses, setContactedBusinesses] = useState<Set<string>>(() => readContactedSet(key));
 
   // Re-read when user changes
   useEffect(() => {
-    setUsage(readUsage(key));
+    setContactedBusinesses(readContactedSet(key));
   }, [key]);
 
-  const hasUsedContact = useCallback((leadId: string, channel: 'call' | 'sms' | 'whatsapp'): boolean => {
-    const current = readUsage(key);
-    return !!current[leadId]?.[channel];
+  const contactedCount = contactedBusinesses.size;
+  const isContactLocked = contactedCount >= MAX_FREE_BUSINESSES;
+
+  /** Check if contacting this business is allowed. Returns true if allowed, false if blocked. */
+  const tryContact = useCallback((leadId: string): boolean => {
+    const current = readContactedSet(key);
+    // Already contacted this business — allow (doesn't count again)
+    if (current.has(leadId)) return true;
+    // Under limit — allow and record
+    if (current.size < MAX_FREE_BUSINESSES) {
+      current.add(leadId);
+      writeContactedSet(key, current);
+      setContactedBusinesses(new Set(current));
+      return true;
+    }
+    // Limit reached
+    return false;
   }, [key]);
 
-  const markContactUsed = useCallback((leadId: string, channel: 'call' | 'sms' | 'whatsapp') => {
-    const current = readUsage(key);
-    if (!current[leadId]) current[leadId] = {};
-    current[leadId][channel] = true;
-    writeUsage(key, current);
-    setUsage({ ...current });
+  // Legacy compat
+  const hasUsedContact = useCallback((_leadId: string, _channel: 'call' | 'sms' | 'whatsapp'): boolean => {
+    return readContactedSet(key).has(_leadId);
   }, [key]);
 
-  return { hasUsedContact, markContactUsed, usage };
+  const markContactUsed = useCallback((leadId: string, _channel: 'call' | 'sms' | 'whatsapp') => {
+    const current = readContactedSet(key);
+    current.add(leadId);
+    writeContactedSet(key, current);
+    setContactedBusinesses(new Set(current));
+  }, [key]);
+
+  return { tryContact, isContactLocked, contactedCount, hasUsedContact, markContactUsed, maxFreeBusinesses: MAX_FREE_BUSINESSES };
 }
