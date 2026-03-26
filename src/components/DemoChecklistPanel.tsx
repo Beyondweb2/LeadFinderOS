@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
-
+import { useNavigate } from 'react-router-dom';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import appLogo from '@/assets/logo.png';
@@ -35,6 +35,7 @@ export function DemoChecklistPanel() {
   const { isStripeTrialing } = useTrial();
   const { isPaidSubscriber } = useSubscription();
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const dismissKey = user?.id ? `demo_walkthrough_dismissed_${user.id}` : 'demo_walkthrough_dismissed_guest';
   const [dismissed, setDismissed] = useState(false);
@@ -83,6 +84,7 @@ export function DemoChecklistPanel() {
     setShowCompletionModal(false);
     handleDismiss();
     window.dispatchEvent(new CustomEvent('walkthrough-dismissed'));
+    navigate('/find-leads');
   };
 
   if (!isDemoUser || dismissed) return null;
