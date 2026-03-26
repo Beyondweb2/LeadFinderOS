@@ -1527,11 +1527,11 @@ const PotentialWorkPage = () => {
         lead={selectedLead}
         open={!!selectedLead}
         onOpenChange={(open) => !open && setSelectedLead(null)}
-        onUpdateStatus={updateStatus}
-        onUpdateNextAction={updateNextAction}
-        onUpdateNotes={updateNotes}
-        onUpdateLead={updateLead}
-        onDelete={deleteLead}
+        onUpdateStatus={safeUpdateStatus}
+        onUpdateNextAction={safeUpdateNextAction}
+        onUpdateNotes={safeUpdateNotes}
+        onUpdateLead={safeUpdateLead}
+        onDelete={safeDeleteLead}
         fetchActivities={fetchActivities}
       />
 
