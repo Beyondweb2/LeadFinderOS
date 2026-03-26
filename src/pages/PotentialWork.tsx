@@ -70,6 +70,10 @@ import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach'
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { FacebookSection } from '@/components/FacebookSection';
 import { cn } from '@/lib/utils';
+import { useContactUsage } from '@/hooks/useContactUsage';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useTrial } from '@/hooks/useTrial';
+import { TrialConversionModal } from '@/components/TrialConversionModal';
 
 /* ───────── constants ───────── */
 
@@ -274,6 +278,7 @@ interface LeadCardProps {
   customStatuses: { value: string; label: string }[];
   onAddCustomStatus: () => void;
   userId: string | undefined;
+  onContactGated?: () => boolean;
 }
 
 const SERVICE_OPTIONS = [
