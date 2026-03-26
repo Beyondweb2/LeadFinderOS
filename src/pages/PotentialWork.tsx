@@ -1507,13 +1507,13 @@ const PotentialWorkPage = () => {
                 lead={lead}
                 isExpanded={expandedCardId === lead.id}
                 onToggleExpand={() => setExpandedCardId(prev => prev === lead.id ? null : lead.id)}
-                onStatusChange={updateStatus}
-                onNextActionChange={updateNextAction}
-                onNotesChange={updateNotes}
-                onBusinessNameChange={updateBusinessName}
+                onStatusChange={safeUpdateStatus}
+                onNextActionChange={safeUpdateNextAction}
+                onNotesChange={safeUpdateNotes}
+                onBusinessNameChange={safeUpdateBusinessName}
                 onImageChange={updateImageUrl}
-                onUpdateLead={updateLead}
-                onDelete={deleteLead}
+                onUpdateLead={safeUpdateLead}
+                onDelete={safeDeleteLead}
                 customStatuses={customStatuses}
                 onAddCustomStatus={() => setShowCustomStatusDialog(true)}
                 userId={user?.id}
