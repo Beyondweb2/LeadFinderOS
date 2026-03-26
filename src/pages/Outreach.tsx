@@ -58,7 +58,6 @@ const Outreach = () => {
 
   const handleDismissDemo = useCallback(() => {
     if (user?.id) dismissDemoLeads(user.id);
-    setShowDemoLeads(false);
     setDemoDismissedLocal(true);
   }, [user?.id]);
 
