@@ -99,10 +99,17 @@ export function WalkthroughOverlay() {
   const [tooltipPos, setTooltipPos] = useState<{ top: number; left: number } | null>(null);
   const [activeStep, setActiveStep] = useState<StepDef | null>(null);
   const [paused, setPaused] = useState(false);
+  const [initialDelay, setInitialDelay] = useState(true); // Delay walkthrough until page settles
   const rafRef = useRef<number>();
   const lastScrolledStepRef = useRef<number | null>(null);
   const [tick, setTick] = useState(0);
   const introFiredRef = useRef(false);
+
+  // Wait for page to fully render before showing walkthrough
+  useEffect(() => {
+    const timer = setTimeout(() => setInitialDelay(false), 1200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!isActive || allDone || !walkthroughOpen) return;
