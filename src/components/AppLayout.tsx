@@ -8,9 +8,7 @@ import { DemoChecklistProvider } from '@/contexts/DemoChecklistContext';
 import { DemoChecklistPanel } from '@/components/DemoChecklistPanel';
 import { PaymentFailureDialog } from '@/components/PaymentFailureDialog';
 import { PaymentWarningBanner } from '@/components/PaymentWarningBanner';
-import { WalkthroughOverlay } from '@/components/WalkthroughOverlay';
-import { SkipWalkthroughButton } from '@/components/SkipWalkthroughButton';
-import { WelcomeWalkthroughModal } from '@/components/WelcomeWalkthroughModal';
+import { OnboardingPopups } from '@/components/OnboardingPopups';
 import { Challenge10Modal } from '@/components/Challenge10Modal';
 import { useAuth } from '@/hooks/useAuth';
 import { usePersistLastRoute } from '@/hooks/usePersistLastRoute';
@@ -18,11 +16,6 @@ import { usePersistedScroll } from '@/hooks/usePersistedScroll';
 import { useTrial } from '@/hooks/useTrial';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useChallenge10 } from '@/hooks/useChallenge10';
-import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
-import { UserMenu } from '@/components/UserMenu';
-import { AccentColorPicker } from '@/components/AccentColorPicker';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { useAvatar } from '@/hooks/useAvatar';
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -30,7 +23,6 @@ interface AppLayoutProps {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { user } = useAuth();
-  const { avatarUrl } = useAvatar();
   const location = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const { isStripeTrialing, isLoading: isTrialLoading } = useTrial();
@@ -39,7 +31,6 @@ export function AppLayout({ children }: AppLayoutProps) {
   const hasProAccess = subStatus === 'active' || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin';
   const isDemoUser = isLoaded && !hasProAccess && !isStripeTrialing;
   const isTrialingUser = isLoaded && subStatus === 'trialing';
-  // Allow admin to simulate new-user experience via localStorage flag
   const isSimulatingNewUser = (() => {
     try {
       return user?.id ? localStorage.getItem(`simulate_new_user_${user.id}`) === 'true' : false;
@@ -47,12 +38,11 @@ export function AppLayout({ children }: AppLayoutProps) {
   })();
   const showWalkthrough = isDemoUser || isTrialingUser || isSimulatingNewUser;
   const challenge = useChallenge10();
-  const { walkthroughOpen } = useWalkthroughStatus();
 
   // Listen for walkthrough completion — set pending flag only for subscribed users
   useEffect(() => {
     const handleReady = () => {
-      if (!hasProAccess && !isStripeTrialing) return; // Only for subscribed/trialing users
+      if (!hasProAccess && !isStripeTrialing) return;
       try {
         const key = user?.id ? `challenge_10_pending_${user.id}` : 'challenge_10_pending';
         localStorage.setItem(key, 'true');
@@ -67,9 +57,9 @@ export function AppLayout({ children }: AppLayoutProps) {
     };
   }, [user?.id, hasProAccess, isStripeTrialing]);
 
-  // Once challenge state loads, check if there's a pending trigger (e.g. if event fired before load finished)
+  // Once challenge state loads, check if there's a pending trigger
   useEffect(() => {
-    if (challenge.isLoading || challenge.modalShown || walkthroughOpen) return;
+    if (challenge.isLoading || challenge.modalShown) return;
 
     const key = user?.id ? `challenge_10_pending_${user.id}` : 'challenge_10_pending';
     try {
@@ -82,24 +72,19 @@ export function AppLayout({ children }: AppLayoutProps) {
     const handleTrigger = () => challenge.triggerModal();
     window.addEventListener('trigger-challenge-10-modal', handleTrigger);
     return () => window.removeEventListener('trigger-challenge-10-modal', handleTrigger);
-  }, [challenge.isLoading, challenge.modalShown, user?.id, challenge.triggerModal, location.pathname, walkthroughOpen]);
-
-
-
+  }, [challenge.isLoading, challenge.modalShown, user?.id, challenge.triggerModal, location.pathname]);
 
   const pathKey = useMemo(
     () => `${location.pathname}${location.search}${location.hash}`,
     [location.pathname, location.search, location.hash]
   );
 
-  // Persist last visited in-app route (so we can resume after idle refresh)
   usePersistLastRoute({
     userId: user?.id,
     path: pathKey,
     enabled: !!user,
   });
 
-  // Persist scroll position of the main content container per route
   usePersistedScroll({
     containerRef: mainRef,
     userId: user?.id,
@@ -119,12 +104,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           {/* Main content area */}
           <div className="flex-1 flex flex-col min-w-0 relative z-10">
-            {/* Payment warning banner — persistent during grace period */}
+            {/* Payment warning banner */}
             <PaymentWarningBanner />
-            {/* Skip walkthrough link — top-right, outside modals */}
-            <div className="flex items-center justify-end gap-2 px-4 sm:px-6 lg:px-8 pt-2 pb-1">
-              <SkipWalkthroughButton />
-            </div>
             <main ref={mainRef} className="flex-1 overflow-auto pb-20 md:pb-0">
               <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
                 <Suspense fallback={
@@ -143,15 +124,12 @@ export function AppLayout({ children }: AppLayoutProps) {
           <CheckoutActivationOverlay />
           <PaymentFailureDialog />
           <DemoChecklistPanel />
-          <WalkthroughOverlay />
-          <WelcomeWalkthroughModal />
+          <OnboardingPopups />
           <Challenge10Modal
             open={challenge.showModal}
             onStart={challenge.startChallenge}
             onSkip={challenge.skipChallenge}
           />
-
-
         </div>
       </SidebarProvider>
     </DemoChecklistProvider>
