@@ -1533,6 +1533,7 @@ const PotentialWorkPage = () => {
                 customStatuses={customStatuses}
                 onAddCustomStatus={() => setShowCustomStatusDialog(true)}
                 userId={user?.id}
+                onContactGated={() => handleContactGatedForLead(lead.id)}
               />
             </div>
           ))}
