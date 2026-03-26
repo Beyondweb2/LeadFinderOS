@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useAuth } from './useAuth';
 
 const STORAGE_KEY_PREFIX = 'leadfinder_view_details_count';
-const FREE_LIMIT = 5;
+const FREE_LIMIT = 10;
 
 function getKey(userId?: string | null) {
   return userId ? `${STORAGE_KEY_PREFIX}:${userId}` : STORAGE_KEY_PREFIX;

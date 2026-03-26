@@ -409,9 +409,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   };
 
   const handleDelete = async () => {
-    if (confirm('Are you sure you want to remove this lead?')) {
-      await onDelete(lead.id);
-    }
+    await onDelete(lead.id);
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
