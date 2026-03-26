@@ -41,8 +41,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
   };
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
   const [isModified, setIsModified] = useState(false);
-  const [showTemplateNudge, setShowTemplateNudge] = useState(false);
-  const [templatesOpened, setTemplatesOpened] = useState(false);
+  const [showTemplateNudge] = useState(false);
   const [isSending, setIsSending] = useState(false);
 
   const { autoOn, toggleAuto, getNextTemplate } = useAutoRotateTemplate();
@@ -52,15 +51,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
   const { isDemoUser, state } = useDemoChecklist();
   const isWalkthroughStep3 = isDemoUser && state.addedToCrm && !state.contactAttempted;
 
-  // Show template nudge when dialog opens during walkthrough
-  useEffect(() => {
-    if (open && isWalkthroughStep3) {
-      setShowTemplateNudge(true);
-      setTemplatesOpened(false);
-    } else {
-      setShowTemplateNudge(false);
-    }
-  }, [open, isWalkthroughStep3]);
 
   // Auto-rotate on dialog open
   useEffect(() => {
@@ -190,19 +180,9 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
                   <AutoRotateToggle autoOn={autoOn} onToggle={toggleAuto} />
                 </div>
               </div>
-              {/* Walkthrough nudge */}
-              {showTemplateNudge && !templatesOpened && (
-                <div className="mb-3 p-3 rounded-lg border border-yellow-500/40 bg-card shadow-lg">
-                  <div className="text-[10px] font-semibold text-primary mb-0.5">Step 3 of 8</div>
-                  <p className="text-xs text-foreground">
-                    Select <span className="font-semibold text-primary">"Initial Contact Cycle"</span> to auto-rotate between 6 proven messages.
-                  </p>
-                </div>
-              )}
               <TemplatePicker 
                 onSelectTemplate={(content, templateId) => {
                   handleTemplateChange(content);
-                  setShowTemplateNudge(false);
                   if (templateId === 'default-0') {
                     toggleAuto(true);
                   } else {
@@ -210,8 +190,7 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
                   }
                 }} 
                 templateType="text" 
-                isWalkthrough={showTemplateNudge}
-                onWalkthroughTemplatesOpened={() => setTemplatesOpened(true)}
+                isWalkthrough={false}
               />
               <Textarea
                 id="template"
