@@ -54,12 +54,12 @@ function getActiveStep(state: any, pathname: string, t: any): StepDef | null {
       // On the outreach page: fire event to show the intro modal, no tooltip needed
       return null;
     }
-    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: t('walkthrough.step3NavToOutreach') };
+    return { step: 3, selector: '[data-walkthrough="crm-nav"]', tooltip: t('walkthrough.step3NavToOutreach'), noDim: true };
   }
 
   // Step 4: Navigate to Track Leads
   if (!state.viewedTrackLeads) {
-    return { step: 4, selector: '[data-walkthrough="track-nav"]', tooltip: 'Head to Track Leads to manage interested businesses and close deals', tooltipPosition: 'top' };
+    return { step: 4, selector: '[data-walkthrough="track-nav"]', tooltip: 'Head to Track Leads to manage interested businesses and close deals', tooltipPosition: 'top', noDim: true };
   }
 
   return null;
