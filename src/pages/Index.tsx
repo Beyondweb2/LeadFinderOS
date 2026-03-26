@@ -59,7 +59,7 @@ const Index = () => {
   const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
   const savedLeadCountKey = user?.id ? `leadfinder_saved_lead_count:${user.id}` : null;
   const [savedLeadCount, setSavedLeadCount] = useState(0);
-  const MAX_FREE_SAVES = 3;
+  const MAX_FREE_SAVES = 10;
 
   // Ad-entry users without auth are always gated for actions (same as unsubscribed users)
   const isAdEntryGuest = !user && !hasProAccess;
