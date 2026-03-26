@@ -1604,6 +1604,12 @@ const PotentialWorkPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <TrialConversionModal
+        open={showPaywall}
+        onOpenChange={setShowPaywall}
+        noWebsiteCount={0}
+        contactedCount={0}
+      />
     </div>
   );
 };
