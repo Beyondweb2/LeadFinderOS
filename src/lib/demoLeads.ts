@@ -84,9 +84,9 @@ export function createDemoLeads(userId: string): OutreachLead[] {
       google_maps_url: null,
       address: '22 Station Road, Manchester M1 4JN',
       category: 'Kitchen Fitting',
-      status: 'replied',
-      next_action: 'send_follow_up',
-      next_action_date: futureDate(3),
+      status: 'interested',
+      next_action: 'call',
+      next_action_date: futureDate(1),
       notes: null,
       country: 'UK',
       list_type: 'no_website',
@@ -98,6 +98,7 @@ export function createDemoLeads(userId: string): OutreachLead[] {
       outreach_attempts: 3,
       last_outreach_attempt_at: demoDate(0),
       image_url: demoKitchenImage,
+      potential_revenue: 499,
     },
   ];
 }
