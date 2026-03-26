@@ -246,13 +246,17 @@ const Index = () => {
               <span className="text-primary font-bold">{noWebsiteCount}</span> potential client{noWebsiteCount !== 1 ? 's' : ''} found in this search
             </span>
           </div>
-          {effectiveGated && paywallTriggeredOnce && (
+          {isFreeUser && savedLeadCount >= MAX_FREE_SAVES ? (
             <button
               onClick={() => setShowConversionModal(true)}
-              className="text-xs sm:text-sm font-medium text-primary hover:text-primary/80 cursor-pointer transition-colors"
+              className="text-xs sm:text-sm font-semibold text-primary hover:text-primary/80 cursor-pointer transition-colors mt-0.5"
             >
-              Unlock these leads →
+              🔓 Unlock Full Access →
             </button>
+          ) : (
+            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+              Add to Outreach to start contacting them
+            </p>
           )}
         </div>
       )}
@@ -327,7 +331,7 @@ const Index = () => {
             onGatedAction={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
             savedLeadCount={savedLeadCount}
             maxFreeSaves={MAX_FREE_SAVES}
-            viewDetailsExhausted={viewDetailsExhausted && isFreeUser}
+            viewDetailsExhausted={(viewDetailsExhausted || (isFreeUser && savedLeadCount >= MAX_FREE_SAVES)) && isFreeUser}
             onViewDetailsGated={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
           />
         </section>
