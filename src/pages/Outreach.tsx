@@ -54,17 +54,18 @@ const Outreach = () => {
 
   // Demo leads for first-time users — persist until user explicitly dismisses with X
   const [demoDismissedLocal, setDemoDismissedLocal] = useState(false);
-  const showDemoLeads = user?.id ? !isDemoDismissed(user.id) && !demoDismissedLocal : false;
+  const showDemoLeads = user?.id ? !isDemoDismissed(user.id) : false;
 
   const handleDismissDemo = useCallback(() => {
     if (user?.id) dismissDemoLeads(user.id);
-    setDemoDismissedLocal(true);
+    setDemoDismissedLocal(true); // Force re-render immediately
   }, [user?.id]);
 
   const demoLeads = useMemo(() => {
-    if (!showDemoLeads || !user?.id) return [];
+    if (demoDismissedLocal || !user?.id) return [];
+    if (!showDemoLeads) return [];
     return createDemoLeads(user.id);
-  }, [showDemoLeads, user?.id]);
+  }, [showDemoLeads, demoDismissedLocal, user?.id]);
 
   // Per-business, per-channel contact gating
   const handleContactGated = useCallback((channel: 'call' | 'sms' | 'whatsapp', leadId?: string): boolean => {
