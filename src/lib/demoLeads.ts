@@ -1,11 +1,12 @@
 import type { OutreachLead } from '@/types/outreach';
 
 /**
- * 3 realistic example leads shown to new users on the Outreach page.
+ * 3 realistic example leads shown to new users on the Outreach page,
+ * plus 1 tracked lead for the Track Leads page.
  * These are client-side only and never persisted to the database.
  * IDs are prefixed with "demo-" to distinguish them.
  */
-export const DEMO_LEAD_IDS = ['demo-lead-1', 'demo-lead-2', 'demo-lead-3'];
+export const DEMO_LEAD_IDS = ['demo-lead-1', 'demo-lead-2', 'demo-lead-3', 'demo-lead-tracked'];
 
 export function isDemoLead(id: string): boolean {
   return id.startsWith('demo-');
@@ -15,6 +16,7 @@ export function createDemoLeads(userId: string): OutreachLead[] {
   const now = new Date().toISOString();
   const yesterday = new Date(Date.now() - 86400000).toISOString();
   const twoDaysAgo = new Date(Date.now() - 172800000).toISOString();
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
   return [
     {
@@ -87,6 +89,45 @@ export function createDemoLeads(userId: string): OutreachLead[] {
       last_outreach_attempt_at: now,
     },
   ];
+}
+
+/**
+ * Rich demo tracked lead shown on the Track Leads page for new users.
+ */
+export function createDemoTrackedLead(userId: string): OutreachLead {
+  const now = new Date().toISOString();
+  const yesterday = new Date(Date.now() - 86400000).toISOString();
+  const twoDaysAgo = new Date(Date.now() - 172800000).toISOString();
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+  return {
+    id: 'demo-lead-tracked',
+    user_id: userId,
+    business_name: 'Greenfield Plumbing & Heating',
+    phone: '+44 7890 123 456',
+    email: 'info@greenfieldplumbing.co.uk',
+    google_maps_url: null,
+    address: '45 Church Street, Bristol BS1 3NE',
+    category: 'Plumbing & Heating',
+    status: 'qualified',
+    next_action: 'send_draft',
+    next_action_date: tomorrow,
+    notes: 'Spoke with Dave — interested in a 5-page website with booking form. Wants to see a draft by Friday. Budget around £800.',
+    country: 'UK',
+    list_type: 'no_website',
+    created_at: twoDaysAgo,
+    updated_at: now,
+    is_archived: false,
+    is_potential_work: true,
+    contact_method: 'whatsapp',
+    outreach_attempts: 3,
+    last_outreach_attempt_at: yesterday,
+    potential_revenue: 800,
+    services_included: ['Website Design', 'Hosting', 'SEO'],
+    project_overview: '5-page brochure website with online booking form',
+    project_status: 'not_started',
+    contact_name: 'Dave Greenfield',
+  } as OutreachLead;
 }
 
 const DEMO_DISMISSED_KEY = 'leadfinder_demo_leads_dismissed';
