@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { createDemoLeads, isDemoLead, isDemoDismissed } from '@/lib/demoLeads';
 import { AlertTriangle, Clock, CalendarCheck } from 'lucide-react';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { Card } from '@/components/ui/card';
@@ -1225,7 +1226,11 @@ const PotentialWorkPage = () => {
 
   const allPotentialLeads = useMemo(() => {
     const pipelineStatuses = PIPELINE_STAGES;
-    const allLeads = [...leads, ...archivedLeads];
+    // Inject tracked demo leads for first-time users
+    const demoTracked = (user?.id && !isDemoDismissed(user.id))
+      ? createDemoLeads(user.id).filter(d => d.is_potential_work)
+      : [];
+    const allLeads = [...demoTracked, ...leads, ...archivedLeads];
     let result = allLeads.filter((lead) => {
       const mapped = mapLegacyStatus(lead.status);
       return lead.is_potential_work || pipelineStatuses.includes(mapped) || lead.status === 'interested';
