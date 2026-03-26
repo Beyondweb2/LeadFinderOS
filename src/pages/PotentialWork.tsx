@@ -1255,7 +1255,7 @@ const PotentialWorkPage = () => {
       result.sort((a, b) => a.business_name.localeCompare(b.business_name));
     }
     return result;
-  }, [leads, archivedLeads, searchQuery, sortOrder]);
+  }, [leads, archivedLeads, searchQuery, sortOrder, user?.id]);
 
   const potentialWorkLeads = useMemo(() => {
     let filtered = allPotentialLeads;
