@@ -1170,6 +1170,7 @@ const PotentialWorkPage = () => {
   const [editStatusLabel, setEditStatusLabel] = useState('');
 
   const updateImageUrl = useCallback(async (leadId: string, imageUrl: string | null) => {
+    if (isDemoLead(leadId)) return null;
     const { data, error } = await supabase
       .from('outreach_leads')
       .update({ image_url: imageUrl })

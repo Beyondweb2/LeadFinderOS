@@ -114,7 +114,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
             {lead.country === 'Australia' && (
               <span className="text-xs" title="Australia">🇦🇺</span>
             )}
-            <span className="font-semibold text-sm leading-tight">{lead.business_name}</span>
+            <span className="font-bold text-[15px] leading-tight">{lead.business_name}</span>
             {lead.is_potential_work && (
               <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />
             )}
