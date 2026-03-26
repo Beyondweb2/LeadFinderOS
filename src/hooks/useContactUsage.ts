@@ -7,7 +7,7 @@ import { useAuth } from './useAuth';
  * After that, all contact buttons are locked across Outreach + Track Leads.
  */
 const STORAGE_KEY_PREFIX = 'leadfinder_contacted_businesses';
-const MAX_FREE_BUSINESSES = 3;
+const MAX_FREE_BUSINESSES = 2;
 
 function getStorageKey(userId?: string | null) {
   return userId ? `${STORAGE_KEY_PREFIX}:${userId}` : STORAGE_KEY_PREFIX;

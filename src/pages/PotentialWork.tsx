@@ -1152,6 +1152,18 @@ const PotentialWorkPage = () => {
   } = useOutreach();
 
   const { user } = useAuth();
+  const { isPaidSubscriber, status: subStatus } = useSubscription();
+  const { isStripeTrialing } = useTrial();
+  const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
+  const { tryContact } = useContactUsage();
+  const [showPaywall, setShowPaywall] = useState(false);
+
+  const handleContactGatedForLead = useCallback((leadId: string) => {
+    if (hasProAccess) return true;
+    if (tryContact(leadId)) return true;
+    setShowPaywall(true);
+    return false;
+  }, [hasProAccess, tryContact]);
 
   // Guard demo leads from triggering DB writes
   const safeUpdateStatus = useCallback(async (leadId: string, status: LeadStatus) => {
@@ -1521,6 +1533,7 @@ const PotentialWorkPage = () => {
                 customStatuses={customStatuses}
                 onAddCustomStatus={() => setShowCustomStatusDialog(true)}
                 userId={user?.id}
+                onContactGated={() => handleContactGatedForLead(lead.id)}
               />
             </div>
           ))}
@@ -1591,6 +1604,12 @@ const PotentialWorkPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <TrialConversionModal
+        open={showPaywall}
+        onOpenChange={setShowPaywall}
+        noWebsiteCount={0}
+        contactedCount={0}
+      />
     </div>
   );
 };
