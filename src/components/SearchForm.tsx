@@ -158,7 +158,11 @@ export function SearchForm({
                       </>
                     )}
                   </Button>
-                  {/* Search counter removed — silent limit */}
+                  {!isPaidSubscriber && searchesRemaining > 0 && searchesRemaining < Infinity && searchesRemaining < dailyLimit && (
+                    <p className="text-xs text-muted-foreground mt-1.5 text-center sm:text-right">
+                      {searchesRemaining} free search{searchesRemaining !== 1 ? 'es' : ''} remaining
+                    </p>
+                  )}
                   {isLoading && (
                     <p className="text-[10px] sm:text-xs text-muted-foreground/60 mt-1.5 text-center sm:text-right">
                       This can take 20-30 seconds - hang tight!
