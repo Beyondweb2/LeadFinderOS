@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { isDemoLead } from '@/lib/demoLeads';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -1223,6 +1224,26 @@ const PotentialWorkPage = () => {
     saveCustomStatuses(customStatuses.filter((_, i) => i !== idx));
   };
 
+  // Demo tracked lead for new users
+  const showDemoTracked = useMemo(() => {
+    if (!user?.id) return false;
+    const allLeads = [...leads, ...archivedLeads];
+    const realTracked = allLeads.filter(l => {
+      const mapped = mapLegacyStatus(l.status);
+      return l.is_potential_work || PIPELINE_STAGES.includes(mapped) || l.status === 'interested';
+    });
+    if (realTracked.length > 0) return false;
+    try {
+      return localStorage.getItem(`leadfinder_demo_leads_dismissed:${user.id}`) !== 'true';
+    } catch { return false; }
+  }, [user?.id, leads, archivedLeads]);
+
+  const demoTrackedLead = useMemo(() => {
+    if (!showDemoTracked || !user?.id) return null;
+    const { createDemoTrackedLead } = require('@/lib/demoLeads');
+    return createDemoTrackedLead(user.id);
+  }, [showDemoTracked, user?.id]);
+
   const allPotentialLeads = useMemo(() => {
     const pipelineStatuses = PIPELINE_STAGES;
     const allLeads = [...leads, ...archivedLeads];
@@ -1230,6 +1251,10 @@ const PotentialWorkPage = () => {
       const mapped = mapLegacyStatus(lead.status);
       return lead.is_potential_work || pipelineStatuses.includes(mapped) || lead.status === 'interested';
     });
+    // Inject demo tracked lead if no real tracked leads exist
+    if (result.length === 0 && demoTrackedLead) {
+      result = [demoTrackedLead, ...result];
+    }
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
@@ -1250,7 +1275,7 @@ const PotentialWorkPage = () => {
       result.sort((a, b) => a.business_name.localeCompare(b.business_name));
     }
     return result;
-  }, [leads, archivedLeads, searchQuery, sortOrder]);
+  }, [leads, archivedLeads, searchQuery, sortOrder, demoTrackedLead]);
 
   const potentialWorkLeads = useMemo(() => {
     let filtered = allPotentialLeads;
