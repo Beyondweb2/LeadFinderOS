@@ -54,17 +54,18 @@ const Outreach = () => {
 
   // Demo leads for first-time users — persist until user explicitly dismisses with X
   const [demoDismissedLocal, setDemoDismissedLocal] = useState(false);
-  const showDemoLeads = user?.id ? !isDemoDismissed(user.id) && !demoDismissedLocal : false;
+  const showDemoLeads = user?.id ? !isDemoDismissed(user.id) : false;
 
   const handleDismissDemo = useCallback(() => {
     if (user?.id) dismissDemoLeads(user.id);
-    setDemoDismissedLocal(true);
+    setDemoDismissedLocal(true); // Force re-render immediately
   }, [user?.id]);
 
   const demoLeads = useMemo(() => {
-    if (!showDemoLeads || !user?.id) return [];
+    if (demoDismissedLocal || !user?.id) return [];
+    if (!showDemoLeads) return [];
     return createDemoLeads(user.id);
-  }, [showDemoLeads, user?.id]);
+  }, [showDemoLeads, demoDismissedLocal, user?.id]);
 
   // Per-business, per-channel contact gating
   const handleContactGated = useCallback((channel: 'call' | 'sms' | 'whatsapp', leadId?: string): boolean => {
@@ -114,11 +115,11 @@ const Outreach = () => {
   // Combine active and archived leads into one unified list
   const allLeads = useMemo(() => {
     const real = [...leads, ...archivedLeads];
-    if (showDemoLeads && demoLeads.length > 0 && real.length === 0) {
+    if (!demoDismissedLocal && showDemoLeads && demoLeads.length > 0) {
       return [...demoLeads, ...real];
     }
     return real;
-  }, [leads, archivedLeads, showDemoLeads, demoLeads]);
+  }, [leads, archivedLeads, showDemoLeads, demoDismissedLocal, demoLeads]);
 
   const isReadOnly = false;
 
@@ -209,7 +210,7 @@ const Outreach = () => {
       </div>
 
       {/* Demo leads onboarding banner */}
-      {showDemoLeads && !demoDismissedLocal && (
+      {showDemoLeads && !demoDismissedLocal && demoLeads.length > 0 && (
         <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-primary/20 bg-primary/5">
           <Sparkles className="h-4 w-4 text-primary shrink-0" />
           <p className="text-xs sm:text-sm text-muted-foreground flex-1">

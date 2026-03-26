@@ -133,7 +133,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
                 <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
                 <strong className="text-foreground text-[17px]">£0 today</strong>
               </div>
-              <span className="text-[12px]">Cancel anytime · Card required</span>
+              <span className="text-[12px]">Cancel anytime in 2 clicks</span>
             </div>
           </div>
 
@@ -144,7 +144,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
             disabled={isLoading}
           >
             <Lock className="h-4 w-4" />
-            {isLoading ? 'Opening checkout...' : 'Start 5-Day Free Trial'}
+            {isLoading ? 'Opening checkout...' : 'Start Free Trial – £0 Today'}
           </Button>
 
           <Button
@@ -157,7 +157,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
 
           <p className="text-[11px] text-muted-foreground/50 text-center mt-2 flex items-center justify-center gap-1.5">
             <ShieldCheck className="h-3 w-3" />
-            Secure payment via Stripe · No charge today
+            No charge today · Secure checkout via Stripe
           </p>
         </div>
       </DialogContent>
