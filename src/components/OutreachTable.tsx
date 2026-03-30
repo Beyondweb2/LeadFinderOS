@@ -1463,6 +1463,15 @@ export function OutreachTable({
         lead={smsDialogLead}
         onSent={handleDialogSent}
       />
+
+      {/* Admin AI Opener Modal */}
+      {isAdmin && (
+        <AiOpenerModal
+          lead={aiOpenerLead}
+          open={!!aiOpenerLead}
+          onOpenChange={(open) => { if (!open) setAiOpenerLead(null); }}
+        />
+      )}
     </Card>
   );
 }
