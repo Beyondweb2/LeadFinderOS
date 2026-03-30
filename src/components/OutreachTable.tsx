@@ -1481,6 +1481,11 @@ export function OutreachTable({
           lead={aiOpenerLead}
           open={!!aiOpenerLead}
           onOpenChange={(open) => { if (!open) setAiOpenerLead(null); }}
+          onSelectMessage={(msg) => {
+            // Store selected AI message so SMS/WhatsApp dialogs can pick it up
+            localStorage.setItem('leadfinder_sms_template', msg);
+            localStorage.setItem('leadfinder_wa_template', msg);
+          }}
         />
       )}
     </Card>
