@@ -42,6 +42,7 @@ import {
   PhoneCall,
   X,
   Facebook,
+  Sparkles,
 } from 'lucide-react';
 import {
   DropdownMenu,
