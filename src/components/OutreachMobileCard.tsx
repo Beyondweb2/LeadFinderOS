@@ -73,6 +73,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   phoneFetchStatus,
   onRetryPhoneFetch,
   isWalkthroughContacted = false,
+  onAiOpener,
 }: OutreachMobileCardProps) {
   const isPhoneFetching = phoneFetchStatus === 'pending';
   const isPhoneFailed = phoneFetchStatus === 'failed';
