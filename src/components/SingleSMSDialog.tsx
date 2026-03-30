@@ -25,6 +25,8 @@ interface SingleSMSDialogProps {
   lead: { phone: string; business_name: string; id?: string; status?: string } | null;
   /** Called when user clicks "Open SMS App" — signals a send happened (confirmation handled externally) */
   onSent?: (leadId: string, channel: 'sms') => void;
+  /** Admin-only: open AI opener modal for this lead */
+  onAiOpener?: () => void;
 }
 
 const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
