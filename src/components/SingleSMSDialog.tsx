@@ -133,15 +133,6 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent, onAiOpener }
           <DialogTitle className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-blue-500" />
             SMS Message
-            {onAiOpener && (
-              <button
-                onClick={onAiOpener}
-                className="ml-auto p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
-                title="Generate AI opener"
-              >
-                <Sparkles className="h-4 w-4" />
-              </button>
-            )}
           </DialogTitle>
           <DialogDescription>
             To <span className="font-semibold text-foreground">{lead.business_name}</span>
