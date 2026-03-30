@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { MessageSquare, Send, AlertTriangle, RotateCcw, Loader2 } from 'lucide-react';
+import { MessageSquare, Send, AlertTriangle, RotateCcw, Loader2, Sparkles } from 'lucide-react';
 import { generateWhatsAppUrl } from '@/lib/leadUtils';
 import { TemplatePicker } from '@/components/TemplatePicker';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
@@ -26,12 +26,14 @@ interface SingleWhatsAppDialogProps {
   lead: { phone: string; business_name: string; id?: string; whatsapp_status?: string | null; status?: string } | null;
   /** Called when user clicks "Open WhatsApp" — signals a send happened (confirmation handled externally) */
   onSent?: (leadId: string, channel: 'whatsapp') => void;
+  /** Admin-only: open AI opener modal for this lead */
+  onAiOpener?: () => void;
 }
 
 const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
 const STORAGE_KEY = 'leadfinder_whatsapp_template';
 
-export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: SingleWhatsAppDialogProps) {
+export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpener }: SingleWhatsAppDialogProps) {
   const handleOpenChange = (v: boolean) => {
     onOpenChange(v);
     if (!v) {
@@ -146,6 +148,15 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent }: Singl
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-green-500" />
             WhatsApp Message
+            {onAiOpener && (
+              <button
+                onClick={onAiOpener}
+                className="ml-auto p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
+                title="Generate AI opener"
+              >
+                <Sparkles className="h-4 w-4" />
+              </button>
+            )}
           </DialogTitle>
           <DialogDescription>
             To <span className="font-semibold text-foreground">{lead.business_name}</span>

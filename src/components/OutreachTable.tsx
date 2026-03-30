@@ -1454,6 +1454,9 @@ export function OutreachTable({
         }}
         lead={whatsappDialogLead}
         onSent={handleDialogSent}
+        onAiOpener={isAdmin && whatsappDialogLead ? () => {
+          setAiOpenerLead(whatsappDialogLead);
+        } : undefined}
       />
 
       {/* SMS Template Dialog */}
@@ -1467,6 +1470,9 @@ export function OutreachTable({
         }}
         lead={smsDialogLead}
         onSent={handleDialogSent}
+        onAiOpener={isAdmin && smsDialogLead ? () => {
+          setAiOpenerLead(smsDialogLead);
+        } : undefined}
       />
 
       {/* Admin AI Opener Modal */}

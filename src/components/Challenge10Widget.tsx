@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Target, ChevronDown, ChevronUp, Check, Search, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
@@ -15,7 +15,14 @@ interface Challenge10WidgetProps {
 
 export function Challenge10Widget({ isActive, isCompleted, isSkipped, count, featureEnabled, onStart }: Challenge10WidgetProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [completedDismissed, setCompletedDismissed] = useState(false);
+  const [completedDismissed, setCompletedDismissed] = useState(() => {
+    return localStorage.getItem('challenge10_completed_dismissed') === 'true';
+  });
+
+  const handleDismissCompleted = () => {
+    setCompletedDismissed(true);
+    localStorage.setItem('challenge10_completed_dismissed', 'true');
+  };
 
   if (!featureEnabled) return null;
 
@@ -32,7 +39,7 @@ export function Challenge10Widget({ isActive, isCompleted, isSkipped, count, fea
               <span className="text-sm font-semibold text-foreground">Challenge Complete ✅</span>
             </div>
             <button
-              onClick={() => setCompletedDismissed(true)}
+              onClick={handleDismissCompleted}
               className="text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Dismiss"
             >

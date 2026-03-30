@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { MessageCircle, Send, AlertTriangle, RotateCcw } from 'lucide-react';
+import { MessageCircle, Send, AlertTriangle, RotateCcw, Sparkles } from 'lucide-react';
 import { generateSMSUrl } from '@/lib/leadUtils';
 import { TemplatePicker } from '@/components/TemplatePicker';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
@@ -25,12 +25,14 @@ interface SingleSMSDialogProps {
   lead: { phone: string; business_name: string; id?: string; status?: string } | null;
   /** Called when user clicks "Open SMS App" — signals a send happened (confirmation handled externally) */
   onSent?: (leadId: string, channel: 'sms') => void;
+  /** Admin-only: open AI opener modal for this lead */
+  onAiOpener?: () => void;
 }
 
 const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
 const STORAGE_KEY = 'leadfinder_sms_template';
 
-export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSDialogProps) {
+export function SingleSMSDialog({ open, onOpenChange, lead, onSent, onAiOpener }: SingleSMSDialogProps) {
   const handleOpenChange = (v: boolean) => {
     onOpenChange(v);
     if (!v) {
@@ -131,6 +133,15 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSD
           <DialogTitle className="flex items-center gap-2">
             <MessageCircle className="h-5 w-5 text-blue-500" />
             SMS Message
+            {onAiOpener && (
+              <button
+                onClick={onAiOpener}
+                className="ml-auto p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
+                title="Generate AI opener"
+              >
+                <Sparkles className="h-4 w-4" />
+              </button>
+            )}
           </DialogTitle>
           <DialogDescription>
             To <span className="font-semibold text-foreground">{lead.business_name}</span>
