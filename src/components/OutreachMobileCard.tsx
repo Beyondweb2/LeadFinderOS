@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, CalendarClock } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, CalendarClock, Sparkles } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { openFacebookSearch } from '@/lib/facebookSearch';
 import { ContactMethodBadge } from './ContactMethodBadge';
