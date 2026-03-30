@@ -32,7 +32,7 @@ interface SingleSMSDialogProps {
 const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
 const STORAGE_KEY = 'leadfinder_sms_template';
 
-export function SingleSMSDialog({ open, onOpenChange, lead, onSent }: SingleSMSDialogProps) {
+export function SingleSMSDialog({ open, onOpenChange, lead, onSent, onAiOpener }: SingleSMSDialogProps) {
   const handleOpenChange = (v: boolean) => {
     onOpenChange(v);
     if (!v) {
