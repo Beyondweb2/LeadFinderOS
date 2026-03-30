@@ -1099,8 +1099,11 @@ export function OutreachTable({
                     </>
                   )}
                   <TableHead className="w-[160px] text-center">Actions</TableHead>
-                  {!readOnly && onMarkAsInterested && (
+                   {!readOnly && onMarkAsInterested && (
                     <TableHead className="w-[80px] text-center">Track</TableHead>
+                  )}
+                  {isAdmin && (
+                    <TableHead className="w-[60px] text-center">AI</TableHead>
                   )}
                 </TableRow>
               </TableHeader>
