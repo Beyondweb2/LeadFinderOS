@@ -70,6 +70,8 @@ import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, 
 import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS } from '@/types/outreach';
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { SingleSMSDialog } from '@/components/SingleSMSDialog';
+import { AiOpenerModal } from '@/components/AiOpenerModal';
+import { useSubscription } from '@/hooks/useSubscription';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
