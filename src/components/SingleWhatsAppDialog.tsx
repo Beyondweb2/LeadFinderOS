@@ -180,6 +180,17 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
                     </Button>
                   )}
                   <AutoRotateToggle autoOn={autoOn} onToggle={toggleAuto} />
+                  {onAiOpener && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onAiOpener}
+                      className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      AI Generator
+                    </Button>
+                  )}
                 </div>
               </div>
               <TemplatePicker 
