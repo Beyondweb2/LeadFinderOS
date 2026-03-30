@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { MessageSquare, Send, AlertTriangle, RotateCcw, Loader2 } from 'lucide-react';
+import { MessageSquare, Send, AlertTriangle, RotateCcw, Loader2, Sparkles } from 'lucide-react';
 import { generateWhatsAppUrl } from '@/lib/leadUtils';
 import { TemplatePicker } from '@/components/TemplatePicker';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
