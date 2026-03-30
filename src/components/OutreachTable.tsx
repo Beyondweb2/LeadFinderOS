@@ -1470,6 +1470,9 @@ export function OutreachTable({
         }}
         lead={smsDialogLead}
         onSent={handleDialogSent}
+        onAiOpener={isAdmin && smsDialogLead ? () => {
+          setAiOpenerLead(smsDialogLead);
+        } : undefined}
       />
 
       {/* Admin AI Opener Modal */}
