@@ -26,6 +26,8 @@ interface SingleWhatsAppDialogProps {
   lead: { phone: string; business_name: string; id?: string; whatsapp_status?: string | null; status?: string } | null;
   /** Called when user clicks "Open WhatsApp" — signals a send happened (confirmation handled externally) */
   onSent?: (leadId: string, channel: 'whatsapp') => void;
+  /** Admin-only: open AI opener modal for this lead */
+  onAiOpener?: () => void;
 }
 
 const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
