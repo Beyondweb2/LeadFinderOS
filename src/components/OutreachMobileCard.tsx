@@ -299,7 +299,18 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     >
                       <Star className="h-3.5 w-3.5" />
                     </Button>
-                  )
+                )}
+                {onAiOpener && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
+                    onClick={onAiOpener}
+                    title="Generate AI opener"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </Button>
+                )}
                 )}
               </div>
             </>
