@@ -42,6 +42,7 @@ import {
   PhoneCall,
   X,
   Facebook,
+  Sparkles,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -70,6 +71,8 @@ import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, 
 import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS } from '@/types/outreach';
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { SingleSMSDialog } from '@/components/SingleSMSDialog';
+import { AiOpenerModal } from '@/components/AiOpenerModal';
+import { useSubscription } from '@/hooks/useSubscription';
 
 interface OutreachTableProps {
   leads: OutreachLead[];
@@ -131,6 +134,8 @@ export function OutreachTable({
   const isMobile = useIsMobile();
   const ITEMS_PER_PAGE = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
   const { user } = useAuth();
+  const { isAdmin } = useSubscription();
+  const [aiOpenerLead, setAiOpenerLead] = useState<OutreachLead | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
@@ -1061,6 +1066,7 @@ export function OutreachTable({
                   phoneFetchStatus={phoneFetchStatus[lead.id]}
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
                   isWalkthroughContacted={walkthroughContactedIds.has(lead.id)}
+                  onAiOpener={isAdmin ? () => setAiOpenerLead(lead) : undefined}
                 />
               ))
             )}
@@ -1094,8 +1100,11 @@ export function OutreachTable({
                     </>
                   )}
                   <TableHead className="w-[160px] text-center">Actions</TableHead>
-                  {!readOnly && onMarkAsInterested && (
+                   {!readOnly && onMarkAsInterested && (
                     <TableHead className="w-[80px] text-center">Track</TableHead>
+                  )}
+                  {isAdmin && (
+                    <TableHead className="w-[60px] text-center">AI</TableHead>
                   )}
                 </TableRow>
               </TableHeader>
@@ -1353,6 +1362,19 @@ export function OutreachTable({
                           </div>
                         </TableCell>
                       )}
+                      {isAdmin && (
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary"
+                            onClick={() => setAiOpenerLead(lead)}
+                          >
+                            <Sparkles className="h-3.5 w-3.5 mr-1" />
+                            AI
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))
                 )}
@@ -1446,6 +1468,15 @@ export function OutreachTable({
         lead={smsDialogLead}
         onSent={handleDialogSent}
       />
+
+      {/* Admin AI Opener Modal */}
+      {isAdmin && (
+        <AiOpenerModal
+          lead={aiOpenerLead}
+          open={!!aiOpenerLead}
+          onOpenChange={(open) => { if (!open) setAiOpenerLead(null); }}
+        />
+      )}
     </Card>
   );
 }

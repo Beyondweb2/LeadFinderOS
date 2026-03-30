@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, CalendarClock } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, CalendarClock, Sparkles } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { openFacebookSearch } from '@/lib/facebookSearch';
 import { ContactMethodBadge } from './ContactMethodBadge';
@@ -48,6 +48,7 @@ interface OutreachMobileCardProps {
   phoneFetchStatus?: PhoneFetchStatus;
   onRetryPhoneFetch?: () => void;
   isWalkthroughContacted?: boolean;
+  onAiOpener?: () => void;
 }
 
 export const OutreachMobileCard = memo(function OutreachMobileCard({
@@ -72,6 +73,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   phoneFetchStatus,
   onRetryPhoneFetch,
   isWalkthroughContacted = false,
+  onAiOpener,
 }: OutreachMobileCardProps) {
   const isPhoneFetching = phoneFetchStatus === 'pending';
   const isPhoneFailed = phoneFetchStatus === 'failed';
@@ -298,6 +300,17 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                       <Star className="h-3.5 w-3.5" />
                     </Button>
                   )
+                )}
+                {onAiOpener && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-primary hover:text-primary hover:bg-primary/10"
+                    onClick={onAiOpener}
+                    title="Generate AI opener"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </Button>
                 )}
               </div>
             </>

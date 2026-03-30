@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.ii-auth]
 verify_jwt = false
+
+[functions.admin-ai-opener]
+verify_jwt = false
