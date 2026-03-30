@@ -72,6 +72,16 @@ CATEGORY A — AVAILABILITY: asking if they're currently taking on work, if they
 CATEGORY B — TYPE OF WORK / SERVICES: asking what kind of websites they build, if they do redesigns, landing pages, ecommerce, specific platforms, etc.
 CATEGORY C — CLIENT TYPE / NICHE / LOCATION / PROCESS: asking what kind of clients they typically work with, if they work with local businesses, what their process looks like, turnaround time, pricing structure
 
+QUESTION QUALITY RULES:
+- Each question must feel like it helps the sender decide whether to hire them
+- Each question must be ONE clean question — no broken punctuation, no dangling fragments
+- No multiple sentences unless they flow naturally together
+- No vague follow-up sentences tacked on
+- Questions must be slightly specific and purposeful, not generic
+- Avoid vague questions like "are you taking on clients" or "what sort of businesses do you work with"
+- Instead ask things a real customer would actually want to know before hiring someone
+- Good examples: "Hey do you build sites on wordpress or something else", "Hi do you handle the design and copy or just the build", "Hey how long does a site usually take you from start to finish"
+
 Each message MUST be a question. Each message MUST be directly relevant to what the business actually does based on their name, category, and any other info provided.
 
 DO NOT:
