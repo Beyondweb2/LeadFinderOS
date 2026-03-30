@@ -1269,8 +1269,8 @@ const PotentialWorkPage = () => {
 
   const allPotentialLeads = useMemo(() => {
     const pipelineStatuses = PIPELINE_STAGES;
-    // Inject tracked demo leads for first-time users
-    const demoTracked = (user?.id && !isDemoDismissed(user.id))
+    // Inject tracked demo leads for free users only — subscribers never see them
+    const demoTracked = (user?.id && !hasProAccess && !isDemoDismissed(user.id))
       ? createDemoLeads(user.id).filter(d => d.is_potential_work)
       : [];
     const allLeads = [...demoTracked, ...leads, ...archivedLeads];

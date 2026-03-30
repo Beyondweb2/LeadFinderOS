@@ -52,9 +52,9 @@ const Outreach = () => {
   const { tryContact, isContactLocked } = useContactUsage();
   const [showPaywall, setShowPaywall] = useState(false);
 
-  // Demo leads for first-time users — persist until user explicitly dismisses with X
+  // Demo leads for free users only — subscribers/pro users never see them
   const [demoDismissedLocal, setDemoDismissedLocal] = useState(false);
-  const showDemoLeads = user?.id ? !isDemoDismissed(user.id) : false;
+  const showDemoLeads = user?.id && !hasProAccess ? !isDemoDismissed(user.id) : false;
 
   const handleDismissDemo = useCallback(() => {
     if (user?.id) dismissDemoLeads(user.id);
