@@ -110,16 +110,30 @@ TONE AND STYLE RULES (strictly enforced):
 - messages should feel open-ended and natural to pivot from later
 
 MESSAGE VARIETY REQUIREMENTS:
-You must generate exactly 3 messages. Each must be distinctly different in:
-- length (one short ~5-15 words, one medium ~15-30 words, one can be ~25-45 words)
-- structure (all must start with hey/hi/hello but vary what follows)
-- approach type — pick 3 DIFFERENT approaches from this list:
+You must generate exactly 3 messages. They MUST follow this exact structure:
+
+MESSAGE 1 — VERY SHORT (2-4 words max after the greeting):
+- Examples: "hey you do websites", "hi still taking work", "hey this [business]"
+- Must be abrupt and extremely minimal
+
+MESSAGE 2 — CASUAL ROUGH QUESTION (one sentence, ~8-18 words):
+- A single direct question, slightly rough around the edges
+- No filler, no preamble, just the question after the greeting
+- Example: "hey do you do like small business sites or more bigger projects"
+
+MESSAGE 3 — SLIGHTLY LONGER (~20-35 words, still imperfect):
+- Two short sentences max after the greeting
+- Still casual and slightly rough, not polished
+- Example: "hi i saw you do website work. do you mainly work with local businesses or is it more of a mix"
+
+ALL 3 must use different structures — they must NOT follow the same pattern.
+Each must use a DIFFERENT approach from this list:
   * identity check ("hi is this [business]")
   * availability check ("hey you still taking on website work")
   * asking about their services
   * asking about types of projects they do
   * checking if they handle a specific type of work
-  * light curiosity about what kind of clients they usually work with
+  * what kind of clients they usually work with
   * slightly ambiguous opener that sounds like casual interest
 
 SPAM MINIMISATION:
