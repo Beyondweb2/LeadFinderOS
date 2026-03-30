@@ -48,6 +48,7 @@ interface OutreachMobileCardProps {
   phoneFetchStatus?: PhoneFetchStatus;
   onRetryPhoneFetch?: () => void;
   isWalkthroughContacted?: boolean;
+  onAiOpener?: () => void;
 }
 
 export const OutreachMobileCard = memo(function OutreachMobileCard({
