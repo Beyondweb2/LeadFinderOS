@@ -15,7 +15,14 @@ interface Challenge10WidgetProps {
 
 export function Challenge10Widget({ isActive, isCompleted, isSkipped, count, featureEnabled, onStart }: Challenge10WidgetProps) {
   const [collapsed, setCollapsed] = useState(false);
-  const [completedDismissed, setCompletedDismissed] = useState(false);
+  const [completedDismissed, setCompletedDismissed] = useState(() => {
+    return localStorage.getItem('challenge10_completed_dismissed') === 'true';
+  });
+
+  const handleDismissCompleted = () => {
+    setCompletedDismissed(true);
+    localStorage.setItem('challenge10_completed_dismissed', 'true');
+  };
 
   if (!featureEnabled) return null;
 
