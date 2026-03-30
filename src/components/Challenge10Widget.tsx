@@ -39,7 +39,7 @@ export function Challenge10Widget({ isActive, isCompleted, isSkipped, count, fea
               <span className="text-sm font-semibold text-foreground">Challenge Complete ✅</span>
             </div>
             <button
-              onClick={() => setCompletedDismissed(true)}
+              onClick={handleDismissCompleted}
               className="text-muted-foreground hover:text-foreground transition-colors"
               aria-label="Dismiss"
             >
