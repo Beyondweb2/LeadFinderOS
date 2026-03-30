@@ -133,6 +133,8 @@ export function OutreachTable({
   const isMobile = useIsMobile();
   const ITEMS_PER_PAGE = isMobile ? ITEMS_PER_PAGE_MOBILE : ITEMS_PER_PAGE_DESKTOP;
   const { user } = useAuth();
+  const { isAdmin } = useSubscription();
+  const [aiOpenerLead, setAiOpenerLead] = useState<OutreachLead | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
