@@ -148,15 +148,6 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
           <DialogTitle className="flex items-center gap-2">
             <MessageSquare className="h-5 w-5 text-green-500" />
             WhatsApp Message
-            {onAiOpener && (
-              <button
-                onClick={onAiOpener}
-                className="ml-auto p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-primary transition-colors"
-                title="Generate AI opener"
-              >
-                <Sparkles className="h-4 w-4" />
-              </button>
-            )}
           </DialogTitle>
           <DialogDescription>
             To <span className="font-semibold text-foreground">{lead.business_name}</span>
@@ -189,6 +180,17 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
                     </Button>
                   )}
                   <AutoRotateToggle autoOn={autoOn} onToggle={toggleAuto} />
+                  {onAiOpener && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={onAiOpener}
+                      className="h-7 text-xs gap-1 border-primary/30 text-primary hover:bg-primary/10"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      AI Generator
+                    </Button>
+                  )}
                 </div>
               </div>
               <TemplatePicker 
