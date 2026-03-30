@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -15,9 +15,11 @@ interface AiOpenerModalProps {
   lead: OutreachLead | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Called when user clicks a message to use it */
+  onSelectMessage?: (message: string) => void;
 }
 
-export function AiOpenerModal({ lead, open, onOpenChange }: AiOpenerModalProps) {
+export function AiOpenerModal({ lead, open, onOpenChange, onSelectMessage }: AiOpenerModalProps) {
   const [messages, setMessages] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
@@ -53,6 +55,19 @@ export function AiOpenerModal({ lead, open, onOpenChange }: AiOpenerModalProps) 
     }
   };
 
+  // Auto-generate when modal opens
+  useEffect(() => {
+    if (open && lead && messages.length === 0 && !isLoading) {
+      generate();
+    }
+    // Reset state when modal closes
+    if (!open) {
+      setMessages([]);
+      setCopiedIdx(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, lead]);
+
   const copyMessage = async (msg: string, idx: number) => {
     try {
       await navigator.clipboard.writeText(msg);
@@ -63,16 +78,15 @@ export function AiOpenerModal({ lead, open, onOpenChange }: AiOpenerModalProps) 
     }
   };
 
-  // Auto-generate on open if no messages yet
-  const handleOpenChange = (isOpen: boolean) => {
-    if (isOpen && messages.length === 0 && !isLoading) {
-      generate();
+  const selectMessage = (msg: string) => {
+    if (onSelectMessage) {
+      onSelectMessage(msg);
+      onOpenChange(false);
     }
-    onOpenChange(isOpen);
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-sm">
@@ -92,11 +106,12 @@ export function AiOpenerModal({ lead, open, onOpenChange }: AiOpenerModalProps) 
           {!isLoading && messages.map((msg, idx) => (
             <div
               key={idx}
-              className="group relative rounded-lg border border-border/50 bg-muted/30 p-3"
+              className={`group relative rounded-lg border border-border/50 bg-muted/30 p-3 ${onSelectMessage ? 'cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors' : ''}`}
+              onClick={() => onSelectMessage && selectMessage(msg)}
             >
               <p className="text-sm pr-8 whitespace-pre-wrap">{msg}</p>
               <button
-                onClick={() => copyMessage(msg, idx)}
+                onClick={(e) => { e.stopPropagation(); copyMessage(msg, idx); }}
                 className="absolute top-2 right-2 p-1.5 rounded-md hover:bg-background/80 text-muted-foreground hover:text-foreground transition-colors"
                 title="Copy"
               >
