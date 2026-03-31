@@ -60,7 +60,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     };
 
     window.addEventListener('walkthrough-dismissed', handleReady);
-    window.addEventListener('skip-walkthrough', handleReady);
     return () => {
       window.removeEventListener('walkthrough-dismissed', handleReady);
       window.removeEventListener('skip-walkthrough', handleReady);
