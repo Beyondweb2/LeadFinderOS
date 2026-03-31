@@ -1066,7 +1066,7 @@ export function OutreachTable({
                   phoneFetchStatus={phoneFetchStatus[lead.id]}
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
                   isWalkthroughContacted={walkthroughContactedIds.has(lead.id)}
-                  onAiOpener={isAdmin ? () => setAiOpenerLead(lead) : undefined}
+                  
                 />
               ))
             )}
