@@ -88,9 +88,9 @@ const ScrollReveal = ({
   );
 };
 
-// Navigate to start free trial page
+// Navigate to create account page
 const goToStartTrial = (navigate: ReturnType<typeof useNavigate>) => () => {
-  navigate('/start-free-trial');
+  navigate('/auth?mode=signup');
 };
 
 // Inline CTA band - desktop only, inserted between sections
