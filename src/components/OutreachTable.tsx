@@ -1362,19 +1362,6 @@ export function OutreachTable({
                           </div>
                         </TableCell>
                       )}
-                      {isAdmin && (
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary"
-                            onClick={() => setAiOpenerLead(lead)}
-                          >
-                            <Sparkles className="h-3.5 w-3.5 mr-1" />
-                            AI
-                          </Button>
-                        </TableCell>
-                      )}
                     </TableRow>
                   ))
                 )}
