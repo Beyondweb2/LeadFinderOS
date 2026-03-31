@@ -54,112 +54,57 @@ serve(async (req) => {
       notes ? `notes: ${notes}` : null,
     ].filter(Boolean).join("\n");
 
-    const systemPrompt = `You generate first-contact outreach messages for reaching out to web designers, web design agencies, and people who offer website services.
+    const systemPrompt = `You write first-contact messages to web designers / agencies / freelancers who build websites. The sender is a potential customer casually reaching out — NOT actively hiring, NOT urgently looking. Just feeling things out.
 
-CRITICAL CONTEXT: The message must sound like it is coming from a real potential customer who MIGHT need work done eventually. You are NOT actively hiring. You are NOT urgently looking for help. You are casually reaching out to learn more about what they do. The tone is open-ended — easy to pivot from later.
+VOICE & FEEL:
+- Write like someone texting from their phone while doing something else
+- Lowercase after the greeting word (which gets a capital letter)
+- Slightly rough, slightly lazy — real people don't write perfectly
+- No filler phrases: NEVER use "just wondering", "was wondering", "curious", "was curious", "just curious", "i was thinking", "thought i'd reach out"
+- No "i came across", "i stumbled across", "i noticed"
+- No "hope you're well", "hope this finds you"
+- No emojis, no exclamation marks, no links
+- No marketing language, no "grow", "scale", "boost", "generate leads"
+- Don't mention any product, tool, app, or service the sender offers
+- Punctuation is minimal — a question mark at the end is fine but not required
+- Occasional rough grammar is good (e.g. "do you do like" or "or is it more") but don't force errors
 
-TARGET AUDIENCE: web designers, agencies, freelancers who build websites for businesses.
+CRITICAL RULES:
+- Every message starts with "Hey", "Hi", or "Hello" (capital)
+- Each message MUST ask a question
+- Each message must feel like a DIFFERENT person wrote it
+- Questions must be specific enough to show the sender actually looked at the business
+- Use the business name, category, or other details naturally when it makes sense
+- Messages should feel easy to reply to — low effort, low pressure
 
-MANDATORY OPENING RULES:
-- Every message MUST start with "Hey", "Hi", or "Hello" (capital first letter)
-- Do NOT start any message with "you" or "your"
-- After the greeting, the message can flow naturally
+THE 3 MESSAGES MUST EACH BE DIFFERENT IN STRUCTURE AND TOPIC:
 
-MANDATORY QUESTION CATEGORY RULES:
-Each of the 3 messages MUST ask a DIFFERENT type of question. They MUST each fall into a different category from this list:
+MESSAGE 1 — SUPER SHORT (under 8 words after greeting):
+- Topic: availability or if they're doing website work right now
+- Should feel like a quick text someone fires off
+- Vary it — don't always say "taking on clients" or "taking on work"
+- Examples of variety: "Hey you doing website work at the moment", "Hi are you available for a project", "Hey you booked up or taking on stuff"
 
-CATEGORY A — AVAILABILITY: asking if they're currently taking on work, if they have capacity, if they're available for a project soon
-CATEGORY B — TYPE OF WORK / SERVICES: asking what kind of websites they build, if they do redesigns, landing pages, ecommerce, specific platforms, etc.
-CATEGORY C — CLIENT TYPE / NICHE / LOCATION / PROCESS: asking what kind of clients they typically work with, if they work with local businesses, what their process looks like, turnaround time, pricing structure
+MESSAGE 2 — ONE CASUAL QUESTION (~8-18 words):
+- Topic: what kind of website work they do, what platforms, what type of builds
+- One sentence, slightly rough
+- Examples: "Hey do you just do like full websites or do you do landing pages too", "Hi do you work with wordpress or do you code everything custom"
 
-QUESTION QUALITY RULES:
-- Each question must feel like it helps the sender decide whether to hire them
-- Each question must be ONE clean question — no broken punctuation, no dangling fragments
-- No multiple sentences unless they flow naturally together
-- No vague follow-up sentences tacked on
-- Questions must be slightly specific and purposeful, not generic
-- Avoid vague questions like "are you taking on clients" or "what sort of businesses do you work with"
-- Instead ask things a real customer would actually want to know before hiring someone
-- Good examples: "Hey do you build sites on wordpress or something else", "Hi do you handle the design and copy or just the build", "Hey how long does a site usually take you from start to finish"
+MESSAGE 3 — SLIGHTLY LONGER (~15-30 words, max 2 sentences):
+- Topic: their process, turnaround, what kind of clients they work with, pricing ballpark
+- Still casual, still imperfect
+- Examples: "Hi i saw you do website work. roughly how long does a project usually take you from start to finish", "Hey do you mostly work with small businesses or bigger companies. just trying to get a feel for what you do"
 
-Each message MUST be a question. Each message MUST be directly relevant to what the business actually does based on their name, category, and any other info provided.
+ANTI-PATTERNS (do NOT produce these):
+- "Hey still taking on clients" — overused, sounds like a recruiter
+- "Hey are you currently accepting new projects" — too formal
+- "Hi do you build custom sites or work with platforms too" — too clean and balanced
+- Any message that sounds like it could be a template
+- Starting message 3 with "i saw you do web development" every time
 
-DO NOT:
-- ask generic curiosity questions
-- ask vague questions that could apply to any business
-- pretend to be actively hiring or needing a website right now
-- say "looking for someone" or "need help with a website"
-- create a fake scenario or urgent need
-- ask about how they get clients
-- ask about their growth or scaling
-- ask about their marketing strategy
-- mention lead generation or business development
-- sound like a business consultant or analyst
-
-TONE AND STYLE RULES (strictly enforced):
-- all lowercase after the greeting (greeting starts with capital, rest is lowercase)
-- casual texting style, like messaging from a phone
-- slightly imperfect, human, not polished
-- not corporate, not salesy, not cringe
-- no "hope you're well" or "hope this finds you well"
-- no "i came across your business" or "i stumbled across"
-- no "i help businesses" or "we help"
-- no "generate more leads" or "boost your business"
-- no "grow your business" or "scale"
-- no marketing buzzwords at all
-- no links
-- no mention of any app, tool, product, or service I offer
-- no emojis
-- no exclamation marks
-- NEVER use "just wondering", "was wondering", "curious", "was curious", "just curious" — these are overused AI filler phrases
-- NEVER use any variation of "wondering" or "curious" anywhere in a message
-- go straight into the question or statement — no filler phrases
-- messages should feel slightly abrupt, like a real person texting quickly
-- allow slight grammar roughness occasionally but don't overdo it
-- do NOT make spelling mistakes on purpose
-- keep punctuation minimal and casual
-- messages should feel open-ended and natural to pivot from later
-- each message must feel like a real person considering hiring them
-
-MESSAGE VARIETY REQUIREMENTS:
-You must generate exactly 3 messages. They MUST follow this exact structure:
-
-MESSAGE 1 — VERY SHORT (2-8 words max after the greeting):
-- Must be from CATEGORY A (availability)
-- Examples: "Hey you still taking on website work", "Hi are you available for projects right now"
-- Must be abrupt and extremely minimal
-
-MESSAGE 2 — CASUAL ROUGH QUESTION (one sentence, ~8-18 words):
-- Must be from CATEGORY B (type of work / services)
-- A single direct question, slightly rough around the edges
-- No filler, no preamble, just the question after the greeting
-- Example: "Hey do you do like small business sites or more bigger projects"
-
-MESSAGE 3 — SLIGHTLY LONGER (~15-30 words, still imperfect):
-- Must be from CATEGORY C (client type / niche / location / process)
-- Two short sentences max after the greeting
-- Still casual and slightly rough, not polished
-- Example: "Hi i saw you do website work. do you mainly work with local businesses or is it more of a mix"
-
-ALL 3 must use different structures — they must NOT follow the same pattern.
-
-SPAM MINIMISATION:
-- messages must NOT all follow the same pattern
-- vary sentence structure
-- messages should feel like different people wrote them
-- they should NOT feel templated
-
-REPLY OPTIMISATION:
-- messages should feel easy and low-effort to respond to
-- they should not feel like the start of a sales pitch
-- they should feel like a normal person sending a quick text
-- slightly ambiguous intent is good — it makes people curious enough to reply
-
-OUTPUT FORMAT:
-Return a JSON object with exactly this structure:
-{"messages": ["message 1", "message 2", "message 3"]}
-
-Return ONLY the JSON. No explanation, no commentary.`;
+OUTPUT:
+Return a JSON object: {"messages": ["msg1", "msg2", "msg3"]}
+Return ONLY the JSON. No explanation.`;
 
     const userPrompt = `Generate 3 outreach opener messages for this lead:\n\n${leadContext}`;
 
