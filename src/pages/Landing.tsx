@@ -676,9 +676,6 @@ const Landing = () => {
                   </Link>
                 </Button>
               </div>
-              <p className="text-[11px] text-muted-foreground/50 mt-2.5 tracking-wide">
-                £0 today • Find leads in seconds
-              </p>
             </div>
 
             {/* Metrics row */}
