@@ -9,7 +9,7 @@ import appLogo from '@/assets/logo.png';
 import { trackStartTrial } from '@/lib/fbPixel';
 import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 
-const DEFAULT_IN_APP_ROUTE = '/find-leads';
+const DEFAULT_IN_APP_ROUTE = '/outreach';
 
 const sanitizeReturnTo = (raw: string | null): string => {
   if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return DEFAULT_IN_APP_ROUTE;
