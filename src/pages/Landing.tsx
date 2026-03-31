@@ -504,8 +504,7 @@ const Landing = () => {
       sessionStorage.setItem('fb_lead_fired', '1');
     }
     navigate('/auth?mode=signup');
-    }
-  }, [navigate, user]);
+  }, [navigate]);
 
   // Track scroll to show/hide sticky CTA and adjust header button
   useEffect(() => {
