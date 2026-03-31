@@ -62,7 +62,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     window.addEventListener('walkthrough-dismissed', handleReady);
     return () => {
       window.removeEventListener('walkthrough-dismissed', handleReady);
-      window.removeEventListener('skip-walkthrough', handleReady);
     };
   }, [user?.id, hasProAccess, isStripeTrialing]);
 
