@@ -14,7 +14,7 @@ import { LANGUAGE_OPTIONS, type SupportedLanguage } from '@/hooks/useLanguage';
 import { getStoredUtmData } from '@/lib/utmCapture';
 import appLogo from '@/assets/logo.png';
 
-const DEFAULT_IN_APP_ROUTE = '/outreach';
+const DEFAULT_IN_APP_ROUTE = '/find-leads';
 
 const sanitizeReturnTo = (raw: string | null): string => {
   if (!raw || !raw.startsWith('/') || raw.startsWith('//')) return DEFAULT_IN_APP_ROUTE;
