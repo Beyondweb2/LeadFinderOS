@@ -18,7 +18,7 @@ const ALLOWED_ORIGINS = [
   'https://leadfinderapp.lovable.app',
 ];
 const DEFAULT_ORIGIN = 'https://leadfinderapp.lovable.app';
-const DEFAULT_RETURN_PATH = '/find-leads';
+const DEFAULT_RETURN_PATH = '/outreach';
 
 const isTrustedOrigin = (origin: string): boolean => {
   try {
