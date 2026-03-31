@@ -77,6 +77,20 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent, onAiOpener }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Listen for AI opener message selection
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const msg = (e as CustomEvent).detail?.message;
+      if (msg && open) {
+        setTemplate(msg);
+        setIsModified(true);
+        localStorage.setItem(STORAGE_KEY, msg);
+      }
+    };
+    window.addEventListener('ai-opener-selected', handler);
+    return () => window.removeEventListener('ai-opener-selected', handler);
+  }, [open]);
+
   const handleTemplateChange = (value: string) => {
     setTemplate(value);
     setIsModified(value !== DEFAULT_TEMPLATE);
