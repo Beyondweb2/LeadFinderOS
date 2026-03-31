@@ -503,10 +503,7 @@ const Landing = () => {
       trackLead();
       sessionStorage.setItem('fb_lead_fired', '1');
     }
-    if (user) {
-      navigate('/start-free-trial');
-    } else {
-      navigate('/auth?mode=signup');
+    navigate('/auth?mode=signup');
     }
   }, [navigate, user]);
 
