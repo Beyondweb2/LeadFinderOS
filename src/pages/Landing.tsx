@@ -88,9 +88,9 @@ const ScrollReveal = ({
   );
 };
 
-// Navigate to start free trial page
+// Navigate to create account page
 const goToStartTrial = (navigate: ReturnType<typeof useNavigate>) => () => {
-  navigate('/start-free-trial');
+  navigate('/auth?mode=signup');
 };
 
 // Inline CTA band - desktop only, inserted between sections
@@ -503,12 +503,8 @@ const Landing = () => {
       trackLead();
       sessionStorage.setItem('fb_lead_fired', '1');
     }
-    if (user) {
-      navigate('/start-free-trial');
-    } else {
-      navigate('/auth?mode=signup');
-    }
-  }, [navigate, user]);
+    navigate('/auth?mode=signup');
+  }, [navigate]);
 
   // Track scroll to show/hide sticky CTA and adjust header button
   useEffect(() => {
@@ -1084,7 +1080,7 @@ const Landing = () => {
               <Link to="/auth?mode=signin" className="hover:text-foreground transition-colors duration-200">
                 Sign In
               </Link>
-              <Link to="/start-free-trial" className="hover:text-foreground transition-colors duration-200">
+              <Link to="/auth?mode=signup" className="hover:text-foreground transition-colors duration-200">
                 Try it free
               </Link>
               <Link to="/feedback" className="hover:text-foreground transition-colors duration-200">
