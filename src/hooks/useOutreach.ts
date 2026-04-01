@@ -903,44 +903,97 @@ export function useOutreach() {
     return (data || []) as OutreachLead[];
   }, [user]);
 
-   // Bulk lookup phone numbers for leads missing them
-   const bulkLookupPhones = useCallback(async (leadIds?: string[]): Promise<{ updated: number; total: number }> => {
-     if (!user) return { updated: 0, total: 0 };
- 
-     // If no specific IDs provided, get all leads missing phone numbers
-     const idsToLookup = leadIds || [...leads, ...archivedLeads]
-       .filter(l => !l.phone)
-       .map(l => l.id);
- 
-     if (idsToLookup.length === 0) {
-        // No leads to update — no toast
-       return { updated: 0, total: 0 };
+   // Bulk lookup phone numbers — uses google-place-details with concurrency-3
+   const bulkLookupPhones = useCallback(async (
+     leadIds?: string[],
+     onProgress?: (current: number, total: number) => void
+   ): Promise<{ updated: number; skipped: number; failed: number; total: number }> => {
+     if (!user) return { updated: 0, skipped: 0, failed: 0, total: 0 };
+
+     // Collect target leads
+     const allTargetLeads = leadIds
+       ? [...leads, ...archivedLeads].filter(l => leadIds.includes(l.id))
+       : [...leads, ...archivedLeads];
+
+     const eligible: typeof allTargetLeads = [];
+     let skippedCount = 0;
+
+     for (const lead of allTargetLeads) {
+       if (lead.phone) {
+         skippedCount++;
+         continue;
+       }
+       const placeId = (lead as any).place_id;
+       if (!placeId) {
+         skippedCount++;
+         console.log(`Skipped lead ${lead.id} (${lead.business_name}): no place_id`);
+         continue;
+       }
+       eligible.push(lead);
      }
- 
-      // Looking up phones — no toast
- 
-     try {
-       const { data, error } = await supabase.functions.invoke('lookup-phones', {
-         body: { leadIds: idsToLookup },
-       });
- 
-       if (error) throw error;
- 
-       // Refresh leads to get updated phone numbers
-       await fetchLeads();
- 
-        // Phone lookup complete — no toast
- 
-       return { updated: data.updated, total: data.total };
-     } catch (error) {
-       console.error('Bulk phone lookup error:', error);
-       toast({
-         title: 'Lookup failed',
-         description: 'Could not complete phone number lookup.',
-         variant: 'destructive',
-       });
-       return { updated: 0, total: 0 };
+
+     const total = allTargetLeads.length;
+     if (eligible.length === 0) {
+       onProgress?.(total, total);
+       return { updated: 0, skipped: skippedCount, failed: 0, total };
      }
+
+     let updatedCount = 0;
+     let failedCount = 0;
+     let processed = skippedCount; // already-skipped leads count as processed for progress
+
+     // Concurrency-3 pool
+     const queue = [...eligible];
+     const processOne = async () => {
+       while (queue.length > 0) {
+         const lead = queue.shift();
+         if (!lead) break;
+         const placeId = (lead as any).place_id;
+         try {
+           const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
+             body: { placeId },
+           });
+
+           if (detailsError) {
+             failedCount++;
+             console.error(`Bulk enrich failed for ${lead.business_name}:`, detailsError);
+           } else if (details?.phone) {
+             // Phone found — update DB
+             const updates: Record<string, string | null> = { phone: details.phone };
+             if (details.address) updates.address = details.address;
+             if (details.category) updates.category = details.category;
+
+             const { error: updateError } = await supabase
+               .from('outreach_leads')
+               .update(updates)
+               .eq('id', lead.id);
+
+             if (updateError) {
+               failedCount++;
+               console.error(`DB update failed for ${lead.business_name}:`, updateError);
+             } else {
+               updatedCount++;
+             }
+           } else {
+             // No phone found — count as skipped, do NOT remove lead
+             skippedCount++;
+           }
+         } catch (e) {
+           failedCount++;
+           console.error(`Bulk enrich error for ${lead.business_name}:`, e);
+         }
+         processed++;
+         onProgress?.(processed, total);
+       }
+     };
+
+     // Start CONCURRENCY workers
+     await Promise.all(Array.from({ length: CONCURRENCY }, () => processOne()));
+
+     // Refresh state once at the end
+     await fetchLeads();
+
+     return { updated: updatedCount, skipped: skippedCount, failed: failedCount, total };
    }, [user, leads, archivedLeads, fetchLeads]);
 
   // Bulk import leads from CSV

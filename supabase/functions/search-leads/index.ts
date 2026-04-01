@@ -888,6 +888,36 @@ serve(async (req) => {
       console.error('Usage tracking failed (non-blocking):', trackingErr);
     }
 
+    // ─── LOG API USAGE TO api_usage_log (best-effort) ───
+    try {
+      const usageLogs = [];
+      if (debug.googleCallsMade.geocode > 0) {
+        usageLogs.push({
+          user_id: userId,
+          function_name: 'search-leads',
+          api_type: 'geocode',
+          calls_made: debug.googleCallsMade.geocode,
+          cache_hit: false,
+          estimated_cost_usd: debug.googleCallsMade.geocode * 0.005,
+        });
+      }
+      if (debug.googleCallsMade.textSearchPages > 0) {
+        usageLogs.push({
+          user_id: userId,
+          function_name: 'search-leads',
+          api_type: 'text_search',
+          calls_made: debug.googleCallsMade.textSearchPages,
+          cache_hit: false,
+          estimated_cost_usd: debug.googleCallsMade.textSearchPages * 0.032,
+        });
+      }
+      if (usageLogs.length > 0) {
+        await serviceClient.from('api_usage_log').insert(usageLogs);
+      }
+    } catch (e) {
+      console.error('API usage logging failed (non-blocking):', e);
+    }
+
     return jsonResponse({
       leads: isGated ? stripGatedFields(leads) : leads,
       totalFound: leads.length,
