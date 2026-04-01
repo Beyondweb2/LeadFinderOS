@@ -298,12 +298,20 @@ const ArchivePage = () => {
                        <span className="hidden sm:inline">Lookup </span>{missingPhoneCount}
                      </>
                      )}
-                   </Button>
-                 )}
-               </div>
-             )}
-           </div>
-         </CardHeader>
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+            {lookupProgress && (
+              <div className="mt-3">
+                <Progress value={lookupProgress.total > 0 ? (lookupProgress.current / lookupProgress.total) * 100 : 0} className="h-2" />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {lookupProgress.current} / {lookupProgress.total} processed
+                </p>
+              </div>
+            )}
+          </CardHeader>
          <CardContent className="px-4 sm:px-6">
            <div className="relative max-w-full sm:max-w-md">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
