@@ -182,27 +182,35 @@ const ArchivePage = () => {
     await unarchiveLead(lead.id);
   };
 
-  const handleBulkLookup = async () => {
+  const [lookupProgress, setLookupProgress] = useState<{ current: number; total: number } | null>(null);
+
+  const handleBulkLookup = useCallback(async () => {
     setIsLookingUp(true);
+    setLookupProgress({ current: 0, total: missingPhoneCount });
     try {
       const missingIds = archivedLeads.filter(l => !l.phone).map(l => l.id);
-      
-      // Process in batches of 50 (API limit)
-      const batchSize = 50;
-      
-      for (let i = 0; i < missingIds.length; i += batchSize) {
-        const batch = missingIds.slice(i, i + batchSize);
-        await bulkLookupPhones(batch);
-        
-        // Small delay between batches
-        if (i + batchSize < missingIds.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+      const result = await bulkLookupPhones(missingIds, (current, total) => {
+        setLookupProgress({ current, total });
+      });
+
+      if (result.updated > 0 || result.failed > 0) {
+        toast({
+          title: 'Phone lookup complete',
+          description: `${result.updated} found, ${result.skipped} skipped, ${result.failed} failed`,
+        });
       }
+    } catch (err) {
+      console.error('Bulk lookup error:', err);
+      toast({
+        title: 'Lookup failed',
+        description: 'An error occurred during phone lookup.',
+        variant: 'destructive',
+      });
     } finally {
       setIsLookingUp(false);
+      setLookupProgress(null);
     }
-  };
+  }, [archivedLeads, bulkLookupPhones, missingPhoneCount, toast]);
  
    if (isLoading) {
      return (
