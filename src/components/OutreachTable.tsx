@@ -123,6 +123,7 @@ export function OutreachTable({
   onMarkAsInterested,
   onRefreshLeads,
   onImportLeads,
+  onBulkLookupPhones,
   showArchiveButton = true,
   isArchiveView = false,
   readOnly = false,
