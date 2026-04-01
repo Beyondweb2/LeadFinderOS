@@ -15,8 +15,6 @@ verify_jwt = false
 [functions.stripe-webhook]
 verify_jwt = false
  
-[functions.lookup-phones]
-verify_jwt = false
 
 [functions.ensure-trial]
 verify_jwt = false

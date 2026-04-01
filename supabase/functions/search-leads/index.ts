@@ -18,7 +18,7 @@ const MAX_RESULTS = 50;
 const CACHE_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
 const FREE_SEARCH_LIMIT = 3;
 const MIN_NO_WEBSITE_TARGET = 5;
-const MAX_EXPANSION_ATTEMPTS = 16;
+const MAX_EXPANSION_ATTEMPTS = 6;
 
 // ═══════════════════════════════════════════════
 // INPUT VALIDATION
@@ -404,9 +404,9 @@ async function expandSearch(
       const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken';
       const clampedRadius = Math.min(radius, 50000);
 
-      // Fetch up to 2 pages per expansion centre for a bigger candidate pool
+      // Fetch 1 page per expansion centre to limit API spend
       let expansionPageToken: string | undefined;
-      for (let ePage = 0; ePage < 2; ePage++) {
+      for (let ePage = 0; ePage < 1; ePage++) {
         if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET) break;
 
         const body: Record<string, unknown> = {
@@ -886,6 +886,36 @@ serve(async (req) => {
       });
     } catch (trackingErr) {
       console.error('Usage tracking failed (non-blocking):', trackingErr);
+    }
+
+    // ─── LOG API USAGE TO api_usage_log (best-effort) ───
+    try {
+      const usageLogs = [];
+      if (debug.googleCallsMade.geocode > 0) {
+        usageLogs.push({
+          user_id: userId,
+          function_name: 'search-leads',
+          api_type: 'geocode',
+          calls_made: debug.googleCallsMade.geocode,
+          cache_hit: false,
+          estimated_cost_usd: debug.googleCallsMade.geocode * 0.005,
+        });
+      }
+      if (debug.googleCallsMade.textSearchPages > 0) {
+        usageLogs.push({
+          user_id: userId,
+          function_name: 'search-leads',
+          api_type: 'text_search',
+          calls_made: debug.googleCallsMade.textSearchPages,
+          cache_hit: false,
+          estimated_cost_usd: debug.googleCallsMade.textSearchPages * 0.032,
+        });
+      }
+      if (usageLogs.length > 0) {
+        await serviceClient.from('api_usage_log').insert(usageLogs);
+      }
+    } catch (e) {
+      console.error('API usage logging failed (non-blocking):', e);
     }
 
     return jsonResponse({

@@ -36,6 +36,7 @@ const Outreach = () => {
     archiveMultiple,
     markMultipleAsInterested,
     bulkImportLeads,
+    bulkLookupPhones,
     fetchLeads,
     phoneFetchStatus,
     retryPhoneFetch,
@@ -213,6 +214,7 @@ const Outreach = () => {
         onImportLeads={async (leadsToImport) => {
           await bulkImportLeads(leadsToImport as any, 'UK');
         }}
+        onBulkLookupPhones={(ids, onProgress) => bulkLookupPhones(ids, onProgress)}
         showArchiveButton={false}
         isArchiveView={false}
         readOnly={isReadOnly}

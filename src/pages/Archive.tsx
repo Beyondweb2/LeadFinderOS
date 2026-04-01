@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCopiedPhones } from '@/hooks/useCopiedPhones';
@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 import { 
   Search, 
   MessageSquare, 
@@ -182,27 +183,35 @@ const ArchivePage = () => {
     await unarchiveLead(lead.id);
   };
 
-  const handleBulkLookup = async () => {
+  const [lookupProgress, setLookupProgress] = useState<{ current: number; total: number } | null>(null);
+
+  const handleBulkLookup = useCallback(async () => {
     setIsLookingUp(true);
+    setLookupProgress({ current: 0, total: missingPhoneCount });
     try {
       const missingIds = archivedLeads.filter(l => !l.phone).map(l => l.id);
-      
-      // Process in batches of 50 (API limit)
-      const batchSize = 50;
-      
-      for (let i = 0; i < missingIds.length; i += batchSize) {
-        const batch = missingIds.slice(i, i + batchSize);
-        await bulkLookupPhones(batch);
-        
-        // Small delay between batches
-        if (i + batchSize < missingIds.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
+      const result = await bulkLookupPhones(missingIds, (current, total) => {
+        setLookupProgress({ current, total });
+      });
+
+      if (result.updated > 0 || result.failed > 0) {
+        toast({
+          title: 'Phone lookup complete',
+          description: `${result.updated} found, ${result.skipped} skipped, ${result.failed} failed`,
+        });
       }
+    } catch (err) {
+      console.error('Bulk lookup error:', err);
+      toast({
+        title: 'Lookup failed',
+        description: 'An error occurred during phone lookup.',
+        variant: 'destructive',
+      });
     } finally {
       setIsLookingUp(false);
+      setLookupProgress(null);
     }
-  };
+  }, [archivedLeads, bulkLookupPhones, missingPhoneCount, toast]);
  
    if (isLoading) {
      return (
@@ -290,12 +299,20 @@ const ArchivePage = () => {
                        <span className="hidden sm:inline">Lookup </span>{missingPhoneCount}
                      </>
                      )}
-                   </Button>
-                 )}
-               </div>
-             )}
-           </div>
-         </CardHeader>
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+            {lookupProgress && (
+              <div className="mt-3">
+                <Progress value={lookupProgress.total > 0 ? (lookupProgress.current / lookupProgress.total) * 100 : 0} className="h-2" />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {lookupProgress.current} / {lookupProgress.total} processed
+                </p>
+              </div>
+            )}
+          </CardHeader>
          <CardContent className="px-4 sm:px-6">
            <div className="relative max-w-full sm:max-w-md">
              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

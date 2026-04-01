@@ -94,6 +94,42 @@ export type Database = {
         }
         Relationships: []
       }
+      api_usage_log: {
+        Row: {
+          api_type: string
+          cache_hit: boolean
+          calls_made: number
+          created_at: string
+          estimated_cost_usd: number | null
+          function_name: string
+          id: string
+          search_session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          api_type: string
+          cache_hit?: boolean
+          calls_made?: number
+          created_at?: string
+          estimated_cost_usd?: number | null
+          function_name: string
+          id?: string
+          search_session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          api_type?: string
+          cache_hit?: boolean
+          calls_made?: number
+          created_at?: string
+          estimated_cost_usd?: number | null
+          function_name?: string
+          id?: string
+          search_session_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       checked_businesses: {
         Row: {
           business_name: string

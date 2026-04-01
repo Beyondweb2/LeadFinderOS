@@ -90,6 +90,7 @@ interface OutreachTableProps {
   onMarkAsInterested?: (leadIds: string[]) => void;
   onRefreshLeads?: () => void;
   onImportLeads?: (leads: Array<Partial<OutreachLead>>) => Promise<void>;
+  onBulkLookupPhones?: (leadIds: string[], onProgress: (current: number, total: number) => void) => Promise<{ updated: number; skipped: number; failed: number; total: number }>;
   showArchiveButton?: boolean;
   isArchiveView?: boolean;
   /** When true, hides status and next action editing (for simplified Outreach CRM view) */
@@ -122,6 +123,7 @@ export function OutreachTable({
   onMarkAsInterested,
   onRefreshLeads,
   onImportLeads,
+  onBulkLookupPhones,
   showArchiveButton = true,
   isArchiveView = false,
   readOnly = false,
@@ -414,48 +416,29 @@ export function OutreachTable({
       return;
     }
 
+    if (!onBulkLookupPhones) {
+      toast({
+        title: 'Not available',
+        description: 'Bulk phone lookup is not available.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsRecoveringPhones(true);
     setRecoveryProgress({ current: 0, total: leadsWithMissingPhones.length });
-    
-    const batchSize = 50;
-    let totalUpdated = 0;
-    let totalProcessed = 0;
 
     try {
-      // Process in batches of 50
-      for (let i = 0; i < leadsWithMissingPhones.length; i += batchSize) {
-        const batch = leadsWithMissingPhones.slice(i, i + batchSize);
-        const leadIds = batch.map(l => l.id);
+      const leadIds = leadsWithMissingPhones.map(l => l.id);
+      const result = await onBulkLookupPhones(leadIds, (current, total) => {
+        setRecoveryProgress({ current, total });
+      });
 
-        const { data, error } = await supabase.functions.invoke('lookup-phones', {
-          body: { leadIds },
+      if (result.updated > 0 || result.failed > 0) {
+        toast({
+          title: 'Phone recovery complete',
+          description: `${result.updated} found, ${result.skipped} skipped, ${result.failed} failed`,
         });
-
-        if (error) {
-          console.error('Phone lookup error:', error);
-          toast({
-            title: 'Recovery error',
-            description: error.message || 'Failed to recover phone numbers.',
-            variant: 'destructive',
-          });
-          break;
-        }
-
-        totalUpdated += data?.updated || 0;
-        totalProcessed += batch.length;
-        setRecoveryProgress({ current: totalProcessed, total: leadsWithMissingPhones.length });
-
-        // Small delay between batches to avoid rate limits
-        if (i + batchSize < leadsWithMissingPhones.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-
-      // Phone recovery complete — no toast
-
-      // Refresh leads to show updated data
-      if (onRefreshLeads) {
-        onRefreshLeads();
       }
     } catch (err) {
       console.error('Phone recovery error:', err);
