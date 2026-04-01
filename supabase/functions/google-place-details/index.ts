@@ -10,6 +10,28 @@ const corsHeaders = {
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60000;
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+const NULL_PHONE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+// Best-effort usage logging — never blocks the main response
+async function logUsage(
+  supabase: ReturnType<typeof createClient>,
+  userId: string | null,
+  cacheHit: boolean,
+  costUsd: number
+) {
+  try {
+    await supabase.from('api_usage_log').insert({
+      user_id: userId,
+      function_name: 'google-place-details',
+      api_type: 'place_details',
+      calls_made: 1,
+      cache_hit: cacheHit,
+      estimated_cost_usd: costUsd,
+    });
+  } catch (e) {
+    console.error('Usage logging failed (non-blocking):', e);
+  }
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -59,7 +81,7 @@ serve(async (req) => {
       );
     }
 
-    // ─── CACHE CHECK (30 days for phone, 1 hour for null-phone) ───
+    // ─── CACHE CHECK ─────────────────────────
     if (!forceRefresh) {
       const cutoff = new Date(Date.now() - CACHE_TTL_MS).toISOString();
       const { data: cached } = await supabase
@@ -69,14 +91,14 @@ serve(async (req) => {
         .gte('created_at', cutoff)
         .maybeSingle();
 
-      // Only serve from cache if phone was found; null-phone entries expire after 1 hour
       if (cached) {
-        const NULL_PHONE_TTL_MS = 60 * 60 * 1000; // 1 hour
         const cacheAge = Date.now() - new Date(cached.created_at).getTime();
         const isNullPhone = !cached.phone;
 
         if (!isNullPhone || cacheAge < NULL_PHONE_TTL_MS) {
           console.log(`Cache hit for place ${placeId} (phone=${cached.phone ? 'found' : 'none'}, age=${Math.round(cacheAge / 60000)}min)`);
+          // Log cache hit (best-effort)
+          logUsage(supabase, userId, true, 0);
           return new Response(
             JSON.stringify({
               placeId,
@@ -129,6 +151,9 @@ serve(async (req) => {
     const googleMapsUri = data.googleMapsUri || null;
 
     console.log(`Place ${placeId}: phone=${phone ? 'found' : 'none'}, address=${address ? 'found' : 'none'}`);
+
+    // Log API miss (best-effort) — $0.017 per Place Details call
+    logUsage(supabase, userId, false, 0.017);
 
     // ─── CACHE STORE ─────────────────────────
     try {

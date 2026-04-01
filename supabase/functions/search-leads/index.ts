@@ -404,9 +404,9 @@ async function expandSearch(
       const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken';
       const clampedRadius = Math.min(radius, 50000);
 
-      // Fetch up to 2 pages per expansion centre for a bigger candidate pool
+      // Fetch 1 page per expansion centre to limit API spend
       let expansionPageToken: string | undefined;
-      for (let ePage = 0; ePage < 2; ePage++) {
+      for (let ePage = 0; ePage < 1; ePage++) {
         if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET) break;
 
         const body: Record<string, unknown> = {
