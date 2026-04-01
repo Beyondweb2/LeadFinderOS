@@ -90,6 +90,7 @@ interface OutreachTableProps {
   onMarkAsInterested?: (leadIds: string[]) => void;
   onRefreshLeads?: () => void;
   onImportLeads?: (leads: Array<Partial<OutreachLead>>) => Promise<void>;
+  onBulkLookupPhones?: (leadIds: string[], onProgress: (current: number, total: number) => void) => Promise<{ updated: number; skipped: number; failed: number; total: number }>;
   showArchiveButton?: boolean;
   isArchiveView?: boolean;
   /** When true, hides status and next action editing (for simplified Outreach CRM view) */
