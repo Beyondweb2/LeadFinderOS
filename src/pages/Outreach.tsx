@@ -36,6 +36,7 @@ const Outreach = () => {
     archiveMultiple,
     markMultipleAsInterested,
     bulkImportLeads,
+    bulkLookupPhones,
     fetchLeads,
     phoneFetchStatus,
     retryPhoneFetch,
