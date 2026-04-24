@@ -43,7 +43,7 @@ const AffiliateProgram = lazy(() => import("./pages/AffiliateProgram"));
 const Playbook = lazy(() => import("./pages/Playbook"));
 const UnlockAccess = lazy(() => import("./pages/UnlockAccess"));
 const Start = lazy(() => import("./pages/Start"));
-const StartFreeTrial = lazy(() => import("./pages/StartFreeTrial"));
+
 const CityLeads = lazy(() => import("./pages/CityLeads"));
 
 function PageLoader() {
@@ -188,7 +188,7 @@ const App = () => {
              <Route path="/feedback" element={<Feedback />} />
              <Route path="/partners" element={<AffiliateProgram />} />
               <Route path="/start" element={<Start />} />
-              <Route path="/start-free-trial" element={<StartFreeTrial />} />
+              <Route path="/start-free-trial" element={<Navigate to="/subscribe" replace />} />
               <Route path="/find-clients/:city" element={<CityLeads />} />
               <Route 
                 path="/ads" 
