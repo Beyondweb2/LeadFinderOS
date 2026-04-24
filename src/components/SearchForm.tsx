@@ -134,7 +134,7 @@ export function SearchForm({
                     {isUpgradeLoading ? (
                       <><Loader2 className="h-3.5 w-3.5 animate-spin" />Starting...</>
                     ) : (
-                      <><img src={logoIcon} alt="" className="h-5 w-5 object-contain" />Start Free Trial</>
+                      <><img src={logoIcon} alt="" className="h-5 w-5 object-contain" />Upgrade to Unlock</>
                     )}
                   </Button>
                 </div>
