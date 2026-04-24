@@ -218,7 +218,7 @@ const HowToUse = () => {
               <>
                 <Button asChild className="w-full sm:w-auto">
                   <Link to="/auth">
-                    Start Free Trial
+                    Subscribe Now
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>

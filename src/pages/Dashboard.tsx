@@ -8,7 +8,7 @@ import { RevenueCard } from '@/components/dashboard/RevenueCard';
 import { PipelineCard } from '@/components/dashboard/PipelineCard';
 import { OutreachCard } from '@/components/dashboard/OutreachCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
-import { TrialProgressCard } from '@/components/dashboard/TrialProgressCard';
+
 import { FunnelMetricsCard } from '@/components/dashboard/FunnelMetricsCard';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';

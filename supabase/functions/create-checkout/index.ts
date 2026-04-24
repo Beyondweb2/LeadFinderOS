@@ -203,16 +203,8 @@ serve(async (req) => {
       }
     }
 
-    // Check if user has already used a trial
-    let trialUsed = false;
-    if (user) {
-      const { data: trialRow } = await supabaseClient
-        .from('user_trials')
-        .select('trial_used')
-        .eq('user_id', user.id)
-        .single();
-      trialUsed = trialRow?.trial_used === true;
-    }
+    // Trial periods are removed — all new checkouts charge immediately.
+    const trialUsed = true;
 
     // Get tracking metadata if authenticated
     const trackingMetadata: Record<string, string> = {};
@@ -260,16 +252,11 @@ serve(async (req) => {
       sessionConfig.metadata = trackingMetadata;
     }
 
-    // Offer 5-day trial for new users (anonymous always get trial)
-    if (!trialUsed) {
-      logStep("Creating checkout with 5-day free trial");
-      sessionConfig.subscription_data = {
-        trial_period_days: 5,
-        ...(Object.keys(trackingMetadata).length > 0 ? { metadata: trackingMetadata } : {}),
-      };
-    } else {
-      logStep("Creating checkout without trial (trial already used)");
+    // No trial period — charge immediately on checkout completion.
+    if (Object.keys(trackingMetadata).length > 0) {
+      sessionConfig.subscription_data = { metadata: trackingMetadata };
     }
+    logStep("Creating checkout without trial (paid-only model)");
 
     logStep("Creating checkout session", {
       hasCustomer: !!customerId,

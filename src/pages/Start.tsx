@@ -29,11 +29,11 @@ const BENEFITS = [
   'Find businesses without websites in seconds',
   'Open WhatsApp or SMS instantly with templates',
   'Track every contact and follow-up',
-  '5-day free trial · £0 today',
+  'Cancel anytime',
 ];
 
 const TRUST_POINTS = [
-  '5-day free trial with full access',
+  'Full access · cancel anytime',
   'Upgrade only if you want unlimited access',
   'Cancel anytime',
   'Real human support via WhatsApp',
@@ -48,7 +48,7 @@ const SCREENSHOTS = [
 const Start = () => {
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <SEOHead title="Get Started | LeadFinder Pro" description="Find businesses without websites and turn them into clients. Start your free 5-day trial today." canonical="/start" />
+      <SEOHead title="Get Started | LeadFinder Pro" description="Find businesses without websites and turn them into clients. Start your subscription today." canonical="/start" />
       {/* Background glow */}
       <div
         className="fixed inset-0 pointer-events-none"
@@ -89,7 +89,7 @@ const Start = () => {
             </Link>
           </Button>
           <p className="text-xs text-muted-foreground/50 mt-3">
-            5-day free trial · £0 today · Cancel anytime
+            £19.99/mo · Cancel anytime
           </p>
         </div>
       </section>
@@ -213,7 +213,7 @@ const Start = () => {
             </Link>
           </Button>
           <p className="text-xs text-muted-foreground/50 mt-3">
-            5-day free trial · £0 today
+            £19.99/mo · Cancel anytime
           </p>
         </div>
       </section>

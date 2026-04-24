@@ -520,7 +520,7 @@ const Landing = () => {
     <div className="min-h-screen bg-background overflow-hidden" style={{ backgroundColor: 'hsl(220, 50%, 6%)' }}>
       <SEOHead
         title="Find Clients Who Need Websites | LeadFinder Pro"
-        description="Find businesses without websites in any city. Contact them via WhatsApp, SMS or phone and close web design deals fast. Free 5-day trial."
+        description="Find businesses without websites in any city. Contact them via WhatsApp, SMS or phone and close web design deals fast. Cancel anytime."
         canonical="/landing"
         jsonLd={{
           '@context': 'https://schema.org',
@@ -533,7 +533,7 @@ const Landing = () => {
             '@type': 'Offer',
             price: '0',
             priceCurrency: 'GBP',
-            description: '5-day free trial',
+            description: 'Cancel anytime',
           },
         }}
       />
@@ -996,7 +996,7 @@ const Landing = () => {
                 className="inline-block text-[11px] sm:text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full mb-5"
                 style={{ background: 'hsl(142 76% 45% / 0.12)', color: 'hsl(142 76% 55%)' }}
               >
-                Free Trial
+                Subscribe
               </span>
 
               <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">LeadFinder <span className="text-gradient-primary">Pro</span></h3>
@@ -1128,7 +1128,7 @@ const Landing = () => {
               Try for free
           </Button>
           <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            5-day free trial · £0 today · Cancel anytime
+            £19.99/mo · Cancel anytime
           </p>
         </div>
       )}
