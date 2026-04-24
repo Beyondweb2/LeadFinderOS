@@ -131,7 +131,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
             <div className="flex flex-col items-center gap-1 text-muted-foreground">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-emerald-500 shrink-0" />
-                <strong className="text-foreground text-[17px]">£0 today</strong>
+                <strong className="text-foreground text-[17px]">£19.99/mo</strong>
               </div>
               <span className="text-[12px]">Cancel anytime in 2 clicks</span>
             </div>
@@ -157,7 +157,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
 
           <p className="text-[11px] text-muted-foreground/50 text-center mt-2 flex items-center justify-center gap-1.5">
             <ShieldCheck className="h-3 w-3" />
-            No charge today · Secure checkout via Stripe
+            Secure checkout via Stripe
           </p>
         </div>
       </DialogContent>

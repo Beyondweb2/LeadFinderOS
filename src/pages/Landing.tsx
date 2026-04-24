@@ -1029,7 +1029,7 @@ const Landing = () => {
               </Button>
 
               <p className="text-[11px] sm:text-xs text-muted-foreground/50 mt-4">
-                £0 today · Cancel anytime
+                £19.99/mo · Cancel anytime
               </p>
             </div>
           </ScrollReveal>
