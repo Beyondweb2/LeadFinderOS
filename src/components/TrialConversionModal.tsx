@@ -157,7 +157,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
 
           <p className="text-[11px] text-muted-foreground/50 text-center mt-2 flex items-center justify-center gap-1.5">
             <ShieldCheck className="h-3 w-3" />
-            No charge today · Secure checkout via Stripe
+            Secure checkout via Stripe
           </p>
         </div>
       </DialogContent>
