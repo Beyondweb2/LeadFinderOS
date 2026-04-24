@@ -6,14 +6,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { PaymentPausedScreen } from '@/components/PaymentPausedScreen';
 import { SubscriptionCancelledScreen } from '@/components/SubscriptionCancelledScreen';
-import { TrialExpiredScreen } from '@/components/TrialExpiredScreen';
 import { hasAdEntryAccess } from '@/lib/adEntryAccess';
 
 interface SubscriptionGateProps {
   children: ReactNode;
 }
 
-const subscriptionGateCache = new Map<string, { setupCompleted: boolean; trialUsed: boolean }>();
+const subscriptionGateCache = new Map<string, { setupCompleted: boolean }>();
 
 export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const { isLoading: subLoading, isPaymentPaused, isPaidSubscriber, isStripeTrialing, isAdmin, status: subStatus } = useSubscription();
@@ -21,7 +20,6 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
   const cachedGateState = user?.id ? subscriptionGateCache.get(user.id) : null;
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(cachedGateState?.setupCompleted ?? null);
-  const [trialUsed, setTrialUsed] = useState<boolean | null>(cachedGateState?.trialUsed ?? null);
   const [setupLoading, setSetupLoading] = useState(Boolean(user?.id) && !cachedGateState);
 
   const isAdGuest = !user && hasAdEntryAccess();
@@ -29,7 +27,6 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   useEffect(() => {
     if (!user?.id) {
       setSetupCompleted(null);
-      setTrialUsed(null);
       setSetupLoading(false);
       return;
     }
@@ -37,7 +34,6 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     const cached = subscriptionGateCache.get(user.id);
     if (cached) {
       setSetupCompleted(cached.setupCompleted);
-      setTrialUsed(cached.trialUsed);
       setSetupLoading(false);
       return;
     }
@@ -49,7 +45,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       try {
         const { data } = await supabase
           .from('user_trials')
-          .select('setup_completed, trial_used')
+          .select('setup_completed')
           .eq('user_id', user.id)
           .maybeSingle();
 
@@ -57,16 +53,13 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
         const nextState = {
           setupCompleted: (data as any)?.setup_completed ?? false,
-          trialUsed: (data as any)?.trial_used ?? false,
         };
 
         subscriptionGateCache.set(user.id, nextState);
         setSetupCompleted(nextState.setupCompleted);
-        setTrialUsed(nextState.trialUsed);
       } catch {
         if (cancelled) return;
         setSetupCompleted(true);
-        setTrialUsed(false);
       } finally {
         if (!cancelled) {
           setSetupLoading(false);
@@ -101,9 +94,8 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     return <SubscriptionCancelledScreen />;
   }
 
-  if (!isAdmin && subStatus === null && trialUsed === true) {
-    return <TrialExpiredScreen />;
-  }
+  // Free users (no subscription) are allowed in — they hit per-feature limits
+  // (5 searches, 2 contacts, 10 outreach adds). No more trial-expired full block.
 
   const hasPaidAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
   if (hasPaidAccess && !isAdmin && setupCompleted === false) {
