@@ -109,7 +109,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
 
           {/* Value description */}
           <p className="text-center text-[13px] text-muted-foreground/80 leading-relaxed mb-5">
-            Start your 5-day free trial to unlock contact details and start your outreach
+            Subscribe to unlock contact details and start your outreach
           </p>
 
           {/* Benefits */}
@@ -144,7 +144,7 @@ export function TrialConversionModal({ open, onOpenChange, noWebsiteCount = 0, c
             disabled={isLoading}
           >
             <Lock className="h-4 w-4" />
-            {isLoading ? 'Opening checkout...' : 'Start Free Trial – £0 Today'}
+            {isLoading ? 'Opening checkout...' : 'Subscribe – £19.99/mo'}
           </Button>
 
           <Button
