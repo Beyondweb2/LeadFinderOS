@@ -36,7 +36,7 @@ const BillingCancel = () => {
         <CardContent className="flex flex-col items-center gap-4 py-8">
           <div className="text-center">
             <h2 className="text-xl font-semibold mb-4">Checkout cancelled — no charge made</h2>
-            <p className="text-2xl font-bold mb-2">Start your 5-day free trial for <span className="text-primary">£0</span>.</p>
+            <p className="text-2xl font-bold mb-2">Subscribe for <span className="text-primary">£19.99/mo</span>.</p>
             <p className="text-muted-foreground mb-6 leading-relaxed">
               You get full access to LeadFinder Pro for 5 days. If you cancel anytime before the trial ends, you will not be charged.
             </p>
@@ -50,7 +50,7 @@ const BillingCancel = () => {
                 ) : (
                   <>
                     <CreditCard className="mr-2 h-4 w-4" />
-                    Resume Free Trial
+                    Resume Checkout
                   </>
                 )}
               </Button>

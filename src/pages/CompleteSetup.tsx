@@ -312,7 +312,7 @@ const CompleteSetup = () => {
             <div className="flex flex-col items-center gap-4 py-8">
               <CheckCircle2 className="h-12 w-12" style={{ color: 'hsl(142 76% 50%)' }} />
               <h2 className="text-xl font-semibold">You're all set!</h2>
-              <p className="text-sm text-muted-foreground text-center">Your 5-day free trial is active. Redirecting...</p>
+              <p className="text-sm text-muted-foreground text-center">Your subscription is active. Redirecting...</p>
               <Button onClick={() => navigate(returnTo, { replace: true })} className="btn-premium">
                 Continue to app →
               </Button>

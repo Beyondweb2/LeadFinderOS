@@ -182,14 +182,14 @@ const Subscribe = () => {
                   </>
                 ) : (
                   <>
-                    Start Free Trial
+                    Subscribe Now
                     <span className="ml-2">→</span>
                   </>
                 )}
               </Button>
 
               <p className="text-center text-[11px] text-muted-foreground">
-                5-day free trial · £0 today · Cancel anytime
+                £19.99/mo · Cancel anytime
               </p>
               <p className="text-center text-[11px] text-muted-foreground -mt-2">
                 After trial · £19.99/month · Secure payment via Stripe

@@ -103,7 +103,7 @@ const CityLeads = () => {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            <p className="text-xs text-muted-foreground/50 mt-3">5-day free trial · £0 today · Cancel anytime</p>
+            <p className="text-xs text-muted-foreground/50 mt-3">£19.99/mo · Cancel anytime</p>
           </div>
         </section>
 
@@ -183,11 +183,11 @@ const CityLeads = () => {
             <h2 className="text-xl sm:text-2xl font-bold mb-5">Ready to find clients in {displayName}?</h2>
             <Button size="lg" className="btn-premium font-semibold text-base px-8 py-3.5 h-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/auth?mode=signup">
-                Start free trial
+                Subscribe now
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            <p className="text-xs text-muted-foreground/50 mt-3">5-day free trial · £0 today</p>
+            <p className="text-xs text-muted-foreground/50 mt-3">£19.99/mo · Cancel anytime</p>
           </div>
         </section>
       </main>
