@@ -996,7 +996,7 @@ const Landing = () => {
                 className="inline-block text-[11px] sm:text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full mb-5"
                 style={{ background: 'hsl(142 76% 45% / 0.12)', color: 'hsl(142 76% 55%)' }}
               >
-                Free Trial
+                Subscribe
               </span>
 
               <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">LeadFinder <span className="text-gradient-primary">Pro</span></h3>
