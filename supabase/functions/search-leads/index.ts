@@ -16,7 +16,7 @@ const corsHeaders = {
 // ═══════════════════════════════════════════════
 const MAX_RESULTS = 50;
 const CACHE_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
-const FREE_SEARCH_LIMIT = 3;
+const FREE_SEARCH_LIMIT = 5;
 const MIN_NO_WEBSITE_TARGET = 5;
 const MAX_EXPANSION_ATTEMPTS = 6;
 
