@@ -528,15 +528,7 @@ const HeroPhonePreview = () => {
   const slide = productPreviewSlides[currentSlide];
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      {/* Slide label */}
-      <p className="text-sm font-bold tracking-widest uppercase text-primary">
-        {slide.title}
-      </p>
-      <p className="text-sm text-muted-foreground/70 leading-relaxed text-center max-w-[320px] min-h-[40px]">
-        {slide.desc}
-      </p>
-
+    <div className="flex flex-col items-center gap-5 lg:animate-[heroFloat_4s_ease-in-out_infinite] lg:hover:translate-y-[-2px] lg:hover:scale-[1.01] transition-transform duration-500">
       {/* Phone + arrows wrapper */}
       <div className="relative flex items-center justify-center">
         {/* Left arrow */}
