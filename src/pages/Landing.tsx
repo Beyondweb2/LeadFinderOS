@@ -920,7 +920,6 @@ const Landing = () => {
             })}
           </div>
 
-const Landing = () => {
 
         </div>
       </section>
