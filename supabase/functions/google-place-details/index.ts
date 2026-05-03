@@ -17,7 +17,8 @@ async function logUsage(
   supabase: ReturnType<typeof createClient>,
   userId: string | null,
   cacheHit: boolean,
-  costUsd: number
+  costUsd: number,
+  triggerSource?: string
 ) {
   try {
     await supabase.from('api_usage_log').insert({
@@ -27,6 +28,7 @@ async function logUsage(
       calls_made: 1,
       cache_hit: cacheHit,
       estimated_cost_usd: costUsd,
+      trigger_source: triggerSource || 'unknown',
     });
   } catch (e) {
     console.error('Usage logging failed (non-blocking):', e);
