@@ -937,7 +937,7 @@ serve(async (req) => {
 
     // ─── SEARCH WITH EXPANSION ───────────────────
     console.log(`[DIAG-HANDLER] Starting search for "${keyword}" in "${location}" within ${radius}m`);
-    const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug);
+    const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient);
     console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb, expanded: ${expanded})`);
 
     // ─── CACHE STORE ─────────────────────────────
