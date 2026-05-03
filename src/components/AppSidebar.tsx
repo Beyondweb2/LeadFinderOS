@@ -96,9 +96,9 @@ export function AppSidebar() {
               {navItems.map((item) => {
                 const isActive = item.url !== '#notepad' && location.pathname === item.url;
                 const isFlashing = 
-                  (item.url === '/outreach' && (flashCRM || crmPulseWalkthrough)) || 
-                  (item.url === '/potential-work' && (flashTrack || trackPulseWalkthrough)) ||
-                  (item.url === '/find-leads' && (searchPulse || flashSearch));
+                  (item.url === '/outreach' && flashCRM) || 
+                  (item.url === '/potential-work' && flashTrack) ||
+                  (item.url === '/find-leads' && flashSearch);
                 const flashColor = item.url === '/outreach' ? 'text-green-400' : (item.url === '/potential-work' || item.url === '/find-leads') ? 'text-yellow-400' : '';
                 return (
                   <SidebarMenuItem key={item.url}>
