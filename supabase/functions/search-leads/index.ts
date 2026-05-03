@@ -565,9 +565,10 @@ async function performSearchWithExpansion(
   location: string,
   radius: number,
   apiKey: string,
-  debug: DebugMeta
+  debug: DebugMeta,
+  serviceClient?: ReturnType<typeof createClient>
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
-  const { lat, lng } = await geocodeLocation(location, apiKey, debug);
+  const { lat, lng } = await geocodeLocation(location, apiKey, debug, serviceClient);
   const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, apiKey, debug);
 
   const noWebCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
