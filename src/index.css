@@ -52,6 +52,42 @@
     --status-uncertain: 215 20% 40%;
     --status-uncertain-foreground: 0 0% 100%;
 
+    /* Pipeline / outreach badge colors (solid with dark text) */
+    --badge-new: 215 20% 55%;
+    --badge-new-fg: 0 0% 0%;
+    --badge-attempted: 38 92% 50%;
+    --badge-attempted-fg: 0 0% 0%;
+    --badge-contacted: 217 75% 55%;
+    --badge-contacted-fg: 0 0% 0%;
+    --badge-replied: 160 76% 45%;
+    --badge-replied-fg: 0 0% 0%;
+    --badge-interested: 48 96% 53%;
+    --badge-interested-fg: 0 0% 0%;
+    --badge-not-interested: 0 72% 51%;
+    --badge-not-interested-fg: 0 0% 100%;
+    --badge-closed: 142 76% 45%;
+    --badge-closed-fg: 0 0% 0%;
+    --badge-call: 38 92% 50%;
+    --badge-call-fg: 0 0% 0%;
+    --badge-sms: 217 75% 55%;
+    --badge-sms-fg: 0 0% 0%;
+    --badge-whatsapp: 142 70% 45%;
+    --badge-whatsapp-fg: 0 0% 0%;
+    --badge-facebook: 239 60% 55%;
+    --badge-facebook-fg: 0 0% 100%;
+    --badge-waiting: 38 92% 50%;
+    --badge-waiting-fg: 0 0% 0%;
+    --badge-purple: 271 60% 55%;
+    --badge-purple-fg: 0 0% 100%;
+    --badge-orange: 24 85% 50%;
+    --badge-orange-fg: 0 0% 0%;
+    --badge-cyan: 187 70% 45%;
+    --badge-cyan-fg: 0 0% 0%;
+    --badge-sky: 199 70% 50%;
+    --badge-sky-fg: 0 0% 0%;
+    --badge-gray: 215 14% 45%;
+    --badge-gray-fg: 0 0% 100%;
+
     /* Subtle gradients */
     --gradient-primary: linear-gradient(135deg, hsl(210 100% 50%), hsl(220 100% 45%));
     --gradient-card: linear-gradient(180deg, hsl(220 40% 8%), hsl(220 40% 5%));
