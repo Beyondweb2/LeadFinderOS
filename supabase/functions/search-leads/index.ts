@@ -156,7 +156,41 @@ function createDebugMeta(): DebugMeta {
   };
 }
 
-async function geocodeLocation(location: string, apiKey: string, debug: DebugMeta): Promise<{ lat: number; lng: number }> {
+const GEOCODE_CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+function normalizeLocationKey(location: string): string {
+  return location.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+async function geocodeLocation(
+  location: string,
+  apiKey: string,
+  debug: DebugMeta,
+  serviceClient?: ReturnType<typeof createClient>
+): Promise<{ lat: number; lng: number }> {
+  const locationKey = normalizeLocationKey(location);
+
+  // ─── GEOCODE CACHE CHECK ─────────────────────
+  if (serviceClient) {
+    try {
+      const cutoff = new Date(Date.now() - GEOCODE_CACHE_TTL_MS).toISOString();
+      const { data: cached } = await serviceClient
+        .from('geocode_cache')
+        .select('lat, lng')
+        .eq('location_key', locationKey)
+        .gte('created_at', cutoff)
+        .maybeSingle();
+
+      if (cached) {
+        console.log(`[GEOCODE-CACHE] HIT for "${locationKey}" — lat: ${cached.lat}, lng: ${cached.lng}`);
+        return { lat: cached.lat, lng: cached.lng };
+      }
+    } catch (e) {
+      console.error('[GEOCODE-CACHE] Check failed (non-blocking):', e);
+    }
+  }
+
+  // ─── GOOGLE GEOCODING API ────────────────────
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`;
   console.log(`[DIAG-GEOCODE] Request URL: ${url.replace(apiKey, '[REDACTED]')}`);
   
@@ -176,6 +210,19 @@ async function geocodeLocation(location: string, apiKey: string, debug: DebugMet
   
   const coords = data.results[0].geometry.location;
   console.log(`[DIAG-GEOCODE] SUCCESS — lat: ${coords.lat}, lng: ${coords.lng}`);
+
+  // ─── GEOCODE CACHE STORE ─────────────────────
+  if (serviceClient) {
+    try {
+      await serviceClient.from('geocode_cache').upsert(
+        { location_key: locationKey, lat: coords.lat, lng: coords.lng, raw_location: location, created_at: new Date().toISOString() },
+        { onConflict: 'location_key' }
+      );
+    } catch (e) {
+      console.error('[GEOCODE-CACHE] Store failed (non-blocking):', e);
+    }
+  }
+
   return coords;
 }
 
