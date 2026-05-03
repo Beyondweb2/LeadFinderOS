@@ -913,6 +913,10 @@ serve(async (req) => {
     }
 
     // ─── LOG API USAGE TO api_usage_log (best-effort) ───
+    const searchSessionId = crypto.randomUUID();
+    const totalCostUsd = (debug.googleCallsMade.geocode * 0.005) + (debug.googleCallsMade.textSearchPages * 0.032);
+    console.log(`[COST] userId=${userId} searchSession=${searchSessionId} geocode=${debug.googleCallsMade.geocode} textSearch=${debug.googleCallsMade.textSearchPages} totalCost=$${totalCostUsd.toFixed(3)} expanded=${expanded}`);
+
     try {
       const usageLogs = [];
       if (debug.googleCallsMade.geocode > 0) {
@@ -923,6 +927,7 @@ serve(async (req) => {
           calls_made: debug.googleCallsMade.geocode,
           cache_hit: false,
           estimated_cost_usd: debug.googleCallsMade.geocode * 0.005,
+          search_session_id: searchSessionId,
         });
       }
       if (debug.googleCallsMade.textSearchPages > 0) {
@@ -933,6 +938,7 @@ serve(async (req) => {
           calls_made: debug.googleCallsMade.textSearchPages,
           cache_hit: false,
           estimated_cost_usd: debug.googleCallsMade.textSearchPages * 0.032,
+          search_session_id: searchSessionId,
         });
       }
       if (usageLogs.length > 0) {
