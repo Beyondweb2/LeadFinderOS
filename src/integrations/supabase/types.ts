@@ -1151,6 +1151,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      invoke_cron_run: { Args: never; Returns: undefined }
       log_usage_event: {
         Args: { p_event_type: string; p_meta?: Json }
         Returns: undefined
