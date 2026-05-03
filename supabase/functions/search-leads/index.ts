@@ -779,19 +779,32 @@ serve(async (req) => {
       if (hasActiveSubscription) {
         console.log(`User ${userId} has Stripe subscription (${subscription.status}) — unlimited searches`);
       } else {
-        // Free user — allow search but mark results as gated
+        // Free user — check if they've hit the search cap BEFORE any Google API call
         isGated = true;
-        console.log(`User ${userId} is free user — search allowed, results gated`);
 
-        // Track free search count for analytics
         const { data: trial } = await serviceClient
           .from('user_trials')
           .select('free_search_count, searches_used')
           .eq('user_id', userId)
           .maybeSingle();
 
+        const currentFreeCount = trial?.free_search_count || 0;
+
+        if (currentFreeCount >= FREE_SEARCH_LIMIT) {
+          console.log(`User ${userId} blocked — free search limit reached (${currentFreeCount}/${FREE_SEARCH_LIMIT})`);
+          return jsonResponse({
+            error: 'You have used all your free searches. Subscribe to unlock unlimited searches.',
+            code: 'FREE_LIMIT_REACHED',
+            searches_used: currentFreeCount,
+            limit: FREE_SEARCH_LIMIT,
+            _debug: debug,
+          }, 402);
+        }
+
+        console.log(`User ${userId} is free user — search ${currentFreeCount + 1}/${FREE_SEARCH_LIMIT} allowed, results gated`);
+
+        // Increment the count BEFORE running the search so it can't be bypassed by concurrent requests
         if (trial) {
-          const currentFreeCount = trial.free_search_count || 0;
           await serviceClient
             .from('user_trials')
             .update({
