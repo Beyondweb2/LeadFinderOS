@@ -209,11 +209,9 @@ const App = () => {
               element={
                 <ProtectedRoute>
                    <SubscriptionGate>
-                     <FirstTimeRedirect>
                        <AppLayout>
-                         <Dashboard />
+                         <Outreach />
                        </AppLayout>
-                     </FirstTimeRedirect>
                    </SubscriptionGate>
                 </ProtectedRoute>
               } 
