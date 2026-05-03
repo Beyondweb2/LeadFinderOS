@@ -17,8 +17,9 @@ const corsHeaders = {
 const MAX_RESULTS = 50;
 const CACHE_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
 const FREE_SEARCH_LIMIT = 5;
-const MIN_NO_WEBSITE_TARGET = 5;
-const MAX_EXPANSION_ATTEMPTS = 6;
+const MIN_NO_WEBSITE_TARGET = 1; // Only expand if ZERO no-website leads found
+const MAX_EXPANSION_ATTEMPTS = 2; // Down from 6 — max 2 expansion centres
+const MAX_TEXT_SEARCH_CALLS = 4; // Hard cap: total text search API calls per user search
 
 // ═══════════════════════════════════════════════
 // INPUT VALIDATION
