@@ -12,7 +12,7 @@ import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
-import { FirstTimeRedirect } from "@/components/FirstTimeRedirect";
+
 import { RefSourceCapture } from "@/components/RefSourceCapture";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 import { Loader2 } from "lucide-react";
