@@ -244,7 +244,7 @@ export function useOutreach() {
     setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'pending' }));
     try {
       const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
-        body: { placeId, forceRefresh: true },
+        body: { placeId, forceRefresh: true, triggerSource: 'manual_retry' },
       });
 
       if (detailsError || !details) {
