@@ -100,7 +100,7 @@ serve(async (req) => {
         if (!isNullPhone || cacheAge < NULL_PHONE_TTL_MS) {
           console.log(`Cache hit for place ${placeId} (phone=${cached.phone ? 'found' : 'none'}, age=${Math.round(cacheAge / 60000)}min)`);
           // Log cache hit (best-effort)
-          logUsage(supabase, userId, true, 0);
+          logUsage(supabase, userId, true, 0, triggerSource);
           return new Response(
             JSON.stringify({
               placeId,
