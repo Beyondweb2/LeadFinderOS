@@ -104,6 +104,7 @@ export type Database = {
           function_name: string
           id: string
           search_session_id: string | null
+          trigger_source: string | null
           user_id: string | null
         }
         Insert: {
@@ -115,6 +116,7 @@ export type Database = {
           function_name: string
           id?: string
           search_session_id?: string | null
+          trigger_source?: string | null
           user_id?: string | null
         }
         Update: {
@@ -126,6 +128,7 @@ export type Database = {
           function_name?: string
           id?: string
           search_session_id?: string | null
+          trigger_source?: string | null
           user_id?: string | null
         }
         Relationships: []
@@ -334,6 +337,30 @@ export type Database = {
           id?: string
           meta?: Json | null
           user_id?: string | null
+        }
+        Relationships: []
+      }
+      geocode_cache: {
+        Row: {
+          created_at: string
+          lat: number
+          lng: number
+          location_key: string
+          raw_location: string
+        }
+        Insert: {
+          created_at?: string
+          lat: number
+          lng: number
+          location_key: string
+          raw_location: string
+        }
+        Update: {
+          created_at?: string
+          lat?: number
+          lng?: number
+          location_key?: string
+          raw_location?: string
         }
         Relationships: []
       }

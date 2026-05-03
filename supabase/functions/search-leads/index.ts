@@ -17,8 +17,9 @@ const corsHeaders = {
 const MAX_RESULTS = 50;
 const CACHE_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
 const FREE_SEARCH_LIMIT = 5;
-const MIN_NO_WEBSITE_TARGET = 5;
-const MAX_EXPANSION_ATTEMPTS = 6;
+const MIN_NO_WEBSITE_TARGET = 1; // Only expand if ZERO no-website leads found
+const MAX_EXPANSION_ATTEMPTS = 2; // Down from 6 — max 2 expansion centres
+const MAX_TEXT_SEARCH_CALLS = 4; // Hard cap: total text search API calls per user search
 
 // ═══════════════════════════════════════════════
 // INPUT VALIDATION
@@ -155,7 +156,41 @@ function createDebugMeta(): DebugMeta {
   };
 }
 
-async function geocodeLocation(location: string, apiKey: string, debug: DebugMeta): Promise<{ lat: number; lng: number }> {
+const GEOCODE_CACHE_TTL_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+function normalizeLocationKey(location: string): string {
+  return location.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+async function geocodeLocation(
+  location: string,
+  apiKey: string,
+  debug: DebugMeta,
+  serviceClient?: ReturnType<typeof createClient>
+): Promise<{ lat: number; lng: number }> {
+  const locationKey = normalizeLocationKey(location);
+
+  // ─── GEOCODE CACHE CHECK ─────────────────────
+  if (serviceClient) {
+    try {
+      const cutoff = new Date(Date.now() - GEOCODE_CACHE_TTL_MS).toISOString();
+      const { data: cached } = await serviceClient
+        .from('geocode_cache')
+        .select('lat, lng')
+        .eq('location_key', locationKey)
+        .gte('created_at', cutoff)
+        .maybeSingle();
+
+      if (cached) {
+        console.log(`[GEOCODE-CACHE] HIT for "${locationKey}" — lat: ${cached.lat}, lng: ${cached.lng}`);
+        return { lat: cached.lat, lng: cached.lng };
+      }
+    } catch (e) {
+      console.error('[GEOCODE-CACHE] Check failed (non-blocking):', e);
+    }
+  }
+
+  // ─── GOOGLE GEOCODING API ────────────────────
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`;
   console.log(`[DIAG-GEOCODE] Request URL: ${url.replace(apiKey, '[REDACTED]')}`);
   
@@ -175,6 +210,19 @@ async function geocodeLocation(location: string, apiKey: string, debug: DebugMet
   
   const coords = data.results[0].geometry.location;
   console.log(`[DIAG-GEOCODE] SUCCESS — lat: ${coords.lat}, lng: ${coords.lng}`);
+
+  // ─── GEOCODE CACHE STORE ─────────────────────
+  if (serviceClient) {
+    try {
+      await serviceClient.from('geocode_cache').upsert(
+        { location_key: locationKey, lat: coords.lat, lng: coords.lng, raw_location: location, created_at: new Date().toISOString() },
+        { onConflict: 'location_key' }
+      );
+    } catch (e) {
+      console.error('[GEOCODE-CACHE] Store failed (non-blocking):', e);
+    }
+  }
+
   return coords;
 }
 
@@ -238,6 +286,11 @@ async function textSearchPlaces(
   console.log(`[DIAG-SEARCH] Radius requested: ${radius}, clamped: ${clampedRadius}`);
 
   for (let page = 0; page < MAX_PAGES; page++) {
+    // Hard cap on total text search calls across initial + expansion
+    if (debug.googleCallsMade.textSearchPages >= MAX_TEXT_SEARCH_CALLS) {
+      console.log(`[DIAG-SEARCH] Hard cap reached: ${debug.googleCallsMade.textSearchPages} text search calls`);
+      break;
+    }
     // Early stop: already have 50+ NO_WEBSITE leads
     if (noWebsiteCount >= MAX_RESULTS) {
       console.log(`[DIAG-SEARCH] Early stop: ${noWebsiteCount} NO_WEBSITE leads already collected`);
@@ -395,6 +448,11 @@ async function expandSearch(
 
   for (const centre of centres) {
     if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET || attempts >= MAX_EXPANSION_ATTEMPTS) break;
+    // Hard cap on total text search calls across initial + expansion
+    if (debug.googleCallsMade.textSearchPages >= MAX_TEXT_SEARCH_CALLS) {
+      console.log(`[EXPAND] Hard cap reached: ${debug.googleCallsMade.textSearchPages} text search calls, stopping expansion`);
+      break;
+    }
 
     attempts++;
     console.log(`[EXPAND] Attempt ${attempts}: searching at (${centre.lat.toFixed(4)}, ${centre.lng.toFixed(4)})`);
@@ -507,9 +565,10 @@ async function performSearchWithExpansion(
   location: string,
   radius: number,
   apiKey: string,
-  debug: DebugMeta
+  debug: DebugMeta,
+  serviceClient?: ReturnType<typeof createClient>
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
-  const { lat, lng } = await geocodeLocation(location, apiKey, debug);
+  const { lat, lng } = await geocodeLocation(location, apiKey, debug, serviceClient);
   const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, apiKey, debug);
 
   const noWebCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
@@ -671,7 +730,7 @@ serve(async (req) => {
         });
       }
 
-      const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug);
+      const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient);
 
       // Cache the results
       try {
@@ -779,19 +838,32 @@ serve(async (req) => {
       if (hasActiveSubscription) {
         console.log(`User ${userId} has Stripe subscription (${subscription.status}) — unlimited searches`);
       } else {
-        // Free user — allow search but mark results as gated
+        // Free user — check if they've hit the search cap BEFORE any Google API call
         isGated = true;
-        console.log(`User ${userId} is free user — search allowed, results gated`);
 
-        // Track free search count for analytics
         const { data: trial } = await serviceClient
           .from('user_trials')
           .select('free_search_count, searches_used')
           .eq('user_id', userId)
           .maybeSingle();
 
+        const currentFreeCount = trial?.free_search_count || 0;
+
+        if (currentFreeCount >= FREE_SEARCH_LIMIT) {
+          console.log(`User ${userId} blocked — free search limit reached (${currentFreeCount}/${FREE_SEARCH_LIMIT})`);
+          return jsonResponse({
+            error: 'You have used all your free searches. Subscribe to unlock unlimited searches.',
+            code: 'FREE_LIMIT_REACHED',
+            searches_used: currentFreeCount,
+            limit: FREE_SEARCH_LIMIT,
+            _debug: debug,
+          }, 402);
+        }
+
+        console.log(`User ${userId} is free user — search ${currentFreeCount + 1}/${FREE_SEARCH_LIMIT} allowed, results gated`);
+
+        // Increment the count BEFORE running the search so it can't be bypassed by concurrent requests
         if (trial) {
-          const currentFreeCount = trial.free_search_count || 0;
           await serviceClient
             .from('user_trials')
             .update({
@@ -865,7 +937,7 @@ serve(async (req) => {
 
     // ─── SEARCH WITH EXPANSION ───────────────────
     console.log(`[DIAG-HANDLER] Starting search for "${keyword}" in "${location}" within ${radius}m`);
-    const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug);
+    const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient);
     console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb, expanded: ${expanded})`);
 
     // ─── CACHE STORE ─────────────────────────────
@@ -889,6 +961,10 @@ serve(async (req) => {
     }
 
     // ─── LOG API USAGE TO api_usage_log (best-effort) ───
+    const searchSessionId = crypto.randomUUID();
+    const totalCostUsd = (debug.googleCallsMade.geocode * 0.005) + (debug.googleCallsMade.textSearchPages * 0.032);
+    console.log(`[COST] userId=${userId} searchSession=${searchSessionId} geocode=${debug.googleCallsMade.geocode} textSearch=${debug.googleCallsMade.textSearchPages} totalCost=$${totalCostUsd.toFixed(3)} expanded=${expanded}`);
+
     try {
       const usageLogs = [];
       if (debug.googleCallsMade.geocode > 0) {
@@ -899,6 +975,7 @@ serve(async (req) => {
           calls_made: debug.googleCallsMade.geocode,
           cache_hit: false,
           estimated_cost_usd: debug.googleCallsMade.geocode * 0.005,
+          search_session_id: searchSessionId,
         });
       }
       if (debug.googleCallsMade.textSearchPages > 0) {
@@ -909,6 +986,7 @@ serve(async (req) => {
           calls_made: debug.googleCallsMade.textSearchPages,
           cache_hit: false,
           estimated_cost_usd: debug.googleCallsMade.textSearchPages * 0.032,
+          search_session_id: searchSessionId,
         });
       }
       if (usageLogs.length > 0) {

@@ -39,6 +39,7 @@ export function useOutreach() {
   // Parallel phone fetch queue — processes up to 3 leads concurrently for speed
   const phoneQueueRef = useRef<Array<{ outreachLeadId: string; placeId: string; businessName: string }>>([]);
   const isProcessingQueueRef = useRef(false);
+  const queuedPlaceIdsRef = useRef<Set<string>>(new Set()); // Dedup: prevent same place_id being queued twice per session
   const CONCURRENCY = 3;
 
   const removeLeadNoPhone = useCallback(async (outreachLeadId: string, businessName: string) => {
@@ -64,7 +65,7 @@ export function useOutreach() {
     setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'pending' }));
     try {
       const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
-        body: { placeId: item.placeId },
+        body: { placeId: item.placeId, triggerSource: 'add_to_crm' },
       });
 
       if (detailsError || !details) {
@@ -117,6 +118,12 @@ export function useOutreach() {
   }, [fetchOnePhone]);
 
   const enqueuePhoneFetch = useCallback((outreachLeadId: string, placeId: string, businessName: string) => {
+    // Dedup: skip if this place_id has already been queued this session
+    if (queuedPlaceIdsRef.current.has(placeId)) {
+      console.log(`Skipping duplicate phone fetch for place_id ${placeId} (${businessName})`);
+      return;
+    }
+    queuedPlaceIdsRef.current.add(placeId);
     setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'pending' }));
     phoneQueueRef.current.push({ outreachLeadId, placeId, businessName });
     processPhoneQueue();
@@ -197,9 +204,6 @@ export function useOutreach() {
     return data as OutreachActivity[];
   }, []);
 
-  // Auto-enrich leads missing phone numbers on load
-  const hasEnrichedRef = useRef(false);
-
   // Only refetch when user ID changes (login/logout), not on token refresh
   useEffect(() => {
     const currentUserId = user?.id ?? null;
@@ -218,18 +222,8 @@ export function useOutreach() {
     }
   }, [user]);
 
-  // After leads are loaded, enqueue phone fetches for leads without phone but with place_id
-  useEffect(() => {
-    if (hasEnrichedRef.current || leads.length === 0) return;
-    hasEnrichedRef.current = true;
-
-    const needsEnrichment = leads.filter(
-      (l) => !l.phone && (l as any).place_id
-    );
-    for (const lead of needsEnrichment) {
-      enqueuePhoneFetch(lead.id, (lead as any).place_id, lead.business_name);
-    }
-  }, [leads, enqueuePhoneFetch]);
+  // REMOVED: Auto-enrichment on page load was removed to prevent unnecessary Google Place Details API calls.
+  // Phone enrichment now only happens when: (1) lead first added to CRM, (2) manual retry, (3) bulk recover phones.
 
   // Retry phone fetch for a lead that failed — uses forceRefresh to bypass cache
   const retryPhoneFetch = useCallback(async (outreachLeadId: string) => {
@@ -250,7 +244,7 @@ export function useOutreach() {
     setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'pending' }));
     try {
       const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
-        body: { placeId, forceRefresh: true },
+        body: { placeId, forceRefresh: true, triggerSource: 'manual_retry' },
       });
 
       if (detailsError || !details) {
@@ -951,7 +945,7 @@ export function useOutreach() {
          const placeId = (lead as any).place_id;
          try {
            const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
-             body: { placeId },
+              body: { placeId, triggerSource: 'bulk_recover' },
            });
 
            if (detailsError) {

@@ -17,7 +17,8 @@ async function logUsage(
   supabase: ReturnType<typeof createClient>,
   userId: string | null,
   cacheHit: boolean,
-  costUsd: number
+  costUsd: number,
+  triggerSource?: string
 ) {
   try {
     await supabase.from('api_usage_log').insert({
@@ -27,6 +28,7 @@ async function logUsage(
       calls_made: 1,
       cache_hit: cacheHit,
       estimated_cost_usd: costUsd,
+      trigger_source: triggerSource || 'unknown',
     });
   } catch (e) {
     console.error('Usage logging failed (non-blocking):', e);
@@ -73,7 +75,7 @@ serve(async (req) => {
     }
 
     // ─── INPUT ───────────────────────────────
-    const { placeId, forceRefresh } = await req.json();
+    const { placeId, forceRefresh, triggerSource } = await req.json();
     if (!placeId || typeof placeId !== 'string' || placeId.length > 200) {
       return new Response(
         JSON.stringify({ error: 'Valid placeId required' }),
@@ -98,7 +100,7 @@ serve(async (req) => {
         if (!isNullPhone || cacheAge < NULL_PHONE_TTL_MS) {
           console.log(`Cache hit for place ${placeId} (phone=${cached.phone ? 'found' : 'none'}, age=${Math.round(cacheAge / 60000)}min)`);
           // Log cache hit (best-effort)
-          logUsage(supabase, userId, true, 0);
+          logUsage(supabase, userId, true, 0, triggerSource);
           return new Response(
             JSON.stringify({
               placeId,
@@ -153,7 +155,7 @@ serve(async (req) => {
     console.log(`Place ${placeId}: phone=${phone ? 'found' : 'none'}, address=${address ? 'found' : 'none'}`);
 
     // Log API miss (best-effort) — $0.017 per Place Details call
-    logUsage(supabase, userId, false, 0.017);
+    logUsage(supabase, userId, false, 0.017, triggerSource);
 
     // ─── CACHE STORE ─────────────────────────
     try {
