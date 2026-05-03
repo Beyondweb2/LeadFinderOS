@@ -401,6 +401,11 @@ async function expandSearch(
 
   for (const centre of centres) {
     if (totalNoWebsite >= MIN_NO_WEBSITE_TARGET || attempts >= MAX_EXPANSION_ATTEMPTS) break;
+    // Hard cap on total text search calls across initial + expansion
+    if (debug.googleCallsMade.textSearchPages >= MAX_TEXT_SEARCH_CALLS) {
+      console.log(`[EXPAND] Hard cap reached: ${debug.googleCallsMade.textSearchPages} text search calls, stopping expansion`);
+      break;
+    }
 
     attempts++;
     console.log(`[EXPAND] Attempt ${attempts}: searching at (${centre.lat.toFixed(4)}, ${centre.lng.toFixed(4)})`);
