@@ -10,102 +10,102 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
   not_contacted: {
     label: 'Not Contacted',
     shortLabel: 'Contact Method',
-    className: 'bg-muted text-muted-foreground border-border/50',
+    className: 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent font-semibold',
   },
   sent_initial_text: {
     label: 'Sent Text / WhatsApp',
     shortLabel: 'Texted',
-    className: 'bg-green-500/20 text-green-400 border-green-500/40',
+    className: 'bg-[hsl(var(--badge-whatsapp))] text-[hsl(var(--badge-whatsapp-fg))] border-transparent font-semibold',
   },
   replied: {
     label: 'Replied',
     shortLabel: 'Replied',
-    className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+    className: 'bg-[hsl(var(--badge-replied))] text-[hsl(var(--badge-replied-fg))] border-transparent font-semibold',
   },
   sent_voice_note: {
     label: 'Sent Voice Note',
     shortLabel: 'Voice',
-    className: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+    className: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent font-semibold',
   },
   awaiting_decision: {
     label: 'Awaiting Decision',
     shortLabel: 'Awaiting',
-    className: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+    className: 'bg-[hsl(var(--badge-attempted))] text-[hsl(var(--badge-attempted-fg))] border-transparent font-semibold',
   },
   contacted: {
     label: 'Called',
     shortLabel: 'Called',
-    className: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+    className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
   },
   call_back: {
     label: 'Call Back',
     shortLabel: 'Call Back',
-    className: 'bg-orange-500/20 text-orange-400 border-orange-500/40',
+    className: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))] border-transparent font-semibold',
   },
   not_answered: {
     label: 'Not Answered',
     shortLabel: 'No Answer',
-    className: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/40',
+    className: 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))] border-transparent font-semibold',
   },
   on_hold: {
     label: 'On Hold / Waiting',
     shortLabel: 'On Hold',
-    className: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+    className: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent font-semibold',
   },
   wants_draft: {
     label: 'Wants a Draft',
     shortLabel: 'Wants Draft',
-    className: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40',
+    className: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent font-semibold',
   },
   interested: {
     label: 'Interested',
     shortLabel: 'Interested',
-    className: 'bg-green-500/20 text-green-400 border-green-500/40',
+    className: 'bg-[hsl(var(--badge-interested))] text-[hsl(var(--badge-interested-fg))] border-transparent font-semibold',
   },
   not_interested: {
     label: 'Not Interested',
     shortLabel: 'Not Int.',
-    className: 'bg-red-500/20 text-red-400 border-red-500/40',
+    className: 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))] border-transparent font-semibold',
   },
   no_whatsapp: {
     label: 'No WhatsApp',
     shortLabel: 'No WA',
-    className: 'bg-gray-500/20 text-gray-400 border-gray-500/40',
+    className: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))] border-transparent font-semibold',
   },
   waiting: {
     label: 'Waiting',
     shortLabel: 'Waiting',
-    className: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+    className: 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))] border-transparent font-semibold',
   },
   reviewing_draft: {
     label: 'Reviewing Draft',
     shortLabel: 'Reviewing',
-    className: 'bg-sky-500/20 text-sky-400 border-sky-500/40',
+    className: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent font-semibold',
   },
   paid_for_draft: {
     label: 'Paid for Draft',
     shortLabel: 'Paid Draft',
-    className: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
+    className: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent font-semibold',
   },
   completed: {
     label: 'Completed (Client)',
     shortLabel: 'Completed',
-    className: 'bg-green-600/20 text-green-500 border-green-600/40',
+    className: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent font-semibold',
   },
   sms: {
     label: 'SMS',
     shortLabel: 'SMS',
-    className: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+    className: 'bg-[hsl(var(--badge-sms))] text-[hsl(var(--badge-sms-fg))] border-transparent font-semibold',
   },
   whatsapp: {
     label: 'WhatsApp',
     shortLabel: 'WhatsApp',
-    className: 'bg-green-500/20 text-green-400 border-green-500/40',
+    className: 'bg-[hsl(var(--badge-whatsapp))] text-[hsl(var(--badge-whatsapp-fg))] border-transparent font-semibold',
   },
   facebook_msg: {
     label: 'FB Messenger',
     shortLabel: 'FB Msg',
-    className: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
+    className: 'bg-[hsl(var(--badge-facebook))] text-[hsl(var(--badge-facebook-fg))] border-transparent font-semibold',
   },
 };
 
@@ -113,7 +113,7 @@ export function OutreachStatusBadge({ status, compact }: OutreachStatusBadgeProp
   const config = statusConfig[status] ?? {
     label: status ?? 'Unknown',
     shortLabel: status ?? '?',
-    className: 'bg-muted text-muted-foreground border-muted',
+    className: 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent font-semibold',
   };
 
   return (

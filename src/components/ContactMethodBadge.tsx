@@ -10,29 +10,29 @@ const methodConfig: Record<string, { label: string; shortLabel: string; classNam
   call: {
     label: 'Call',
     shortLabel: 'Call',
-    className: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
+    className: 'bg-[hsl(var(--badge-call))] text-[hsl(var(--badge-call-fg))] border-transparent font-semibold',
   },
   sms: {
     label: 'SMS',
     shortLabel: 'SMS',
-    className: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
+    className: 'bg-[hsl(var(--badge-sms))] text-[hsl(var(--badge-sms-fg))] border-transparent font-semibold',
   },
   whatsapp: {
     label: 'WhatsApp',
     shortLabel: 'WA',
-    className: 'bg-green-500/20 text-green-400 border-green-500/40',
+    className: 'bg-[hsl(var(--badge-whatsapp))] text-[hsl(var(--badge-whatsapp-fg))] border-transparent font-semibold',
   },
   facebook_msg: {
     label: 'Messenger',
     shortLabel: 'FB',
-    className: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
+    className: 'bg-[hsl(var(--badge-facebook))] text-[hsl(var(--badge-facebook-fg))] border-transparent font-semibold',
   },
 };
 
 const defaultConfig = {
   label: 'Contact',
   shortLabel: 'Contact',
-  className: 'bg-muted text-muted-foreground border-border/50',
+  className: 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent font-semibold',
 };
 
 export function ContactMethodBadge({ method, compact }: ContactMethodBadgeProps) {
