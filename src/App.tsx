@@ -35,6 +35,7 @@ const HowToUse = lazy(() => import("./pages/HowToUse"));
 const AdminAffiliates = lazy(() => import("./pages/AdminAffiliates"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminFunnel = lazy(() => import("./pages/AdminFunnel"));
+const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const Landing = lazy(() => import("./pages/Landing"));
 const AdEntryRedirect = lazy(() => import("./components/AdEntryRedirect"));
 const Terms = lazy(() => import("./pages/Terms"));
