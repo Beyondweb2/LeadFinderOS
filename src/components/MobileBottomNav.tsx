@@ -85,7 +85,7 @@ export function MobileBottomNav() {
   } catch {}
 
   useEffect(() => {
-    const crmHandler = () => { setCrmGlow(true); setTimeout(() => setCrmGlow(false), 600); };
+    const crmHandler = () => { setCrmGlow(true); setTimeout(() => setCrmGlow(false), 2000); };
     const trackHandler = () => { setTrackGlow(true); setTimeout(() => setTrackGlow(false), 600); };
     const searchHandler = () => { setSearchGlow(true); setSearchTooltip(true); setTimeout(() => setSearchGlow(false), 1200); setTimeout(() => setSearchTooltip(false), 2500); };
     window.addEventListener('crm-lead-added', crmHandler);
@@ -133,10 +133,9 @@ export function MobileBottomNav() {
                 data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : item.url === '/potential-work' ? 'track-nav' : undefined}
                 className={cn(
                   'relative flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[60px]',
-                  item.url === '/find-leads' && (searchPulse || searchGlow) ? 'text-yellow-400 animate-pulse'
-                    : item.url === '/outreach' && crmPulseWalkthrough ? 'text-yellow-400 animate-pulse'
+                  item.url === '/find-leads' && searchGlow ? 'text-yellow-400 animate-pulse'
                     : item.url === '/outreach' && crmGlow ? 'text-green-400 animate-pulse'
-                    : item.url === '/potential-work' && (trackGlow || trackPulseWalkthrough) ? 'text-yellow-400 animate-pulse'
+                    : item.url === '/potential-work' && trackGlow ? 'text-yellow-400 animate-pulse'
                     : isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 )}>
                 {item.url === '/find-leads' && searchTooltip && (
