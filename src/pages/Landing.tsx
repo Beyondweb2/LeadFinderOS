@@ -560,7 +560,7 @@ const HeroPhonePreview = () => {
   );
 };
 
-
+const Landing = () => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
   const [hasScrolled, setHasScrolled] = useState(false);
   const isMobile = useIsMobile();
