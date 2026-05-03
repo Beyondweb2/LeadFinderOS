@@ -310,7 +310,15 @@
     }
   }
 
-  @keyframes gradient-shift {
+  @keyframes heroFloat {
+    0%, 100% {
+      transform: translateY(0px);
+    }
+    50% {
+      transform: translateY(-6px);
+    }
+  }
+
     0% {
       background-position: 0% 50%;
     }
