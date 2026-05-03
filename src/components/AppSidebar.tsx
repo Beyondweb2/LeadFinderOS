@@ -62,7 +62,7 @@ export function AppSidebar() {
   const [searchTooltip, setSearchTooltip] = useState(false);
 
   useEffect(() => {
-    const onCRMAdded = () => { setFlashCRM(true); setTimeout(() => setFlashCRM(false), 600); };
+    const onCRMAdded = () => { setFlashCRM(true); setTimeout(() => setFlashCRM(false), 2000); };
     const onTrackAdded = () => { setFlashTrack(true); setTimeout(() => setFlashTrack(false), 600); };
     const onSearchPulse = () => { setFlashSearch(true); setSearchTooltip(true); setTimeout(() => setFlashSearch(false), 1200); setTimeout(() => setSearchTooltip(false), 2500); };
     window.addEventListener('crm-lead-added', onCRMAdded);
