@@ -75,7 +75,7 @@ serve(async (req) => {
     }
 
     // ─── INPUT ───────────────────────────────
-    const { placeId, forceRefresh } = await req.json();
+    const { placeId, forceRefresh, triggerSource } = await req.json();
     if (!placeId || typeof placeId !== 'string' || placeId.length > 200) {
       return new Response(
         JSON.stringify({ error: 'Valid placeId required' }),
