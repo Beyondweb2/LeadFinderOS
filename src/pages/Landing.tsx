@@ -633,75 +633,92 @@ const Landing = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="relative z-10 pt-6 pb-6 sm:pt-14 sm:pb-16 md:pt-20 md:pb-24 lg:min-h-[calc(100vh-64px)] lg:flex lg:items-center lg:pt-0 lg:pb-0 px-4">
+      <section className="relative z-10 pt-6 pb-6 sm:pt-14 sm:pb-16 md:pt-20 md:pb-24 lg:min-h-[90vh] lg:flex lg:items-center lg:pt-0 lg:pb-0 px-4">
         <div 
           className="hidden lg:block absolute top-0 left-1/2 -translate-x-1/2 w-[1100px] h-[800px] pointer-events-none"
           style={{ background: 'radial-gradient(ellipse 80% 60% at 50% 35%, hsl(210 100% 50% / 0.06), transparent 70%)' }}
         />
-        <div className="container mx-auto text-center lg:max-w-[1040px]">
+        <div className="container mx-auto lg:max-w-[1200px]">
           {/* Mobile: Video at top */}
           <div className="sm:hidden mb-6">
             <MobileHeroVideo />
           </div>
 
-          <div className="max-w-3xl mx-auto lg:max-w-xl">
-
-            <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-[3.5rem] lg:text-[3.75rem] font-extrabold lg:font-bold tracking-tight leading-tight">
-              <span className="tracking-[0.02em]">Find Businesses</span>
-              <br />
-              <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
-            </h1>
-            
-            <p className="text-sm sm:text-lg md:text-lg lg:text-base text-foreground/60 max-w-2xl lg:max-w-[32rem] mx-auto leading-relaxed sm:leading-[1.7] px-2 mt-5 sm:mt-6">
-              Find businesses that need a website, contact them instantly and close deals – all from one dashboard.
-            </p>
-            
-            {/* CTA */}
-            <div className="flex flex-col items-center max-w-[480px] mx-auto w-full px-6 sm:px-0 mt-7 sm:mt-9">
-              <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+          {/* Desktop: 2-column split layout */}
+          <div className="lg:grid lg:grid-cols-[minmax(0,520px)_1fr] lg:gap-24 lg:items-center">
+            {/* Left column: Text + CTA */}
+            <div className="text-center lg:text-left max-w-3xl mx-auto lg:mx-0 lg:max-w-none">
+              <h1 className="text-3xl sm:text-5xl sm:leading-[1.05] md:text-[3.5rem] lg:text-[4rem] font-extrabold lg:font-bold tracking-tight leading-tight lg:leading-[1.05]">
+                <span className="tracking-[0.02em]">Find Businesses</span>
+                <br />
+                <span className="text-gradient-primary whitespace-nowrap">Without Websites</span>
+              </h1>
+              
+              <p className="text-sm sm:text-lg md:text-lg lg:text-[17px] text-foreground/60 max-w-2xl lg:max-w-[30rem] mx-auto lg:mx-0 leading-relaxed sm:leading-[1.7] px-2 lg:px-0 mt-5 sm:mt-6">
+                Find businesses that need a website, contact them instantly and close deals — all from one dashboard.
+              </p>
+              
+              {/* CTA */}
+              <div className="flex flex-col lg:flex-row items-center lg:items-start max-w-[480px] mx-auto lg:mx-0 w-full px-6 sm:px-0 lg:px-0 mt-7 sm:mt-9">
+                <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+                    <Button 
+                      size="lg" 
+                      className="btn-premium text-[13px] sm:text-[16px] font-semibold px-8 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
+                      onClick={handleCTA}
+                    >
+                      Try it free
+                    </Button>
                   <Button 
-                    size="lg" 
-                    className="btn-premium text-[13px] sm:text-[16px] font-semibold px-8 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
-                    onClick={handleCTA}
+                    variant="ghost" 
+                    className="hidden sm:inline-flex text-[14px] font-medium text-foreground/40 hover:text-foreground/70 h-[52px] px-5 rounded-xl transition-all duration-200" 
+                    asChild
                   >
-                    Try it free
+                    <Link to="/auth?mode=signin">
+                      Sign in
+                    </Link>
                   </Button>
-                <Button 
-                  variant="ghost" 
-                  className="hidden sm:inline-flex text-[14px] font-medium text-foreground/40 hover:text-foreground/70 h-[52px] px-5 rounded-xl transition-all duration-200" 
-                  asChild
-                >
-                  <Link to="/auth?mode=signin">
-                    Sign in
-                  </Link>
-                </Button>
+                </div>
+              </div>
+
+              {/* Metrics row */}
+              <div className="grid grid-cols-3 gap-2 sm:gap-5 md:gap-14 lg:gap-8 max-w-[260px] sm:max-w-xl lg:max-w-md mx-auto lg:mx-0 mt-10">
+                <CountUpStat target={2300} suffix="+" label="Found this week" />
+                <div className="text-center lg:text-center">
+                  <div className="text-base sm:text-2xl md:text-3xl lg:text-2xl font-bold text-gradient-primary tracking-tight">Global</div>
+                  <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+                </div>
+                <div className="text-center lg:text-center">
+                  <div className="text-base sm:text-2xl md:text-3xl lg:text-2xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
+                  <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Searches</div>
+                </div>
+              </div>
+
+              {/* Feature bullets */}
+              <ScrollReveal>
+                <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/60 font-medium">
+                  <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Get a steady flow of new clients</span>
+                  <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find leads in minutes, not hours</span>
+                  <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Start more conversations</span>
+                </div>
+              </ScrollReveal>
+              {/* Scroll down indicator - mobile only */}
+              <div className="sm:hidden flex flex-col items-center mt-6 animate-bounce">
+                <ChevronDown className="h-5 w-5 text-foreground/30" />
               </div>
             </div>
 
-            {/* Metrics row */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-5 md:gap-14 max-w-[260px] sm:max-w-xl mx-auto mt-10">
-              <CountUpStat target={2300} suffix="+" label="Found this week" />
-              <div className="text-center">
-                <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Global</div>
-                <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Coverage</div>
+            {/* Right column: Product carousel (desktop only) */}
+            <div className="hidden lg:block relative">
+              {/* Subtle radial glow backdrop */}
+              <div 
+                className="absolute -inset-12 pointer-events-none -z-10"
+                style={{ 
+                  background: 'radial-gradient(ellipse 70% 60% at 50% 50%, hsl(210 100% 50% / 0.08), transparent 70%)',
+                }}
+              />
+              <div className="transform scale-105">
+                <ProductPhoneCarousel />
               </div>
-              <div className="text-center">
-                <div className="text-base sm:text-2xl md:text-3xl font-bold text-gradient-primary tracking-tight">Unlimited</div>
-                <div className="text-[8px] sm:text-xs text-foreground/55 mt-1 sm:mt-1.5 font-medium uppercase tracking-wider">Searches</div>
-              </div>
-            </div>
-
-            {/* Feature bullets */}
-            <ScrollReveal>
-              <div className="flex sm:hidden flex-col items-center justify-center gap-3 mt-5 text-[12px] text-foreground/60 font-medium">
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Get a steady flow of new clients</span>
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Find leads in minutes, not hours</span>
-                <span className="flex items-center gap-2"><Check className="h-3.5 w-3.5 shrink-0" style={{ color: 'hsl(142 76% 45%)' }} strokeWidth={2.5} />Start more conversations</span>
-              </div>
-            </ScrollReveal>
-            {/* Scroll down indicator - mobile only */}
-            <div className="sm:hidden flex flex-col items-center mt-6 animate-bounce">
-              <ChevronDown className="h-5 w-5 text-foreground/30" />
             </div>
           </div>
         </div>
@@ -840,8 +857,8 @@ const Landing = () => {
 
       {/* Video section moved to after hero */}
 
-      {/* Product Preview Section */}
-      <section className="relative z-10 py-10 sm:py-16 md:py-24 px-3 sm:px-4">
+      {/* Product Preview Section - hidden on desktop (shown in hero) */}
+      <section className="relative z-10 py-10 sm:py-16 md:py-24 px-3 sm:px-4 lg:hidden">
         <div className="container mx-auto max-w-[1150px]">
           <div className="text-center mb-10 sm:mb-12 md:mb-16">
             <h2 className="text-3xl sm:text-4xl md:text-[2.75rem] font-bold tracking-tight leading-[1.15]">
