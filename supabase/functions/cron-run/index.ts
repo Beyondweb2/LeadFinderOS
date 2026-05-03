@@ -89,20 +89,30 @@ async function logDailySummary(supabase: ReturnType<typeof createClient>) {
   }
 }
 
-// ── Auth check: accepts ?secret= query param OR x-cron-secret header ──
+// ── Auth check: accepts x-cron-secret header OR service-role key in Authorization ──
 
 function isAuthorized(req: Request): boolean {
+  // Method 1: CRON_SECRET via header
   const cronSecret = Deno.env.get("CRON_SECRET");
-  if (!cronSecret) {
-    logStep("WARNING: CRON_SECRET env var is not set");
-    return false;
+  const headerSecret = req.headers.get("x-cron-secret");
+  if (cronSecret && headerSecret === cronSecret) {
+    logStep("Auth: matched x-cron-secret header");
+    return true;
   }
 
-  const url = new URL(req.url);
-  const querySecret = url.searchParams.get("secret");
-  const headerSecret = req.headers.get("x-cron-secret");
+  // Method 2: Service role key in Authorization header (used by pg_cron internal calls)
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const authHeader = req.headers.get("authorization");
+  if (serviceRoleKey && authHeader) {
+    const token = authHeader.replace("Bearer ", "");
+    if (token === serviceRoleKey) {
+      logStep("Auth: matched service role key");
+      return true;
+    }
+  }
 
-  return querySecret === cronSecret || headerSecret === cronSecret;
+  logStep("WARNING: No valid auth method matched");
+  return false;
 }
 
 // ── Main handler ──────────────────────────────────────────────────────
