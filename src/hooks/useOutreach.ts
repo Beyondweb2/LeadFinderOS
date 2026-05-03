@@ -204,9 +204,6 @@ export function useOutreach() {
     return data as OutreachActivity[];
   }, []);
 
-  // Auto-enrich leads missing phone numbers on load
-  const hasEnrichedRef = useRef(false);
-
   // Only refetch when user ID changes (login/logout), not on token refresh
   useEffect(() => {
     const currentUserId = user?.id ?? null;
@@ -225,18 +222,8 @@ export function useOutreach() {
     }
   }, [user]);
 
-  // After leads are loaded, enqueue phone fetches for leads without phone but with place_id
-  useEffect(() => {
-    if (hasEnrichedRef.current || leads.length === 0) return;
-    hasEnrichedRef.current = true;
-
-    const needsEnrichment = leads.filter(
-      (l) => !l.phone && (l as any).place_id
-    );
-    for (const lead of needsEnrichment) {
-      enqueuePhoneFetch(lead.id, (lead as any).place_id, lead.business_name);
-    }
-  }, [leads, enqueuePhoneFetch]);
+  // REMOVED: Auto-enrichment on page load was removed to prevent unnecessary Google Place Details API calls.
+  // Phone enrichment now only happens when: (1) lead first added to CRM, (2) manual retry, (3) bulk recover phones.
 
   // Retry phone fetch for a lead that failed — uses forceRefresh to bypass cache
   const retryPhoneFetch = useCallback(async (outreachLeadId: string) => {
