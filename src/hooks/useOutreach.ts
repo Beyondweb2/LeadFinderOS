@@ -945,7 +945,7 @@ export function useOutreach() {
          const placeId = (lead as any).place_id;
          try {
            const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
-             body: { placeId },
+              body: { placeId, triggerSource: 'bulk_recover' },
            });
 
            if (detailsError) {
