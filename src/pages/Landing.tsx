@@ -510,6 +510,21 @@ const HeroPhonePreview = () => {
     return () => clearInterval(timer);
   }, []);
 
+  const goTo = useCallback((index: number) => {
+    if (isTransitioning) return;
+    setIsTransitioning(true);
+    setCurrentSlide(index);
+    setTimeout(() => setIsTransitioning(false), 350);
+  }, [isTransitioning]);
+
+  const goPrev = useCallback(() => {
+    goTo((currentSlide - 1 + productPreviewSlides.length) % productPreviewSlides.length);
+  }, [currentSlide, goTo]);
+
+  const goNext = useCallback(() => {
+    goTo((currentSlide + 1) % productPreviewSlides.length);
+  }, [currentSlide, goTo]);
+
   const slide = productPreviewSlides[currentSlide];
 
   return (
@@ -518,23 +533,44 @@ const HeroPhonePreview = () => {
       <p className="text-sm font-bold tracking-widest uppercase text-primary">
         {slide.title}
       </p>
-      <p className="text-sm text-muted-foreground/70 leading-relaxed text-center max-w-[320px]">
+      <p className="text-sm text-muted-foreground/70 leading-relaxed text-center max-w-[320px] min-h-[40px]">
         {slide.desc}
       </p>
 
-      {/* Phone */}
-      <div className="relative w-[300px]">
-        <div className="absolute -inset-10 rounded-full opacity-25 blur-3xl -z-10" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.35), transparent 70%)' }} />
-        <div className="rounded-[2.5rem] border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
-          <div className="absolute top-[8px] left-1/2 -translate-x-1/2 w-[60px] h-[18px] bg-foreground/15 rounded-b-xl z-10" />
-          <img
-            src={slide.image}
-            alt={`${slide.title} screen`}
-            className="w-full h-auto block transition-opacity duration-300"
-            style={{ opacity: isTransitioning ? 0.6 : 1 }}
-            draggable={false}
-          />
+      {/* Phone + arrows wrapper */}
+      <div className="relative flex items-center justify-center">
+        {/* Left arrow */}
+        <button
+          onClick={goPrev}
+          className="hidden lg:flex absolute -left-14 z-20 items-center justify-center w-9 h-9 rounded-full border border-border/40 bg-background/60 backdrop-blur-sm text-muted-foreground/50 hover:text-primary hover:border-primary/40 hover:bg-background/80 transition-all duration-200"
+          aria-label="Previous screen"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        </button>
+
+        {/* Phone */}
+        <div className="relative w-[300px]">
+          <div className="absolute -inset-10 rounded-full opacity-25 blur-3xl -z-10" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.35), transparent 70%)' }} />
+          <div className="rounded-[2.5rem] border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
+            <div className="absolute top-[8px] left-1/2 -translate-x-1/2 w-[60px] h-[18px] bg-foreground/15 rounded-b-xl z-10" />
+            <img
+              src={slide.image}
+              alt={`${slide.title} screen`}
+              className="w-full h-auto block transition-opacity duration-300"
+              style={{ opacity: isTransitioning ? 0.6 : 1 }}
+              draggable={false}
+            />
+          </div>
         </div>
+
+        {/* Right arrow */}
+        <button
+          onClick={goNext}
+          className="hidden lg:flex absolute -right-14 z-20 items-center justify-center w-9 h-9 rounded-full border border-border/40 bg-background/60 backdrop-blur-sm text-muted-foreground/50 hover:text-primary hover:border-primary/40 hover:bg-background/80 transition-all duration-200"
+          aria-label="Next screen"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+        </button>
       </div>
 
       {/* Dots */}
@@ -542,11 +578,7 @@ const HeroPhonePreview = () => {
         {productPreviewSlides.map((_, i) => (
           <button
             key={i}
-            onClick={() => {
-              setIsTransitioning(true);
-              setCurrentSlide(i);
-              setTimeout(() => setIsTransitioning(false), 350);
-            }}
+            onClick={() => goTo(i)}
             className={`rounded-full transition-all duration-300 ease-out ${
               i === currentSlide
                 ? 'h-2.5 w-7 bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.5)]'
