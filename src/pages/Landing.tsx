@@ -707,18 +707,16 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Right column: Product carousel (desktop only) */}
+            {/* Right column: Product preview (desktop only) */}
             <div className="hidden lg:block relative">
               {/* Subtle radial glow backdrop */}
               <div 
-                className="absolute -inset-12 pointer-events-none -z-10"
+                className="absolute -inset-16 pointer-events-none -z-10"
                 style={{ 
-                  background: 'radial-gradient(ellipse 70% 60% at 50% 50%, hsl(210 100% 50% / 0.08), transparent 70%)',
+                  background: 'radial-gradient(ellipse 80% 70% at 50% 50%, hsl(210 100% 50% / 0.1), transparent 65%)',
                 }}
               />
-              <div className="transform scale-105">
-                <ProductPhoneCarousel />
-              </div>
+              <HeroPhonePreview />
             </div>
           </div>
         </div>
