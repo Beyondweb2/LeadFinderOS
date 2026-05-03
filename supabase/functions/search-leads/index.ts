@@ -730,7 +730,7 @@ serve(async (req) => {
         });
       }
 
-      const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug);
+      const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient);
 
       // Cache the results
       try {
