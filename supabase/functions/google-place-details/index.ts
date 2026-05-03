@@ -155,7 +155,7 @@ serve(async (req) => {
     console.log(`Place ${placeId}: phone=${phone ? 'found' : 'none'}, address=${address ? 'found' : 'none'}`);
 
     // Log API miss (best-effort) — $0.017 per Place Details call
-    logUsage(supabase, userId, false, 0.017);
+    logUsage(supabase, userId, false, 0.017, triggerSource);
 
     // ─── CACHE STORE ─────────────────────────
     try {
