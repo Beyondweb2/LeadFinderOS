@@ -488,6 +488,78 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
   );
 };
 
+// Compact phone preview for desktop hero — no arrows, no side feature boxes
+const HeroPhonePreview = () => {
+  const [currentSlide, setCurrentSlide] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+
+  useEffect(() => {
+    productPreviewSlides.forEach((slide) => {
+      const img = new Image();
+      img.src = slide.image;
+    });
+  }, []);
+
+  // Auto-rotate every 4 seconds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIsTransitioning(true);
+      setCurrentSlide((prev) => (prev + 1) % productPreviewSlides.length);
+      setTimeout(() => setIsTransitioning(false), 350);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const slide = productPreviewSlides[currentSlide];
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      {/* Slide label */}
+      <p className="text-sm font-bold tracking-widest uppercase text-primary">
+        {slide.title}
+      </p>
+      <p className="text-sm text-muted-foreground/70 leading-relaxed text-center max-w-[320px]">
+        {slide.desc}
+      </p>
+
+      {/* Phone */}
+      <div className="relative w-[300px]">
+        <div className="absolute -inset-10 rounded-full opacity-25 blur-3xl -z-10" style={{ background: 'radial-gradient(circle, hsl(var(--primary) / 0.35), transparent 70%)' }} />
+        <div className="rounded-[2.5rem] border-[8px] border-foreground/15 bg-background/80 shadow-2xl overflow-hidden">
+          <div className="absolute top-[8px] left-1/2 -translate-x-1/2 w-[60px] h-[18px] bg-foreground/15 rounded-b-xl z-10" />
+          <img
+            src={slide.image}
+            alt={`${slide.title} screen`}
+            className="w-full h-auto block transition-opacity duration-300"
+            style={{ opacity: isTransitioning ? 0.6 : 1 }}
+            draggable={false}
+          />
+        </div>
+      </div>
+
+      {/* Dots */}
+      <div className="flex items-center gap-2">
+        {productPreviewSlides.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => {
+              setIsTransitioning(true);
+              setCurrentSlide(i);
+              setTimeout(() => setIsTransitioning(false), 350);
+            }}
+            className={`rounded-full transition-all duration-300 ease-out ${
+              i === currentSlide
+                ? 'h-2.5 w-7 bg-primary shadow-[0_0_8px_hsl(var(--primary)/0.5)]'
+                : 'h-2.5 w-2.5 bg-foreground/20 hover:bg-foreground/30'
+            }`}
+            aria-label={`Go to slide ${i + 1}`}
+          />
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const Landing = () => {
   const [expandedImage, setExpandedImage] = useState<{ src: string; title: string } | null>(null);
   const [hasScrolled, setHasScrolled] = useState(false);
@@ -707,18 +779,16 @@ const Landing = () => {
               </div>
             </div>
 
-            {/* Right column: Product carousel (desktop only) */}
+            {/* Right column: Product preview (desktop only) */}
             <div className="hidden lg:block relative">
               {/* Subtle radial glow backdrop */}
               <div 
-                className="absolute -inset-12 pointer-events-none -z-10"
+                className="absolute -inset-16 pointer-events-none -z-10"
                 style={{ 
-                  background: 'radial-gradient(ellipse 70% 60% at 50% 50%, hsl(210 100% 50% / 0.08), transparent 70%)',
+                  background: 'radial-gradient(ellipse 80% 70% at 50% 50%, hsl(210 100% 50% / 0.1), transparent 65%)',
                 }}
               />
-              <div className="transform scale-105">
-                <ProductPhoneCarousel />
-              </div>
+              <HeroPhonePreview />
             </div>
           </div>
         </div>
@@ -851,7 +921,6 @@ const Landing = () => {
           </div>
 
 
-
         </div>
       </section>
 
@@ -871,7 +940,6 @@ const Landing = () => {
           <ProductPhoneCarousel />
         </div>
       </section>
-
 
 
       {/* Testimonials */}
