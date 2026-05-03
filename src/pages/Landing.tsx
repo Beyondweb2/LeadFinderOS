@@ -920,7 +920,7 @@ const HeroPhonePreview = () => {
             })}
           </div>
 
-
+const Landing = () => {
 
         </div>
       </section>
