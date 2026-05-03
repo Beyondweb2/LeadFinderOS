@@ -39,6 +39,7 @@ export function useOutreach() {
   // Parallel phone fetch queue — processes up to 3 leads concurrently for speed
   const phoneQueueRef = useRef<Array<{ outreachLeadId: string; placeId: string; businessName: string }>>([]);
   const isProcessingQueueRef = useRef(false);
+  const queuedPlaceIdsRef = useRef<Set<string>>(new Set()); // Dedup: prevent same place_id being queued twice per session
   const CONCURRENCY = 3;
 
   const removeLeadNoPhone = useCallback(async (outreachLeadId: string, businessName: string) => {
