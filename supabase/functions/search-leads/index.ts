@@ -239,6 +239,11 @@ async function textSearchPlaces(
   console.log(`[DIAG-SEARCH] Radius requested: ${radius}, clamped: ${clampedRadius}`);
 
   for (let page = 0; page < MAX_PAGES; page++) {
+    // Hard cap on total text search calls across initial + expansion
+    if (debug.googleCallsMade.textSearchPages >= MAX_TEXT_SEARCH_CALLS) {
+      console.log(`[DIAG-SEARCH] Hard cap reached: ${debug.googleCallsMade.textSearchPages} text search calls`);
+      break;
+    }
     // Early stop: already have 50+ NO_WEBSITE leads
     if (noWebsiteCount >= MAX_RESULTS) {
       console.log(`[DIAG-SEARCH] Early stop: ${noWebsiteCount} NO_WEBSITE leads already collected`);
