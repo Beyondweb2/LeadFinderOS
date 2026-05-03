@@ -118,6 +118,12 @@ export function useOutreach() {
   }, [fetchOnePhone]);
 
   const enqueuePhoneFetch = useCallback((outreachLeadId: string, placeId: string, businessName: string) => {
+    // Dedup: skip if this place_id has already been queued this session
+    if (queuedPlaceIdsRef.current.has(placeId)) {
+      console.log(`Skipping duplicate phone fetch for place_id ${placeId} (${businessName})`);
+      return;
+    }
+    queuedPlaceIdsRef.current.add(placeId);
     setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'pending' }));
     phoneQueueRef.current.push({ outreachLeadId, placeId, businessName });
     processPhoneQueue();
