@@ -15,6 +15,7 @@ import { AccentInitializer } from "@/components/AccentInitializer";
 
 import { RefSourceCapture } from "@/components/RefSourceCapture";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
+import { FirstTimeRedirect } from "./components/FirstTimeRedirect";
 import { Loader2 } from "lucide-react";
 
 // Eagerly loaded routes (critical path)
@@ -208,11 +209,13 @@ const App = () => {
               path="/" 
               element={
                 <ProtectedRoute>
-                   <SubscriptionGate>
-                       <AppLayout>
-                         <Outreach />
-                       </AppLayout>
-                   </SubscriptionGate>
+                    <SubscriptionGate>
+                        <AppLayout>
+                          <FirstTimeRedirect>
+                            <Dashboard />
+                          </FirstTimeRedirect>
+                        </AppLayout>
+                    </SubscriptionGate>
                 </ProtectedRoute>
               } 
             />
