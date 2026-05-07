@@ -208,11 +208,13 @@ const App = () => {
               path="/" 
               element={
                 <ProtectedRoute>
-                   <SubscriptionGate>
-                       <AppLayout>
-                         <Outreach />
-                       </AppLayout>
-                   </SubscriptionGate>
+                    <SubscriptionGate>
+                        <AppLayout>
+                          <FirstTimeRedirect>
+                            <Dashboard />
+                          </FirstTimeRedirect>
+                        </AppLayout>
+                    </SubscriptionGate>
                 </ProtectedRoute>
               } 
             />
