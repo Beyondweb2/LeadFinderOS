@@ -70,40 +70,51 @@ export function useOutreach() {
 
       if (detailsError || !details) {
         console.log('Phone enrichment returned no data for', item.businessName);
-        // No data at all — remove the lead
-        await removeLeadNoPhone(item.outreachLeadId, item.businessName);
-        setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'no_phone' }));
-      } else {
-        if (!details.phone) {
-          // Enrichment succeeded but no phone — auto-remove
-          await removeLeadNoPhone(item.outreachLeadId, item.businessName);
-          setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'no_phone' }));
-        } else {
-          const updates: Record<string, string | null> = {};
-          if (details.phone) updates.phone = details.phone;
-          if (details.address) updates.address = details.address;
-          if (details.category) updates.category = details.category;
-
-          if (Object.keys(updates).length > 0) {
-            const { data: updated } = await supabase
-              .from('outreach_leads')
-              .update(updates)
-              .eq('id', item.outreachLeadId)
-              .select()
-              .single();
-
-            if (updated) {
-              setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? (updated as OutreachLead) : l));
-            }
-          }
-          setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'success' }));
-        }
+        // Keep the lead in the CRM. User can manually retry.
+        setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
+        return;
       }
+
+      if (!details.phone) {
+        // Enrichment succeeded but Google has no phone for this business.
+        // Do NOT delete the lead — deleting forces re-enrichment next time the
+        // same business appears in a search. Leave it; user can act on it.
+        const updates: Record<string, string | null> = {};
+        if (details.website) updates.website = details.website;
+        if (Object.keys(updates).length > 0) {
+          const { data: updated } = await supabase
+            .from('outreach_leads')
+            .update(updates)
+            .eq('id', item.outreachLeadId)
+            .select()
+            .single();
+          if (updated) {
+            setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? (updated as OutreachLead) : l));
+          }
+        }
+        setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'no_phone' }));
+        return;
+      }
+
+      const updates: Record<string, string | null> = { phone: details.phone };
+      if (details.website) updates.website = details.website;
+
+      const { data: updated } = await supabase
+        .from('outreach_leads')
+        .update(updates)
+        .eq('id', item.outreachLeadId)
+        .select()
+        .single();
+
+      if (updated) {
+        setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? (updated as OutreachLead) : l));
+      }
+      setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'success' }));
     } catch (e) {
       console.error('Phone enrichment failed (non-blocking):', e);
       setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
     }
-  }, [removeLeadNoPhone]);
+  }, []);
 
   const processPhoneQueue = useCallback(async () => {
     if (isProcessingQueueRef.current) return;
@@ -254,29 +265,25 @@ export function useOutreach() {
       }
 
       if (!details.phone) {
-        // Still no phone after retry — auto-remove
-        await removeLeadNoPhone(outreachLeadId, lead.business_name);
+        // No phone available even after force-refresh. Keep the lead.
         setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'no_phone' }));
+        toast({ title: 'No phone available', description: 'Google has no phone number for this business.' });
         return;
       }
 
-      const updates: Record<string, string | null> = {};
-      if (details.phone) updates.phone = details.phone;
-      if (details.address) updates.address = details.address;
-      if (details.category) updates.category = details.category;
+      const updates: Record<string, string | null> = { phone: details.phone };
+      if (details.website) updates.website = details.website;
 
-      if (Object.keys(updates).length > 0) {
-        const { data: updated } = await supabase
-          .from('outreach_leads')
-          .update(updates)
-          .eq('id', outreachLeadId)
-          .select()
-          .single();
+      const { data: updated } = await supabase
+        .from('outreach_leads')
+        .update(updates)
+        .eq('id', outreachLeadId)
+        .select()
+        .single();
 
-        if (updated) {
-          setLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
-          setArchivedLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
-        }
+      if (updated) {
+        setLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
+        setArchivedLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
       }
 
       setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'success' }));
@@ -332,11 +339,14 @@ export function useOutreach() {
       .insert({
         user_id: user.id,
         business_name: lead.name,
-        phone: null,
+        // Save the phone we already have from the search result. This avoids
+        // a Place Details call entirely when the search already returned one.
+        phone: lead.phone || null,
         email: null,
         google_maps_url: lead.googleMapsUrl,
         address: lead.address || null,
         category: lead.category || null,
+        website: lead.websiteUrl || null,
         status: 'not_contacted' as LeadStatus,
         next_action: 'none' as NextActionType,
         next_action_date: null,
@@ -401,9 +411,12 @@ export function useOutreach() {
 
     // Lead added — no toast
 
-    // Enrich lead with phone/address from Google Place Details (queued, sequential)
-    if (lead.id) {
+    // Skip enrichment entirely when the search result already gave us a phone.
+    // Otherwise enqueue a single Place Details lookup (server-side cache + single-flight).
+    if (lead.id && !lead.phone) {
       enqueuePhoneFetch(newLead.id, lead.id, lead.name);
+    } else if (lead.id && lead.phone) {
+      console.log(`Skipping enrichment for ${lead.name}: phone already present from search result`);
     }
 
     return newLead;

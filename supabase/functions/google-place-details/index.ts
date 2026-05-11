@@ -10,7 +10,11 @@ const corsHeaders = {
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60000;
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const NULL_PHONE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const NULL_PHONE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (matches positive cache to stop expensive re-checks)
+
+// In-memory single-flight: collapse concurrent requests for the same place_id
+// within the same edge isolate down to one upstream Google call.
+const inFlight = new Map<string, Promise<Response>>();
 
 // Best-effort usage logging — never blocks the main response
 async function logUsage(
@@ -99,7 +103,6 @@ serve(async (req) => {
 
         if (!isNullPhone || cacheAge < NULL_PHONE_TTL_MS) {
           console.log(`Cache hit for place ${placeId} (phone=${cached.phone ? 'found' : 'none'}, age=${Math.round(cacheAge / 60000)}min)`);
-          // Log cache hit (best-effort)
           logUsage(supabase, userId, true, 0, triggerSource);
           return new Response(
             JSON.stringify({
@@ -120,64 +123,93 @@ serve(async (req) => {
       console.log(`Force refresh requested for ${placeId}, skipping cache`);
     }
 
-    // ─── GOOGLE PLACE DETAILS (New API) ──────
-    const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: 'Service not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // ─── SINGLE-FLIGHT: collapse concurrent misses for the same place_id ─
+    const flightKey = `${placeId}`;
+    const existing = inFlight.get(flightKey);
+    if (existing && !forceRefresh) {
+      console.log(`Single-flight: awaiting in-progress lookup for ${placeId}`);
+      const cloned = (await existing).clone();
+      logUsage(supabase, userId, true, 0, triggerSource);
+      return cloned;
     }
 
-    const fieldMask = 'internationalPhoneNumber,nationalPhoneNumber,formattedAddress,primaryTypeDisplayName,googleMapsUri';
-    const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
-      headers: {
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': fieldMask,
-      },
-    });
+    const flight = (async (): Promise<Response> => {
+      // ─── GOOGLE PLACE DETAILS (New API) ──────
+      const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
+      if (!apiKey) {
+        return new Response(
+          JSON.stringify({ error: 'Service not configured' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
 
-    if (!res.ok) {
-      const errText = await res.text();
-      console.error(`Place Details failed for ${placeId}: ${res.status}`, errText);
+      // Slim mask: phone + website only. Address/category/maps URI are already
+      // returned by Text Search at lead-creation time, so re-fetching them
+      // here was paying Enterprise prices for data we already have.
+      const fieldMask = 'internationalPhoneNumber,nationalPhoneNumber,websiteUri';
+      const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+        headers: {
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': fieldMask,
+        },
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error(`Place Details failed for ${placeId}: ${res.status}`, errText);
+        return new Response(
+          JSON.stringify({ placeId, phone: null, error: 'Lookup failed' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const data = await res.json();
+      const phone = data.internationalPhoneNumber || data.nationalPhoneNumber || null;
+      const website = data.websiteUri || null;
+
+      console.log(`Place ${placeId}: phone=${phone ? 'found' : 'none'}, website=${website ? 'found' : 'none'}`);
+
+      // Log API miss (best-effort) — $0.017 per Place Details call
+      logUsage(supabase, userId, false, 0.017, triggerSource);
+
+      // ─── CACHE STORE ─────────────────────────
+      // Only write the columns we actually fetched. Don't overwrite existing
+      // address/category/google_maps_uri that may have been seeded earlier.
+      try {
+        const { data: existingRow } = await supabase
+          .from('phone_cache')
+          .select('address, category, google_maps_uri')
+          .eq('place_id', placeId)
+          .maybeSingle();
+
+        await supabase.from('phone_cache').upsert(
+          {
+            place_id: placeId,
+            phone,
+            address: existingRow?.address ?? null,
+            category: existingRow?.category ?? null,
+            google_maps_uri: existingRow?.google_maps_uri ?? null,
+            created_at: new Date().toISOString(),
+          },
+          { onConflict: 'place_id' }
+        );
+      } catch (e) {
+        console.error('Cache store failed:', e);
+      }
+
       return new Response(
-        JSON.stringify({ placeId, phone: null, error: 'Lookup failed' }),
+        JSON.stringify({ placeId, phone, website, cached: false }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
-    }
+    })();
 
-    const data = await res.json();
-    const phone = data.internationalPhoneNumber || data.nationalPhoneNumber || null;
-    const address = data.formattedAddress || null;
-    const category = data.primaryTypeDisplayName?.text || null;
-    const googleMapsUri = data.googleMapsUri || null;
-
-    console.log(`Place ${placeId}: phone=${phone ? 'found' : 'none'}, address=${address ? 'found' : 'none'}`);
-
-    // Log API miss (best-effort) — $0.017 per Place Details call
-    logUsage(supabase, userId, false, 0.017, triggerSource);
-
-    // ─── CACHE STORE ─────────────────────────
+    inFlight.set(flightKey, flight);
     try {
-      await supabase.from('phone_cache').upsert(
-        {
-          place_id: placeId,
-          phone,
-          address,
-          category,
-          google_maps_uri: googleMapsUri,
-          created_at: new Date().toISOString(),
-        },
-        { onConflict: 'place_id' }
-      );
-    } catch (e) {
-      console.error('Cache store failed:', e);
+      const response = await flight;
+      return response.clone();
+    } finally {
+      inFlight.delete(flightKey);
     }
-
-    return new Response(
-      JSON.stringify({ placeId, phone, address, category, googleMapsUri, cached: false }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
 
   } catch (error) {
     console.error('Place details error:', error);
