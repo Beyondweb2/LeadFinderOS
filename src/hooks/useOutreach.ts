@@ -411,9 +411,12 @@ export function useOutreach() {
 
     // Lead added — no toast
 
-    // Enrich lead with phone/address from Google Place Details (queued, sequential)
-    if (lead.id) {
+    // Skip enrichment entirely when the search result already gave us a phone.
+    // Otherwise enqueue a single Place Details lookup (server-side cache + single-flight).
+    if (lead.id && !lead.phone) {
       enqueuePhoneFetch(newLead.id, lead.id, lead.name);
+    } else if (lead.id && lead.phone) {
+      console.log(`Skipping enrichment for ${lead.name}: phone already present from search result`);
     }
 
     return newLead;
