@@ -265,29 +265,25 @@ export function useOutreach() {
       }
 
       if (!details.phone) {
-        // Still no phone after retry — auto-remove
-        await removeLeadNoPhone(outreachLeadId, lead.business_name);
+        // No phone available even after force-refresh. Keep the lead.
         setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'no_phone' }));
+        toast({ title: 'No phone available', description: 'Google has no phone number for this business.' });
         return;
       }
 
-      const updates: Record<string, string | null> = {};
-      if (details.phone) updates.phone = details.phone;
-      if (details.address) updates.address = details.address;
-      if (details.category) updates.category = details.category;
+      const updates: Record<string, string | null> = { phone: details.phone };
+      if (details.website) updates.website = details.website;
 
-      if (Object.keys(updates).length > 0) {
-        const { data: updated } = await supabase
-          .from('outreach_leads')
-          .update(updates)
-          .eq('id', outreachLeadId)
-          .select()
-          .single();
+      const { data: updated } = await supabase
+        .from('outreach_leads')
+        .update(updates)
+        .eq('id', outreachLeadId)
+        .select()
+        .single();
 
-        if (updated) {
-          setLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
-          setArchivedLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
-        }
+      if (updated) {
+        setLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
+        setArchivedLeads(prev => prev.map(l => l.id === outreachLeadId ? (updated as OutreachLead) : l));
       }
 
       setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'success' }));
