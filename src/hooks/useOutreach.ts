@@ -339,11 +339,14 @@ export function useOutreach() {
       .insert({
         user_id: user.id,
         business_name: lead.name,
-        phone: null,
+        // Save the phone we already have from the search result. This avoids
+        // a Place Details call entirely when the search already returned one.
+        phone: lead.phone || null,
         email: null,
         google_maps_url: lead.googleMapsUrl,
         address: lead.address || null,
         category: lead.category || null,
+        website: lead.websiteUrl || null,
         status: 'not_contacted' as LeadStatus,
         next_action: 'none' as NextActionType,
         next_action_date: null,
