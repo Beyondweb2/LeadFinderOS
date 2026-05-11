@@ -10,7 +10,11 @@ const corsHeaders = {
 const RATE_LIMIT = 30;
 const RATE_WINDOW_MS = 60000;
 const CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-const NULL_PHONE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const NULL_PHONE_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days (matches positive cache to stop expensive re-checks)
+
+// In-memory single-flight: collapse concurrent requests for the same place_id
+// within the same edge isolate down to one upstream Google call.
+const inFlight = new Map<string, Promise<Response>>();
 
 // Best-effort usage logging — never blocks the main response
 async function logUsage(
