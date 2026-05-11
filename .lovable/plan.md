@@ -1,107 +1,114 @@
+# Reduce Google Places API costs
 
+## Where the money is going today
 
-# Google Maps API Optimisation — Implementation Plan
+The `google-place-details` edge function runs on every "Add to CRM" click. Today it requests:
 
-## Overview
-Consolidate all phone enrichment to `google-place-details`, eliminate `lookup-phones`, cap search expansion, extend null-phone cache to 7 days, and add usage analytics. All changes preserve existing single-lead enrichment behaviour.
+```
+internationalPhoneNumber, nationalPhoneNumber, formattedAddress,
+primaryTypeDisplayName, googleMapsUri
+```
+
+Phone numbers fall in Google's **Enterprise (Contact)** SKU — the most expensive tier (~$0.017/call). Address/category/uri are already returned by Text Search, so we are paying Enterprise prices for data we mostly already have.
+
+There is also a `phone_cache` table keyed by `place_id` (30-day TTL), which is good — but the cache hit rate is ~3% because:
+
+1. Each new search returns fresh `place_id`s the user hasn't added before.
+2. When a Place Details lookup returns no phone, the lead is **auto-deleted**, so the same business gets re-enriched the next time it appears in a search.
+3. Null-phone cache TTL is only 7 days vs 30 days for positive hits.
+4. There's no client-side check before calling — the function is invoked even when the lead row already has a phone.
+
+## Goals
+
+- Drop per-call cost (smaller field mask, Contact SKU only when needed).
+- Drop call volume (better dedup, no re-enrichment of known-null businesses, reuse search-result data).
+- Keep UX identical.
 
 ---
 
-## Step 1: Migration — Create `api_usage_log` table
-New migration with the exact schema specified. RLS denies all public access (service-role insert only from edge functions).
+## Changes
 
-## Step 2: `supabase/functions/google-place-details/index.ts`
-- Change `NULL_PHONE_TTL_MS` from `60 * 60 * 1000` to `7 * 24 * 60 * 60 * 1000` (7 days)
-- After cache check and after API call, best-effort insert into `api_usage_log` (cache_hit true/false, cost 0.017 for misses). Wrapped in try/catch — never blocks the response.
+### 1. Slim the field mask in `google-place-details`
 
-## Step 3: `supabase/functions/search-leads/index.ts`
-- `MAX_EXPANSION_ATTEMPTS`: 16 → 6
-- Expansion paging: `ePage < 2` → `ePage < 1` (1 page per centre)
-- Best-effort logging for geocode ($0.005), text_search ($0.032), expansion triggers. All wrapped in try/catch.
+New mask: `internationalPhoneNumber,nationalPhoneNumber,websiteUri`
 
-## Step 4: `src/hooks/useOutreach.ts` — Rewrite `bulkLookupPhones`
+- Drop `formattedAddress`, `primaryTypeDisplayName`, `googleMapsUri` — Text Search already returns address, category, and the maps URI when the lead is created. We were paying Enterprise prices to re-fetch them.
+- Add `websiteUri` so the cached row stays useful if a search-time website was missing.
+- Update the `phone_cache` upsert and the response shape: keep the existing columns but stop overwriting `address`/`category` with new values (only fill if currently null).
 
-New signature and return shape:
-```typescript
-bulkLookupPhones(
-  leadIds?: string[],
-  onProgress?: (current: number, total: number) => void
-): Promise<{ updated: number; skipped: number; failed: number; total: number }>
-```
+This keeps us in the Enterprise SKU (phone fields) but stops requesting Pro fields we don't need.
 
-Logic:
-1. Collect target leads from `leadIds` param or all leads+archivedLeads
-2. Filter into two groups:
-   - **eligible**: `!lead.phone && lead.place_id` → will be enriched
-   - **skipped (no place_id)**: `!lead.phone && !lead.place_id` → counted as skipped, logged to console: `Skipped lead ${id} (${businessName}): no place_id`
-   - **skipped (already has phone)**: `lead.phone` → counted as skipped
-3. Process eligible leads with concurrency-3 pool (reuse `CONCURRENCY` constant)
-4. For each eligible lead, call `google-place-details` directly (NOT `fetchOnePhone`, which auto-removes leads). This is a new internal helper `enrichPhoneBulk`:
-   - Calls `supabase.functions.invoke('google-place-details', { body: { placeId } })`
-   - If phone found → update DB (`outreach_leads.phone`, `.address`, `.category`) → count as **updated**
-   - If no phone found → do nothing to DB → count as **skipped** (not a failure)
-   - If actual error (network, 500, etc.) → count as **failed**, log error, continue
-5. Call `onProgress(current, total)` after each lead completes (regardless of outcome)
-6. After all done, call `fetchLeads()` once to refresh state
-7. Return `{ updated, skipped, failed, total }`
+### 2. Extend null-phone TTL to 30 days
 
-Count definitions:
-- **updated** = phone was newly written to the lead
-- **skipped** = already had phone, had no place_id, or enrichment returned no phone (not an error)
-- **failed** = enrichment threw an actual error
-- **total** = all leads considered (updated + skipped + failed)
+In `google-place-details`, change `NULL_PHONE_TTL_MS` from 7 days to 30 days, matching positive cache. A business with no Google-listed phone today almost never gets one within a month, and re-checking is the single biggest source of repeat calls today.
 
-Key: `fetchOnePhone` is NOT touched — single-lead add-to-CRM auto-removal behaviour stays exactly as-is.
+### 3. Stop auto-deleting leads with no phone
 
-## Step 5: `src/components/OutreachTable.tsx`
+In `useOutreach.ts` (`fetchOnePhone` and `retryPhoneFetch`):
 
-- Add new prop: `onBulkLookupPhones?: (leadIds: string[], onProgress: (current: number, total: number) => void) => Promise<{ updated: number; skipped: number; failed: number; total: number }>`
-- Replace `handleRecoverPhones` (lines 408-470): call `onBulkLookupPhones` with the missing-phone lead IDs and a progress callback that updates `recoveryProgress` state. Remove the old batch-of-50 loop and `lookup-phones` invocation. Show toast summary with updated/skipped/failed counts.
+- Remove the `removeLeadNoPhone` path. If enrichment returns no phone, leave the lead in the CRM with `phone = null` and set `phoneFetchStatus` to `no_phone`.
+- The existing "Retry" UI stays — user can manually retry, which uses `forceRefresh`.
+- Effect: the same `place_id` won't be re-added → re-enriched on every future search. The `outreach_history` dedupe (which already prevents re-adding the same business) now works as intended.
 
-## Step 6: `src/pages/Outreach.tsx`
+This single change should massively raise the cache hit rate, since today's null-phone leads silently disappear and get re-enriched.
 
-- Pass new prop: `onBulkLookupPhones={(ids, onProgress) => bulkLookupPhones(ids, onProgress)}`
+### 4. Skip enrichment when we already have a phone
 
-## Step 7: `src/pages/Archive.tsx`
+In `addLead` (useOutreach.ts):
 
-- Replace `handleBulkLookup` to call `bulkLookupPhones(missingIds, onProgress)` with progress callback
-- Add `lookupProgress` state: `{ current: number; total: number } | null`
-- Show `<Progress />` bar when active
-- Show toast summary when complete
+- Search results already carry `lead.phone` for some sources. Currently we always call enrichment if `lead.id` (place_id) exists.
+- New rule: only call `enqueuePhoneFetch` if `!lead.phone`.
+- Persist the search-time phone into the `outreach_leads` insert (it is currently set to `null`).
 
-## Step 8: Cleanup
+Result: zero Place Details call when the search already gave us a phone.
 
-- Delete `supabase/functions/lookup-phones/index.ts`
-- Remove `[functions.lookup-phones]` from `supabase/config.toml`
-- Remove import/reference to `lookup-phones` in `useOutreach.ts` and `OutreachTable.tsx` (already replaced in steps 4-5)
+### 5. Cross-user dedup via `phone_cache` (already global)
+
+The `phone_cache` table is **already keyed by `place_id` only** (no `user_id`), so it is global across all users. Confirm RLS keeps it locked to service-role-only (already the case via "No public access"). No change needed beyond the TTL bump in step 2 — once user A enriches a place_id, user B reuses it for free.
+
+### 6. Single-flight protection per place_id (server-side)
+
+Today there's only an in-memory per-session dedup (`queuedPlaceIdsRef`). Two tabs / two users hitting Add at the same moment can each fire a real Google call before the cache row exists.
+
+In `google-place-details`, after the cache check fails:
+
+- Insert a placeholder row into `phone_cache` with `phone = null` and a special marker (e.g. a column `pending_until` or just check `created_at` very recent + null `address`).
+- Simpler alternative: wrap the cache check + Google call in a tiny in-memory `Map<placeId, Promise>` inside the edge function module scope. Concurrent requests in the same isolate await the same promise. Cross-isolate races still hit Google twice but that's rare and bounded.
+
+Go with the in-memory promise map — minimal change, no schema churn.
+
+### 7. Client-side debounce on Add to CRM
+
+In the search results component (the button that calls `addLead`):
+
+- Track an in-flight `Set<string>` of place_ids being added.
+- Disable the button (or no-op) while the same place_id is being added.
+- The local `outreachHistory` check already prevents the second add succeeding, but the disabled state stops accidental double-clicks from even trying.
+
+### 8. Logging is already wired up
+
+`api_usage_log` table + `AdminApiUsage` page already track cache_hit / miss / cost. After the changes above, the same dashboard will show the improvement (hit rate climbing, daily cost dropping). No new tooling needed; just add `trigger_source: 'add_to_crm_skipped'` log lines (cost 0) for the cases where we skipped enrichment — useful for "enrichments prevented" visibility.
 
 ---
 
-## Answers to specific questions
+## Files touched
 
-**Return shape of `bulkLookupPhones`:**
-```typescript
-{ updated: number; skipped: number; failed: number; total: number }
-```
-Where `total = updated + skipped + failed`.
+- `supabase/functions/google-place-details/index.ts` — slim field mask, 30-day null TTL, in-memory single-flight, only fill missing cache columns.
+- `src/hooks/useOutreach.ts` — keep no-phone leads, skip enrichment when phone already present, log skipped enrichments.
+- `src/components/OutreachTable.tsx` or wherever Add to CRM lives in search results — in-flight Set + disabled button. (Will confirm exact file during build.)
 
-**How counts are calculated:**
-- `updated`: phone found and written to DB
-- `skipped`: lead already had phone OR had no `place_id` OR enrichment returned no phone
-- `failed`: actual error during enrichment call
-- Leads with no `place_id` are logged: `console.log('Skipped lead ${id}: no place_id')`
+## Out of scope
 
-**DB schema assumptions:** None. The `outreach_leads` table already has `place_id` (text, nullable). The new `api_usage_log` table is additive.
+- No UI redesign.
+- No new tables (api_usage_log already exists).
+- No changes to bulk phone recovery — already routes through the same function and benefits automatically.
+- No rate limiter changes — existing 30/min per user is fine; the real fix is volume reduction, not throttling.
 
-**Old leads without `place_id`:** These will be skipped by bulk enrichment and counted in `skipped`. They can still be manually enriched via the existing "Retry" button if a `place_id` is added later. A future backfill could query leads where `place_id IS NULL AND phone IS NULL` and attempt a name-based lookup — but that's out of scope for this change.
+## Expected impact
 
-## Implementation order
-1. Migration (zero risk)
-2. `google-place-details` cache + logging changes
-3. `search-leads` expansion cap + logging
-4. `useOutreach.ts` — new `bulkLookupPhones`
-5. `OutreachTable.tsx` — new prop + updated handler
-6. `Outreach.tsx` — pass prop
-7. `Archive.tsx` — updated handler + progress UI
-8. Delete `lookup-phones` + config cleanup
+- **Field mask**: ~20% cheaper per call (drop 3 Pro fields, keep Contact SKU).
+- **30-day null TTL + no auto-delete**: the dominant win — repeat enrichments of phoneless businesses go to ~zero, hit rate should climb from 3% to 40%+ within a week as the global cache fills.
+- **Skip-when-phone-present**: eliminates calls entirely for search results that already carry a phone.
+- **Single-flight**: caps concurrent duplicate calls.
 
+Combined: realistic 60–80% cost reduction, no UX change.
