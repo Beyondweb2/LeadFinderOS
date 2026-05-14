@@ -18,4 +18,4 @@ Disallow: /billing/
 Disallow: /complete-setup
 Disallow: /unlock
 
-Sitemap: https://leadfinderapp.lovable.app/sitemap.xml
+Sitemap: https://lead-finder-app.com/sitemap.xml
