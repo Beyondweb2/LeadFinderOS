@@ -1,0 +1,26 @@
+# LeadFinder Pro
+
+> LeadFinder helps freelancers and agencies find local businesses without websites and turn them into web design clients via WhatsApp and SMS outreach.
+
+LeadFinder Pro is a lead generation tool that searches Google for local businesses, identifies those without websites, and provides a built-in CRM to track outreach via WhatsApp, SMS, and calls. It includes message templates, pipeline tracking, and a 5-day free trial.
+
+## Pages
+
+- [Home / Landing](/landing): Product overview, features, and pricing.
+- [Get Started](/start): Account creation and subscription details.
+- [Start Free Trial](/start-free-trial): Begin a 5-day free trial.
+- [Sign In / Sign Up](/auth): Authentication for existing or new users.
+- [How To Use Guide](/guide): Step-by-step guide for finding and contacting clients.
+- [Partner Program](/partners): Affiliate program for referring new users.
+- [Feedback](/feedback): Send product feedback to the team.
+- [Terms of Service](/terms): Terms and conditions.
+
+## City Lead Pages
+
+- [Find Clients in London](/find-clients/london): Local lead search for London.
+- [Find Clients in New York](/find-clients/new-york): Local lead search for New York.
+- [Find Clients in Manchester](/find-clients/manchester): Local lead search for Manchester.
+
+## Optional
+
+- [Sitemap](/sitemap.xml): Full list of indexable pages.
