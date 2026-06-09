@@ -47,6 +47,7 @@ const UnlockAccess = lazy(() => import("./pages/UnlockAccess"));
 const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
+const BarberSite = lazy(() => import("./pages/BarberSite"));
 
 function PageLoader() {
   return (
@@ -192,6 +193,7 @@ const App = () => {
               <Route path="/start" element={<Start />} />
               <Route path="/start-free-trial" element={<Navigate to="/subscribe" replace />} />
               <Route path="/find-clients/:city" element={<CityLeads />} />
+              <Route path="/p/:slug" element={<BarberSite />} />
               <Route 
                 path="/ads" 
                 element={<AdEntryRedirect />} 
