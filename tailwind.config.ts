@@ -20,6 +20,11 @@ export default {
         body: ['"Manrope"', 'system-ui', 'sans-serif'],
       },
       colors: {
+        amber: { DEFAULT: '#E6A24B', soft: '#F0BD7B', deep: '#C9853A' },
+        ink: '#0E0E10',
+        'ink-soft': '#161619',
+        'ink-card': '#17171B',
+        line: 'rgba(255,255,255,0.08)',
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
