@@ -340,6 +340,44 @@ export type Database = {
         }
         Relationships: []
       }
+      generated_sites: {
+        Row: {
+          content: Json
+          created_at: string
+          id: string
+          lead_id: string | null
+          site_name: string
+          status: Database["public"]["Enums"]["site_status"]
+          updated_at: string
+        }
+        Insert: {
+          content?: Json
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          site_name: string
+          status?: Database["public"]["Enums"]["site_status"]
+          updated_at?: string
+        }
+        Update: {
+          content?: Json
+          created_at?: string
+          id?: string
+          lead_id?: string | null
+          site_name?: string
+          status?: Database["public"]["Enums"]["site_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generated_sites_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       geocode_cache: {
         Row: {
           created_at: string
@@ -363,6 +401,44 @@ export type Database = {
           raw_location?: string
         }
         Relationships: []
+      }
+      hosting_clients: {
+        Row: {
+          created_at: string
+          domain: string
+          hosting_status: Database["public"]["Enums"]["hosting_status"]
+          id: string
+          lead_id: string | null
+          notes: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          domain: string
+          hosting_status?: Database["public"]["Enums"]["hosting_status"]
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          domain?: string
+          hosting_status?: Database["public"]["Enums"]["hosting_status"]
+          id?: string
+          lead_id?: string | null
+          notes?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hosting_clients_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       lead_contacts: {
         Row: {
@@ -715,6 +791,44 @@ export type Database = {
           place_id?: string
         }
         Relationships: []
+      }
+      preview_links: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          lead_id: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          lead_id?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          lead_id?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "preview_links_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "outreach_leads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       search_cache: {
         Row: {
@@ -1175,6 +1289,7 @@ export type Database = {
         | "callback_scheduled"
         | "wrong_number"
         | "left_voicemail"
+      hosting_status: "pending" | "active" | "suspended" | "cancelled"
       lead_status:
         | "not_contacted"
         | "contacted"
@@ -1207,6 +1322,7 @@ export type Database = {
         | "send_follow_up"
         | "check_3_day_removal"
         | "2nd_follow_up"
+      site_status: "draft" | "published" | "archived"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1343,6 +1459,7 @@ export const Constants = {
         "wrong_number",
         "left_voicemail",
       ],
+      hosting_status: ["pending", "active", "suspended", "cancelled"],
       lead_status: [
         "not_contacted",
         "contacted",
@@ -1377,6 +1494,7 @@ export const Constants = {
         "check_3_day_removal",
         "2nd_follow_up",
       ],
+      site_status: ["draft", "published", "archived"],
     },
   },
 } as const
