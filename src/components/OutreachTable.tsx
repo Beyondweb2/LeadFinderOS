@@ -138,6 +138,7 @@ export function OutreachTable({
   const { user } = useAuth();
   const { isAdmin } = useSubscription();
   const [aiOpenerLead, setAiOpenerLead] = useState<OutreachLead | null>(null);
+  const [generatingSiteId, setGeneratingSiteId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
@@ -373,6 +374,46 @@ export function OutreachTable({
   }, [onContactGated, onContactMethodChange]);
 
   // Handle Call button click - direct open + count walkthrough contact
+  // Admin-only: generate a barber site for this lead via the (admin-gated)
+  // generate-barber-site edge function, then surface links to view / add images.
+  const handleGenerateSite = useCallback(async (lead: OutreachLead) => {
+    setGeneratingSiteId(lead.id);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const { data, error } = await supabase.functions.invoke('generate-barber-site', {
+        body: { lead_id: lead.id },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
+      const slug = (data as any)?.site?.slug as string | undefined;
+      toast({
+        title: `Site generated for ${lead.business_name}`,
+        description: (
+          <span className="flex gap-3 mt-1">
+            {slug && (
+              <a href={`/p/${slug}`} target="_blank" rel="noreferrer" className="underline font-medium">
+                View site
+              </a>
+            )}
+            <a href="/admin/site-images" target="_blank" rel="noreferrer" className="underline font-medium">
+              Upload images
+            </a>
+          </span>
+        ),
+      });
+    } catch (e) {
+      toast({
+        title: 'Site generation failed',
+        description: (e as Error).message || 'Please try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingSiteId(null);
+    }
+  }, [toast]);
+
   const handleCallClick = useCallback((lead: OutreachLead) => {
     if (onContactGated && !onContactGated('call', lead.id)) return;
     // Auto-fill contact method
@@ -1049,6 +1090,8 @@ export function OutreachTable({
                   phoneFetchStatus={phoneFetchStatus[lead.id]}
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
                   isWalkthroughContacted={walkthroughContactedIds.has(lead.id)}
+                  onGenerateSite={isAdmin ? () => handleGenerateSite(lead) : undefined}
+                  isGeneratingSite={generatingSiteId === lead.id}
                   
                 />
               ))
@@ -1323,6 +1366,24 @@ export function OutreachTable({
                               Retry
                             </Button>
                           ) : null}
+                          {isAdmin && (
+                            <button
+                              className="p-1.5 rounded-md text-violet-400 hover:bg-violet-500/10 hover:text-violet-300 transition-colors disabled:opacity-50"
+                              title="Generate barber site (admin)"
+                              disabled={generatingSiteId === lead.id}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleGenerateSite(lead);
+                              }}
+                            >
+                              {generatingSiteId === lead.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Sparkles className="h-4 w-4" />
+                              )}
+                            </button>
+                          )}
                         </div>
                       </TableCell>
                       {!readOnly && onMarkAsInterested && (

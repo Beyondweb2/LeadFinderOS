@@ -73,6 +73,11 @@ export interface BarberSiteContent {
    */
   heroImageUrl?: string;
   /**
+   * Optional "about / our story" image URL, shown beside the about copy. When
+   * omitted, the bundled stock interior image is used.
+   */
+  aboutImageUrl?: string;
+  /**
    * Optional gallery image URLs. When omitted (or empty), a curated set of
    * bundled stock barbershop images is used instead.
    */

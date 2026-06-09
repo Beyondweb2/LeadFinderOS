@@ -49,6 +49,8 @@ interface OutreachMobileCardProps {
   onRetryPhoneFetch?: () => void;
   isWalkthroughContacted?: boolean;
   onAiOpener?: () => void;
+  onGenerateSite?: () => void;
+  isGeneratingSite?: boolean;
 }
 
 export const OutreachMobileCard = memo(function OutreachMobileCard({
@@ -74,6 +76,8 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   onRetryPhoneFetch,
   isWalkthroughContacted = false,
   onAiOpener,
+  onGenerateSite,
+  isGeneratingSite = false,
 }: OutreachMobileCardProps) {
   const isPhoneFetching = phoneFetchStatus === 'pending';
   const isPhoneFailed = phoneFetchStatus === 'failed';
@@ -310,6 +314,22 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     title="Generate AI opener"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {onGenerateSite && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-violet-400 hover:text-violet-300 hover:bg-violet-500/10"
+                    onClick={onGenerateSite}
+                    disabled={isGeneratingSite}
+                    title="Generate barber site (admin)"
+                  >
+                    {isGeneratingSite ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-3.5 w-3.5" />
+                    )}
                   </Button>
                 )}
               </div>

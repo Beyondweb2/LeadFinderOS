@@ -46,6 +46,7 @@ export default function AdminSiteImages() {
   const [hero, setHero] = useState<File | null>(null);
   const [g1, setG1] = useState<File | null>(null);
   const [g2, setG2] = useState<File | null>(null);
+  const [about, setAbout] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -100,14 +101,15 @@ export default function AdminSiteImages() {
     setErr(null);
     setMsg(null);
     if (!selected) return setErr("Pick a site first.");
-    if (!hero && !g1 && !g2) return setErr("Choose at least one image.");
-    const vErr = validate(hero) || validate(g1) || validate(g2);
+    if (!hero && !g1 && !g2 && !about) return setErr("Choose at least one image.");
+    const vErr = validate(hero) || validate(g1) || validate(g2) || validate(about);
     if (vErr) return setErr(vErr);
 
     setBusy(true);
     try {
       const existing = (selected.content || {}) as BarberSiteContent;
       const heroUrl = hero ? await uploadOne(hero, "hero", selected.id) : existing.heroImageUrl;
+      const aboutUrl = about ? await uploadOne(about, "about", selected.id) : existing.aboutImageUrl;
       const g1Url = g1 ? await uploadOne(g1, "gallery-1", selected.id) : existing.galleryImageUrls?.[0];
       const g2Url = g2 ? await uploadOne(g2, "gallery-2", selected.id) : existing.galleryImageUrls?.[1];
       const gallery = [g1Url, g2Url].filter(Boolean) as string[];
@@ -115,6 +117,7 @@ export default function AdminSiteImages() {
       const newContent: BarberSiteContent = {
         ...existing,
         ...(heroUrl ? { heroImageUrl: heroUrl } : {}),
+        ...(aboutUrl ? { aboutImageUrl: aboutUrl } : {}),
         ...(gallery.length ? { galleryImageUrls: gallery } : {}),
       };
 
@@ -130,6 +133,7 @@ export default function AdminSiteImages() {
       setHero(null);
       setG1(null);
       setG2(null);
+      setAbout(null);
       setMsg("Saved — the site now uses the uploaded image(s).");
     } catch (e) {
       setErr((e as Error).message || "Upload failed");
@@ -169,6 +173,7 @@ export default function AdminSiteImages() {
                 setHero(null);
                 setG1(null);
                 setG2(null);
+                setAbout(null);
                 setMsg(null);
                 setErr(null);
               }}
@@ -190,15 +195,17 @@ export default function AdminSiteImages() {
 
             {selected && (
               <>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                   <Thumb label="Hero" url={selected.content?.heroImageUrl} />
                   <Thumb label="Gallery 1" url={selected.content?.galleryImageUrls?.[0]} />
                   <Thumb label="Gallery 2" url={selected.content?.galleryImageUrls?.[1]} />
+                  <Thumb label="About / Story" url={selected.content?.aboutImageUrl} />
                 </div>
 
                 <FileSlot label="Hero image" file={hero} onPick={setHero} />
                 <FileSlot label="Gallery image 1" file={g1} onPick={setG1} />
                 <FileSlot label="Gallery image 2" file={g2} onPick={setG2} />
+                <FileSlot label="About / Story image" file={about} onPick={setAbout} />
 
                 {err && <p className="text-sm text-destructive">{err}</p>}
                 {msg && <p className="text-sm text-green-500">{msg}</p>}

@@ -29,6 +29,7 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
     googleRating,
     reviewCount,
     heroImageUrl,
+    aboutImageUrl,
     galleryImageUrls,
     stats,
   } = content;
@@ -85,7 +86,7 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
             reviewCount={reviewCount}
             onBook={openBooking}
           />
-          <About about={about} businessName={businessName} stats={stats} />
+          <About about={about} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} />
           <Services services={services} />
           <Gallery images={gallery} businessName={businessName} />
           <Hours hours={hours} />
@@ -498,7 +499,7 @@ function Hero({
 
 /* ---------------------------------- about --------------------------------- */
 
-function About({ about, businessName, stats }: { about: string; businessName: string; stats?: BarberStat[] }) {
+function About({ about, businessName, stats, aboutImageUrl }: { about: string; businessName: string; stats?: BarberStat[]; aboutImageUrl?: string }) {
   return (
     <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
@@ -523,7 +524,7 @@ function About({ about, businessName, stats }: { about: string; businessName: st
         <Reveal delay={0.1} className="order-1 md:order-2">
           <div className="relative">
             <SmartImg
-              src={STOCK_INTERIOR}
+              src={aboutImageUrl || STOCK_INTERIOR}
               alt={`Inside ${businessName}`}
               className="aspect-[4/5] w-full rounded-3xl border border-white/[0.06] shadow-card"
               imgClassName="transition-transform duration-700 hover:scale-[1.04]"
@@ -590,9 +591,13 @@ function Services({ services }: { services: BarberSiteContent["services"] }) {
                 </div>
                 {/* dotted leader */}
                 <span className="mx-1 hidden flex-1 translate-y-[-3px] border-b border-dotted border-white/15 sm:block" />
-                {s.price && (
+                {s.price ? (
                   <span className="shrink-0 font-display text-2xl tracking-wide text-amber">
                     {s.price}
+                  </span>
+                ) : (
+                  <span className="shrink-0 text-sm font-medium uppercase tracking-wide text-zinc-500">
+                    Price on request
                   </span>
                 )}
               </div>
@@ -1097,9 +1102,13 @@ function BookingModal({
                           </span>
                         </span>
                         <span className="flex shrink-0 items-center gap-2.5">
-                          {s.price && (
+                          {s.price ? (
                             <span className="font-display text-xl tracking-wide text-amber">
                               {s.price}
+                            </span>
+                          ) : (
+                            <span className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                              Price on request
                             </span>
                           )}
                           <ChevronLeftIcon className="h-4 w-4 rotate-180 text-zinc-600 transition-colors group-hover:text-amber" />
