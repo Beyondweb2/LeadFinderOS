@@ -1,0 +1,62 @@
+/**
+ * Content contract for the barbershop site template.
+ *
+ * This is the single typed payload the AI generator produces per business and
+ * the template renders. It is intentionally presentation-agnostic: no styling,
+ * no asset bundling decisions — just the words and numbers for one shop.
+ */
+
+export interface BarberService {
+  /** Service name, e.g. "Skin Fade". */
+  name: string;
+  /** Optional one-line description shown beneath the name. */
+  description?: string;
+  /** Pre-formatted price string, e.g. "£25" or "from £18". Rendered verbatim. */
+  price?: string;
+  /**
+   * Optional appointment length in minutes, used to size booking slots and shown
+   * on the service. When omitted, the booking flow infers a sensible default
+   * from the service name.
+   */
+  durationMins?: number;
+}
+
+export interface BarberOpeningHours {
+  /** Day label, e.g. "Monday" or "Mon". */
+  day: string;
+  /** Hours for that day, e.g. "9:00 – 18:00" or "Closed". Rendered verbatim. */
+  open: string;
+}
+
+export interface BarberSiteContent {
+  /** Shop name — rendered as the wordmark and throughout. */
+  businessName: string;
+  /** Short hero subheading beneath the headline. */
+  tagline: string;
+  /** Large hero headline. */
+  heroHeadline: string;
+  /** 2–3 sentence "about" paragraph. */
+  about: string;
+  /** Services offered, with optional descriptions and prices. */
+  services: BarberService[];
+  /** Weekly opening hours, one row per day. */
+  hours: BarberOpeningHours[];
+  /** Contact phone number, e.g. "020 7946 0123". */
+  phone: string;
+  /** Postal address — also used to build the embedded map. */
+  address: string;
+  /** Optional Google rating, 0–5 (e.g. 4.8). Renders as stars when present. */
+  googleRating?: number;
+  /** Optional number of reviews backing the rating. */
+  reviewCount?: number;
+  /**
+   * Optional hero image URL. When omitted, a bundled stock barbershop image is
+   * used. May be any same-origin or absolute URL the host app provides.
+   */
+  heroImageUrl?: string;
+  /**
+   * Optional gallery image URLs. When omitted (or empty), a curated set of
+   * bundled stock barbershop images is used instead.
+   */
+  galleryImageUrls?: string[];
+}
