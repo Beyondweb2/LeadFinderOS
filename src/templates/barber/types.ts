@@ -78,6 +78,12 @@ export interface BarberSiteContent {
    */
   aboutImageUrl?: string;
   /**
+   * Optional logo image URL (admin-uploaded). When present, it replaces the
+   * text wordmark in the header/footer. When omitted, the text wordmark is used.
+   * Logos are never generated — upload only.
+   */
+  logoUrl?: string;
+  /**
    * Optional gallery image URLs. When omitted (or empty), a curated set of
    * bundled stock barbershop images is used instead.
    */

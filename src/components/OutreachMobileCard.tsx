@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, CalendarClock, Sparkles } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, CalendarClock, Sparkles, Settings2 } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { openFacebookSearch } from '@/lib/facebookSearch';
 import { ContactMethodBadge } from './ContactMethodBadge';
@@ -51,6 +51,7 @@ interface OutreachMobileCardProps {
   onAiOpener?: () => void;
   onGenerateSite?: () => void;
   isGeneratingSite?: boolean;
+  onManageSite?: () => void;
 }
 
 export const OutreachMobileCard = memo(function OutreachMobileCard({
@@ -78,6 +79,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   onAiOpener,
   onGenerateSite,
   isGeneratingSite = false,
+  onManageSite,
 }: OutreachMobileCardProps) {
   const isPhoneFetching = phoneFetchStatus === 'pending';
   const isPhoneFailed = phoneFetchStatus === 'failed';
@@ -314,6 +316,17 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     title="Generate AI opener"
                   >
                     <Sparkles className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {onManageSite && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-500/10"
+                    onClick={onManageSite}
+                    title="Manage site (admin)"
+                  >
+                    <Settings2 className="h-3.5 w-3.5" />
                   </Button>
                 )}
                 {onGenerateSite && (

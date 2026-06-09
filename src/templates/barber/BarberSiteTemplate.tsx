@@ -32,6 +32,7 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
     aboutImageUrl,
     galleryImageUrls,
     stats,
+    logoUrl,
   } = content;
 
   const heroSrc = heroImageUrl || STOCK_HERO;
@@ -73,6 +74,7 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
           telHref={telHref}
           phone={phone}
           onBook={openBooking}
+          logoUrl={logoUrl}
         />
 
         <main>
@@ -102,7 +104,7 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
           />
         </main>
 
-        <Footer businessName={businessName} address={address} />
+        <Footer businessName={businessName} address={address} logoUrl={logoUrl} />
       </div>
 
       {/* Mobile-only sticky Book bar — owners open the link on a phone. */}
@@ -320,7 +322,17 @@ function ChevronLeftIcon({ className = "" }: { className?: string }) {
 /* -------------------------------- wordmark -------------------------------- */
 
 /** Type-only wordmark (no logo) — display face + amber dot accent. */
-function Wordmark({ businessName, size = "md" }: { businessName: string; size?: "md" | "lg" }) {
+function Wordmark({ businessName, size = "md", logoUrl }: { businessName: string; size?: "md" | "lg"; logoUrl?: string }) {
+  // Uploaded logo takes precedence over the text wordmark when present.
+  if (logoUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt={businessName}
+        className={`w-auto object-contain ${size === "lg" ? "h-12" : "h-9"}`}
+      />
+    );
+  }
   return (
     <span className="inline-flex items-baseline gap-1">
       <span
@@ -342,17 +354,19 @@ function Header({
   telHref,
   phone,
   onBook,
+  logoUrl,
 }: {
   businessName: string;
   telHref: string;
   phone: string;
   onBook: () => void;
+  logoUrl?: string;
 }) {
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-ink/70 backdrop-blur-xl supports-[backdrop-filter]:bg-ink/55">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3.5 sm:px-8">
         <a href="#top" className="shrink-0" aria-label={`${businessName} — home`}>
-          <Wordmark businessName={businessName} />
+          <Wordmark businessName={businessName} logoUrl={logoUrl} />
         </a>
 
         <nav className="hidden items-center gap-8 text-sm font-medium text-zinc-400 md:flex">
@@ -815,11 +829,11 @@ function Contact({
 
 /* ---------------------------------- footer -------------------------------- */
 
-function Footer({ businessName, address }: { businessName: string; address: string }) {
+function Footer({ businessName, address, logoUrl }: { businessName: string; address: string; logoUrl?: string }) {
   return (
     <footer className="border-t border-white/[0.06] bg-ink">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-5 py-10 text-center sm:flex-row sm:justify-between sm:gap-6 sm:px-8 sm:text-left">
-        <Wordmark businessName={businessName} />
+        <Wordmark businessName={businessName} logoUrl={logoUrl} />
         <p className="text-sm text-zinc-500">{address}</p>
         <p className="text-xs text-zinc-600">
           © {businessName}. All rights reserved.

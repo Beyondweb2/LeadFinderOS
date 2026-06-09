@@ -50,6 +50,7 @@ import {
   Search,
   Activity,
   Image as ImageIcon,
+  Globe,
   MessageSquare,
   Building2,
   RefreshCw,
@@ -611,6 +612,10 @@ export default function AdminDashboard() {
             <Button variant="outline" size="sm" onClick={() => navigate('/admin/api-usage')}>
               <Activity className="h-4 w-4 mr-2" />
               API Usage
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/admin/sites')}>
+              <Globe className="h-4 w-4 mr-2" />
+              Sites
             </Button>
             <Button variant="outline" size="sm" onClick={() => navigate('/admin/site-images')}>
               <ImageIcon className="h-4 w-4 mr-2" />

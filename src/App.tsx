@@ -38,6 +38,8 @@ const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminFunnel = lazy(() => import("./pages/AdminFunnel"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const AdminSiteImages = lazy(() => import("./pages/AdminSiteImages"));
+const AdminSitesList = lazy(() => import("./pages/AdminSitesList"));
+const AdminSiteManage = lazy(() => import("./pages/AdminSiteManage"));
 const Landing = lazy(() => import("./pages/Landing"));
 const AdEntryRedirect = lazy(() => import("./components/AdEntryRedirect"));
 const Terms = lazy(() => import("./pages/Terms"));
@@ -357,6 +359,22 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <AdminSiteImages />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/sites"
+              element={
+                <ProtectedRoute>
+                  <AdminSitesList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/sites/:id"
+              element={
+                <ProtectedRoute>
+                  <AdminSiteManage />
                 </ProtectedRoute>
               }
             />

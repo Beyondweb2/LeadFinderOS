@@ -43,6 +43,7 @@ import {
   X,
   Facebook,
   Sparkles,
+  Settings2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -60,6 +61,7 @@ import { useCopiedPhones } from '@/hooks/useCopiedPhones';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
 import { ContactMethodBadge } from './ContactMethodBadge';
@@ -139,6 +141,29 @@ export function OutreachTable({
   const { isAdmin } = useSubscription();
   const [aiOpenerLead, setAiOpenerLead] = useState<OutreachLead | null>(null);
   const [generatingSiteId, setGeneratingSiteId] = useState<string | null>(null);
+  const [sitesByLead, setSitesByLead] = useState<Record<string, { id: string; slug: string }>>({});
+  const navigate = useNavigate();
+
+  // Admin-only: map lead_id -> existing generated site (most recent) so each row
+  // shows "Manage Site" instead of "Generate Site". Purely additive — only runs
+  // for admins; never affects normal users or leads without a site.
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('generated_sites')
+        .select('id, site_name, lead_id')
+        .order('created_at', { ascending: false });
+      if (cancelled || !data) return;
+      const map: Record<string, { id: string; slug: string }> = {};
+      for (const row of data as Array<{ id: string; site_name: string; lead_id: string | null }>) {
+        if (row.lead_id && !map[row.lead_id]) map[row.lead_id] = { id: row.id, slug: row.site_name };
+      }
+      setSitesByLead(map);
+    })();
+    return () => { cancelled = true; };
+  }, [isAdmin]);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
@@ -388,6 +413,10 @@ export function OutreachTable({
       if (error) throw error;
       if ((data as any)?.error) throw new Error((data as any).error);
       const slug = (data as any)?.site?.slug as string | undefined;
+      const newSiteId = (data as any)?.site?.id as string | undefined;
+      if (newSiteId && slug) {
+        setSitesByLead((prev) => ({ ...prev, [lead.id]: { id: newSiteId, slug } }));
+      }
       toast({
         title: `Site generated for ${lead.business_name}`,
         description: (
@@ -1090,8 +1119,9 @@ export function OutreachTable({
                   phoneFetchStatus={phoneFetchStatus[lead.id]}
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
                   isWalkthroughContacted={walkthroughContactedIds.has(lead.id)}
-                  onGenerateSite={isAdmin ? () => handleGenerateSite(lead) : undefined}
+                  onGenerateSite={isAdmin && !sitesByLead[lead.id] ? () => handleGenerateSite(lead) : undefined}
                   isGeneratingSite={generatingSiteId === lead.id}
+                  onManageSite={isAdmin && sitesByLead[lead.id] ? () => navigate(`/admin/sites/${sitesByLead[lead.id].id}`) : undefined}
                   
                 />
               ))
@@ -1367,22 +1397,36 @@ export function OutreachTable({
                             </Button>
                           ) : null}
                           {isAdmin && (
-                            <button
-                              className="p-1.5 rounded-md text-violet-400 hover:bg-violet-500/10 hover:text-violet-300 transition-colors disabled:opacity-50"
-                              title="Generate barber site (admin)"
-                              disabled={generatingSiteId === lead.id}
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                handleGenerateSite(lead);
-                              }}
-                            >
-                              {generatingSiteId === lead.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Sparkles className="h-4 w-4" />
-                              )}
-                            </button>
+                            sitesByLead[lead.id] ? (
+                              <button
+                                className="p-1.5 rounded-md text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors"
+                                title="Manage site (admin)"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  navigate(`/admin/sites/${sitesByLead[lead.id].id}`);
+                                }}
+                              >
+                                <Settings2 className="h-4 w-4" />
+                              </button>
+                            ) : (
+                              <button
+                                className="p-1.5 rounded-md text-violet-400 hover:bg-violet-500/10 hover:text-violet-300 transition-colors disabled:opacity-50"
+                                title="Generate barber site (admin)"
+                                disabled={generatingSiteId === lead.id}
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleGenerateSite(lead);
+                                }}
+                              >
+                                {generatingSiteId === lead.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Sparkles className="h-4 w-4" />
+                                )}
+                              </button>
+                            )
                           )}
                         </div>
                       </TableCell>
