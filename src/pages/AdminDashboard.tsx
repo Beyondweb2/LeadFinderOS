@@ -49,6 +49,7 @@ import {
   Users,
   Search,
   Activity,
+  Image as ImageIcon,
   MessageSquare,
   Building2,
   RefreshCw,
@@ -610,6 +611,10 @@ export default function AdminDashboard() {
             <Button variant="outline" size="sm" onClick={() => navigate('/admin/api-usage')}>
               <Activity className="h-4 w-4 mr-2" />
               API Usage
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate('/admin/site-images')}>
+              <ImageIcon className="h-4 w-4 mr-2" />
+              Site Images
             </Button>
             <Button variant="outline" size="sm" onClick={() => { deletedIdsRef.current.clear(); fetchUsers(); }} disabled={isLoading}>
               <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
