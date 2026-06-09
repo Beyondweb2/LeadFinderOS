@@ -28,9 +28,21 @@ export interface BarberOpeningHours {
   open: string;
 }
 
+export interface BarberStat {
+  /** The figure, rendered verbatim, e.g. "2009". Must be a real value. */
+  value: string;
+  /** Caption beneath it, e.g. "Trading since". */
+  label: string;
+}
+
 export interface BarberSiteContent {
   /** Shop name — rendered as the wordmark and throughout. */
   businessName: string;
+  /**
+   * Optional real business category (e.g. "Barber shop"), shown in the hero
+   * eyebrow. Omitted → eyebrow shows only the business name. Never a placeholder.
+   */
+  category?: string;
   /** Short hero subheading beneath the headline. */
   tagline: string;
   /** Large hero headline. */
@@ -49,6 +61,12 @@ export interface BarberSiteContent {
   googleRating?: number;
   /** Optional number of reviews backing the rating. */
   reviewCount?: number;
+  /**
+   * Optional about-section stat tiles (e.g. trading-since year). Each tile
+   * renders ONLY from a real value here — there are no hardcoded defaults, so a
+   * shop with no real stats shows no tiles (never a fabricated placeholder).
+   */
+  stats?: BarberStat[];
   /**
    * Optional hero image URL. When omitted, a bundled stock barbershop image is
    * used. May be any same-origin or absolute URL the host app provides.

@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import "./fonts.css";
 import { STOCK_GALLERY, STOCK_HERO, STOCK_INTERIOR } from "./assets";
-import type { BarberOpeningHours, BarberService, BarberSiteContent } from "./types";
+import type { BarberOpeningHours, BarberService, BarberSiteContent, BarberStat } from "./types";
 
 /* -------------------------------------------------------------------------- */
 /*  BarberSiteTemplate                                                         */
@@ -18,6 +18,7 @@ import type { BarberOpeningHours, BarberService, BarberSiteContent } from "./typ
 export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) {
   const {
     businessName,
+    category,
     tagline,
     heroHeadline,
     about,
@@ -29,6 +30,7 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
     reviewCount,
     heroImageUrl,
     galleryImageUrls,
+    stats,
   } = content;
 
   const heroSrc = heroImageUrl || STOCK_HERO;
@@ -75,6 +77,7 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
         <main>
           <Hero
             businessName={businessName}
+            category={category}
             heroHeadline={heroHeadline}
             tagline={tagline}
             heroSrc={heroSrc}
@@ -82,7 +85,7 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
             reviewCount={reviewCount}
             onBook={openBooking}
           />
-          <About about={about} businessName={businessName} />
+          <About about={about} businessName={businessName} stats={stats} />
           <Services services={services} />
           <Gallery images={gallery} businessName={businessName} />
           <Hours hours={hours} />
@@ -395,6 +398,7 @@ function Header({
 
 function Hero({
   businessName,
+  category,
   heroHeadline,
   tagline,
   heroSrc,
@@ -403,6 +407,7 @@ function Hero({
   onBook,
 }: {
   businessName: string;
+  category?: string;
   heroHeadline: string;
   tagline: string;
   heroSrc: string;
@@ -437,7 +442,7 @@ function Hero({
         <div className="max-w-2xl">
           <Reveal>
             <Eyebrow>
-              {businessName} · Est. Barbers
+              {category ? `${businessName} · ${category}` : businessName}
             </Eyebrow>
           </Reveal>
 
@@ -493,7 +498,7 @@ function Hero({
 
 /* ---------------------------------- about --------------------------------- */
 
-function About({ about, businessName }: { about: string; businessName: string }) {
+function About({ about, businessName, stats }: { about: string; businessName: string; stats?: BarberStat[] }) {
   return (
     <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
@@ -506,11 +511,13 @@ function About({ about, businessName }: { about: string; businessName: string })
           </h2>
           <p className="mt-6 text-lg leading-relaxed text-zinc-400">{about}</p>
 
-          <div className="mt-8 flex flex-wrap gap-8">
-            <Stat value="2009" label="Trading since" />
-            <Stat value="10k+" label="Cuts a year" />
-            <Stat value="Walk-ins" label="Always welcome" />
-          </div>
+          {stats && stats.length > 0 && (
+            <div className="mt-8 flex flex-wrap gap-8">
+              {stats.map((s, i) => (
+                <Stat key={`${s.label}-${i}`} value={s.value} label={s.label} />
+              ))}
+            </div>
+          )}
         </Reveal>
 
         <Reveal delay={0.1} className="order-1 md:order-2">

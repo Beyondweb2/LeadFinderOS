@@ -11,7 +11,7 @@ export const demoContent: BarberSiteContent = {
     "An independent barbershop in the heart of Shoreditch. Traditional craft, modern finish — no fuss, just a proper cut.",
   heroHeadline: "Look sharp. Feel sharper.",
   about:
-    "Sharps & Co. has been keeping East London looking its best since 2009. Our master barbers blend old-school skill with a relaxed, welcoming chair — whether you're after a skin fade, a beard sculpt, or a classic short back and sides. Great coffee, good chat, and a cut you'll actually want to show off.",
+    "A neighbourhood barbershop focused on sharp cuts, skin fades, and beard work, with a relaxed chair and an easy booking experience. Whether you're after a quick trim or the full treatment, it's no fuss — just a proper cut and a finish you'll want to show off.",
   services: [
     {
       name: "Signature Cut",
