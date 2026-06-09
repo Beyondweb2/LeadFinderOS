@@ -102,6 +102,7 @@ export default function AdminSiteImages() {
             {selected && (
               <>
                 <SiteImageManager
+                  key={selected.id}
                   siteId={selected.id}
                   content={selected.content}
                   onSaved={(c) =>

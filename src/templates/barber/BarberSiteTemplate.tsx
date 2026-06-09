@@ -626,8 +626,10 @@ function Services({ services }: { services: BarberSiteContent["services"] }) {
 /* --------------------------------- gallery -------------------------------- */
 
 function Gallery({ images, businessName }: { images: string[]; businessName: string }) {
-  // Use up to 4 images in an asymmetric editorial grid.
-  const imgs = images.slice(0, 4);
+  // Render 1–10 images in a responsive grid that adapts to the count.
+  const imgs = images.slice(0, 10);
+  if (imgs.length === 0) return null;
+  const single = imgs.length === 1;
   return (
     <section id="gallery" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <Reveal className="mb-12">
@@ -637,24 +639,20 @@ function Gallery({ images, businessName }: { images: string[]; businessName: str
         </h2>
       </Reveal>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4 md:grid-rows-2">
+      <div
+        className={
+          single
+            ? "mx-auto max-w-3xl"
+            : "grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4"
+        }
+      >
         {imgs.map((src, i) => (
-          <Reveal
-            as="figure"
-            key={`${src}-${i}`}
-            delay={Math.min(i * 0.07, 0.3)}
-            className={
-              // First tile spans large on desktop for a hero-of-the-grid feel.
-              i === 0
-                ? "col-span-2 row-span-2 md:col-span-2 md:row-span-2"
-                : "col-span-1"
-            }
-          >
+          <Reveal as="figure" key={`${src}-${i}`} delay={Math.min(i * 0.05, 0.3)}>
             <SmartImg
               src={src}
               alt={`${businessName} — gallery ${i + 1}`}
-              className={`group h-full w-full rounded-2xl border border-white/[0.06] ${
-                i === 0 ? "aspect-square md:aspect-auto" : "aspect-square"
+              className={`group w-full rounded-2xl border border-white/[0.06] ${
+                single ? "aspect-[16/10]" : "aspect-square"
               }`}
               imgClassName="transition-transform duration-700 group-hover:scale-105"
             />

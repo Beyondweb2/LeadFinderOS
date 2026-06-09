@@ -278,6 +278,7 @@ export default function AdminSiteManage() {
         </CardHeader>
         <CardContent>
           <SiteImageManager
+            key={site.id}
             siteId={site.id}
             content={site.content}
             onSaved={(c) => setSite({ ...site, content: c })}
