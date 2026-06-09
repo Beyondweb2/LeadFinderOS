@@ -57,3 +57,6 @@ verify_jwt = false
 
 [functions.admin-ai-opener]
 verify_jwt = false
+
+[functions.generate-barber-site]
+verify_jwt = false

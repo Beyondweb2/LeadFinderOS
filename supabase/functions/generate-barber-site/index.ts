@@ -1,0 +1,540 @@
+// generate-barber-site
+//
+// Admin-only edge function. Given a lead_id, it reads that lead's REAL data from
+// outreach_leads, asks OpenAI to write barbershop site copy under strict honesty
+// rules (never invent facts), and saves the result to generated_sites.content.
+//
+// Auth: mirrors the admin-users pattern exactly — verify JWT manually (getClaims
+// with getUser fallback), then confirm the caller has the 'admin' role via the
+// user_roles table using the service-role client. verify_jwt is false in
+// config.toml because we verify inside the function.
+//
+// Honesty enforcement: the model is instructed to invent nothing, AND the server
+// re-applies the verifiable facts after parsing (defense in depth). Anything we
+// don't actually have in the lead is omitted, never fabricated.
+
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { checkRateLimit, rateLimitHeaders } from "../_shared/rate-limiter.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function jsonResponse(
+  body: unknown,
+  status: number,
+  headers: Record<string, string>,
+  extra?: Record<string, string>,
+) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...headers, "Content-Type": "application/json", ...(extra || {}) },
+  });
+}
+
+// ---- Cost/usage logging -----------------------------------------------------
+// Mirrors google-place-details: best-effort insert into api_usage_log, never
+// blocks the response. Same table + columns; api_type is parameterised so this
+// one function can log both its Google Places call and its OpenAI call.
+const GOOGLE_PLACE_DETAILS_COST_USD = 0.017; // matches google-place-details' per-miss estimate
+// gpt-4o-mini list price (USD per 1M tokens). Used to estimate per-generation AI cost.
+const OPENAI_INPUT_USD_PER_M = 0.15;
+const OPENAI_OUTPUT_USD_PER_M = 0.6;
+
+async function logUsage(
+  supabase: ReturnType<typeof createClient>,
+  userId: string | null,
+  apiType: string,
+  costUsd: number,
+) {
+  try {
+    await supabase.from("api_usage_log").insert({
+      user_id: userId,
+      function_name: "generate-barber-site",
+      api_type: apiType,
+      calls_made: 1,
+      cache_hit: false,
+      estimated_cost_usd: costUsd,
+      trigger_source: "site_generation",
+    });
+  } catch (e) {
+    console.error("[GENERATE-BARBER-SITE] Usage logging failed (non-blocking):", e);
+  }
+}
+
+// ---- Content contract (mirrors src/templates/barber/types.ts) ----------------
+interface BarberService {
+  name: string;
+  description?: string;
+  price?: string;
+  durationMins?: number;
+}
+interface BarberOpeningHours {
+  day: string;
+  open: string;
+}
+interface BarberSiteContent {
+  businessName: string;
+  tagline: string;
+  heroHeadline: string;
+  about: string;
+  services: BarberService[];
+  hours: BarberOpeningHours[];
+  phone: string;
+  address: string;
+  googleRating?: number;
+  reviewCount?: number;
+  heroImageUrl?: string;
+  galleryImageUrls?: string[];
+}
+
+// Default service set used ONLY when the lead has no stored services. Generic
+// names + generic descriptions — no prices, no shop-specific claims.
+const DEFAULT_SERVICES: BarberService[] = [
+  { name: "Signature Cut", description: "A tailored cut and finish to suit you." },
+  { name: "Skin Fade", description: "A clean, gradual fade from skin upwards." },
+  { name: "Cut & Beard", description: "A full cut paired with a beard tidy-up." },
+  { name: "Beard Trim & Shape", description: "Shaping and tidying to keep the beard sharp." },
+  { name: "Hot-Towel Wet Shave", description: "A traditional close shave with a hot towel." },
+  { name: "Under 12s", description: "A relaxed cut for younger clients." },
+];
+
+// ---- Google enrichment ------------------------------------------------------
+// Reuses the SAME Google integration as the google-place-details function:
+// Google Places API (New) at places.googleapis.com, authenticated with the
+// existing GOOGLE_MAPS_API_KEY secret via the X-Goog-FieldMask header. No new key
+// and no new Google service — only an expanded field mask so we also receive
+// opening hours, rating and review count (google-place-details requests a slim
+// phone/website mask for cost reasons and returns none of these).
+//
+// Best-effort only: any failure / empty result returns null and the caller
+// proceeds with whatever it already has. Returns only real fetched values.
+interface GoogleEnrichment {
+  rating?: number;
+  reviewCount?: number;
+  hours?: BarberOpeningHours[];
+  phone?: string;
+  address?: string;
+}
+
+async function fetchGoogleEnrichment(placeId: string): Promise<GoogleEnrichment | null> {
+  const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY");
+  if (!apiKey || !placeId) return null;
+
+  const fieldMask = [
+    "rating",
+    "userRatingCount",
+    "regularOpeningHours.weekdayDescriptions",
+    "internationalPhoneNumber",
+    "nationalPhoneNumber",
+    "formattedAddress",
+  ].join(",");
+
+  try {
+    const res = await fetch(`https://places.googleapis.com/v1/places/${placeId}`, {
+      headers: { "X-Goog-Api-Key": apiKey, "X-Goog-FieldMask": fieldMask },
+    });
+    if (!res.ok) {
+      console.error("[GENERATE-BARBER-SITE] Google enrichment non-OK:", res.status);
+      return null;
+    }
+    const g = await res.json();
+
+    const out: GoogleEnrichment = {};
+    if (typeof g.rating === "number" && g.rating > 0 && g.rating <= 5) out.rating = g.rating;
+    if (typeof g.userRatingCount === "number" && g.userRatingCount >= 0) out.reviewCount = g.userRatingCount;
+
+    const desc: unknown = g.regularOpeningHours?.weekdayDescriptions;
+    if (Array.isArray(desc) && desc.length) {
+      // Google returns localized strings like "Monday: 9:00 AM – 6:00 PM".
+      const hours = desc
+        .filter((l: unknown): l is string => typeof l === "string" && l.trim().length > 0)
+        .map((line: string) => {
+          const idx = line.indexOf(": ");
+          return idx === -1
+            ? { day: line.trim(), open: "" }
+            : { day: line.slice(0, idx).trim(), open: line.slice(idx + 2).trim() };
+        })
+        .filter((h) => h.day);
+      if (hours.length) out.hours = hours;
+    }
+
+    const phone = g.internationalPhoneNumber || g.nationalPhoneNumber;
+    if (typeof phone === "string" && phone.trim()) out.phone = phone.trim();
+    if (typeof g.formattedAddress === "string" && g.formattedAddress.trim()) out.address = g.formattedAddress.trim();
+
+    return out;
+  } catch (e) {
+    console.error("[GENERATE-BARBER-SITE] Google enrichment failed (non-blocking):", (e as Error).message);
+    return null;
+  }
+}
+
+function slugify(name: string): string {
+  const base = name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40) || "barber-site";
+  // Unguessable suffix: 8 hex chars from a CSPRNG.
+  const rand = Array.from(crypto.getRandomValues(new Uint8Array(4)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `${base}-${rand}`;
+}
+
+serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    // --- Step 1: Authorization header ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.error("[GENERATE-BARBER-SITE] Missing Authorization header");
+      return jsonResponse({ error: "Missing Authorization header" }, 401, corsHeaders);
+    }
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+
+    // --- Step 2: User client (ANON key + caller's auth header) ---
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+      global: { headers: { Authorization: authHeader } },
+    });
+
+    // --- Step 3: Verify token (getClaims, getUser fallback) ---
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+
+    let adminUserId: string;
+    if (claimsError || !claimsData?.claims) {
+      const { data: userData, error: userError } = await userClient.auth.getUser();
+      if (userError || !userData?.user) {
+        console.error("[GENERATE-BARBER-SITE] Token verification failed:", userError?.message || claimsError?.message);
+        return jsonResponse(
+          { error: "Invalid token", details: userError?.message || claimsError?.message },
+          401,
+          corsHeaders,
+        );
+      }
+      adminUserId = userData.user.id;
+      console.log("[GENERATE-BARBER-SITE] Auth via getUser fallback, userId:", adminUserId);
+    } else {
+      adminUserId = claimsData.claims.sub as string;
+      console.log("[GENERATE-BARBER-SITE] Auth via getClaims, userId:", adminUserId);
+    }
+
+    // --- Rate limit (10 req/min per admin) ---
+    const rl = checkRateLimit(`generate-barber-site:${adminUserId}`, 10, 60000);
+    const rlHeaders = rateLimitHeaders(rl, 10);
+    if (!rl.allowed) {
+      return jsonResponse({ error: "Rate limit exceeded" }, 429, corsHeaders, rlHeaders);
+    }
+
+    // --- Step 4: Service-role client (only after token verified) ---
+    const serviceClient = createClient(
+      supabaseUrl,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } },
+    );
+
+    // --- Step 5: Verify admin role (user_roles, mirrors admin-users) ---
+    const { data: roleData } = await serviceClient
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", adminUserId)
+      .eq("role", "admin")
+      .maybeSingle();
+
+    if (!roleData) {
+      console.error("[GENERATE-BARBER-SITE] Admin role check FAILED for", adminUserId);
+      return jsonResponse({ error: "Not authorized - no admin role" }, 403, corsHeaders, rlHeaders);
+    }
+
+    // --- Step 6: Parse body ---
+    const body = await req.json().catch(() => ({}));
+    const leadId = typeof body.lead_id === "string" ? body.lead_id.trim() : "";
+    if (!leadId) {
+      return jsonResponse({ error: "lead_id required" }, 400, corsHeaders, rlHeaders);
+    }
+
+    // --- Step 7: OpenAI key (from secret; never hardcoded) ---
+    const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
+    if (!openAiKey) {
+      console.error("[GENERATE-BARBER-SITE] OPENAI_API_KEY secret is not set");
+      return jsonResponse({ error: "Server misconfigured: OPENAI_API_KEY not set" }, 500, corsHeaders, rlHeaders);
+    }
+
+    // --- Step 8: Read the lead's REAL data ---
+    const { data: lead, error: leadError } = await serviceClient
+      .from("outreach_leads")
+      .select(
+        "id, business_name, category, address, phone, place_id, services_included, facebook_url, facebook_confidence, image_url",
+      )
+      .eq("id", leadId)
+      .maybeSingle();
+
+    if (leadError) {
+      console.error("[GENERATE-BARBER-SITE] Lead lookup error:", leadError.message);
+      return jsonResponse({ error: "Failed to read lead" }, 500, corsHeaders, rlHeaders);
+    }
+    if (!lead) {
+      return jsonResponse({ error: "Lead not found" }, 404, corsHeaders, rlHeaders);
+    }
+
+    // --- Step 9a: Fresh Google Places enrichment (best-effort, non-blocking) ---
+    // outreach_leads has no rating / review-count / opening-hours columns, so we
+    // fetch those live from Google. If this fails or is empty we carry on with
+    // whatever we already have — generation is never blocked on Google.
+    const google = lead.place_id ? await fetchGoogleEnrichment(lead.place_id as string) : null;
+    console.log(
+      "[GENERATE-BARBER-SITE] Google enrichment:",
+      google
+        ? `rating=${google.rating ?? "-"} reviews=${google.reviewCount ?? "-"} hoursRows=${google.hours?.length ?? 0}`
+        : "none",
+    );
+    // A non-null result means a billable Places (New) call returned 200. Log it
+    // (best-effort) exactly like google-place-details does.
+    if (google) {
+      logUsage(serviceClient, adminUserId, "place_details", GOOGLE_PLACE_DETAILS_COST_USD);
+    }
+
+    // --- Step 9b: Build a facts object containing ONLY present values ---
+    // (real lead values, then live Google values; nulls = unknown to the model).
+    const realServices: string[] = Array.isArray(lead.services_included)
+      ? lead.services_included.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim())
+      : [];
+    const facebookHigh =
+      typeof lead.facebook_confidence === "number" && lead.facebook_confidence >= 80 && !!lead.facebook_url;
+
+    // Hard facts, resolved once: lead value preferred, Google fills gaps.
+    const phone = lead.phone || google?.phone || "";
+    const address = lead.address || google?.address || "";
+    const googleRating = typeof google?.rating === "number" ? google.rating : undefined;
+    const reviewCount = typeof google?.reviewCount === "number" ? google.reviewCount : undefined;
+    const hours: BarberOpeningHours[] = Array.isArray(google?.hours) ? google!.hours : [];
+
+    const facts: Record<string, unknown> = {
+      business_name: lead.business_name || null,
+      category: lead.category || null,
+      address: address || null,
+      phone: phone || null,
+      services: realServices.length ? realServices : null,
+      google_rating: googleRating ?? null,
+      review_count: reviewCount ?? null,
+      opening_hours: hours.length ? hours : null,
+      image_url: lead.image_url || null,
+    };
+
+    // --- Step 10: Prompt OpenAI under the honesty rules ---
+    const systemPrompt = [
+      "You write website copy for a barbershop using ONLY the structured data provided.",
+      "ABSOLUTE RULE: invent no fact that is not in the data. Never invent history, founding",
+      "dates, founder stories, credentials, awards, staff counts, chair counts, years in",
+      "business, or any numeric statistic. If a fact is not provided, do not mention it —",
+      "leave the field empty or write a shorter section. Inventing a plausible fact is a failure.",
+      "Tone for heroHeadline and tagline may be creative, but they must assert no specific fact.",
+      "The 'about' paragraph (2-3 sentences max) may draw ONLY on the provided location, category,",
+      "services, and (when provided) the Google rating and review count; it must contain no history,",
+      "no 'family-run', no 'for generations', no awards, no staff/chair counts, no years in business.",
+      "Less data means a shorter about — never pad with invention.",
+      "Service descriptions must be generic; never claim specific products or techniques the shop",
+      "has not stated, and never invent prices.",
+      "Return ONLY valid JSON matching the schema. No commentary, no markdown.",
+    ].join(" ");
+
+    // The model only writes copy. Hard facts (businessName, phone, address, hours,
+    // googleRating, reviewCount, service names, image) are applied server-side after
+    // parsing, so they cannot be altered or invented by the model.
+    const schemaHint = {
+      tagline: "string (creative, no factual claim)",
+      heroHeadline: "string (creative, no factual claim)",
+      about: "string, 2-3 sentences, only from location/category/services/rating/reviews",
+      services: "array of { name: string, description?: string } — generic descriptions, never prices",
+    };
+
+    const userPrompt = [
+      "REAL DATA (fields that are null are unknown and must NOT be referenced):",
+      JSON.stringify(facts, null, 2),
+      "",
+      "Write a JSON object with exactly these fields:",
+      JSON.stringify(schemaHint, null, 2),
+      "",
+      realServices.length
+        ? "Use the provided service names verbatim; add a short generic description for each."
+        : "No services were provided — use this default barber list with short generic descriptions: " +
+          DEFAULT_SERVICES.map((s) => s.name).join(", ") + ".",
+      "Do not invent prices, hours, ratings, counts, years, or history. Output JSON only.",
+    ].join("\n");
+
+    let openAiRes: Response;
+    try {
+      openAiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${openAiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          temperature: 0.7,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      });
+    } catch (e) {
+      console.error("[GENERATE-BARBER-SITE] OpenAI request failed:", (e as Error).message);
+      return jsonResponse({ error: "AI request failed" }, 502, corsHeaders, rlHeaders);
+    }
+
+    if (!openAiRes.ok) {
+      const detail = await openAiRes.text().catch(() => "");
+      console.error("[GENERATE-BARBER-SITE] OpenAI non-OK:", openAiRes.status, detail.slice(0, 300));
+      return jsonResponse({ error: "AI request failed", status: openAiRes.status }, 502, corsHeaders, rlHeaders);
+    }
+
+    // --- Step 11: Read completion, log AI cost, then parse safely. ---
+    // The OpenAI call is billed whether or not its content parses, so log usage
+    // first (best-effort), then enforce "on parse failure, write nothing".
+    let completion: any;
+    try {
+      completion = await openAiRes.json();
+    } catch (e) {
+      console.error("[GENERATE-BARBER-SITE] AI response not JSON (nothing written):", (e as Error).message);
+      return jsonResponse({ error: "AI returned unreadable response; nothing was saved" }, 502, corsHeaders, rlHeaders);
+    }
+
+    // Estimate cost from the tokens OpenAI reports, log via the same pattern.
+    const inTok = Number(completion?.usage?.prompt_tokens) || 0;
+    const outTok = Number(completion?.usage?.completion_tokens) || 0;
+    const openAiCostUsd =
+      (inTok / 1_000_000) * OPENAI_INPUT_USD_PER_M + (outTok / 1_000_000) * OPENAI_OUTPUT_USD_PER_M;
+    console.log(
+      `[GENERATE-BARBER-SITE] OpenAI tokens in=${inTok} out=${outTok} est_cost_usd=${openAiCostUsd.toFixed(6)}`,
+    );
+    logUsage(serviceClient, adminUserId, "openai_chat", openAiCostUsd);
+
+    let modelContent: Partial<BarberSiteContent>;
+    try {
+      const raw = completion?.choices?.[0]?.message?.content;
+      if (typeof raw !== "string" || !raw.trim()) throw new Error("empty completion");
+      modelContent = JSON.parse(raw);
+      if (typeof modelContent !== "object" || modelContent === null) throw new Error("not an object");
+    } catch (e) {
+      console.error("[GENERATE-BARBER-SITE] AI parse failure (nothing written):", (e as Error).message);
+      return jsonResponse({ error: "AI returned unparseable content; nothing was saved" }, 502, corsHeaders, rlHeaders);
+    }
+
+    // --- Step 12: Server-side honesty enforcement (overrides the model) ---
+    // Hard facts come from the lead, never the model. Unknown facts are dropped.
+    const services: BarberService[] = (() => {
+      if (realServices.length) {
+        // Real service names verbatim; keep only a generic description the model wrote.
+        const descByName = new Map<string, string>();
+        if (Array.isArray(modelContent.services)) {
+          for (const s of modelContent.services) {
+            if (s && typeof s.name === "string" && typeof s.description === "string") {
+              descByName.set(s.name.trim().toLowerCase(), s.description);
+            }
+          }
+        }
+        return realServices.map((name) => {
+          const desc = descByName.get(name.toLowerCase());
+          return desc ? { name, description: desc } : { name };
+        });
+      }
+      // Default list — allow generic descriptions, never prices.
+      if (Array.isArray(modelContent.services) && modelContent.services.length) {
+        return modelContent.services
+          .filter((s) => s && typeof s.name === "string" && s.name.trim())
+          .map((s) => ({
+            name: s.name.trim(),
+            ...(typeof s.description === "string" && s.description.trim() ? { description: s.description.trim() } : {}),
+          }));
+      }
+      return DEFAULT_SERVICES;
+    })();
+
+    const content: BarberSiteContent = {
+      businessName: lead.business_name || "", // real, verbatim
+      tagline: typeof modelContent.tagline === "string" ? modelContent.tagline : "",
+      heroHeadline: typeof modelContent.heroHeadline === "string" ? modelContent.heroHeadline : "",
+      about: typeof modelContent.about === "string" ? modelContent.about : "",
+      services,
+      hours, // real Google hours if fetched, else [] (section omitted)
+      phone, // real lead/Google value or "" (omitted)
+      address, // real lead/Google value or "" (omitted)
+      // Rating/reviews: set ONLY when really fetched from Google; never fabricated.
+      ...(googleRating !== undefined ? { googleRating } : {}),
+      ...(reviewCount !== undefined ? { reviewCount } : {}),
+      ...(lead.image_url ? { heroImageUrl: lead.image_url as string } : {}),
+      // galleryImageUrls: omitted — no real gallery; template falls back to stock.
+    };
+    // facebookHigh is computed for completeness, but BarberSiteContent has no social
+    // field, so a social link is not part of generated content (see notes to user).
+    void facebookHigh;
+
+    // --- Step 13: Generate an unguessable slug and save ---
+    const slug = slugify(content.businessName || "barber-site");
+
+    const { data: saved, error: insertError } = await serviceClient
+      .from("generated_sites")
+      .insert({
+        lead_id: leadId,
+        site_name: slug, // see notes: generated_sites has no dedicated slug column
+        content,
+        status: "draft",
+      })
+      .select("id, lead_id, site_name, status, created_at")
+      .single();
+
+    if (insertError || !saved) {
+      console.error("[GENERATE-BARBER-SITE] Insert failed:", insertError?.message);
+      return jsonResponse({ error: "Failed to save generated site" }, 500, corsHeaders, rlHeaders);
+    }
+
+    console.log(JSON.stringify({
+      level: "info",
+      fn: "generate-barber-site",
+      admin_user_id: adminUserId,
+      lead_id: leadId,
+      site_id: saved.id,
+      slug,
+      timestamp: new Date().toISOString(),
+    }));
+
+    // Surface the same costs we logged so they're visible immediately on the call.
+    const googleCostUsd = google ? GOOGLE_PLACE_DETAILS_COST_USD : 0;
+    const cost = {
+      google_usd: Number(googleCostUsd.toFixed(6)),
+      openai_usd: Number(openAiCostUsd.toFixed(6)),
+      total_usd: Number((googleCostUsd + openAiCostUsd).toFixed(6)),
+    };
+
+    return jsonResponse(
+      {
+        success: true,
+        site: { id: saved.id, lead_id: saved.lead_id, slug, status: saved.status },
+        preview_path: `/p/${slug}`,
+        cost,
+        content,
+      },
+      200,
+      corsHeaders,
+      rlHeaders,
+    );
+  } catch (error) {
+    console.error("[GENERATE-BARBER-SITE] Unhandled error:", (error as Error).message);
+    return jsonResponse({ error: "Internal server error" }, 500, corsHeaders);
+  }
+});
