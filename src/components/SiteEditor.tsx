@@ -9,7 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, X } from "lucide-react";
 import { SiteImageManager, type SiteImageManagerHandle } from "@/components/SiteImageManager";
-import type { BarberSiteContent, BarberService } from "@/templates/barber/types";
+import type { BarberSiteContent, BarberService, BarberOpeningHours } from "@/templates/barber/types";
 import type { Json } from "@/integrations/supabase/types";
 
 export type EditableSite = {
@@ -18,6 +18,19 @@ export type EditableSite = {
   status: string;
   content: BarberSiteContent;
 };
+
+// Preset accent colours (no free entry) — hexes chosen to read well on the dark
+// template. "Amber" is the default (stored as unset). Soft/deep shades are
+// derived by the template.
+const AMBER_HEX = "#E6A24B";
+const ACCENT_PRESETS: { name: string; hex: string }[] = [
+  { name: "Amber", hex: "#E6A24B" },
+  { name: "Barber red", hex: "#CE4B45" },
+  { name: "Steel blue", hex: "#5B8FC9" },
+  { name: "Forest green", hex: "#46A06A" },
+  { name: "Burgundy", hex: "#A8455F" },
+  { name: "Slate", hex: "#8C97AB" },
+];
 
 /**
  * Reusable barber-site editor: text + services/prices + images/logo, with one
@@ -51,6 +64,10 @@ export function SiteEditor({
   const [services, setServices] = useState<BarberService[]>([]);
   const [showExamplePrices, setShowExamplePrices] = useState(false);
   const [googleReviewsUrl, setGoogleReviewsUrl] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [hours, setHours] = useState<BarberOpeningHours[]>([]);
+  const [accentColor, setAccentColor] = useState<string | undefined>(undefined);
 
   const [textDirty, setTextDirty] = useState(false);
   const [imageDirty, setImageDirty] = useState(false);
@@ -67,6 +84,10 @@ export function SiteEditor({
     setServices((c.services ?? []).map((s) => ({ ...s })));
     setShowExamplePrices(!!c.showExamplePrices);
     setGoogleReviewsUrl(c.googleReviewsUrl ?? "");
+    setPhone(c.phone ?? "");
+    setAddress(c.address ?? "");
+    setHours((c.hours ?? []).map((h) => ({ ...h })));
+    setAccentColor(c.accentColor || undefined);
     setTextDirty(false);
     setImageDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,6 +117,19 @@ export function SiteEditor({
     setTextDirty(true);
   };
 
+  const updateHour = (i: number, field: keyof BarberOpeningHours, value: string) => {
+    setHours((prev) => prev.map((h, idx) => (idx === i ? { ...h, [field]: value } : h)));
+    setTextDirty(true);
+  };
+  const addHour = () => {
+    setHours((prev) => [...prev, { day: "", open: "" }]);
+    setTextDirty(true);
+  };
+  const removeHour = (i: number) => {
+    setHours((prev) => prev.filter((_, idx) => idx !== i));
+    setTextDirty(true);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -109,9 +143,14 @@ export function SiteEditor({
           return out;
         });
 
+      // Opening-hours rows: keep any with a day label, trimmed.
+      const cleanedHours: BarberOpeningHours[] = hours
+        .filter((h) => (h.day ?? "").trim())
+        .map((h) => ({ day: h.day.trim(), open: (h.open ?? "").trim() }));
+
       // Spread the EXISTING content; overwrite ONLY the edited keys, so unedited
-      // fields (businessName, category, hours, phone, address, stats, rating, …)
-      // are preserved and never dropped.
+      // fields (businessName, category, stats, rating, …) are preserved and never
+      // dropped.
       const base: BarberSiteContent = {
         ...site.content,
         heroHeadline: heroHeadline.trim(),
@@ -120,6 +159,10 @@ export function SiteEditor({
         services: cleanedServices,
         showExamplePrices,
         googleReviewsUrl: googleReviewsUrl.trim() || undefined,
+        phone: phone.trim(),
+        address: address.trim(),
+        hours: cleanedHours,
+        accentColor: accentColor || undefined,
       };
 
       // Upload any pending images and merge them in — one combined content write.
@@ -132,6 +175,7 @@ export function SiteEditor({
       if (error) throw error;
 
       setServices(cleanedServices.map((s) => ({ ...s })));
+      setHours(cleanedHours.map((h) => ({ ...h })));
       setTextDirty(false);
       setImageDirty(false);
       onSaved?.(finalContent);
@@ -218,6 +262,83 @@ export function SiteEditor({
               </p>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Contact & opening hours */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Contact &amp; opening hours</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Phone</Label>
+            <Input value={phone} placeholder="020 7946 0123" onChange={(e) => { setPhone(e.target.value); setTextDirty(true); }} />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Address</Label>
+            <Input value={address} placeholder="123 High Street, Town" onChange={(e) => { setAddress(e.target.value); setTextDirty(true); }} />
+            <p className="text-xs text-muted-foreground">Used for the contact section and the embedded map.</p>
+          </div>
+
+          <div className="space-y-3 border-t border-border pt-4">
+            <Label>Opening hours</Label>
+            {hours.length === 0 && (
+              <p className="text-sm text-muted-foreground">No hours yet — add a day below.</p>
+            )}
+            {hours.map((h, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input className="sm:max-w-[150px]" value={h.day} placeholder="Day" onChange={(e) => updateHour(i, "day", e.target.value)} />
+                <Input value={h.open} placeholder="Hours (e.g. 9:00 – 18:00, or Closed)" onChange={(e) => updateHour(i, "open", e.target.value)} />
+                <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" title="Remove day" onClick={() => removeHour(i)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+            <Button variant="outline" size="sm" onClick={addHour}>
+              <Plus className="h-4 w-4 mr-2" /> Add day
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Shown in the site's opening-hours section. Any format, e.g. "9:00 – 18:00" or "Closed".
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Accent colour */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Accent colour</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            The highlight colour used across your site — buttons, headings and links.
+          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            {ACCENT_PRESETS.map((p) => {
+              const selected = (accentColor ?? AMBER_HEX).toLowerCase() === p.hex.toLowerCase();
+              return (
+                <button
+                  key={p.hex}
+                  type="button"
+                  title={p.name}
+                  aria-label={p.name}
+                  aria-pressed={selected}
+                  onClick={() => {
+                    setAccentColor(p.hex === AMBER_HEX ? undefined : p.hex);
+                    setTextDirty(true);
+                  }}
+                  className={`h-9 w-9 rounded-full ring-2 ring-offset-2 ring-offset-background transition ${
+                    selected ? "ring-foreground scale-110" : "ring-transparent hover:scale-105"
+                  }`}
+                  style={{ backgroundColor: p.hex }}
+                />
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {ACCENT_PRESETS.find((p) => p.hex.toLowerCase() === (accentColor ?? AMBER_HEX).toLowerCase())?.name ?? "Amber"}
+          </p>
         </CardContent>
       </Card>
 

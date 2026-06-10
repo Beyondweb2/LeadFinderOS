@@ -33,6 +33,13 @@
     --accent: 210 80% 45%;
     --accent-foreground: 210 40% 98%;
 
+    /* Barber-site template accent — space-separated RGB channels, overridable
+       per-site from content.accentColor; defaults to the brand amber (#E6A24B,
+       #F0BD7B, #C9853A). Distinct from shadcn's --accent above. */
+    --barber-accent: 230 162 75;
+    --barber-accent-soft: 240 189 123;
+    --barber-accent-deep: 201 133 58;
+
     --destructive: 0 72% 55%;
     --destructive-foreground: 210 40% 98%;
 
@@ -377,6 +384,15 @@
   .reveal.visible {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  /* Barber-site accent glow shadows — follow --barber-accent (replaces the
+     hardcoded rgba(230,162,75,0.6) glows in BarberSiteTemplate). */
+  .shadow-accent-sm {
+    box-shadow: 0 4px 20px -6px rgb(var(--barber-accent) / 0.6);
+  }
+  .shadow-accent-lg {
+    box-shadow: 0 8px 30px -6px rgb(var(--barber-accent) / 0.6);
   }
 }
 

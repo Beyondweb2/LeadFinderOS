@@ -1,10 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
 import "./fonts.css";
 import { STOCK_GALLERY, STOCK_HERO, STOCK_INTERIOR } from "./assets";
 import type { BarberOpeningHours, BarberService, BarberSiteContent, BarberStat } from "./types";
+
+const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/** "#E6A24B" -> "230 162 75" (space-separated RGB channels for rgb(var() / a)). */
+function hexToChannels(hex: string): string {
+  const h = hex.replace("#", "");
+  const n = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  return `${parseInt(n.slice(0, 2), 16)} ${parseInt(n.slice(2, 4), 16)} ${parseInt(n.slice(4, 6), 16)}`;
+}
+
+/** Mix a hex toward white (255) or black (0) by t; returns RGB channels. Used to
+ *  derive the soft (lighter) and deep (darker) accent shades from one colour. */
+function mixChannels(hex: string, toward: 0 | 255, t: number): string {
+  const h = hex.replace("#", "");
+  const n = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const ch = [n.slice(0, 2), n.slice(2, 4), n.slice(4, 6)].map((x) => {
+    const v = parseInt(x, 16);
+    return Math.round(v + (toward - v) * t);
+  });
+  return ch.join(" ");
+}
 
 /* -------------------------------------------------------------------------- */
 /*  BarberSiteTemplate                                                         */
@@ -55,6 +76,18 @@ export function BarberSiteTemplate({
     googleReviewsUrl,
   } = content;
 
+  // Per-site accent: set the CSS variables the amber* tokens (and the converted
+  // gradient/pinstripe/shadows) read, deriving soft/deep shades. Applied ONLY for
+  // a valid hex — otherwise the template inherits the default amber from :root, so
+  // existing sites (no accentColor) are unchanged.
+  const accentStyle = (HEX_RE.test(content.accentColor ?? "")
+    ? {
+        "--barber-accent": hexToChannels(content.accentColor as string),
+        "--barber-accent-soft": mixChannels(content.accentColor as string, 255, 0.3),
+        "--barber-accent-deep": mixChannels(content.accentColor as string, 0, 0.15),
+      }
+    : {}) as CSSProperties;
+
   const heroSrc = heroImageUrl || STOCK_HERO;
   const gallery =
     galleryImageUrls && galleryImageUrls.length > 0
@@ -86,7 +119,7 @@ export function BarberSiteTemplate({
   };
 
   return (
-    <div className="barber-site font-body text-zinc-300 antialiased">
+    <div className="barber-site font-body text-zinc-300 antialiased" style={accentStyle}>
       {/* Warm, scoped background so the page looks right regardless of host body
           styles. Two soft amber radials over deep ink. */}
       {/* pb on mobile clears the fixed bottom Book bar so no section sits under it */}
@@ -94,8 +127,8 @@ export function BarberSiteTemplate({
         className={`relative min-h-screen bg-ink ${onClaim ? "pb-[88px]" : "pb-[76px] sm:pb-0"}`}
         style={{
           backgroundImage:
-            "radial-gradient(1100px 600px at 85% -8%, rgba(230,162,75,0.10), transparent 60%)," +
-            "radial-gradient(800px 500px at -10% 8%, rgba(230,162,75,0.05), transparent 55%)",
+            "radial-gradient(1100px 600px at 85% -8%, rgb(var(--barber-accent) / 0.10), transparent 60%)," +
+            "radial-gradient(800px 500px at -10% 8%, rgb(var(--barber-accent) / 0.05), transparent 55%)",
         }}
       >
         <Header
@@ -204,7 +237,13 @@ function SmartImg({
     <div className={`relative overflow-hidden bg-ink-soft ${className}`}>
       {failed ? (
         <div className="absolute inset-0 bg-gradient-to-br from-[#1c1509] via-ink to-black">
-          <div className="absolute inset-0 opacity-[0.06] [background-image:repeating-linear-gradient(135deg,#E6A24B_0,#E6A24B_1px,transparent_1px,transparent_22px)]" />
+          <div
+            className="absolute inset-0 opacity-[0.06]"
+            style={{
+              backgroundImage:
+                "repeating-linear-gradient(135deg, rgb(var(--barber-accent)) 0, rgb(var(--barber-accent)) 1px, transparent 1px, transparent 22px)",
+            }}
+          />
         </div>
       ) : (
         <img
@@ -429,7 +468,7 @@ function Header({
           <button
             type="button"
             onClick={onBook}
-            className="group inline-flex items-center gap-2 rounded-full bg-amber px-4 py-2 text-sm font-bold text-ink shadow-[0_4px_20px_-6px_rgba(230,162,75,0.6)] transition-all hover:-translate-y-0.5 hover:bg-amber-soft"
+            className="group inline-flex items-center gap-2 rounded-full bg-amber px-4 py-2 text-sm font-bold text-ink shadow-accent-sm transition-all hover:-translate-y-0.5 hover:bg-amber-soft"
           >
             <CalendarIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Book now</span>
@@ -513,7 +552,7 @@ function Hero({
               <button
                 type="button"
                 onClick={onBook}
-                className="inline-flex items-center gap-2.5 rounded-full bg-amber px-7 py-3.5 text-base font-bold text-ink shadow-[0_8px_30px_-6px_rgba(230,162,75,0.6)] transition-all hover:-translate-y-0.5 hover:bg-amber-soft"
+                className="inline-flex items-center gap-2.5 rounded-full bg-amber px-7 py-3.5 text-base font-bold text-ink shadow-accent-lg transition-all hover:-translate-y-0.5 hover:bg-amber-soft"
               >
                 <CalendarIcon className="h-5 w-5" />
                 Book now
@@ -871,7 +910,7 @@ function Contact({
             <button
               type="button"
               onClick={onBook}
-              className="mt-6 inline-flex items-center gap-2.5 rounded-full bg-amber px-7 py-3.5 text-base font-bold text-ink shadow-[0_8px_30px_-6px_rgba(230,162,75,0.6)] transition-all hover:-translate-y-0.5 hover:bg-amber-soft"
+              className="mt-6 inline-flex items-center gap-2.5 rounded-full bg-amber px-7 py-3.5 text-base font-bold text-ink shadow-accent-lg transition-all hover:-translate-y-0.5 hover:bg-amber-soft"
             >
               <CalendarIcon className="h-5 w-5" />
               Book now
@@ -987,7 +1026,7 @@ function MobileBookBar({ onBook }: { onBook: () => void }) {
       <button
         type="button"
         onClick={onBook}
-        className="flex w-full items-center justify-center gap-2 rounded-full bg-amber py-2 text-[15px] font-bold text-ink shadow-[0_4px_20px_-6px_rgba(230,162,75,0.6)] active:scale-[0.98]"
+        className="flex w-full items-center justify-center gap-2 rounded-full bg-amber py-2 text-[15px] font-bold text-ink shadow-accent-sm active:scale-[0.98]"
       >
         <CalendarIcon className="h-[18px] w-[18px]" />
         Book now
@@ -1009,7 +1048,7 @@ function ClaimBar({ onClaim }: { onClaim: () => void }) {
         <button
           type="button"
           onClick={onClaim}
-          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-amber px-5 py-2.5 text-sm font-bold text-ink shadow-[0_4px_20px_-6px_rgba(230,162,75,0.6)] transition-all hover:-translate-y-0.5 hover:bg-amber-soft active:scale-[0.98]"
+          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-amber px-5 py-2.5 text-sm font-bold text-ink shadow-accent-sm transition-all hover:-translate-y-0.5 hover:bg-amber-soft active:scale-[0.98]"
         >
           Claim for free
         </button>

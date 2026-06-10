@@ -20,7 +20,14 @@ export default {
         body: ['"Manrope"', 'system-ui', 'sans-serif'],
       },
       colors: {
-        amber: { DEFAULT: '#E6A24B', soft: '#F0BD7B', deep: '#C9853A' },
+        // Barber accent — backed by a CSS variable so a per-site accentColor can
+        // recolour every `amber*` class at once (default channels live in
+        // index.css :root; the template overrides them from content.accentColor).
+        amber: {
+          DEFAULT: 'rgb(var(--barber-accent) / <alpha-value>)',
+          soft: 'rgb(var(--barber-accent-soft) / <alpha-value>)',
+          deep: 'rgb(var(--barber-accent-deep) / <alpha-value>)',
+        },
         ink: '#0E0E10',
         'ink-soft': '#161619',
         'ink-card': '#17171B',

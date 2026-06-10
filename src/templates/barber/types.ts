@@ -101,4 +101,10 @@ export interface BarberSiteContent {
    * bundled stock barbershop images is used instead.
    */
   galleryImageUrls?: string[];
+  /**
+   * Optional accent (highlight) colour as a hex string, e.g. "#E6A24B". When
+   * unset the template uses its default amber. Only the accent hue changes — the
+   * dark theme stays — via a CSS variable the template sets on its root.
+   */
+  accentColor?: string;
 }
