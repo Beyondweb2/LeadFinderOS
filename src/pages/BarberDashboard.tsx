@@ -6,7 +6,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ExternalLink } from "lucide-react";
+import { Loader2, ExternalLink, LogOut } from "lucide-react";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
 /**
@@ -21,6 +21,13 @@ export default function BarberDashboard() {
   const { isAdmin } = useSubscription();
   const [sites, setSites] = useState<OwnedSite[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Barber sign-out: clear the session and return to the barber front door —
+  // NOT useAuth().signOut(), which redirects to LeadFinder's /landing marketing.
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    window.location.href = "/barber-login";
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -49,9 +56,14 @@ export default function BarberDashboard() {
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 max-w-3xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Your site</h1>
-        <p className="text-sm text-muted-foreground">Manage your barbershop site.</p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Your site</h1>
+          <p className="text-sm text-muted-foreground">Manage your barbershop site.</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleSignOut} title="Sign out">
+          <LogOut className="h-4 w-4 mr-2" /> Sign out
+        </Button>
       </div>
 
       {sites.map((s) => (
