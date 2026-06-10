@@ -110,13 +110,10 @@ export default function AdminSiteManage() {
       </div>
     );
   }
+  // Missing/deleted site (e.g. browser-back to a deleted row) → bounce to the
+  // live Sites list instead of a dead-end, and replace it in history.
   if (notFound || !site) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-background">
-        <p className="text-muted-foreground">Site not found.</p>
-        <Button onClick={() => navigate("/admin/sites")}>Back to sites</Button>
-      </div>
-    );
+    return <Navigate to="/admin/sites" replace />;
   }
 
   const isPublished = site.status === "published";
@@ -212,7 +209,7 @@ export default function AdminSiteManage() {
       const { error } = await supabase.from("generated_sites").delete().eq("id", site.id);
       if (error) throw error;
       toast({ title: "Site deleted" });
-      navigate("/admin/sites");
+      navigate("/admin/sites", { replace: true });
     } catch (e) {
       toast({ title: "Delete failed", description: (e as Error).message, variant: "destructive" });
       setDeleting(false);
