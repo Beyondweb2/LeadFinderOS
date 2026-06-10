@@ -37,6 +37,19 @@ function esc(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
+// Social preview images must be small (WhatsApp drops large ones). Route
+// Supabase-hosted images through the storage image-transform endpoint to get a
+// ~60KB 1200x630 rendition. External (non-Supabase) URLs are returned unchanged.
+function ogImage(rawUrl: string): string {
+  if (!rawUrl) return "";
+  const marker = "/storage/v1/object/public/";
+  const idx = rawUrl.indexOf(marker);
+  if (idx === -1) return rawUrl;
+  const base = rawUrl.slice(0, idx);
+  const path = rawUrl.slice(idx + marker.length);
+  return `${base}/storage/v1/render/image/public/${path}?width=1200&height=630&resize=cover&quality=70`;
+}
+
 function page(opts: {
   title: string;
   description: string;
@@ -131,7 +144,7 @@ serve(async (req) => {
       }
     }
 
-    return new Response(page({ title, description: OG_DESCRIPTION, image, ogUrl, redirectTo }), {
+    return new Response(page({ title, description: OG_DESCRIPTION, image: ogImage(image), ogUrl, redirectTo }), {
       status: 200,
       headers: {
         "Content-Type": "text/html; charset=utf-8",
