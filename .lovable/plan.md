@@ -1,18 +1,22 @@
-## Backfill `site_name` on `generated_sites`
+## Goal
 
-Run a one-time data update that populates `site_name` for every row in `public.generated_sites` using a slug derived from `content->>'businessName'`.
+Enforce that every row in `public.generated_sites` has a distinct `site_name`, so the slug can be safely used as a public URL key.
 
-### What it does
-- Lowercases `businessName`, replaces non-alphanumerics with `-`, trims leading/trailing `-`, truncates to 40 chars.
-- Falls back to `'barber-site'` when the slug is empty.
-- De-duplicates by appending `-2`, `-3`, … to later rows sharing the same base (ordered by `created_at`, then `id`); the first keeps the bare base.
+## Change
 
-### How it runs
-- Executed via the data tool (UPDATE on existing table, no schema change).
-- Note: `set local request.jwt.claims` and the `begin/commit` wrapper are dropped — the data tool runs as service_role in its own transaction, so they're unnecessary. The `UPDATE` itself is unchanged.
+Single migration:
 
-### Safety
-- Earlier check confirmed no duplicate `site_name` values currently exist, so overwriting is safe.
-- `lock_generated_sites_protected_fields` trigger blocks `site_name` changes for non-service callers; service_role bypasses it, so the update will succeed.
+```sql
+ALTER TABLE public.generated_sites
+  ADD CONSTRAINT generated_sites_site_name_key UNIQUE (site_name);
+```
 
-Approve to run the UPDATE.
+## Safety
+
+- Prior backfill already deduped `site_name` values; the verification query returned zero duplicates, so the constraint will be accepted without error.
+- Adds a unique btree index on `site_name`, which also speeds up lookups by slug.
+- No data is modified; no RLS or grants change.
+
+## Follow-up (not in this migration)
+
+Once this constraint is in place, future inserts/updates that would collide will fail with a `unique_violation`. Any code path that assigns `site_name` should either pre-check or catch that error — worth a separate pass if/when we let users rename sites.
