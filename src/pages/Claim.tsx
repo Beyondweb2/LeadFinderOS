@@ -3,23 +3,39 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Scissors } from "lucide-react";
+import "@/templates/barber/fonts.css";
 
 /**
- * /claim/:token — the barber's self-contained front door. Neutral branding (NO
+ * /claim/:token — the barber's self-contained front door. Barber-branded (NO
  * LeadFinder chrome). Validates the token, shows "Claim your website for X" with
  * its OWN inline create-account form, then claims the site and lands the barber in
  * /barber. A logged-in visitor gets a one-click claim instead of the form.
  *
  * Barbers are invite-only: this page is only reachable with a token, and account
  * creation happens server-side in claim-site only when the token is valid.
+ *
+ * Styling mirrors the barber site template (ink background + amber accents,
+ * Bebas Neue display font) so the barber never sees LeadFinder's look.
  */
 type Phase = "loading" | "invalid" | "ready" | "claimed" | "working";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Shared barber-look classnames.
+const SHELL =
+  "min-h-screen flex items-center justify-center bg-ink font-body text-zinc-300 antialiased p-4";
+const SHELL_BG =
+  "radial-gradient(1100px 600px at 85% -8%, rgba(230,162,75,0.10), transparent 60%)," +
+  "radial-gradient(800px 500px at -10% 8%, rgba(230,162,75,0.05), transparent 55%)";
+const CARD =
+  "w-full max-w-md rounded-2xl border border-line bg-ink-card p-7 sm:p-8 shadow-[0_24px_70px_-24px_rgba(0,0,0,0.75)]";
+const INPUT =
+  "bg-ink-soft border-line text-white placeholder:text-zinc-500 focus-visible:ring-amber/60";
+const PRIMARY_BTN =
+  "w-full rounded-full bg-amber font-bold text-ink shadow-[0_8px_30px_-6px_rgba(230,162,75,0.5)] transition-all hover:-translate-y-0.5 hover:bg-amber-soft";
 
 export default function Claim() {
   const { token = "" } = useParams();
@@ -125,44 +141,52 @@ export default function Claim() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-primary/10">
-            <Scissors className="h-5 w-5 text-primary" />
+    <div className={SHELL} style={{ backgroundImage: SHELL_BG }}>
+      <div className={CARD}>
+        {/* Header */}
+        <div className="text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-amber/30 bg-amber/10">
+            <Scissors className="h-5 w-5 text-amber" />
           </div>
           {phase === "invalid" ? (
-            <CardTitle className="text-xl">Claim link unavailable</CardTitle>
+            <h1 className="mt-4 font-display text-3xl uppercase tracking-wide text-white">
+              Claim link unavailable
+            </h1>
           ) : phase === "claimed" ? (
-            <CardTitle className="text-xl">Already claimed</CardTitle>
+            <h1 className="mt-4 font-display text-3xl uppercase tracking-wide text-white">
+              Already claimed
+            </h1>
           ) : (
-            <CardTitle className="text-xl">
+            <h1 className="mt-4 font-display text-3xl uppercase leading-tight tracking-wide text-white">
               Claim your website for{" "}
-              <span className="text-primary">{businessName}</span>
-            </CardTitle>
+              <span className="text-amber">{businessName}</span>
+            </h1>
           )}
-        </CardHeader>
+        </div>
 
-        <CardContent className="space-y-4">
+        <div className="mt-6 space-y-4">
           {phase === "loading" && (
             <div className="flex justify-center py-6">
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <Loader2 className="h-6 w-6 animate-spin text-amber" />
             </div>
           )}
 
           {phase === "invalid" && (
-            <p className="text-center text-sm text-muted-foreground">
+            <p className="text-center text-sm text-zinc-400">
               This claim link is invalid or has expired. Please ask for a fresh link.
             </p>
           )}
 
           {phase === "claimed" && (
             <div className="space-y-4 text-center">
-              <p className="text-sm text-muted-foreground">
-                This website has already been claimed.
-              </p>
+              <p className="text-sm text-zinc-400">This website has already been claimed.</p>
               <Link to="/barber-login">
-                <Button variant="outline" className="w-full">Log in to manage it</Button>
+                <Button
+                  variant="outline"
+                  className="w-full rounded-full border-line bg-white/[0.03] text-zinc-100 hover:border-amber/50 hover:text-white"
+                >
+                  Log in to manage it
+                </Button>
               </Link>
             </div>
           )}
@@ -172,12 +196,13 @@ export default function Claim() {
               {user ? (
                 // Already signed in → one-click claim.
                 <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    You're signed in as <span className="font-medium text-foreground">{user.email}</span>.
-                    Claim this website to manage it.
+                  <p className="text-sm text-zinc-400">
+                    You're signed in as{" "}
+                    <span className="font-medium text-zinc-200">{user.email}</span>. Claim this
+                    website to manage it.
                   </p>
-                  {error && <p className="text-sm text-destructive">{error}</p>}
-                  <Button className="w-full" onClick={handleClaimAsMe} disabled={phase === "working"}>
+                  {error && <p className="text-sm text-red-400">{error}</p>}
+                  <Button className={PRIMARY_BTN} onClick={handleClaimAsMe} disabled={phase === "working"}>
                     {phase === "working" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     Claim my website
                   </Button>
@@ -185,57 +210,55 @@ export default function Claim() {
               ) : (
                 // Self-contained create-account form.
                 <div className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-zinc-400">
                     Create an account to manage your website. It takes a few seconds.
                   </p>
                   <div className="space-y-1.5">
-                    <Label htmlFor="claim-email">Email</Label>
+                    <Label htmlFor="claim-email" className="text-zinc-300">Email</Label>
                     <Input
                       id="claim-email"
                       type="email"
                       autoComplete="email"
+                      className={INPUT}
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       placeholder="you@example.com"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="claim-password">Password</Label>
+                    <Label htmlFor="claim-password" className="text-zinc-300">Password</Label>
                     <Input
                       id="claim-password"
                       type="password"
                       autoComplete="new-password"
+                      className={INPUT}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       placeholder="At least 8 characters"
                     />
                   </div>
                   {error && (
-                    <p className="text-sm text-destructive">
+                    <p className="text-sm text-red-400">
                       {error}{" "}
                       {existingEmail && (
                         <Link
                           to={`/barber-login?next=${encodeURIComponent(`/claim/${token}`)}`}
-                          className="font-medium underline"
+                          className="font-medium text-amber underline hover:text-amber-soft"
                         >
                           Log in instead
                         </Link>
                       )}
                     </p>
                   )}
-                  <Button
-                    className="w-full"
-                    onClick={handleCreateAndClaim}
-                    disabled={phase === "working"}
-                  >
+                  <Button className={PRIMARY_BTN} onClick={handleCreateAndClaim} disabled={phase === "working"}>
                     {phase === "working" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     Create account &amp; claim
                   </Button>
-                  <p className="text-center text-xs text-muted-foreground">
+                  <p className="text-center text-xs text-zinc-500">
                     Already have an account?{" "}
                     <Link
                       to={`/barber-login?next=${encodeURIComponent(`/claim/${token}`)}`}
-                      className="underline"
+                      className="text-amber underline hover:text-amber-soft"
                     >
                       Log in
                     </Link>
@@ -244,8 +267,8 @@ export default function Claim() {
               )}
             </>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
