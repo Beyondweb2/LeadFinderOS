@@ -1,1 +1,1 @@
-Redeploy the existing `supabase/functions/create-claim-link` Edge Function as-is. No file changes.
+Deploy the existing `supabase/functions/claim-info` Edge Function as-is. No file changes.
