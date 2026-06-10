@@ -705,15 +705,12 @@ function Services({
         </ul>
 
         {anyExamples && (
-          <div className="mt-10 flex items-start gap-3 rounded-xl border border-amber/35 bg-amber/[0.1] px-4 py-3.5 text-amber-soft">
-            <svg viewBox="0 0 24 24" className="mt-0.5 h-5 w-5 shrink-0 text-amber" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+          <div className="mt-10 flex items-center justify-center gap-2 text-amber-soft/85">
+            <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-amber/75" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <circle cx="12" cy="12" r="9" />
               <path d="M12 11v5M12 7.5h.01" strokeLinecap="round" />
             </svg>
-            <p className="text-sm font-medium leading-relaxed sm:text-[15px]">
-              Prices marked <span className="font-semibold">“Example”</span> are illustrative only —
-              please confirm current prices with the shop.
-            </p>
+            <p className="text-center text-sm">Example prices shown for illustration.</p>
           </div>
         )}
       </div>

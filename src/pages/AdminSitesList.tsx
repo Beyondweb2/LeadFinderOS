@@ -5,7 +5,8 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Loader2, ExternalLink, Settings2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { ArrowLeft, Loader2, ExternalLink, Settings2, Trash2 } from "lucide-react";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
 /**
@@ -22,8 +23,24 @@ type SiteRow = {
 export default function AdminSitesList() {
   const { isAdmin, isLoading: roleLoading } = useSubscription();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [sites, setSites] = useState<SiteRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (s: SiteRow) => {
+    if (!window.confirm(`Delete "${s.content?.businessName || s.site_name}"? This can't be undone.`)) return;
+    setDeletingId(s.id);
+    const { error } = await supabase.from("generated_sites").delete().eq("id", s.id);
+    if (error) {
+      toast({ title: "Delete failed", description: error.message, variant: "destructive" });
+      setDeletingId(null);
+      return;
+    }
+    setSites((prev) => prev.filter((x) => x.id !== s.id));
+    setDeletingId(null);
+    toast({ title: "Site deleted" });
+  };
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -88,6 +105,16 @@ export default function AdminSitesList() {
                   </a>
                   <Button size="sm" onClick={() => navigate(`/admin/sites/${s.id}`)}>
                     <Settings2 className="h-4 w-4 mr-2" /> Manage
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    title="Delete"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => handleDelete(s)}
+                    disabled={deletingId === s.id}
+                  >
+                    {deletingId === s.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                   </Button>
                 </div>
               </CardContent>

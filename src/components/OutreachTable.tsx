@@ -417,18 +417,30 @@ export function OutreachTable({
       if (newSiteId && slug) {
         setSitesByLead((prev) => ({ ...prev, [lead.id]: { id: newSiteId, slug } }));
       }
+      // The function returns existing:true when a site already exists for the lead
+      // (no duplicate created) — take the admin straight to its Manage page.
+      if ((data as any)?.existing && newSiteId) {
+        toast({
+          title: `${lead.business_name} already has a site`,
+          description: 'Opening its Manage page — no duplicate was created.',
+        });
+        navigate(`/admin/sites/${newSiteId}`);
+        return;
+      }
       toast({
         title: `Site generated for ${lead.business_name}`,
         description: (
           <span className="flex gap-3 mt-1">
+            {newSiteId && (
+              <a href={`/admin/sites/${newSiteId}`} className="underline font-medium">
+                Manage site
+              </a>
+            )}
             {slug && (
               <a href={`/p/${slug}`} target="_blank" rel="noreferrer" className="underline font-medium">
                 View site
               </a>
             )}
-            <a href="/admin/site-images" target="_blank" rel="noreferrer" className="underline font-medium">
-              Upload images
-            </a>
           </span>
         ),
       });

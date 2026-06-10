@@ -289,6 +289,36 @@ serve(async (req) => {
       return jsonResponse({ error: "Lead not found" }, 404, corsHeaders, rlHeaders);
     }
 
+    // --- Step 8b: Don't create duplicates. If a site already exists for this
+    // lead, return it (so the caller opens its Manage page) instead of generating
+    // and inserting another row. Saves the OpenAI/Google cost of a needless regen.
+    const { data: existingSite } = await serviceClient
+      .from("generated_sites")
+      .select("id, site_name, status")
+      .eq("lead_id", leadId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (existingSite) {
+      console.log("[GENERATE-BARBER-SITE] Existing site for lead, returning it:", existingSite.id);
+      return jsonResponse(
+        {
+          success: true,
+          existing: true,
+          site: {
+            id: existingSite.id,
+            lead_id: leadId,
+            slug: existingSite.site_name,
+            status: existingSite.status,
+          },
+          preview_path: `/p/${existingSite.site_name}`,
+        },
+        200,
+        corsHeaders,
+        rlHeaders,
+      );
+    }
+
     // --- Step 9a: Fresh Google Places enrichment (best-effort, non-blocking) ---
     // outreach_leads has no rating / review-count / opening-hours columns, so we
     // fetch those live from Google. If this fails or is empty we carry on with

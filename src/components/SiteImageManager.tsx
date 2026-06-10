@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -8,22 +8,31 @@ import type { Json } from "@/integrations/supabase/types";
 
 /**
  * Reusable admin image/logo uploader for a single generated site.
- * Used by both /admin/site-images and the Manage Site page.
  *
  * - hero / about / logo: single-replace slots (leave empty to keep current).
- * - gallery: a dynamic list of up to 10 images (add new files, remove existing),
- *   stored as content.galleryImageUrls (string[]). Existing sites already use
- *   this array, so no migration is needed.
+ * - gallery: dynamic list of up to 10 images, stored as content.galleryImageUrls.
  *
- * Uploads to the shared `barber-site-images` bucket (admin-only writes via
- * storage RLS); writes URLs into generated_sites.content (admin RLS UPDATE).
- * The page-level isAdmin gate is UX only; the real boundary is those policies.
+ * Two modes:
+ * - Standalone (default, /admin/site-images): shows its own "Save images" button
+ *   that uploads + writes the DB + calls onSaved.
+ * - Controlled (`controlled` prop, Manage page): no own button. The parent drives
+ *   a single combined save by calling the imperative `uploadPendingInto(base)` —
+ *   which uploads any pending files and returns `base` merged with the new image
+ *   URLs (no DB write), so text + images persist in one update.
+ *
+ * Writes go through admin-only storage RLS + generated_sites admin RLS.
  */
 
 const BUCKET = "barber-site-images";
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
 const GALLERY_MAX = 10;
+
+export interface SiteImageManagerHandle {
+  /** Upload any pending files and return `base` merged with the new image fields. No DB write. */
+  uploadPendingInto(base: BarberSiteContent): Promise<BarberSiteContent>;
+  isDirty(): boolean;
+}
 
 function validate(f: File | null): string | null {
   if (!f) return null;
@@ -42,28 +51,36 @@ async function uploadOne(file: File, slot: string, siteId: string): Promise<stri
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
-export function SiteImageManager({
-  siteId,
-  content,
-  onSaved,
-}: {
-  siteId: string;
-  content: BarberSiteContent;
-  onSaved?: (newContent: BarberSiteContent) => void;
-}) {
+export const SiteImageManager = forwardRef<
+  SiteImageManagerHandle,
+  {
+    siteId: string;
+    content: BarberSiteContent;
+    onSaved?: (newContent: BarberSiteContent) => void;
+    controlled?: boolean;
+    onDirtyChange?: (dirty: boolean) => void;
+  }
+>(function SiteImageManager({ siteId, content, onSaved, controlled, onDirtyChange }, ref) {
   const [hero, setHero] = useState<File | null>(null);
   const [about, setAbout] = useState<File | null>(null);
   const [logo, setLogo] = useState<File | null>(null);
-
-  // Gallery: existing URLs the admin chooses to keep + new files to add (cap 10).
   const [keptGallery, setKeptGallery] = useState<string[]>(content.galleryImageUrls ?? []);
   const [newFiles, setNewFiles] = useState<File[]>([]);
-
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const galleryTotal = keptGallery.length + newFiles.length;
+  const dirty =
+    !!hero ||
+    !!about ||
+    !!logo ||
+    newFiles.length > 0 ||
+    JSON.stringify(keptGallery) !== JSON.stringify(content.galleryImageUrls ?? []);
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
 
   const addFiles = (files: FileList | null) => {
     if (!files) return;
@@ -78,51 +95,63 @@ export function SiteImageManager({
     setNewFiles((prev) => [...prev, ...picked]);
   };
 
-  const handleSave = async () => {
+  // Upload pending files and merge image fields into `base`. No DB write.
+  async function buildInto(base: BarberSiteContent): Promise<BarberSiteContent> {
+    const vErr = validate(hero) || validate(about) || validate(logo) || newFiles.map(validate).find(Boolean) || null;
+    if (vErr) throw new Error(vErr);
+    const heroUrl = hero ? await uploadOne(hero, "hero", siteId) : base.heroImageUrl;
+    const aboutUrl = about ? await uploadOne(about, "about", siteId) : base.aboutImageUrl;
+    const logoUrl = logo ? await uploadOne(logo, "logo", siteId) : base.logoUrl;
+    const uploaded: string[] = [];
+    for (let i = 0; i < newFiles.length; i++) {
+      uploaded.push(await uploadOne(newFiles[i], `gallery-${i}`, siteId));
+    }
+    const gallery = [...keptGallery, ...uploaded].slice(0, GALLERY_MAX);
+    return {
+      ...base,
+      ...(heroUrl ? { heroImageUrl: heroUrl } : {}),
+      ...(aboutUrl ? { aboutImageUrl: aboutUrl } : {}),
+      ...(logoUrl ? { logoUrl } : {}),
+      galleryImageUrls: gallery,
+    };
+  }
+
+  function resetFiles(gallery: string[]) {
+    setHero(null);
+    setAbout(null);
+    setLogo(null);
+    setKeptGallery(gallery);
+    setNewFiles([]);
+  }
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      isDirty: () => dirty,
+      uploadPendingInto: async (base) => {
+        const c = await buildInto(base);
+        resetFiles(c.galleryImageUrls ?? []);
+        return c;
+      },
+    }),
+    [dirty, hero, about, logo, newFiles, keptGallery, siteId],
+  );
+
+  const handleSaveStandalone = async () => {
     setErr(null);
     setMsg(null);
-    const galleryChanged =
-      JSON.stringify(keptGallery) !== JSON.stringify(content.galleryImageUrls ?? []) ||
-      newFiles.length > 0;
-    if (!hero && !about && !logo && !galleryChanged) {
-      return setErr("Choose an image or change the gallery first.");
-    }
-    const vErr = validate(hero) || validate(about) || validate(logo) || newFiles.map(validate).find(Boolean) || null;
-    if (vErr) return setErr(vErr);
-
+    if (!dirty) return setErr("Choose an image or change the gallery first.");
     setBusy(true);
     try {
-      const heroUrl = hero ? await uploadOne(hero, "hero", siteId) : content.heroImageUrl;
-      const aboutUrl = about ? await uploadOne(about, "about", siteId) : content.aboutImageUrl;
-      const logoUrl = logo ? await uploadOne(logo, "logo", siteId) : content.logoUrl;
-
-      const uploadedGallery: string[] = [];
-      for (let i = 0; i < newFiles.length; i++) {
-        uploadedGallery.push(await uploadOne(newFiles[i], `gallery-${i}`, siteId));
-      }
-      const gallery = [...keptGallery, ...uploadedGallery].slice(0, GALLERY_MAX);
-
-      const newContent: BarberSiteContent = {
-        ...content,
-        ...(heroUrl ? { heroImageUrl: heroUrl } : {}),
-        ...(aboutUrl ? { aboutImageUrl: aboutUrl } : {}),
-        ...(logoUrl ? { logoUrl } : {}),
-        galleryImageUrls: gallery, // always set so removals persist (empty -> stock fallback)
-      };
-
+      const c = await buildInto(content);
       const { error } = await supabase
         .from("generated_sites")
-        .update({ content: newContent as unknown as Json })
+        .update({ content: c as unknown as Json })
         .eq("id", siteId);
       if (error) throw error;
-
-      setHero(null);
-      setAbout(null);
-      setLogo(null);
-      setKeptGallery(gallery);
-      setNewFiles([]);
+      resetFiles(c.galleryImageUrls ?? []);
       setMsg("Saved — the site now uses the updated image(s).");
-      onSaved?.(newContent);
+      onSaved?.(c);
     } catch (e) {
       setErr((e as Error).message || "Upload failed");
     } finally {
@@ -132,24 +161,20 @@ export function SiteImageManager({
 
   return (
     <div className="space-y-6">
-      {/* Single-replace slots */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <SingleSlot label="Hero image" current={content.heroImageUrl} file={hero} onPick={setHero} />
         <SingleSlot label="About / Story image" current={content.aboutImageUrl} file={about} onPick={setAbout} />
         <SingleSlot label="Logo" current={content.logoUrl} file={logo} onPick={setLogo} contain />
       </div>
 
-      {/* Dynamic gallery */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <Label>Gallery images</Label>
           <span className="text-xs text-muted-foreground">{galleryTotal}/{GALLERY_MAX}</span>
         </div>
-
         {galleryTotal === 0 && (
           <p className="text-xs text-muted-foreground">No gallery images — the site uses bundled stock photos.</p>
         )}
-
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
           {keptGallery.map((url, i) => (
             <div key={`${url}-${i}`} className="group relative aspect-square overflow-hidden rounded-md border border-border">
@@ -196,13 +221,15 @@ export function SiteImageManager({
       {err && <p className="text-sm text-destructive">{err}</p>}
       {msg && <p className="text-sm text-green-500">{msg}</p>}
 
-      <Button onClick={handleSave} disabled={busy}>
-        {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-        {busy ? "Saving…" : "Save images"}
-      </Button>
+      {!controlled && (
+        <Button onClick={handleSaveStandalone} disabled={busy}>
+          {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+          {busy ? "Saving…" : "Save images"}
+        </Button>
+      )}
     </div>
   );
-}
+});
 
 function SingleSlot({
   label,

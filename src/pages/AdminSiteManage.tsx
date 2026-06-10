@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -10,16 +10,16 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff } from "lucide-react";
-import { SiteImageManager } from "@/components/SiteImageManager";
+import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, Plus, X } from "lucide-react";
+import { SiteImageManager, type SiteImageManagerHandle } from "@/components/SiteImageManager";
 import type { BarberSiteContent, BarberService } from "@/templates/barber/types";
 import type { Json } from "@/integrations/supabase/types";
 
 /**
  * Admin-only Manage Site page for a single generated barber site.
- * Edit text + prices, manage images/logo (shared SiteImageManager), publish /
- * unpublish, and copy the public link. All writes go through admin-gated RLS
- * (generated_sites UPDATE + barber-site-images storage policies); the isAdmin
+ * Edit text + services/prices, manage images/logo, publish/unpublish, copy link,
+ * delete. A SINGLE "Save all changes" commits text + images in one DB write, with
+ * an unsaved-changes guard. All writes go through admin-gated RLS; the isAdmin
  * check here is UX only.
  */
 type SiteRow = {
@@ -34,20 +34,26 @@ export default function AdminSiteManage() {
   const { isAdmin, isLoading: roleLoading } = useSubscription();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const imageRef = useRef<SiteImageManagerHandle>(null);
 
   const [site, setSite] = useState<SiteRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  // Text form state (separate from image saves, which only touch image fields).
   const [heroHeadline, setHeroHeadline] = useState("");
   const [tagline, setTagline] = useState("");
   const [about, setAbout] = useState("");
   const [services, setServices] = useState<BarberService[]>([]);
   const [showExamplePrices, setShowExamplePrices] = useState(false);
   const [googleReviewsUrl, setGoogleReviewsUrl] = useState("");
-  const [savingText, setSavingText] = useState(false);
+
+  const [textDirty, setTextDirty] = useState(false);
+  const [imageDirty, setImageDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const anyDirty = textDirty || imageDirty;
 
   useEffect(() => {
     if (!isAdmin || !id) return;
@@ -70,10 +76,23 @@ export default function AdminSiteManage() {
         setServices((c.services ?? []).map((s) => ({ ...s })));
         setShowExamplePrices(!!c.showExamplePrices);
         setGoogleReviewsUrl(c.googleReviewsUrl ?? "");
+        setTextDirty(false);
+        setImageDirty(false);
       }
       setLoading(false);
     })();
   }, [isAdmin, id]);
+
+  // Warn before leaving (refresh / tab close) with unsaved edits.
+  useEffect(() => {
+    if (!anyDirty) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [anyDirty]);
 
   if (roleLoading) {
     return (
@@ -105,12 +124,20 @@ export default function AdminSiteManage() {
 
   const updateService = (i: number, field: keyof BarberService, value: string) => {
     setServices((prev) => prev.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
+    setTextDirty(true);
+  };
+  const addService = () => {
+    setServices((prev) => [...prev, { name: "" }]);
+    setTextDirty(true);
+  };
+  const removeService = (i: number) => {
+    setServices((prev) => prev.filter((_, idx) => idx !== i));
+    setTextDirty(true);
   };
 
-  const handleSaveText = async () => {
-    setSavingText(true);
+  const handleSave = async () => {
+    setSaving(true);
     try {
-      // Clean services: keep names; drop empty description/price (never store "").
       const cleanedServices: BarberService[] = services
         .filter((s) => (s.name ?? "").trim())
         .map((s) => {
@@ -121,7 +148,7 @@ export default function AdminSiteManage() {
           return out;
         });
 
-      const newContent: BarberSiteContent = {
+      const base: BarberSiteContent = {
         ...site.content,
         heroHeadline: heroHeadline.trim(),
         tagline: tagline.trim(),
@@ -131,18 +158,24 @@ export default function AdminSiteManage() {
         googleReviewsUrl: googleReviewsUrl.trim() || undefined,
       };
 
+      // Upload any pending images and merge them in — one combined content write.
+      const finalContent = imageRef.current ? await imageRef.current.uploadPendingInto(base) : base;
+
       const { error } = await supabase
         .from("generated_sites")
-        .update({ content: newContent as unknown as Json })
+        .update({ content: finalContent as unknown as Json })
         .eq("id", site.id);
       if (error) throw error;
 
-      setSite({ ...site, content: newContent });
-      toast({ title: "Saved", description: "Text content updated." });
+      setSite({ ...site, content: finalContent });
+      setServices(cleanedServices.map((s) => ({ ...s })));
+      setTextDirty(false);
+      setImageDirty(false);
+      toast({ title: "Saved", description: "All changes saved." });
     } catch (e) {
       toast({ title: "Save failed", description: (e as Error).message, variant: "destructive" });
     } finally {
-      setSavingText(false);
+      setSaving(false);
     }
   };
 
@@ -167,6 +200,22 @@ export default function AdminSiteManage() {
       toast({ title: "Status change failed", description: (e as Error).message, variant: "destructive" });
     } finally {
       setSavingStatus(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm(`Delete the site for "${site.content?.businessName || site.site_name}"? This can't be undone.`)) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      const { error } = await supabase.from("generated_sites").delete().eq("id", site.id);
+      if (error) throw error;
+      toast({ title: "Site deleted" });
+      navigate("/admin/sites");
+    } catch (e) {
+      toast({ title: "Delete failed", description: (e as Error).message, variant: "destructive" });
+      setDeleting(false);
     }
   };
 
@@ -218,6 +267,9 @@ export default function AdminSiteManage() {
             )}
             {isPublished ? "Unpublish" : "Publish"}
           </Button>
+          <Button variant="outline" size="sm" onClick={handleDelete} disabled={deleting} className="text-destructive hover:text-destructive">
+            {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          </Button>
         </div>
       </div>
 
@@ -229,45 +281,44 @@ export default function AdminSiteManage() {
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <Label>Hero headline</Label>
-            <Input value={heroHeadline} onChange={(e) => setHeroHeadline(e.target.value)} />
+            <Input value={heroHeadline} onChange={(e) => { setHeroHeadline(e.target.value); setTextDirty(true); }} />
           </div>
           <div className="space-y-1.5">
             <Label>Tagline</Label>
-            <Input value={tagline} onChange={(e) => setTagline(e.target.value)} />
+            <Input value={tagline} onChange={(e) => { setTagline(e.target.value); setTextDirty(true); }} />
           </div>
           <div className="space-y-1.5">
             <Label>About</Label>
-            <Textarea rows={4} value={about} onChange={(e) => setAbout(e.target.value)} />
+            <Textarea rows={4} value={about} onChange={(e) => { setAbout(e.target.value); setTextDirty(true); }} />
           </div>
 
           <div className="space-y-3">
-            <Label>Services</Label>
+            <Label>Services &amp; prices</Label>
             {services.length === 0 && (
-              <p className="text-sm text-muted-foreground">No services on this site.</p>
+              <p className="text-sm text-muted-foreground">No services yet — add the shop's real menu below.</p>
             )}
             {services.map((s, i) => (
               <div key={i} className="rounded-lg border border-border p-3 space-y-2">
-                <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_120px]">
-                  <Input
-                    value={s.name}
-                    placeholder="Service name"
-                    onChange={(e) => updateService(i, "name", e.target.value)}
-                  />
-                  <Input
-                    value={s.price ?? ""}
-                    placeholder="Price (optional)"
-                    onChange={(e) => updateService(i, "price", e.target.value)}
-                  />
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 space-y-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_120px]">
+                      <Input value={s.name} placeholder="Service name" onChange={(e) => updateService(i, "name", e.target.value)} />
+                      <Input value={s.price ?? ""} placeholder="Price (optional)" onChange={(e) => updateService(i, "price", e.target.value)} />
+                    </div>
+                    <Input value={s.description ?? ""} placeholder="Description (optional)" onChange={(e) => updateService(i, "description", e.target.value)} />
+                  </div>
+                  <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" title="Remove service" onClick={() => removeService(i)}>
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Input
-                  value={s.description ?? ""}
-                  placeholder="Description (optional)"
-                  onChange={(e) => updateService(i, "description", e.target.value)}
-                />
               </div>
             ))}
+            <Button variant="outline" size="sm" onClick={addService}>
+              <Plus className="h-4 w-4 mr-2" /> Add service
+            </Button>
             <p className="text-xs text-muted-foreground">
-              Leave price blank to show "Price on request". Nothing is auto-generated — only what you enter is saved.
+              Enter the shop's real services and prices. Leave a price blank to show "Price on request" (or an example, below).
+              Nothing is auto-generated.
             </p>
           </div>
 
@@ -277,10 +328,10 @@ export default function AdminSiteManage() {
                 <Label>Show example prices</Label>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Services without a confirmed price show an illustrative <span className="font-medium">example</span> price
-                  (clearly labelled, under a disclaimer) instead of "Price on request". Confirmed prices are never relabelled.
+                  (clearly labelled) instead of "Price on request". Confirmed prices are never relabelled.
                 </p>
               </div>
-              <Switch checked={showExamplePrices} onCheckedChange={setShowExamplePrices} />
+              <Switch checked={showExamplePrices} onCheckedChange={(v) => { setShowExamplePrices(v); setTextDirty(true); }} />
             </div>
 
             <div className="space-y-1.5">
@@ -288,19 +339,13 @@ export default function AdminSiteManage() {
               <Input
                 value={googleReviewsUrl}
                 placeholder="https://maps.google.com/…"
-                onChange={(e) => setGoogleReviewsUrl(e.target.value)}
+                onChange={(e) => { setGoogleReviewsUrl(e.target.value); setTextDirty(true); }}
               />
               <p className="text-xs text-muted-foreground">
-                Adds a "Read our Google reviews" link (with the Google logo) by the rating, in the hero and Visit
-                sections. Leave blank to hide it. We never copy review text — this just links to the real reviews.
+                Adds a "Read our Google reviews" link (with the Google logo) by the rating. Leave blank to hide it.
               </p>
             </div>
           </div>
-
-          <Button onClick={handleSaveText} disabled={savingText}>
-            {savingText && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-            Save text
-          </Button>
         </CardContent>
       </Card>
 
@@ -311,13 +356,26 @@ export default function AdminSiteManage() {
         </CardHeader>
         <CardContent>
           <SiteImageManager
+            ref={imageRef}
+            controlled
             key={site.id}
             siteId={site.id}
             content={site.content}
-            onSaved={(c) => setSite({ ...site, content: c })}
+            onDirtyChange={setImageDirty}
           />
         </CardContent>
       </Card>
+
+      {/* Single save bar — saves text + prices + reviews + toggle + images at once */}
+      <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-xl border border-border bg-background/95 px-4 py-3 backdrop-blur">
+        <span className={`text-sm ${anyDirty ? "text-amber-500" : "text-muted-foreground"}`}>
+          {anyDirty ? "You have unsaved changes" : "All changes saved"}
+        </span>
+        <Button onClick={handleSave} disabled={saving || !anyDirty}>
+          {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          Save all changes
+        </Button>
+      </div>
     </div>
   );
 }
