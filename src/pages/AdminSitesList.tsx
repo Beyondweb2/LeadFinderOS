@@ -67,7 +67,12 @@ export default function AdminSitesList() {
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/admin")}>
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Back"
+          onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/admin"))}
+        >
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-2xl font-bold text-foreground">Generated Sites</h1>

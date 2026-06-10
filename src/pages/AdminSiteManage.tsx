@@ -233,7 +233,12 @@ export default function AdminSiteManage() {
       {/* Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/admin/sites")}>
+          <Button
+            variant="ghost"
+            size="icon"
+            title="Back"
+            onClick={() => (window.history.length > 1 ? navigate(-1) : navigate("/admin/sites"))}
+          >
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div>
