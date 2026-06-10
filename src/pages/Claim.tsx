@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Scissors, Star } from "lucide-react";
 import { barberProPriceLabel } from "@/config/pricing";
+import { SETUP_BY_NAME, SUPPORT_CONTACT, supportContactHref } from "@/config/barberBrand";
 import "@/templates/barber/fonts.css";
 
 /**
@@ -328,6 +329,24 @@ export default function Claim() {
             </div>
           )}
         </div>
+
+        {phase !== "loading" && (
+          <p className="mt-6 border-t border-line pt-4 text-center text-xs text-zinc-500">
+            Set up by {SETUP_BY_NAME}
+            {SUPPORT_CONTACT && (
+              <>
+                {" "}— questions?{" "}
+                {supportContactHref ? (
+                  <a href={supportContactHref} className="text-amber underline hover:text-amber-soft">
+                    {SUPPORT_CONTACT}
+                  </a>
+                ) : (
+                  <span className="text-zinc-400">{SUPPORT_CONTACT}</span>
+                )}
+              </>
+            )}
+          </p>
+        )}
       </div>
     </div>
   );

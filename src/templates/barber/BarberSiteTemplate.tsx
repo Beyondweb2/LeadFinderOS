@@ -15,7 +15,18 @@ import type { BarberOpeningHours, BarberService, BarberSiteContent, BarberStat }
 /*  explicitly part of the contact section.                                   */
 /* -------------------------------------------------------------------------- */
 
-export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) {
+export function BarberSiteTemplate({
+  content,
+  bookingEnabled = false,
+}: {
+  content: BarberSiteContent;
+  /**
+   * Online booking + SMS reminders are the paid (£19.99/mo) feature. Until a site
+   * is on the paid tier this stays false, and "Book now" honestly routes to the
+   * contact/call section instead of opening a booking flow the site can't deliver.
+   */
+  bookingEnabled?: boolean;
+}) {
   const {
     businessName,
     category,
@@ -56,7 +67,16 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
   );
 
   const [bookingOpen, setBookingOpen] = useState(false);
-  const openBooking = () => setBookingOpen(true);
+  // Honest free-tier behavior: online booking is a paid feature, so instead of
+  // opening a booking flow the site can't fulfil, take the visitor to the contact
+  // section to call. Flips to the real flow once bookingEnabled (paid) is true.
+  const openBooking = () => {
+    if (bookingEnabled) {
+      setBookingOpen(true);
+      return;
+    }
+    document.getElementById("visit")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   return (
     <div className="barber-site font-body text-zinc-300 antialiased">
@@ -105,6 +125,7 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
             reviewCount={reviewCount}
             googleReviewsUrl={googleReviewsUrl}
             onBook={openBooking}
+            bookingEnabled={bookingEnabled}
           />
         </main>
 
@@ -814,6 +835,7 @@ function Contact({
   reviewCount,
   googleReviewsUrl,
   onBook,
+  bookingEnabled,
 }: {
   businessName: string;
   phone: string;
@@ -824,6 +846,7 @@ function Contact({
   reviewCount?: number;
   googleReviewsUrl?: string;
   onBook: () => void;
+  bookingEnabled?: boolean;
 }) {
   return (
     <section id="visit" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
@@ -837,14 +860,16 @@ function Contact({
             Walk in or call ahead — we&apos;ll have the chair ready.
           </p>
 
-          <button
-            type="button"
-            onClick={onBook}
-            className="mt-6 inline-flex items-center gap-2.5 rounded-full bg-amber px-7 py-3.5 text-base font-bold text-ink shadow-[0_8px_30px_-6px_rgba(230,162,75,0.6)] transition-all hover:-translate-y-0.5 hover:bg-amber-soft"
-          >
-            <CalendarIcon className="h-5 w-5" />
-            Book now
-          </button>
+          {bookingEnabled && (
+            <button
+              type="button"
+              onClick={onBook}
+              className="mt-6 inline-flex items-center gap-2.5 rounded-full bg-amber px-7 py-3.5 text-base font-bold text-ink shadow-[0_8px_30px_-6px_rgba(230,162,75,0.6)] transition-all hover:-translate-y-0.5 hover:bg-amber-soft"
+            >
+              <CalendarIcon className="h-5 w-5" />
+              Book now
+            </button>
+          )}
 
           <div className="mt-8 space-y-3">
             <a
