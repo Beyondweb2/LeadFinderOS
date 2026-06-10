@@ -143,10 +143,13 @@ serve(async (req) => {
       timestamp: new Date().toISOString(),
     }));
 
-    // Plaintext token returned ONCE. The caller composes the full URL against its
-    // own origin so the link points back at the same app.
+    // Plaintext token returned ONCE. The link to SEND is the claim-share shim URL
+    // (so social previews show barber branding, not LeadFinder); claim_path is
+    // kept for reference / fallback. share_url is an absolute Supabase functions
+    // URL, so the admin UI copies it as-is (no origin prepend).
+    const shareUrl = `${supabaseUrl}/functions/v1/claim-share/${plaintext}`;
     return jsonResponse(
-      { token: plaintext, claim_path: `/claim/${plaintext}`, expires_at: expiresAt },
+      { token: plaintext, share_url: shareUrl, claim_path: `/claim/${plaintext}`, expires_at: expiresAt },
       200,
       rlHeaders,
     );

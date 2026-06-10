@@ -243,7 +243,9 @@ export default function AdminSiteManage() {
             : "Couldn't create a claim link.",
         );
       }
-      setClaimLink(`${window.location.origin}${data.claim_path}`);
+      // Send the share-shim URL so social previews show barber branding (not
+      // LeadFinder); fall back to the raw claim path only if it's missing.
+      setClaimLink(data.share_url || `${window.location.origin}${data.claim_path}`);
     } catch (e) {
       toast({ title: "Claim link failed", description: (e as Error).message, variant: "destructive" });
     } finally {

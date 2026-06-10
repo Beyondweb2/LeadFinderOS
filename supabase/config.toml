@@ -69,3 +69,6 @@ verify_jwt = false
 
 [functions.claim-site]
 verify_jwt = false
+
+[functions.claim-share]
+verify_jwt = false
