@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff } from "lucide-react";
 import { SiteImageManager } from "@/components/SiteImageManager";
@@ -43,6 +44,8 @@ export default function AdminSiteManage() {
   const [tagline, setTagline] = useState("");
   const [about, setAbout] = useState("");
   const [services, setServices] = useState<BarberService[]>([]);
+  const [showExamplePrices, setShowExamplePrices] = useState(false);
+  const [googleReviewsUrl, setGoogleReviewsUrl] = useState("");
   const [savingText, setSavingText] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
 
@@ -65,6 +68,8 @@ export default function AdminSiteManage() {
         setTagline(c.tagline ?? "");
         setAbout(c.about ?? "");
         setServices((c.services ?? []).map((s) => ({ ...s })));
+        setShowExamplePrices(!!c.showExamplePrices);
+        setGoogleReviewsUrl(c.googleReviewsUrl ?? "");
       }
       setLoading(false);
     })();
@@ -122,6 +127,8 @@ export default function AdminSiteManage() {
         tagline: tagline.trim(),
         about: about.trim(),
         services: cleanedServices,
+        showExamplePrices,
+        googleReviewsUrl: googleReviewsUrl.trim() || undefined,
       };
 
       const { error } = await supabase
@@ -262,6 +269,32 @@ export default function AdminSiteManage() {
             <p className="text-xs text-muted-foreground">
               Leave price blank to show "Price on request". Nothing is auto-generated — only what you enter is saved.
             </p>
+          </div>
+
+          <div className="space-y-4 border-t border-border pt-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <Label>Show example prices</Label>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Services without a confirmed price show an illustrative <span className="font-medium">example</span> price
+                  (clearly labelled, under a disclaimer) instead of "Price on request". Confirmed prices are never relabelled.
+                </p>
+              </div>
+              <Switch checked={showExamplePrices} onCheckedChange={setShowExamplePrices} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Google reviews / Maps URL</Label>
+              <Input
+                value={googleReviewsUrl}
+                placeholder="https://maps.google.com/…"
+                onChange={(e) => setGoogleReviewsUrl(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Adds a "Read our Google reviews" link (with the Google logo) by the rating, in the hero and Visit
+                sections. Leave blank to hide it. We never copy review text — this just links to the real reviews.
+              </p>
+            </div>
           </div>
 
           <Button onClick={handleSaveText} disabled={savingText}>

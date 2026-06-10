@@ -33,6 +33,8 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
     galleryImageUrls,
     stats,
     logoUrl,
+    showExamplePrices,
+    googleReviewsUrl,
   } = content;
 
   const heroSrc = heroImageUrl || STOCK_HERO;
@@ -86,10 +88,11 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
             heroSrc={heroSrc}
             googleRating={googleRating}
             reviewCount={reviewCount}
+            googleReviewsUrl={googleReviewsUrl}
             onBook={openBooking}
           />
           <About about={about} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} />
-          <Services services={services} />
+          <Services services={services} showExamplePrices={showExamplePrices} />
           <Gallery images={gallery} businessName={businessName} />
           <Hours hours={hours} />
           <Contact
@@ -100,6 +103,7 @@ export function BarberSiteTemplate({ content }: { content: BarberSiteContent }) 
             mapSrc={mapSrc}
             googleRating={googleRating}
             reviewCount={reviewCount}
+            googleReviewsUrl={googleReviewsUrl}
             onBook={openBooking}
           />
         </main>
@@ -419,6 +423,7 @@ function Hero({
   heroSrc,
   googleRating,
   reviewCount,
+  googleReviewsUrl,
   onBook,
 }: {
   businessName: string;
@@ -428,6 +433,7 @@ function Hero({
   heroSrc: string;
   googleRating?: number;
   reviewCount?: number;
+  googleReviewsUrl?: string;
   onBook: () => void;
 }) {
   return (
@@ -505,6 +511,14 @@ function Hero({
               </div>
             </Reveal>
           )}
+
+          {googleReviewsUrl && (
+            <Reveal delay={0.28}>
+              <div className="mt-4">
+                <GoogleReviewsLink url={googleReviewsUrl} />
+              </div>
+            </Reveal>
+          )}
         </div>
       </div>
     </section>
@@ -569,9 +583,71 @@ function Stat({ value, label }: { value: string; label: string }) {
   );
 }
 
+/* ---------------------- example prices + reviews link ---------------------- */
+
+// Illustrative default prices (GBP) used ONLY when showExamplePrices is on and a
+// service has no confirmed price. Always labelled "Example" + shown under a
+// disclaimer; never presented as real. Matched by lowercased service name.
+const EXAMPLE_PRICES: Record<string, string> = {
+  "signature cut": "£25",
+  "skin fade": "£24",
+  "cut & beard": "£35",
+  "beard trim & shape": "£15",
+  "beard trim": "£15",
+  "hot-towel wet shave": "£28",
+  "wet shave": "£28",
+  "under 12s": "£16",
+  "kids cut": "£16",
+  haircut: "£22",
+  fade: "£24",
+};
+const EXAMPLE_PRICE_FALLBACK = "from £20";
+
+function examplePrice(name: string): string {
+  return EXAMPLE_PRICES[name.trim().toLowerCase()] ?? EXAMPLE_PRICE_FALLBACK;
+}
+
+/** Google "G" mark (4-colour) for the reviews link. */
+function GoogleG({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 48 48" className={className} aria-hidden="true">
+      <path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z" />
+      <path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z" />
+      <path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z" />
+      <path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z" />
+    </svg>
+  );
+}
+
+/** "Read our Google reviews" pill — links to the real reviews. Renders nothing without a URL. */
+function GoogleReviewsLink({ url, className = "" }: { url?: string; className?: string }) {
+  if (!url) return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={`inline-flex items-center gap-2.5 rounded-full border border-amber/45 bg-amber/[0.06] px-4 py-2 text-sm font-semibold text-amber-soft transition-colors hover:bg-amber/10 ${className}`}
+    >
+      <GoogleG className="h-4 w-4" />
+      Read our Google reviews
+      <span aria-hidden="true">→</span>
+    </a>
+  );
+}
+
 /* -------------------------------- services -------------------------------- */
 
-function Services({ services }: { services: BarberSiteContent["services"] }) {
+function Services({
+  services,
+  showExamplePrices,
+}: {
+  services: BarberSiteContent["services"];
+  showExamplePrices?: boolean;
+}) {
+  // Any service without a confirmed price shows an example only when the toggle
+  // is on — which is also what triggers the bottom-of-section disclaimer.
+  const anyExamples = !!showExamplePrices && services.some((s) => !s.price);
   return (
     <section
       id="services"
@@ -609,6 +685,15 @@ function Services({ services }: { services: BarberSiteContent["services"] }) {
                   <span className="shrink-0 font-display text-2xl tracking-wide text-amber">
                     {s.price}
                   </span>
+                ) : showExamplePrices ? (
+                  <span className="flex shrink-0 items-center gap-2">
+                    <span className="rounded bg-amber/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-soft">
+                      Example
+                    </span>
+                    <span className="font-display text-xl tracking-wide text-amber/55">
+                      {examplePrice(s.name)}
+                    </span>
+                  </span>
                 ) : (
                   <span className="shrink-0 text-sm font-medium uppercase tracking-wide text-zinc-500">
                     Price on request
@@ -618,6 +703,19 @@ function Services({ services }: { services: BarberSiteContent["services"] }) {
             </Reveal>
           ))}
         </ul>
+
+        {anyExamples && (
+          <div className="mt-10 flex items-start gap-3 rounded-xl border border-amber/35 bg-amber/[0.1] px-4 py-3.5 text-amber-soft">
+            <svg viewBox="0 0 24 24" className="mt-0.5 h-5 w-5 shrink-0 text-amber" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 11v5M12 7.5h.01" strokeLinecap="round" />
+            </svg>
+            <p className="text-sm font-medium leading-relaxed sm:text-[15px]">
+              Prices marked <span className="font-semibold">“Example”</span> are illustrative only —
+              please confirm current prices with the shop.
+            </p>
+          </div>
+        )}
       </div>
     </section>
   );
@@ -716,6 +814,7 @@ function Contact({
   mapSrc,
   googleRating,
   reviewCount,
+  googleReviewsUrl,
   onBook,
 }: {
   businessName: string;
@@ -725,6 +824,7 @@ function Contact({
   mapSrc: string;
   googleRating?: number;
   reviewCount?: number;
+  googleReviewsUrl?: string;
   onBook: () => void;
 }) {
   return (
@@ -801,6 +901,12 @@ function Contact({
               </div>
             )}
           </div>
+
+          {googleReviewsUrl && (
+            <div className="mt-5">
+              <GoogleReviewsLink url={googleReviewsUrl} />
+            </div>
+          )}
         </Reveal>
 
         {mapSrc && (

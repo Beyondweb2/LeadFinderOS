@@ -68,6 +68,19 @@ export interface BarberSiteContent {
    */
   stats?: BarberStat[];
   /**
+   * When true, services without a confirmed `price` show an illustrative
+   * EXAMPLE price (clearly labelled, under a disclaimer) instead of "Price on
+   * request". Confirmed prices are always shown as-is, never labelled example.
+   * Default/false preserves the "Price on request" behaviour.
+   */
+  showExamplePrices?: boolean;
+  /**
+   * Optional Google Maps / Google Business reviews URL. When set, the site shows
+   * a "Read our Google reviews" link to the real reviews at the source. Hidden
+   * entirely when empty. We never republish review text — only link out.
+   */
+  googleReviewsUrl?: string;
+  /**
    * Optional hero image URL. When omitted, a bundled stock barbershop image is
    * used. May be any same-origin or absolute URL the host app provides.
    */
