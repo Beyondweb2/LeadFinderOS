@@ -9,9 +9,14 @@ export function toBase64Url(bytes: Uint8Array): string {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-/** Generate a new claim token: 32 CSPRNG bytes as a URL-safe base64 string. */
+/**
+ * Generate a new claim token: 16 CSPRNG bytes (128-bit) as a URL-safe base64
+ * string (~22 chars). Single-use, 7-day, rate-limited tokens don't need 256-bit;
+ * 128 bits is unguessable and keeps the share URL short. Length doesn't affect
+ * validation (we look up by SHA-256 hash), so older 32-byte tokens still work.
+ */
 export function generateToken(): string {
-  return toBase64Url(crypto.getRandomValues(new Uint8Array(32)));
+  return toBase64Url(crypto.getRandomValues(new Uint8Array(16)));
 }
 
 /** SHA-256 of a string, lowercase hex. Used to hash tokens before storage/lookup. */

@@ -22,6 +22,12 @@ const corsHeaders = {
 
 const TOKEN_TTL_DAYS = 7;
 
+// Public base for the link the admin sends. Points at the Cloudflare Worker on a
+// separate branded domain (claim.yoursites.uk) that proxies the claim-share
+// function — so links read clean and previews show barber branding, not the
+// long supabase.co URL. Empty falls back to the raw Supabase function URL.
+const SHARE_BASE_URL = "https://claim.yoursites.uk";
+
 function jsonResponse(
   body: unknown,
   status: number,
@@ -143,11 +149,12 @@ serve(async (req) => {
       timestamp: new Date().toISOString(),
     }));
 
-    // Plaintext token returned ONCE. The link to SEND is the claim-share shim URL
-    // (so social previews show barber branding, not LeadFinder); claim_path is
-    // kept for reference / fallback. share_url is an absolute Supabase functions
-    // URL, so the admin UI copies it as-is (no origin prepend).
-    const shareUrl = `${supabaseUrl}/functions/v1/claim-share/${plaintext}`;
+    // Plaintext token returned ONCE. The link to SEND is the branded share URL
+    // (claim.yoursites.uk → Worker → claim-share OG), so previews show barber
+    // branding on a clean domain; claim_path is kept for reference / fallback.
+    const shareUrl = SHARE_BASE_URL
+      ? `${SHARE_BASE_URL}/${plaintext}`
+      : `${supabaseUrl}/functions/v1/claim-share/${plaintext}`;
     return jsonResponse(
       { token: plaintext, share_url: shareUrl, claim_path: `/claim/${plaintext}`, expires_at: expiresAt },
       200,
