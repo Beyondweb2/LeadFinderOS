@@ -1,11 +1,3 @@
-## Deploy claim-share Edge Function
+Deploy the existing `supabase/functions/create-claim-link` Edge Function to production without any code changes. The function is already present in the repo and `supabase/config.toml` already contains the `[functions.create-claim-link]` block with `verify_jwt = false`.
 
-### What
-Deploy the existing `claim-share` Edge Function located at `supabase/functions/claim-share/index.ts` to the production backend.
-
-### How
-1. Deploy via `supabase functions deploy claim-share`.
-2. Confirm successful deployment.
-
-### No code changes
-The function file will not be modified. It is already configured in `supabase/config.toml` with `verify_jwt = false`.
+No file edits are required — deployment only.
