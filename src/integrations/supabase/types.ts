@@ -346,6 +346,7 @@ export type Database = {
           created_at: string
           id: string
           lead_id: string | null
+          owner_id: string | null
           site_name: string
           status: Database["public"]["Enums"]["site_status"]
           updated_at: string
@@ -355,6 +356,7 @@ export type Database = {
           created_at?: string
           id?: string
           lead_id?: string | null
+          owner_id?: string | null
           site_name: string
           status?: Database["public"]["Enums"]["site_status"]
           updated_at?: string
@@ -364,6 +366,7 @@ export type Database = {
           created_at?: string
           id?: string
           lead_id?: string | null
+          owner_id?: string | null
           site_name?: string
           status?: Database["public"]["Enums"]["site_status"]
           updated_at?: string
