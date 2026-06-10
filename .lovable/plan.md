@@ -1,12 +1,11 @@
-## Deploy claim-site Edge Function
+## Deploy claim-share Edge Function
 
 ### What
-Deploy the existing `claim-site` Edge Function located at `supabase/functions/claim-site` to the production backend.
+Deploy the existing `claim-share` Edge Function located at `supabase/functions/claim-share/index.ts` to the production backend.
 
 ### How
-1. Verify the function file exists at `supabase/functions/claim-site/index.ts`.
-2. Deploy via `supabase functions deploy claim-site`.
-3. Confirm successful deployment.
+1. Deploy via `supabase functions deploy claim-share`.
+2. Confirm successful deployment.
 
 ### No code changes
-The function file will not be modified.
+The function file will not be modified. It is already configured in `supabase/config.toml` with `verify_jwt = false`.
