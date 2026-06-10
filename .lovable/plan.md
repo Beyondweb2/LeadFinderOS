@@ -1,17 +1,13 @@
-## Create `barber-site-images` storage bucket + policies
+## Migration: remove orphan claim path & remove first-claim bypass
 
-The previous attempt failed because this workspace blocks public buckets. Two options:
+Run the provided SQL verbatim as a single migration:
 
-### Option A (recommended): Enable public buckets, then create
-1. You enable public buckets in **Lovable Cloud → Settings → Privacy & Security** (owner/admin only).
-2. I create `barber-site-images` as a public bucket (5 MB cap, image MIME types).
-3. I apply a migration on `storage.objects` adding:
-   - Public read (anyone) for `bucket_id = 'barber-site-images'`
-   - Admin-only INSERT / UPDATE / DELETE via `public.has_role(auth.uid(), 'admin')`
+1. `DROP FUNCTION IF EXISTS public.claim_site(text)` — removes the legacy RPC that bypassed the protected-fields trigger.
+2. `DROP TABLE IF EXISTS public.site_claim_tokens` — removes the orphan tokens table (the canonical one is `public.claim_tokens`, used by `claim_generated_site`).
+3. `CREATE OR REPLACE FUNCTION public.lock_generated_sites_protected_fields()` — tightens the trigger so owners can never change `owner_id`, `lead_id`, or `site_name`. First-time claims must now go through the SECURITY DEFINER `claim_generated_site(text, uuid)` RPC (service_role bypass).
 
-### Option B: Keep bucket private, serve via signed URLs
-1. I create `barber-site-images` as a private bucket.
-2. Same admin-only write policies; reads happen through signed URLs generated server-side (edge function or signed URL on render).
-3. Requires changes to the barber site rendering code to request signed URLs instead of using public URLs.
+## Impact / follow-ups
 
-Which do you want — A (enable public buckets) or B (private + signed URLs)?
+- Any client code calling `supabase.rpc('claim_site', ...)` will break. Claims must use `claim_generated_site` via a server-side (edge function / service_role) path.
+- No table/column shape changes, so `src/integrations/supabase/types.ts` only loses the `claim_site` function and `site_claim_tokens` table entries (regenerated automatically after migration).
+- No frontend code changes included in this step — I'll audit references to `claim_site` / `site_claim_tokens` after the migration runs and report back before touching app code.
