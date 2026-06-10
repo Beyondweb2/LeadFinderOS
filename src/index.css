@@ -177,6 +177,30 @@
 }
 
 @layer components {
+  /* Barber ink/amber surface — remaps the shadcn theme variables so neutral
+     components rendered inside (SiteEditor's Cards/Inputs/Buttons) take the
+     barber theme instead of the default LeadFinder dark-navy. Unlisted vars
+     inherit the global :root. */
+  .barber-surface {
+    --background: 240 7% 6%;
+    --foreground: 240 9% 93%;
+    --card: 240 8% 10%;
+    --card-foreground: 240 9% 95%;
+    --popover: 240 8% 10%;
+    --popover-foreground: 240 9% 95%;
+    --primary: 34 76% 60%;
+    --primary-foreground: 240 8% 8%;
+    --secondary: 240 6% 15%;
+    --secondary-foreground: 240 9% 93%;
+    --muted: 240 6% 13%;
+    --muted-foreground: 240 5% 64%;
+    --accent: 240 6% 16%;
+    --accent-foreground: 240 9% 95%;
+    --border: 240 6% 20%;
+    --input: 240 6% 22%;
+    --ring: 34 76% 60%;
+  }
+
   /* Clean panel with shadow in light mode */
   .glass-panel {
     @apply bg-card border border-border;
