@@ -174,18 +174,20 @@ async function fetchGoogleEnrichment(placeId: string): Promise<GoogleEnrichment 
   }
 }
 
+// Clean slug base from the business name — no random suffix. Uniqueness is
+// enforced by the UNIQUE constraint on generated_sites.site_name; the caller
+// appends -2, -3, … on conflict. (Draft privacy is already covered by RLS, which
+// only exposes published rows, so the old "unguessable" hash is dropped.)
 function slugify(name: string): string {
-  const base = name
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40) || "barber-site";
-  // Unguessable suffix: 8 hex chars from a CSPRNG.
-  const rand = Array.from(crypto.getRandomValues(new Uint8Array(4)))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  return `${base}-${rand}`;
+  return (
+    name
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40)
+      .replace(/-+$/, "") || "barber-site"
+  );
 }
 
 serve(async (req) => {
@@ -521,19 +523,34 @@ serve(async (req) => {
     // field, so a social link is not part of generated content (see notes to user).
     void facebookHigh;
 
-    // --- Step 13: Generate an unguessable slug and save ---
-    const slug = slugify(content.businessName || "barber-site");
+    // --- Step 13: Generate a clean, unique slug and save ---
+    // Clean base from the business name; the DB UNIQUE constraint on site_name is
+    // the arbiter of uniqueness. Try the bare base, then -2, -3, …, reacting to a
+    // unique-violation (Postgres 23505) — race-safe, since two concurrent inserts
+    // cannot both win the same slug.
+    const baseSlug = slugify(content.businessName || "barber-site");
 
-    const { data: saved, error: insertError } = await serviceClient
-      .from("generated_sites")
-      .insert({
-        lead_id: leadId,
-        site_name: slug, // see notes: generated_sites has no dedicated slug column
-        content,
-        status: "draft",
-      })
-      .select("id, lead_id, site_name, status, created_at")
-      .single();
+    type SavedRow = { id: string; lead_id: string; site_name: string; status: string; created_at: string };
+    let saved: SavedRow | null = null;
+    let insertError: { code?: string; message?: string } | null = null;
+    let slug = baseSlug;
+
+    for (let attempt = 1; attempt <= 50; attempt++) {
+      slug = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
+      const res = await serviceClient
+        .from("generated_sites")
+        .insert({ lead_id: leadId, site_name: slug, content, status: "draft" })
+        .select("id, lead_id, site_name, status, created_at")
+        .single();
+      if (!res.error) {
+        saved = res.data as unknown as SavedRow;
+        insertError = null;
+        break;
+      }
+      insertError = res.error;
+      if (res.error.code === "23505") continue; // slug already taken — next suffix
+      break; // a different error — stop and report
+    }
 
     if (insertError || !saved) {
       console.error("[GENERATE-BARBER-SITE] Insert failed:", insertError?.message);
