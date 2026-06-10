@@ -1171,9 +1171,6 @@ export function OutreachTable({
                    {!readOnly && onMarkAsInterested && (
                     <TableHead className="w-[80px] text-center">Track</TableHead>
                   )}
-                  {isAdmin && (
-                    <TableHead className="w-[60px] text-center">AI</TableHead>
-                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
