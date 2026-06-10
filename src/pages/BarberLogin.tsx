@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Scissors } from "lucide-react";
+import { useBarberBranding } from "@/hooks/useBarberBranding";
 import "@/templates/barber/fonts.css";
 
 /**
@@ -39,6 +40,8 @@ export default function BarberLogin() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useBarberBranding("Log in to your website");
 
   // Already signed in → straight through (e.g. opened a claim link while logged in).
   if (!isLoading && user) {

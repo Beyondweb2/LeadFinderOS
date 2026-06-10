@@ -10,6 +10,7 @@ import { barberProPriceLabel } from "@/config/pricing";
 import { SETUP_BY_NAME, SUPPORT_CONTACT, supportContactHref } from "@/config/barberBrand";
 import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
 import type { BarberSiteContent } from "@/templates/barber/types";
+import { useBarberBranding } from "@/hooks/useBarberBranding";
 import "@/templates/barber/fonts.css";
 
 /**
@@ -74,6 +75,12 @@ export default function Claim() {
       cancelled = true;
     };
   }, [token]);
+
+  useBarberBranding(
+    businessName && businessName !== "your business"
+      ? `Claim your website — ${businessName}`
+      : "Claim your website",
+  );
 
   const mapError = (code: string): string => {
     switch (code) {

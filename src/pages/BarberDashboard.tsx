@@ -6,6 +6,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { Button } from "@/components/ui/button";
 import { Loader2, ExternalLink, LogOut } from "lucide-react";
 import type { BarberSiteContent } from "@/templates/barber/types";
+import { useBarberBranding } from "@/hooks/useBarberBranding";
 import "@/templates/barber/fonts.css";
 
 /**
@@ -26,6 +27,8 @@ export default function BarberDashboard() {
   const { isAdmin } = useSubscription();
   const [sites, setSites] = useState<OwnedSite[]>([]);
   const [loading, setLoading] = useState(true);
+
+  useBarberBranding("Your website");
 
   // Barber sign-out: clear the session and return to the barber front door —
   // NOT useAuth().signOut(), which redirects to LeadFinder's /landing marketing.

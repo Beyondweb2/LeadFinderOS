@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
 import { demoContent } from "@/templates/barber/demoContent";
 import type { BarberSiteContent } from "@/templates/barber/types";
+import { useBarberBranding } from "@/hooks/useBarberBranding";
 
 /**
  * Public, unauthenticated barber site at /p/:slug.
@@ -33,6 +34,9 @@ export default function BarberSite() {
       return (data?.content as unknown as BarberSiteContent) ?? null;
     },
   });
+
+  // Tab title = the shop name, barber favicon — not LeadFinder's.
+  useBarberBranding(data?.businessName || "Barber website");
 
   if (isLoading) {
     return (
