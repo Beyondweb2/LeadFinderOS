@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Loader2, ExternalLink, LogOut, ArrowLeft, Globe, EyeOff } from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
+import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
 import type { BarberSiteContent } from "@/templates/barber/types";
 import { useBarberBranding } from "@/hooks/useBarberBranding";
 import "@/templates/barber/fonts.css";
@@ -128,12 +129,12 @@ export default function BarberDashboard() {
                 </h1>
                 <div className="flex items-center gap-2">
                   <span className={statusBadge(editing.status)}>{editing.status}</span>
-                  <span className="font-mono text-xs text-zinc-500">/p/{editing.site_name}</span>
+                  <span className="font-mono text-xs text-zinc-500">{publicSiteLabel(editing.site_name)}</span>
                 </div>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <a href={`/p/${editing.site_name}`} target="_blank" rel="noreferrer">
+              <a href={publicSiteUrl(editing.site_name)} target="_blank" rel="noreferrer">
                 <Button
                   variant="outline"
                   size="sm"
@@ -208,10 +209,10 @@ export default function BarberDashboard() {
                 </span>
                 <span className={statusBadge(s.status)}>{s.status}</span>
               </div>
-              <span className="font-mono text-xs text-zinc-500">/p/{s.site_name}</span>
+              <span className="font-mono text-xs text-zinc-500">{publicSiteLabel(s.site_name)}</span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <a href={`/p/${s.site_name}`} target="_blank" rel="noreferrer">
+              <a href={publicSiteUrl(s.site_name)} target="_blank" rel="noreferrer">
                 <Button
                   variant="ghost"
                   size="icon"

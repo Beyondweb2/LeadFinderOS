@@ -18,7 +18,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { sha256Hex } from "../_shared/claim-crypto.ts";
 
 // Where humans are sent on to (the real claim page). One spot to change.
-const APP_ORIGIN = "https://lead-finder-app.com";
+const APP_ORIGIN = "https://yoursites.uk";
 
 // Public https image shown in the preview when a site has no hero photo.
 // MUST be a crawler-reachable absolute URL (e.g. a file in the public

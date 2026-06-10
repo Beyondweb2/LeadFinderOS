@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, Link2, CheckCircle2 } from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
+import { publicSiteUrl } from "@/config/publicSite";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
 /**
@@ -83,7 +84,7 @@ export default function AdminSiteManage() {
   }
 
   const isPublished = site.status === "published";
-  const publicUrl = `${window.location.origin}/p/${site.site_name}`;
+  const publicUrl = publicSiteUrl(site.site_name);
 
   const handleTogglePublish = async () => {
     setSavingStatus(true);

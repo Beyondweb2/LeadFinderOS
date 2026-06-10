@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Loader2, ExternalLink } from "lucide-react";
 import { SiteImageManager } from "@/components/SiteImageManager";
+import { publicSiteUrl } from "@/config/publicSite";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
 /**
@@ -113,7 +114,7 @@ export default function AdminSiteImages() {
                 />
                 <div className="flex items-center gap-4 pt-1">
                   <a
-                    href={`/p/${selected.site_name}`}
+                    href={publicSiteUrl(selected.site_name)}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
