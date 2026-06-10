@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-route
 import { AuthProvider } from "@/hooks/useAuth";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { OwnerRedirect } from "@/components/OwnerRedirect";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
@@ -51,6 +52,7 @@ const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
 const BarberSite = lazy(() => import("./pages/BarberSite"));
+const BarberDashboard = lazy(() => import("./pages/BarberDashboard"));
 
 function PageLoader() {
   return (
@@ -210,10 +212,11 @@ const App = () => {
                  </ProtectedRoute>
                } 
              />
-            <Route 
-              path="/" 
+            <Route
+              path="/"
               element={
                 <ProtectedRoute>
+                  <OwnerRedirect>
                     <SubscriptionGate>
                         <AppLayout>
                           <FirstTimeRedirect>
@@ -221,8 +224,17 @@ const App = () => {
                           </FirstTimeRedirect>
                         </AppLayout>
                     </SubscriptionGate>
+                  </OwnerRedirect>
                 </ProtectedRoute>
-              } 
+              }
+            />
+            <Route
+              path="/barber"
+              element={
+                <ProtectedRoute>
+                  <BarberDashboard />
+                </ProtectedRoute>
+              }
             />
             <Route 
               path="/find-leads" 
