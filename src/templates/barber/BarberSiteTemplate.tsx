@@ -441,23 +441,24 @@ function Hero({
       id="top"
       className="relative isolate flex min-h-[88vh] flex-col justify-end overflow-hidden"
     >
-      {/* Full-bleed image with slow ken-burns drift.
+      {/* Full-bleed background image with slow ken-burns drift.
           NOTE: SmartImg's own wrapper is `position: relative`, which (by Tailwind
-          source order) beats a plain `absolute` here — that left the image as an
-          in-flow block with the text stacked beneath it. `md:!absolute` forces a
-          true background overlay on desktop while leaving the mobile hero, which
-          relies on the in-flow behaviour, exactly as it is. */}
+          source order) beats a plain `absolute`. `!absolute` forces it out of flow
+          on ALL breakpoints so the photo is a true background with the text/scrim
+          overlaid on top — including mobile (was `md:!absolute`, which left mobile
+          as an in-flow block with a dead gap before the text). */}
       <SmartImg
         src={heroSrc}
         alt={`Inside ${businessName}`}
         loading="eager"
         zoom
-        className="absolute inset-0 -z-10 h-full w-full md:!absolute"
+        className="!absolute inset-0 -z-10 h-full w-full"
       />
       {/* Legibility + warmth gradients — anchored dark at the bottom/left for the
-          text, but kept light enough on the right that the photograph reads. */}
-      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-ink via-ink/55 to-ink/10" />
-      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-ink/85 via-ink/25 to-transparent" />
+          text, but kept light enough on the right that the photograph reads.
+          Tuned a touch darker so white text holds over bright photos on mobile. */}
+      <div className="absolute inset-0 -z-10 bg-gradient-to-t from-ink via-ink/70 to-ink/20" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-ink/90 via-ink/35 to-transparent" />
 
       <div className="mx-auto w-full max-w-6xl px-5 pb-16 pt-28 sm:px-8 sm:pb-24">
         <div className="max-w-2xl">

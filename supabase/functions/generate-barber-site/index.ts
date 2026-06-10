@@ -371,10 +371,16 @@ serve(async (req) => {
       "business, or any numeric statistic. If a fact is not provided, do not mention it —",
       "leave the field empty or write a shorter section. Inventing a plausible fact is a failure.",
       "Tone for heroHeadline and tagline may be creative, but they must assert no specific fact.",
-      "The 'about' paragraph (2-3 sentences max) may draw ONLY on the provided location, category,",
-      "services, and (when provided) the Google rating and review count; it must contain no history,",
-      "no 'family-run', no 'for generations', no awards, no staff/chair counts, no years in business.",
-      "Less data means a shorter about — never pad with invention.",
+      "The 'about' paragraph (1-2 short sentences) must be PURELY FACTUAL. It may state ONLY: the",
+      "business name, its town or city (from the address), the real Google rating and review count",
+      "(when provided), and the names of services offered (when provided). It MUST NOT assert any",
+      "subjective quality the data cannot prove — FORBIDDEN: welcoming, friendly, skilled, expert,",
+      "experienced, professional, talented, passionate, dedicated, top-notch, premium, high-quality,",
+      "best, trusted, relaxing, cosy, 'great atmosphere', 'top-notch experience', and the like. Also",
+      "no history, founding, awards, counts, or years. Let the real rating speak for itself. Less data",
+      "means a shorter about — never pad with flattery or invention.",
+      "GOOD: 'Northern Quarter Barber is a barbershop in Manchester, rated 4.5 from 203 Google reviews.'",
+      "BAD: 'a welcoming shop where skilled barbers deliver a top-notch grooming experience.'",
       "Service descriptions must be generic; never claim specific products or techniques the shop",
       "has not stated, and never invent prices.",
       "Return ONLY valid JSON matching the schema. No commentary, no markdown.",
@@ -386,7 +392,7 @@ serve(async (req) => {
     const schemaHint = {
       tagline: "string (creative, no factual claim)",
       heroHeadline: "string (creative, no factual claim)",
-      about: "string, 2-3 sentences, only from location/category/services/rating/reviews",
+      about: "string, 1-2 FACTUAL sentences: business name, town/city, real rating+reviews, real service names ONLY — NO subjective quality words (welcoming/skilled/top-notch/friendly/professional/etc.)",
       services: "array of { name: string, description?: string } — generic descriptions, never prices",
     };
 
@@ -402,6 +408,7 @@ serve(async (req) => {
         : "No services were provided — use this default barber list with short generic descriptions: " +
           DEFAULT_SERVICES.map((s) => s.name).join(", ") + ".",
       "Do not invent prices, hours, ratings, counts, years, or history. Output JSON only.",
+      "The 'about' must be factual only — no subjective adjectives (welcoming, skilled, top-notch, friendly, professional, etc.). State only the name, town/city, real rating/reviews and real services.",
     ].join("\n");
 
     let openAiRes: Response;
