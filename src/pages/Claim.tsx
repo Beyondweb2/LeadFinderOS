@@ -5,7 +5,8 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Scissors } from "lucide-react";
+import { Loader2, Scissors, Star } from "lucide-react";
+import { barberProPriceLabel } from "@/config/pricing";
 import "@/templates/barber/fonts.css";
 
 /**
@@ -21,6 +22,16 @@ import "@/templates/barber/fonts.css";
  * Bebas Neue display font) so the barber never sees LeadFinder's look.
  */
 type Phase = "loading" | "invalid" | "ready" | "claimed" | "working";
+
+type PreviewData = {
+  heroHeadline?: string;
+  tagline?: string;
+  heroImageUrl?: string;
+  category?: string;
+  address?: string;
+  googleRating?: number;
+  reviewCount?: number;
+};
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -44,6 +55,7 @@ export default function Claim() {
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [businessName, setBusinessName] = useState("your business");
+  const [preview, setPreview] = useState<PreviewData | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -62,6 +74,7 @@ export default function Claim() {
         return;
       }
       setBusinessName(data.businessName || "your business");
+      setPreview((data.preview as PreviewData) ?? null);
       setPhase(data.alreadyClaimed ? "claimed" : "ready");
     })();
     return () => {
@@ -192,7 +205,54 @@ export default function Claim() {
           )}
 
           {(phase === "ready" || phase === "working") && !authLoading && (
-            <>
+            <div className="space-y-4">
+              {preview && (
+                <div className="overflow-hidden rounded-xl border border-line">
+                  <div
+                    className="relative flex min-h-[150px] flex-col justify-end p-4"
+                    style={
+                      preview.heroImageUrl
+                        ? {
+                            backgroundImage: `linear-gradient(to top, rgba(14,14,16,0.94), rgba(14,14,16,0.30)), url(${preview.heroImageUrl})`,
+                            backgroundSize: "cover",
+                            backgroundPosition: "center",
+                          }
+                        : { backgroundColor: "#161619" }
+                    }
+                  >
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-amber-soft">
+                      Your website
+                    </div>
+                    <div className="font-display text-2xl uppercase leading-none tracking-wide text-white">
+                      {businessName}
+                    </div>
+                    {(preview.heroHeadline || preview.tagline) && (
+                      <div className="mt-1 truncate text-xs text-zinc-300">
+                        {preview.heroHeadline || preview.tagline}
+                      </div>
+                    )}
+                    {typeof preview.googleRating === "number" && (
+                      <div className="mt-1.5 inline-flex items-center gap-1 text-xs text-amber-soft">
+                        <Star className="h-3 w-3 fill-amber text-amber" />
+                        {preview.googleRating}
+                        {preview.reviewCount ? ` · ${preview.reviewCount} reviews` : ""}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Honest reassurance: the SITE is free; booking + reminders are the paid add-on. */}
+              <div className="rounded-lg border border-line bg-white/[0.02] p-3 text-xs leading-relaxed text-zinc-400">
+                <p>
+                  <span className="font-semibold text-white">Your website is free</span> — no card needed.
+                </p>
+                <p className="mt-1">
+                  Add online booking &amp; no-show SMS reminders for{" "}
+                  <span className="font-semibold text-amber-soft">{barberProPriceLabel}</span>.
+                </p>
+              </div>
+
               {user ? (
                 // Already signed in → one-click claim.
                 <div className="space-y-4">
@@ -265,7 +325,7 @@ export default function Claim() {
                   </p>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </div>

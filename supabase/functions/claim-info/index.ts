@@ -74,13 +74,29 @@ serve(async (req) => {
       return jsonResponse({ valid: false }, 200, rlHeaders);
     }
 
+    const c = (site.content || {}) as Record<string, unknown>;
+    const str = (v: unknown) => (typeof v === "string" ? v : "");
+    const num = (v: unknown) => (typeof v === "number" ? v : undefined);
+
     const businessName =
-      (site.content as { businessName?: string } | null)?.businessName?.trim() ||
-      (site.site_name as string) ||
-      "your business";
+      str(c.businessName).trim() || (site.site_name as string) || "your business";
+
+    // Token-gated preview so the barber can SEE it's really their shop before
+    // claiming (the strongest anti-"is this a scam" signal). These are the same
+    // fields that become public once the site is published; the token holder is
+    // the intended owner, so returning them here is fine.
+    const preview = {
+      heroHeadline: str(c.heroHeadline),
+      tagline: str(c.tagline),
+      heroImageUrl: str(c.heroImageUrl),
+      category: str(c.category),
+      address: str(c.address),
+      googleRating: num(c.googleRating),
+      reviewCount: num(c.reviewCount),
+    };
 
     return jsonResponse(
-      { valid: true, businessName, alreadyClaimed: !!site.owner_id },
+      { valid: true, businessName, alreadyClaimed: !!site.owner_id, preview },
       200,
       rlHeaders,
     );
