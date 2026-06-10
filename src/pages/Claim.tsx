@@ -5,38 +5,29 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Scissors, Star } from "lucide-react";
+import { Loader2, Scissors, ArrowLeft } from "lucide-react";
 import { barberProPriceLabel } from "@/config/pricing";
 import { SETUP_BY_NAME, SUPPORT_CONTACT, supportContactHref } from "@/config/barberBrand";
+import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
+import type { BarberSiteContent } from "@/templates/barber/types";
 import "@/templates/barber/fonts.css";
 
 /**
  * /claim/:token — the barber's self-contained front door. Barber-branded (NO
- * LeadFinder chrome). Validates the token, shows "Claim your website for X" with
- * its OWN inline create-account form, then claims the site and lands the barber in
- * /barber. A logged-in visitor gets a one-click claim instead of the form.
+ * LeadFinder chrome). Two steps:
+ *   1. "preview" — the barber sees their ACTUAL website (the real template,
+ *      booking disabled) with a fixed "Claim for free" bar.
+ *   2. "signup"  — clicking claim brings up the create-account form (or a
+ *      one-click claim if already signed in), then claims the site → /barber.
  *
  * Barbers are invite-only: this page is only reachable with a token, and account
  * creation happens server-side in claim-site only when the token is valid.
- *
- * Styling mirrors the barber site template (ink background + amber accents,
- * Bebas Neue display font) so the barber never sees LeadFinder's look.
  */
 type Phase = "loading" | "invalid" | "ready" | "claimed" | "working";
-
-type PreviewData = {
-  heroHeadline?: string;
-  tagline?: string;
-  heroImageUrl?: string;
-  category?: string;
-  address?: string;
-  googleRating?: number;
-  reviewCount?: number;
-};
+type Step = "preview" | "signup";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-// Shared barber-look classnames.
 const SHELL =
   "min-h-screen flex items-center justify-center bg-ink font-body text-zinc-300 antialiased p-4";
 const SHELL_BG =
@@ -55,14 +46,15 @@ export default function Claim() {
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState<Phase>("loading");
+  const [step, setStep] = useState<Step>("preview");
   const [businessName, setBusinessName] = useState("your business");
-  const [preview, setPreview] = useState<PreviewData | null>(null);
+  const [content, setContent] = useState<BarberSiteContent | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [existingEmail, setExistingEmail] = useState(false);
 
-  // Validate the token / fetch the business name.
+  // Validate the token / fetch the site content for the preview.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -75,7 +67,7 @@ export default function Claim() {
         return;
       }
       setBusinessName(data.businessName || "your business");
-      setPreview((data.preview as PreviewData) ?? null);
+      setContent((data.content as BarberSiteContent) ?? null);
       setPhase(data.alreadyClaimed ? "claimed" : "ready");
     })();
     return () => {
@@ -154,10 +146,26 @@ export default function Claim() {
     navigate("/barber", { replace: true });
   };
 
+  // Full-screen spinner while validating.
+  if (phase === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-ink">
+        <Loader2 className="h-8 w-8 animate-spin text-amber" />
+      </div>
+    );
+  }
+
+  // Step 1 — show the barber their ACTUAL website, with a "Claim for free" bar.
+  if (phase === "ready" && step === "preview" && content) {
+    return (
+      <BarberSiteTemplate content={content} bookingEnabled={false} onClaim={() => setStep("signup")} />
+    );
+  }
+
+  // Card layout — sign-up step, plus the invalid / already-claimed states.
   return (
     <div className={SHELL} style={{ backgroundImage: SHELL_BG }}>
       <div className={CARD}>
-        {/* Header */}
         <div className="text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-amber/30 bg-amber/10">
             <Scissors className="h-5 w-5 text-amber" />
@@ -179,12 +187,6 @@ export default function Claim() {
         </div>
 
         <div className="mt-6 space-y-4">
-          {phase === "loading" && (
-            <div className="flex justify-center py-6">
-              <Loader2 className="h-6 w-6 animate-spin text-amber" />
-            </div>
-          )}
-
           {phase === "invalid" && (
             <p className="text-center text-sm text-zinc-400">
               This claim link is invalid or has expired. Please ask for a fresh link.
@@ -207,40 +209,14 @@ export default function Claim() {
 
           {(phase === "ready" || phase === "working") && !authLoading && (
             <div className="space-y-4">
-              {preview && (
-                <div className="overflow-hidden rounded-xl border border-line">
-                  <div
-                    className="relative flex min-h-[150px] flex-col justify-end p-4"
-                    style={
-                      preview.heroImageUrl
-                        ? {
-                            backgroundImage: `linear-gradient(to top, rgba(14,14,16,0.94), rgba(14,14,16,0.30)), url(${preview.heroImageUrl})`,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                          }
-                        : { backgroundColor: "#161619" }
-                    }
-                  >
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.28em] text-amber-soft">
-                      Your website
-                    </div>
-                    <div className="font-display text-2xl uppercase leading-none tracking-wide text-white">
-                      {businessName}
-                    </div>
-                    {(preview.heroHeadline || preview.tagline) && (
-                      <div className="mt-1 truncate text-xs text-zinc-300">
-                        {preview.heroHeadline || preview.tagline}
-                      </div>
-                    )}
-                    {typeof preview.googleRating === "number" && (
-                      <div className="mt-1.5 inline-flex items-center gap-1 text-xs text-amber-soft">
-                        <Star className="h-3 w-3 fill-amber text-amber" />
-                        {preview.googleRating}
-                        {preview.reviewCount ? ` · ${preview.reviewCount} reviews` : ""}
-                      </div>
-                    )}
-                  </div>
-                </div>
+              {content && phase === "ready" && (
+                <button
+                  type="button"
+                  onClick={() => setStep("preview")}
+                  className="inline-flex items-center gap-1 text-xs text-zinc-400 transition-colors hover:text-amber"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" /> Back to your website
+                </button>
               )}
 
               {/* Honest reassurance: the SITE is free; booking + reminders are the paid add-on. */}
@@ -330,23 +306,21 @@ export default function Claim() {
           )}
         </div>
 
-        {phase !== "loading" && (
-          <p className="mt-6 border-t border-line pt-4 text-center text-xs text-zinc-500">
-            Set up by {SETUP_BY_NAME}
-            {SUPPORT_CONTACT && (
-              <>
-                {" "}— questions?{" "}
-                {supportContactHref ? (
-                  <a href={supportContactHref} className="text-amber underline hover:text-amber-soft">
-                    {SUPPORT_CONTACT}
-                  </a>
-                ) : (
-                  <span className="text-zinc-400">{SUPPORT_CONTACT}</span>
-                )}
-              </>
-            )}
-          </p>
-        )}
+        <p className="mt-6 border-t border-line pt-4 text-center text-xs text-zinc-500">
+          Set up by {SETUP_BY_NAME}
+          {SUPPORT_CONTACT && (
+            <>
+              {" "}— questions?{" "}
+              {supportContactHref ? (
+                <a href={supportContactHref} className="text-amber underline hover:text-amber-soft">
+                  {SUPPORT_CONTACT}
+                </a>
+              ) : (
+                <span className="text-zinc-400">{SUPPORT_CONTACT}</span>
+              )}
+            </>
+          )}
+        </p>
       </div>
     </div>
   );

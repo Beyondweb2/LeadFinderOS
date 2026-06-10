@@ -18,6 +18,7 @@ import type { BarberOpeningHours, BarberService, BarberSiteContent, BarberStat }
 export function BarberSiteTemplate({
   content,
   bookingEnabled = false,
+  onClaim,
 }: {
   content: BarberSiteContent;
   /**
@@ -26,6 +27,12 @@ export function BarberSiteTemplate({
    * contact/call section instead of opening a booking flow the site can't deliver.
    */
   bookingEnabled?: boolean;
+  /**
+   * When set, the site renders in "claim preview" mode: a fixed "Claim for free"
+   * bar replaces the mobile Book bar so a barber can view their site before
+   * signing up. Used by the /claim page; the public /p/:slug site never sets it.
+   */
+  onClaim?: () => void;
 }) {
   const {
     businessName,
@@ -84,7 +91,7 @@ export function BarberSiteTemplate({
           styles. Two soft amber radials over deep ink. */}
       {/* pb on mobile clears the fixed bottom Book bar so no section sits under it */}
       <div
-        className="relative min-h-screen bg-ink pb-[76px] sm:pb-0"
+        className={`relative min-h-screen bg-ink ${onClaim ? "pb-[88px]" : "pb-[76px] sm:pb-0"}`}
         style={{
           backgroundImage:
             "radial-gradient(1100px 600px at 85% -8%, rgba(230,162,75,0.10), transparent 60%)," +
@@ -133,7 +140,7 @@ export function BarberSiteTemplate({
       </div>
 
       {/* Mobile-only sticky Book bar — owners open the link on a phone. */}
-      <MobileBookBar onBook={openBooking} />
+      {onClaim ? <ClaimBar onClaim={onClaim} /> : <MobileBookBar onBook={openBooking} />}
 
       <BookingModal
         open={bookingOpen}
@@ -985,6 +992,28 @@ function MobileBookBar({ onBook }: { onBook: () => void }) {
         <CalendarIcon className="h-[18px] w-[18px]" />
         Book now
       </button>
+    </div>
+  );
+}
+
+/** Claim-preview bar: shown (all viewports) when the site is rendered on the
+ *  /claim page so a barber can view their website, then claim it for free. */
+function ClaimBar({ onClaim }: { onClaim: () => void }) {
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-ink/90 px-4 py-2.5 backdrop-blur-xl">
+      <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-white sm:text-base">This is your new website</div>
+          <div className="text-xs text-amber-soft">It's free — no card needed.</div>
+        </div>
+        <button
+          type="button"
+          onClick={onClaim}
+          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-amber px-5 py-2.5 text-sm font-bold text-ink shadow-[0_4px_20px_-6px_rgba(230,162,75,0.6)] transition-all hover:-translate-y-0.5 hover:bg-amber-soft active:scale-[0.98]"
+        >
+          Claim for free
+        </button>
+      </div>
     </div>
   );
 }
