@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, Plus, X } from "lucide-react";
+import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, Plus, X, Link2, CheckCircle2 } from "lucide-react";
 import { SiteImageManager, type SiteImageManagerHandle } from "@/components/SiteImageManager";
 import type { BarberSiteContent, BarberService } from "@/templates/barber/types";
 import type { Json } from "@/integrations/supabase/types";
@@ -27,6 +27,7 @@ type SiteRow = {
   site_name: string;
   status: string;
   content: BarberSiteContent;
+  owner_id: string | null;
 };
 
 export default function AdminSiteManage() {
@@ -52,6 +53,8 @@ export default function AdminSiteManage() {
   const [saving, setSaving] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [claimLink, setClaimLink] = useState<string | null>(null);
+  const [generatingLink, setGeneratingLink] = useState(false);
 
   const anyDirty = textDirty || imageDirty;
 
@@ -61,7 +64,7 @@ export default function AdminSiteManage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("generated_sites")
-        .select("id, site_name, status, content")
+        .select("id, site_name, status, content, owner_id")
         .eq("id", id)
         .maybeSingle();
       if (error || !data) {
@@ -225,6 +228,39 @@ export default function AdminSiteManage() {
     }
   };
 
+  const handleGenerateClaimLink = async () => {
+    setGeneratingLink(true);
+    setClaimLink(null);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-claim-link", {
+        body: { site_id: site.id },
+      });
+      if (error) throw new Error("Couldn't reach the server. Please try again.");
+      if (data?.error) {
+        throw new Error(
+          data.error === "already_claimed"
+            ? "This site has already been claimed by a barber."
+            : "Couldn't create a claim link.",
+        );
+      }
+      setClaimLink(`${window.location.origin}${data.claim_path}`);
+    } catch (e) {
+      toast({ title: "Claim link failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setGeneratingLink(false);
+    }
+  };
+
+  const copyClaimLink = async () => {
+    if (!claimLink) return;
+    try {
+      await navigator.clipboard.writeText(claimLink);
+      toast({ title: "Claim link copied" });
+    } catch {
+      toast({ title: "Copy failed", description: claimLink, variant: "destructive" });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 max-w-3xl mx-auto space-y-6">
       {/* Header */}
@@ -365,6 +401,46 @@ export default function AdminSiteManage() {
             content={site.content}
             onDirtyChange={setImageDirty}
           />
+        </CardContent>
+      </Card>
+
+      {/* Barber access — generate the private claim link to send the barber */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Barber access</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {site.owner_id ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+              This site has been claimed by a barber. They manage it from their own dashboard.
+            </div>
+          ) : (
+            <>
+              <p className="text-sm text-muted-foreground">
+                Generate a private, single-use link (valid 7 days) and send it to the barber.
+                They create their own account on that page and become the owner of this one site.
+              </p>
+              <Button variant="outline" size="sm" onClick={handleGenerateClaimLink} disabled={generatingLink}>
+                {generatingLink ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />}
+                {claimLink ? "Generate a new link" : "Generate claim link"}
+              </Button>
+
+              {claimLink && (
+                <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                  <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
+                    Copy this link now — it won't be shown again. Generating a new link invalidates this one.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input readOnly value={claimLink} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
+                    <Button variant="outline" size="icon" title="Copy claim link" onClick={copyClaimLink}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </CardContent>
       </Card>
 

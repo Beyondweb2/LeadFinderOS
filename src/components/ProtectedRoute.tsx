@@ -6,9 +6,15 @@ import { hasAdEntryAccess } from '@/lib/adEntryAccess';
 
 interface ProtectedRouteProps {
   children: ReactNode;
+  /**
+   * Where to send an unauthenticated visitor. Defaults to the LeadFinder
+   * marketing landing; barber routes pass "/barber-login" so a logged-out barber
+   * hits THEIR front door, never LeadFinder's.
+   */
+  redirectTo?: string;
 }
 
-export function ProtectedRoute({ children }: ProtectedRouteProps) {
+export function ProtectedRoute({ children, redirectTo = "/landing" }: ProtectedRouteProps) {
   const { user, isLoading } = useAuth();
   const location = useLocation();
 
@@ -43,7 +49,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     if (hasAdEntryAccess()) {
       return <>{children}</>;
     }
-    return <Navigate to="/landing" replace />;
+    return <Navigate to={redirectTo} replace />;
   }
 
   return <>{children}</>;

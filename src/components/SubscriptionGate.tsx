@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
+import { useOwner } from '@/contexts/OwnerContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2 } from 'lucide-react';
 import { PaymentPausedScreen } from '@/components/PaymentPausedScreen';
@@ -17,6 +18,7 @@ const subscriptionGateCache = new Map<string, { setupCompleted: boolean }>();
 export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const { isLoading: subLoading, isPaymentPaused, isPaidSubscriber, isStripeTrialing, isAdmin, status: subStatus } = useSubscription();
   const { user } = useAuth();
+  const { loading: ownerLoading, isOwner } = useOwner();
 
   const cachedGateState = user?.id ? subscriptionGateCache.get(user.id) : null;
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(cachedGateState?.setupCompleted ?? null);
@@ -76,12 +78,20 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     return <>{children}</>;
   }
 
-  if (subLoading || setupLoading) {
+  if (subLoading || setupLoading || ownerLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
+  }
+
+  // Barbers (site owners) must never see LeadFinder's customer flow or subscribe
+  // wall. Divert them to /barber from EVERY gated route — OwnerRedirect only
+  // guards "/", so this is the catch-all. Admins who happen to own a site keep
+  // the admin/customer experience.
+  if (isOwner && !isAdmin) {
+    return <Navigate to="/barber" replace />;
   }
 
   const isPaymentBlocked = isPaymentPaused || subStatus === 'unpaid';

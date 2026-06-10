@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
+import { OwnerProvider } from "@/contexts/OwnerContext";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { OwnerRedirect } from "@/components/OwnerRedirect";
@@ -53,6 +54,8 @@ const Start = lazy(() => import("./pages/Start"));
 const CityLeads = lazy(() => import("./pages/CityLeads"));
 const BarberSite = lazy(() => import("./pages/BarberSite"));
 const BarberDashboard = lazy(() => import("./pages/BarberDashboard"));
+const Claim = lazy(() => import("./pages/Claim"));
+const BarberLogin = lazy(() => import("./pages/BarberLogin"));
 
 function PageLoader() {
   return (
@@ -169,6 +172,7 @@ const App = () => {
   <ErrorBoundary>
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
+      <OwnerProvider>
       <SubscriptionProvider>
       <AccentInitializer>
         <TooltipProvider>
@@ -199,6 +203,9 @@ const App = () => {
               <Route path="/start-free-trial" element={<Navigate to="/subscribe" replace />} />
               <Route path="/find-clients/:city" element={<CityLeads />} />
               <Route path="/p/:slug" element={<BarberSite />} />
+              {/* Barber front doors — PUBLIC, neutral-branded, never LeadFinder chrome. */}
+              <Route path="/claim/:token" element={<Claim />} />
+              <Route path="/barber-login" element={<BarberLogin />} />
               <Route 
                 path="/ads" 
                 element={<AdEntryRedirect />} 
@@ -231,7 +238,7 @@ const App = () => {
             <Route
               path="/barber"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute redirectTo="/barber-login">
                   <BarberDashboard />
                 </ProtectedRoute>
               }
@@ -399,6 +406,7 @@ const App = () => {
         </TooltipProvider>
       </AccentInitializer>
       </SubscriptionProvider>
+      </OwnerProvider>
     </AuthProvider>
   </QueryClientProvider>
   </ErrorBoundary>
