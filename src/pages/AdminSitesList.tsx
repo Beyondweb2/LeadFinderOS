@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, ExternalLink, Settings2, Trash2 } from "lucide-react";
+import { ArrowLeft, Loader2, ExternalLink, Settings2, Trash2, CheckCircle2 } from "lucide-react";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
 /**
@@ -18,6 +18,7 @@ type SiteRow = {
   status: string;
   content: BarberSiteContent;
   created_at: string;
+  owner_id: string | null;
 };
 
 export default function AdminSitesList() {
@@ -48,7 +49,7 @@ export default function AdminSitesList() {
       setLoading(true);
       const { data } = await supabase
         .from("generated_sites")
-        .select("id, site_name, status, content, created_at")
+        .select("id, site_name, status, content, created_at, owner_id")
         .order("created_at", { ascending: false });
       setSites((data ?? []) as unknown as SiteRow[]);
       setLoading(false);
@@ -99,6 +100,11 @@ export default function AdminSitesList() {
                     <Badge variant={s.status === "published" ? "default" : "secondary"}>
                       {s.status}
                     </Badge>
+                    {s.owner_id && (
+                      <Badge className="gap-1 border-transparent bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400">
+                        <CheckCircle2 className="h-3 w-3" /> Activated
+                      </Badge>
+                    )}
                   </div>
                   <span className="font-mono text-xs text-muted-foreground">/p/{s.site_name}</span>
                 </div>
