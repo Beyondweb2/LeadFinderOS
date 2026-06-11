@@ -133,6 +133,101 @@ export type Database = {
         }
         Relationships: []
       }
+      booking_staff: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          site_id: string
+          sort_order: number
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          site_id: string
+          sort_order?: number
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          site_id?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "booking_staff_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "generated_sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bookings: {
+        Row: {
+          created_at: string
+          customer_name: string
+          customer_phone: string
+          ends_at: string
+          id: string
+          notes: string | null
+          service_name: string
+          site_id: string
+          staff_id: string
+          starts_at: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          customer_name: string
+          customer_phone: string
+          ends_at: string
+          id?: string
+          notes?: string | null
+          service_name: string
+          site_id: string
+          staff_id: string
+          starts_at: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          customer_name?: string
+          customer_phone?: string
+          ends_at?: string
+          id?: string
+          notes?: string | null
+          service_name?: string
+          site_id?: string
+          staff_id?: string
+          starts_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "generated_sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bookings_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "booking_staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checked_businesses: {
         Row: {
           business_name: string
@@ -928,6 +1023,41 @@ export type Database = {
         }
         Relationships: []
       }
+      staff_working_hours: {
+        Row: {
+          created_at: string
+          end_time: string
+          id: string
+          staff_id: string
+          start_time: string
+          weekday: number
+        }
+        Insert: {
+          created_at?: string
+          end_time: string
+          id?: string
+          staff_id: string
+          start_time: string
+          weekday: number
+        }
+        Update: {
+          created_at?: string
+          end_time?: string
+          id?: string
+          staff_id?: string
+          start_time?: string
+          weekday?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "staff_working_hours_staff_id_fkey"
+            columns: ["staff_id"]
+            isOneToOne: false
+            referencedRelation: "booking_staff"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           created_at: string
@@ -1298,6 +1428,10 @@ export type Database = {
       }
     }
     Functions: {
+      bookable_staff: {
+        Args: { _site_id: string; _staff_id: string }
+        Returns: boolean
+      }
       challenge_10_record_contact: {
         Args: { p_lead_id: string }
         Returns: Json
@@ -1322,7 +1456,11 @@ export type Database = {
         Args: { p_event_type: string; p_meta?: Json }
         Returns: undefined
       }
+      owns_site: { Args: { _site_id: string }; Returns: boolean }
+      owns_staff: { Args: { _staff_id: string }; Returns: boolean }
       reset_my_metrics: { Args: never; Returns: undefined }
+      site_is_published: { Args: { _site_id: string }; Returns: boolean }
+      staff_site_published: { Args: { _staff_id: string }; Returns: boolean }
       validate_affiliate_code: {
         Args: { code_to_check: string }
         Returns: boolean
