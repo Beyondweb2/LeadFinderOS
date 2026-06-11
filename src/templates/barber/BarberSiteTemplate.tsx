@@ -124,7 +124,7 @@ export function BarberSiteTemplate({
           styles. Two soft amber radials over deep ink. */}
       {/* pb on mobile clears the fixed bottom Book bar so no section sits under it */}
       <div
-        className={`relative min-h-screen bg-ink ${onClaim ? "pb-[88px]" : "pb-[76px] sm:pb-0"}`}
+        className={`relative min-h-screen bg-ink ${onClaim ? "pb-[104px] sm:pb-[140px]" : "pb-[76px] sm:pb-0"}`}
         style={{
           backgroundImage:
             "radial-gradient(1100px 600px at 85% -8%, rgb(var(--barber-accent) / 0.10), transparent 60%)," +
@@ -1036,22 +1036,36 @@ function MobileBookBar({ onBook }: { onBook: () => void }) {
 }
 
 /** Claim-preview bar: shown (all viewports) when the site is rendered on the
- *  /claim page so a barber can view their website, then claim it for free. */
+ *  /claim page so a barber can view their website, then claim it for free.
+ *  Compact on mobile; taller and higher-contrast on desktop where it's otherwise
+ *  easy to miss, with a softly pulsing glow behind a larger "Claim for free". */
 function ClaimBar({ onClaim }: { onClaim: () => void }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-ink/90 px-4 py-2.5 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t-2 border-amber/40 bg-ink/95 px-4 py-3 shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:py-5">
+      {/* Bright accent hairline along the top edge for extra contrast. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber to-transparent opacity-70"
+      />
+      <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 sm:gap-6">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-white sm:text-base">This is your new website</div>
-          <div className="text-xs text-amber-soft">It's free — no card needed.</div>
+          <div className="text-sm font-bold text-white sm:text-xl">This is your new website</div>
+          <div className="text-xs text-amber-soft sm:text-sm">It's free — no card needed.</div>
         </div>
-        <button
-          type="button"
-          onClick={onClaim}
-          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-amber px-5 py-2.5 text-sm font-bold text-ink shadow-accent-sm transition-all hover:-translate-y-0.5 hover:bg-amber-soft active:scale-[0.98]"
-        >
-          Claim for free
-        </button>
+        <div className="relative shrink-0">
+          {/* Soft pulsing glow behind the button (draws the eye on desktop). */}
+          <span
+            aria-hidden
+            className="absolute -inset-1 rounded-full bg-amber/40 opacity-60 blur-lg animate-pulse-slow"
+          />
+          <button
+            type="button"
+            onClick={onClaim}
+            className="relative inline-flex items-center gap-2 rounded-full bg-amber px-6 py-2.5 text-sm font-bold text-ink shadow-accent-lg transition-all hover:-translate-y-0.5 hover:bg-amber-soft active:scale-[0.98] sm:px-9 sm:py-4 sm:text-lg"
+          >
+            Claim for free
+          </button>
+        </div>
       </div>
     </div>
   );
