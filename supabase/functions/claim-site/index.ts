@@ -37,6 +37,84 @@ function clientIp(req: Request): string {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/** HTML-escape for safe interpolation into the notification email body. */
+function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+/** Best-effort operator notification when a barber claims a site. Sends via
+ *  Resend (raw fetch, RESEND_API_KEY) FROM the verified lead-finder-app.com
+ *  sender — NEVER from yoursites.uk, which isn't verified in Resend. Any failure
+ *  is logged and swallowed so it can never affect the claim itself. */
+async function notifyAdminOfClaim(opts: {
+  serviceClient: ReturnType<typeof createClient>;
+  siteId: string;
+  accountEmail: string;
+  newAccount: boolean;
+}): Promise<void> {
+  const resendKey = Deno.env.get("RESEND_API_KEY");
+  if (!resendKey) {
+    console.warn("[CLAIM-SITE] RESEND_API_KEY not set; skipping operator notification");
+    return;
+  }
+  try {
+    const { data: site } = await opts.serviceClient
+      .from("generated_sites")
+      .select("site_name, content")
+      .eq("id", opts.siteId)
+      .maybeSingle();
+
+    const content = (site?.content ?? {}) as Record<string, unknown>;
+    const slug = typeof site?.site_name === "string" ? site.site_name : "(unknown)";
+    const shopName =
+      typeof content.businessName === "string" && content.businessName.trim()
+        ? content.businessName.trim()
+        : slug;
+    const account = opts.accountEmail
+      ? `${opts.accountEmail} (${opts.newAccount ? "new account" : "existing account"})`
+      : "existing/logged-in user";
+    const publicUrl = `https://yoursites.uk/p/${slug}`;
+
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${resendKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "LeadFinder Pro <noreply@lead-finder-app.com>",
+        to: ["paul@yoursites.uk"],
+        subject: `New barber claim: ${shopName}`,
+        text:
+          `A barber just claimed their site.\n\n` +
+          `Shop:    ${shopName}\n` +
+          `Slug:    ${slug}\n` +
+          `Site:    ${publicUrl}\n` +
+          `Account: ${account}\n`,
+        html:
+          `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;color:#1e293b">` +
+          `<h2 style="margin:0 0 12px">New barber claim 🎉</h2>` +
+          `<p style="margin:0 0 4px"><strong>Shop:</strong> ${esc(shopName)}</p>` +
+          `<p style="margin:0 0 4px"><strong>Slug:</strong> ${esc(slug)}</p>` +
+          `<p style="margin:0 0 4px"><strong>Site:</strong> <a href="${esc(publicUrl)}">${esc(publicUrl)}</a></p>` +
+          `<p style="margin:0 0 4px"><strong>Account:</strong> ${esc(account)}</p>` +
+          `</div>`,
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error("[CLAIM-SITE] notify email non-OK:", res.status, errBody.slice(0, 200));
+    }
+  } catch (e) {
+    console.error("[CLAIM-SITE] notify email failed (non-blocking):", (e as Error).message);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -153,6 +231,14 @@ serve(async (req) => {
       new_account: !!createdUserId,
       timestamp: new Date().toISOString(),
     }));
+
+    // Notify the operator (best-effort; never blocks or fails the claim).
+    await notifyAdminOfClaim({
+      serviceClient,
+      siteId: claimedSiteId as string,
+      accountEmail: email,
+      newAccount: !!createdUserId,
+    });
 
     // For new accounts the client now signs in with the same email/password.
     return jsonResponse(
