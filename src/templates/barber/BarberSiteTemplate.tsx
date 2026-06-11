@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import "./fonts.css";
 import { STOCK_GALLERY, STOCK_HERO, STOCK_INTERIOR } from "./assets";
+import { BookingFlow } from "./BookingFlow";
 import type { BarberOpeningHours, BarberService, BarberSiteContent, BarberStat } from "./types";
 
 const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -39,15 +40,23 @@ function mixChannels(hex: string, toward: 0 | 255, t: number): string {
 export function BarberSiteTemplate({
   content,
   bookingEnabled = false,
+  bookingSlug,
   onClaim,
 }: {
   content: BarberSiteContent;
   /**
-   * Online booking + SMS reminders are the paid (£19.99/mo) feature. Until a site
-   * is on the paid tier this stays false, and "Book now" honestly routes to the
-   * contact/call section instead of opening a booking flow the site can't deliver.
+   * Online booking is enabled when the shop has set up bookable staff + hours
+   * (Phase 2). When true, "Book now" opens the real booking flow; when false it
+   * honestly routes to the contact/call section instead.
    */
   bookingEnabled?: boolean;
+  /**
+   * The site's slug (site_name). Required for the REAL booking flow — the
+   * create-booking / get-availability edge functions key off it. When present
+   * (the public /p/:slug page), "Book now" opens <BookingFlow>; when absent
+   * (admin/claim preview) it falls back to the frontend-only demo modal.
+   */
+  bookingSlug?: string;
   /**
    * When set, the site renders in "claim preview" mode: a fixed "Claim for free"
    * bar replaces the mobile Book bar so a barber can view their site before
@@ -175,15 +184,21 @@ export function BarberSiteTemplate({
       {/* Mobile-only sticky Book bar — owners open the link on a phone. */}
       {onClaim ? <ClaimBar onClaim={onClaim} /> : <MobileBookBar onBook={openBooking} />}
 
-      <BookingModal
-        open={bookingOpen}
-        onClose={() => setBookingOpen(false)}
-        businessName={businessName}
-        services={services}
-        hours={hours}
-        phone={phone}
-        telHref={telHref}
-      />
+      {/* Public site → real booking flow (keyed off the slug). Admin/claim
+          preview (no slug) → the frontend-only demo modal. */}
+      {bookingSlug ? (
+        <BookingFlow open={bookingOpen} onClose={() => setBookingOpen(false)} slug={bookingSlug} content={content} />
+      ) : (
+        <BookingModal
+          open={bookingOpen}
+          onClose={() => setBookingOpen(false)}
+          businessName={businessName}
+          services={services}
+          hours={hours}
+          phone={phone}
+          telHref={telHref}
+        />
+      )}
     </div>
   );
 }
