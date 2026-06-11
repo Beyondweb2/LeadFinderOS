@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import {
   Loader2, ExternalLink, LogOut, ArrowLeft, Globe, EyeOff, Sparkles, Check,
-  Bell, Calendar, MessageSquare,
+  Bell, Calendar, MessageSquare, type LucideIcon,
 } from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
 import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
@@ -151,23 +151,31 @@ function CountUp({ to, suffix = "", duration = 1400, start }: {
   return <>{val}{suffix}</>;
 }
 
-/** One cited stat tile for the booking upsell. */
-function UpsellStat({ prefix, to, suffix, label, cite, start }: {
+/** A single "coming feature" pill for the booking upsell. */
+function FeaturePill({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-zinc-200">
+      <Icon className="h-4 w-4 text-amber" />
+      {label}
+    </span>
+  );
+}
+
+/** Secondary cited stat (smaller than the benefit headline) for the upsell. */
+function MiniStat({ prefix, to, suffix, label, start }: {
   prefix?: string;
   to: number;
   suffix: string;
   label: string;
-  cite: string;
   start: boolean;
 }) {
   return (
-    <div className="rounded-xl border border-line bg-white/[0.03] p-4">
-      <div className="font-display text-4xl text-amber sm:text-5xl">
-        {prefix ? <span className="mr-1 align-middle text-2xl text-amber-soft sm:text-3xl">{prefix}</span> : null}
+    <div>
+      <div className="font-display text-2xl text-amber sm:text-3xl">
+        {prefix ? <span className="mr-1 align-middle text-base text-amber-soft sm:text-lg">{prefix}</span> : null}
         <CountUp to={to} suffix={suffix} start={start} />
       </div>
-      <div className="mt-1 text-sm font-semibold text-zinc-100">{label}</div>
-      <div className="mt-0.5 text-xs text-zinc-500">{cite}</div>
+      <div className="mt-0.5 text-xs text-zinc-400">{label}</div>
     </div>
   );
 }
@@ -186,38 +194,25 @@ function BookingUpsell({ onNotify, interested }: { onNotify: () => void; interes
       <div className="inline-flex items-center gap-2 rounded-full border border-amber/30 bg-amber/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-soft">
         Coming soon
       </div>
-      <h2 className="mt-4 font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">
-        Online booking &amp; SMS reminders
-      </h2>
-      <p className="mt-2 max-w-prose text-sm text-zinc-400">
-        Let customers book 24/7 — no phone tag. Automatic text reminders before each appointment to
-        help cut no-shows.
-      </p>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-2">
-        <UpsellStat
-          prefix="up to"
-          to={38}
-          suffix="%"
-          start={inView}
-          label="fewer no-shows with SMS reminders"
-          cite="Imperial College London study"
-        />
-        <UpsellStat
-          prefix="~"
-          to={34}
-          suffix="%"
-          start={inView}
-          label="average drop in missed appointments"
-          cite="Systematic review of reminder studies"
-        />
+      {/* Punchy benefit line, then the three features at a glance. */}
+      <h2 className="mt-4 font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">
+        Get booked 24/7 — cut the no-shows
+      </h2>
+
+      <div className="mt-5 flex flex-wrap gap-2">
+        <FeaturePill icon={Globe} label="Custom domain" />
+        <FeaturePill icon={Calendar} label="Online booking (24/7)" />
+        <FeaturePill icon={MessageSquare} label="SMS reminders" />
       </div>
 
-      <p className="mt-4 text-xs text-zinc-500">
-        Figures from general appointment-reminder research, not barbershop-specific.
-      </p>
+      {/* Supporting evidence — secondary, not the headline. */}
+      <div className="mt-6 flex flex-wrap gap-x-10 gap-y-4">
+        <MiniStat prefix="up to" to={38} suffix="%" start={inView} label="fewer no-shows with SMS reminders" />
+        <MiniStat prefix="~" to={34} suffix="%" start={inView} label="average drop in missed appointments" />
+      </div>
 
-      <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
+      <div className="mt-6">
         <Button
           onClick={onNotify}
           disabled={interested}
@@ -229,11 +224,13 @@ function BookingUpsell({ onNotify, interested }: { onNotify: () => void; interes
             <><Bell className="mr-2 h-4 w-4" /> I'm interested — notify me</>
           )}
         </Button>
-        <span className="flex items-center gap-3 text-xs text-zinc-500">
-          <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> 24/7 booking</span>
-          <span className="inline-flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" /> SMS reminders</span>
-        </span>
       </div>
+
+      {/* Honesty small-print — present but unobtrusive. */}
+      <p className="mt-5 text-[11px] leading-snug text-zinc-600">
+        Figures are from general appointment-reminder research, not barbershop-specific — Imperial
+        College London study; systematic review of reminder studies.
+      </p>
     </div>
   );
 }
