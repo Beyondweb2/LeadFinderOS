@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, X } from "lucide-react";
 import { SiteImageManager, type SiteImageManagerHandle } from "@/components/SiteImageManager";
@@ -31,6 +32,12 @@ const ACCENT_PRESETS: { name: string; hex: string }[] = [
   { name: "Burgundy", hex: "#A8455F" },
   { name: "Slate", hex: "#8C97AB" },
 ];
+
+// Per-service appointment length presets (minutes). New services default to 30;
+// existing services with no stored duration are treated as 30 at read time (no
+// content migration — just a code-level fallback wherever duration is read).
+const DURATION_OPTIONS = [15, 30, 45, 60, 90] as const;
+const DEFAULT_DURATION = 30;
 
 /**
  * Reusable barber-site editor: text + services/prices + images/logo, with one
@@ -110,8 +117,13 @@ export function SiteEditor({
     setServices((prev) => prev.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
     setTextDirty(true);
   };
+  const updateServiceDuration = (i: number, mins: number) => {
+    setServices((prev) => prev.map((s, idx) => (idx === i ? { ...s, durationMins: mins } : s)));
+    setTextDirty(true);
+  };
   const addService = () => {
-    setServices((prev) => [...prev, { name: "" }]);
+    // New services default to a 30-minute appointment length.
+    setServices((prev) => [...prev, { name: "", durationMins: DEFAULT_DURATION }]);
     setTextDirty(true);
   };
   const removeService = (i: number) => {
@@ -141,7 +153,8 @@ export function SiteEditor({
           const out: BarberService = { name: s.name.trim() };
           if (s.description && s.description.trim()) out.description = s.description.trim();
           if (s.price && s.price.trim()) out.price = s.price.trim();
-          if (typeof s.durationMins === "number") out.durationMins = s.durationMins;
+          // Always persist a duration alongside name/price; absent → 30 minutes.
+          out.durationMins = typeof s.durationMins === "number" ? s.durationMins : DEFAULT_DURATION;
           return out;
         });
 
@@ -219,9 +232,22 @@ export function SiteEditor({
               <div key={i} className="rounded-lg border border-border p-3 space-y-2">
                 <div className="flex items-start gap-2">
                   <div className="flex-1 space-y-2">
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_120px]">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_120px_130px]">
                       <Input value={s.name} placeholder="Service name" onChange={(e) => updateService(i, "name", e.target.value)} />
                       <Input value={s.price ?? ""} placeholder="Price (optional)" onChange={(e) => updateService(i, "price", e.target.value)} />
+                      <Select
+                        value={String(s.durationMins ?? DEFAULT_DURATION)}
+                        onValueChange={(v) => updateServiceDuration(i, Number(v))}
+                      >
+                        <SelectTrigger aria-label="Appointment length">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {DURATION_OPTIONS.map((m) => (
+                            <SelectItem key={m} value={String(m)}>{m} min</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <Input value={s.description ?? ""} placeholder="Description (optional)" onChange={(e) => updateService(i, "description", e.target.value)} />
                   </div>
@@ -236,7 +262,7 @@ export function SiteEditor({
             </Button>
             <p className="text-xs text-muted-foreground">
               Enter the shop's real services and prices. Leave a price blank to show "Price on request" (or an example, below).
-              Nothing is auto-generated.
+              Nothing is auto-generated. Duration is how long each appointment takes — it sizes the slots once online booking is on.
             </p>
           </div>
 
