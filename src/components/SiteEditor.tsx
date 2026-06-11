@@ -82,7 +82,9 @@ export function SiteEditor({
     setTagline(c.tagline ?? "");
     setAbout(c.about ?? "");
     setServices((c.services ?? []).map((s) => ({ ...s })));
-    setShowExamplePrices(!!c.showExamplePrices);
+    // Example prices are ON by default (only an explicit `false` turns them off),
+    // so newly generated / never-toggled sites show illustrative prices.
+    setShowExamplePrices(c.showExamplePrices !== false);
     setGoogleReviewsUrl(c.googleReviewsUrl ?? "");
     setPhone(c.phone ?? "");
     setAddress(c.address ?? "");
