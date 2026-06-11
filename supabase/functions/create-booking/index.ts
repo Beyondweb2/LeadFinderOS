@@ -95,6 +95,9 @@ serve(async (req) => {
     const customerName = typeof body.customer_name === "string" ? body.customer_name.trim() : "";
     const customerPhone = typeof body.customer_phone === "string" ? body.customer_phone.trim() : "";
     const startsAtRaw = typeof body.starts_at === "string" ? body.starts_at.trim() : "";
+    // Consent must be an active choice — coerce to a real boolean; only a literal
+    // `true` opts in. Anything else (absent/string/null/etc.) → false.
+    const reminderOptIn = body.reminder_opt_in === true;
 
     // --- Input validation (200 {ok:false} so the page can show a specific message) ---
     if ((!siteId && !slug) || !staffId || !serviceName || !customerName || !customerPhone || !startsAtRaw) {
@@ -200,6 +203,7 @@ serve(async (req) => {
       starts_at: start.toISOString(),
       ends_at: end.toISOString(),
       status: "confirmed",
+      reminder_opt_in: reminderOptIn,
     });
     if (insErr) {
       // 23P01 = exclusion_violation → someone grabbed the slot in the race window.

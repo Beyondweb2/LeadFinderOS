@@ -111,6 +111,7 @@ export function BookingFlow({
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [reminderOptIn, setReminderOptIn] = useState(false); // explicit opt-in, never pre-checked
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState<{ service_name: string; staff_name: string; starts_at: string; business_name: string } | null>(null);
@@ -128,6 +129,7 @@ export function BookingFlow({
     setSlotIso(null);
     setName("");
     setPhone("");
+    setReminderOptIn(false);
     setError(null);
     setConfirmed(null);
   }, [open]);
@@ -243,6 +245,7 @@ export function BookingFlow({
         customer_name: name.trim(),
         customer_phone: phone.trim(),
         starts_at: slotIso,
+        reminder_opt_in: reminderOptIn,
       },
     });
     setSubmitting(false);
@@ -422,6 +425,21 @@ export function BookingFlow({
                   placeholder="Mobile number"
                 />
               </div>
+              {/* SMS reminder opt-in — explicit, never pre-checked. */}
+              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <input
+                  type="checkbox"
+                  checked={reminderOptIn}
+                  onChange={(e) => setReminderOptIn(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-amber"
+                />
+                <span className="text-sm">
+                  <span className="text-zinc-100">Text me a reminder 1 hour before my appointment</span>
+                  <span className="mt-0.5 block text-xs text-zinc-500">
+                    We'll only text you about this booking, to the number above.
+                  </span>
+                </span>
+              </label>
               {error && <p className="text-sm text-red-400">{error}</p>}
             </div>
           )}
