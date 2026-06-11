@@ -1037,31 +1037,32 @@ function MobileBookBar({ onBook }: { onBook: () => void }) {
 
 /** Claim-preview bar: shown (all viewports) when the site is rendered on the
  *  /claim page so a barber can view their website, then claim it for free.
- *  Compact on mobile; taller and higher-contrast on desktop where it's otherwise
- *  easy to miss, with a softly pulsing glow behind a larger "Claim for free". */
+ *  Deliberately uses FIXED neutral colours (ink bar, white button) and NEVER the
+ *  per-site --barber-accent, so it reads as a distinct platform overlay on every
+ *  barber site whatever accent they picked. Compact on mobile; taller on desktop. */
 function ClaimBar({ onClaim }: { onClaim: () => void }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t-2 border-amber/40 bg-ink/95 px-4 py-3 shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:py-5">
-      {/* Bright accent hairline along the top edge for extra contrast. */}
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t-2 border-white/15 bg-ink/95 px-4 py-3 shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:py-5">
+      {/* Fixed neutral hairline (NOT the per-site accent) for contrast. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-amber to-transparent opacity-70"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent"
       />
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 sm:gap-6">
         <div className="min-w-0">
           <div className="text-sm font-bold text-white sm:text-xl">This is your new website</div>
-          <div className="text-xs text-amber-soft sm:text-sm">It's free — no card needed.</div>
+          <div className="text-xs text-zinc-300 sm:text-sm">It's free — no card needed.</div>
         </div>
         <div className="relative shrink-0">
-          {/* Soft pulsing glow behind the button (draws the eye on desktop). */}
+          {/* Soft pulsing white glow (fixed, not accent-tied). */}
           <span
             aria-hidden
-            className="absolute -inset-1 rounded-full bg-amber/40 opacity-60 blur-lg animate-pulse-slow"
+            className="absolute -inset-1 rounded-full bg-white/25 opacity-60 blur-lg animate-pulse-slow"
           />
           <button
             type="button"
             onClick={onClaim}
-            className="relative inline-flex items-center gap-2 rounded-full bg-amber px-6 py-2.5 text-sm font-bold text-ink shadow-accent-lg transition-all hover:-translate-y-0.5 hover:bg-amber-soft active:scale-[0.98] sm:px-9 sm:py-4 sm:text-lg"
+            className="relative inline-flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-bold text-ink shadow-[0_6px_28px_-6px_rgba(255,255,255,0.45)] transition-all hover:-translate-y-0.5 hover:bg-zinc-100 active:scale-[0.98] sm:px-9 sm:py-4 sm:text-lg"
           >
             Claim for free
           </button>
