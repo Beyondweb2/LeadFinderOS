@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -6,7 +6,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Loader2, ExternalLink, LogOut, ArrowLeft, Globe, EyeOff, Sparkles, Check } from "lucide-react";
+import {
+  Loader2, ExternalLink, LogOut, ArrowLeft, Globe, EyeOff, Sparkles, Check,
+  Bell, Calendar, MessageSquare,
+} from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
 import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
 import type { BarberSiteContent } from "@/templates/barber/types";
@@ -99,6 +102,142 @@ function WelcomeOverlay({
   );
 }
 
+/** Fire `inView` once the element first scrolls into view (so counters animate
+ *  when seen, not on mount while off-screen). */
+function useInView<T extends HTMLElement>(threshold = 0.3) {
+  const ref = useRef<T>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setInView(true);
+          obs.disconnect();
+        }
+      },
+      { threshold },
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [threshold]);
+  return { ref, inView };
+}
+
+/** Eased count-up from 0 → `to`, started when `start` flips true. Uses the rAF
+ *  timestamp (no wall-clock), cleaned up on unmount. */
+function CountUp({ to, suffix = "", duration = 1400, start }: {
+  to: number;
+  suffix?: string;
+  duration?: number;
+  start: boolean;
+}) {
+  const [val, setVal] = useState(0);
+  useEffect(() => {
+    if (!start) return;
+    let raf = 0;
+    let t0 = 0;
+    const tick = (ts: number) => {
+      if (!t0) t0 = ts;
+      const p = Math.min(1, (ts - t0) / duration);
+      const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+      setVal(Math.round(eased * to));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [start, to, duration]);
+  return <>{val}{suffix}</>;
+}
+
+/** One cited stat tile for the booking upsell. */
+function UpsellStat({ prefix, to, suffix, label, cite, start }: {
+  prefix?: string;
+  to: number;
+  suffix: string;
+  label: string;
+  cite: string;
+  start: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-line bg-white/[0.03] p-4">
+      <div className="font-display text-4xl text-amber sm:text-5xl">
+        {prefix ? <span className="mr-1 align-middle text-2xl text-amber-soft sm:text-3xl">{prefix}</span> : null}
+        <CountUp to={to} suffix={suffix} start={start} />
+      </div>
+      <div className="mt-1 text-sm font-semibold text-zinc-100">{label}</div>
+      <div className="mt-0.5 text-xs text-zinc-500">{cite}</div>
+    </div>
+  );
+}
+
+/** Honest "coming soon" upsell for online booking + SMS reminders. Register-
+ *  interest only (no buy-now). Stats are general appointment-reminder research,
+ *  clearly cited and labelled as not barbershop-specific. */
+function BookingUpsell({ onNotify, interested }: { onNotify: () => void; interested: boolean }) {
+  const { ref, inView } = useInView<HTMLDivElement>();
+  return (
+    <div
+      ref={ref}
+      className="relative overflow-hidden rounded-2xl border border-amber/25 bg-ink-card p-6 sm:p-8"
+      style={{ backgroundImage: SHELL_BG }}
+    >
+      <div className="inline-flex items-center gap-2 rounded-full border border-amber/30 bg-amber/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-soft">
+        Coming soon
+      </div>
+      <h2 className="mt-4 font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">
+        Online booking &amp; SMS reminders
+      </h2>
+      <p className="mt-2 max-w-prose text-sm text-zinc-400">
+        Let customers book 24/7 — no phone tag. Automatic text reminders before each appointment to
+        help cut no-shows.
+      </p>
+
+      <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <UpsellStat
+          prefix="up to"
+          to={38}
+          suffix="%"
+          start={inView}
+          label="fewer no-shows with SMS reminders"
+          cite="Imperial College London study"
+        />
+        <UpsellStat
+          prefix="~"
+          to={34}
+          suffix="%"
+          start={inView}
+          label="average drop in missed appointments"
+          cite="Systematic review of reminder studies"
+        />
+      </div>
+
+      <p className="mt-4 text-xs text-zinc-500">
+        Figures from general appointment-reminder research, not barbershop-specific.
+      </p>
+
+      <div className="mt-6 flex flex-wrap items-center gap-x-4 gap-y-3">
+        <Button
+          onClick={onNotify}
+          disabled={interested}
+          className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft disabled:opacity-100"
+        >
+          {interested ? (
+            <><Check className="mr-2 h-4 w-4" /> We'll notify you</>
+          ) : (
+            <><Bell className="mr-2 h-4 w-4" /> I'm interested — notify me</>
+          )}
+        </Button>
+        <span className="flex items-center gap-3 text-xs text-zinc-500">
+          <span className="inline-flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> 24/7 booking</span>
+          <span className="inline-flex items-center gap-1"><MessageSquare className="h-3.5 w-3.5" /> SMS reminders</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 export default function BarberDashboard() {
   const { user } = useAuth();
   const { isAdmin } = useSubscription();
@@ -122,6 +261,16 @@ export default function BarberDashboard() {
   const dismissWelcome = () => {
     if (user) localStorage.setItem(`barber:welcome:v1:${user.id}`, "1");
     setShowWelcome(false);
+  };
+
+  const [interested, setInterested] = useState(false);
+  // Placeholder — to be wired to the notify edge function next.
+  const handleNotifyInterest = () => {
+    setInterested(true);
+    toast({
+      title: "You're on the list",
+      description: "We'll email you the moment online booking & SMS reminders go live.",
+    });
   };
 
   // Barber sign-out: clear the session and return to the barber front door —
@@ -325,7 +474,7 @@ export default function BarberDashboard() {
           </div>
         ))}
 
-        <p className="text-xs text-zinc-500">Bookings — coming soon.</p>
+        <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />
       </div>
     </div>
   );
