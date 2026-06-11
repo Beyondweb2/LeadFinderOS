@@ -11,6 +11,7 @@ import {
   Bell, Calendar, MessageSquare, type LucideIcon,
 } from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
+import { StaffManager } from "@/components/StaffManager";
 import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
 import type { BarberSiteContent } from "@/templates/barber/types";
 import { useBarberBranding } from "@/hooks/useBarberBranding";
@@ -396,6 +397,9 @@ export default function BarberDashboard() {
               refreshPublic(editing.site_name);
             }}
           />
+
+          {/* Phase 2: manage booking staff + per-staff weekly hours (own saves). */}
+          <StaffManager siteId={editing.id} />
         </div>
       </div>
     );
