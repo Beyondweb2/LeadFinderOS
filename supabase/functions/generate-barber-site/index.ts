@@ -284,7 +284,7 @@ serve(async (req) => {
     const { data: lead, error: leadError } = await serviceClient
       .from("outreach_leads")
       .select(
-        "id, business_name, category, address, phone, place_id, services_included, facebook_url, facebook_confidence, image_url",
+        "id, business_name, category, address, phone, place_id, services_included, facebook_url, facebook_confidence, image_url, google_maps_url",
       )
       .eq("id", leadId)
       .maybeSingle();
@@ -358,11 +358,16 @@ serve(async (req) => {
     const googleRating = typeof google?.rating === "number" ? google.rating : undefined;
     const reviewCount = typeof google?.reviewCount === "number" ? google.reviewCount : undefined;
     const hours: BarberOpeningHours[] = Array.isArray(google?.hours) ? google!.hours : [];
-    // Google reviews/Maps link: prefer the canonical URL Google returns; otherwise
-    // build the standard place-by-id link from the lead's place_id. Empty when we
-    // have neither (the template hides the link). This is a real, verifiable link —
-    // not invented content — so the "Read our Google reviews" link is pre-filled.
+    // Google reviews/Maps link. Precedence:
+    //   1. the lead's stored google_maps_url (the SAME column the Outreach page
+    //      shows) — the curated, verified source, so the editor matches Outreach;
+    //   2. the canonical URL from the live Places fetch (googleMapsUri);
+    //   3. a standard place-by-id link reconstructed from the lead's place_id.
+    // Empty when we have none (the template hides the link). Real, verifiable
+    // link — not invented content — so "Read our Google reviews" is pre-filled.
+    const leadMapsUrl = typeof lead.google_maps_url === "string" ? lead.google_maps_url.trim() : "";
     const googleReviewsUrl =
+      leadMapsUrl ||
       google?.mapsUri ||
       (lead.place_id
         ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
