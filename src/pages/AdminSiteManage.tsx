@@ -242,7 +242,7 @@ export default function AdminSiteManage() {
                 </p>
                 <Button variant="outline" size="sm" onClick={handleGenerateClaimLink} disabled={generatingLink}>
                   {generatingLink ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Link2 className="h-4 w-4 mr-2" />}
-                  {claimLink ? "Generate a new link" : "Generate claim link"}
+                  {claimLink ? "Generate a new link" : "Generate / resend claim link"}
                 </Button>
 
                 {claimLink && (
