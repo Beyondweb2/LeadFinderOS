@@ -88,6 +88,8 @@ interface BarberSiteContent {
   address: string;
   googleRating?: number;
   reviewCount?: number;
+  showExamplePrices?: boolean;
+  googleReviewsUrl?: string;
   heroImageUrl?: string;
   galleryImageUrls?: string[];
 }
@@ -119,6 +121,7 @@ interface GoogleEnrichment {
   hours?: BarberOpeningHours[];
   phone?: string;
   address?: string;
+  mapsUri?: string;
 }
 
 async function fetchGoogleEnrichment(placeId: string): Promise<GoogleEnrichment | null> {
@@ -132,6 +135,7 @@ async function fetchGoogleEnrichment(placeId: string): Promise<GoogleEnrichment 
     "internationalPhoneNumber",
     "nationalPhoneNumber",
     "formattedAddress",
+    "googleMapsUri",
   ].join(",");
 
   try {
@@ -166,6 +170,8 @@ async function fetchGoogleEnrichment(placeId: string): Promise<GoogleEnrichment 
     const phone = g.internationalPhoneNumber || g.nationalPhoneNumber;
     if (typeof phone === "string" && phone.trim()) out.phone = phone.trim();
     if (typeof g.formattedAddress === "string" && g.formattedAddress.trim()) out.address = g.formattedAddress.trim();
+    // Canonical Google Maps link for the place (its reviews live on this page).
+    if (typeof g.googleMapsUri === "string" && g.googleMapsUri.trim()) out.mapsUri = g.googleMapsUri.trim();
 
     return out;
   } catch (e) {
@@ -352,6 +358,17 @@ serve(async (req) => {
     const googleRating = typeof google?.rating === "number" ? google.rating : undefined;
     const reviewCount = typeof google?.reviewCount === "number" ? google.reviewCount : undefined;
     const hours: BarberOpeningHours[] = Array.isArray(google?.hours) ? google!.hours : [];
+    // Google reviews/Maps link: prefer the canonical URL Google returns; otherwise
+    // build the standard place-by-id link from the lead's place_id. Empty when we
+    // have neither (the template hides the link). This is a real, verifiable link —
+    // not invented content — so the "Read our Google reviews" link is pre-filled.
+    const googleReviewsUrl =
+      google?.mapsUri ||
+      (lead.place_id
+        ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+            (lead.business_name as string) || "barber",
+          )}&query_place_id=${lead.place_id}`
+        : "");
 
     const facts: Record<string, unknown> = {
       business_name: lead.business_name || null,
@@ -516,6 +533,11 @@ serve(async (req) => {
       // Rating/reviews: set ONLY when really fetched from Google; never fabricated.
       ...(googleRating !== undefined ? { googleRating } : {}),
       ...(reviewCount !== undefined ? { reviewCount } : {}),
+      // Example prices on by default (clearly labelled "Example" under a disclaimer)
+      // so a brand-new site doesn't look empty; the editor can switch this off.
+      showExamplePrices: true,
+      // Pre-fill the real Google reviews link when we have one (verifiable, not invented).
+      ...(googleReviewsUrl ? { googleReviewsUrl } : {}),
       ...(lead.image_url ? { heroImageUrl: lead.image_url as string } : {}),
       // galleryImageUrls: omitted — no real gallery; template falls back to stock.
     };
