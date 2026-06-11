@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Loader2, ExternalLink, LogOut, ArrowLeft, Globe, EyeOff } from "lucide-react";
+import { Loader2, ExternalLink, LogOut, ArrowLeft, Globe, EyeOff, Sparkles, Check } from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
 import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
 import type { BarberSiteContent } from "@/templates/barber/types";
@@ -31,6 +31,74 @@ const statusBadge = (status: string) =>
       : "border-line bg-white/[0.05] text-zinc-400"
   }`;
 
+/** One-time, friendly welcome shown the first time a barber opens /barber after
+ *  claiming. Ink/amber, modal, with their real public URL and clear next steps. */
+function WelcomeOverlay({
+  site,
+  onClose,
+  onEdit,
+}: {
+  site: OwnedSite;
+  onClose: () => void;
+  onEdit: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink/85 backdrop-blur-sm" onClick={onClose} aria-hidden />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-amber/30 bg-ink-card p-6 shadow-accent-lg sm:p-8"
+        style={{ backgroundImage: SHELL_BG }}
+      >
+        <div className="inline-flex items-center gap-2 rounded-full border border-amber/30 bg-amber/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-soft">
+          <Sparkles className="h-3.5 w-3.5" /> Welcome
+        </div>
+        <h2 className="mt-4 font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">
+          Your site is live 🎉
+        </h2>
+        <p className="mt-2 text-sm text-zinc-400">It's online now at your own link:</p>
+        <a
+          href={publicSiteUrl(site.site_name)}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-2 flex max-w-full items-center gap-2 rounded-lg border border-line bg-white/[0.04] px-3 py-2 font-mono text-sm text-amber-soft transition-colors hover:border-amber/50 hover:text-amber"
+        >
+          <span className="truncate">{publicSiteLabel(site.site_name)}</span>
+          <ExternalLink className="h-4 w-4 shrink-0" />
+        </a>
+
+        <ul className="mt-5 space-y-2 text-sm text-zinc-300">
+          <li className="flex gap-2">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+            <span>
+              Edit your text, services, prices, hours, photos, logo and accent colour anytime — just
+              tap <span className="font-semibold text-white">Edit my site</span>.
+            </span>
+          </li>
+          <li className="flex gap-2">
+            <Check className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+            <span>Share your link with customers so they can find and book you.</span>
+          </li>
+        </ul>
+
+        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button
+            variant="outline"
+            onClick={onClose}
+            className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white"
+          >
+            Got it
+          </Button>
+          <Button onClick={onEdit} className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">
+            Edit my site
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function BarberDashboard() {
   const { user } = useAuth();
   const { isAdmin } = useSubscription();
@@ -40,8 +108,21 @@ export default function BarberDashboard() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<OwnedSite | null>(null);
   const [savingStatus, setSavingStatus] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(false);
 
   useBarberBranding("Your website");
+
+  // First time a barber lands here after claiming, show a one-time welcome.
+  // Keyed per user so it never re-shows for them, and never blocks anyone else.
+  useEffect(() => {
+    if (loading || !user || sites.length === 0) return;
+    if (!localStorage.getItem(`barber:welcome:v1:${user.id}`)) setShowWelcome(true);
+  }, [loading, user, sites.length]);
+
+  const dismissWelcome = () => {
+    if (user) localStorage.setItem(`barber:welcome:v1:${user.id}`, "1");
+    setShowWelcome(false);
+  };
 
   // Barber sign-out: clear the session and return to the barber front door —
   // NOT useAuth().signOut(), which redirects to LeadFinder's /landing marketing.
@@ -180,6 +261,17 @@ export default function BarberDashboard() {
       className="min-h-screen bg-ink font-body text-zinc-300 antialiased p-4 md:p-8"
       style={{ backgroundImage: SHELL_BG }}
     >
+      {showWelcome && sites[0] && (
+        <WelcomeOverlay
+          site={sites[0]}
+          onClose={dismissWelcome}
+          onEdit={() => {
+            dismissWelcome();
+            setEditing(sites[0]);
+          }}
+        />
+      )}
+
       <div className="mx-auto max-w-3xl space-y-6">
         <div className="flex items-start justify-between gap-3">
           <div>
