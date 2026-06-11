@@ -199,7 +199,7 @@ function BookingUpsell({ onNotify, interested }: { onNotify: () => void; interes
 
       {/* Punchy benefit line, then the three features at a glance. */}
       <h2 className="mt-4 font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">
-        Get booked 24/7 — cut the no-shows
+        Get more clients, stop the no-shows
       </h2>
 
       <div className="mt-5 flex flex-wrap gap-2">
@@ -409,7 +409,80 @@ export default function BarberDashboard() {
     );
   }
 
-  // --- Dashboard list view ---------------------------------------------------
+  // --- Single-site dashboard (owner of EXACTLY ONE site) ---------------------
+  // Skip the picker and land directly on the one site. Bookings lead (checked
+  // daily); the coming-soon upsell sits below. Owners of 2+ sites (admins) fall
+  // through to the multi-site picker below — that case is unchanged.
+  if (sites.length === 1) {
+    const site = sites[0];
+    return (
+      <div
+        className="min-h-screen bg-ink font-body text-zinc-300 antialiased p-4 md:p-8"
+        style={{ backgroundImage: SHELL_BG }}
+      >
+        {showWelcome && (
+          <WelcomeOverlay
+            site={site}
+            onClose={dismissWelcome}
+            onEdit={() => {
+              dismissWelcome();
+              setEditing(site);
+            }}
+          />
+        )}
+
+        <div className="barber-surface mx-auto max-w-3xl space-y-6">
+          {/* Header: name + status, View site, Edit my site, Sign out */}
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div>
+              <h1 className="font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">
+                {site.content?.businessName || site.site_name}
+              </h1>
+              <div className="mt-1 flex items-center gap-2">
+                <span className={statusBadge(site.status)}>{site.status}</span>
+                <span className="font-mono text-xs text-zinc-500">{publicSiteLabel(site.site_name)}</span>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" /> View site
+                </Button>
+              </a>
+              <Button
+                size="sm"
+                onClick={() => setEditing(site)}
+                className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft"
+              >
+                Edit my site
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSignOut}
+                title="Sign out"
+                className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white"
+              >
+                <LogOut className="h-4 w-4 mr-2" /> Sign out
+              </Button>
+            </div>
+          </div>
+
+          {/* Bookings lead — this is the daily-check surface. */}
+          <BookingsManager siteId={site.id} />
+
+          {/* Coming-soon upsell below. */}
+          <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />
+        </div>
+      </div>
+    );
+  }
+
+  // --- Multi-site picker (owner of 2+ sites / admin) — UNCHANGED -------------
   return (
     <div
       className="min-h-screen bg-ink font-body text-zinc-300 antialiased p-4 md:p-8"
