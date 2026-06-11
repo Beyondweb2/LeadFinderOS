@@ -179,6 +179,7 @@ export type Database = {
           ends_at: string
           id: string
           notes: string | null
+          reminder_opt_in: boolean
           service_name: string
           site_id: string
           staff_id: string
@@ -192,6 +193,7 @@ export type Database = {
           ends_at: string
           id?: string
           notes?: string | null
+          reminder_opt_in?: boolean
           service_name: string
           site_id: string
           staff_id: string
@@ -205,6 +207,7 @@ export type Database = {
           ends_at?: string
           id?: string
           notes?: string | null
+          reminder_opt_in?: boolean
           service_name?: string
           site_id?: string
           staff_id?: string
