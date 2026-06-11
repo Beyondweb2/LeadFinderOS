@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
 import { StaffManager } from "@/components/StaffManager";
+import { BookingsManager } from "@/components/BookingsManager";
 import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
 import type { BarberSiteContent } from "@/templates/barber/types";
 import { useBarberBranding } from "@/hooks/useBarberBranding";
@@ -400,6 +401,9 @@ export default function BarberDashboard() {
 
           {/* Phase 2: manage booking staff + per-staff weekly hours (own saves). */}
           <StaffManager siteId={editing.id} />
+
+          {/* Phase 4: upcoming bookings — cancel / mark no-show (owner RLS). */}
+          <BookingsManager siteId={editing.id} />
         </div>
       </div>
     );
