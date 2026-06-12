@@ -21,24 +21,6 @@ function getSupabaseAdmin() {
 
 // ── Task implementations (lightweight, <2s each) ──────────────────────
 
-async function checkFailedPayments(supabase: ReturnType<typeof createClient>) {
-  const start = Date.now();
-  logStep("Task:checkFailedPayments — start");
-
-  // Placeholder: query subscriptions with past_due / unpaid status
-  // When ready, add Stripe API call here with timeout
-  const { count, error } = await supabase
-    .from("subscriptions")
-    .select("*", { count: "exact", head: true })
-    .in("status", ["past_due", "unpaid"]);
-
-  if (error) {
-    logStep("Task:checkFailedPayments — DB error", { error: error.message });
-  } else {
-    logStep("Task:checkFailedPayments — done", { failedCount: count, ms: Date.now() - start });
-  }
-}
-
 async function cleanupExpiredCaches(supabase: ReturnType<typeof createClient>) {
   const start = Date.now();
   logStep("Task:cleanupExpiredCaches — start");
@@ -141,7 +123,6 @@ serve(async (req) => {
 
     // Run each task with individual error isolation
     for (const [name, fn] of [
-      ["checkFailedPayments", () => checkFailedPayments(supabase)],
       ["cleanupExpiredCaches", () => cleanupExpiredCaches(supabase)],
       ["logDailySummary", () => logDailySummary(supabase)],
     ] as const) {

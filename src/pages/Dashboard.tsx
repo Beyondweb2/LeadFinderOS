@@ -31,7 +31,6 @@ import {
   FileText,
   Users,
   Trash2,
-  Mail,
 } from 'lucide-react';
 import { TipBar } from '@/components/TipBar';
 
@@ -41,7 +40,6 @@ const Dashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [isFullResetting, setIsFullResetting] = useState(false);
-  const [isSendingTestEmail, setIsSendingTestEmail] = useState(false);
   
   const isAdmin = user?.email === 'pauljsales455@outlook.com';
 
@@ -163,32 +161,6 @@ const Dashboard = () => {
           </Link>
         </Button>
 
-        {isAdmin && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            disabled={isSendingTestEmail}
-            onClick={async () => {
-              setIsSendingTestEmail(true);
-              try {
-                const { data, error } = await supabase.functions.invoke('test-abandoned-email', {
-                  body: { email: 'pauljsales455@outlook.com' },
-                });
-                if (error) throw error;
-                toast({ title: 'Test email sent', description: 'Check your inbox.' });
-              } catch (err: any) {
-                toast({ title: 'Failed to send test email', description: err.message || 'Unknown error', variant: 'destructive' });
-              } finally {
-                setIsSendingTestEmail(false);
-              }
-            }}
-          >
-            {isSendingTestEmail ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Mail className="h-3.5 w-3.5" />}
-            Test Abandoned Email
-          </Button>
-        )}
-
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive gap-1.5">
@@ -200,7 +172,7 @@ const Dashboard = () => {
             <AlertDialogHeader>
               <AlertDialogTitle>Full account reset?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will delete <strong>everything</strong> — all outreach leads, outreach history, templates, contact logs, search history, and metrics. Only your subscription will remain. This cannot be undone.
+                This will delete <strong>everything</strong> — all outreach leads, outreach history, templates, contact logs, search history, and metrics. This cannot be undone.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

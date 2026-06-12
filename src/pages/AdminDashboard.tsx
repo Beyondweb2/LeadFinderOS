@@ -46,7 +46,6 @@ import {
 import {
   ArrowLeft,
   Loader2,
-  Users,
   Search,
   Activity,
   Image as ImageIcon,
@@ -55,119 +54,18 @@ import {
   Building2,
   RefreshCw,
   Trash2,
-  Footprints,
-  Timer,
-  CheckCircle,
-  XCircle,
-  TrendingUp,
-  PoundSterling,
-  Info,
-  Percent,
-  Megaphone,
-  Link2,
 } from 'lucide-react';
 
 interface AdminUser {
   id: string;
   email: string;
   created_at: string;
-  subscription_status: string;
-  access_mode: string;
-  billing_status: string;
-  current_period_end: string | null;
-  demo_started_at: string | null;
-  trial_started_at: string | null;
-  paid_at: string | null;
-  free_search_count: number;
-  walkthrough_completed: boolean;
-  walkthrough_max_step: number;
-  walkthrough_last_seen_at: string | null;
-  walkthrough_started_at: string | null;
-  walkthrough_completed_at: string | null;
-  walkthrough_skipped_at: string | null;
-  stripe_subscription_id: string | null;
   search_count: number;
   businesses_added_count: number;
   messages_sent_count: number;
   replies_count: number;
   last_active_at: string | null;
   last_search_at: string | null;
-  // Attribution
-  traffic_source: string | null;
-  utm_source: string | null;
-  utm_campaign: string | null;
-  utm_adset: string | null;
-  utm_ad: string | null;
-  fbclid: string | null;
-  ref_source: string | null;
-  affiliate_code: string | null;
-}
-
-function normalizeAttributionValue(value: string | null | undefined): string {
-  return (value ?? '').trim().toLowerCase();
-}
-
-function isMetaAdsUser(u: AdminUser): boolean {
-  const trafficSource = normalizeAttributionValue(u.traffic_source);
-  const utmSource = normalizeAttributionValue(u.utm_source);
-  const hasFbclid = !!normalizeAttributionValue(u.fbclid);
-
-  return (
-    hasFbclid ||
-    trafficSource === 'meta_ads' ||
-    utmSource === 'meta' ||
-    utmSource === 'facebook' ||
-    utmSource === 'instagram'
-  );
-}
-
-function isAffiliateUser(u: AdminUser): boolean {
-  return !!normalizeAttributionValue(u.affiliate_code) && !isMetaAdsUser(u);
-}
-
-function getSourceLabel(u: AdminUser): string {
-  if (isMetaAdsUser(u)) return 'Meta Ads';
-  if (isAffiliateUser(u)) return 'Affiliate';
-  return 'Organic';
-}
-
-function getSourceColor(u: AdminUser): string {
-  if (isMetaAdsUser(u)) return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
-  if (isAffiliateUser(u)) return 'bg-purple-500/15 text-purple-400 border-purple-500/30';
-  return 'bg-muted text-muted-foreground border-border';
-}
-
-function getWalkthroughStatus(u: AdminUser): 'completed' | 'skipped' | 'in_progress' | 'not_started' {
-  if (u.walkthrough_completed_at || u.walkthrough_completed) return 'completed';
-  if (u.walkthrough_skipped_at) return 'skipped';
-  if (u.walkthrough_started_at || u.walkthrough_max_step > 0) return 'in_progress';
-  return 'not_started';
-}
-
-function walkthroughStatusLabel(status: 'completed' | 'skipped' | 'in_progress' | 'not_started'): string {
-  switch (status) {
-    case 'completed': return 'Completed';
-    case 'skipped': return 'Skipped';
-    case 'in_progress': return 'In Progress';
-    case 'not_started': return 'Not Started';
-  }
-}
-
-function walkthroughStatusColor(status: 'completed' | 'skipped' | 'in_progress' | 'not_started'): string {
-  switch (status) {
-    case 'completed': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
-    case 'in_progress': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
-    case 'skipped': return 'bg-red-500/15 text-red-400 border-red-500/30';
-    case 'not_started': return 'bg-muted text-muted-foreground border-border';
-  }
-}
-
-function walkthroughStepLabel(u: AdminUser): string {
-  const status = getWalkthroughStatus(u);
-  if (status === 'completed') return 'Completed';
-  if (status === 'skipped') return 'Skipped';
-  if (status === 'in_progress') return `Step ${u.walkthrough_max_step}/8`;
-  return 'Not Started';
 }
 
 interface UsageEvent {
@@ -175,79 +73,6 @@ interface UsageEvent {
   event_type: string;
   meta: Record<string, unknown> | null;
   created_at: string;
-}
-
-interface CheckoutAttempt {
-  id: string;
-  email: string;
-  user_id: string | null;
-  converted: boolean;
-  checkout_completed: boolean;
-  created_at: string;
-  utm_source?: string | null;
-  utm_campaign?: string | null;
-  utm_adset?: string | null;
-  utm_ad?: string | null;
-  fbclid?: string | null;
-  traffic_source?: string | null;
-  ref_source?: string | null;
-  affiliate_code?: string | null;
-}
-
-function accessModeColor(mode: string): string {
-  switch (mode) {
-    case 'paid': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
-    case 'trial': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
-    case 'payment_required': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
-    case 'no_access': return 'bg-red-500/15 text-red-400 border-red-500/30';
-    case 'trial_used_no_sub': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
-    case 'free_user': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
-    case 'checkout_only': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
-    case 'signed_up': return 'bg-muted text-muted-foreground border-border';
-    case 'no_stripe': return 'bg-muted text-muted-foreground border-border';
-    default: return 'bg-muted text-muted-foreground border-border';
-  }
-}
-
-function accessModeLabel(mode: string): string {
-  switch (mode) {
-    case 'paid': return 'Paid Active';
-    case 'trial': return 'Trial Active';
-    case 'payment_required': return 'Payment Required';
-    case 'no_access': return 'Cancelled';
-    case 'trial_used_no_sub': return 'Trial Used · No Sub';
-    case 'free_user': return 'Free User';
-    case 'checkout_only': return 'Checkout Only';
-    case 'signed_up': return 'Signed Up';
-    case 'no_stripe': return 'No Stripe Record';
-    default: return mode;
-  }
-}
-
-function billingStatusColor(status: string): string {
-  switch (status) {
-    case 'active': return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
-    case 'trialing': return 'bg-sky-500/15 text-sky-400 border-sky-500/30';
-    case 'past_due': return 'bg-amber-500/15 text-amber-400 border-amber-500/30';
-    case 'canceled': return 'bg-red-500/15 text-red-400 border-red-500/30';
-    case 'checkout_started': return 'bg-orange-500/15 text-orange-400 border-orange-500/30';
-    case 'checkout_completed': return 'bg-yellow-500/15 text-yellow-400 border-yellow-500/30';
-    case 'no_stripe': return 'bg-muted text-muted-foreground border-border';
-    default: return 'bg-muted text-muted-foreground border-border';
-  }
-}
-
-function billingStatusLabel(status: string): string {
-  switch (status) {
-    case 'no_stripe': return 'No Stripe';
-    case 'checkout_started': return 'Checkout Started';
-    case 'checkout_completed': return 'Paid – No Account';
-    case 'trialing': return 'Stripe Trialing';
-    case 'active': return 'Active';
-    case 'past_due': return 'Past Due';
-    case 'canceled': return 'Canceled';
-    default: return status;
-  }
 }
 
 function formatDate(dateStr: string | null): string {
@@ -284,7 +109,6 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [activityFilter, setActivityFilter] = useState('all');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [userEvents, setUserEvents] = useState<UsageEvent[]>([]);
@@ -294,8 +118,6 @@ export default function AdminDashboard() {
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
-  const [checkoutAttempts24h, setCheckoutAttempts24h] = useState(0);
-  const [recentCheckoutAttempts, setRecentCheckoutAttempts] = useState<CheckoutAttempt[]>([]);
   const deletedIdsRef = useRef<Set<string>>(new Set());
   const hasFetchedRef = useRef(false);
 
@@ -318,7 +140,6 @@ export default function AdminDashboard() {
 
     const filterBody: Record<string, unknown> = { action: 'list_users', per_page: 200 };
     if (searchQuery) filterBody.email = searchQuery;
-    if (statusFilter !== 'all') filterBody.status = statusFilter;
     if (activityFilter === '7d') filterBody.active_days = 7;
     else if (activityFilter === '30d') filterBody.active_days = 30;
 
@@ -340,65 +161,17 @@ export default function AdminDashboard() {
         setFetchError(`${data.error}${data.details ? ': ' + data.details : ''}`);
         toast.error(`Server error: ${data.error}`);
       } else {
-        const userList = data?.users || [];
-        const rawAttempts = (data?.recent_checkout_attempts || []) as CheckoutAttempt[];
-        
-        // Merge anonymous checkout attempts (no user_id) into the users list as pseudo-users
-        const existingEmails = new Set(userList.map((u: AdminUser) => u.email.toLowerCase()));
-        const anonymousAttempts: AdminUser[] = rawAttempts
-          .filter((a: CheckoutAttempt) => !a.user_id && !existingEmails.has(a.email.toLowerCase()))
-          // Apply search filter to checkout-only entries too
-          .filter((a: CheckoutAttempt) => !searchQuery || a.email.toLowerCase().includes(searchQuery.toLowerCase()))
-          // Dedupe by email (keep latest)
-          .filter((a: CheckoutAttempt, i: number, arr: CheckoutAttempt[]) => 
-            arr.findIndex((b: CheckoutAttempt) => b.email.toLowerCase() === a.email.toLowerCase()) === i
-          )
-          .map((a: CheckoutAttempt) => ({
-            id: `checkout-${a.id}`,
-            email: a.email,
-            created_at: a.created_at,
-            subscription_status: 'none',
-            access_mode: 'checkout_only',
-            billing_status: a.converted ? 'converted' : (a.checkout_completed ? 'checkout_completed' : 'checkout_started'),
-            current_period_end: null,
-            demo_started_at: null,
-            trial_started_at: null,
-            paid_at: null,
-            free_search_count: 0,
-            walkthrough_completed: false,
-            walkthrough_max_step: 0,
-            walkthrough_last_seen_at: null,
-            walkthrough_started_at: null,
-            walkthrough_completed_at: null,
-            walkthrough_skipped_at: null,
-            stripe_subscription_id: null,
-            search_count: 0,
-            businesses_added_count: 0,
-            messages_sent_count: 0,
-            replies_count: 0,
-            last_active_at: null,
-            last_search_at: null,
-            traffic_source: a.traffic_source || null,
-            utm_source: a.utm_source || null,
-            utm_campaign: a.utm_campaign || null,
-            utm_adset: a.utm_adset || null,
-            utm_ad: a.utm_ad || null,
-            fbclid: a.fbclid || null,
-            ref_source: a.ref_source || null,
-            affiliate_code: a.affiliate_code || null,
-          }));
+        const userList = (data?.users || []) as AdminUser[];
 
-        const merged = [...userList, ...anonymousAttempts]
+        const merged = userList
           .filter((u: AdminUser) => !deletedIdsRef.current.has(u.id))
           .sort(
             (a: AdminUser, b: AdminUser) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
           );
-        
-        console.log('[AdminDashboard] Users received:', userList.length, '+ anonymous attempts:', anonymousAttempts.length);
+
+        console.log('[AdminDashboard] Users received:', userList.length);
         setUsers(merged);
-        setCheckoutAttempts24h(data?.checkout_attempts_24h || 0);
-        setRecentCheckoutAttempts(rawAttempts);
-        if (merged.length === 0 && !searchQuery && statusFilter === 'all') {
+        if (merged.length === 0 && !searchQuery) {
           toast.info('No users returned. Check edge function logs for details.');
         }
       }
@@ -410,7 +183,7 @@ export default function AdminDashboard() {
     }
 
     setIsLoading(false);
-  }, [getAccessToken, searchQuery, statusFilter, activityFilter]);
+  }, [getAccessToken, searchQuery, activityFilter]);
 
   const fetchUserEvents = useCallback(async (userId: string) => {
     const accessToken = await getAccessToken();
@@ -432,14 +205,6 @@ export default function AdminDashboard() {
   }, [getAccessToken]);
 
   const deleteUser = useCallback(async (userId: string, email: string) => {
-    // Checkout-only pseudo-users aren't real auth users — just remove from UI
-    if (userId.startsWith('checkout-')) {
-      deletedIdsRef.current.add(userId);
-      setUsers(prev => prev.filter(u => u.id !== userId));
-      if (selectedUser?.id === userId) setSelectedUser(null);
-      toast.success(`Removed ${email} from list`);
-      return;
-    }
     const accessToken = await getAccessToken();
     if (!accessToken) return;
 
@@ -469,20 +234,9 @@ export default function AdminDashboard() {
     const accessToken = await getAccessToken();
     if (!accessToken) return;
 
-    const allIds = Array.from(selectedIds);
-    // Separate checkout-only pseudo-users from real auth users
-    const checkoutIds = allIds.filter(id => id.startsWith('checkout-'));
-    const ids = allIds.filter(id => !id.startsWith('checkout-'));
-
-    // Remove checkout-only entries from UI immediately
-    if (checkoutIds.length > 0) {
-      checkoutIds.forEach(id => deletedIdsRef.current.add(id));
-      setUsers(prev => prev.filter(u => !checkoutIds.includes(u.id)));
-    }
-
+    const ids = Array.from(selectedIds);
     if (ids.length === 0) {
       setSelectedIds(new Set());
-      toast.success(`Removed ${checkoutIds.length} checkout entries from list`);
       return;
     }
 
@@ -546,43 +300,8 @@ export default function AdminDashboard() {
 
   const filtered = users;
 
-  // --- Attribution metrics (uses same helper as row labels) ---
-  const fromAds = users.filter(u => isMetaAdsUser(u)).length;
-  const fromAffiliates = users.filter(u => isAffiliateUser(u)).length;
-
-  // --- Trial-model metrics ---
-  // Trials Started = anyone who has a stripe subscription (started a trial)
-  const trialsStarted = users.filter(u => u.stripe_subscription_id).length;
-  // Trialing Active = currently trialing in Stripe
-  const trialingActive = users.filter(u => u.billing_status === 'trialing').length;
-  // Paid Subscribers = active after first invoice
-  const paidSubscribers = users.filter(u => u.billing_status === 'active').length;
-  // Trial Cancellations = canceled before ever paying
-  const trialChurn = users.filter(u => u.billing_status === 'canceled' && !u.paid_at).length;
-  // Paid Churn = canceled after paying
-  const paidChurn = users.filter(u => u.billing_status === 'canceled' && !!u.paid_at).length;
-  // Trial → Paid conversion rate
-  const trialToPaidRate = trialsStarted > 0 ? ((paidSubscribers / trialsStarted) * 100).toFixed(1) : '0.0';
-  // MRR
-  const mrr = paidSubscribers * 19.99;
-
   const totalSearches = users.reduce((s, u) => s + u.search_count, 0);
   const totalMessages = users.reduce((s, u) => s + u.messages_sent_count, 0);
-
-  // Walkthrough summary counts (computed from user data)
-  const wtStarted = users.filter(u => getWalkthroughStatus(u) !== 'not_started').length;
-  const wtCompleted = users.filter(u => getWalkthroughStatus(u) === 'completed').length;
-  const wtSkipped = users.filter(u => getWalkthroughStatus(u) === 'skipped').length;
-  const wtNotStarted = users.filter(u => getWalkthroughStatus(u) === 'not_started').length;
-  const stepDropoffs = Array.from({ length: 8 }, (_, i) => {
-    const atStep = users.filter(u => {
-      const s = getWalkthroughStatus(u);
-      return (s === 'in_progress') && u.walkthrough_max_step === i + 1;
-    }).length;
-    return atStep;
-  });
-  const topDropoffIdx = stepDropoffs.indexOf(Math.max(...stepDropoffs));
-  const topDropoffStep = stepDropoffs[topDropoffIdx] > 0 ? topDropoffIdx + 1 : null;
 
   if (isSubLoading) {
     return (
@@ -638,118 +357,6 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {/* Summary Cards - Acquisition Pipeline */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-4">
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <TrendingUp className="h-3.5 w-3.5" /> Trials Started
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{trialsStarted}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Activity className="h-3.5 w-3.5" /> Checkout Attempts (24h)
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{checkoutAttempts24h}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-amber-500/30">
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Timer className="h-3.5 w-3.5 text-amber-500" /> Trialing
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{trialingActive}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <CheckCircle className="h-3.5 w-3.5 text-green-500" /> Paid Subscribers
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{paidSubscribers}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Percent className="h-3.5 w-3.5" /> Trial→Paid
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{trialToPaidRate}%</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <PoundSterling className="h-3.5 w-3.5 text-emerald-500" /> MRR
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">£{mrr.toFixed(2)}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <XCircle className="h-3.5 w-3.5 text-red-500" /> Churn
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <div className="flex items-baseline gap-2">
-                <p className="text-2xl font-bold">{trialChurn + paidChurn}</p>
-              </div>
-              <div className="flex gap-3 mt-1 text-xs text-muted-foreground">
-                <span>Trial: {trialChurn}</span>
-                <span>Paid: {paidChurn}</span>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Attribution Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">
-          <Card className="border-blue-500/30">
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Megaphone className="h-3.5 w-3.5 text-blue-500" /> From Ads
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{fromAds}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-purple-500/30">
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Link2 className="h-3.5 w-3.5 text-purple-500" /> From Affiliates
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{fromAffiliates}</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Revenue helper text */}
-        <p className="text-xs text-muted-foreground/70 flex items-center gap-1">
-          <Info className="h-3 w-3" />
-          Revenue only reflects successful payments after the 5-day trial period.
-        </p>
-
-
-
         {/* Activity Cards */}
         <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">
           <Card>
@@ -774,22 +381,6 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* Walkthrough Summary Row */}
-        {users.length > 0 && (
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-lg border border-border bg-card/50 px-4 py-2.5 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground flex items-center gap-1.5">
-              <Footprints className="h-3.5 w-3.5 text-primary" /> Walkthrough:
-            </span>
-            <span>Started: <strong className="text-foreground">{wtStarted}</strong></span>
-            <span>Completed: <strong className="text-foreground">{wtCompleted}</strong></span>
-            <span>Skipped: <strong className="text-foreground">{wtSkipped}</strong></span>
-            <span>Not Started: <strong className="text-foreground">{wtNotStarted}</strong></span>
-            {topDropoffStep && (
-              <span>Top Drop-off: <strong className="text-foreground">Step {topDropoffStep}</strong></span>
-            )}
-          </div>
-        )}
-
         {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
@@ -801,17 +392,6 @@ export default function AdminDashboard() {
               className="pl-9"
             />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-[160px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="trialing">Trialing</SelectItem>
-              <SelectItem value="canceled">Canceled/Expired</SelectItem>
-            </SelectContent>
-          </Select>
           <Select value={activityFilter} onValueChange={setActivityFilter}>
             <SelectTrigger className="w-full sm:w-[160px]">
               <SelectValue placeholder="Activity" />
@@ -881,24 +461,19 @@ export default function AdminDashboard() {
                       </TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Signed Up</TableHead>
-                      <TableHead>Access</TableHead>
-                      <TableHead>Source</TableHead>
-                      <TableHead>Billing</TableHead>
-                      <TableHead>Messages</TableHead>
-                      <TableHead>WT Status</TableHead>
-                      <TableHead>Current Step</TableHead>
-                      <TableHead>Last WT Activity</TableHead>
-                      <TableHead>Paid At</TableHead>
                       <TableHead className="text-right">Searches</TableHead>
                       <TableHead className="text-right">Added</TableHead>
+                      <TableHead className="text-right">Messages</TableHead>
+                      <TableHead className="text-right">Replies</TableHead>
                       <TableHead>Last Active</TableHead>
+                      <TableHead>Last Search</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filtered.length === 0 ? (
                       <TableRow>
-                        <TableCell colSpan={15} className="text-center py-8 text-muted-foreground">
+                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                           No users found
                         </TableCell>
                       </TableRow>
@@ -923,42 +498,15 @@ export default function AdminDashboard() {
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
                             {formatDateTime(u.created_at)}
                           </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={accessModeColor(u.access_mode)}>
-                              {accessModeLabel(u.access_mode)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={getSourceColor(u)}>
-                              {getSourceLabel(u)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={billingStatusColor(u.billing_status)}>
-                              {billingStatusLabel(u.billing_status)}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {u.messages_sent_count ?? 0}
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className={walkthroughStatusColor(getWalkthroughStatus(u))}>
-                              {walkthroughStatusLabel(getWalkthroughStatus(u))}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {walkthroughStepLabel(u)}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {timeAgo(u.walkthrough_last_seen_at)}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {formatDate(u.paid_at)}
-                          </TableCell>
                           <TableCell className="text-right tabular-nums">{u.search_count}</TableCell>
                           <TableCell className="text-right tabular-nums">{u.businesses_added_count}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
+                          <TableCell className="text-right tabular-nums">{u.messages_sent_count ?? 0}</TableCell>
+                          <TableCell className="text-right tabular-nums">{u.replies_count ?? 0}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                             {timeAgo(u.last_active_at)}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                            {timeAgo(u.last_search_at)}
                           </TableCell>
                           <TableCell>
                             {u.id !== user?.id && (
@@ -1027,26 +575,10 @@ export default function AdminDashboard() {
               </SheetHeader>
 
               <div className="mt-6 space-y-6">
-                {/* Subscription Info */}
+                {/* Status */}
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold text-foreground">Status</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs text-muted-foreground">Access Mode</p>
-                      <Badge variant="outline" className={`mt-1 ${accessModeColor(selectedUser.access_mode)}`}>
-                        {accessModeLabel(selectedUser.access_mode)}
-                      </Badge>
-                    </div>
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs text-muted-foreground">Billing (Stripe)</p>
-                      <Badge variant="outline" className={`mt-1 ${billingStatusColor(selectedUser.billing_status)}`}>
-                        {billingStatusLabel(selectedUser.billing_status)}
-                      </Badge>
-                    </div>
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs text-muted-foreground">Period End</p>
-                      <p className="text-sm font-medium mt-1">{formatDate(selectedUser.current_period_end)}</p>
-                    </div>
                     <div className="rounded-lg border border-border p-3">
                       <p className="text-xs text-muted-foreground">Joined</p>
                       <p className="text-sm font-medium mt-1">{formatDate(selectedUser.created_at)}</p>
@@ -1055,76 +587,12 @@ export default function AdminDashboard() {
                       <p className="text-xs text-muted-foreground">Last Active</p>
                       <p className="text-sm font-medium mt-1">{timeAgo(selectedUser.last_active_at)}</p>
                     </div>
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs text-muted-foreground">Messages Sent</p>
-                      <p className="text-sm font-medium mt-1">{selectedUser.messages_sent_count ?? 0}</p>
+                    <div className="rounded-lg border border-border p-3 col-span-2">
+                      <p className="text-xs text-muted-foreground">Last Search</p>
+                      <p className="text-sm font-medium mt-1">{timeAgo(selectedUser.last_search_at)}</p>
                     </div>
-                    <div className="rounded-lg border border-border p-3">
-                      <p className="text-xs text-muted-foreground">Walkthrough</p>
-                      <Badge variant="outline" className={`mt-1 ${walkthroughStatusColor(getWalkthroughStatus(selectedUser))}`}>
-                        {walkthroughStatusLabel(getWalkthroughStatus(selectedUser))}
-                      </Badge>
-                      <p className="text-xs text-muted-foreground mt-1">{walkthroughStepLabel(selectedUser)}</p>
-                    </div>
-                    {selectedUser.stripe_subscription_id && (
-                      <div className="rounded-lg border border-border p-3 col-span-2">
-                        <p className="text-xs text-muted-foreground">Stripe Subscription</p>
-                        <p className="text-sm font-mono font-medium mt-1 truncate">{selectedUser.stripe_subscription_id}</p>
-                      </div>
-                    )}
                   </div>
                 </div>
-
-                {/* Attribution */}
-                {(selectedUser.traffic_source || selectedUser.affiliate_code || selectedUser.ref_source || selectedUser.utm_source) && (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold text-foreground">Attribution</h3>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-lg border border-border p-3">
-                        <p className="text-xs text-muted-foreground">Source</p>
-                        <Badge variant="outline" className={`mt-1 ${getSourceColor(selectedUser)}`}>
-                          {getSourceLabel(selectedUser)}
-                        </Badge>
-                      </div>
-                      {selectedUser.affiliate_code && (
-                        <div className="rounded-lg border border-border p-3">
-                          <p className="text-xs text-muted-foreground">Affiliate Code</p>
-                          <p className="text-sm font-mono font-medium mt-1">{selectedUser.affiliate_code}</p>
-                        </div>
-                      )}
-                      {selectedUser.utm_source && (
-                        <div className="rounded-lg border border-border p-3">
-                          <p className="text-xs text-muted-foreground">utm_source</p>
-                          <p className="text-sm font-medium mt-1">{selectedUser.utm_source}</p>
-                        </div>
-                      )}
-                      {selectedUser.utm_campaign && (
-                        <div className="rounded-lg border border-border p-3">
-                          <p className="text-xs text-muted-foreground">utm_campaign</p>
-                          <p className="text-sm font-medium mt-1">{selectedUser.utm_campaign}</p>
-                        </div>
-                      )}
-                      {selectedUser.utm_adset && (
-                        <div className="rounded-lg border border-border p-3">
-                          <p className="text-xs text-muted-foreground">utm_adset</p>
-                          <p className="text-sm font-medium mt-1">{selectedUser.utm_adset}</p>
-                        </div>
-                      )}
-                      {selectedUser.utm_ad && (
-                        <div className="rounded-lg border border-border p-3">
-                          <p className="text-xs text-muted-foreground">utm_ad</p>
-                          <p className="text-sm font-medium mt-1">{selectedUser.utm_ad}</p>
-                        </div>
-                      )}
-                      {selectedUser.fbclid && (
-                        <div className="rounded-lg border border-border p-3 col-span-2">
-                          <p className="text-xs text-muted-foreground">fbclid</p>
-                          <p className="text-sm font-mono font-medium mt-1 truncate">{selectedUser.fbclid}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
 
                 {/* Delete User */}
                 {selectedUser.id !== user?.id && (

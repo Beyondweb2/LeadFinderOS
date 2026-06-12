@@ -9,56 +9,16 @@ verify_jwt = false
 [functions.cron-run]
 verify_jwt = false
 
-[functions.create-checkout]
-verify_jwt = false
-
-[functions.check-subscription]
-verify_jwt = false
-
-[functions.customer-portal]
-verify_jwt = false
- 
-[functions.stripe-webhook]
-verify_jwt = false
- 
-
-[functions.ensure-trial]
-verify_jwt = false
-
-[functions.sync-subscription]
-verify_jwt = false
-
 [functions.send-feedback]
 verify_jwt = false
 
 [functions.admin-users]
 verify_jwt = false
 
-[functions.admin-funnel]
-verify_jwt = false
-
 [functions.extract-facebook]
 verify_jwt = false
 
 [functions.google-place-details]
-verify_jwt = false
-
-[functions.lifecycle-emails]
-verify_jwt = false
-
-[functions.test-abandoned-email]
-verify_jwt = false
-
-[functions.complete-signup]
-verify_jwt = false
-
-[functions.get-checkout-email]
-verify_jwt = false
-
-[functions.check-email-subscription]
-verify_jwt = false
-
-[functions.ii-auth]
 verify_jwt = false
 
 [functions.admin-ai-opener]

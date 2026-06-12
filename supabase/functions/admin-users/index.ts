@@ -101,7 +101,6 @@ serve(async (req) => {
       const page = Math.max(1, parseInt(body.page) || 1);
       const perPage = Math.min(200, Math.max(1, parseInt(body.per_page) || 50));
       const emailFilter: string | undefined = typeof body.email === 'string' ? body.email.trim().toLowerCase() : undefined;
-      const statusFilterRaw: string | undefined = typeof body.status === 'string' ? body.status : undefined;
       const activeDays: number | undefined = typeof body.active_days === 'number' ? body.active_days : undefined;
 
       const { data: authData, error: authError } = await serviceClient.auth.admin.listUsers({
@@ -123,8 +122,6 @@ serve(async (req) => {
 
       const userIds = authUsers.map(u => u.id);
 
-      const dayAgoIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-
       // Fetch contacted leads count per user (status != not_contacted, 1 per business)
       const contactedLeadsRes = userIds.length > 0
         ? await serviceClient
@@ -140,138 +137,30 @@ serve(async (req) => {
         contactedCountMap.set(lead.user_id, (contactedCountMap.get(lead.user_id) || 0) + 1);
       }
 
-      const [metricsRes, subsRes, trialsRes, funnelRes, checkoutAttempts24hRes, checkoutAttemptsRecentRes] = await Promise.all([
-        userIds.length > 0
-          ? serviceClient.from('user_metrics').select('user_id, search_count, businesses_added_count, messages_sent_count, replies_count, last_active_at, last_search_at, walkthrough_max_step, walkthrough_completed, walkthrough_last_seen_at, walkthrough_last_step, walkthrough_started_at, walkthrough_completed_at, walkthrough_skipped_at').in('user_id', userIds)
-          : Promise.resolve({ data: [] }),
-        userIds.length > 0
-          ? serviceClient.from('subscriptions').select('user_id, status, current_period_end, stripe_customer_id, stripe_subscription_id').in('user_id', userIds)
-          : Promise.resolve({ data: [] }),
-        userIds.length > 0
-          ? serviceClient.from('user_trials').select('user_id, plan_status, demo_search_used, trial_used, checkout_abandoned, checkout_started_at, free_search_count, walkthrough_completed, utm_source, utm_campaign, utm_adset, utm_ad, fbclid, traffic_source, ref_source, affiliate_code').in('user_id', userIds)
-          : Promise.resolve({ data: [] }),
-        userIds.length > 0
-          ? serviceClient.from('funnel_events').select('user_id, event_type, created_at').in('user_id', userIds).in('event_type', ['demo_started', 'trial_started', 'subscription_active'])
-          : Promise.resolve({ data: [] }),
-        serviceClient
-          .from('checkout_attempts')
-          .select('id', { count: 'exact', head: true })
-          .gte('created_at', dayAgoIso),
-        serviceClient
-          .from('checkout_attempts')
-          .select('id, email, user_id, converted, checkout_completed, created_at, utm_source, utm_campaign, utm_adset, utm_ad, fbclid, traffic_source, ref_source, affiliate_code')
-          .order('created_at', { ascending: false })
-          .limit(25),
-      ]);
+      const metricsRes = userIds.length > 0
+        ? await serviceClient.from('user_metrics').select('user_id, search_count, businesses_added_count, messages_sent_count, replies_count, last_active_at, last_search_at').in('user_id', userIds)
+        : { data: [] };
 
       const metricsData = (metricsRes as any).data || [];
-      const subsData = (subsRes as any).data || [];
-      const trialsData = (trialsRes as any).data || [];
-      const funnelData = (funnelRes as any).data || [];
-      const checkoutAttempts24h = (checkoutAttempts24hRes as any).count || 0;
-      const recentCheckoutAttempts = (checkoutAttemptsRecentRes as any).data || [];
-      console.log('[ADMIN-USERS] Joined data - metrics:', metricsData.length, 'subs:', subsData.length, 'trials:', trialsData.length, 'funnel:', funnelData.length, 'checkout_attempts_24h:', checkoutAttempts24h);
+      console.log('[ADMIN-USERS] Joined data - metrics:', metricsData.length);
 
       const metricsMap = new Map(metricsData.map((m: any) => [m.user_id, m]));
-      const subsMap = new Map(subsData.map((s: any) => [s.user_id, s]));
-      const trialsMap = new Map(trialsData.map((t: any) => [t.user_id, t]));
-
-      // Build funnel map: user_id -> { demo_started_at, trial_started_at, paid_at }
-      const funnelMap = new Map<string, { demo_started_at: string | null; trial_started_at: string | null; paid_at: string | null }>();
-      for (const fe of funnelData) {
-        if (!funnelMap.has(fe.user_id)) {
-          funnelMap.set(fe.user_id, { demo_started_at: null, trial_started_at: null, paid_at: null });
-        }
-        const entry = funnelMap.get(fe.user_id)!;
-        if (fe.event_type === 'demo_started') entry.demo_started_at = fe.created_at;
-        if (fe.event_type === 'trial_started') entry.trial_started_at = fe.created_at;
-        if (fe.event_type === 'subscription_active') entry.paid_at = fe.created_at;
-      }
 
       let users = authUsers.map(u => {
         const metrics = metricsMap.get(u.id) as any;
-        const sub = subsMap.get(u.id) as any;
-        const trial = trialsMap.get(u.id) as any;
-        const funnel = funnelMap.get(u.id) || { demo_started_at: null, trial_started_at: null, paid_at: null };
-
-        // --- Billing Status (purely from Stripe data) ---
-        let billing_status = 'no_stripe';
-        if (sub) {
-          billing_status = sub.status; // trialing, active, past_due, canceled
-        } else if (trial?.checkout_abandoned || trial?.checkout_started_at) {
-          billing_status = 'checkout_started';
-        }
-
-        // --- Access Mode (what the user currently experiences) ---
-        let access_mode = 'no_stripe';
-        if (sub?.status === 'active') {
-          access_mode = 'paid';
-        } else if (sub?.status === 'trialing') {
-          access_mode = 'trial';
-        } else if (sub?.status === 'past_due' || sub?.status === 'unpaid') {
-          access_mode = 'payment_required';
-        } else if (sub?.status === 'canceled' || sub?.status === 'incomplete' || sub?.status === 'incomplete_expired') {
-          access_mode = 'no_access';
-        } else if (!sub && trial?.trial_used) {
-          // Old user who used trial/free access but never subscribed via Stripe
-          access_mode = 'trial_used_no_sub';
-        } else if (!sub && trial) {
-          access_mode = 'free_user';
-        }
-
-        // Keep legacy subscription_status for filter compatibility
-        let subscription_status = 'none';
-        if (sub) {
-          subscription_status = sub.status;
-        } else if (trial) {
-          subscription_status = trial.plan_status;
-        }
 
         return {
           id: u.id,
           email: u.email || 'N/A',
           created_at: u.created_at,
-          subscription_status,
-          access_mode,
-          billing_status,
-          current_period_end: sub?.current_period_end || null,
-          demo_started_at: funnel.demo_started_at,
-          trial_started_at: funnel.trial_started_at,
-          paid_at: funnel.paid_at,
-          free_search_count: trial?.free_search_count ?? 0,
-          walkthrough_completed: trial?.walkthrough_completed ?? false,
-          stripe_subscription_id: sub?.stripe_subscription_id || null,
           search_count: metrics?.search_count ?? 0,
           businesses_added_count: metrics?.businesses_added_count ?? 0,
           messages_sent_count: contactedCountMap.get(u.id) ?? 0,
           replies_count: metrics?.replies_count ?? 0,
           last_active_at: metrics?.last_active_at || null,
           last_search_at: metrics?.last_search_at || null,
-          walkthrough_max_step: metrics?.walkthrough_max_step ?? 0,
-          walkthrough_last_seen_at: metrics?.walkthrough_last_seen_at || null,
-          walkthrough_started_at: metrics?.walkthrough_started_at || null,
-          walkthrough_completed_at: metrics?.walkthrough_completed_at || null,
-          walkthrough_skipped_at: metrics?.walkthrough_skipped_at || null,
-          // Attribution
-          traffic_source: trial?.traffic_source || null,
-          utm_source: trial?.utm_source || null,
-          utm_campaign: trial?.utm_campaign || null,
-          utm_adset: trial?.utm_adset || null,
-          utm_ad: trial?.utm_ad || null,
-          fbclid: trial?.fbclid || null,
-          ref_source: trial?.ref_source || null,
-          affiliate_code: trial?.affiliate_code || null,
         };
       });
-
-      if (statusFilterRaw && statusFilterRaw !== 'all') {
-        users = users.filter(u => {
-          if (statusFilterRaw === 'trialing') return u.subscription_status === 'trial' || u.subscription_status === 'trialing';
-          if (statusFilterRaw === 'active') return u.subscription_status === 'active';
-          if (statusFilterRaw === 'canceled') return u.subscription_status === 'canceled' || u.subscription_status === 'expired';
-          return true;
-        });
-      }
 
       if (activeDays && activeDays > 0) {
         const cutoff = Date.now() - activeDays * 24 * 60 * 60 * 1000;
@@ -283,8 +172,6 @@ serve(async (req) => {
         page,
         per_page: perPage,
         total: authData?.users?.length ?? 0,
-        checkout_attempts_24h: checkoutAttempts24h,
-        recent_checkout_attempts: recentCheckoutAttempts,
       }, 200, corsHeaders, rlHeaders);
     }
 

@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
@@ -16,16 +15,11 @@ import {
   ArrowDown,
   ArrowLeft,
   ZoomIn,
-  Play,
-  UserPlus,
 } from 'lucide-react';
 import step1Search from '@/assets/howto-step1-search.png';
 import step2Results from '@/assets/howto-step2-results.png';
 import step3Crm from '@/assets/howto-step3-crm.png';
 import step4TrackLeads from '@/assets/howto-step4-trackleads.png';
-import { useSubscription } from '@/hooks/useSubscription';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
 
 const STEPS = [
   {
@@ -64,42 +58,10 @@ const STEPS = [
 
 const HowToUse = () => {
   const location = useLocation();
-  const navigate = useNavigate();
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
-  const { resetWalkthrough } = useDemoChecklist();
-  const { isAdmin } = useSubscription();
-  const { user } = useAuth();
   // If accessed via /guide (public route), show sign-up CTA
   const isPublicGuide = location.pathname === '/guide';
 
-  const handleRestartWalkthrough = () => {
-    resetWalkthrough();
-    navigate('/find-leads');
-  };
-
-  const handleSimulateNewUser = async () => {
-    if (!user?.id) return;
-    // Clear all walkthrough/first-time localStorage keys
-    const keysToRemove = [
-      `demo_walkthrough_dismissed_${user.id}`,
-      `walkthrough_completed_${user.id}`,
-      `demo_checklist_v4_${user.id}`,
-      `leadfinder_first_login_completed_${user.id}`,
-      `post_walkthrough_tips_dismissed_${user.id}`,
-    ];
-    keysToRemove.forEach(k => { try { localStorage.removeItem(k); } catch {} });
-    // Set simulate flag
-    localStorage.setItem(`simulate_new_user_${user.id}`, 'true');
-    // Reset DB walkthrough prompt flag
-    try {
-      await supabase.functions.invoke('ensure-trial', {
-        body: { action: 'reset_walkthrough_prompt' },
-      });
-    } catch {}
-    // Hard reload to /find-leads so all state re-initializes
-    window.location.href = '/find-leads';
-  };
-  
   return (
     <div className="container mx-auto px-4 py-6 md:py-8 max-w-5xl">
       {/* Expanded image dialog */}
@@ -124,20 +86,6 @@ const HowToUse = () => {
           Follow this step-by-step guide to find businesses without websites, 
           reach out via WhatsApp, SMS or calls, track interested leads, and close deals.
         </p>
-        {!isPublicGuide && (
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={handleRestartWalkthrough} variant="outline" size="sm" className="gap-1.5">
-              <Play className="h-3.5 w-3.5" />
-              Run Interactive Walkthrough
-            </Button>
-            {isAdmin && (
-              <Button onClick={handleSimulateNewUser} variant="outline" size="sm" className="gap-1.5 border-amber-500/30 text-amber-400 hover:bg-amber-500/10">
-                <UserPlus className="h-3.5 w-3.5" />
-                Simulate New User
-              </Button>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Steps */}

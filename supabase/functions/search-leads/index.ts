@@ -810,73 +810,8 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // ─── ADMIN CHECK ─────────────────────────────
-    const { data: roleData } = await serviceClient
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'admin')
-      .maybeSingle();
-    const isAdmin = !!roleData;
-
-    // ─── SUBSCRIPTION / TRIAL CHECK ──────────────
-    let hasActiveSubscription = false;
-    let isGated = false;
-
-    if (!isAdmin) {
-      const { data: subscription } = await serviceClient
-        .from('subscriptions')
-        .select('status')
-        .eq('user_id', userId)
-        .maybeSingle();
-
-      const fullAccessStatuses = ['active', 'past_due', 'trialing'];
-      hasActiveSubscription = subscription && fullAccessStatuses.includes(subscription.status);
-
-      console.log(`[SEARCH] userId: ${userId}, subStatus: ${subscription?.status ?? 'none'}, proAccess: ${hasActiveSubscription}`);
-
-      if (hasActiveSubscription) {
-        console.log(`User ${userId} has Stripe subscription (${subscription.status}) — unlimited searches`);
-      } else {
-        // Free user — check if they've hit the search cap BEFORE any Google API call
-        isGated = true;
-
-        const { data: trial } = await serviceClient
-          .from('user_trials')
-          .select('free_search_count, searches_used')
-          .eq('user_id', userId)
-          .maybeSingle();
-
-        const currentFreeCount = trial?.free_search_count || 0;
-
-        if (currentFreeCount >= FREE_SEARCH_LIMIT) {
-          console.log(`User ${userId} blocked — free search limit reached (${currentFreeCount}/${FREE_SEARCH_LIMIT})`);
-          return jsonResponse({
-            error: 'You have used all your free searches. Subscribe to unlock unlimited searches.',
-            code: 'FREE_LIMIT_REACHED',
-            searches_used: currentFreeCount,
-            limit: FREE_SEARCH_LIMIT,
-            _debug: debug,
-          }, 402);
-        }
-
-        console.log(`User ${userId} is free user — search ${currentFreeCount + 1}/${FREE_SEARCH_LIMIT} allowed, results gated`);
-
-        // Increment the count BEFORE running the search so it can't be bypassed by concurrent requests
-        if (trial) {
-          await serviceClient
-            .from('user_trials')
-            .update({
-              free_search_count: currentFreeCount + 1,
-              searches_used: (trial.searches_used || 0) + 1,
-              demo_search_used: true,
-            })
-            .eq('user_id', userId);
-        }
-      }
-    } else {
-      console.log(`User ${userId} is admin — bypassing limits`);
-    }
+    // Internal tool: every authenticated account has full, ungated access.
+    const isGated = false;
 
     // ─── RATE LIMIT ──────────────────────────────
     if (!checkRateLimit(userId)) {
