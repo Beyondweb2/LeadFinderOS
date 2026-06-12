@@ -4,7 +4,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { reportClientError } from '@/lib/errorReporting';
-import { hasAdEntryAccess } from '@/lib/adEntryAccess';
 import type { Lead, SearchFilters, SearchResponse } from '@/types/lead';
 
 interface ExcludedBusiness {
@@ -51,11 +50,6 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const { user } = useAuth();
   const { isPaidSubscriber, isStripeTrialing, isAdmin, isLoading: isSubLoading } = useSubscription();
   const hasProAccess = isPaidSubscriber || isStripeTrialing || isAdmin;
-
-  // Helper: is this an ad-entry guest (no account)?
-  const isAdEntryGuest = !user && hasAdEntryAccess();
-  const GUEST_SEARCH_LIMIT = 3;
-  const GUEST_COUNT_KEY = 'leadfinder_guest_search_count';
 
   const clearTrialLimitError = useCallback(() => setTrialLimitError(null), []);
 
@@ -220,19 +214,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     // Only clear gated flag if user has pro access; free users stay gated until checkout
     if (hasProAccess) setGated(false);
 
-    // ─── Guest (ad-entry, no account) search cap ───
-    const isGuestNow = !user && hasAdEntryAccess();
-    if (isGuestNow) {
-      const count = parseInt(localStorage.getItem(GUEST_COUNT_KEY) || '0', 10);
-      if (count >= GUEST_SEARCH_LIMIT) {
-        setTrialLimitError({ searchesToday: count, limit: GUEST_SEARCH_LIMIT });
-        setIsLoading(false);
-        return;
-      }
-    }
-    
-    // Refresh excluded businesses before searching (skip for demo and guest)
-    if (!isDemo && !isGuestNow) await fetchExcludedBusinesses();
+    // Refresh excluded businesses before searching (skip for demo)
+    if (!isDemo) await fetchExcludedBusinesses();
 
     // Helper to determine if an error is retryable (network / 5xx / 429)
     const isRetryable = (err: any): boolean => {
@@ -253,7 +236,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       try {
         // Race the invoke against a timeout
         const invokePromise = supabase.functions.invoke<SearchResponse>('search-leads', {
-          body: { ...filters, skipTrialCount, ...(isDemo ? { demo: true } : {}), ...(isGuestNow ? { guest: true } : {}) },
+          body: { ...filters, skipTrialCount, ...(isDemo ? { demo: true } : {}) },
         });
 
         const timeoutPromise = new Promise<never>((_, reject) => {
@@ -390,14 +373,6 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           }
 
           const noWebsiteCount = filteredLeads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
-
-          // Increment guest search count on success
-          if (isGuestNow) {
-            try {
-              const prev = parseInt(localStorage.getItem(GUEST_COUNT_KEY) || '0', 10);
-              localStorage.setItem(GUEST_COUNT_KEY, String(prev + 1));
-            } catch {}
-          }
 
           await saveSearch(filters, filteredLeads.length, noWebsiteCount);
 

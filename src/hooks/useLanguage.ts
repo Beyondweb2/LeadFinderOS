@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { LANG_STORAGE_KEY } from '@/i18n';
 
@@ -36,32 +35,11 @@ export function useLanguage() {
         return;
       }
 
-      if (user?.id) {
-        try {
-          const { data } = await supabase
-            .from('user_trials')
-            .select('preferred_language' as any)
-            .eq('user_id', user.id)
-            .maybeSingle();
-          
-          if (!cancelled && data && (data as any).preferred_language) {
-            const lang = (data as any).preferred_language as string;
-            setDbLanguage(lang);
-            await i18n.changeLanguage(lang);
-            try { localStorage.setItem(LANG_STORAGE_KEY, lang); } catch {}
-            loadedForUserRef.current = user.id;
-            setIsLoading(false);
-            return;
-          }
-        } catch {
-          // Fall through to localStorage
-        }
-      }
-
-      // Fallback to localStorage
+      // Language preference lives in localStorage (no server-side store)
       try {
         const stored = localStorage.getItem(LANG_STORAGE_KEY);
         if (stored && !cancelled) {
+          setDbLanguage(stored);
           await i18n.changeLanguage(stored);
         }
       } catch {}
@@ -82,14 +60,7 @@ export function useLanguage() {
     try { localStorage.setItem(LANG_STORAGE_KEY, lang); } catch {}
     setDbLanguage(lang);
     await i18n.changeLanguage(lang);
-
-    if (user?.id) {
-      // Fire-and-forget DB update
-      supabase.functions.invoke('ensure-trial', {
-        body: { action: 'set_language', language: lang },
-      }).catch(() => {});
-    }
-  }, [i18n, user?.id]);
+  }, [i18n]);
 
   const needsLanguageSelection = user?.id && !isLoading && !dbLanguage;
 

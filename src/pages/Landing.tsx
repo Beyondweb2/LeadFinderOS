@@ -1,5 +1,4 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { trackLead } from '@/lib/fbPixel';
 import { SEOHead } from '@/components/SEOHead';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -46,8 +45,6 @@ import avatarAlex from '@/assets/review-alex.jpeg';
 import avatarDaniel from '@/assets/review-daniel.jpg';
 
 
-
-import { AffiliateCapture } from '@/components/AffiliateCapture';
 
 // Scroll reveal wrapper component
 const ScrollReveal = ({ 
@@ -595,10 +592,6 @@ const Landing = () => {
   useLandingTheme();
 
   const handleCTA = useCallback(() => {
-    if (!sessionStorage.getItem('fb_lead_fired')) {
-      trackLead();
-      sessionStorage.setItem('fb_lead_fired', '1');
-    }
     navigate('/auth?mode=signup');
   }, [navigate]);
 
@@ -633,9 +626,6 @@ const Landing = () => {
           },
         }}
       />
-      {/* Capture affiliate codes from URL */}
-      <AffiliateCapture />
-
       {/* Feature Image Modal */}
       <Dialog open={!!expandedImage} onOpenChange={() => setExpandedImage(null)}>
         <DialogContent className="max-w-5xl w-[95vw] p-0 bg-card/95 backdrop-blur-xl border-white/10">

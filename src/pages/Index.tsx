@@ -1,180 +1,36 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
-
-import { TrialLimitDialog } from '@/components/TrialLimitDialog';
-import { TrialConversionModal } from '@/components/TrialConversionModal';
 
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
-import { useTrial } from '@/hooks/useTrial';
-import { useSubscription } from '@/hooks/useSubscription';
-import { useAuth } from '@/hooks/useAuth';
-import { useWalkthroughStatus } from '@/hooks/useWalkthroughStatus';
-import { useViewDetailsLimit } from '@/hooks/useViewDetailsLimit';
-import { supabase } from '@/integrations/supabase/client';
-import { Flame, Target, Zap, Search, AlertTriangle, MapPin, Info } from 'lucide-react';
-import { trackFunnelEvent } from '@/lib/funnelAnalytics';
+import { Flame, Target, Zap, Search, MapPin, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import type { Lead, Country } from '@/types/lead';
+import type { Country } from '@/types/lead';
 
 const Index = () => {
-  const location = useLocation();
-  const { leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded, gated } = useLeadSearchContext();
-  const { addLead: addToOutreach, isInOutreach, leads: outreachLeads } = useOutreach();
+  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, expanded } = useLeadSearchContext();
+  const { addLead: addToOutreach, isInOutreach } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
-  const { checkTrial, isStripeTrialing, isLoading: isTrialLoading, freeSearchCount } = useTrial();
-  const { subscribed, isLoading: isSubscriptionLoading, status: subStatus, isPaidSubscriber } = useSubscription();
-  const { session, user } = useAuth();
-  const { walkthroughCompleted } = useWalkthroughStatus();
-  const { toast } = useToast();
 
-  // Pro access = active, past_due, admin, or trialing (Stripe trial)
-  const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
-  const isFreeUser = !hasProAccess;
-  const { recordView, isExhausted: viewDetailsExhausted } = useViewDetailsLimit(hasProAccess);
-
-  // Trigger challenge modal on first search page visit after walkthrough completion (only for subscribed users)
-  useEffect(() => {
-    if (!hasProAccess) return;
-    const key = user?.id ? `challenge_10_pending_${user.id}` : 'challenge_10_pending';
-    try {
-      if (localStorage.getItem(key) === 'true') {
-        localStorage.removeItem(key);
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('trigger-challenge-10-modal'));
-        }, 500);
-      }
-    } catch {}
-  }, [user?.id, hasProAccess]);
-  
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
-  const [totalBusinessesFound, setTotalBusinessesFound] = useState(0);
-  const [showConversionModal, setShowConversionModal] = useState(false);
-  const [paywallTriggeredOnce, setPaywallTriggeredOnce] = useState(false);
-  const [conversionModalShownThisSession, setConversionModalShownThisSession] = useState(false);
-  const savedLeadCountKey = user?.id ? `leadfinder_saved_lead_count:${user.id}` : null;
-  const [savedLeadCount, setSavedLeadCount] = useState(0);
-  const MAX_FREE_SAVES = 10;
-
-  // Ad-entry users without auth are always gated for actions (same as unsubscribed users)
-  const isAdEntryGuest = !user && !hasProAccess;
-  const effectiveGated = gated || isAdEntryGuest;
-
-  // Guest search cap reached? Persist so it survives re-renders/navigation
-  const GUEST_CAP_KEY = 'leadfinder_guest_cap_reached';
-  const guestSearchesExhausted = useMemo(() => {
-    if (!isAdEntryGuest) return false;
-    if (trialLimitError) {
-      try { localStorage.setItem(GUEST_CAP_KEY, '1'); } catch {}
-      return true;
-    }
-    try { return localStorage.getItem(GUEST_CAP_KEY) === '1'; } catch { return false; }
-  }, [isAdEntryGuest, trialLimitError]);
-
-  // Authenticated free user search cap (2 searches)
-  const FREE_USER_SEARCH_CAP = 5;
-  const freeUserSearchKey = user?.id ? `leadfinder_free_search_count:${user.id}` : null;
-  const [freeUserSearchCount, setFreeUserSearchCount] = useState(0);
-
-  useEffect(() => {
-    if (!freeUserSearchKey) {
-      setFreeUserSearchCount(0);
-      return;
-    }
-    try {
-      setFreeUserSearchCount(parseInt(localStorage.getItem(freeUserSearchKey) || '0', 10));
-    } catch {
-      setFreeUserSearchCount(0);
-    }
-  }, [freeUserSearchKey]);
-
-  // Clear free search cap when user becomes subscriber
-  useEffect(() => {
-    if (hasProAccess && freeUserSearchKey) {
-      try { localStorage.removeItem(freeUserSearchKey); } catch {}
-      setFreeUserSearchCount(0);
-    }
-  }, [hasProAccess, freeUserSearchKey]);
-
-  const freeUserSearchesExhausted = isFreeUser && !!user && freeUserSearchCount >= FREE_USER_SEARCH_CAP;
-  const anySearchesExhausted = guestSearchesExhausted || freeUserSearchesExhausted || freeSearchExhausted;
-
-  useEffect(() => {
-    if (!savedLeadCountKey) {
-      setSavedLeadCount(0);
-      return;
-    }
-    try {
-      localStorage.removeItem('leadfinder_saved_lead_count');
-      setSavedLeadCount(parseInt(localStorage.getItem(savedLeadCountKey) || '0', 10));
-    } catch {
-      setSavedLeadCount(0);
-    }
-  }, [savedLeadCountKey]);
-
-  // Paywall modal is only opened when user clicks a CTA (e.g. "Start Free Trial" button or locked action)
-  // No auto-popup on search cap hit
 
   // Count businesses without websites — only from the most recent search
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
-  // Show conversion modal after first gated search results load
-  // Only auto-popup for ad-entry guests (no account); authenticated free users see the inline CTA instead
+  // Fire the post-search tip once results land
   useEffect(() => {
-    if (!isLoading && leads.length > 0 && gated && !conversionModalShownThisSession && isAdEntryGuest) {
-      checkTrial();
-      setTotalBusinessesFound(prev => prev + leads.length);
-      const timer = setTimeout(() => {
-        setShowConversionModal(true);
-        setConversionModalShownThisSession(true);
-      }, 4000);
-      return () => clearTimeout(timer);
-    }
-    if (!isLoading && leads.length > 0 && !gated) {
-      checkTrial();
+    if (!isLoading && leads.length > 0) {
       setTimeout(() => window.dispatchEvent(new CustomEvent('post-search-tip')), 300);
     }
-  }, [isLoading, leads.length, gated, checkTrial, conversionModalShownThisSession, isAdEntryGuest]);
+  }, [isLoading, leads.length]);
 
-  // On mount/refresh: only auto-popup for ad-entry guests with cached leads
-  useEffect(() => {
-    if (leads.length > 0 && gated && isFreeUser && !conversionModalShownThisSession && !isSubscriptionLoading && isAdEntryGuest) {
-      const timer = setTimeout(() => {
-        setShowConversionModal(true);
-        setConversionModalShownThisSession(true);
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [leads.length, gated, isFreeUser, isSubscriptionLoading, conversionModalShownThisSession, isAdEntryGuest]);
-
-  // Handle search attempt — capped at 2 for free users
   const handleSearch = useCallback((filters: any) => {
-    // Block if free user exhausted
-    if (freeUserSearchesExhausted) {
-      setShowConversionModal(true);
-      return;
-    }
     setLastSearchCountry(filters.country || 'UK');
-    search(filters, false, false).then(() => {
-      // Increment free user search count after successful search
-      if (isFreeUser && freeUserSearchKey) {
-        try {
-          const prev = parseInt(localStorage.getItem(freeUserSearchKey) || '0', 10);
-          const next = prev + 1;
-          localStorage.setItem(freeUserSearchKey, String(next));
-          setFreeUserSearchCount(next);
-        } catch {}
-      }
-    });
-    if (isAdEntryGuest) {
-      trackFunnelEvent('guest_search_performed', true);
-    }
-  }, [search, isAdEntryGuest, freeUserSearchesExhausted, isFreeUser, freeUserSearchKey]);
+    search(filters, false, false);
+  }, [search]);
 
   return (
     <div className="space-y-4 md:space-y-8">
@@ -198,28 +54,12 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Post-Abandon Exhausted Banner */}
-      {postAbandonExhausted && !hasProAccess && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg">
-          <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
-            <AlertTriangle className="h-4 w-4 shrink-0" />
-            <span className="font-medium">You're one step away from unlimited leads.</span>
-          </div>
-        </div>
-      )}
-
       {/* Search Section */}
       <section>
-        <SearchForm 
-          onSearch={handleSearch} 
+        <SearchForm
+          onSearch={handleSearch}
           isLoading={isLoading}
-          isOnTrial={false}
-          searchesRemaining={hasProAccess ? Infinity : Math.max(0, FREE_USER_SEARCH_CAP - freeUserSearchCount)}
-          dailyLimit={hasProAccess ? Infinity : FREE_USER_SEARCH_CAP}
-          isPaidSubscriber={hasProAccess}
-          disabled={false}
-          freeSearchesExhausted={anySearchesExhausted}
-          onUpgrade={() => setShowConversionModal(true)}
+          isPaidSubscriber={true}
         />
       </section>
 
@@ -246,18 +86,9 @@ const Index = () => {
               <span className="text-primary font-bold">{noWebsiteCount}</span> potential client{noWebsiteCount !== 1 ? 's' : ''} found in this search
             </span>
           </div>
-          {isFreeUser && savedLeadCount >= MAX_FREE_SAVES ? (
-            <button
-              onClick={() => setShowConversionModal(true)}
-              className="text-xs sm:text-sm font-semibold text-primary hover:text-primary/80 cursor-pointer transition-colors mt-0.5"
-            >
-              🔓 Unlock Full Access →
-            </button>
-          ) : (
-            <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-              Add to Outreach to start contacting them
-            </p>
-          )}
+          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+            Add to Outreach to start contacting them
+          </p>
         </div>
       )}
 
@@ -299,40 +130,15 @@ const Index = () => {
       {/* Results Section */}
       {leads.length > 0 && (
         <section data-walkthrough="results-header">
-          <LeadsTable 
-            leads={leads} 
+          <LeadsTable
+            leads={leads}
             onExport={exportToCsv}
-            onAddToOutreach={(lead) => {
-              if (!user) {
-                setShowConversionModal(true);
-                return;
-              }
-              // Track saved lead count for free users
-              const newCount = savedLeadCount + 1;
-              setSavedLeadCount(newCount);
-              try {
-                if (savedLeadCountKey) localStorage.setItem(savedLeadCountKey, String(newCount));
-              } catch {}
-              // Trigger paywall after exceeding free saves
-              if (effectiveGated && newCount > MAX_FREE_SAVES) {
-                setPaywallTriggeredOnce(true);
-                setShowConversionModal(true);
-                return;
-              }
-              return addToOutreach(lead, lastSearchCountry, 'no_website');
-            }}
+            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
             isInOutreach={isInOutreach}
             onMapLinkClick={(name, url) => {
-              recordView();
               markAsChecked(name, url);
             }}
             isChecked={isChecked}
-            gated={effectiveGated}
-            onGatedAction={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
-            savedLeadCount={savedLeadCount}
-            maxFreeSaves={MAX_FREE_SAVES}
-            viewDetailsExhausted={(viewDetailsExhausted || (isFreeUser && savedLeadCount >= MAX_FREE_SAVES)) && isFreeUser}
-            onViewDetailsGated={() => { setPaywallTriggeredOnce(true); setShowConversionModal(true); }}
           />
         </section>
       )}
@@ -348,26 +154,6 @@ const Index = () => {
           </h2>
         </section>
       )}
-
-      {/* Trial Limit Dialog — only for authenticated users; guests use TrialConversionModal */}
-      <TrialLimitDialog
-        open={!!trialLimitError && !isAdEntryGuest}
-        onOpenChange={(open) => !open && clearTrialLimitError()}
-        searchesToday={trialLimitError?.searchesToday || 3}
-        dailyLimit={trialLimitError?.limit || 3}
-        totalBusinessesFound={totalBusinessesFound}
-        noWebsiteCount={noWebsiteCount}
-      />
-
-      {/* Conversion Modal for gated users + guest search cap */}
-      <TrialConversionModal
-        open={showConversionModal}
-        onOpenChange={(open) => {
-          setShowConversionModal(open);
-        }}
-        noWebsiteCount={noWebsiteCount}
-        contactedCount={0}
-      />
     </div>
   );
 };

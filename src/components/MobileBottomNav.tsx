@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText, Star,
   DollarSign, MoreHorizontal, Palette, LogOut, HelpCircle,
-  MessageSquare, Users, ShieldCheck, CreditCard
+  MessageSquare, Users, ShieldCheck
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
@@ -52,7 +52,7 @@ export function MobileBottomNav() {
   const { t } = useTranslation();
   const location = useLocation();
   const { signOut } = useAuth();
-  const { isAdmin, openCustomerPortal } = useSubscription();
+  const { isAdmin } = useSubscription();
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
   const [notepadOpen, setNotepadOpen] = useState(false);
   const [crmGlow, setCrmGlow] = useState(false);
@@ -185,12 +185,6 @@ export function MobileBottomNav() {
               <DropdownMenuItem onClick={() => setNotepadOpen(true)} className="flex items-center gap-3 cursor-pointer">
                 <StickyNote className="h-4 w-4" />
                 <span>Notepad</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => {
-                try { openCustomerPortal(); } catch { }
-              }} className="flex items-center gap-3 cursor-pointer">
-                <CreditCard className="h-4 w-4" />
-                <span>{t('userMenu.manageSubscription')}</span>
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setThemeSheetOpen(true)} className="flex items-center gap-3 cursor-pointer">
                 <Palette className="h-4 w-4" />

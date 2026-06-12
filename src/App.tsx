@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { OwnerProvider } from "@/contexts/OwnerContext";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
@@ -15,7 +15,6 @@ import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 
-import { RefSourceCapture } from "@/components/RefSourceCapture";
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
 import { FirstTimeRedirect } from "./components/FirstTimeRedirect";
 import { Loader2 } from "lucide-react";
@@ -26,29 +25,21 @@ import NotFound from "./pages/NotFound";
 
 // Lazy loaded routes — reduces initial bundle size
 const Index = lazy(() => import("./pages/Index"));
-const BillingSuccess = lazy(() => import("./pages/BillingSuccess"));
-const CompleteSetup = lazy(() => import("./pages/CompleteSetup"));
-const BillingCancel = lazy(() => import("./pages/BillingCancel"));
 const Outreach = lazy(() => import("./pages/Outreach"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Templates = lazy(() => import("./pages/Templates"));
 const PotentialWorkPage = lazy(() => import("./pages/PotentialWork"));
 const PaidClientsPage = lazy(() => import("./pages/PaidClients"));
 const HowToUse = lazy(() => import("./pages/HowToUse"));
-const AdminAffiliates = lazy(() => import("./pages/AdminAffiliates"));
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
-const AdminFunnel = lazy(() => import("./pages/AdminFunnel"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const AdminSiteImages = lazy(() => import("./pages/AdminSiteImages"));
 const AdminSitesList = lazy(() => import("./pages/AdminSitesList"));
 const AdminSiteManage = lazy(() => import("./pages/AdminSiteManage"));
 const Landing = lazy(() => import("./pages/Landing"));
-const AdEntryRedirect = lazy(() => import("./components/AdEntryRedirect"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Feedback = lazy(() => import("./pages/Feedback"));
-const AffiliateProgram = lazy(() => import("./pages/AffiliateProgram"));
 const Playbook = lazy(() => import("./pages/Playbook"));
-const UnlockAccess = lazy(() => import("./pages/UnlockAccess"));
 const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
@@ -180,16 +171,12 @@ const App = () => {
           <Sonner />
            <LeadSearchProvider>
             <BrowserRouter>
-              <RefSourceCapture />
               <ScrollToTop />
               <Suspense fallback={<FullPageLoader />}>
           <Routes>
             <Route path="/auth" element={<Auth />} />
-             <Route path="/billing/success" element={<BillingSuccess />} />
-             <Route path="/complete-setup" element={<CompleteSetup />} />
-             <Route path="/billing/cancel" element={<BillingCancel />} />
-             <Route 
-               path="/landing" 
+             <Route
+               path="/landing"
               element={
                 <PublicRoute>
                   <Landing />
@@ -198,27 +185,13 @@ const App = () => {
              />
              <Route path="/terms" element={<Terms />} />
              <Route path="/feedback" element={<Feedback />} />
-             <Route path="/partners" element={<AffiliateProgram />} />
               <Route path="/start" element={<Start />} />
-              <Route path="/start-free-trial" element={<Navigate to="/subscribe" replace />} />
               <Route path="/find-clients/:city" element={<CityLeads />} />
               <Route path="/p/:slug" element={<BarberSite />} />
               {/* Barber front doors — PUBLIC, neutral-branded, never LeadFinder chrome. */}
               <Route path="/claim/:token" element={<Claim />} />
               <Route path="/barber-login" element={<BarberLogin />} />
-              <Route 
-                path="/ads" 
-                element={<AdEntryRedirect />} 
-              />
              <Route path="/guide" element={<HowToUse />} />
-             <Route 
-               path="/unlock" 
-               element={
-                 <ProtectedRoute>
-                   <UnlockAccess />
-                 </ProtectedRoute>
-               } 
-             />
             <Route
               path="/"
               element={
@@ -346,22 +319,6 @@ const App = () => {
               element={
                 <ProtectedRoute>
                   <AdminDashboard />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/admin/affiliates" 
-              element={
-                <ProtectedRoute>
-                  <AdminAffiliates />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/admin/funnel-v2" 
-              element={
-                <ProtectedRoute>
-                  <AdminFunnel />
                 </ProtectedRoute>
               } 
             />

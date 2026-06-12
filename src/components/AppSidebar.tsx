@@ -43,7 +43,6 @@ export function AppSidebar() {
 
   const adminItems = [
     { title: t('nav.adminDashboard'), url: '/admin', icon: ShieldCheck, description: t('nav.adminDashboardDesc') },
-    { title: t('nav.affiliates'), url: '/admin/affiliates', icon: Users, description: t('nav.affiliatesDesc') },
   ];
 
   let searchPulse = false;

@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useLocation } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
 
 export interface DemoChecklistState {
   searchDone: boolean;
@@ -255,10 +254,6 @@ export function DemoChecklistProvider({
       if (user?.id) {
         try { localStorage.removeItem(`simulate_new_user_${user.id}`); } catch {}
       }
-      Promise.resolve(supabase.rpc('log_walkthrough_event' as any, {
-        p_event_type: 'walkthrough_complete',
-        p_meta: { walkthrough_id: 'main_v2' },
-      })).catch(() => {});
       if (isReplay) {
         setIsOpen(false);
         setIsReplay(false);

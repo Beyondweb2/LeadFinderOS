@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { LogOut, User, CreditCard, Crown, Key, Loader2, Camera, Globe } from 'lucide-react';
+import { LogOut, User, Crown, Key, Loader2, Camera, Globe } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -34,7 +34,7 @@ import { supabase } from '@/integrations/supabase/client';
 export function UserMenu() {
   const { t } = useTranslation();
   const { user, signOut } = useAuth();
-  const { subscribed, subscriptionEnd, openCustomerPortal, isAdmin, isPaidSubscriber, isStripeTrialing } = useSubscription();
+  const { subscriptionEnd, isAdmin, isPaidSubscriber, isStripeTrialing } = useSubscription();
   const { uploadAvatar, isUploading } = useAvatar();
   const { currentLanguage, changeLanguage } = useLanguage();
   const { toast } = useToast();
@@ -61,15 +61,6 @@ export function UserMenu() {
   };
 
   const handleSignOut = async () => { await signOut(); };
-
-  const handleManageSubscription = async () => {
-    try {
-      await openCustomerPortal();
-    } catch (error) {
-      console.error('Customer portal error:', error);
-      toast({ title: t('userMenu.unableOpenBilling'), description: t('userMenu.billingRetry'), variant: 'destructive' });
-    }
-  };
 
   const handleChangePassword = async () => {
     if (newPassword.length < 6) {
@@ -133,12 +124,6 @@ export function UserMenu() {
             <Key className="mr-2 h-4 w-4" />
             {t('userMenu.changePassword')}
           </DropdownMenuItem>
-          {subscribed && !isAdmin && (
-            <DropdownMenuItem onClick={handleManageSubscription} className="cursor-pointer">
-              <CreditCard className="mr-2 h-4 w-4" />
-              {t('userMenu.manageSubscription')}
-            </DropdownMenuItem>
-           )}
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="cursor-pointer">
               <Globe className="mr-2 h-4 w-4" />

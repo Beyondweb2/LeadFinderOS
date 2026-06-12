@@ -7,19 +7,12 @@ import { readLastRoute } from '@/hooks/usePersistLastRoute';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Loader2, Sparkles, Gift, Check, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { AffiliateCapture } from '@/components/AffiliateCapture';
-import { InternetIdentityButton } from '@/components/InternetIdentityButton';
-import { GoogleLoginButton } from '@/components/GoogleLoginButton';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { type SupportedLanguage } from '@/hooks/useLanguage';
 import { LANG_STORAGE_KEY } from '@/i18n';
 import appLogo from '@/assets/logo.png';
-import { trackCompleteRegistration } from '@/lib/fbPixel';
-import { getCheckoutAttribution } from '@/lib/checkoutAttribution';
 
 const Auth = () => {
   const { t } = useTranslation();
@@ -43,8 +36,6 @@ const Auth = () => {
     } catch { return 'en'; }
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRedirectingToCheckout, setIsRedirectingToCheckout] = useState(false);
-  const [showTrialModal, setShowTrialModal] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   
   const { signIn, signUp, user, isLoading } = useAuth();
@@ -112,40 +103,6 @@ const Auth = () => {
             toast({ title: t('auth.signUpFailed'), description: error.message, variant: 'destructive' });
           }
         } else {
-          trackCompleteRegistration();
-          try {
-            await supabase.functions.invoke('ensure-trial', {
-              body: { action: 'set_language', language: selectedLanguage },
-            });
-          } catch {}
-
-          let shouldCheckout = false;
-          try {
-            shouldCheckout = localStorage.getItem('leadfinder_post_signup_checkout') === 'true';
-            if (shouldCheckout) localStorage.removeItem('leadfinder_post_signup_checkout');
-          } catch {}
-
-          if (shouldCheckout) {
-            setIsRedirectingToCheckout(true);
-            toast({ title: t('auth.accountCreated'), description: 'Redirecting to checkout…' });
-            try {
-              await new Promise(r => setTimeout(r, 500));
-              const { data: sessionData } = await supabase.auth.getSession();
-              const token = sessionData?.session?.access_token;
-              if (token) {
-                const { data, error } = await supabase.functions.invoke('create-checkout', {
-                  headers: { Authorization: `Bearer ${token}` },
-                  body: getCheckoutAttribution(),
-                });
-                if (!error && data?.url) {
-                  window.location.href = data.url;
-                  return;
-                }
-              }
-            } catch {}
-            setIsRedirectingToCheckout(false);
-          }
-
           toast({ title: t('auth.accountCreated'), description: t('auth.welcomeRedirecting') });
           navigate('/', { replace: true });
           return;
@@ -164,13 +121,10 @@ const Auth = () => {
     });
   };
 
-  if (isLoading || isRedirectingToCheckout) {
+  if (isLoading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        {isRedirectingToCheckout && (
-          <p className="text-sm text-muted-foreground">Opening checkout…</p>
-        )}
       </div>
     );
   }
@@ -214,55 +168,6 @@ const Auth = () => {
           </div>
         )}
       </div>
-
-      <AffiliateCapture />
-
-      {/* Free Trial Loading Modal */}
-      <Dialog open={showTrialModal} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-md border-primary/30 bg-card/95 backdrop-blur-xl" hideClose>
-          <div className="flex flex-col items-center justify-center py-8 gap-6">
-            <div className="relative">
-              <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-              <div className="relative h-20 w-20 rounded-full border-4 border-primary/30 border-t-primary animate-spin" />
-              <div className="absolute inset-0 flex items-center justify-center">
-                <Gift className="h-8 w-8 text-primary animate-pulse" />
-              </div>
-            </div>
-            <div className="text-center space-y-2">
-              <h3 className="text-xl font-bold flex items-center justify-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                {t('trial.threeDayFullAccess')}
-                <Sparkles className="h-5 w-5 text-primary" />
-              </h3>
-              <p className="text-muted-foreground text-sm">{t('trial.settingUpTrial')}</p>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Check className="h-4 w-4 text-primary" />
-                <span>{t('trial.unlimitedSearches')}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Check className="h-4 w-4 text-primary" />
-                <span>{t('trial.fullOutreach')}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Check className="h-4 w-4 text-primary" />
-                <span>{t('trial.whatsappTemplates')}</span>
-              </div>
-            </div>
-            <div className="text-center pt-1 border-t border-border/50">
-              <p className="text-xs text-muted-foreground mb-1">{t('trial.notReadyCard')}</p>
-              <button
-                type="button"
-                onClick={() => { setShowTrialModal(false); navigate('/demo'); }}
-                className="text-xs text-primary hover:underline font-medium"
-              >
-                {t('trial.freeSearchDemo')}
-              </button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Auth Card */}
       <div className="w-full max-w-[420px] relative z-10 -mt-6">
@@ -361,46 +266,6 @@ const Auth = () => {
               </>
             )}
           </p>
-
-          {/* Divider */}
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <span className="w-full border-t border-border/20" />
-            </div>
-            <div className="relative flex justify-center">
-              <span className="px-4 text-[10px] uppercase tracking-[0.15em] text-muted-foreground/40" style={{ backgroundColor: 'hsl(220 30% 8%)' }}>or</span>
-            </div>
-          </div>
-
-          {/* Social logins */}
-          <div className="space-y-3">
-            <GoogleLoginButton />
-
-            {/* Internet Identity - premium differentiated button */}
-            <div
-              className="rounded-xl p-[1px] transition-all duration-250"
-              style={{
-                background: 'linear-gradient(135deg, hsl(270 60% 40% / 0.5), hsl(250 50% 35% / 0.3), hsl(270 60% 40% / 0.5))',
-              }}
-            >
-              <div
-                className="rounded-[11px]"
-                style={{
-                  background: 'linear-gradient(135deg, hsl(270 30% 12%), hsl(260 25% 10%))',
-                }}
-              >
-                <InternetIdentityButton />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-center gap-1.5 pt-1">
-              <div className="h-[1px] w-3 bg-muted-foreground/15" />
-              <p className="text-[9px] text-muted-foreground/35 tracking-[0.12em] uppercase font-medium">
-                Powered by Internet Computer
-              </p>
-              <div className="h-[1px] w-3 bg-muted-foreground/15" />
-            </div>
-          </div>
         </div>
       </div>
     </div>

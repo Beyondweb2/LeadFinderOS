@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, createContext, useContext, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { clearAdEntryAccess } from '@/lib/adEntryAccess';
 
 
 interface AuthContextType {
@@ -120,8 +119,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    // Clear ad-entry guest access (both in-memory and sessionStorage)
-    clearAdEntryAccess();
     try { localStorage.removeItem('leadfinder_guest_cap_reached'); } catch {}
     await supabase.auth.signOut();
     window.location.href = '/landing';

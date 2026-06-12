@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { createDemoLeads, isDemoLead, isDemoDismissed } from '@/lib/demoLeads';
+import { isDemoLead } from '@/lib/demoLeads';
 import { AlertTriangle, Clock, CalendarCheck } from 'lucide-react';
 import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
 import { Card } from '@/components/ui/card';
@@ -70,10 +70,6 @@ import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach'
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { FacebookSection } from '@/components/FacebookSection';
 import { cn } from '@/lib/utils';
-import { useContactUsage } from '@/hooks/useContactUsage';
-import { useSubscription } from '@/hooks/useSubscription';
-import { useTrial } from '@/hooks/useTrial';
-import { TrialConversionModal } from '@/components/TrialConversionModal';
 
 /* ───────── constants ───────── */
 
@@ -1152,18 +1148,6 @@ const PotentialWorkPage = () => {
   } = useOutreach();
 
   const { user } = useAuth();
-  const { isPaidSubscriber, status: subStatus } = useSubscription();
-  const { isStripeTrialing } = useTrial();
-  const hasProAccess = isPaidSubscriber || subStatus === 'trialing' || subStatus === 'past_due' || subStatus === 'admin' || isStripeTrialing;
-  const { tryContact } = useContactUsage();
-  const [showPaywall, setShowPaywall] = useState(false);
-
-  const handleContactGatedForLead = useCallback((leadId: string) => {
-    if (hasProAccess) return true;
-    if (tryContact(leadId)) return true;
-    setShowPaywall(true);
-    return false;
-  }, [hasProAccess, tryContact]);
 
   // Guard demo leads from triggering DB writes
   const safeUpdateStatus = useCallback(async (leadId: string, status: LeadStatus) => {
@@ -1269,11 +1253,7 @@ const PotentialWorkPage = () => {
 
   const allPotentialLeads = useMemo(() => {
     const pipelineStatuses = PIPELINE_STAGES;
-    // Inject tracked demo leads for free users only — subscribers never see them
-    const demoTracked = (user?.id && !hasProAccess && !isDemoDismissed(user.id))
-      ? createDemoLeads(user.id).filter(d => d.is_potential_work)
-      : [];
-    const allLeads = [...demoTracked, ...leads, ...archivedLeads];
+    const allLeads = [...leads, ...archivedLeads];
     let result = allLeads.filter((lead) => {
       const mapped = mapLegacyStatus(lead.status);
       return lead.is_potential_work || pipelineStatuses.includes(mapped) || lead.status === 'interested';
@@ -1533,7 +1513,6 @@ const PotentialWorkPage = () => {
                 customStatuses={customStatuses}
                 onAddCustomStatus={() => setShowCustomStatusDialog(true)}
                 userId={user?.id}
-                onContactGated={() => handleContactGatedForLead(lead.id)}
               />
             </div>
           ))}
@@ -1604,12 +1583,6 @@ const PotentialWorkPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <TrialConversionModal
-        open={showPaywall}
-        onOpenChange={setShowPaywall}
-        noWebsiteCount={0}
-        contactedCount={0}
-      />
     </div>
   );
 };
