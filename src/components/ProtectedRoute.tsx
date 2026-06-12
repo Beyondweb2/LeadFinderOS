@@ -2,7 +2,6 @@ import { ReactNode, useEffect, useMemo } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
-import { hasAdEntryAccess } from '@/lib/adEntryAccess';
 
 interface ProtectedRouteProps {
   children: ReactNode;
@@ -45,10 +44,6 @@ export function ProtectedRoute({ children, redirectTo = "/landing" }: ProtectedR
   }
 
   if (!user) {
-    // Allow ad-entry users to bypass auth gate
-    if (hasAdEntryAccess()) {
-      return <>{children}</>;
-    }
     return <Navigate to={redirectTo} replace />;
   }
 
