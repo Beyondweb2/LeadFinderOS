@@ -44,7 +44,7 @@ export default function BarberDashboard() {
       setLoading(true);
       const { data } = await supabase
         .from("generated_sites")
-        .select("id, site_name, status, content")
+        .select("id, site_name, status, content, is_paid")
         .eq("owner_id", user.id)
         .order("created_at", { ascending: false });
       setSites((data ?? []) as unknown as OwnedSite[]);

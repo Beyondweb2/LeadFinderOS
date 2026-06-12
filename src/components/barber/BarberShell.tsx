@@ -17,7 +17,7 @@ import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
 import { londonInstant, londonYMD } from "@/components/barber/london";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
-export type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent };
+export type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent; is_paid?: boolean };
 
 const SHELL_BG =
   "radial-gradient(1100px 600px at 85% -8%, rgba(230,162,75,0.10), transparent 60%)," +
@@ -187,6 +187,19 @@ export function BarberShell({
 
       {/* Content */}
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Upsell announcement bar — shown ONLY to unpaid barbers; paid sites
+            never see it. Clicking opens Settings where the full upsell lives. */}
+        {!site.is_paid && (
+          <button
+            type="button"
+            onClick={() => go("settings")}
+            className="flex w-full items-center justify-center gap-2 bg-amber px-4 py-2 text-center text-sm font-semibold text-ink transition-colors hover:bg-amber-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/40"
+          >
+            <span>Unlock online booking &amp; SMS reminders — get more clients, stop the no-shows</span>
+            <span aria-hidden="true">→</span>
+          </button>
+        )}
+
         <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-line bg-ink/90 px-4 py-3 backdrop-blur">
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setNavOpen(true)} aria-label="Open menu" className="rounded p-1.5 text-zinc-300 hover:bg-white/10 hover:text-white md:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/60">
@@ -201,7 +214,7 @@ export function BarberShell({
           </a>
         </header>
 
-        <main className="barber-surface mx-auto w-full max-w-4xl flex-1 p-4 md:p-8">
+        <main className={`barber-surface mx-auto w-full flex-1 p-4 md:p-8 ${page === "calendar" ? "max-w-none" : "max-w-4xl"}`}>
           {page === "dashboard" && <DashboardPage site={site} />}
 
           {page === "calendar" && <WeekCalendar siteId={site.id} />}
@@ -228,12 +241,16 @@ export function BarberShell({
 
           {page === "settings" && (
             <div className="space-y-6">
-              <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />
+              {/* Upsell card — unpaid barbers only; paid never see an upsell. */}
+              {!site.is_paid && <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Account</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
+                  <div className="text-sm text-muted-foreground">
+                    Plan: <span className="font-medium text-zinc-200">{site.is_paid ? "Pro — booking & reminders active" : "Free"}</span>
+                  </div>
                   <div className="text-sm text-muted-foreground">Your public site link:</div>
                   <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-mono text-sm text-amber-soft hover:text-amber">
                     {publicSiteLabel(site.site_name)} <ExternalLink className="h-4 w-4" />
