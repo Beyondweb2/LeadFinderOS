@@ -10,90 +10,35 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.1"
+    PostgrestVersion: "14.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
-      affiliate_conversions: {
-        Row: {
-          affiliate_id: string
-          commission_amount: number
-          created_at: string
-          currency: string
-          first_payment_amount: number
-          id: string
-          paid_at: string
-          status: string
-          stripe_payment_intent_id: string | null
-          user_id: string
-        }
-        Insert: {
-          affiliate_id: string
-          commission_amount: number
-          created_at?: string
-          currency?: string
-          first_payment_amount: number
-          id?: string
-          paid_at?: string
-          status?: string
-          stripe_payment_intent_id?: string | null
-          user_id: string
-        }
-        Update: {
-          affiliate_id?: string
-          commission_amount?: number
-          created_at?: string
-          currency?: string
-          first_payment_amount?: number
-          id?: string
-          paid_at?: string
-          status?: string
-          stripe_payment_intent_id?: string | null
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "affiliate_conversions_affiliate_id_fkey"
-            columns: ["affiliate_id"]
-            isOneToOne: false
-            referencedRelation: "affiliates"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      affiliates: {
-        Row: {
-          click_count: number
-          code: string
-          commission_rate: number
-          created_at: string
-          email: string
-          id: string
-          is_active: boolean
-          name: string
-        }
-        Insert: {
-          click_count?: number
-          code: string
-          commission_rate?: number
-          created_at?: string
-          email: string
-          id?: string
-          is_active?: boolean
-          name: string
-        }
-        Update: {
-          click_count?: number
-          code?: string
-          commission_rate?: number
-          created_at?: string
-          email?: string
-          id?: string
-          is_active?: boolean
-          name?: string
-        }
-        Relationships: []
-      }
       api_usage_log: {
         Row: {
           api_type: string
@@ -258,66 +203,6 @@ export type Database = {
         }
         Relationships: []
       }
-      checkout_attempts: {
-        Row: {
-          affiliate_code: string | null
-          checkout_completed: boolean
-          converted: boolean
-          created_at: string
-          email: string
-          fbclid: string | null
-          id: string
-          ref_source: string | null
-          reminder_sent_at: string | null
-          stripe_customer_id: string | null
-          stripe_subscription_id: string | null
-          traffic_source: string | null
-          user_id: string | null
-          utm_ad: string | null
-          utm_adset: string | null
-          utm_campaign: string | null
-          utm_source: string | null
-        }
-        Insert: {
-          affiliate_code?: string | null
-          checkout_completed?: boolean
-          converted?: boolean
-          created_at?: string
-          email: string
-          fbclid?: string | null
-          id?: string
-          ref_source?: string | null
-          reminder_sent_at?: string | null
-          stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
-          traffic_source?: string | null
-          user_id?: string | null
-          utm_ad?: string | null
-          utm_adset?: string | null
-          utm_campaign?: string | null
-          utm_source?: string | null
-        }
-        Update: {
-          affiliate_code?: string | null
-          checkout_completed?: boolean
-          converted?: boolean
-          created_at?: string
-          email?: string
-          fbclid?: string | null
-          id?: string
-          ref_source?: string | null
-          reminder_sent_at?: string | null
-          stripe_customer_id?: string | null
-          stripe_subscription_id?: string | null
-          traffic_source?: string | null
-          user_id?: string | null
-          utm_ad?: string | null
-          utm_adset?: string | null
-          utm_campaign?: string | null
-          utm_source?: string | null
-        }
-        Relationships: []
-      }
       claim_tokens: {
         Row: {
           created_at: string
@@ -401,84 +286,6 @@ export type Database = {
           id?: string
           lead_id?: string
           user_id?: string
-        }
-        Relationships: []
-      }
-      email_job_runs: {
-        Row: {
-          checked_count: number
-          eligible_count: number
-          errors: string | null
-          id: string
-          ran_at: string
-          sample_user_ids: Json | null
-          sent_count: number
-        }
-        Insert: {
-          checked_count?: number
-          eligible_count?: number
-          errors?: string | null
-          id?: string
-          ran_at?: string
-          sample_user_ids?: Json | null
-          sent_count?: number
-        }
-        Update: {
-          checked_count?: number
-          eligible_count?: number
-          errors?: string | null
-          id?: string
-          ran_at?: string
-          sample_user_ids?: Json | null
-          sent_count?: number
-        }
-        Relationships: []
-      }
-      funnel_analytics: {
-        Row: {
-          created_at: string
-          event_type: string
-          id: string
-          is_guest_user: boolean
-          session_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          event_type: string
-          id?: string
-          is_guest_user?: boolean
-          session_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          event_type?: string
-          id?: string
-          is_guest_user?: boolean
-          session_id?: string | null
-        }
-        Relationships: []
-      }
-      funnel_events: {
-        Row: {
-          created_at: string
-          event_type: string
-          id: string
-          meta: Json | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          event_type: string
-          id?: string
-          meta?: Json | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          event_type?: string
-          id?: string
-          meta?: Json | null
-          user_id?: string | null
         }
         Relationships: []
       }
@@ -851,41 +658,6 @@ export type Database = {
         }
         Relationships: []
       }
-      outreach_logs: {
-        Row: {
-          contacted_at: string
-          created_at: string
-          id: string
-          lead_id: string | null
-          outreach_type: string
-          user_id: string
-        }
-        Insert: {
-          contacted_at?: string
-          created_at?: string
-          id?: string
-          lead_id?: string | null
-          outreach_type: string
-          user_id: string
-        }
-        Update: {
-          contacted_at?: string
-          created_at?: string
-          id?: string
-          lead_id?: string | null
-          outreach_type?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "outreach_logs_lead_id_fkey"
-            columns: ["lead_id"]
-            isOneToOne: false
-            referencedRelation: "outreach_leads"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       personal_actions: {
         Row: {
           completed: boolean
@@ -1067,48 +839,6 @@ export type Database = {
           },
         ]
       }
-      subscriptions: {
-        Row: {
-          created_at: string
-          current_period_end: string | null
-          first_payment_failed_at: string | null
-          id: string
-          last_payment_failed_at: string | null
-          payment_failure_count: number
-          status: string
-          stripe_customer_id: string
-          stripe_subscription_id: string
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          created_at?: string
-          current_period_end?: string | null
-          first_payment_failed_at?: string | null
-          id?: string
-          last_payment_failed_at?: string | null
-          payment_failure_count?: number
-          status?: string
-          stripe_customer_id: string
-          stripe_subscription_id: string
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          created_at?: string
-          current_period_end?: string | null
-          first_payment_failed_at?: string | null
-          id?: string
-          last_payment_failed_at?: string | null
-          payment_failure_count?: number
-          status?: string
-          stripe_customer_id?: string
-          stripe_subscription_id?: string
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       templates: {
         Row: {
           category: string
@@ -1169,60 +899,6 @@ export type Database = {
         }
         Relationships: []
       }
-      user_challenge_10_outreach_contacts: {
-        Row: {
-          first_contacted_at: string
-          lead_id: string
-          user_id: string
-        }
-        Insert: {
-          first_contacted_at?: string
-          lead_id: string
-          user_id: string
-        }
-        Update: {
-          first_contacted_at?: string
-          lead_id?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
-      user_challenges_10_outreach: {
-        Row: {
-          completed: boolean
-          completed_at: string | null
-          count: number
-          enabled: boolean
-          modal_shown: boolean
-          skipped: boolean
-          started_at: string | null
-          updated_at: string
-          user_id: string
-        }
-        Insert: {
-          completed?: boolean
-          completed_at?: string | null
-          count?: number
-          enabled?: boolean
-          modal_shown?: boolean
-          skipped?: boolean
-          started_at?: string | null
-          updated_at?: string
-          user_id: string
-        }
-        Update: {
-          completed?: boolean
-          completed_at?: string | null
-          count?: number
-          enabled?: boolean
-          modal_shown?: boolean
-          skipped?: boolean
-          started_at?: string | null
-          updated_at?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
       user_metrics: {
         Row: {
           businesses_added_count: number
@@ -1233,13 +909,6 @@ export type Database = {
           search_count: number
           updated_at: string
           user_id: string
-          walkthrough_completed: boolean
-          walkthrough_completed_at: string | null
-          walkthrough_last_seen_at: string | null
-          walkthrough_last_step: number | null
-          walkthrough_max_step: number
-          walkthrough_skipped_at: string | null
-          walkthrough_started_at: string | null
         }
         Insert: {
           businesses_added_count?: number
@@ -1250,13 +919,6 @@ export type Database = {
           search_count?: number
           updated_at?: string
           user_id: string
-          walkthrough_completed?: boolean
-          walkthrough_completed_at?: string | null
-          walkthrough_last_seen_at?: string | null
-          walkthrough_last_step?: number | null
-          walkthrough_max_step?: number
-          walkthrough_skipped_at?: string | null
-          walkthrough_started_at?: string | null
         }
         Update: {
           businesses_added_count?: number
@@ -1267,13 +929,6 @@ export type Database = {
           search_count?: number
           updated_at?: string
           user_id?: string
-          walkthrough_completed?: boolean
-          walkthrough_completed_at?: string | null
-          walkthrough_last_seen_at?: string | null
-          walkthrough_last_step?: number | null
-          walkthrough_max_step?: number
-          walkthrough_skipped_at?: string | null
-          walkthrough_started_at?: string | null
         }
         Relationships: []
       }
@@ -1298,152 +953,14 @@ export type Database = {
         }
         Relationships: []
       }
-      user_trials: {
-        Row: {
-          affiliate_attributed_at: string | null
-          affiliate_code: string | null
-          avatar_url: string | null
-          checkout_abandoned: boolean
-          checkout_started_at: string | null
-          created_at: string
-          demo_search_used: boolean
-          fbclid: string | null
-          free_search_count: number
-          has_seen_walkthrough_prompt: boolean
-          id: string
-          last_lifecycle_email_sent_at: string | null
-          last_search_date: string | null
-          lifecycle_stage: number
-          paid_at: string | null
-          plan_status: string
-          post_abandon_search_used: boolean
-          preferred_language: string | null
-          ref_source: string | null
-          searches_today: number
-          searches_used: number
-          setup_completed: boolean
-          traffic_source: string | null
-          trial_days: number
-          trial_end_date: string
-          trial_started_at: string
-          trial_used: boolean
-          user_id: string
-          utm_ad: string | null
-          utm_adset: string | null
-          utm_campaign: string | null
-          utm_source: string | null
-          walkthrough_completed: boolean
-        }
-        Insert: {
-          affiliate_attributed_at?: string | null
-          affiliate_code?: string | null
-          avatar_url?: string | null
-          checkout_abandoned?: boolean
-          checkout_started_at?: string | null
-          created_at?: string
-          demo_search_used?: boolean
-          fbclid?: string | null
-          free_search_count?: number
-          has_seen_walkthrough_prompt?: boolean
-          id?: string
-          last_lifecycle_email_sent_at?: string | null
-          last_search_date?: string | null
-          lifecycle_stage?: number
-          paid_at?: string | null
-          plan_status?: string
-          post_abandon_search_used?: boolean
-          preferred_language?: string | null
-          ref_source?: string | null
-          searches_today?: number
-          searches_used?: number
-          setup_completed?: boolean
-          traffic_source?: string | null
-          trial_days?: number
-          trial_end_date: string
-          trial_started_at?: string
-          trial_used?: boolean
-          user_id: string
-          utm_ad?: string | null
-          utm_adset?: string | null
-          utm_campaign?: string | null
-          utm_source?: string | null
-          walkthrough_completed?: boolean
-        }
-        Update: {
-          affiliate_attributed_at?: string | null
-          affiliate_code?: string | null
-          avatar_url?: string | null
-          checkout_abandoned?: boolean
-          checkout_started_at?: string | null
-          created_at?: string
-          demo_search_used?: boolean
-          fbclid?: string | null
-          free_search_count?: number
-          has_seen_walkthrough_prompt?: boolean
-          id?: string
-          last_lifecycle_email_sent_at?: string | null
-          last_search_date?: string | null
-          lifecycle_stage?: number
-          paid_at?: string | null
-          plan_status?: string
-          post_abandon_search_used?: boolean
-          preferred_language?: string | null
-          ref_source?: string | null
-          searches_today?: number
-          searches_used?: number
-          setup_completed?: boolean
-          traffic_source?: string | null
-          trial_days?: number
-          trial_end_date?: string
-          trial_started_at?: string
-          trial_used?: boolean
-          user_id?: string
-          utm_ad?: string | null
-          utm_adset?: string | null
-          utm_campaign?: string | null
-          utm_source?: string | null
-          walkthrough_completed?: boolean
-        }
-        Relationships: []
-      }
     }
     Views: {
-      user_subscription_status: {
-        Row: {
-          created_at: string | null
-          current_period_end: string | null
-          id: string | null
-          status: string | null
-          updated_at: string | null
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string | null
-          current_period_end?: string | null
-          id?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string | null
-          current_period_end?: string | null
-          id?: string | null
-          status?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Functions: {
       bookable_staff: {
         Args: { _site_id: string; _staff_id: string }
         Returns: boolean
-      }
-      challenge_10_record_contact: {
-        Args: { p_lead_id: string }
-        Returns: Json
       }
       claim_generated_site: {
         Args: { p_token_hash: string; p_user_id: string }
@@ -1461,19 +978,11 @@ export type Database = {
         Args: { p_event_type: string; p_meta?: Json }
         Returns: undefined
       }
-      log_walkthrough_event: {
-        Args: { p_event_type: string; p_meta?: Json }
-        Returns: undefined
-      }
       owns_site: { Args: { _site_id: string }; Returns: boolean }
       owns_staff: { Args: { _staff_id: string }; Returns: boolean }
       reset_my_metrics: { Args: never; Returns: undefined }
       site_is_published: { Args: { _site_id: string }; Returns: boolean }
       staff_site_published: { Args: { _staff_id: string }; Returns: boolean }
-      validate_affiliate_code: {
-        Args: { code_to_check: string }
-        Returns: boolean
-      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
@@ -1643,6 +1152,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
