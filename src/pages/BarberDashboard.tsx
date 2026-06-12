@@ -20,8 +20,12 @@ import "@/templates/barber/fonts.css";
 
 /**
  * Barber dashboard. Lists the site(s) the logged-in barber owns (RLS only returns
- * their own rows) and lets them edit one in-place via the shared SiteEditor —
- * owner-scoped, no admin-only Delete or claim-link. Barber-branded (ink + amber).
+ * their own rows). Navigation:
+ *   - owns 1 site  → land straight on that site's dashboard;
+ *   - owns 2+ sites → a picker; clicking a site opens that SAME single-site
+ *     dashboard (with a "back to all sites" control);
+ *   - from a site's dashboard, "Edit my site" opens the shared editor.
+ * Barber-branded (ink + amber).
  */
 type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent };
 
@@ -245,6 +249,7 @@ export default function BarberDashboard() {
   const [sites, setSites] = useState<OwnedSite[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<OwnedSite | null>(null);
+  const [selected, setSelected] = useState<OwnedSite | null>(null); // multi-site: which site's dashboard is open
   const [savingStatus, setSavingStatus] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
 
@@ -311,6 +316,7 @@ export default function BarberDashboard() {
     }
     setSites((prev) => prev.map((x) => (x.id === s.id ? { ...x, status: next } : x)));
     setEditing((e) => (e && e.id === s.id ? { ...e, status: next } : e));
+    setSelected((sel) => (sel && sel.id === s.id ? { ...sel, status: next } : sel));
     refreshPublic(s.site_name);
     toast({
       title: next === "published" ? "Published" : "Unpublished",
@@ -320,6 +326,86 @@ export default function BarberDashboard() {
           : "Your site is now hidden from the public.",
     });
   };
+
+  // The single-site dashboard landing — reused for both the 1-site owner and the
+  // selected site of a multi-site owner. `onBack` (multi-site) returns to the
+  // picker; `welcome` enables the one-time claim welcome (single-site only).
+  const renderSiteDashboard = (site: OwnedSite, opts?: { onBack?: () => void; welcome?: boolean }) => (
+    <div
+      className="min-h-screen bg-ink font-body text-zinc-300 antialiased p-4 md:p-8"
+      style={{ backgroundImage: SHELL_BG }}
+    >
+      {opts?.welcome && showWelcome && (
+        <WelcomeOverlay
+          site={site}
+          onClose={dismissWelcome}
+          onEdit={() => {
+            dismissWelcome();
+            setEditing(site);
+          }}
+        />
+      )}
+
+      <div className="barber-surface mx-auto max-w-3xl space-y-6">
+        {opts?.onBack && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={opts.onBack}
+            className="-ml-2 text-zinc-400 hover:bg-white/[0.04] hover:text-white"
+          >
+            <ArrowLeft className="h-4 w-4 mr-1.5" /> All sites
+          </Button>
+        )}
+
+        {/* Header: name + status, View site, Edit my site, Sign out */}
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div>
+            <h1 className="font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">
+              {site.content?.businessName || site.site_name}
+            </h1>
+            <div className="mt-1 flex items-center gap-2">
+              <span className={statusBadge(site.status)}>{site.status}</span>
+              <span className="font-mono text-xs text-zinc-500">{publicSiteLabel(site.site_name)}</span>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white"
+              >
+                <ExternalLink className="h-4 w-4 mr-2" /> View site
+              </Button>
+            </a>
+            <Button
+              size="sm"
+              onClick={() => setEditing(site)}
+              className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft"
+            >
+              Edit my site
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleSignOut}
+              title="Sign out"
+              className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white"
+            >
+              <LogOut className="h-4 w-4 mr-2" /> Sign out
+            </Button>
+          </div>
+        </div>
+
+        {/* Bookings lead — the daily-check surface. */}
+        <BookingsManager siteId={site.id} />
+
+        {/* Coming-soon upsell below. */}
+        <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />
+      </div>
+    </div>
+  );
 
   if (loading) {
     return (
@@ -395,6 +481,7 @@ export default function BarberDashboard() {
             onSaved={(content) => {
               setEditing((e) => (e ? { ...e, content } : e));
               setSites((prev) => prev.map((x) => (x.id === editing.id ? { ...x, content } : x)));
+              setSelected((sel) => (sel && sel.id === editing.id ? { ...sel, content } : sel));
               refreshPublic(editing.site_name);
             }}
           />
@@ -409,101 +496,28 @@ export default function BarberDashboard() {
     );
   }
 
-  // --- Single-site dashboard (owner of EXACTLY ONE site) ---------------------
-  // Skip the picker and land directly on the one site. Bookings lead (checked
-  // daily); the coming-soon upsell sits below. Owners of 2+ sites (admins) fall
-  // through to the multi-site picker below — that case is unchanged.
+  // --- Single-site owner → straight to their dashboard (welcome enabled) ------
   if (sites.length === 1) {
-    const site = sites[0];
-    return (
-      <div
-        className="min-h-screen bg-ink font-body text-zinc-300 antialiased p-4 md:p-8"
-        style={{ backgroundImage: SHELL_BG }}
-      >
-        {showWelcome && (
-          <WelcomeOverlay
-            site={site}
-            onClose={dismissWelcome}
-            onEdit={() => {
-              dismissWelcome();
-              setEditing(site);
-            }}
-          />
-        )}
-
-        <div className="barber-surface mx-auto max-w-3xl space-y-6">
-          {/* Header: name + status, View site, Edit my site, Sign out */}
-          <div className="flex items-start justify-between gap-3 flex-wrap">
-            <div>
-              <h1 className="font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">
-                {site.content?.businessName || site.site_name}
-              </h1>
-              <div className="mt-1 flex items-center gap-2">
-                <span className={statusBadge(site.status)}>{site.status}</span>
-                <span className="font-mono text-xs text-zinc-500">{publicSiteLabel(site.site_name)}</span>
-              </div>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white"
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" /> View site
-                </Button>
-              </a>
-              <Button
-                size="sm"
-                onClick={() => setEditing(site)}
-                className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft"
-              >
-                Edit my site
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSignOut}
-                title="Sign out"
-                className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white"
-              >
-                <LogOut className="h-4 w-4 mr-2" /> Sign out
-              </Button>
-            </div>
-          </div>
-
-          {/* Bookings lead — this is the daily-check surface. */}
-          <BookingsManager siteId={site.id} />
-
-          {/* Coming-soon upsell below. */}
-          <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />
-        </div>
-      </div>
-    );
+    return renderSiteDashboard(sites[0], { welcome: true });
   }
 
-  // --- Multi-site picker (owner of 2+ sites / admin) — UNCHANGED -------------
+  // --- Multi-site: a selected site opens that site's dashboard (+ back) -------
+  if (selected) {
+    return renderSiteDashboard(selected, { onBack: () => setSelected(null) });
+  }
+
+  // --- Multi-site picker (owner of 2+ sites / admin) -------------------------
+  // Clicking a site opens its dashboard (NOT the editor) via setSelected.
   return (
     <div
       className="min-h-screen bg-ink font-body text-zinc-300 antialiased p-4 md:p-8"
       style={{ backgroundImage: SHELL_BG }}
     >
-      {showWelcome && sites[0] && (
-        <WelcomeOverlay
-          site={sites[0]}
-          onClose={dismissWelcome}
-          onEdit={() => {
-            dismissWelcome();
-            setEditing(sites[0]);
-          }}
-        />
-      )}
-
       <div className="mx-auto max-w-3xl space-y-6">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="font-display text-4xl uppercase tracking-wide text-white">Your site</h1>
-            <p className="mt-1 text-sm text-zinc-400">Manage your barbershop site.</p>
+            <h1 className="font-display text-4xl uppercase tracking-wide text-white">Your sites</h1>
+            <p className="mt-1 text-sm text-zinc-400">Pick a site to open its dashboard.</p>
           </div>
           <Button
             variant="outline"
@@ -543,16 +557,14 @@ export default function BarberDashboard() {
               </a>
               <Button
                 size="sm"
-                onClick={() => setEditing(s)}
+                onClick={() => setSelected(s)}
                 className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft"
               >
-                Edit my site
+                Open
               </Button>
             </div>
           </div>
         ))}
-
-        <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />
       </div>
     </div>
   );
