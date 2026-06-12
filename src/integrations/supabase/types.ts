@@ -180,6 +180,7 @@ export type Database = {
           id: string
           notes: string | null
           reminder_opt_in: boolean
+          reminder_sent_at: string | null
           service_name: string
           site_id: string
           staff_id: string
@@ -194,6 +195,7 @@ export type Database = {
           id?: string
           notes?: string | null
           reminder_opt_in?: boolean
+          reminder_sent_at?: string | null
           service_name: string
           site_id: string
           staff_id: string
@@ -208,6 +210,7 @@ export type Database = {
           id?: string
           notes?: string | null
           reminder_opt_in?: boolean
+          reminder_sent_at?: string | null
           service_name?: string
           site_id?: string
           staff_id?: string
@@ -484,6 +487,7 @@ export type Database = {
           content: Json
           created_at: string
           id: string
+          is_paid: boolean
           lead_id: string | null
           owner_id: string | null
           site_name: string
@@ -494,6 +498,7 @@ export type Database = {
           content?: Json
           created_at?: string
           id?: string
+          is_paid?: boolean
           lead_id?: string | null
           owner_id?: string | null
           site_name: string
@@ -504,6 +509,7 @@ export type Database = {
           content?: Json
           created_at?: string
           id?: string
+          is_paid?: boolean
           lead_id?: string | null
           owner_id?: string | null
           site_name?: string
