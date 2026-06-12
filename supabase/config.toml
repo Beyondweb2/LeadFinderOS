@@ -1,6 +1,12 @@
-project_id = "hhbdvgsnjequwooynxpr"
+project_id = "ruusxpkkmwtljxxulhbq"
 
 [functions.search-leads]
+verify_jwt = false
+
+[functions.admin-api-usage]
+verify_jwt = false
+
+[functions.cron-run]
 verify_jwt = false
 
 [functions.create-checkout]
