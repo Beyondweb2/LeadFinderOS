@@ -128,7 +128,7 @@ serve(async (req) => {
       const to = toE164(b.customer_phone);
 
       const bodyText =
-        `Reminder: you're booked at ${shop} today at ${time} with ${staffName}. ` +
+        `You're booked at ${shop} today at ${time} with ${staffName}. ` +
         `Need to change it? Call the shop.`;
 
       const tw = await fetch(twilioUrl, {
