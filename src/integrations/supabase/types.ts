@@ -320,6 +320,7 @@ export type Database = {
           owner_id: string | null
           site_name: string
           status: Database["public"]["Enums"]["site_status"]
+          template: string
           updated_at: string
         }
         Insert: {
@@ -331,6 +332,7 @@ export type Database = {
           owner_id?: string | null
           site_name: string
           status?: Database["public"]["Enums"]["site_status"]
+          template?: string
           updated_at?: string
         }
         Update: {
@@ -342,6 +344,7 @@ export type Database = {
           owner_id?: string | null
           site_name?: string
           status?: Database["public"]["Enums"]["site_status"]
+          template?: string
           updated_at?: string
         }
         Relationships: [

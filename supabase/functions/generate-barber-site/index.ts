@@ -94,16 +94,47 @@ interface BarberSiteContent {
   galleryImageUrls?: string[];
 }
 
+// Which design template to generate for. Selected by the admin in the Outreach
+// table and stored on the generated_sites row; also steers the copy flavour.
+type SiteTemplate = "barber" | "salon";
+
 // Default service set used ONLY when the lead has no stored services. Generic
-// names + generic descriptions — no prices, no shop-specific claims.
-const DEFAULT_SERVICES: BarberService[] = [
-  { name: "Signature Cut", description: "A tailored cut and finish to suit you." },
-  { name: "Skin Fade", description: "A clean, gradual fade from skin upwards." },
-  { name: "Cut & Beard", description: "A full cut paired with a beard tidy-up." },
-  { name: "Beard Trim & Shape", description: "Shaping and tidying to keep the beard sharp." },
-  { name: "Hot-Towel Wet Shave", description: "A traditional close shave with a hot towel." },
-  { name: "Under 12s", description: "A relaxed cut for younger clients." },
-];
+// names + generic descriptions — no prices, no business-specific claims. One set
+// per template so an unknown salon doesn't get a barber's beard services.
+const DEFAULT_SERVICES_BY_TEMPLATE: Record<SiteTemplate, BarberService[]> = {
+  barber: [
+    { name: "Signature Cut", description: "A tailored cut and finish to suit you." },
+    { name: "Skin Fade", description: "A clean, gradual fade from skin upwards." },
+    { name: "Cut & Beard", description: "A full cut paired with a beard tidy-up." },
+    { name: "Beard Trim & Shape", description: "Shaping and tidying to keep the beard sharp." },
+    { name: "Hot-Towel Wet Shave", description: "A traditional close shave with a hot towel." },
+    { name: "Under 12s", description: "A relaxed cut for younger clients." },
+  ],
+  salon: [
+    { name: "Cut & Finish", description: "A tailored cut finished with a blow-dry." },
+    { name: "Balayage", description: "Hand-painted, blended colour through the lengths." },
+    { name: "Full Head Colour", description: "Even colour from root to tip." },
+    { name: "Gloss & Toner", description: "A shine boost to refresh and balance the tone." },
+    { name: "Blow-Dry", description: "A smooth, polished finish." },
+    { name: "Conditioning Treatment", description: "A nourishing treatment for the hair." },
+  ],
+};
+
+// Per-template copy cues: the business noun the model writes about, plus the
+// factual GOOD/BAD 'about' examples. The honesty rules are identical for both —
+// only the worked example and noun change so the copy reads naturally.
+const TEMPLATE_COPY: Record<SiteTemplate, { noun: string; good: string; bad: string }> = {
+  barber: {
+    noun: "barbershop",
+    good: "Northern Quarter Barber is a barbershop in Manchester, rated 4.5 from 203 Google reviews.",
+    bad: "a welcoming shop where skilled barbers deliver a top-notch grooming experience.",
+  },
+  salon: {
+    noun: "hair salon",
+    good: "Aveline is a hair salon in London, rated 4.8 from 156 Google reviews.",
+    bad: "a welcoming salon where talented stylists deliver a luxurious pampering experience.",
+  },
+};
 
 // ---- Google enrichment ------------------------------------------------------
 // Reuses the SAME Google integration as the google-place-details function:
@@ -184,7 +215,7 @@ async function fetchGoogleEnrichment(placeId: string): Promise<GoogleEnrichment 
 // enforced by the UNIQUE constraint on generated_sites.site_name; the caller
 // appends -2, -3, … on conflict. (Draft privacy is already covered by RLS, which
 // only exposes published rows, so the old "unguessable" hash is dropped.)
-function slugify(name: string): string {
+function slugify(name: string, fallback = "site"): string {
   return (
     name
       .toLowerCase()
@@ -192,7 +223,7 @@ function slugify(name: string): string {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .slice(0, 40)
-      .replace(/-+$/, "") || "barber-site"
+      .replace(/-+$/, "") || fallback
   );
 }
 
@@ -272,6 +303,11 @@ serve(async (req) => {
     if (!leadId) {
       return jsonResponse({ error: "lead_id required" }, 400, corsHeaders, rlHeaders);
     }
+    // Which template to generate. Defaults to 'barber' so existing callers that
+    // don't pass `template` are unchanged. Anything other than 'salon' is barber.
+    const template: SiteTemplate = body.template === "salon" ? "salon" : "barber";
+    const copy = TEMPLATE_COPY[template];
+    const defaultServices = DEFAULT_SERVICES_BY_TEMPLATE[template];
 
     // --- Step 7: OpenAI key (from secret; never hardcoded) ---
     const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
@@ -389,7 +425,7 @@ serve(async (req) => {
 
     // --- Step 10: Prompt OpenAI under the honesty rules ---
     const systemPrompt = [
-      "You write website copy for a barbershop using ONLY the structured data provided.",
+      `You write website copy for a ${copy.noun} using ONLY the structured data provided.`,
       "ABSOLUTE RULE: invent no fact that is not in the data. Never invent history, founding",
       "dates, founder stories, credentials, awards, staff counts, chair counts, years in",
       "business, or any numeric statistic. If a fact is not provided, do not mention it —",
@@ -403,9 +439,9 @@ serve(async (req) => {
       "best, trusted, relaxing, cosy, 'great atmosphere', 'top-notch experience', and the like. Also",
       "no history, founding, awards, counts, or years. Let the real rating speak for itself. Less data",
       "means a shorter about — never pad with flattery or invention.",
-      "GOOD: 'Northern Quarter Barber is a barbershop in Manchester, rated 4.5 from 203 Google reviews.'",
-      "BAD: 'a welcoming shop where skilled barbers deliver a top-notch grooming experience.'",
-      "Service descriptions must be generic; never claim specific products or techniques the shop",
+      `GOOD: '${copy.good}'`,
+      `BAD: '${copy.bad}'`,
+      "Service descriptions must be generic; never claim specific products or techniques the business",
       "has not stated, and never invent prices.",
       "Return ONLY valid JSON matching the schema. No commentary, no markdown.",
     ].join(" ");
@@ -429,8 +465,8 @@ serve(async (req) => {
       "",
       realServices.length
         ? "Use the provided service names verbatim; add a short generic description for each."
-        : "No services were provided — use this default barber list with short generic descriptions: " +
-          DEFAULT_SERVICES.map((s) => s.name).join(", ") + ".",
+        : `No services were provided — use this default ${copy.noun} list with short generic descriptions: ` +
+          defaultServices.map((s) => s.name).join(", ") + ".",
       "Do not invent prices, hours, ratings, counts, years, or history. Output JSON only.",
       "The 'about' must be factual only — no subjective adjectives (welcoming, skilled, top-notch, friendly, professional, etc.). State only the name, town/city, real rating/reviews and real services.",
     ].join("\n");
@@ -523,7 +559,7 @@ serve(async (req) => {
             ...(typeof s.description === "string" && s.description.trim() ? { description: s.description.trim() } : {}),
           }));
       }
-      return DEFAULT_SERVICES;
+      return defaultServices;
     })();
 
     const content: BarberSiteContent = {
@@ -555,7 +591,7 @@ serve(async (req) => {
     // the arbiter of uniqueness. Try the bare base, then -2, -3, …, reacting to a
     // unique-violation (Postgres 23505) — race-safe, since two concurrent inserts
     // cannot both win the same slug.
-    const baseSlug = slugify(content.businessName || "barber-site");
+    const baseSlug = slugify(content.businessName, template === "salon" ? "salon-site" : "barber-site");
 
     type SavedRow = { id: string; lead_id: string; site_name: string; status: string; created_at: string };
     let saved: SavedRow | null = null;
@@ -566,7 +602,7 @@ serve(async (req) => {
       slug = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
       const res = await serviceClient
         .from("generated_sites")
-        .insert({ lead_id: leadId, site_name: slug, content, status: "draft" })
+        .insert({ lead_id: leadId, site_name: slug, content, status: "draft", template })
         .select("id, lead_id, site_name, status, created_at")
         .single();
       if (!res.error) {
@@ -591,6 +627,7 @@ serve(async (req) => {
       lead_id: leadId,
       site_id: saved.id,
       slug,
+      template,
       timestamp: new Date().toISOString(),
     }));
 
@@ -605,7 +642,7 @@ serve(async (req) => {
     return jsonResponse(
       {
         success: true,
-        site: { id: saved.id, lead_id: saved.lead_id, slug, status: saved.status },
+        site: { id: saved.id, lead_id: saved.lead_id, slug, status: saved.status, template },
         preview_path: `/p/${slug}`,
         cost,
         content,
