@@ -12,6 +12,7 @@ import { SALE_TYPES, SALE_TYPE_LABELS, DELIVERABLE_OPTIONS, resolveSaleType, typ
 import type { TeamClaim } from '@/hooks/useTeamClaims';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -482,97 +483,97 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
   return (
     <>
-      <div className={cn(
-        'border-l-2 transition-all',
-        statusBorderColor,
-        isExpanded ? 'ring-1 ring-primary/20 ring-inset' : ''
-      )}>
-        {/* ═══ COLLAPSED ROW (dense, full-width, Outreach-style) ═══ */}
-        <div
-          className="flex items-center gap-2 sm:gap-3 py-2 px-3 cursor-pointer hover:bg-muted/20 transition-colors"
-          onClick={(e) => {
-            if ((e.target as HTMLElement).closest('[data-contact-zone]')) return;
-            if ((e.target as HTMLElement).closest('[data-no-expand]')) return;
-            onToggleExpand();
-          }}
-          data-walkthrough="details"
-        >
-          {/* Expand chevron */}
-          <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground/40 transition-transform', isExpanded && 'rotate-180')} />
+      {/* ═══ COLLAPSED ROW — shadcn Table row, matches Outreach ═══ */}
+      <TableRow
+        className={cn('border-border/50 cursor-pointer hover:bg-muted/30', isExpanded && 'bg-muted/20')}
+        data-walkthrough="details"
+        onClick={(e) => {
+          if ((e.target as HTMLElement).closest('[data-contact-zone]')) return;
+          if ((e.target as HTMLElement).closest('[data-no-expand]')) return;
+          onToggleExpand();
+        }}
+      >
+        {/* Chevron */}
+        <TableCell className="w-[36px] pr-0">
+          <ChevronDown className={cn('h-4 w-4 text-muted-foreground/40 transition-transform', isExpanded && 'rotate-180')} />
+        </TableCell>
 
-          {/* Avatar (compact) */}
-          <div className="relative group/avatar shrink-0" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
-            {lead.image_url ? (
-              <div className="w-8 h-8 rounded-md overflow-hidden bg-muted/40 ring-1 ring-border/40">
-                <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
-              </div>
-            ) : (
-              <div className="w-8 h-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center text-[11px] font-bold text-primary">
-                {getInitials(lead.business_name)}
-              </div>
-            )}
-            <div className="absolute inset-0 rounded-md bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
-              <Pencil className="h-2.5 w-2.5 text-white" />
-            </div>
-          </div>
-
-          {/* Business: name + claim avatar + meta */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              {claim && (
-                <span title={`${claim.displayName || 'A teammate'} ${claim.contacted ? 'has contacted' : 'claimed'} this in the same campaign`} data-no-expand onClick={(e) => e.stopPropagation()}>
-                  <Avatar className="h-4 w-4 shrink-0 ring-1 ring-amber-400/60">
-                    {claim.avatarUrl && <AvatarImage src={claim.avatarUrl} alt={claim.displayName || 'Teammate'} />}
-                    <AvatarFallback className="text-[8px] bg-amber-500/20 text-amber-700 dark:text-amber-300">{claimInitials(claim.displayName)}</AvatarFallback>
-                  </Avatar>
-                </span>
-              )}
-              {editingName ? (
-                <div className="flex items-center gap-1 flex-1 min-w-0" data-no-expand onClick={(e) => e.stopPropagation()}>
-                  <Input
-                    value={editedName}
-                    onChange={(e) => setEditedName(e.target.value)}
-                    className="h-6 text-xs font-semibold px-1.5 flex-1"
-                    autoFocus
-                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); } }}
-                  />
-                  <button onClick={handleSaveName} className="h-5 w-5 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded"><Check className="h-3 w-3" /></button>
-                  <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><X className="h-3 w-3" /></button>
+        {/* Business */}
+        <TableCell className="font-medium">
+          <div className="flex items-center gap-3">
+            <div className="relative group/avatar shrink-0" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
+              {lead.image_url ? (
+                <div className="w-8 h-8 rounded-md overflow-hidden bg-muted/40 ring-1 ring-border/40">
+                  <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
                 </div>
               ) : (
-                <>
-                  <span className="font-semibold text-sm leading-tight truncate">{lead.business_name}</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
-                    className="h-4 w-4 flex items-center justify-center text-muted-foreground/30 hover:text-foreground rounded transition-colors shrink-0"
-                    data-no-expand
-                    title="Edit name"
-                  >
-                    <Pencil className="h-2.5 w-2.5" />
-                  </button>
-                </>
+                <div className="w-8 h-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center text-[11px] font-bold text-primary">
+                  {getInitials(lead.business_name)}
+                </div>
               )}
-              <span className="shrink-0 inline-flex items-center px-1.5 h-[17px] rounded text-[9px] font-semibold uppercase tracking-wide bg-primary/10 text-primary/70 border border-primary/20" title="What we're selling">
-                {SALE_TYPE_LABELS[effectiveSaleType]}
-              </span>
+              <div className="absolute inset-0 rounded-md bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
+                <Pencil className="h-2.5 w-2.5 text-white" />
+              </div>
             </div>
-            <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 leading-tight truncate">
-              {lead.phone && <span className="truncate">{lead.phone}</span>}
-              {lead.phone && lead.category && <span className="text-muted-foreground/25">·</span>}
-              {lead.category && <span className="truncate">{lead.category}</span>}
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                {claim && (
+                  <span title={`${claim.displayName || 'A teammate'} ${claim.contacted ? 'has contacted' : 'claimed'} this in the same campaign`} data-no-expand onClick={(e) => e.stopPropagation()}>
+                    <Avatar className="h-4 w-4 shrink-0 ring-1 ring-amber-400/60">
+                      {claim.avatarUrl && <AvatarImage src={claim.avatarUrl} alt={claim.displayName || 'Teammate'} />}
+                      <AvatarFallback className="text-[8px] bg-amber-500/20 text-amber-700 dark:text-amber-300">{claimInitials(claim.displayName)}</AvatarFallback>
+                    </Avatar>
+                  </span>
+                )}
+                {editingName ? (
+                  <div className="flex items-center gap-1 flex-1 min-w-0" data-no-expand onClick={(e) => e.stopPropagation()}>
+                    <Input
+                      value={editedName}
+                      onChange={(e) => setEditedName(e.target.value)}
+                      className="h-6 text-xs font-semibold px-1.5 flex-1"
+                      autoFocus
+                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); } }}
+                    />
+                    <button onClick={handleSaveName} className="h-5 w-5 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded"><Check className="h-3 w-3" /></button>
+                    <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><X className="h-3 w-3" /></button>
+                  </div>
+                ) : (
+                  <>
+                    <span className="text-sm leading-tight truncate">{lead.business_name}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+                      className="h-4 w-4 flex items-center justify-center text-muted-foreground/30 hover:text-foreground rounded transition-colors shrink-0"
+                      data-no-expand
+                      title="Edit name"
+                    >
+                      <Pencil className="h-2.5 w-2.5" />
+                    </button>
+                  </>
+                )}
+                <span className="shrink-0 inline-flex items-center px-1.5 h-[17px] rounded text-[9px] font-semibold uppercase tracking-wide bg-primary/10 text-primary/70 border border-primary/20" title="What we're selling">
+                  {SALE_TYPE_LABELS[effectiveSaleType]}
+                </span>
+              </div>
+              <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 leading-tight truncate">
+                {lead.phone && <span className="truncate">{lead.phone}</span>}
+                {lead.phone && lead.category && <span className="text-muted-foreground/25">·</span>}
+                {lead.category && <span className="truncate">{lead.category}</span>}
+              </div>
             </div>
           </div>
+        </TableCell>
 
-          {/* Status column */}
-          <div className="hidden sm:flex w-[130px] shrink-0 items-center" data-no-expand onClick={(e) => e.stopPropagation()}>
-            <span className={cn('inline-flex items-center h-[22px] px-2.5 rounded-full text-[11px] font-bold border', statusColorCls)} data-walkthrough="status">
-              {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-2.5 w-2.5 mr-0.5 text-emerald-400" />}
-              <span className="truncate">{statusLabel}</span>
-            </span>
-          </div>
+        {/* Status */}
+        <TableCell className="hidden sm:table-cell">
+          <span className={cn('inline-flex items-center h-[22px] px-2.5 rounded-full text-[11px] font-bold border', statusColorCls)} data-walkthrough="status">
+            {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-2.5 w-2.5 mr-0.5 text-emerald-400" />}
+            <span className="truncate">{statusLabel}</span>
+          </span>
+        </TableCell>
 
-          {/* Next action + due column */}
-          <div className="hidden md:flex w-[170px] shrink-0 items-center gap-1.5 flex-wrap" data-no-expand onClick={(e) => e.stopPropagation()}>
+        {/* Next action + due */}
+        <TableCell className="hidden md:table-cell" data-no-expand onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1.5 flex-wrap">
             {nextActionLabel ? (
               <span className={cn('text-[11px] font-semibold truncate', (NEXT_ACTION_COLORS[lead.next_action || 'none'] || '').replace(/bg-\S+/g, '').replace(/border-\S+/g, '').trim())}>
                 {nextActionLabel}
@@ -598,14 +599,16 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </button>
             )}
           </div>
+        </TableCell>
 
-          {/* Revenue column */}
-          <div className="hidden lg:block w-[70px] shrink-0 text-right text-xs font-semibold text-green-500/80">
-            {(lead as any).potential_revenue > 0 ? `£${(lead as any).potential_revenue.toLocaleString()}` : <span className="text-muted-foreground/25">—</span>}
-          </div>
+        {/* Revenue */}
+        <TableCell className="hidden lg:table-cell text-right text-xs font-semibold text-green-500/80">
+          {(lead as any).potential_revenue > 0 ? `£${(lead as any).potential_revenue.toLocaleString()}` : <span className="text-muted-foreground/25">—</span>}
+        </TableCell>
 
-          {/* Contact icons (single dense row) */}
-          <div className="flex items-center gap-0.5 shrink-0" data-no-expand onClick={(e) => e.stopPropagation()}>
+        {/* Actions */}
+        <TableCell className="text-right" data-no-expand onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center justify-end gap-0.5">
             {(lead.google_maps_url || (lead as any).place_id) && (
               <a
                 href={lead.google_maps_url || `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}`}
@@ -685,16 +688,15 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-        </div>
+          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+        </TableCell>
+      </TableRow>
 
-        {/* ═══ EXPANDED PANEL — natural height (accordion); page scrolls if long ═══ */}
-        <div
-          ref={expandRef}
-          className={cn(
-            isExpanded ? 'opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
-          )}
-        >
-          <div className="border-t border-border/50 px-3.5 sm:px-5 py-4 space-y-4 bg-muted/10">
+      {/* ═══ EXPANDED DETAIL — second row spanning all columns (only when open) ═══ */}
+      {isExpanded && (
+        <TableRow className="border-border/50 hover:bg-transparent">
+          <TableCell colSpan={6} className="p-0">
+            <div ref={expandRef} className="px-3.5 sm:px-5 py-4 space-y-4 bg-muted/10">
             {/* Row: Status / Action / Due / Revenue side-by-side */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-no-expand onClick={(e) => e.stopPropagation()}>
               <div>
@@ -1008,20 +1010,19 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               )}
             </div>
 
-          </div>
+            </div>
 
-          {/* Collapse button */}
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleExpand(); window.dispatchEvent(new CustomEvent('demo-checklist-card-collapsed')); }}
-            data-walkthrough="collapse-card"
-            className="w-full flex items-center justify-center gap-1 py-2.5 text-xs font-medium text-foreground/70 hover:text-foreground hover:bg-muted/20 transition-colors border-t border-border/30"
-          >
-            <ChevronDown className="h-3.5 w-3.5 rotate-180" /> Collapse
-          </button>
-        </div>
-
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-      </div>
+            {/* Collapse button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleExpand(); window.dispatchEvent(new CustomEvent('demo-checklist-card-collapsed')); }}
+              data-walkthrough="collapse-card"
+              className="w-full flex items-center justify-center gap-1 py-2 text-xs font-medium text-foreground/70 hover:text-foreground hover:bg-muted/20 transition-colors border-t border-border/30"
+            >
+              <ChevronDown className="h-3.5 w-3.5 rotate-180" /> Collapse
+            </button>
+          </TableCell>
+        </TableRow>
+      )}
 
       {/* Custom Action Dialog */}
       <Dialog open={showAddCustomAction} onOpenChange={setShowAddCustomAction}>
@@ -1297,60 +1298,9 @@ const PotentialWorkPage = () => {
         <AddCustomLeadDialog onLeadAdded={refetch} />
       </div>
 
-      {/* Pipeline Stage Counter */}
-      {allPotentialLeads.length > 0 && (
-        <>
-          {/* Mobile: dropdown */}
-          <div className="sm:hidden flex items-center gap-2">
-            <Select value={stageFilter || '__all__'} onValueChange={(v) => { setStageFilter(v === '__all__' ? null : v); setMetricFilter(null); }}>
-              <SelectTrigger className="h-8 text-xs border-border/50 flex-1">
-                <SelectValue placeholder="All stages" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">All Stages ({allPotentialLeads.length})</SelectItem>
-                {DEFAULT_POTENTIAL_WORK_STATUSES.map(s => (
-                  <SelectItem key={s.value} value={s.value}>
-                    {s.label} ({stageCounts[s.value] || 0})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {totalPotentialRevenue > 0 && (
-              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-500/10 text-green-500 border border-green-500/30 whitespace-nowrap shrink-0">
-                <DollarSign className="h-3 w-3" />
-                £{totalPotentialRevenue.toLocaleString()}
-              </div>
-            )}
-          </div>
-          {/* Desktop: pills */}
-          <div className="hidden sm:flex flex-wrap gap-1.5">
-            {DEFAULT_POTENTIAL_WORK_STATUSES.map(s => {
-              const count = stageCounts[s.value] || 0;
-              const isActive = stageFilter === s.value;
-              const colorCls = STATUS_COLORS[s.value] || 'bg-muted text-muted-foreground border-border/50';
-              return (
-                <button
-                  key={s.value}
-                  onClick={() => { setStageFilter(f => f === s.value ? null : s.value); setMetricFilter(null); }}
-                  className={cn(
-                    'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold border transition-all',
-                    isActive ? cn(colorCls, 'ring-2 ring-primary/30') : count > 0 ? colorCls : 'bg-muted/30 text-muted-foreground/50 border-border/30'
-                  )}
-                >
-                  {s.label}
-                  <span className="font-bold">{count}</span>
-                </button>
-              );
-            })}
-            {totalPotentialRevenue > 0 && (
-              <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-green-500/10 text-green-500 border border-green-500/30 ml-auto">
-                <DollarSign className="h-3 w-3" />
-                Pipeline: £{totalPotentialRevenue.toLocaleString()}
-              </div>
-            )}
-          </div>
-        </>
-      )}
+      {/* Status-pill stage counter removed — Track Leads now mirrors the Outreach
+          page (stat cards + search/sort + table). Stage filtering lives in the
+          metric cards and per-row status. */}
 
       {/* Search + Sort + Count */}
       <div className="flex items-center gap-2">
@@ -1441,40 +1391,41 @@ const PotentialWorkPage = () => {
         </Card>
       ) : (
         <div className="rounded-lg border border-border/50 bg-card overflow-hidden">
-          {/* Column header (desktop) — mirrors the row columns */}
-          <div className="hidden sm:flex items-center gap-3 px-3 py-2 border-b border-border/50 bg-muted/30 text-[11px] font-medium text-muted-foreground">
-            <span className="w-4 shrink-0" />
-            <span className="w-8 shrink-0" />
-            <span className="flex-1 min-w-0">Business</span>
-            <span className="w-[130px] shrink-0">Status</span>
-            <span className="hidden md:block w-[170px] shrink-0">Next action</span>
-            <span className="hidden lg:block w-[70px] shrink-0 text-right">Revenue</span>
-            <span className="shrink-0 w-[124px] text-right pr-1">Actions</span>
-          </div>
-          <div className="divide-y divide-border/50">
-          {potentialWorkLeads.map((lead) => (
-            <div key={lead.id}>
-              <LeadCard
-                lead={lead}
-                isExpanded={expandedCardId === lead.id}
-                onToggleExpand={() => setExpandedCardId(prev => prev === lead.id ? null : lead.id)}
-                onStatusChange={safeUpdateStatus}
-                onNextActionChange={safeUpdateNextAction}
-                onNotesChange={safeUpdateNotes}
-                onBusinessNameChange={safeUpdateBusinessName}
-                onImageChange={updateImageUrl}
-                onUpdateLead={safeUpdateLead}
-                onDelete={safeDeleteLead}
-                customStatuses={customStatuses}
-                onAddCustomStatus={() => setShowCustomStatusDialog(true)}
-                userId={user?.id}
-                claim={claimsByLead[lead.id] || null}
-                fetchActivities={fetchActivities}
-                campaignDefaultSaleType={lead.campaign_id ? campaignDefaultSaleType[lead.campaign_id] : null}
-              />
-            </div>
-          ))}
-          </div>
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border/50 hover:bg-transparent">
+                <TableHead className="w-[36px]" />
+                <TableHead>Business</TableHead>
+                <TableHead className="hidden sm:table-cell">Status</TableHead>
+                <TableHead className="hidden md:table-cell">Next action</TableHead>
+                <TableHead className="hidden lg:table-cell text-right">Revenue</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {potentialWorkLeads.map((lead) => (
+                <LeadCard
+                  key={lead.id}
+                  lead={lead}
+                  isExpanded={expandedCardId === lead.id}
+                  onToggleExpand={() => setExpandedCardId(prev => prev === lead.id ? null : lead.id)}
+                  onStatusChange={safeUpdateStatus}
+                  onNextActionChange={safeUpdateNextAction}
+                  onNotesChange={safeUpdateNotes}
+                  onBusinessNameChange={safeUpdateBusinessName}
+                  onImageChange={updateImageUrl}
+                  onUpdateLead={safeUpdateLead}
+                  onDelete={safeDeleteLead}
+                  customStatuses={customStatuses}
+                  onAddCustomStatus={() => setShowCustomStatusDialog(true)}
+                  userId={user?.id}
+                  claim={claimsByLead[lead.id] || null}
+                  fetchActivities={fetchActivities}
+                  campaignDefaultSaleType={lead.campaign_id ? campaignDefaultSaleType[lead.campaign_id] : null}
+                />
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
 
