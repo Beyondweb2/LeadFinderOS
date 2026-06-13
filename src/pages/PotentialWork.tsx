@@ -488,272 +488,201 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
         statusBorderColor,
         isExpanded ? 'ring-1 ring-primary/20 ring-inset' : ''
       )}>
-        {/* ═══ COLLAPSED (always visible) ═══ */}
+        {/* ═══ COLLAPSED ROW (dense, full-width, Outreach-style) ═══ */}
         <div
-          className="py-3.5 px-3.5 lg:py-5 lg:px-5 cursor-pointer"
+          className="flex items-center gap-2 sm:gap-3 py-2 px-3 cursor-pointer hover:bg-muted/20 transition-colors"
           onClick={(e) => {
             if ((e.target as HTMLElement).closest('[data-contact-zone]')) return;
             if ((e.target as HTMLElement).closest('[data-no-expand]')) return;
             onToggleExpand();
           }}
+          data-walkthrough="details"
         >
-          <div className="flex items-start gap-3 lg:gap-4">
-            {/* Left: Avatar + contact method + revenue */}
-            <div className="shrink-0 flex flex-col items-center gap-1 pt-0.5">
-              <div className="relative group/avatar cursor-pointer" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
-                {lead.image_url ? (
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-lg overflow-hidden bg-muted/40 ring-1 ring-border/40">
-                    <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
-                  </div>
-                ) : (
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 lg:w-16 lg:h-16 rounded-lg bg-primary/15 border border-primary/30 flex items-center justify-center text-sm sm:text-base lg:text-lg font-bold text-primary">
-                    {getInitials(lead.business_name)}
-                  </div>
-                )}
-                <div className="absolute inset-0 rounded-lg bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
-                  <Pencil className="h-2.5 w-2.5 text-white" />
-                </div>
-              </div>
-              {contactMethodDisplay && (
-                <span className="text-[9px] text-muted-foreground/50 leading-none whitespace-nowrap">via {contactMethodDisplay}</span>
-              )}
-              {(lead as any).potential_revenue > 0 && (
-                <span className="text-[9px] text-green-500/70 font-semibold leading-none whitespace-nowrap">£{(lead as any).potential_revenue.toLocaleString()}</span>
-              )}
-            </div>
+          {/* Expand chevron */}
+          <ChevronDown className={cn('h-4 w-4 shrink-0 text-muted-foreground/40 transition-transform', isExpanded && 'rotate-180')} />
 
-            {/* Middle: Name + Status + Action */}
-            <div className="flex-1 min-w-0 space-y-1.5 lg:space-y-2">
-              {/* Name */}
-              <div className="flex items-center gap-1.5">
-                {claim && (
-                  <span title={`${claim.displayName || 'A teammate'} ${claim.contacted ? 'has contacted' : 'claimed'} this in the same campaign`} data-no-expand onClick={(e) => e.stopPropagation()}>
-                    <Avatar className="h-4 w-4 shrink-0 ring-1 ring-amber-400/60">
-                      {claim.avatarUrl && <AvatarImage src={claim.avatarUrl} alt={claim.displayName || 'Teammate'} />}
-                      <AvatarFallback className="text-[8px] bg-amber-500/20 text-amber-700 dark:text-amber-300">{claimInitials(claim.displayName)}</AvatarFallback>
-                    </Avatar>
-                  </span>
-                )}
-                {editingName ? (
-                  <div className="flex items-center gap-1 flex-1 min-w-0" data-no-expand onClick={(e) => e.stopPropagation()}>
-                    <Input
-                      value={editedName}
-                      onChange={(e) => setEditedName(e.target.value)}
-                      className="h-7 text-xs font-semibold px-1.5 flex-1"
-                      autoFocus
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); } }}
-                    />
-                    <button onClick={handleSaveName} className="h-6 w-6 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded"><Check className="h-3 w-3" /></button>
-                    <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><X className="h-3 w-3" /></button>
-                  </div>
-                ) : (
-                  <>
-                    <span className="font-semibold text-sm sm:text-base lg:text-[17px] leading-tight truncate">{lead.business_name}</span>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
-                      className="h-5 w-5 flex items-center justify-center text-muted-foreground/30 hover:text-foreground rounded transition-colors shrink-0"
-                      data-no-expand
-                      title="Edit name"
-                    >
-                      <Pencil className="h-2.5 w-2.5" />
-                    </button>
-                  </>
-                )}
+          {/* Avatar (compact) */}
+          <div className="relative group/avatar shrink-0" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
+            {lead.image_url ? (
+              <div className="w-8 h-8 rounded-md overflow-hidden bg-muted/40 ring-1 ring-border/40">
+                <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
               </div>
-
-              {/* Phone number */}
-              {lead.phone && (
-                <p className="text-[11px] text-muted-foreground/50 leading-none truncate">{lead.phone}</p>
-              )}
-
-              {/* Meta line */}
-              <div className="flex items-center gap-1 text-[10px] lg:text-[11px] text-muted-foreground/60 flex-wrap">
-                {lead.category && <span className="truncate max-w-[120px]">{lead.category}</span>}
-                {/* Services summary on collapsed card */}
-                {!isExpanded && lead.services_included && lead.services_included.length > 0 && (
-                  <>
-                    {lead.category && <span className="text-muted-foreground/20">·</span>}
-                    <span className="text-primary/50 truncate max-w-[180px]">
-                      {lead.services_included.length <= 2
-                        ? lead.services_included.join(', ')
-                        : `${lead.services_included.slice(0, 2).join(', ')} +${lead.services_included.length - 2}`
-                      }
-                    </span>
-                  </>
-                )}
+            ) : (
+              <div className="w-8 h-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center text-[11px] font-bold text-primary">
+                {getInitials(lead.business_name)}
               </div>
-
-              {/* Status pill + action + due */}
-              <div className="flex items-center gap-1.5 flex-wrap" data-no-expand>
-                <span className={cn('inline-flex items-center h-5 lg:h-[22px] px-2 lg:px-2.5 rounded-full text-[10px] lg:text-[11px] font-bold border', statusColorCls)} data-walkthrough="status">
-                  {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-2.5 w-2.5 mr-0.5 text-emerald-400" />}
-                  {statusLabel}
-                </span>
-                {nextActionLabel && (
-                  <span className={cn('text-[11px] lg:text-xs font-semibold', (NEXT_ACTION_COLORS[lead.next_action || 'none'] || '').replace(/bg-\S+/g, '').replace(/border-\S+/g, '').trim())}>
-                    {nextActionLabel}
-                  </span>
-                )}
-                {!nextActionLabel && (
-                  <button
-                    className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
-                    onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-                    
-                  >
-                    + Set action
-                  </button>
-                )}
-                {dueLabel && (
-                  <span className={cn('inline-flex items-center gap-0.5 text-[10px] lg:text-[11px] font-semibold px-1.5 py-0.5 rounded-full border', dueLabel.cls)}>
-                    <Clock className="h-2.5 w-2.5" />
-                    {dueLabel.text}
-                  </span>
-                )}
-                {lead.next_action && lead.next_action !== 'none' && !isExpanded && (
-                  <button
-                    className="inline-flex items-center gap-0.5 text-[10px] font-bold text-green-400 hover:text-green-300 transition-colors"
-                    onClick={(e) => { e.stopPropagation(); setNextAction('none'); setNextActionDate(undefined); setTrackActionForLead(lead.id, null); setLeadCustomAction(lead.id, null); onNextActionChange(lead.id, 'none' as NextActionType); }}
-                    title="Mark as done"
-                  >
-                    <Check className="h-3 w-3" /> Done
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Right: Contact icons + overflow */}
-            <div className="flex flex-col items-end gap-1 flex-shrink-0" data-no-expand onClick={(e) => e.stopPropagation()}>
-              {/* Row 1: Maps / Facebook / Menu */}
-              <div className="flex items-center gap-0.5">
-                {(lead.google_maps_url || ((lead as any).place_id ? `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}` : null)) && (
-                  <a
-                    href={lead.google_maps_url || `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500 hover:bg-blue-500/10 transition-colors"
-                    title="Google Maps"
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                )}
-                <a
-                  href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-blue-600 hover:bg-blue-500/10 transition-colors"
-                  title="Facebook"
-                >
-                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-                </a>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors">
-                      <MoreVertical className="h-3.5 w-3.5" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="min-w-[160px]">
-                    {lead.phone && (
-                      <DropdownMenuItem asChild>
-                        <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
-                          <Phone className="h-4 w-4 text-green-500" /> WhatsApp Call
-                        </a>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem onClick={() => { fileInputRef.current?.click(); }} className="text-xs" disabled={isUploadingImage}>
-                      <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
-                    </DropdownMenuItem>
-                    {lead.image_url && (
-                      <DropdownMenuItem onClick={handleRemoveImage} className="text-xs">
-                        <X className="h-3.5 w-3.5 mr-2" /> Remove Image
-                      </DropdownMenuItem>
-                    )}
-                    <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
-                      <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-              {/* Row 2: SMS / WhatsApp / Call */}
-              {lead.phone && (
-                <div className="flex items-center gap-0.5">
-                  <a
-                    href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
-                    onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('sms'); }}
-                    className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400 hover:bg-blue-500/10 transition-colors"
-                    title="SMS"
-                  >
-                    <MessageCircle className="h-3.5 w-3.5" />
-                  </a>
-                  <a
-                    href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('whatsapp'); }}
-                    className="h-7 w-7 flex items-center justify-center rounded-md text-green-500 hover:bg-green-500/10 transition-colors"
-                    title="WhatsApp"
-                    data-walkthrough="contact"
-                  >
-                    <MessageSquare className="h-3.5 w-3.5" />
-                  </a>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        onClick={(e) => e.stopPropagation()}
-                        className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500 hover:bg-amber-500/10 transition-colors"
-                        title="Call"
-                      >
-                        <PhoneCall className="h-3.5 w-3.5" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="min-w-[160px]">
-                      <DropdownMenuItem asChild>
-                        <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
-                          <Phone className="h-4 w-4 text-amber-500" /> Normal Call
-                        </a>
-                      </DropdownMenuItem>
-                      <DropdownMenuItem asChild>
-                        <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
-                          <MessageCircle className="h-4 w-4 text-green-500" /> WhatsApp Call
-                        </a>
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              )}
+            )}
+            <div className="absolute inset-0 rounded-md bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
+              <Pencil className="h-2.5 w-2.5 text-white" />
             </div>
           </div>
 
-          {/* Notes preview — single line on collapsed, click to expand */}
-          {!isExpanded && (
-            <div className="flex items-end gap-2 mt-2 lg:mt-3">
-              <div
-                className="flex-1 min-w-0 ml-[60px] sm:ml-[68px] lg:ml-[80px] cursor-pointer rounded-md p-1 -m-1 hover:bg-muted/20 transition-colors"
-                data-walkthrough-step="track-notes-edit" data-walkthrough="notes"
-                onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-              >
-                {lead.notes ? (
-                  <p className="text-xs lg:text-[13px] text-foreground/60 leading-relaxed line-clamp-1">
-                    {lead.notes}
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-muted-foreground/25 italic">
-                    Click to add notes...
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}
-                className="shrink-0 inline-flex items-center gap-0.5 h-7 px-2.5 rounded-md text-xs font-medium text-foreground/70 hover:text-foreground hover:bg-muted/40 transition-colors"
-                data-no-expand
-                data-walkthrough="details"
-              >
-                Details
-                <ChevronDown className="h-3 w-3" />
-              </button>
+          {/* Business: name + claim avatar + meta */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              {claim && (
+                <span title={`${claim.displayName || 'A teammate'} ${claim.contacted ? 'has contacted' : 'claimed'} this in the same campaign`} data-no-expand onClick={(e) => e.stopPropagation()}>
+                  <Avatar className="h-4 w-4 shrink-0 ring-1 ring-amber-400/60">
+                    {claim.avatarUrl && <AvatarImage src={claim.avatarUrl} alt={claim.displayName || 'Teammate'} />}
+                    <AvatarFallback className="text-[8px] bg-amber-500/20 text-amber-700 dark:text-amber-300">{claimInitials(claim.displayName)}</AvatarFallback>
+                  </Avatar>
+                </span>
+              )}
+              {editingName ? (
+                <div className="flex items-center gap-1 flex-1 min-w-0" data-no-expand onClick={(e) => e.stopPropagation()}>
+                  <Input
+                    value={editedName}
+                    onChange={(e) => setEditedName(e.target.value)}
+                    className="h-6 text-xs font-semibold px-1.5 flex-1"
+                    autoFocus
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleSaveName(); if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); } }}
+                  />
+                  <button onClick={handleSaveName} className="h-5 w-5 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded"><Check className="h-3 w-3" /></button>
+                  <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"><X className="h-3 w-3" /></button>
+                </div>
+              ) : (
+                <>
+                  <span className="font-semibold text-sm leading-tight truncate">{lead.business_name}</span>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
+                    className="h-4 w-4 flex items-center justify-center text-muted-foreground/30 hover:text-foreground rounded transition-colors shrink-0"
+                    data-no-expand
+                    title="Edit name"
+                  >
+                    <Pencil className="h-2.5 w-2.5" />
+                  </button>
+                </>
+              )}
             </div>
-          )}
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 leading-tight truncate">
+              {lead.phone && <span className="truncate">{lead.phone}</span>}
+              {lead.phone && lead.category && <span className="text-muted-foreground/25">·</span>}
+              {lead.category && <span className="truncate">{lead.category}</span>}
+            </div>
+          </div>
+
+          {/* Status column */}
+          <div className="hidden sm:flex w-[130px] shrink-0 items-center" data-no-expand onClick={(e) => e.stopPropagation()}>
+            <span className={cn('inline-flex items-center h-[22px] px-2.5 rounded-full text-[11px] font-bold border', statusColorCls)} data-walkthrough="status">
+              {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-2.5 w-2.5 mr-0.5 text-emerald-400" />}
+              <span className="truncate">{statusLabel}</span>
+            </span>
+          </div>
+
+          {/* Next action + due column */}
+          <div className="hidden md:flex w-[170px] shrink-0 items-center gap-1.5 flex-wrap" data-no-expand onClick={(e) => e.stopPropagation()}>
+            {nextActionLabel ? (
+              <span className={cn('text-[11px] font-semibold truncate', (NEXT_ACTION_COLORS[lead.next_action || 'none'] || '').replace(/bg-\S+/g, '').replace(/border-\S+/g, '').trim())}>
+                {nextActionLabel}
+              </span>
+            ) : (
+              <button className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors" onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}>
+                + Set action
+              </button>
+            )}
+            {dueLabel && (
+              <span className={cn('inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border', dueLabel.cls)}>
+                <Clock className="h-2.5 w-2.5" />
+                {dueLabel.text}
+              </span>
+            )}
+            {lead.next_action && lead.next_action !== 'none' && (
+              <button
+                className="inline-flex items-center gap-0.5 text-[10px] font-bold text-green-400 hover:text-green-300 transition-colors"
+                onClick={(e) => { e.stopPropagation(); setNextAction('none'); setNextActionDate(undefined); setTrackActionForLead(lead.id, null); setLeadCustomAction(lead.id, null); onNextActionChange(lead.id, 'none' as NextActionType); }}
+                title="Mark as done"
+              >
+                <Check className="h-3 w-3" /> Done
+              </button>
+            )}
+          </div>
+
+          {/* Revenue column */}
+          <div className="hidden lg:block w-[70px] shrink-0 text-right text-xs font-semibold text-green-500/80">
+            {(lead as any).potential_revenue > 0 ? `£${(lead as any).potential_revenue.toLocaleString()}` : <span className="text-muted-foreground/25">—</span>}
+          </div>
+
+          {/* Contact icons (single dense row) */}
+          <div className="flex items-center gap-0.5 shrink-0" data-no-expand onClick={(e) => e.stopPropagation()}>
+            {(lead.google_maps_url || (lead as any).place_id) && (
+              <a
+                href={lead.google_maps_url || `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}`}
+                target="_blank" rel="noopener noreferrer"
+                className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500 hover:bg-blue-500/10 transition-colors"
+                title="Google Maps"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
+            {lead.phone && (
+              <>
+                <a
+                  href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
+                  onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('sms'); }}
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400 hover:bg-blue-500/10 transition-colors"
+                  title="SMS"
+                >
+                  <MessageCircle className="h-3.5 w-3.5" />
+                </a>
+                <a
+                  href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('whatsapp'); }}
+                  className="h-7 w-7 flex items-center justify-center rounded-md text-green-500 hover:bg-green-500/10 transition-colors"
+                  title="WhatsApp"
+                  data-walkthrough="contact"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </a>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button onClick={(e) => e.stopPropagation()} className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500 hover:bg-amber-500/10 transition-colors" title="Call">
+                      <PhoneCall className="h-3.5 w-3.5" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="min-w-[160px]">
+                    <DropdownMenuItem asChild>
+                      <a href={`tel:${lead.phone}`} className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
+                        <Phone className="h-4 w-4 text-amber-500" /> Normal Call
+                      </a>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <a href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer" onClick={() => handleContactMethodUpdate('contacted')}>
+                        <MessageCircle className="h-4 w-4 text-green-500" /> WhatsApp Call
+                      </a>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors">
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[160px]">
+                <DropdownMenuItem asChild>
+                  <a href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer">
+                    <ExternalLink className="h-3.5 w-3.5" /> Facebook search
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { fileInputRef.current?.click(); }} className="text-xs" disabled={isUploadingImage}>
+                  <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
+                </DropdownMenuItem>
+                {lead.image_url && (
+                  <DropdownMenuItem onClick={handleRemoveImage} className="text-xs">
+                    <X className="h-3.5 w-3.5 mr-2" /> Remove Image
+                  </DropdownMenuItem>
+                )}
+                <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
+                  <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
 
         {/* ═══ EXPANDED PANEL — natural height (accordion); page scrolls if long ═══ */}
@@ -763,80 +692,50 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             isExpanded ? 'opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
           )}
         >
-          <div className="border-t border-border/50 px-3.5 sm:px-5 py-3.5 space-y-3">
-            {/* Status selector */}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-muted-foreground w-12 shrink-0">Status</span>
-              <Select value={mapLegacyStatus(lead.status)} onValueChange={async (v) => {
-                if (v === '__add_custom__') { onAddCustomStatus(); return; }
-                onStatusChange(lead.id, v as LeadStatus);
-                // Auto-clear next action when moving to terminal statuses
-                if (v === 'paid' || v === 'closed_lost' || v === 'payment_received') {
-                  setNextAction('none');
-                  setNextActionDate(undefined);
-                  setTrackActionForLead(lead.id, null);
-                  setLeadCustomAction(lead.id, null);
-                  await onNextActionChange(lead.id, 'none' as NextActionType);
-                }
-                // Show popup when moving to Payment Received
-                if (v === 'payment_received') {
-                  const seenKey = 'leadfinder_seen_paid_popup';
-                  if (!localStorage.getItem(seenKey)) {
-                    localStorage.setItem(seenKey, '1');
-                    setShowPaidPopup(true);
+          <div className="border-t border-border/50 px-3.5 sm:px-5 py-4 space-y-4 bg-muted/10">
+            {/* Row: Status / Action / Due / Revenue side-by-side */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-no-expand onClick={(e) => e.stopPropagation()}>
+              <div>
+                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Status</label>
+                <Select value={mapLegacyStatus(lead.status)} onValueChange={async (v) => {
+                  if (v === '__add_custom__') { onAddCustomStatus(); return; }
+                  onStatusChange(lead.id, v as LeadStatus);
+                  if (v === 'paid' || v === 'closed_lost' || v === 'payment_received') {
+                    setNextAction('none');
+                    setNextActionDate(undefined);
+                    setTrackActionForLead(lead.id, null);
+                    setLeadCustomAction(lead.id, null);
+                    await onNextActionChange(lead.id, 'none' as NextActionType);
                   }
-                }
-                window.dispatchEvent(new CustomEvent('demo-checklist-track-status-changed'));
-                window.dispatchEvent(new CustomEvent('demo-checklist-track-status-update'));
-              }}>
-                <SelectTrigger className="h-8 text-xs border-border/50 flex-1" data-walkthrough-step="track-status-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                  {customStatuses.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                  <SelectItem value="__add_custom__" className="text-primary">+ Custom Status</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                  if (v === 'payment_received') {
+                    const seenKey = 'leadfinder_seen_paid_popup';
+                    if (!localStorage.getItem(seenKey)) {
+                      localStorage.setItem(seenKey, '1');
+                      setShowPaidPopup(true);
+                    }
+                  }
+                  window.dispatchEvent(new CustomEvent('demo-checklist-track-status-changed'));
+                  window.dispatchEvent(new CustomEvent('demo-checklist-track-status-update'));
+                }}>
+                  <SelectTrigger className="h-8 text-xs border-border/50 w-full" data-walkthrough-step="track-status-select">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                    {customStatuses.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                    <SelectItem value="__add_custom__" className="text-primary">+ Custom Status</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Pipeline stage tracker */}
-            {(() => {
-              const currentIdx = getStageIndex(lead.status);
-              const isPaid = mapLegacyStatus(lead.status) === 'paid';
-              const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
-              return (
-                <div className="flex items-center gap-0.5 px-0 py-1">
-                  {PIPELINE_STAGES.filter(s => s !== 'closed_lost').map((stage, idx) => {
-                    const isActive = idx === currentIdx;
-                    const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
-                    return (
-                      <div key={stage} className="flex items-center flex-1 gap-0.5">
-                        <div
-                          className={cn(
-                            'h-1.5 rounded-full flex-1 transition-colors',
-                            isCompleted || isActive
-                              ? isPaid ? 'bg-emerald-500' : 'bg-primary'
-                              : isLost ? 'bg-zinc-700' : 'bg-border/60'
-                          )}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-
-            {/* Next Action + Due Date */}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-muted-foreground w-12 shrink-0">Action</span>
-              <div className="flex-1" data-walkthrough="next-action">
+              <div data-walkthrough="next-action">
+                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Next action</label>
                 <Select value={nextAction} onValueChange={handleNextActionChange}>
-                  <SelectTrigger className="h-8 text-xs border-border/50" data-walkthrough-step="follow-up-action">
+                  <SelectTrigger className="h-8 text-xs border-border/50 w-full" data-walkthrough-step="follow-up-action">
                     <SelectValue placeholder="Next action" />
                   </SelectTrigger>
                   <SelectContent>
@@ -862,200 +761,209 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 </Select>
               </div>
 
-              <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className={cn(
-                      'h-8 px-2.5 text-xs shrink-0 gap-1',
-                      dueLabel ? dueLabel.cls : 'text-muted-foreground'
-                    )}
-                    data-walkthrough-step="follow-up-date"
-                  >
-                    <CalendarIcon className="h-3 w-3" />
-                    {nextActionDate ? format(nextActionDate, 'MMM d') : 'Date'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="end">
-                  <Calendar
-                    mode="single"
-                    selected={nextActionDate}
-                    onSelect={handleDateChange}
-                    initialFocus
-                    className="p-3 pointer-events-auto"
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+              <div>
+                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Due date</label>
+                <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={cn('h-8 px-2.5 text-xs w-full justify-start gap-1', dueLabel ? dueLabel.cls : 'text-muted-foreground')}
+                      data-walkthrough-step="follow-up-date"
+                    >
+                      <CalendarIcon className="h-3 w-3" />
+                      {nextActionDate ? format(nextActionDate, 'MMM d') : 'Date'}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar mode="single" selected={nextActionDate} onSelect={handleDateChange} initialFocus className="p-3 pointer-events-auto" />
+                  </PopoverContent>
+                </Popover>
+              </div>
 
-            {/* Potential Revenue */}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-muted-foreground w-12 shrink-0">Revenue</span>
-              <div className="relative flex-1">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">£</span>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={potentialRevenue}
-                  onChange={(e) => setPotentialRevenue(e.target.value)}
-                  onBlur={async () => {
-                    const val = potentialRevenue ? parseFloat(potentialRevenue) : null;
-                    if (val !== (lead.potential_revenue ?? null)) {
-                      await onUpdateLead(lead.id, { potential_revenue: val } as any);
-                    }
-                  }}
-                  className="h-8 text-xs border-border/50 pl-6"
-                  placeholder="0.00"
-                />
+              <div>
+                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Revenue</label>
+                <div className="relative">
+                  <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">£</span>
+                  <Input
+                    type="number" min="0" step="0.01"
+                    value={potentialRevenue}
+                    onChange={(e) => setPotentialRevenue(e.target.value)}
+                    onBlur={async () => {
+                      const val = potentialRevenue ? parseFloat(potentialRevenue) : null;
+                      if (val !== (lead.potential_revenue ?? null)) {
+                        await onUpdateLead(lead.id, { potential_revenue: val } as any);
+                      }
+                    }}
+                    className="h-8 text-xs border-border/50 pl-6 w-full"
+                    placeholder="0.00"
+                  />
+                </div>
               </div>
             </div>
 
-            {/* Notes */}
-            <div className="pt-1" data-walkthrough="notes">
-              {isEditingNotes ? (
-                <div className="space-y-2">
-                  <Textarea
-                    ref={notesRef}
-                    value={notes}
-                    onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
-                    rows={3}
-                    className="resize-none text-xs border-border/50 min-h-[72px]"
-                    placeholder="Add notes about this lead..."
-                    autoFocus
-                  />
-                  <div className="flex items-center justify-end gap-1.5">
-                    <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onClick={handleCancelNotes}>
-                      Cancel
-                    </Button>
-                    <Button size="sm" className="h-6 text-[11px] gap-1" onClick={handleSaveNotes}>
-                      <Save className="h-2.5 w-2.5" /> Save
-                    </Button>
-                  </div>
+            {/* Pipeline stage tracker */}
+            {(() => {
+              const currentIdx = getStageIndex(lead.status);
+              const isPaid = mapLegacyStatus(lead.status) === 'paid';
+              const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
+              return (
+                <div className="flex items-center gap-0.5">
+                  {PIPELINE_STAGES.filter(s => s !== 'closed_lost').map((stage, idx) => {
+                    const isActive = idx === currentIdx;
+                    const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
+                    return (
+                      <div key={stage} className="flex items-center flex-1 gap-0.5">
+                        <div className={cn('h-1.5 rounded-full flex-1 transition-colors', isCompleted || isActive ? isPaid ? 'bg-emerald-500' : 'bg-primary' : isLost ? 'bg-zinc-700' : 'bg-border/60')} />
+                      </div>
+                    );
+                  })}
                 </div>
-              ) : (
-                <div
-                  className="flex items-start gap-2 cursor-pointer rounded-md p-1.5 -mx-1.5 hover:bg-muted/30 transition-colors"
-                  onClick={() => setIsEditingNotes(true)}
-                >
-                  <StickyNote className="h-3.5 w-3.5 text-muted-foreground/30 mt-0.5 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    {notes ? (
-                      <p className="text-xs text-foreground/60 leading-relaxed whitespace-pre-wrap">{notes}</p>
-                    ) : (
-                      <span className="text-xs text-muted-foreground/25 italic">Click to add notes...</span>
+              );
+            })()}
+
+            {/* Notes: private | team side-by-side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-3 border-t border-border/40">
+              {/* Private note */}
+              <div data-walkthrough="notes">
+                <label className="text-[11px] font-medium text-muted-foreground block mb-1.5 flex items-center gap-1">
+                  <StickyNote className="h-3 w-3" /> Private note <span className="text-muted-foreground/40 font-normal">· only you</span>
+                </label>
+                {isEditingNotes ? (
+                  <div className="space-y-2">
+                    <Textarea
+                      ref={notesRef}
+                      value={notes}
+                      onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
+                      rows={3}
+                      className="resize-none text-xs border-border/50 min-h-[72px]"
+                      placeholder="Add a private note..."
+                      autoFocus
+                    />
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onClick={handleCancelNotes}>Cancel</Button>
+                      <Button size="sm" className="h-6 text-[11px] gap-1" onClick={handleSaveNotes}><Save className="h-2.5 w-2.5" /> Save</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2 cursor-pointer rounded-md p-2 border border-border/40 bg-background/40 hover:bg-muted/30 transition-colors min-h-[44px]" onClick={() => setIsEditingNotes(true)}>
+                    <div className="flex-1 min-w-0">
+                      {notes ? (
+                        <p className="text-xs text-foreground/70 leading-relaxed whitespace-pre-wrap">{notes}</p>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/30 italic">Click to add a private note...</span>
+                      )}
+                    </div>
+                    {notesSaved && (
+                      <span className="text-[10px] text-green-500 shrink-0 flex items-center gap-0.5"><Check className="h-2.5 w-2.5" /> Saved</span>
                     )}
                   </div>
-                  {notesSaved && (
-                    <span className="text-[10px] text-green-500 shrink-0 flex items-center gap-0.5">
-                      <Check className="h-2.5 w-2.5" /> Saved
-                    </span>
-                  )}
+                )}
+              </div>
+
+              {/* Team notes */}
+              {!isDemoLead(lead.id) && (
+                <div data-no-expand onClick={(e) => e.stopPropagation()}>
+                  <TeamNotes
+                    placeId={(lead as any).place_id ?? null}
+                    googleMapsUrl={lead.google_maps_url ?? null}
+                    businessName={lead.business_name}
+                  />
                 </div>
               )}
             </div>
 
-            {/* Team notes — inline (team-visible, business-global) */}
-            {!isDemoLead(lead.id) && (
-              <div className="pt-2 border-t border-border/40" data-no-expand onClick={(e) => e.stopPropagation()}>
-                <TeamNotes
-                  placeId={(lead as any).place_id ?? null}
-                  googleMapsUrl={lead.google_maps_url ?? null}
-                  businessName={lead.business_name}
-                />
-              </div>
-            )}
-
-            {/* Service Delivery — inline */}
-            <div className="pt-2 border-t border-border/40 space-y-3" data-no-expand onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+            {/* Service Delivery — uses full width */}
+            <div className="pt-3 border-t border-border/40" data-no-expand onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 text-xs font-semibold text-primary mb-2">
                 <Package className="h-3.5 w-3.5" /> Service Delivery
               </div>
-              <div>
-                <label className="text-[11px] text-muted-foreground block mb-1">Project Overview</label>
-                <Textarea
-                  value={projectOverview}
-                  onChange={(e) => setProjectOverview(e.target.value)}
-                  onBlur={async () => {
-                    if (projectOverview !== (lead.project_overview || '')) {
-                      await onUpdateLead(lead.id, { project_overview: projectOverview || null } as any);
-                    }
-                  }}
-                  rows={3}
-                  className="resize-none text-xs border-border/50"
-                  placeholder="Describe what you'll deliver..."
-                />
-              </div>
-              <div>
-                <label className="text-[11px] text-muted-foreground block mb-1.5">Services Included</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {SERVICE_OPTIONS.map(service => (
-                    <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                      <Checkbox
-                        checked={servicesIncluded.includes(service)}
-                        onCheckedChange={(checked) => {
-                          const updated = checked
-                            ? [...servicesIncluded, service]
-                            : servicesIncluded.filter(s => s !== service);
-                          setServicesIncluded(updated);
-                          onUpdateLead(lead.id, { services_included: updated } as any);
-                        }}
-                        className="h-3.5 w-3.5"
-                      />
-                      {service}
-                    </label>
-                  ))}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[11px] text-muted-foreground block mb-1">Project Overview</label>
+                    <Textarea
+                      value={projectOverview}
+                      onChange={(e) => setProjectOverview(e.target.value)}
+                      onBlur={async () => {
+                        if (projectOverview !== (lead.project_overview || '')) {
+                          await onUpdateLead(lead.id, { project_overview: projectOverview || null } as any);
+                        }
+                      }}
+                      rows={3}
+                      className="resize-none text-xs border-border/50"
+                      placeholder="Describe what you'll deliver..."
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] text-muted-foreground block mb-1">Project Status</label>
+                    <Select value={projectStatus} onValueChange={async (v) => {
+                      setProjectStatus(v);
+                      await onUpdateLead(lead.id, { project_status: v } as any);
+                    }}>
+                      <SelectTrigger className="h-8 text-xs border-border/50 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PROJECT_STATUS_OPTIONS.map(opt => (
+                          <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-              </div>
-              <div>
-                <label className="text-[11px] text-muted-foreground block mb-1">Project Status</label>
-                <Select value={projectStatus} onValueChange={async (v) => {
-                  setProjectStatus(v);
-                  await onUpdateLead(lead.id, { project_status: v } as any);
-                }}>
-                  <SelectTrigger className="h-8 text-xs border-border/50">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROJECT_STATUS_OPTIONS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Facebook — inline */}
-            <div className="pt-2 border-t border-border/40" data-no-expand onClick={(e) => e.stopPropagation()}>
-              <FacebookSection lead={lead} onUpdate={onUpdateLead} />
-            </div>
-
-            {/* Activity log — inline (moved out of the dialog) */}
-            {!isDemoLead(lead.id) && (
-              <div className="pt-2 border-t border-border/40">
-                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
-                  <Clock className="h-3.5 w-3.5" /> Activity log
-                </div>
-                {activities.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground/50">No activity yet.</p>
-                ) : (
-                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                    {activities.slice(0, 20).map((a) => (
-                      <div key={a.id} className="flex items-start gap-2 text-[11px]">
-                        <Clock className="h-3 w-3 text-muted-foreground/40 mt-0.5 shrink-0" />
-                        <div className="min-w-0 flex-1">
-                          <span className="text-foreground/70">{a.description}</span>
-                          <span className="text-muted-foreground/40 ml-1.5">
-                            {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
-                          </span>
-                        </div>
-                      </div>
+                <div>
+                  <label className="text-[11px] text-muted-foreground block mb-1.5">Services Included</label>
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                    {SERVICE_OPTIONS.map(service => (
+                      <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                        <Checkbox
+                          checked={servicesIncluded.includes(service)}
+                          onCheckedChange={(checked) => {
+                            const updated = checked
+                              ? [...servicesIncluded, service]
+                              : servicesIncluded.filter(s => s !== service);
+                            setServicesIncluded(updated);
+                            onUpdateLead(lead.id, { services_included: updated } as any);
+                          }}
+                          className="h-3.5 w-3.5"
+                        />
+                        {service}
+                      </label>
                     ))}
                   </div>
-                )}
+                </div>
               </div>
-            )}
+            </div>
+
+            {/* Facebook | Activity log side-by-side */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-3 border-t border-border/40">
+              <div data-no-expand onClick={(e) => e.stopPropagation()}>
+                <FacebookSection lead={lead} onUpdate={onUpdateLead} />
+              </div>
+              {!isDemoLead(lead.id) && (
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
+                    <Clock className="h-3.5 w-3.5" /> Activity log
+                  </div>
+                  {activities.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground/50">No activity yet.</p>
+                  ) : (
+                    <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                      {activities.slice(0, 20).map((a) => (
+                        <div key={a.id} className="flex items-start gap-2 text-[11px]">
+                          <Clock className="h-3 w-3 text-muted-foreground/40 mt-0.5 shrink-0" />
+                          <div className="min-w-0 flex-1">
+                            <span className="text-foreground/70">{a.description}</span>
+                            <span className="text-muted-foreground/40 ml-1.5">{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
           </div>
 
@@ -1481,9 +1389,20 @@ const PotentialWorkPage = () => {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-2">
+        <div className="rounded-lg border border-border/50 bg-card overflow-hidden">
+          {/* Column header (desktop) — mirrors the row columns */}
+          <div className="hidden sm:flex items-center gap-3 px-3 py-2 border-b border-border/50 bg-muted/30 text-[11px] font-medium text-muted-foreground">
+            <span className="w-4 shrink-0" />
+            <span className="w-8 shrink-0" />
+            <span className="flex-1 min-w-0">Business</span>
+            <span className="w-[130px] shrink-0">Status</span>
+            <span className="hidden md:block w-[170px] shrink-0">Next action</span>
+            <span className="hidden lg:block w-[70px] shrink-0 text-right">Revenue</span>
+            <span className="shrink-0 w-[124px] text-right pr-1">Actions</span>
+          </div>
+          <div className="divide-y divide-border/50">
           {potentialWorkLeads.map((lead) => (
-            <div key={lead.id} className="rounded-lg border border-border/50 bg-card overflow-hidden">
+            <div key={lead.id}>
               <LeadCard
                 lead={lead}
                 isExpanded={expandedCardId === lead.id}
@@ -1503,6 +1422,7 @@ const PotentialWorkPage = () => {
               />
             </div>
           ))}
+          </div>
         </div>
       )}
 
