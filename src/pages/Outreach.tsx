@@ -5,10 +5,11 @@ import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
 import { OutreachIntroModal } from '@/components/OutreachIntroModal';
 import { PostContactModal } from '@/components/PostContactModal';
 import { useOutreach } from '@/hooks/useOutreach';
+import { CampaignPicker } from '@/components/CampaignPicker';
 import { Loader2 } from 'lucide-react';
 import { isDemoLead } from '@/lib/demoLeads';
 import type { ContactMethod, PipelineStatus } from '@/types/outreach';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 const Outreach = () => {
   const {
@@ -30,8 +31,15 @@ const Outreach = () => {
     retryPhoneFetch,
   } = useOutreach();
 
-  // Combine active and archived leads into one unified list
-  const allLeads = useMemo(() => [...leads, ...archivedLeads], [leads, archivedLeads]);
+  // Campaign filter (null = all campaigns)
+  const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+
+  // Combine active and archived leads into one unified list, filtered by campaign
+  const allLeads = useMemo(() => {
+    const combined = [...leads, ...archivedLeads];
+    if (!campaignFilter) return combined;
+    return combined.filter((l) => l.campaign_id === campaignFilter);
+  }, [leads, archivedLeads, campaignFilter]);
 
   const isReadOnly = false;
 
@@ -76,11 +84,17 @@ const Outreach = () => {
   return (
     <div className="space-y-3 sm:space-y-6">
       {/* Page Header */}
-      <div className="text-center sm:text-left">
-        <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
-        <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
-          Contact businesses via WhatsApp, SMS or call. Update their status, then track promising ones in Track Leads.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="text-center sm:text-left">
+          <h1 className="text-lg sm:text-2xl font-bold tracking-tight">Outreach CRM</h1>
+          <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
+            Contact businesses via WhatsApp, SMS or call. Update their status, then track promising ones in Track Leads.
+          </p>
+        </div>
+        <div className="flex items-center justify-center sm:justify-end gap-2 shrink-0">
+          <span className="text-xs text-muted-foreground hidden sm:inline">Campaign</span>
+          <CampaignPicker mode="filter" value={campaignFilter} onChange={setCampaignFilter} />
+        </div>
       </div>
 
       <OutreachTable

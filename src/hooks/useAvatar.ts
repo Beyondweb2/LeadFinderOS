@@ -10,7 +10,7 @@ export function useAvatar() {
   const fetchAvatar = useCallback(async () => {
     if (!user?.id) return;
     const { data } = await supabase
-      .from('user_trials')
+      .from('profiles')
       .select('avatar_url')
       .eq('user_id', user.id)
       .maybeSingle();
@@ -41,10 +41,12 @@ export function useAvatar() {
       
       const publicUrl = `${urlData.publicUrl}?t=${Date.now()}`;
 
-      // Save to user_trials via edge function since RLS denies direct updates
-      // For now, we update via a workaround: use the ensure-trial function pattern
-      // Actually user_trials has deny update RLS, so we need an edge function
-      // Let's use auth.updateUser metadata instead
+      // Persist to the team-readable profiles row (own-row RLS allows this) so
+      // teammates see the avatar, and mirror into auth metadata for the session.
+      await supabase
+        .from('profiles')
+        .update({ avatar_url: publicUrl })
+        .eq('user_id', user.id);
       await supabase.auth.updateUser({
         data: { avatar_url: publicUrl }
       });

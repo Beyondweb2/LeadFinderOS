@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
+import { CampaignPicker } from '@/components/CampaignPicker';
 
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 
@@ -10,12 +11,27 @@ import { Flame, Target, Zap, Search, MapPin, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Country } from '@/types/lead';
 
+const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
+
 const Index = () => {
   const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, expanded } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach } = useOutreach();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
 
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
+
+  // Active campaign — new leads added from search are tagged with it.
+  // Persisted so it survives navigation/reload.
+  const [activeCampaign, setActiveCampaign] = useState<string | null>(() => {
+    try { return localStorage.getItem(ACTIVE_CAMPAIGN_KEY) || null; } catch { return null; }
+  });
+  const handleCampaignChange = useCallback((id: string | null) => {
+    setActiveCampaign(id);
+    try {
+      if (id) localStorage.setItem(ACTIVE_CAMPAIGN_KEY, id);
+      else localStorage.removeItem(ACTIVE_CAMPAIGN_KEY);
+    } catch {}
+  }, []);
 
   // Count businesses without websites — only from the most recent search
   const noWebsiteCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
@@ -42,14 +58,20 @@ const Index = () => {
             Find businesses without websites in any area. Search by business type and location, then add hot leads to your Outreach.
           </p>
         </div>
-        <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
-          <div className="flex items-center gap-1 sm:gap-2">
-            <Flame className="h-3 w-3 sm:h-4 sm:w-4 text-status-hot" />
-            <span>Hot = No website</span>
+        <div className="flex flex-col items-center sm:items-end gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] sm:text-xs text-muted-foreground">Adding to</span>
+            <CampaignPicker mode="assign" value={activeCampaign} onChange={handleCampaignChange} className="h-8 w-[180px]" />
           </div>
-          <div className="flex items-center gap-1 sm:gap-2">
-            <Zap className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
-            <span>AI-powered</span>
+          <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Flame className="h-3 w-3 sm:h-4 sm:w-4 text-status-hot" />
+              <span>Hot = No website</span>
+            </div>
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Zap className="h-3 w-3 sm:h-4 sm:w-4 text-primary" />
+              <span>AI-powered</span>
+            </div>
           </div>
         </div>
       </div>
@@ -133,7 +155,7 @@ const Index = () => {
           <LeadsTable
             leads={leads}
             onExport={exportToCsv}
-            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website')}
+            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign)}
             isInOutreach={isInOutreach}
             onMapLinkClick={(name, url) => {
               markAsChecked(name, url);

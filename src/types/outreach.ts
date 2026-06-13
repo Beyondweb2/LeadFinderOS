@@ -87,6 +87,7 @@ export interface OutreachLead {
   notes: string | null;
   country: Country | null;
   list_type: ListType;
+  campaign_id?: string | null;
   created_at: string;
   updated_at: string;
   is_archived?: boolean;

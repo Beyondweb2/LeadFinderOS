@@ -293,7 +293,7 @@ export function useOutreach() {
     }
   }, [leads, archivedLeads, removeLeadNoPhone]);
 
-  const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website') => {
+  const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website', campaignId: string | null = null) => {
     if (!user) {
       toast({
         title: 'Not authenticated',
@@ -352,6 +352,7 @@ export function useOutreach() {
         next_action_date: null,
         country,
         list_type: listType,
+        campaign_id: campaignId,
         place_id: lead.id || null,
       } as any)
       .select()

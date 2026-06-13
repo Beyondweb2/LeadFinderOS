@@ -179,6 +179,27 @@ export type Database = {
           },
         ]
       }
+      campaigns: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       checked_businesses: {
         Row: {
           business_name: string
@@ -525,6 +546,7 @@ export type Database = {
           address: string | null
           amount_paid: number | null
           business_name: string
+          campaign_id: string | null
           category: string | null
           checkin_notes: string | null
           contact_method: string | null
@@ -570,6 +592,7 @@ export type Database = {
           address?: string | null
           amount_paid?: number | null
           business_name: string
+          campaign_id?: string | null
           category?: string | null
           checkin_notes?: string | null
           contact_method?: string | null
@@ -615,6 +638,7 @@ export type Database = {
           address?: string | null
           amount_paid?: number | null
           business_name?: string
+          campaign_id?: string | null
           category?: string | null
           checkin_notes?: string | null
           contact_method?: string | null
@@ -656,7 +680,15 @@ export type Database = {
           whatsapp_checked_at?: string | null
           whatsapp_status?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "outreach_leads_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       personal_actions: {
         Row: {
@@ -749,6 +781,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       search_cache: {
         Row: {
