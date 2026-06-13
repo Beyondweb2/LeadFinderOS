@@ -539,24 +539,24 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   </div>
                 ) : (
                   <>
-                    <span className="text-sm leading-tight truncate">{lead.business_name}</span>
+                    <span className="text-sm truncate">{lead.business_name}</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
                       className="h-4 w-4 flex items-center justify-center text-muted-foreground/30 hover:text-foreground rounded transition-colors shrink-0"
                       data-no-expand
                       title="Edit name"
                     >
-                      <Pencil className="h-2.5 w-2.5" />
+                      <Pencil className="h-3 w-3" />
                     </button>
                   </>
                 )}
-                <span className="shrink-0 inline-flex items-center px-1.5 h-[17px] rounded text-[9px] font-semibold uppercase tracking-wide bg-primary/10 text-primary/70 border border-primary/20" title="What we're selling">
+                <span className="shrink-0 inline-flex items-center px-1.5 h-[18px] rounded text-[10px] font-semibold uppercase tracking-wide bg-primary/10 text-primary/70 border border-primary/20" title="What we're selling">
                   {SALE_TYPE_LABELS[effectiveSaleType]}
                 </span>
               </div>
-              <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 leading-tight truncate">
-                {lead.phone && <span className="truncate">{lead.phone}</span>}
-                {lead.phone && lead.category && <span className="text-muted-foreground/25">·</span>}
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5 truncate">
+                {lead.phone && <span className="font-mono truncate">{lead.phone}</span>}
+                {lead.phone && lead.category && <span className="text-muted-foreground/30">·</span>}
                 {lead.category && <span className="truncate">{lead.category}</span>}
               </div>
             </div>
@@ -565,8 +565,8 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
         {/* Status */}
         <TableCell className="hidden sm:table-cell">
-          <span className={cn('inline-flex items-center h-[22px] px-2.5 rounded-full text-[11px] font-bold border', statusColorCls)} data-walkthrough="status">
-            {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-2.5 w-2.5 mr-0.5 text-emerald-400" />}
+          <span className={cn('inline-flex items-center h-6 px-2.5 rounded-full text-xs font-bold border', statusColorCls)} data-walkthrough="status">
+            {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-3 w-3 mr-0.5 text-emerald-400" />}
             <span className="truncate">{statusLabel}</span>
           </span>
         </TableCell>
@@ -575,23 +575,23 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
         <TableCell className="hidden md:table-cell" data-no-expand onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-1.5 flex-wrap">
             {nextActionLabel ? (
-              <span className={cn('text-[11px] font-semibold truncate', (NEXT_ACTION_COLORS[lead.next_action || 'none'] || '').replace(/bg-\S+/g, '').replace(/border-\S+/g, '').trim())}>
+              <span className={cn('text-sm font-semibold truncate', (NEXT_ACTION_COLORS[lead.next_action || 'none'] || '').replace(/bg-\S+/g, '').replace(/border-\S+/g, '').trim())}>
                 {nextActionLabel}
               </span>
             ) : (
-              <button className="text-[11px] text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors" onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}>
+              <button className="text-sm text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors" onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}>
                 + Set action
               </button>
             )}
             {dueLabel && (
-              <span className={cn('inline-flex items-center gap-0.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border', dueLabel.cls)}>
-                <Clock className="h-2.5 w-2.5" />
+              <span className={cn('inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full border', dueLabel.cls)}>
+                <Clock className="h-3 w-3" />
                 {dueLabel.text}
               </span>
             )}
             {lead.next_action && lead.next_action !== 'none' && (
               <button
-                className="inline-flex items-center gap-0.5 text-[10px] font-bold text-green-400 hover:text-green-300 transition-colors"
+                className="inline-flex items-center gap-0.5 text-[11px] font-bold text-green-400 hover:text-green-300 transition-colors"
                 onClick={(e) => { e.stopPropagation(); setNextAction('none'); setNextActionDate(undefined); setTrackActionForLead(lead.id, null); setLeadCustomAction(lead.id, null); onNextActionChange(lead.id, 'none' as NextActionType); }}
                 title="Mark as done"
               >
@@ -602,21 +602,21 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
         </TableCell>
 
         {/* Revenue */}
-        <TableCell className="hidden lg:table-cell text-right text-xs font-semibold text-green-500/80">
+        <TableCell className="hidden lg:table-cell text-right text-sm font-semibold text-green-500/80">
           {(lead as any).potential_revenue > 0 ? `£${(lead as any).potential_revenue.toLocaleString()}` : <span className="text-muted-foreground/25">—</span>}
         </TableCell>
 
         {/* Actions */}
         <TableCell className="text-right" data-no-expand onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center justify-end gap-0.5">
+          <div className="flex items-center justify-end gap-1.5">
             {(lead.google_maps_url || (lead as any).place_id) && (
               <a
                 href={lead.google_maps_url || `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}`}
                 target="_blank" rel="noopener noreferrer"
-                className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500 hover:bg-blue-500/10 transition-colors"
+                className="p-1.5 rounded-md text-blue-500 hover:bg-blue-500/10 hover:text-blue-400 transition-colors"
                 title="Google Maps"
               >
-                <ExternalLink className="h-3.5 w-3.5" />
+                <ExternalLink className="h-4 w-4" />
               </a>
             )}
             {lead.phone && (
@@ -624,25 +624,25 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 <a
                   href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
                   onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('sms'); }}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400 hover:bg-blue-500/10 transition-colors"
+                  className="p-1.5 rounded-md text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 transition-colors"
                   title="SMS"
                 >
-                  <MessageCircle className="h-3.5 w-3.5" />
+                  <MessageCircle className="h-4 w-4" />
                 </a>
                 <a
                   href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
                   target="_blank" rel="noopener noreferrer"
                   onClick={(e) => { e.stopPropagation(); handleContactMethodUpdate('whatsapp'); }}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-green-500 hover:bg-green-500/10 transition-colors"
+                  className="p-1.5 rounded-md text-green-500 hover:bg-green-500/10 hover:text-green-400 transition-colors"
                   title="WhatsApp"
                   data-walkthrough="contact"
                 >
-                  <MessageSquare className="h-3.5 w-3.5" />
+                  <MessageSquare className="h-4 w-4" />
                 </a>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <button onClick={(e) => e.stopPropagation()} className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500 hover:bg-amber-500/10 transition-colors" title="Call">
-                      <PhoneCall className="h-3.5 w-3.5" />
+                    <button onClick={(e) => e.stopPropagation()} className="p-1.5 rounded-md text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 transition-colors" title="Call">
+                      <PhoneCall className="h-4 w-4" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[160px]">
@@ -662,8 +662,8 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors">
-                  <MoreVertical className="h-3.5 w-3.5" />
+                <button className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors">
+                  <MoreVertical className="h-4 w-4" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[160px]">
