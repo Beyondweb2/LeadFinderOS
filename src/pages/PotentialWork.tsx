@@ -4,7 +4,11 @@ import { useOutreach } from '@/hooks/useOutreach';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { isDemoLead } from '@/lib/demoLeads';
 import { AlertTriangle, Clock, CalendarCheck } from 'lucide-react';
-import { OutreachLeadDialog } from '@/components/OutreachLeadDialog';
+import { TeamNotes } from '@/components/TeamNotes';
+// Lead detail is now fully inline in the expandable row (no dialog/sheets).
+import { useTrackClaims } from '@/hooks/useTrackClaims';
+import type { TeamClaim } from '@/hooks/useTeamClaims';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,12 +17,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { AddCustomLeadDialog } from '@/components/AddCustomLeadDialog';
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
 import {
   Select,
   SelectContent,
@@ -65,9 +63,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { format, isToday, isPast, startOfDay } from 'date-fns';
+import { format, isToday, isPast, startOfDay, formatDistanceToNow } from 'date-fns';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
-import type { OutreachLead, LeadStatus, NextActionType } from '@/types/outreach';
+import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from '@/types/outreach';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { FacebookSection } from '@/components/FacebookSection';
 import { cn } from '@/lib/utils';
@@ -276,8 +274,15 @@ interface LeadCardProps {
   onAddCustomStatus: () => void;
   userId: string | undefined;
   onContactGated?: () => boolean;
-  onOpenDetails?: () => void;
+  /** Teammate who also claimed this business in the same campaign (soft indicator). */
+  claim?: TeamClaim | null;
+  fetchActivities?: (leadId: string) => Promise<OutreachActivity[]>;
 }
+
+const claimInitials = (name: string | null): string => {
+  if (!name) return '?';
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
+};
 
 const SERVICE_OPTIONS = [
   'Website Design',
@@ -296,8 +301,7 @@ const PROJECT_STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
 ];
 
-const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId, onContactGated, onOpenDetails }: LeadCardProps) => {
-  const [detailOpen, setDetailOpen] = useState(false);
+const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId, onContactGated, claim, fetchActivities }: LeadCardProps) => {
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -320,11 +324,20 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const [datePopoverOpen, setDatePopoverOpen] = useState(false);
   const expandRef = useRef<HTMLDivElement>(null);
   const [potentialRevenue, setPotentialRevenue] = useState<string>(lead.potential_revenue?.toString() || '');
-  const [serviceDeliveryOpen, setServiceDeliveryOpen] = useState(false);
   const [projectOverview, setProjectOverview] = useState(lead.project_overview || '');
   const [servicesIncluded, setServicesIncluded] = useState<string[]>(lead.services_included || []);
   const [projectStatus, setProjectStatus] = useState(lead.project_status || 'not_started');
   const [showPaidPopup, setShowPaidPopup] = useState(false);
+  // Activity log — loaded lazily when the row is expanded (replaces the dialog).
+  const [activities, setActivities] = useState<OutreachActivity[]>([]);
+  const [activitiesLoaded, setActivitiesLoaded] = useState(false);
+
+  useEffect(() => {
+    if (isExpanded && !activitiesLoaded && fetchActivities && !isDemoLead(lead.id)) {
+      setActivitiesLoaded(true);
+      fetchActivities(lead.id).then(setActivities).catch(() => {});
+    }
+  }, [isExpanded, activitiesLoaded, fetchActivities, lead.id]);
 
   useEffect(() => {
     setNotes(lead.notes || '');
@@ -513,6 +526,14 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             <div className="flex-1 min-w-0 space-y-1.5 lg:space-y-2">
               {/* Name */}
               <div className="flex items-center gap-1.5">
+                {claim && (
+                  <span title={`${claim.displayName || 'A teammate'} ${claim.contacted ? 'has contacted' : 'claimed'} this in the same campaign`} data-no-expand onClick={(e) => e.stopPropagation()}>
+                    <Avatar className="h-4 w-4 shrink-0 ring-1 ring-amber-400/60">
+                      {claim.avatarUrl && <AvatarImage src={claim.avatarUrl} alt={claim.displayName || 'Teammate'} />}
+                      <AvatarFallback className="text-[8px] bg-amber-500/20 text-amber-700 dark:text-amber-300">{claimInitials(claim.displayName)}</AvatarFallback>
+                    </Avatar>
+                  </span>
+                )}
                 {editingName ? (
                   <div className="flex items-center gap-1 flex-1 min-w-0" data-no-expand onClick={(e) => e.stopPropagation()}>
                     <Input
@@ -646,9 +667,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                         <X className="h-3.5 w-3.5 mr-2" /> Remove Image
                       </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem onClick={() => setDetailOpen(true)} className="text-xs">
-                      <Pencil className="h-3.5 w-3.5 mr-2" /> Full Edit
-                    </DropdownMenuItem>
                     <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
@@ -738,12 +756,11 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           )}
         </div>
 
-        {/* ═══ EXPANDED PANEL ═══ */}
+        {/* ═══ EXPANDED PANEL — natural height (accordion); page scrolls if long ═══ */}
         <div
           ref={expandRef}
           className={cn(
-            'overflow-hidden transition-all duration-300 ease-out',
-            isExpanded ? 'max-h-[450px] opacity-100' : 'max-h-0 opacity-0'
+            isExpanded ? 'opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
           )}
         >
           <div className="border-t border-border/50 px-3.5 sm:px-5 py-3.5 space-y-3">
@@ -939,29 +956,106 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               )}
             </div>
 
-            {/* Team notes — opens the lead dialog (team-visible notes live there) */}
-            {onOpenDetails && (
-              <button
-                className="flex items-center gap-2 w-full text-left py-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
-                data-no-expand
-                onClick={(e) => { e.stopPropagation(); onOpenDetails(); }}
-              >
-                <Users className="h-3.5 w-3.5" />
-                Team notes
-                <ChevronDown className="h-3 w-3 ml-auto -rotate-90" />
-              </button>
+            {/* Team notes — inline (team-visible, business-global) */}
+            {!isDemoLead(lead.id) && (
+              <div className="pt-2 border-t border-border/40" data-no-expand onClick={(e) => e.stopPropagation()}>
+                <TeamNotes
+                  placeId={(lead as any).place_id ?? null}
+                  googleMapsUrl={lead.google_maps_url ?? null}
+                  businessName={lead.business_name}
+                />
+              </div>
             )}
 
-            {/* Service Delivery — opens in a side sheet */}
-            <button
-              className="flex items-center gap-2 w-full text-left py-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
-              data-no-expand
-              onClick={(e) => { e.stopPropagation(); setServiceDeliveryOpen(true); }}
-            >
-              <Package className="h-3.5 w-3.5" />
-              Service Delivery
-              <ChevronDown className="h-3 w-3 ml-auto -rotate-90" />
-            </button>
+            {/* Service Delivery — inline */}
+            <div className="pt-2 border-t border-border/40 space-y-3" data-no-expand onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+                <Package className="h-3.5 w-3.5" /> Service Delivery
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground block mb-1">Project Overview</label>
+                <Textarea
+                  value={projectOverview}
+                  onChange={(e) => setProjectOverview(e.target.value)}
+                  onBlur={async () => {
+                    if (projectOverview !== (lead.project_overview || '')) {
+                      await onUpdateLead(lead.id, { project_overview: projectOverview || null } as any);
+                    }
+                  }}
+                  rows={3}
+                  className="resize-none text-xs border-border/50"
+                  placeholder="Describe what you'll deliver..."
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground block mb-1.5">Services Included</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {SERVICE_OPTIONS.map(service => (
+                    <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                      <Checkbox
+                        checked={servicesIncluded.includes(service)}
+                        onCheckedChange={(checked) => {
+                          const updated = checked
+                            ? [...servicesIncluded, service]
+                            : servicesIncluded.filter(s => s !== service);
+                          setServicesIncluded(updated);
+                          onUpdateLead(lead.id, { services_included: updated } as any);
+                        }}
+                        className="h-3.5 w-3.5"
+                      />
+                      {service}
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-[11px] text-muted-foreground block mb-1">Project Status</label>
+                <Select value={projectStatus} onValueChange={async (v) => {
+                  setProjectStatus(v);
+                  await onUpdateLead(lead.id, { project_status: v } as any);
+                }}>
+                  <SelectTrigger className="h-8 text-xs border-border/50">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PROJECT_STATUS_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Facebook — inline */}
+            <div className="pt-2 border-t border-border/40" data-no-expand onClick={(e) => e.stopPropagation()}>
+              <FacebookSection lead={lead} onUpdate={onUpdateLead} />
+            </div>
+
+            {/* Activity log — inline (moved out of the dialog) */}
+            {!isDemoLead(lead.id) && (
+              <div className="pt-2 border-t border-border/40">
+                <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
+                  <Clock className="h-3.5 w-3.5" /> Activity log
+                </div>
+                {activities.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground/50">No activity yet.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                    {activities.slice(0, 20).map((a) => (
+                      <div key={a.id} className="flex items-start gap-2 text-[11px]">
+                        <Clock className="h-3 w-3 text-muted-foreground/40 mt-0.5 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-foreground/70">{a.description}</span>
+                          <span className="text-muted-foreground/40 ml-1.5">
+                            {formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>
 
@@ -997,132 +1091,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Detail / Edit Dialog */}
-      <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
-        <DialogContent className="sm:max-w-lg border-primary/20 bg-card/95 backdrop-blur-xl">
-          <DialogHeader className="pb-2">
-            <DialogTitle className="text-lg font-bold flex items-center gap-2">
-              <Briefcase className="h-5 w-5 text-primary" />
-              Edit Lead
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              {lead.image_url ? (
-                <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-muted/30 ring-2 ring-primary/20">
-                  <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
-                  <button onClick={handleRemoveImage} className="absolute top-0.5 right-0.5 h-5 w-5 rounded-full bg-background/80 flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground transition-colors">
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="w-16 h-16 rounded-xl bg-primary/5 border-2 border-dashed border-primary/20 flex items-center justify-center text-lg font-bold text-primary/30">
-                  {getInitials(lead.business_name)}
-                </div>
-              )}
-              <Button variant="outline" size="sm" className="text-xs border-primary/20 hover:border-primary/40 hover:bg-primary/5" onClick={() => fileInputRef.current?.click()} disabled={isUploadingImage}>
-                <Pencil className="h-3 w-3 mr-1.5" /> {lead.image_url ? 'Change' : 'Add Image'}
-              </Button>
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-primary mb-1.5 block">Business Name</label>
-              <Input value={editedName} onChange={(e) => setEditedName(e.target.value)} className="h-9 text-sm border-border/50 focus-visible:ring-primary/30" />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-primary mb-1.5 block">Notes</label>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add notes about this lead..."
-                rows={3}
-                className="resize-none text-sm border-border/50 focus-visible:ring-primary/30"
-              />
-            </div>
-            <FacebookSection lead={lead} onUpdate={onUpdateLead} />
-          </div>
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
-            <Button variant="ghost" size="sm" onClick={() => setDetailOpen(false)} className="h-9 text-sm">Cancel</Button>
-            <Button size="sm" onClick={async () => {
-              if (editedName.trim() && editedName.trim() !== lead.business_name) {
-                await onBusinessNameChange(lead.id, editedName.trim());
-              }
-              await onNotesChange(lead.id, notes);
-              setDetailOpen(false);
-            }} className="h-9 text-sm gap-1.5 btn-premium">
-              <Save className="h-3.5 w-3.5" />
-              Save Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Service Delivery Sheet */}
-      <Sheet open={serviceDeliveryOpen} onOpenChange={setServiceDeliveryOpen}>
-        <SheetContent side="right" className="w-[340px] sm:w-[400px] overflow-y-auto">
-          <SheetHeader className="pb-4">
-            <SheetTitle className="flex items-center gap-2 text-base">
-              <Package className="h-4 w-4 text-primary" />
-              Service Delivery
-            </SheetTitle>
-            <p className="text-xs text-muted-foreground">{lead.business_name}</p>
-          </SheetHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="text-[11px] text-muted-foreground block mb-1">Project Overview</label>
-              <Textarea
-                value={projectOverview}
-                onChange={(e) => setProjectOverview(e.target.value)}
-                onBlur={async () => {
-                  if (projectOverview !== (lead.project_overview || '')) {
-                    await onUpdateLead(lead.id, { project_overview: projectOverview || null } as any);
-                  }
-                }}
-                rows={3}
-                className="resize-none text-xs border-border/50"
-                placeholder="Describe what you'll deliver..."
-              />
-            </div>
-            <div>
-              <label className="text-[11px] text-muted-foreground block mb-1.5">Services Included</label>
-              <div className="grid grid-cols-2 gap-1.5">
-                {SERVICE_OPTIONS.map(service => (
-                  <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <Checkbox
-                      checked={servicesIncluded.includes(service)}
-                      onCheckedChange={(checked) => {
-                        const updated = checked
-                          ? [...servicesIncluded, service]
-                          : servicesIncluded.filter(s => s !== service);
-                        setServicesIncluded(updated);
-                        onUpdateLead(lead.id, { services_included: updated } as any);
-                      }}
-                      className="h-3.5 w-3.5"
-                    />
-                    {service}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div>
-              <label className="text-[11px] text-muted-foreground block mb-1">Project Status</label>
-              <Select value={projectStatus} onValueChange={async (v) => {
-                setProjectStatus(v);
-                await onUpdateLead(lead.id, { project_status: v } as any);
-              }}>
-                <SelectTrigger className="h-8 text-xs border-border/50">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PROJECT_STATUS_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </SheetContent>
-      </Sheet>
 
       {/* Payment Received popup */}
       <Dialog open={showPaidPopup} onOpenChange={setShowPaidPopup}>
@@ -1194,7 +1162,6 @@ const PotentialWorkPage = () => {
   const [sortOrder, setSortOrder] = useState<'action_date' | 'recent' | 'alpha'>('action_date');
   const [metricFilter, setMetricFilter] = useState<'overdue' | 'today' | 'upcoming' | 'no_action' | null>(null);
   const [stageFilter, setStageFilter] = useState<string | null>(null);
-  const [selectedLead, setSelectedLead] = useState<OutreachLead | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
   // Auto-expand first card during walkthrough (only once)
@@ -1315,6 +1282,9 @@ const PotentialWorkPage = () => {
     }
     return filtered;
   }, [allPotentialLeads, metricFilter, stageFilter]);
+
+  // Teammate claims for the visible tracked leads (per each lead's own campaign).
+  const claimsByLead = useTrackClaims(potentialWorkLeads);
 
   // Pipeline stage counts for the counter
   const stageCounts = useMemo(() => {
@@ -1511,7 +1481,7 @@ const PotentialWorkPage = () => {
           </div>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 lg:gap-4">
+        <div className="grid grid-cols-1 gap-2">
           {potentialWorkLeads.map((lead) => (
             <div key={lead.id} className="rounded-lg border border-border/50 bg-card overflow-hidden">
               <LeadCard
@@ -1528,24 +1498,13 @@ const PotentialWorkPage = () => {
                 customStatuses={customStatuses}
                 onAddCustomStatus={() => setShowCustomStatusDialog(true)}
                 userId={user?.id}
-                onOpenDetails={() => setSelectedLead(lead)}
+                claim={claimsByLead[lead.id] || null}
+                fetchActivities={fetchActivities}
               />
             </div>
           ))}
         </div>
       )}
-
-      <OutreachLeadDialog
-        lead={selectedLead}
-        open={!!selectedLead}
-        onOpenChange={(open) => !open && setSelectedLead(null)}
-        onUpdateStatus={safeUpdateStatus}
-        onUpdateNextAction={safeUpdateNextAction}
-        onUpdateNotes={safeUpdateNotes}
-        onUpdateLead={safeUpdateLead}
-        onDelete={safeDeleteLead}
-        fetchActivities={fetchActivities}
-      />
 
       {/* Custom Status Dialog */}
       <Dialog open={showCustomStatusDialog} onOpenChange={setShowCustomStatusDialog}>
