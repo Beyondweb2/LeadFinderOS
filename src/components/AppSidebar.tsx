@@ -8,12 +8,11 @@ import {
 import { UserMenu } from '@/components/UserMenu';
 import { AccentColorPicker } from '@/components/AccentColorPicker';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { useSubscription } from '@/hooks/useSubscription';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText, Star,
-  DollarSign, HelpCircle, Users, MessageSquare, ShieldCheck, Lightbulb, StickyNote
+  DollarSign, HelpCircle, Users, MessageSquare, Lightbulb, StickyNote
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
@@ -23,7 +22,6 @@ import appLogo from '@/assets/logo.png';
 export function AppSidebar() {
   const { t } = useTranslation();
   const location = useLocation();
-  const { isAdmin } = useSubscription();
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
   const [notepadOpen, setNotepadOpen] = useState(false);
@@ -39,10 +37,6 @@ export function AppSidebar() {
     { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle, description: t('nav.howToUseDesc') },
     { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare, description: t('nav.feedbackDesc') },
     { title: 'Notepad', url: '#notepad', icon: StickyNote, description: 'Personal actions & notes' },
-  ];
-
-  const adminItems = [
-    { title: t('nav.adminDashboard'), url: '/admin', icon: ShieldCheck, description: t('nav.adminDashboardDesc') },
   ];
 
   let searchPulse = false;
@@ -141,37 +135,6 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {isAdmin && (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <div className="px-3 py-2 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
-                {t('common.admin')}
-              </div>
-              <SidebarMenu>
-                {adminItems.map((item) => {
-                  const isActive = location.pathname === item.url;
-                  return (
-                    <SidebarMenuItem key={item.url}>
-                      <SidebarMenuButton asChild isActive={isActive}>
-                        <Link to={item.url} className={cn(
-                          'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                          isActive ? 'bg-sidebar-accent text-sidebar-primary font-medium' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'
-                        )}>
-                          <item.icon className={cn('h-5 w-5 shrink-0', isActive ? 'text-sidebar-primary' : '')} />
-                          <div className="flex flex-col overflow-hidden">
-                            <span className="truncate">{item.title}</span>
-                            <span className="text-xs text-sidebar-foreground/50 truncate">{item.description}</span>
-                          </div>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3 mt-auto shrink-0 space-y-2">

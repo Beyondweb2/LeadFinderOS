@@ -8,6 +8,8 @@ import { RevenueCard } from '@/components/dashboard/RevenueCard';
 import { PipelineCard } from '@/components/dashboard/PipelineCard';
 import { OutreachCard } from '@/components/dashboard/OutreachCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
+import { TeamActivity } from '@/components/dashboard/TeamActivity';
+import { AdminZone } from '@/components/dashboard/AdminZone';
 
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -36,12 +38,10 @@ import { TipBar } from '@/components/TipBar';
 
 const Dashboard = () => {
   const { metrics, isLoading, refetch } = useDashboardMetrics();
-  const { subscribed, isLoading: isSubscriptionLoading, isPaidSubscriber, isStripeTrialing, trialEnd } = useSubscription();
+  const { isLoading: isSubscriptionLoading, isAdmin } = useSubscription();
   const { user } = useAuth();
   const { toast } = useToast();
   const [isFullResetting, setIsFullResetting] = useState(false);
-  
-  const isAdmin = user?.email === 'pauljsales455@outlook.com';
 
   if (isLoading || isSubscriptionLoading) {
     return (
@@ -90,7 +90,7 @@ const Dashboard = () => {
       </div>
 
       <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Performance</h2>
+        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Your performance</h2>
         <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
           <RevenueCard
             revenueThisMonth={metrics.revenueThisMonth}
@@ -112,6 +112,20 @@ const Dashboard = () => {
           <NextActionsCard trackedLeads={metrics.trackedLeads} />
         </div>
       </section>
+
+      {/* Team zone — visible to ALL users; built only from team-readable tables */}
+      <section>
+        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Team activity</h2>
+        <TeamActivity />
+      </section>
+
+      {/* Admin zone — rendered ONLY for admins (role-based useSubscription().isAdmin) */}
+      {isAdmin && (
+        <section>
+          <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Admin</h2>
+          <AdminZone />
+        </section>
+      )}
 
       {/* Quick Links */}
       <section>

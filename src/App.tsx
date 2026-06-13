@@ -4,7 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { OwnerProvider } from "@/contexts/OwnerContext";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
@@ -31,7 +31,6 @@ const Templates = lazy(() => import("./pages/Templates"));
 const PotentialWorkPage = lazy(() => import("./pages/PotentialWork"));
 const PaidClientsPage = lazy(() => import("./pages/PaidClients"));
 const HowToUse = lazy(() => import("./pages/HowToUse"));
-const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const AdminSiteImages = lazy(() => import("./pages/AdminSiteImages"));
 const AdminSitesList = lazy(() => import("./pages/AdminSitesList"));
@@ -313,15 +312,8 @@ const App = () => {
                 </ProtectedRoute>
               } 
             />
-            {/* Admin routes */}
-            <Route 
-              path="/admin" 
-              element={
-                <ProtectedRoute>
-                  <AdminDashboard />
-                </ProtectedRoute>
-              } 
-            />
+            {/* Admin routes — the standalone admin hub is now a zone on /dashboard */}
+            <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
             <Route
               path="/admin/api-usage"
               element={

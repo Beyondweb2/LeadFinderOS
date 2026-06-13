@@ -44,7 +44,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
-  ArrowLeft,
   Loader2,
   Search,
   Activity,
@@ -102,9 +101,19 @@ function timeAgo(dateStr: string | null): string {
   return formatDate(dateStr);
 }
 
-export default function AdminDashboard() {
+/**
+ * Dashboard ADMIN zone — rendered ONLY for admins (role-based
+ * useSubscription().isAdmin). This is the former standalone AdminDashboard's
+ * genuinely-admin content (user-management table, delete / bulk-delete,
+ * usage_events drawer) folded into the dashboard page, minus the full-page
+ * chrome. It still calls the `admin-users` edge function, which keeps its own
+ * server-side admin gate — the client-side gate is convenience only. The
+ * separate API Usage / Sites / Site Images pages stay as their own routes and
+ * are linked out from here.
+ */
+export function AdminZone() {
   const navigate = useNavigate();
-  const { user, session } = useAuth();
+  const { user } = useAuth();
   const { isAdmin, isLoading: isSubLoading } = useSubscription();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -122,7 +131,6 @@ export default function AdminDashboard() {
   const hasFetchedRef = useRef(false);
 
   const getAccessToken = useCallback(async (): Promise<string | null> => {
-    // Always get a fresh session
     const { data: { session: freshSession } } = await supabase.auth.getSession();
     if (!freshSession?.access_token) {
       toast.error('No session token found. Please log in again.');
@@ -149,27 +157,22 @@ export default function AdminDashboard() {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 
-      console.log('[AdminDashboard] Response:', { data, error });
-
       if (error) {
         const errMsg = error.message || 'Unknown error';
-        console.error('[AdminDashboard] Invoke error:', errMsg);
+        console.error('[AdminZone] Invoke error:', errMsg);
         setFetchError(errMsg);
         toast.error(`Admin fetch failed: ${errMsg}`);
       } else if (data?.error) {
-        console.error('[AdminDashboard] Server error:', data.error, data.details);
+        console.error('[AdminZone] Server error:', data.error, data.details);
         setFetchError(`${data.error}${data.details ? ': ' + data.details : ''}`);
         toast.error(`Server error: ${data.error}`);
       } else {
         const userList = (data?.users || []) as AdminUser[];
-
         const merged = userList
           .filter((u: AdminUser) => !deletedIdsRef.current.has(u.id))
           .sort(
             (a: AdminUser, b: AdminUser) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
           );
-
-        console.log('[AdminDashboard] Users received:', userList.length);
         setUsers(merged);
         if (merged.length === 0 && !searchQuery) {
           toast.info('No users returned. Check edge function logs for details.');
@@ -177,7 +180,7 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       const errMsg = (err as Error).message;
-      console.error('[AdminDashboard] Exception:', errMsg);
+      console.error('[AdminZone] Exception:', errMsg);
       setFetchError(errMsg);
       toast.error(`Unexpected error: ${errMsg}`);
     }
@@ -228,7 +231,6 @@ export default function AdminDashboard() {
 
     setIsDeletingUser(false);
   }, [getAccessToken, selectedUser]);
-
 
   const bulkDeleteUsers = useCallback(async () => {
     const accessToken = await getAccessToken();
@@ -281,21 +283,18 @@ export default function AdminDashboard() {
     }
   };
 
+  // Only fetch once, and only for admins (this zone isn't even rendered otherwise).
   useEffect(() => {
-    if (!isSubLoading && !isAdmin) {
-      navigate('/', { replace: true });
-      return;
-    }
     if (!isSubLoading && isAdmin && !hasFetchedRef.current) {
       hasFetchedRef.current = true;
       fetchUsers();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSubLoading, isAdmin, navigate]);
+  }, [isSubLoading, isAdmin]);
 
-  const handleRowClick = (user: AdminUser) => {
-    setSelectedUser(user);
-    fetchUserEvents(user.id);
+  const handleRowClick = (u: AdminUser) => {
+    setSelectedUser(u);
+    fetchUserEvents(u.id);
   };
 
   const filtered = users;
@@ -303,236 +302,217 @@ export default function AdminDashboard() {
   const totalSearches = users.reduce((s, u) => s + u.search_count, 0);
   const totalMessages = users.reduce((s, u) => s + u.messages_sent_count, 0);
 
-  if (isSubLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
-  }
-
-  if (!isAdmin) return null;
+  // Defensive client gate — server-side gate on admin-users is the real one.
+  if (isSubLoading || !isAdmin) return null;
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <div className="border-b border-border bg-card/50 sticky top-0 z-10 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-              <ArrowLeft className="h-5 w-5" />
-            </Button>
-            <div>
-              <h1 className="text-xl font-bold">Admin Dashboard</h1>
-              <p className="text-sm text-muted-foreground">{users.length} users total</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate('/admin/api-usage')}>
-              <Activity className="h-4 w-4 mr-2" />
-              API Usage
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate('/admin/sites')}>
-              <Globe className="h-4 w-4 mr-2" />
-              Sites
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate('/admin/site-images')}>
-              <ImageIcon className="h-4 w-4 mr-2" />
-              Site Images
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => { deletedIdsRef.current.clear(); fetchUsers(); }} disabled={isLoading}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-          </div>
+    <div className="space-y-4">
+      {/* Controls row: user count + links out to the still-separate admin pages */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p className="text-sm text-muted-foreground">{users.length} users total</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/admin/api-usage')}>
+            <Activity className="h-4 w-4 mr-2" />
+            API Usage
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/admin/sites')}>
+            <Globe className="h-4 w-4 mr-2" />
+            Sites
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/admin/site-images')}>
+            <ImageIcon className="h-4 w-4 mr-2" />
+            Site Images
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => { deletedIdsRef.current.clear(); fetchUsers(); }} disabled={isLoading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Refresh
+          </Button>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        {/* Error Banner */}
-        {fetchError && (
-          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
-            <p className="text-sm text-red-400 font-medium">Error loading users</p>
-            <p className="text-xs text-red-400/80 mt-1">{fetchError}</p>
-          </div>
-        )}
-
-        {/* Activity Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <Search className="h-3.5 w-3.5" /> Total Searches
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{totalSearches}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2 pt-4 px-4">
-              <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
-                <MessageSquare className="h-3.5 w-3.5" /> Messages Sent
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-4 pb-4">
-              <p className="text-2xl font-bold">{totalMessages}</p>
-            </CardContent>
-          </Card>
+      {/* Error Banner */}
+      {fetchError && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4">
+          <p className="text-sm text-red-400 font-medium">Error loading users</p>
+          <p className="text-xs text-red-400/80 mt-1">{fetchError}</p>
         </div>
+      )}
 
-        {/* Filters */}
-        <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by email..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-          <Select value={activityFilter} onValueChange={setActivityFilter}>
-            <SelectTrigger className="w-full sm:w-[160px]">
-              <SelectValue placeholder="Activity" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Time</SelectItem>
-              <SelectItem value="7d">Last 7 Days</SelectItem>
-              <SelectItem value="30d">Last 30 Days</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Bulk Delete Bar */}
-        {selectedIds.size > 0 && (
-          <div className="flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
-            <span className="text-sm font-medium">{selectedIds.size} selected</span>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button variant="destructive" size="sm" disabled={isBulkDeleting}>
-                  {isBulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-                  Delete Selected
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete {selectedIds.size} users?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will permanently delete <strong>{selectedIds.size}</strong> users and all their data. This cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    className="bg-red-600 hover:bg-red-700"
-                    onClick={bulkDeleteUsers}
-                    disabled={isBulkDeleting}
-                  >
-                    {isBulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Delete All
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-            <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
-              Clear
-            </Button>
-          </div>
-        )}
-
-        {/* Users Table */}
+      {/* Activity Cards */}
+      <div className="grid grid-cols-2 gap-4">
         <Card>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="flex items-center justify-center py-16">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead className="w-10">
-                        <Checkbox
-                          checked={filtered.filter(u => u.id !== user?.id).length > 0 && selectedIds.size >= filtered.filter(u => u.id !== user?.id).length}
-                          onCheckedChange={toggleSelectAll}
-                        />
-                      </TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Signed Up</TableHead>
-                      <TableHead className="text-right">Searches</TableHead>
-                      <TableHead className="text-right">Added</TableHead>
-                      <TableHead className="text-right">Messages</TableHead>
-                      <TableHead className="text-right">Replies</TableHead>
-                      <TableHead>Last Active</TableHead>
-                      <TableHead>Last Search</TableHead>
-                      <TableHead className="w-10"></TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                          No users found
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      filtered.map((u) => (
-                        <TableRow
-                          key={u.id}
-                          className={`cursor-pointer hover:bg-muted/50 ${selectedIds.has(u.id) ? 'bg-muted/30' : ''}`}
-                          onClick={() => handleRowClick(u)}
-                        >
-                          <TableCell onClick={(e) => e.stopPropagation()}>
-                            {u.id !== user?.id && (
-                              <Checkbox
-                                checked={selectedIds.has(u.id)}
-                                onCheckedChange={() => toggleSelect(u.id)}
-                              />
-                            )}
-                          </TableCell>
-                          <TableCell className="font-medium text-sm max-w-[200px] truncate">
-                            {u.email}
-                          </TableCell>
-                          <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {formatDateTime(u.created_at)}
-                          </TableCell>
-                          <TableCell className="text-right tabular-nums">{u.search_count}</TableCell>
-                          <TableCell className="text-right tabular-nums">{u.businesses_added_count}</TableCell>
-                          <TableCell className="text-right tabular-nums">{u.messages_sent_count ?? 0}</TableCell>
-                          <TableCell className="text-right tabular-nums">{u.replies_count ?? 0}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                            {timeAgo(u.last_active_at)}
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                            {timeAgo(u.last_search_at)}
-                          </TableCell>
-                          <TableCell>
-                            {u.id !== user?.id && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-red-400"
-                                onClick={(e) => { e.stopPropagation(); setUserToDelete(u); }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                      ))
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <Search className="h-3.5 w-3.5" /> Total Searches
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <p className="text-2xl font-bold">{totalSearches}</p>
           </CardContent>
         </Card>
-        <p className="text-xs text-muted-foreground">
-          Showing {filtered.length} of {users.length} users
-        </p>
+        <Card>
+          <CardHeader className="pb-2 pt-4 px-4">
+            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+              <MessageSquare className="h-3.5 w-3.5" /> Messages Sent
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4">
+            <p className="text-2xl font-bold">{totalMessages}</p>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={activityFilter} onValueChange={setActivityFilter}>
+          <SelectTrigger className="w-full sm:w-[160px]">
+            <SelectValue placeholder="Activity" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Time</SelectItem>
+            <SelectItem value="7d">Last 7 Days</SelectItem>
+            <SelectItem value="30d">Last 30 Days</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Bulk Delete Bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" size="sm" disabled={isBulkDeleting}>
+                {isBulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+                Delete Selected
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {selectedIds.size} users?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete <strong>{selectedIds.size}</strong> users and all their data. This cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  className="bg-red-600 hover:bg-red-700"
+                  onClick={bulkDeleteUsers}
+                  disabled={isBulkDeleting}
+                >
+                  {isBulkDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Delete All
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+            Clear
+          </Button>
+        </div>
+      )}
+
+      {/* Users Table */}
+      <Card>
+        <CardContent className="p-0">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={filtered.filter(u => u.id !== user?.id).length > 0 && selectedIds.size >= filtered.filter(u => u.id !== user?.id).length}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Signed Up</TableHead>
+                    <TableHead className="text-right">Searches</TableHead>
+                    <TableHead className="text-right">Added</TableHead>
+                    <TableHead className="text-right">Messages</TableHead>
+                    <TableHead className="text-right">Replies</TableHead>
+                    <TableHead>Last Active</TableHead>
+                    <TableHead>Last Search</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                        No users found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filtered.map((u) => (
+                      <TableRow
+                        key={u.id}
+                        className={`cursor-pointer hover:bg-muted/50 ${selectedIds.has(u.id) ? 'bg-muted/30' : ''}`}
+                        onClick={() => handleRowClick(u)}
+                      >
+                        <TableCell onClick={(e) => e.stopPropagation()}>
+                          {u.id !== user?.id && (
+                            <Checkbox
+                              checked={selectedIds.has(u.id)}
+                              onCheckedChange={() => toggleSelect(u.id)}
+                            />
+                          )}
+                        </TableCell>
+                        <TableCell className="font-medium text-sm max-w-[200px] truncate">
+                          {u.email}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                          {formatDateTime(u.created_at)}
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums">{u.search_count}</TableCell>
+                        <TableCell className="text-right tabular-nums">{u.businesses_added_count}</TableCell>
+                        <TableCell className="text-right tabular-nums">{u.messages_sent_count ?? 0}</TableCell>
+                        <TableCell className="text-right tabular-nums">{u.replies_count ?? 0}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {timeAgo(u.last_active_at)}
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                          {timeAgo(u.last_search_at)}
+                        </TableCell>
+                        <TableCell>
+                          {u.id !== user?.id && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-red-400"
+                              onClick={(e) => { e.stopPropagation(); setUserToDelete(u); }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      <p className="text-xs text-muted-foreground">
+        Showing {filtered.length} of {users.length} users
+      </p>
 
       {/* Single User Delete Dialog (state-driven, outside table loop) */}
       <AlertDialog open={!!userToDelete} onOpenChange={(open) => { if (!open) setUserToDelete(null); }}>
