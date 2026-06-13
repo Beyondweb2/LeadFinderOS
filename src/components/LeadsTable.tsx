@@ -14,9 +14,42 @@ import {
 import {
   Tooltip, TooltipContent, TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import type { Lead, WebsiteStatus } from '@/types/lead';
+import type { TeamClaim } from '@/hooks/useTeamClaims';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
+
+function initials(name: string | null): string {
+  if (!name) return '?';
+  return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
+}
+
+/**
+ * Soft teammate-claim indicator: a small avatar shown when a teammate has
+ * already claimed this business in the active campaign. Purely informational —
+ * the add button stays enabled.
+ */
+const TeamClaimBadge = memo(({ claim, small }: { claim: TeamClaim; small?: boolean }) => {
+  const label = claim.displayName || 'A teammate';
+  const size = small ? 'h-4 w-4' : 'h-5 w-5';
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Avatar className={`${size} shrink-0 ring-1 ring-amber-400/60`}>
+          {claim.avatarUrl && <AvatarImage src={claim.avatarUrl} alt={label} />}
+          <AvatarFallback className="text-[8px] bg-amber-500/20 text-amber-700 dark:text-amber-300">
+            {initials(claim.displayName)}
+          </AvatarFallback>
+        </Avatar>
+      </TooltipTrigger>
+      <TooltipContent>
+        {label} {claim.contacted ? 'has contacted' : 'claimed'} this in the current campaign
+      </TooltipContent>
+    </Tooltip>
+  );
+});
+TeamClaimBadge.displayName = 'TeamClaimBadge';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -39,9 +72,11 @@ interface LeadsTableProps {
   maxFreeSaves?: number;
   onViewDetailsGated?: () => void;
   viewDetailsExhausted?: boolean;
+  /** Resolve a teammate's claim on this business in the active campaign (soft indicator). */
+  getTeamClaim?: (lead: Lead) => TeamClaim | null;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
@@ -168,6 +203,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
               >
                 <div className="flex-1 min-w-0 mr-2">
                   <div className="flex items-center gap-1.5">
+                    {(() => { const tc = getTeamClaim?.(lead); return tc ? <TeamClaimBadge claim={tc} small /> : null; })()}
                     <p className="font-medium text-sm truncate leading-tight">{lead.name}</p>
                     {lead.isExpanded && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
@@ -284,6 +320,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                 >
                   <TableCell className="font-medium pl-5">
                     <div className="flex items-center gap-2">
+                      {(() => { const tc = getTeamClaim?.(lead); return tc ? <TeamClaimBadge claim={tc} /> : null; })()}
                       <span className="truncate block">{lead.name}</span>
                       {lead.isExpanded && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>

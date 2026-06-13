@@ -416,6 +416,50 @@ export type Database = {
           },
         ]
       }
+      lead_claims: {
+        Row: {
+          business_name: string
+          campaign_id: string | null
+          claimed_at: string
+          contacted: boolean
+          google_maps_url: string | null
+          id: string
+          place_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          business_name: string
+          campaign_id?: string | null
+          claimed_at?: string
+          contacted?: boolean
+          google_maps_url?: string | null
+          id?: string
+          place_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          business_name?: string
+          campaign_id?: string | null
+          claimed_at?: string
+          contacted?: boolean
+          google_maps_url?: string | null
+          id?: string
+          place_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_claims_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_contacts: {
         Row: {
           contacted_at: string
