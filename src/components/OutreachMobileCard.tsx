@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, CalendarClock, Sparkles, Settings2 } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, CalendarClock, Sparkles, Settings2, Scissors, Flower2 } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { openFacebookSearch } from '@/lib/facebookSearch';
 import { ContactMethodBadge } from './ContactMethodBadge';
@@ -49,7 +49,7 @@ interface OutreachMobileCardProps {
   onRetryPhoneFetch?: () => void;
   isWalkthroughContacted?: boolean;
   onAiOpener?: () => void;
-  onGenerateSite?: () => void;
+  onGenerateSite?: (template: 'barber' | 'salon') => void;
   isGeneratingSite?: boolean;
   onManageSite?: () => void;
 }
@@ -330,20 +330,38 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                   </Button>
                 )}
                 {onGenerateSite && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-violet-400 hover:text-violet-300 hover:bg-violet-500/10"
-                    onClick={onGenerateSite}
-                    disabled={isGeneratingSite}
-                    title="Generate barber site (admin)"
-                  >
-                    {isGeneratingSite ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="h-3.5 w-3.5" />
-                    )}
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-violet-400 hover:text-violet-300 hover:bg-violet-500/10"
+                        disabled={isGeneratingSite}
+                        title="Generate site (admin)"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {isGeneratingSite ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent
+                      align="end"
+                      className="min-w-[160px]"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <DropdownMenuItem onSelect={() => onGenerateSite('barber')}>
+                        <Scissors className="h-4 w-4 mr-2" />
+                        Barber site
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => onGenerateSite('salon')}>
+                        <Flower2 className="h-4 w-4 mr-2" />
+                        Salon site
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 )}
               </div>
             </>
