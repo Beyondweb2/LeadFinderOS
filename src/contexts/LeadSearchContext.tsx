@@ -36,7 +36,13 @@ const LeadSearchContext = createContext<LeadSearchContextType | null>(null);
 export function LeadSearchProvider({ children }: { children: React.ReactNode }) {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // Businesses the user only *viewed* (opened the map link) — still decluttered
+  // out of future results.
   const [excludedBusinesses, setExcludedBusinesses] = useState<ExcludedBusiness[]>([]);
+  // Businesses already in the user's outreach list (history + active/archived).
+  // These are NOT filtered out — they stay visible and get marked "in your list"
+  // with a disabled add button (the table handles that via isInOutreach).
+  const [inListBusinesses, setInListBusinesses] = useState<ExcludedBusiness[]>([]);
   const [trialLimitError, setTrialLimitError] = useState<TrialLimitError | null>(null);
   const [postAbandonExhausted, setPostAbandonExhausted] = useState(false);
   const [freeSearchExhausted, setFreeSearchExhausted] = useState(false);
@@ -154,31 +160,31 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       supabase.from('outreach_leads').select('business_name, google_maps_url'),
     ]);
 
-    const excluded: ExcludedBusiness[] = [];
+    // Viewed-only (checked) businesses are decluttered from results.
+    setExcludedBusinesses(checkedResult.data || []);
 
-    if (checkedResult.data) {
-      excluded.push(...checkedResult.data);
-    }
-    if (historyResult.data) {
-      excluded.push(...historyResult.data);
-    }
-    if (leadsResult.data) {
-      excluded.push(...leadsResult.data);
-    }
-
-    setExcludedBusinesses(excluded);
+    // In-list businesses (ever added) stay visible but get marked.
+    const inList: ExcludedBusiness[] = [];
+    if (historyResult.data) inList.push(...historyResult.data);
+    if (leadsResult.data) inList.push(...leadsResult.data);
+    setInListBusinesses(inList);
   }, [user]);
 
   useEffect(() => {
     fetchExcludedBusinesses();
   }, [fetchExcludedBusinesses]);
 
-  const isExcluded = useCallback((lead: Lead): boolean => {
-    return excludedBusinesses.some(
-      (b) => b.business_name === lead.name || 
+  const matchesBusiness = (list: ExcludedBusiness[], lead: Lead): boolean =>
+    list.some(
+      (b) => b.business_name === lead.name ||
              (lead.googleMapsUrl && b.google_maps_url === lead.googleMapsUrl)
     );
-  }, [excludedBusinesses]);
+
+  // Drop a result only if the user merely *viewed* it AND it is NOT already in
+  // their list. In-list businesses are kept (shown + marked, not double-addable).
+  const isExcluded = useCallback((lead: Lead): boolean => {
+    return matchesBusiness(excludedBusinesses, lead) && !matchesBusiness(inListBusinesses, lead);
+  }, [excludedBusinesses, inListBusinesses]);
 
   const saveSearch = async (filters: SearchFilters, resultsCount: number, noWebsiteCount: number = 0) => {
     const { data: { user } } = await supabase.auth.getUser();

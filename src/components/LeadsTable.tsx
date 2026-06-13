@@ -199,7 +199,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             return (
               <div
                 key={lead.id}
-                className="flex items-center justify-between py-2.5 px-3 rounded-md border border-border bg-background/80"
+                className={`flex items-center justify-between py-2.5 px-3 rounded-md border border-border ${inOutreach ? 'bg-muted/30 opacity-70' : 'bg-background/80'}`}
               >
                 <div className="flex-1 min-w-0 mr-2">
                   <div className="flex items-center gap-1.5">
@@ -248,9 +248,10 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                    </Tooltip>
                   {onAddToOutreach && (
                     inOutreach ? (
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
+                      <span className="inline-flex items-center gap-1 h-8 px-2 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-[11px] font-medium whitespace-nowrap">
                         <Check className="h-3.5 w-3.5" />
-                      </Button>
+                        In your list
+                      </span>
                     ) : gated && !canSave ? (
                       <div className="relative">
                         <Button
@@ -312,11 +313,11 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   </TableCell>
                 </TableRow>
               ) : paginatedLeads.map((lead, index) => {
-                
+                const inOutreach = checkIsInOutreach(lead.name, lead.googleMapsUrl);
                 return (
                 <TableRow
                   key={lead.id}
-                  className="border-border hover:bg-muted/30"
+                  className={`border-border hover:bg-muted/30 ${inOutreach ? 'bg-muted/20 opacity-70' : ''}`}
                 >
                   <TableCell className="font-medium pl-5">
                     <div className="flex items-center gap-2">
@@ -372,15 +373,11 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   <TableCell>
                     <div className="flex items-center">
                       {onAddToOutreach && (
-                        checkIsInOutreach(lead.name, lead.googleMapsUrl) ? (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 bg-muted/30" disabled>
-                                <Check className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Already saved</TooltipContent>
-                          </Tooltip>
+                        inOutreach ? (
+                          <span className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded-md bg-green-500/10 text-green-600 dark:text-green-400 text-xs font-medium whitespace-nowrap">
+                            <Check className="h-3.5 w-3.5" />
+                            In your list
+                          </span>
                         ) : gated && !canSave ? (
                           <div className="relative">
                             <Button
