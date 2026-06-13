@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BarberSiteContent, BarberService } from "./types";
 
 /**
- * Public booking flow (Step 3b) for the barber site (/p/:slug).
+ * Public booking flow (Step 3b) for a generated site (/p/:slug).
  *
  * Flow: service → staff → day → time → details → confirmation.
  *
@@ -22,6 +22,12 @@ import type { BarberSiteContent, BarberService } from "./types";
  *
  * Staff + working hours ARE readable by anon for published sites (Phase 1 RLS), so
  * those load via the standard client (untyped for the not-yet-in-types tables).
+ *
+ * Theming: this single flow backs BOTH templates. `variant` selects a palette
+ * bundle (see THEMES below) — the booking LOGIC is shared, only the class tokens
+ * differ. Default is "barber"; its token strings are exactly the original classes,
+ * and since Tailwind class ORDER doesn't affect the rendered CSS, the barber
+ * output is unchanged.
  */
 
 const sb = supabase as unknown as SupabaseClient;
@@ -34,6 +40,98 @@ type WorkingHour = { staff_id: string; weekday: number; start_time: string; end_
 type Busy = { starts_at: string; ends_at: string };
 type DayOption = { y: number; mo: number; da: number; weekday: number; label: string };
 type Step = "service" | "staff" | "day" | "time" | "details" | "confirm";
+
+/** Visual variant — the booking flow is logic-identical across templates; only
+ *  these palette tokens differ. */
+export type BookingVariant = "barber" | "salon";
+
+type BookingTheme = {
+  overlay: string;
+  panel: string;
+  border: string;
+  titleBase: string;
+  sub: string;
+  closeBtn: string;
+  muted: string;
+  faint: string;
+  option: string;
+  optionTitle: string;
+  accent: string;
+  avatar: string;
+  dayBtn: string;
+  timeTaken: string;
+  timeFree: string;
+  summary: string;
+  input: string;
+  checkbox: string;
+  checkboxStrong: string;
+  error: string;
+  confirmIcon: string;
+  primaryBtn: string;
+  backBtn: string;
+  rowLabel: string;
+  rowValue: string;
+};
+
+const THEMES: Record<BookingVariant, BookingTheme> = {
+  // Barber bundle — strings equal the historical classes verbatim (class order is
+  // irrelevant to the rendered CSS), so the barber booking flow is unchanged.
+  barber: {
+    overlay: "bg-black/70",
+    panel: "border border-white/10 bg-ink-card",
+    border: "border-white/10",
+    titleBase: "font-display uppercase tracking-wide text-white",
+    sub: "text-zinc-400",
+    closeBtn: "text-zinc-400 hover:bg-white/10 hover:text-white",
+    muted: "text-zinc-400",
+    faint: "text-zinc-500",
+    option: "border border-white/10 bg-white/[0.03] hover:border-amber/50",
+    optionTitle: "text-white",
+    accent: "text-amber",
+    avatar: "bg-amber/15 text-amber-soft",
+    dayBtn: "border border-white/10 bg-white/[0.03] text-zinc-200 hover:border-amber/50",
+    timeTaken: "cursor-not-allowed border-white/5 bg-white/[0.02] text-zinc-600 line-through",
+    timeFree: "border-white/10 bg-white/[0.03] text-zinc-100 hover:border-amber/50",
+    summary: "border border-white/10 bg-white/[0.03]",
+    input: "border border-white/10 bg-white/[0.04] text-white placeholder-zinc-500 focus:border-amber/60",
+    checkbox: "accent-amber",
+    checkboxStrong: "text-zinc-100",
+    error: "text-red-400",
+    confirmIcon: "bg-amber/15 text-amber",
+    primaryBtn: "bg-amber text-ink hover:bg-amber-soft",
+    backBtn: "border border-white/10 text-zinc-300 hover:border-amber/40 hover:text-white",
+    rowLabel: "text-zinc-500",
+    rowValue: "text-zinc-100",
+  },
+  // Salon bundle — light/airy rose counterpart (scoped salon-* tokens).
+  salon: {
+    overlay: "bg-salon-ink/40",
+    panel: "border border-salon-line bg-salon-bg",
+    border: "border-salon-line",
+    titleBase: "font-salon-display text-salon-ink",
+    sub: "text-salon-muted",
+    closeBtn: "text-salon-muted hover:bg-salon-rose/10 hover:text-salon-rose",
+    muted: "text-salon-muted",
+    faint: "text-salon-faint",
+    option: "border border-salon-line bg-white hover:border-salon-rose/50",
+    optionTitle: "text-salon-ink",
+    accent: "text-salon-rose",
+    avatar: "bg-salon-rose/10 text-salon-rose-deep",
+    dayBtn: "border border-salon-line bg-white text-salon-ink hover:border-salon-rose/50",
+    timeTaken: "cursor-not-allowed border-salon-line/60 text-salon-faint line-through",
+    timeFree: "border-salon-line bg-white text-salon-ink hover:border-salon-rose/50",
+    summary: "border border-salon-line bg-white",
+    input: "border border-salon-line bg-white text-salon-ink placeholder-salon-faint focus:border-salon-rose/60",
+    checkbox: "accent-salon-rose",
+    checkboxStrong: "text-salon-ink",
+    error: "text-red-500",
+    confirmIcon: "bg-salon-rose/10 text-salon-rose",
+    primaryBtn: "bg-salon-rose text-white hover:bg-salon-rose-deep",
+    backBtn: "border border-salon-line text-salon-ink hover:border-salon-rose/40 hover:text-salon-rose",
+    rowLabel: "text-salon-faint",
+    rowValue: "text-salon-ink",
+  },
+};
 
 // ── Europe/London time helpers (DST-correct via Intl) ────────────────────────
 function londonOffsetMinutes(d: Date): number {
@@ -74,16 +172,32 @@ function fmtDateTime(iso: string): string {
   }).format(new Date(iso));
 }
 
-const ERROR_COPY: Record<string, string> = {
-  slot_taken: "Sorry — that time was just booked. Please pick another slot.",
-  outside_hours: "That time is outside this barber's working hours. Please pick another.",
-  in_past: "That time has already passed. Please pick another slot.",
-  invalid_staff: "That barber isn't available. Please start again.",
-  not_published: "This site isn't taking bookings right now.",
-  unknown_service: "That service isn't available. Please start again.",
-  invalid_phone: "Please enter a valid phone number.",
-  missing_fields: "Please fill in your name and phone number.",
-  rate_limited: "Too many attempts — please wait a moment and try again.",
+// Per-variant error copy. The barber map is verbatim the historical strings (so
+// the barber flow is unchanged); the salon map only swaps the two entries whose
+// wording mentioned "barber"/"shop".
+const ERROR_COPY: Record<BookingVariant, Record<string, string>> = {
+  barber: {
+    slot_taken: "Sorry — that time was just booked. Please pick another slot.",
+    outside_hours: "That time is outside this barber's working hours. Please pick another.",
+    in_past: "That time has already passed. Please pick another slot.",
+    invalid_staff: "That barber isn't available. Please start again.",
+    not_published: "This site isn't taking bookings right now.",
+    unknown_service: "That service isn't available. Please start again.",
+    invalid_phone: "Please enter a valid phone number.",
+    missing_fields: "Please fill in your name and phone number.",
+    rate_limited: "Too many attempts — please wait a moment and try again.",
+  },
+  salon: {
+    slot_taken: "Sorry — that time was just booked. Please pick another slot.",
+    outside_hours: "That time is outside the salon's working hours. Please pick another.",
+    in_past: "That time has already passed. Please pick another slot.",
+    invalid_staff: "That stylist isn't available. Please start again.",
+    not_published: "This site isn't taking bookings right now.",
+    unknown_service: "That service isn't available. Please start again.",
+    invalid_phone: "Please enter a valid phone number.",
+    missing_fields: "Please fill in your name and phone number.",
+    rate_limited: "Too many attempts — please wait a moment and try again.",
+  },
 };
 
 export function BookingFlow({
@@ -91,12 +205,15 @@ export function BookingFlow({
   onClose,
   slug,
   content,
+  variant = "barber",
 }: {
   open: boolean;
   onClose: () => void;
   slug: string;
   content: BarberSiteContent;
+  variant?: BookingVariant;
 }) {
+  const t = THEMES[variant];
   const [step, setStep] = useState<Step>("service");
   const [loadingStaff, setLoadingStaff] = useState(true);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -254,7 +371,7 @@ export function BookingFlow({
       return;
     }
     if (!data.ok) {
-      const msg = ERROR_COPY[data.error as string] || "Couldn't complete the booking. Please try again.";
+      const msg = ERROR_COPY[variant][data.error as string] || "Couldn't complete the booking. Please try again.";
       setError(msg);
       // If the slot was taken / invalid, send them back to re-pick a time.
       if (["slot_taken", "outside_hours", "in_past"].includes(data.error)) setStep("time");
@@ -268,23 +385,23 @@ export function BookingFlow({
 
   return (
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} aria-hidden />
+      <div className={`absolute inset-0 ${t.overlay} backdrop-blur-sm`} onClick={onClose} aria-hidden />
       <div
         role="dialog"
         aria-modal="true"
-        className="relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl border border-white/10 bg-ink-card sm:rounded-2xl"
+        className={`relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-t-2xl ${t.panel} sm:rounded-2xl`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 px-5 py-4">
+        <div className={`flex items-center justify-between border-b ${t.border} px-5 py-4`}>
           <div>
-            <div className="font-display text-xl uppercase tracking-wide text-white">
+            <div className={`${t.titleBase} text-xl`}>
               {confirmed ? "You're booked" : "Book an appointment"}
             </div>
             {!confirmed && (
-              <div className="text-xs text-zinc-400">{content.businessName}</div>
+              <div className={`text-xs ${t.sub}`}>{content.businessName}</div>
             )}
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white">
+          <button type="button" onClick={onClose} aria-label="Close" className={`rounded-full p-1.5 ${t.closeBtn}`}>
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" /></svg>
           </button>
         </div>
@@ -293,20 +410,20 @@ export function BookingFlow({
           {/* STEP: service */}
           {step === "service" && (
             <div className="space-y-2">
-              <p className="text-sm text-zinc-400">Choose a service</p>
-              {services.length === 0 && <p className="text-sm text-zinc-500">No services listed.</p>}
+              <p className={`text-sm ${t.muted}`}>Choose a service</p>
+              {services.length === 0 && <p className={`text-sm ${t.faint}`}>No services listed.</p>}
               {services.map((s, i) => (
                 <button
                   key={i}
                   type="button"
                   onClick={() => { setService(s); setStep("staff"); }}
-                  className="flex w-full items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-left transition-colors hover:border-amber/50"
+                  className={`flex w-full items-center justify-between gap-3 rounded-xl ${t.option} px-4 py-3 text-left transition-colors`}
                 >
                   <div>
-                    <div className="font-semibold text-white">{s.name}</div>
-                    <div className="text-xs text-zinc-400">{s.durationMins ?? DEFAULT_DURATION} min{s.price ? ` · ${s.price}` : ""}</div>
+                    <div className={`font-semibold ${t.optionTitle}`}>{s.name}</div>
+                    <div className={`text-xs ${t.muted}`}>{s.durationMins ?? DEFAULT_DURATION} min{s.price ? ` · ${s.price}` : ""}</div>
                   </div>
-                  <span className="text-amber">›</span>
+                  <span className={t.accent}>›</span>
                 </button>
               ))}
             </div>
@@ -315,26 +432,26 @@ export function BookingFlow({
           {/* STEP: staff */}
           {step === "staff" && (
             <div className="space-y-2">
-              <p className="text-sm text-zinc-400">Choose who with</p>
-              {loadingStaff && <p className="text-sm text-zinc-500">Loading…</p>}
+              <p className={`text-sm ${t.muted}`}>Choose who with</p>
+              {loadingStaff && <p className={`text-sm ${t.faint}`}>Loading…</p>}
               {!loadingStaff && staff.length === 0 && (
-                <p className="text-sm text-zinc-500">No one is available to book online right now.</p>
+                <p className={`text-sm ${t.faint}`}>No one is available to book online right now.</p>
               )}
               {staff.map((st) => (
                 <button
                   key={st.id}
                   type="button"
                   onClick={() => { setChosenStaff(st); setDay(null); setStep("day"); }}
-                  className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-left transition-colors hover:border-amber/50"
+                  className={`flex w-full items-center gap-3 rounded-xl ${t.option} px-4 py-3 text-left transition-colors`}
                 >
                   {st.avatar_url ? (
-                    <img src={st.avatar_url} alt={st.name} className="h-10 w-10 rounded-full border border-white/10 object-cover" />
+                    <img src={st.avatar_url} alt={st.name} className={`h-10 w-10 rounded-full border ${t.border} object-cover`} />
                   ) : (
-                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber/15 text-sm font-bold text-amber-soft">
+                    <div className={`flex h-10 w-10 items-center justify-center rounded-full ${t.avatar} text-sm font-bold`}>
                       {st.name.trim().slice(0, 1).toUpperCase()}
                     </div>
                   )}
-                  <span className="font-semibold text-white">{st.name}</span>
+                  <span className={`font-semibold ${t.optionTitle}`}>{st.name}</span>
                 </button>
               ))}
             </div>
@@ -343,9 +460,9 @@ export function BookingFlow({
           {/* STEP: day */}
           {step === "day" && (
             <div className="space-y-3">
-              <p className="text-sm text-zinc-400">Pick a day with {chosenStaff?.name}</p>
+              <p className={`text-sm ${t.muted}`}>Pick a day with {chosenStaff?.name}</p>
               {dayOptions.length === 0 ? (
-                <p className="text-sm text-zinc-500">No upcoming availability — please call the shop.</p>
+                <p className={`text-sm ${t.faint}`}>No upcoming availability — please call the shop.</p>
               ) : (
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {dayOptions.map((d) => (
@@ -353,7 +470,7 @@ export function BookingFlow({
                       key={`${d.y}-${d.mo}-${d.da}`}
                       type="button"
                       onClick={() => { setDay(d); setSlotIso(null); setStep("time"); }}
-                      className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-2 text-center text-sm text-zinc-200 transition-colors hover:border-amber/50"
+                      className={`rounded-lg ${t.dayBtn} px-2 py-2 text-center text-sm transition-colors`}
                     >
                       {d.label}
                     </button>
@@ -366,11 +483,11 @@ export function BookingFlow({
           {/* STEP: time */}
           {step === "time" && (
             <div className="space-y-3">
-              <p className="text-sm text-zinc-400">Pick a time on {day?.label}</p>
+              <p className={`text-sm ${t.muted}`}>Pick a time on {day?.label}</p>
               {loadingSlots ? (
-                <p className="text-sm text-zinc-500">Checking availability…</p>
+                <p className={`text-sm ${t.faint}`}>Checking availability…</p>
               ) : slots.length === 0 ? (
-                <p className="text-sm text-zinc-500">No times available this day.</p>
+                <p className={`text-sm ${t.faint}`}>No times available this day.</p>
               ) : (
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {slots.map((sl) => {
@@ -382,9 +499,7 @@ export function BookingFlow({
                         disabled={taken}
                         onClick={() => { setSlotIso(sl.iso); setError(null); setStep("details"); }}
                         className={`rounded-lg border px-2 py-2 text-center text-sm transition-colors ${
-                          taken
-                            ? "cursor-not-allowed border-white/5 bg-white/[0.02] text-zinc-600 line-through"
-                            : "border-white/10 bg-white/[0.03] text-zinc-100 hover:border-amber/50"
+                          taken ? t.timeTaken : t.timeFree
                         }`}
                       >
                         {fmtTime(sl.iso)}
@@ -393,81 +508,81 @@ export function BookingFlow({
                   })}
                 </div>
               )}
-              <p className="text-[11px] text-zinc-500">Crossed-out times are already booked.</p>
+              <p className={`text-[11px] ${t.faint}`}>Crossed-out times are already booked.</p>
             </div>
           )}
 
           {/* STEP: details */}
           {step === "details" && (
             <div className="space-y-3">
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm text-zinc-300">
-                <div className="font-semibold text-white">{service?.name} · {duration} min</div>
-                <div className="text-xs text-zinc-400">
+              <div className={`rounded-lg ${t.summary} p-3 text-sm ${t.muted}`}>
+                <div className={`font-semibold ${t.optionTitle}`}>{service?.name} · {duration} min</div>
+                <div className={`text-xs ${t.muted}`}>
                   {chosenStaff?.name} · {slotIso ? fmtDateTime(slotIso) : ""}
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs text-zinc-400">Your name</label>
+                <label className={`text-xs ${t.muted}`}>Your name</label>
                 <input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-white placeholder-zinc-500 outline-none focus:border-amber/60"
+                  className={`w-full rounded-lg ${t.input} px-3 py-2 outline-none`}
                   placeholder="Full name"
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs text-zinc-400">Phone</label>
+                <label className={`text-xs ${t.muted}`}>Phone</label>
                 <input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   inputMode="tel"
-                  className="w-full rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-white placeholder-zinc-500 outline-none focus:border-amber/60"
+                  className={`w-full rounded-lg ${t.input} px-3 py-2 outline-none`}
                   placeholder="Mobile number"
                 />
               </div>
               {/* SMS reminder opt-in — explicit, never pre-checked. */}
-              <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <label className={`flex cursor-pointer items-start gap-3 rounded-lg ${t.option} p-3`}>
                 <input
                   type="checkbox"
                   checked={reminderOptIn}
                   onChange={(e) => setReminderOptIn(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-amber"
+                  className={`mt-0.5 h-4 w-4 shrink-0 ${t.checkbox}`}
                 />
                 <span className="text-sm">
-                  <span className="text-zinc-100">Text me a reminder 1 hour before my appointment</span>
-                  <span className="mt-0.5 block text-xs text-zinc-500">
+                  <span className={t.checkboxStrong}>Text me a reminder 1 hour before my appointment</span>
+                  <span className={`mt-0.5 block text-xs ${t.faint}`}>
                     We'll only text you about this booking, to the number above.
                   </span>
                 </span>
               </label>
-              {error && <p className="text-sm text-red-400">{error}</p>}
+              {error && <p className={`text-sm ${t.error}`}>{error}</p>}
             </div>
           )}
 
           {/* STEP: confirmation */}
           {step === "confirm" && confirmed && (
             <div className="space-y-4 py-2 text-center">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber/15 text-amber">
+              <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-full ${t.confirmIcon}`}>
                 <svg viewBox="0 0 24 24" className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 13l4 4L19 7" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </div>
               <div>
-                <div className="font-display text-2xl uppercase tracking-wide text-white">Booking confirmed</div>
-                <p className="mt-1 text-sm text-zinc-400">A confirmation isn't sent by text yet — please keep these details.</p>
+                <div className={`${t.titleBase} text-2xl`}>Booking confirmed</div>
+                <p className={`mt-1 text-sm ${t.muted}`}>A confirmation isn't sent by text yet — please keep these details.</p>
               </div>
-              <div className="mx-auto max-w-xs space-y-1 rounded-xl border border-white/10 bg-white/[0.03] p-4 text-left text-sm">
-                <Row label="Service" value={confirmed.service_name} />
-                <Row label="With" value={confirmed.staff_name} />
-                <Row label="When" value={fmtDateTime(confirmed.starts_at)} />
-                <Row label="Shop" value={confirmed.business_name || content.businessName} />
+              <div className={`mx-auto max-w-xs space-y-1 rounded-xl ${t.summary} p-4 text-left text-sm`}>
+                <Row label="Service" value={confirmed.service_name} t={t} />
+                <Row label="With" value={confirmed.staff_name} t={t} />
+                <Row label="When" value={fmtDateTime(confirmed.starts_at)} t={t} />
+                <Row label={variant === "salon" ? "Salon" : "Shop"} value={confirmed.business_name || content.businessName} t={t} />
               </div>
             </div>
           )}
         </div>
 
         {/* Footer / actions */}
-        <div className="flex items-center justify-between gap-3 border-t border-white/10 px-5 py-3">
+        <div className={`flex items-center justify-between gap-3 border-t ${t.border} px-5 py-3`}>
           {step === "confirm" ? (
-            <button type="button" onClick={onClose} className="ml-auto rounded-full bg-amber px-6 py-2 text-sm font-bold text-ink hover:bg-amber-soft">
+            <button type="button" onClick={onClose} className={`ml-auto rounded-full ${t.primaryBtn} px-6 py-2 text-sm font-bold`}>
               Done
             </button>
           ) : (
@@ -475,7 +590,7 @@ export function BookingFlow({
               <button
                 type="button"
                 onClick={() => goBack(step, setStep)}
-                className="rounded-full border border-white/10 px-4 py-2 text-sm text-zinc-300 hover:border-amber/40 hover:text-white"
+                className={`rounded-full ${t.backBtn} px-4 py-2 text-sm`}
               >
                 Back
               </button>
@@ -484,12 +599,12 @@ export function BookingFlow({
                   type="button"
                   onClick={submit}
                   disabled={submitting}
-                  className="rounded-full bg-amber px-6 py-2 text-sm font-bold text-ink hover:bg-amber-soft disabled:opacity-60"
+                  className={`rounded-full ${t.primaryBtn} px-6 py-2 text-sm font-bold disabled:opacity-60`}
                 >
                   {submitting ? "Booking…" : "Confirm booking"}
                 </button>
               ) : (
-                <span className="text-xs text-zinc-500">
+                <span className={`text-xs ${t.faint}`}>
                   {service ? service.name : ""}{chosenStaff ? ` · ${chosenStaff.name}` : ""}
                 </span>
               )}
@@ -501,11 +616,11 @@ export function BookingFlow({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, t }: { label: string; value: string; t: BookingTheme }) {
   return (
     <div className="flex justify-between gap-3">
-      <span className="text-zinc-500">{label}</span>
-      <span className="text-right font-medium text-zinc-100">{value}</span>
+      <span className={t.rowLabel}>{label}</span>
+      <span className={`text-right font-medium ${t.rowValue}`}>{value}</span>
     </div>
   );
 }

@@ -42,7 +42,7 @@ const Playbook = lazy(() => import("./pages/Playbook"));
 const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
-const BarberSite = lazy(() => import("./pages/BarberSite"));
+const PublicSite = lazy(() => import("./pages/PublicSite"));
 const BarberDashboard = lazy(() => import("./pages/BarberDashboard"));
 const Claim = lazy(() => import("./pages/Claim"));
 const BarberLogin = lazy(() => import("./pages/BarberLogin"));
@@ -186,7 +186,7 @@ const App = () => {
              <Route path="/feedback" element={<Feedback />} />
               <Route path="/start" element={<Start />} />
               <Route path="/find-clients/:city" element={<CityLeads />} />
-              <Route path="/p/:slug" element={<BarberSite />} />
+              <Route path="/p/:slug" element={<PublicSite />} />
               {/* Barber front doors — PUBLIC, neutral-branded, never LeadFinder chrome. */}
               <Route path="/claim/:token" element={<Claim />} />
               <Route path="/barber-login" element={<BarberLogin />} />

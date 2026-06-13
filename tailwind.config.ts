@@ -18,6 +18,8 @@ export default {
         mono: ['JetBrains Mono', 'monospace'],
         display: ['"Bebas Neue"', 'system-ui', 'sans-serif'],
         body: ['"Manrope"', 'system-ui', 'sans-serif'],
+        // Salon template display face — soft premium serif (scoped to salon use).
+        'salon-display': ['"Playfair Display"', 'Georgia', 'serif'],
       },
       colors: {
         // Barber accent — backed by a CSS variable so a per-site accentColor can
@@ -32,6 +34,22 @@ export default {
         'ink-soft': '#161619',
         'ink-card': '#17171B',
         line: 'rgba(255,255,255,0.08)',
+        // Salon template palette — light, airy, premium boutique. Fixed (not
+        // CSS-var-backed): a self-contained second skin that never touches the
+        // barber's dark/amber tokens above. Used only inside .salon-site.
+        salon: {
+          bg: '#FAF6F3',            // warm off-white page background
+          surface: '#FFFFFF',       // cards / raised surfaces
+          line: '#EFE6E0',          // hairline dividers / borders
+          ink: '#2E2A26',           // warm charcoal headings/text
+          muted: '#6E665E',         // muted body copy
+          faint: '#8A817A',         // faint captions / labels
+          rose: '#C08497',          // primary accent
+          'rose-deep': '#A86A7E',   // deeper accent for emphasis
+          'rose-soft': '#B07084',   // eyebrow labels
+          'rose-border': '#D8C3C9', // soft outline for secondary buttons
+          sage: '#8FA98C',          // MINOR accent only (small touches)
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",

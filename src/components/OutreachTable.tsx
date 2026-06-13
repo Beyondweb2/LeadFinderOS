@@ -44,6 +44,8 @@ import {
   Facebook,
   Sparkles,
   Settings2,
+  Scissors,
+  Flower2,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -401,13 +403,13 @@ export function OutreachTable({
   // Handle Call button click - direct open + count walkthrough contact
   // Admin-only: generate a barber site for this lead via the (admin-gated)
   // generate-barber-site edge function, then surface links to view / add images.
-  const handleGenerateSite = useCallback(async (lead: OutreachLead) => {
+  const handleGenerateSite = useCallback(async (lead: OutreachLead, template: 'barber' | 'salon' = 'barber') => {
     setGeneratingSiteId(lead.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       const { data, error } = await supabase.functions.invoke('generate-barber-site', {
-        body: { lead_id: lead.id },
+        body: { lead_id: lead.id, template },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error) throw error;
@@ -1131,7 +1133,7 @@ export function OutreachTable({
                   phoneFetchStatus={phoneFetchStatus[lead.id]}
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
                   isWalkthroughContacted={walkthroughContactedIds.has(lead.id)}
-                  onGenerateSite={isAdmin && !sitesByLead[lead.id] ? () => handleGenerateSite(lead) : undefined}
+                  onGenerateSite={isAdmin && !sitesByLead[lead.id] ? (template) => handleGenerateSite(lead, template) : undefined}
                   isGeneratingSite={generatingSiteId === lead.id}
                   onManageSite={isAdmin && sitesByLead[lead.id] ? () => navigate(`/admin/sites/${sitesByLead[lead.id].id}`) : undefined}
                   
@@ -1419,22 +1421,36 @@ export function OutreachTable({
                                 <Settings2 className="h-4 w-4" />
                               </button>
                             ) : (
-                              <button
-                                className="p-1.5 rounded-md text-violet-400 hover:bg-violet-500/10 hover:text-violet-300 transition-colors disabled:opacity-50"
-                                title="Generate barber site (admin)"
-                                disabled={generatingSiteId === lead.id}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleGenerateSite(lead);
-                                }}
-                              >
-                                {generatingSiteId === lead.id ? (
-                                  <Loader2 className="h-4 w-4 animate-spin" />
-                                ) : (
-                                  <Sparkles className="h-4 w-4" />
-                                )}
-                              </button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    className="p-1.5 rounded-md text-violet-400 hover:bg-violet-500/10 hover:text-violet-300 transition-colors disabled:opacity-50"
+                                    title="Generate site (admin)"
+                                    disabled={generatingSiteId === lead.id}
+                                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                  >
+                                    {generatingSiteId === lead.id ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Sparkles className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  align="end"
+                                  className="min-w-[160px]"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <DropdownMenuItem onSelect={() => handleGenerateSite(lead, 'barber')}>
+                                    <Scissors className="h-4 w-4 mr-2" />
+                                    Barber site
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => handleGenerateSite(lead, 'salon')}>
+                                    <Flower2 className="h-4 w-4 mr-2" />
+                                    Salon site
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                             )
                           )}
                         </div>
