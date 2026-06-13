@@ -7,6 +7,8 @@ import { AlertTriangle, Clock, CalendarCheck } from 'lucide-react';
 import { TeamNotes } from '@/components/TeamNotes';
 // Lead detail is now fully inline in the expandable row (no dialog/sheets).
 import { useTrackClaims } from '@/hooks/useTrackClaims';
+import { useCampaigns } from '@/hooks/useCampaigns';
+import { SALE_TYPES, SALE_TYPE_LABELS, DELIVERABLE_OPTIONS, resolveSaleType, type SaleType } from '@/lib/saleType';
 import type { TeamClaim } from '@/hooks/useTeamClaims';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
@@ -277,6 +279,8 @@ interface LeadCardProps {
   /** Teammate who also claimed this business in the same campaign (soft indicator). */
   claim?: TeamClaim | null;
   fetchActivities?: (leadId: string) => Promise<OutreachActivity[]>;
+  /** The lead's campaign default sale type (for resolving the effective type). */
+  campaignDefaultSaleType?: string | null;
 }
 
 const claimInitials = (name: string | null): string => {
@@ -284,15 +288,7 @@ const claimInitials = (name: string | null): string => {
   return name.trim().split(/\s+/).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? '').join('') || '?';
 };
 
-const SERVICE_OPTIONS = [
-  'Website Design',
-  'Website Development',
-  'SEO',
-  'Google Business Setup',
-  'Hosting',
-  'Maintenance',
-  'Copywriting',
-];
+// Deliverable options are now sale-type-keyed in src/lib/saleType.ts (DELIVERABLE_OPTIONS).
 
 const PROJECT_STATUS_OPTIONS = [
   { value: 'not_started', label: 'Not Started' },
@@ -301,7 +297,9 @@ const PROJECT_STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
 ];
 
-const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId, onContactGated, claim, fetchActivities }: LeadCardProps) => {
+const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId, onContactGated, claim, fetchActivities, campaignDefaultSaleType }: LeadCardProps) => {
+  const effectiveSaleType: SaleType = resolveSaleType(lead.sale_type, campaignDefaultSaleType);
+  const deliverableOptions = DELIVERABLE_OPTIONS[effectiveSaleType];
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
   const [isEditingNotes, setIsEditingNotes] = useState(false);
@@ -327,6 +325,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const [projectOverview, setProjectOverview] = useState(lead.project_overview || '');
   const [servicesIncluded, setServicesIncluded] = useState<string[]>(lead.services_included || []);
   const [projectStatus, setProjectStatus] = useState(lead.project_status || 'not_started');
+  const [deliveryNotes, setDeliveryNotes] = useState(lead.delivery_notes || '');
   const [showPaidPopup, setShowPaidPopup] = useState(false);
   // Activity log — loaded lazily when the row is expanded (replaces the dialog).
   const [activities, setActivities] = useState<OutreachActivity[]>([]);
@@ -553,6 +552,9 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   </button>
                 </>
               )}
+              <span className="shrink-0 inline-flex items-center px-1.5 h-[17px] rounded text-[9px] font-semibold uppercase tracking-wide bg-primary/10 text-primary/70 border border-primary/20" title="What we're selling">
+                {SALE_TYPE_LABELS[effectiveSaleType]}
+              </span>
             </div>
             <div className="flex items-center gap-1 text-[11px] text-muted-foreground/60 leading-tight truncate">
               {lead.phone && <span className="truncate">{lead.phone}</span>}
@@ -873,10 +875,31 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               )}
             </div>
 
-            {/* Service Delivery — uses full width */}
+            {/* Service Delivery — uses full width; adapts to the lead's sale type */}
             <div className="pt-3 border-t border-border/40" data-no-expand onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center gap-2 text-xs font-semibold text-primary mb-2">
-                <Package className="h-3.5 w-3.5" /> Service Delivery
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2 text-xs font-semibold text-primary">
+                  <Package className="h-3.5 w-3.5" /> Service Delivery
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-muted-foreground">Selling</span>
+                  <Select
+                    value={lead.sale_type ?? '__default__'}
+                    onValueChange={(v) => onUpdateLead(lead.id, { sale_type: v === '__default__' ? null : v } as any)}
+                  >
+                    <SelectTrigger className="h-7 text-xs border-border/50 w-[170px]">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">
+                        Default{campaignDefaultSaleType ? ` (${SALE_TYPE_LABELS[resolveSaleType(null, campaignDefaultSaleType)]})` : ' (Website)'}
+                      </SelectItem>
+                      {SALE_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                 <div className="space-y-3">
@@ -913,25 +936,45 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] text-muted-foreground block mb-1.5">Services Included</label>
-                  <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                    {SERVICE_OPTIONS.map(service => (
-                      <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                        <Checkbox
-                          checked={servicesIncluded.includes(service)}
-                          onCheckedChange={(checked) => {
-                            const updated = checked
-                              ? [...servicesIncluded, service]
-                              : servicesIncluded.filter(s => s !== service);
-                            setServicesIncluded(updated);
-                            onUpdateLead(lead.id, { services_included: updated } as any);
-                          }}
-                          className="h-3.5 w-3.5"
-                        />
-                        {service}
-                      </label>
-                    ))}
-                  </div>
+                  {deliverableOptions.length > 0 ? (
+                    <>
+                      <label className="text-[11px] text-muted-foreground block mb-1.5">Deliverables</label>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+                        {deliverableOptions.map(service => (
+                          <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
+                            <Checkbox
+                              checked={servicesIncluded.includes(service)}
+                              onCheckedChange={(checked) => {
+                                const updated = checked
+                                  ? [...servicesIncluded, service]
+                                  : servicesIncluded.filter(s => s !== service);
+                                setServicesIncluded(updated);
+                                onUpdateLead(lead.id, { services_included: updated } as any);
+                              }}
+                              className="h-3.5 w-3.5"
+                            />
+                            {service}
+                          </label>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <label className="text-[11px] text-muted-foreground block mb-1">Deliverables</label>
+                      <Textarea
+                        value={deliveryNotes}
+                        onChange={(e) => setDeliveryNotes(e.target.value)}
+                        onBlur={async () => {
+                          if (deliveryNotes !== (lead.delivery_notes || '')) {
+                            await onUpdateLead(lead.id, { delivery_notes: deliveryNotes || null } as any);
+                          }
+                        }}
+                        rows={4}
+                        className="resize-none text-xs border-border/50"
+                        placeholder="List what this service includes..."
+                      />
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -1194,6 +1237,14 @@ const PotentialWorkPage = () => {
   // Teammate claims for the visible tracked leads (per each lead's own campaign).
   const claimsByLead = useTrackClaims(potentialWorkLeads);
 
+  // Campaign default sale types, for resolving each lead's effective type.
+  const { campaigns } = useCampaigns();
+  const campaignDefaultSaleType = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    for (const c of campaigns) map[c.id] = c.default_sale_type;
+    return map;
+  }, [campaigns]);
+
   // Pipeline stage counts for the counter
   const stageCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -1419,6 +1470,7 @@ const PotentialWorkPage = () => {
                 userId={user?.id}
                 claim={claimsByLead[lead.id] || null}
                 fetchActivities={fetchActivities}
+                campaignDefaultSaleType={lead.campaign_id ? campaignDefaultSaleType[lead.campaign_id] : null}
               />
             </div>
           ))}

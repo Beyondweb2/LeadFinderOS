@@ -88,6 +88,7 @@ export interface OutreachLead {
   country: Country | null;
   list_type: ListType;
   campaign_id?: string | null;
+  sale_type?: string | null;
   created_at: string;
   updated_at: string;
   is_archived?: boolean;

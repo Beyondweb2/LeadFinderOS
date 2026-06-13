@@ -8,6 +8,7 @@ export interface Campaign {
   name: string;
   created_by: string;
   created_at: string;
+  default_sale_type: string | null;
 }
 
 /**
@@ -23,7 +24,7 @@ export function useCampaigns() {
   const fetchCampaigns = useCallback(async () => {
     const { data, error } = await supabase
       .from('campaigns')
-      .select('id, name, created_by, created_at')
+      .select('id, name, created_by, created_at, default_sale_type')
       .order('created_at', { ascending: true });
 
     setIsLoading(false);
@@ -38,7 +39,7 @@ export function useCampaigns() {
     fetchCampaigns();
   }, [fetchCampaigns]);
 
-  const createCampaign = useCallback(async (name: string): Promise<Campaign | null> => {
+  const createCampaign = useCallback(async (name: string, defaultSaleType: string | null = null): Promise<Campaign | null> => {
     const trimmed = name.trim();
     if (!trimmed) return null;
     if (!user) {
@@ -48,8 +49,8 @@ export function useCampaigns() {
 
     const { data, error } = await supabase
       .from('campaigns')
-      .insert({ name: trimmed, created_by: user.id })
-      .select('id, name, created_by, created_at')
+      .insert({ name: trimmed, created_by: user.id, default_sale_type: defaultSaleType })
+      .select('id, name, created_by, created_at, default_sale_type')
       .single();
 
     if (error) {

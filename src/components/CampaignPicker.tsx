@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Plus } from 'lucide-react';
+import { SALE_TYPES, type SaleType } from '@/lib/saleType';
 
 const NEW_CAMPAIGN = '__new__';
 const ALL_CAMPAIGNS = '__all__';
@@ -39,6 +40,7 @@ export function CampaignPicker({ value, onChange, mode, className }: CampaignPic
   const { campaigns, createCampaign } = useCampaigns();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [newName, setNewName] = useState('');
+  const [newSaleType, setNewSaleType] = useState<SaleType>('website');
   const [creating, setCreating] = useState(false);
 
   const sentinel = mode === 'filter' ? ALL_CAMPAIGNS : NO_CAMPAIGN;
@@ -58,10 +60,11 @@ export function CampaignPicker({ value, onChange, mode, className }: CampaignPic
 
   const handleCreate = async () => {
     setCreating(true);
-    const created = await createCampaign(newName);
+    const created = await createCampaign(newName, newSaleType);
     setCreating(false);
     if (created) {
       setNewName('');
+      setNewSaleType('website');
       setDialogOpen(false);
       onChange(created.id);
     }
@@ -105,6 +108,20 @@ export function CampaignPicker({ value, onChange, mode, className }: CampaignPic
               if (e.key === 'Enter' && newName.trim() && !creating) handleCreate();
             }}
           />
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1.5">Default sale type for this campaign</label>
+            <Select value={newSaleType} onValueChange={(v) => setNewSaleType(v as SaleType)}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SALE_TYPES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground/60 mt-1">Leads in this campaign default to this; each lead can override.</p>
+          </div>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button onClick={handleCreate} disabled={!newName.trim() || creating}>

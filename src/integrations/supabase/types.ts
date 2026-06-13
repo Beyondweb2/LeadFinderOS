@@ -183,18 +183,21 @@ export type Database = {
         Row: {
           created_at: string
           created_by: string
+          default_sale_type: string | null
           id: string
           name: string
         }
         Insert: {
           created_at?: string
           created_by: string
+          default_sale_type?: string | null
           id?: string
           name: string
         }
         Update: {
           created_at?: string
           created_by?: string
+          default_sale_type?: string | null
           id?: string
           name?: string
         }
@@ -657,6 +660,7 @@ export type Database = {
           project_overview: string | null
           project_status: string | null
           project_value: number | null
+          sale_type: string | null
           services_included: string[] | null
           status: string
           updated_at: string
@@ -703,6 +707,7 @@ export type Database = {
           project_overview?: string | null
           project_status?: string | null
           project_value?: number | null
+          sale_type?: string | null
           services_included?: string[] | null
           status?: string
           updated_at?: string
@@ -749,6 +754,7 @@ export type Database = {
           project_overview?: string | null
           project_status?: string | null
           project_value?: number | null
+          sale_type?: string | null
           services_included?: string[] | null
           status?: string
           updated_at?: string
