@@ -493,6 +493,39 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_notes: {
+        Row: {
+          body: string
+          business_name: string
+          created_at: string
+          google_maps_url: string | null
+          id: string
+          place_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          business_name: string
+          created_at?: string
+          google_maps_url?: string | null
+          id?: string
+          place_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          business_name?: string
+          created_at?: string
+          google_maps_url?: string | null
+          id?: string
+          place_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       outreach_activities: {
         Row: {
           activity_type: string

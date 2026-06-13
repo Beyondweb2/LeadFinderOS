@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { TeamNotes } from '@/components/TeamNotes';
 import { 
   Phone, 
   ExternalLink, 
@@ -388,11 +389,12 @@ export function OutreachLeadDialog({
 
             <Separator />
 
-            {/* Notes */}
+            {/* Private notes (only you) */}
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <MessageSquare className="h-4 w-4 text-muted-foreground" />
                 <h3 className="font-semibold">Notes</h3>
+                <span className="text-xs text-muted-foreground">private to you</span>
               </div>
               <Textarea
                 placeholder="Add any relevant notes..."
@@ -405,6 +407,15 @@ export function OutreachLeadDialog({
                 {isSavingNotes ? 'Saving...' : 'Notes are automatically saved'}
               </p>
             </div>
+
+            <Separator />
+
+            {/* Team-visible notes (business-global) */}
+            <TeamNotes
+              placeId={(lead as any).place_id ?? null}
+              googleMapsUrl={lead.google_maps_url ?? null}
+              businessName={lead.business_name}
+            />
           </div>
         </ScrollArea>
 

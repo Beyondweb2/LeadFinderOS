@@ -56,6 +56,7 @@ import {
   ChevronDown,
   DollarSign,
   Package,
+  Users,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -275,6 +276,7 @@ interface LeadCardProps {
   onAddCustomStatus: () => void;
   userId: string | undefined;
   onContactGated?: () => boolean;
+  onOpenDetails?: () => void;
 }
 
 const SERVICE_OPTIONS = [
@@ -294,7 +296,7 @@ const PROJECT_STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
 ];
 
-const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId, onContactGated }: LeadCardProps) => {
+const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId, onContactGated, onOpenDetails }: LeadCardProps) => {
   const [detailOpen, setDetailOpen] = useState(false);
   const [notes, setNotes] = useState(lead.notes || '');
   const [notesDirty, setNotesDirty] = useState(false);
@@ -937,6 +939,19 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               )}
             </div>
 
+            {/* Team notes — opens the lead dialog (team-visible notes live there) */}
+            {onOpenDetails && (
+              <button
+                className="flex items-center gap-2 w-full text-left py-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
+                data-no-expand
+                onClick={(e) => { e.stopPropagation(); onOpenDetails(); }}
+              >
+                <Users className="h-3.5 w-3.5" />
+                Team notes
+                <ChevronDown className="h-3 w-3 ml-auto -rotate-90" />
+              </button>
+            )}
+
             {/* Service Delivery — opens in a side sheet */}
             <button
               className="flex items-center gap-2 w-full text-left py-1.5 text-xs font-semibold text-primary hover:text-primary/80 transition-colors"
@@ -1513,6 +1528,7 @@ const PotentialWorkPage = () => {
                 customStatuses={customStatuses}
                 onAddCustomStatus={() => setShowCustomStatusDialog(true)}
                 userId={user?.id}
+                onOpenDetails={() => setSelectedLead(lead)}
               />
             </div>
           ))}
