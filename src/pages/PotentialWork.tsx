@@ -725,9 +725,9 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
       {isExpanded && (
         <TableRow className="border-border/50 hover:bg-transparent">
           <TableCell colSpan={6} className="p-0">
-            <div ref={expandRef} className="px-3.5 sm:px-5 py-5 space-y-5 bg-gradient-to-b from-muted/25 to-transparent">
+            <div ref={expandRef} className="px-3.5 sm:px-5 py-3.5 space-y-3 bg-gradient-to-b from-muted/25 to-transparent">
             {/* ── DEAL panel: stage progress + the four deal controls ── */}
-            <section className="rounded-xl border border-border/50 bg-card/40 p-3.5 sm:p-4 space-y-4">
+            <section className="rounded-xl border border-border/50 bg-card/40 p-3 space-y-3">
             {(() => {
               const currentIdx = getStageIndex(lead.status);
               const isPaid = mapLegacyStatus(lead.status) === 'paid';
@@ -741,13 +741,13 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                       {getStatusLabel(lead.status, customStatuses)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-0.5">
+                  <div className="flex items-center gap-1 max-w-[260px]">
                     {stages.map((stage, idx) => {
                       const isActive = idx === currentIdx;
                       const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
                       return (
-                        <div key={stage} className="flex items-center flex-1 gap-0.5">
-                          <div className={cn('h-1.5 rounded-full flex-1 transition-colors', isCompleted || isActive ? isPaid ? 'bg-emerald-500' : 'bg-primary' : isLost ? 'bg-zinc-700' : 'bg-border/60')} />
+                        <div key={stage} className="flex items-center flex-1 gap-1">
+                          <div className={cn('h-1 rounded-full flex-1 transition-colors', isCompleted || isActive ? isPaid ? 'bg-emerald-500' : 'bg-primary' : isLost ? 'bg-zinc-700' : 'bg-border/60')} />
                         </div>
                       );
                     })}
@@ -756,7 +756,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               );
             })()}
             {/* Row: Status / Action / Due / Revenue side-by-side */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-no-expand onClick={(e) => e.stopPropagation()}>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5" data-no-expand onClick={(e) => e.stopPropagation()}>
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground block mb-1">Status</label>
                 <Select value={mapLegacyStatus(lead.status)} onValueChange={async (v) => {
@@ -867,20 +867,20 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             </section>
 
             {/* Notes: private | team side-by-side */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               {/* Private note */}
               <div data-walkthrough="notes">
-                <label className="text-[11px] font-medium text-muted-foreground block mb-1.5 flex items-center gap-1">
+                <label className="text-[11px] font-medium text-muted-foreground block mb-1 flex items-center gap-1">
                   <StickyNote className="h-3 w-3" /> Private note <span className="text-muted-foreground/40 font-normal">· only you</span>
                 </label>
                 {isEditingNotes ? (
-                  <div className="space-y-2">
+                  <div className="space-y-1.5">
                     <Textarea
                       ref={notesRef}
                       value={notes}
                       onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
-                      rows={3}
-                      className="resize-none text-xs border-border/50 min-h-[72px]"
+                      rows={2}
+                      className="resize-none text-xs border-border/50 min-h-[52px]"
                       placeholder="Add a private note..."
                       autoFocus
                     />
@@ -890,7 +890,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-start gap-2 cursor-pointer rounded-md p-2 border border-border/40 bg-background/40 hover:bg-muted/30 transition-colors min-h-[44px]" onClick={() => setIsEditingNotes(true)}>
+                  <div className="flex items-start gap-2 cursor-pointer rounded-md p-2 border border-border/40 bg-background/40 hover:bg-muted/30 transition-colors min-h-[36px]" onClick={() => setIsEditingNotes(true)}>
                     <div className="flex-1 min-w-0">
                       {notes ? (
                         <p className="text-xs text-foreground/70 leading-relaxed whitespace-pre-wrap">{notes}</p>
@@ -917,51 +917,27 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               )}
             </div>
 
-            {/* Service Delivery — uses full width; adapts to the lead's sale type */}
-            <div className="rounded-xl border border-border/50 bg-card/40 p-3.5 sm:p-4" data-no-expand onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2 text-xs font-semibold text-primary">
-                  <Package className="h-3.5 w-3.5" /> Service Delivery
+            {/* Project delivery — free-text (no fixed checklist) + status */}
+            <div className="rounded-xl border border-border/50 bg-card/40 p-3" data-no-expand onClick={(e) => e.stopPropagation()}>
+              <div className="grid grid-cols-1 lg:grid-cols-[1fr_160px] gap-3">
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">What you're delivering</label>
+                  <Textarea
+                    value={projectOverview}
+                    onChange={(e) => setProjectOverview(e.target.value)}
+                    onBlur={async () => {
+                      if (projectOverview !== (lead.project_overview || '')) {
+                        await onUpdateLead(lead.id, { project_overview: projectOverview || null } as any);
+                      }
+                    }}
+                    rows={3}
+                    className="resize-none text-xs border-border/50 min-h-[64px]"
+                    placeholder="What are you building / delivering for this lead?"
+                  />
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] text-muted-foreground">Selling</span>
-                  <Select
-                    value={lead.sale_type ?? '__default__'}
-                    onValueChange={(v) => onUpdateLead(lead.id, { sale_type: v === '__default__' ? null : v } as any)}
-                  >
-                    <SelectTrigger className="h-7 text-xs border-border/50 w-[170px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__default__">
-                        Default{campaignDefaultSaleType ? ` (${SALE_TYPE_LABELS[resolveSaleType(null, campaignDefaultSaleType)]})` : ' (Website)'}
-                      </SelectItem>
-                      {SALE_TYPES.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <div>
-                    <label className="text-[11px] text-muted-foreground block mb-1">Project Overview</label>
-                    <Textarea
-                      value={projectOverview}
-                      onChange={(e) => setProjectOverview(e.target.value)}
-                      onBlur={async () => {
-                        if (projectOverview !== (lead.project_overview || '')) {
-                          await onUpdateLead(lead.id, { project_overview: projectOverview || null } as any);
-                        }
-                      }}
-                      rows={3}
-                      className="resize-none text-xs border-border/50"
-                      placeholder="Describe what you'll deliver..."
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] text-muted-foreground block mb-1">Project Status</label>
+                    <label className="text-[11px] font-medium text-muted-foreground block mb-1">Project status</label>
                     <Select value={projectStatus} onValueChange={async (v) => {
                       setProjectStatus(v);
                       await onUpdateLead(lead.id, { project_status: v } as any);
@@ -976,57 +952,35 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-                <div>
-                  {deliverableOptions.length > 0 ? (
-                    <>
-                      <label className="text-[11px] text-muted-foreground block mb-1.5">Deliverables</label>
-                      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-                        {deliverableOptions.map(service => (
-                          <label key={service} className="flex items-center gap-1.5 text-xs cursor-pointer">
-                            <Checkbox
-                              checked={servicesIncluded.includes(service)}
-                              onCheckedChange={(checked) => {
-                                const updated = checked
-                                  ? [...servicesIncluded, service]
-                                  : servicesIncluded.filter(s => s !== service);
-                                setServicesIncluded(updated);
-                                onUpdateLead(lead.id, { services_included: updated } as any);
-                              }}
-                              className="h-3.5 w-3.5"
-                            />
-                            {service}
-                          </label>
+                  <div>
+                    <label className="text-[11px] font-medium text-muted-foreground block mb-1">Selling</label>
+                    <Select
+                      value={lead.sale_type ?? '__default__'}
+                      onValueChange={(v) => onUpdateLead(lead.id, { sale_type: v === '__default__' ? null : v } as any)}
+                    >
+                      <SelectTrigger className="h-8 text-xs border-border/50 w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__default__">
+                          Default{campaignDefaultSaleType ? ` (${SALE_TYPE_LABELS[resolveSaleType(null, campaignDefaultSaleType)]})` : ' (Website)'}
+                        </SelectItem>
+                        {SALE_TYPES.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
                         ))}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <label className="text-[11px] text-muted-foreground block mb-1">Deliverables</label>
-                      <Textarea
-                        value={deliveryNotes}
-                        onChange={(e) => setDeliveryNotes(e.target.value)}
-                        onBlur={async () => {
-                          if (deliveryNotes !== (lead.delivery_notes || '')) {
-                            await onUpdateLead(lead.id, { delivery_notes: deliveryNotes || null } as any);
-                          }
-                        }}
-                        rows={4}
-                        className="resize-none text-xs border-border/50"
-                        placeholder="List what this service includes..."
-                      />
-                    </>
-                  )}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Activity log — Track Leads is for monitoring only; contact
                 enrichment now lives on the search results and the Outreach row. */}
-            <div className="rounded-xl border border-border/50 bg-card/40 p-3.5 sm:p-4">
+            <div className="rounded-xl border border-border/50 bg-card/40 p-3">
               {!isDemoLead(lead.id) && (
                 <div>
-                  <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-1.5">
                     <Clock className="h-3.5 w-3.5" /> Activity log
                   </div>
                   {activities.length === 0 ? (
