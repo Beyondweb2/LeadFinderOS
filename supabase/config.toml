@@ -21,6 +21,9 @@ verify_jwt = false
 [functions.extract-email]
 verify_jwt = false
 
+[functions.enrich-lead]
+verify_jwt = false
+
 [functions.google-place-details]
 verify_jwt = false
 

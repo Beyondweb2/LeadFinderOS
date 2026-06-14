@@ -79,6 +79,7 @@ export interface OutreachLead {
   phone: string | null;
   email: string | null;
   google_maps_url: string | null;
+  place_id?: string | null;
   address: string | null;
   category: string | null;
   status: LeadStatus;
@@ -108,6 +109,13 @@ export interface OutreachLead {
   email_status?: string | null;   // 'found' | 'none' | 'error' | null
   email_method?: string | null;   // 'website_scrape' | 'manual' | null
   email_last_checked_at?: string | null;
+  // Phase 2 enrichment backbone (Apify-backed, stubbed)
+  facebook_status?: string | null;          // 'found' | 'none' | 'error' | null
+  instagram_url?: string | null;
+  instagram_status?: string | null;         // 'found' | 'none' | 'error' | null
+  instagram_method?: string | null;         // 'apify' | 'manual' | null
+  instagram_last_checked_at?: string | null;
+  enrichment_source?: string | null;        // 'website_scrape' | 'apify' | 'manual'
   contact_method?: string | null;
   whatsapp_status?: string | null;
   whatsapp_checked_at?: string | null;

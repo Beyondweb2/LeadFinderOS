@@ -645,6 +645,12 @@ export type Database = {
           facebook_last_checked_at: string | null
           facebook_method: string | null
           facebook_url: string | null
+          facebook_status: string | null
+          enrichment_source: string | null
+          instagram_url: string | null
+          instagram_status: string | null
+          instagram_method: string | null
+          instagram_last_checked_at: string | null
           google_maps_url: string | null
           id: string
           image_url: string | null
@@ -695,6 +701,12 @@ export type Database = {
           facebook_last_checked_at?: string | null
           facebook_method?: string | null
           facebook_url?: string | null
+          facebook_status?: string | null
+          enrichment_source?: string | null
+          instagram_url?: string | null
+          instagram_status?: string | null
+          instagram_method?: string | null
+          instagram_last_checked_at?: string | null
           google_maps_url?: string | null
           id?: string
           image_url?: string | null
@@ -745,6 +757,12 @@ export type Database = {
           facebook_last_checked_at?: string | null
           facebook_method?: string | null
           facebook_url?: string | null
+          facebook_status?: string | null
+          enrichment_source?: string | null
+          instagram_url?: string | null
+          instagram_status?: string | null
+          instagram_method?: string | null
+          instagram_last_checked_at?: string | null
           google_maps_url?: string | null
           id?: string
           image_url?: string | null

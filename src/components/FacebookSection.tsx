@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Facebook, ExternalLink, Search, Trash2, Loader2, Globe, CheckCircle2 } from 'lucide-react';
+import { Facebook, ExternalLink, Search, Trash2, Loader2, Globe, CheckCircle2, Sparkles, Ban } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useEnrichLead } from '@/hooks/useEnrichLead';
 import type { OutreachLead } from '@/types/outreach';
 
 interface FacebookSectionProps {
@@ -46,6 +47,9 @@ export function FacebookSection({ lead, onUpdate, compact = false }: FacebookSec
   const [isFinding, setIsFinding] = useState(false);
   const [showPaste, setShowPaste] = useState(false);
   const { toast } = useToast();
+  const { enrich, enriching, limitReached } = useEnrichLead(lead, onUpdate);
+  const isEnriching = enriching === 'facebook';
+  const fbStatus = lead.facebook_status ?? null;
 
   const hasFacebook = !!lead.facebook_url;
 
@@ -160,8 +164,22 @@ export function FacebookSection({ lead, onUpdate, compact = false }: FacebookSec
         </div>
       ) : (
         <div className="space-y-2">
-          <span className="text-xs text-muted-foreground">Not linked</span>
+          {limitReached ? (
+            <span className="inline-flex items-center gap-1 text-xs text-amber-600">
+              <Ban className="h-3 w-3" /> Daily enrichment limit reached
+            </span>
+          ) : fbStatus === 'none' ? (
+            <span className="text-xs text-muted-foreground">No Facebook found.</span>
+          ) : fbStatus === 'error' ? (
+            <span className="text-xs text-destructive">Lookup failed — try again.</span>
+          ) : (
+            <span className="text-xs text-muted-foreground">Not linked</span>
+          )}
           <div className="flex flex-wrap gap-1.5">
+            <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => enrich('facebook')} disabled={isEnriching}>
+              {isEnriching ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
+              {isEnriching ? 'Searching…' : 'Enrich (auto)'}
+            </Button>
             <Button variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handleSearchGoogle}>
               <Search className="h-3 w-3" /> Search Google
             </Button>

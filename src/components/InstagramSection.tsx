@@ -1,51 +1,54 @@
 import { Button } from '@/components/ui/button';
-import { Mail, ExternalLink, Trash2, Loader2, Search, CheckCircle2, RotateCw, Ban } from 'lucide-react';
+import { Instagram, ExternalLink, Trash2, Loader2, Sparkles, RotateCw, CheckCircle2, Ban } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useEnrichLead } from '@/hooks/useEnrichLead';
 import type { OutreachLead } from '@/types/outreach';
 
-interface EmailSectionProps {
+interface InstagramSectionProps {
   lead: OutreachLead;
   onUpdate: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
   compact?: boolean;
 }
 
 /**
- * Per-lead email enrichment. "Find email" now goes through the enrich-lead edge
- * function, which prefers the free website scrape first and falls back to the
- * (stubbed) Apify path for no-website leads — so it works for every lead.
+ * Per-lead Instagram enrichment via the enrich-lead edge function (stubbed
+ * Apify). Mirrors EmailSection/FacebookSection. Auto-resolve only — there's no
+ * free website path for Instagram, so it always uses the (capped, cached) lookup.
  */
-export function EmailSection({ lead, onUpdate, compact = false }: EmailSectionProps) {
+export function InstagramSection({ lead, onUpdate, compact = false }: InstagramSectionProps) {
   const { toast } = useToast();
   const { enrich, enriching, limitReached } = useEnrichLead(lead, onUpdate);
-  const isFinding = enriching === 'email';
+  const isFinding = enriching === 'instagram';
 
-  const hasEmail = !!lead.email;
-  const status = lead.email_status ?? null;
-  const viaApify = lead.email_method === 'apify';
+  const hasInstagram = !!lead.instagram_url;
+  const status = lead.instagram_status ?? null;
 
   const handleClear = async () => {
     await onUpdate(lead.id, {
-      email: null,
-      email_status: null,
-      email_method: null,
-      email_last_checked_at: null,
+      instagram_url: null,
+      instagram_status: null,
+      instagram_method: null,
+      instagram_last_checked_at: null,
     } as Partial<OutreachLead>);
-    toast({ title: 'Email removed' });
+    toast({ title: 'Instagram removed' });
   };
 
   // ── Compact (card view) ──
   if (compact) {
-    if (!hasEmail) return null;
+    if (!hasInstagram) return null;
     return (
       <a
-        href={`mailto:${lead.email}`}
-        className="inline-flex items-center gap-1 text-[11px] sm:text-xs text-blue-500 hover:text-blue-400 transition-colors"
+        href={lead.instagram_url!}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 text-[11px] sm:text-xs text-pink-500 hover:text-pink-400 transition-colors"
         onClick={(e) => e.stopPropagation()}
-        title="Email business"
+        title="Open Instagram"
       >
-        <Mail className="h-3 w-3" />
-        <span className="truncate max-w-[140px]">{lead.email}</span>
+        <Instagram className="h-3 w-3" />
+        <span className="truncate max-w-[120px]">
+          {lead.instagram_url!.replace(/^https?:\/\/(www\.)?instagram\.com\//, '@').replace(/\/$/, '')}
+        </span>
       </a>
     );
   }
@@ -54,21 +57,23 @@ export function EmailSection({ lead, onUpdate, compact = false }: EmailSectionPr
   return (
     <div className="space-y-2">
       <div className="flex items-center gap-2">
-        <Mail className="h-4 w-4 text-blue-500" />
-        <h4 className="text-sm font-semibold">Email</h4>
+        <Instagram className="h-4 w-4 text-pink-500" />
+        <h4 className="text-sm font-semibold">Instagram</h4>
       </div>
 
-      {hasEmail ? (
+      {hasInstagram ? (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="inline-flex items-center gap-1 text-xs bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full">
-            <CheckCircle2 className="h-3 w-3" /> {viaApify ? 'Found (Apify)' : lead.email_method === 'website_scrape' ? 'Found (site)' : 'Saved'}
+            <CheckCircle2 className="h-3 w-3" /> Found
           </span>
           <a
-            href={`mailto:${lead.email}`}
-            className="text-sm text-blue-500 hover:underline truncate max-w-[280px] flex items-center gap-1"
+            href={lead.instagram_url!}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-pink-500 hover:underline truncate max-w-[280px] flex items-center gap-1"
           >
             <ExternalLink className="h-3 w-3 shrink-0" />
-            {lead.email}
+            {lead.instagram_url!.replace(/^https?:\/\/(www\.)?/, '')}
           </a>
           <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive" onClick={handleClear}>
             <Trash2 className="h-3 w-3 mr-1" /> Clear
@@ -81,7 +86,7 @@ export function EmailSection({ lead, onUpdate, compact = false }: EmailSectionPr
               <Ban className="h-3 w-3" /> Daily enrichment limit reached
             </span>
           ) : status === 'none' ? (
-            <span className="text-xs text-muted-foreground">No email found.</span>
+            <span className="text-xs text-muted-foreground">No Instagram found.</span>
           ) : status === 'error' ? (
             <span className="text-xs text-destructive">Lookup failed — try again.</span>
           ) : (
@@ -93,24 +98,20 @@ export function EmailSection({ lead, onUpdate, compact = false }: EmailSectionPr
               variant="outline"
               size="sm"
               className="h-7 text-xs gap-1"
-              onClick={() => enrich('email')}
+              onClick={() => enrich('instagram')}
               disabled={isFinding}
-              title={lead.website ? 'Scan the website, else look it up' : 'Look up an email for this business'}
+              title="Look up an Instagram profile for this business"
             >
               {isFinding ? (
                 <Loader2 className="h-3 w-3 animate-spin" />
               ) : status === 'error' || status === 'none' ? (
                 <RotateCw className="h-3 w-3" />
               ) : (
-                <Search className="h-3 w-3" />
+                <Sparkles className="h-3 w-3" />
               )}
-              {isFinding ? 'Searching…' : status === 'error' || status === 'none' ? 'Try again' : 'Find email'}
+              {isFinding ? 'Searching…' : status === 'error' || status === 'none' ? 'Try again' : 'Enrich (auto)'}
             </Button>
           </div>
-
-          <p className="text-[11px] text-muted-foreground/70">
-            {lead.website ? 'Scans the website first (free), then a lookup if needed.' : 'No website — uses the lookup path.'}
-          </p>
         </div>
       )}
     </div>

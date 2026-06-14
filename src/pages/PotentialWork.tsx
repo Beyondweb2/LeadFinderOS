@@ -72,6 +72,7 @@ import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from 
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { FacebookSection } from '@/components/FacebookSection';
 import { EmailSection } from '@/components/EmailSection';
+import { InstagramSection } from '@/components/InstagramSection';
 import { cn } from '@/lib/utils';
 
 /* ───────── constants ───────── */
@@ -683,6 +684,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 )}
                 <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
                 <EmailSection lead={lead} onUpdate={onUpdateLead} compact />
+                <InstagramSection lead={lead} onUpdate={onUpdateLead} compact />
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
                   <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
@@ -988,6 +990,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               <div data-no-expand onClick={(e) => e.stopPropagation()} className="space-y-4">
                 <FacebookSection lead={lead} onUpdate={onUpdateLead} />
                 <EmailSection lead={lead} onUpdate={onUpdateLead} />
+                <InstagramSection lead={lead} onUpdate={onUpdateLead} />
               </div>
               {!isDemoLead(lead.id) && (
                 <div>
