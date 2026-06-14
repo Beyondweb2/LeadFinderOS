@@ -43,7 +43,7 @@ const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
 const PublicSite = lazy(() => import("./pages/PublicSite"));
-const BarberDashboard = lazy(() => import("./pages/BarberDashboard"));
+const OwnerDashboard = lazy(() => import("./pages/OwnerDashboard"));
 const Claim = lazy(() => import("./pages/Claim"));
 const BarberLogin = lazy(() => import("./pages/BarberLogin"));
 
@@ -211,7 +211,7 @@ const App = () => {
               path="/barber"
               element={
                 <ProtectedRoute redirectTo="/barber-login">
-                  <BarberDashboard />
+                  <OwnerDashboard />
                 </ProtectedRoute>
               }
             />

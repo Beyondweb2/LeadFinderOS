@@ -450,3 +450,48 @@ textarea,
   line-height: 1.6;
   letter-spacing: 0.02em;
 }
+
+/* ── Salon dashboard theme scope ──────────────────────────────────────────
+   The salon owner dashboard reuses the SAME engine components as the barber
+   dashboard (SiteEditor, StaffManager, BookingsManager, WeekCalendar). To give
+   them the light, Sophistikaty-style salon look WITHOUT touching those shared /
+   barber components, everything inside `.salon-dash` is re-themed here:
+   (1) the shadcn CSS variables are flipped to a light salon palette, and
+   (2) the few barber-fixed tokens (amber / ink-card / line / zinc / display
+       font) that leak through the reused components are remapped to salon
+       colours. These rules are UNLAYERED, so they win over Tailwind's @layer
+       utilities. Barber is untouched — it never carries `.salon-dash`. */
+.salon-dash {
+  --background: 26 30% 97%;
+  --foreground: 28 11% 16%;
+  --card: 0 0% 100%;
+  --card-foreground: 28 11% 16%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 28 11% 16%;
+  --primary: 28 11% 16%;            /* near-black CTAs, like the salon site */
+  --primary-foreground: 0 0% 100%;
+  --secondary: 26 28% 94%;
+  --secondary-foreground: 28 11% 16%;
+  --muted: 26 25% 93%;
+  --muted-foreground: 30 8% 40%;
+  --accent: 340 24% 92%;
+  --accent-foreground: 28 11% 16%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 25 27% 91%;
+  --input: 25 27% 91%;
+  --ring: 340 31% 64%;              /* rose */
+  color-scheme: light;
+}
+
+/* Remap the barber-fixed tokens used by the reused engine components → salon. */
+.salon-dash .bg-ink-card { background-color: #FFFFFF; }
+.salon-dash [class*="border-line"] { border-color: #EFE6E0; }
+.salon-dash [class*="text-zinc-"] { color: #6E665E; }
+.salon-dash [class*="border-amber"] { border-color: #D8C3C9; }
+.salon-dash [class*="text-amber"] { color: #A86A7E; }
+.salon-dash .bg-amber,
+.salon-dash .bg-amber-soft { background-color: #2E2A26; color: #FFFFFF; }
+.salon-dash .hover\:bg-amber:hover,
+.salon-dash .hover\:bg-amber-soft:hover { background-color: #000000; color: #FFFFFF; }
+.salon-dash .font-display { font-family: "Playfair Display", Georgia, serif; font-weight: 500; }
