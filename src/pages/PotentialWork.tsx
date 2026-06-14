@@ -158,18 +158,19 @@ const NEXT_ACTION_COLORS: Record<string, string> = {
   none: 'bg-muted text-muted-foreground border-border/50',
 };
 
+// Solid status pills — mirrors the Outreach page's solid badge style.
 const STATUS_COLORS: Record<string, string> = {
-  qualified: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
-  discovery_call_booked: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40',
-  proposal_sent: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
-  reviewing_proposal: 'bg-sky-500/20 text-sky-400 border-sky-500/40',
-  revision_requested: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
-  paid: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
-  payment_received: 'bg-green-500/20 text-green-400 border-green-500/40',
-  closed_lost: 'bg-zinc-500/20 text-zinc-400 border-zinc-500/40',
+  qualified: 'bg-blue-500 text-white border-transparent',
+  discovery_call_booked: 'bg-cyan-500 text-white border-transparent',
+  proposal_sent: 'bg-purple-500 text-white border-transparent',
+  reviewing_proposal: 'bg-sky-500 text-white border-transparent',
+  revision_requested: 'bg-amber-500 text-white border-transparent',
+  paid: 'bg-emerald-500 text-white border-transparent',
+  payment_received: 'bg-green-600 text-white border-transparent',
+  closed_lost: 'bg-zinc-500 text-white border-transparent',
   // Legacy fallbacks
-  interested: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
-  not_interested: 'bg-zinc-500/20 text-zinc-400 border-zinc-500/40',
+  interested: 'bg-blue-500 text-white border-transparent',
+  not_interested: 'bg-zinc-500 text-white border-transparent',
 };
 
 const STATUS_BORDER_COLORS: Record<string, string> = {
@@ -567,8 +568,8 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
         {/* Status */}
         <TableCell className="hidden sm:table-cell">
-          <span className={cn('inline-flex items-center h-6 px-2.5 rounded-full text-xs font-bold border', statusColorCls)} data-walkthrough="status">
-            {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-3 w-3 mr-0.5 text-emerald-400" />}
+          <span className={cn('inline-flex items-center rounded-full border border-transparent px-2.5 py-0.5 text-xs font-semibold', statusColorCls)} data-walkthrough="status">
+            {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-3 w-3 mr-0.5" />}
             <span className="truncate">{statusLabel}</span>
           </span>
         </TableCell>
@@ -1283,7 +1284,7 @@ const PotentialWorkPage = () => {
             <Briefcase className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
             Track Leads
           </h1>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs sm:text-base text-muted-foreground max-w-lg">
             Manage your deal pipeline from first interest to closed deal.
           </p>
         </div>
