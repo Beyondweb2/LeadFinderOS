@@ -310,10 +310,10 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="w-[40%] pl-5">Business Name</TableHead>
-                <TableHead className="w-[22%]">Website Status</TableHead>
-                <TableHead className="w-[20%]">More Details</TableHead>
-                <TableHead className="w-[18%]" data-walkthrough="actions-column-header">Actions</TableHead>
+                <TableHead className="w-[30%] pl-5">Business Name</TableHead>
+                <TableHead className="w-[20%]">Website Status</TableHead>
+                <TableHead className="w-[30%]">More Details</TableHead>
+                <TableHead className="w-[20%]" data-walkthrough="actions-column-header">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -413,21 +413,17 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             )}
                           </div>
                         ) : (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className={`h-8 w-8 text-green-500 hover:bg-muted hover:text-green-400 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
-                                onClick={() => handleAddToOutreach(lead)}
-                                data-walkthrough-step="add-to-crm"
-                                data-walkthrough="add-crm"
-                              >
-                                <ClipboardList className="h-4 w-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Save this lead</TooltipContent>
-                          </Tooltip>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={`h-8 px-3 text-xs gap-1.5 text-green-600 dark:text-green-500 border-green-600/30 hover:bg-green-500/10 hover:text-green-500 ${shouldPulseCrm ? 'animate-crm-pulse' : ''}`}
+                            onClick={() => handleAddToOutreach(lead)}
+                            data-walkthrough-step="add-to-crm"
+                            data-walkthrough="add-crm"
+                          >
+                            <ClipboardList className="h-3.5 w-3.5" />
+                            Add to CRM
+                          </Button>
                         )
                       )}
                     </div>
