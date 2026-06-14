@@ -217,8 +217,8 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
 
             {/* Status badges */}
             <div className="flex items-center gap-1.5 flex-wrap" onClick={(e) => e.stopPropagation()}>
-              <span className="inline-flex items-center h-5 lg:h-[22px] px-2 lg:px-2.5 rounded-full text-[10px] lg:text-[11px] font-bold border bg-emerald-500/10 text-emerald-400 border-emerald-500/25">
-                <Check className="h-2.5 w-2.5 mr-0.5" />
+              <span className="inline-flex items-center rounded-full border border-transparent px-2.5 py-0.5 text-xs font-semibold bg-emerald-500 text-white">
+                <Check className="h-3 w-3 mr-0.5" />
                 Paid
               </span>
               {lead.payment_date && (
@@ -245,22 +245,22 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
           {/* Right: Contact icons + overflow */}
           <div className="flex flex-col items-end gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
             {/* Row 1: Maps + Menu */}
-            <div className="flex items-center gap-0.5">
+            <div className="flex items-center gap-1.5">
               {lead.google_maps_url && (
                 <a
                   href={lead.google_maps_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-blue-500 hover:bg-blue-500/10 transition-colors"
+                  className="p-1.5 rounded-md text-blue-500 hover:bg-blue-500/10 hover:text-blue-400 transition-colors"
                   title="Google Maps"
                 >
-                  <ExternalLink className="h-3.5 w-3.5" />
+                  <ExternalLink className="h-4 w-4" />
                 </a>
               )}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="h-7 w-7 flex items-center justify-center rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors">
-                    <MoreVertical className="h-3.5 w-3.5" />
+                  <button className="p-1.5 rounded-md text-muted-foreground/50 hover:text-foreground hover:bg-muted/40 transition-colors">
+                    <MoreVertical className="h-4 w-4" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[160px]">
@@ -276,33 +276,33 @@ const ClientCard = ({ lead, onUpdateClientDetails, onNotesChange, onBusinessName
             </div>
             {/* Row 2: SMS / WhatsApp / Call */}
             {lead.phone && (
-              <div className="flex items-center gap-0.5">
+              <div className="flex items-center gap-1.5">
                 <a
                   href={`sms:+${formatPhoneForWhatsApp(lead.phone)}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-blue-400 hover:bg-blue-500/10 transition-colors"
+                  className="p-1.5 rounded-md text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 transition-colors"
                   title="SMS"
                 >
-                  <MessageCircle className="h-3.5 w-3.5" />
+                  <MessageCircle className="h-4 w-4" />
                 </a>
                 <a
                   href={`https://wa.me/${formatPhoneForWhatsApp(lead.phone)}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="h-7 w-7 flex items-center justify-center rounded-md text-green-500 hover:bg-green-500/10 transition-colors"
+                  className="p-1.5 rounded-md text-green-500 hover:bg-green-500/10 hover:text-green-400 transition-colors"
                   title="WhatsApp"
                 >
-                  <MessageSquare className="h-3.5 w-3.5" />
+                  <MessageSquare className="h-4 w-4" />
                 </a>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
                       onClick={(e) => e.stopPropagation()}
-                      className="h-7 w-7 flex items-center justify-center rounded-md text-amber-500 hover:bg-amber-500/10 transition-colors"
+                      className="p-1.5 rounded-md text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 transition-colors"
                       title="Call"
                     >
-                      <PhoneCall className="h-3.5 w-3.5" />
+                      <PhoneCall className="h-4 w-4" />
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="min-w-[160px]">
