@@ -16,9 +16,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Facebook, Loader2, RefreshCw, CalendarClock, Sparkles, Settings2, Scissors, Flower2 } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Sparkles, Settings2, Scissors, Flower2 } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
-import { openFacebookSearch } from '@/lib/facebookSearch';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
@@ -226,7 +225,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
             </div>
           ) : (
             <>
-              {/* Row 1: Maps, Facebook, Call */}
+              {/* Row 1: Maps, Call */}
               <div className="flex items-center gap-0.5">
                 {(lead.google_maps_url || ((lead as any).place_id ? `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}` : null)) && (
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500 hover:text-blue-400 hover:bg-blue-500/10" asChild>
@@ -235,17 +234,6 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     </a>
                   </Button>
                 )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 text-blue-600 hover:text-blue-500 hover:bg-blue-500/10"
-                  onClick={() => {
-                    if (onContactMethodChange) onContactMethodChange('facebook_msg' as any);
-                    openFacebookSearch(lead.business_name);
-                  }}
-                >
-                  <Facebook className="h-3.5 w-3.5" />
-                </Button>
                 {hasPhone ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

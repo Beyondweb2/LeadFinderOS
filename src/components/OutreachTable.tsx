@@ -41,7 +41,6 @@ import {
   PhoneOff,
   PhoneCall,
   X,
-  Facebook,
   Sparkles,
   Settings2,
   Scissors,
@@ -54,7 +53,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
-import { openFacebookSearch } from '@/lib/facebookSearch';
 import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
 import { useContactAction } from '@/hooks/useContactAction';
 import { useDebouncedCallback } from 'use-debounce';
@@ -1337,18 +1335,6 @@ export function OutreachTable({
                               <ExternalLink className="h-4 w-4" />
                             </a>
                           )}
-                          <button
-                            className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-600 hover:text-blue-500 transition-colors"
-                            title="Search Facebook"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              if (onContactMethodChange) onContactMethodChange(lead.id, 'facebook_msg' as any);
-                              openFacebookSearch(lead.business_name);
-                            }}
-                          >
-                            <Facebook className="h-4 w-4" />
-                          </button>
                           {onUpdateLead && !isDemoLead(lead.id) && (
                             <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} />
                           )}
