@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from './StatusBadge';
 import {
-  Download, Filter, ChevronLeft, ChevronRight, ClipboardList, Check, Eye, Lock, MapPin,
+  Download, Filter, ChevronLeft, ChevronRight, ClipboardList, Check, Eye, Lock, MapPin, ExternalLink,
 } from 'lucide-react';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger,
@@ -350,35 +350,27 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     </Tooltip>
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center gap-1.5">
                     {lead.googleMapsUrl && (
                       viewDetailsExhausted ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-3 text-xs gap-1.5 text-muted-foreground border-border/60"
+                        <button
                           onClick={(e) => { e.preventDefault(); onViewDetailsGated?.(); }}
+                          className="p-1.5 rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
+                          title="Open Google Maps"
                         >
-                          <Lock className="h-3.5 w-3.5" />
-                          View Details
-                        </Button>
+                          <Lock className="h-4 w-4" />
+                        </button>
                       ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 px-3 text-xs gap-1.5 text-muted-foreground hover:text-foreground border-border/60 hover:border-border"
-                          asChild
+                        <a
+                          href={lead.googleMapsUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
+                          className="p-1.5 rounded-md text-blue-500 hover:bg-blue-500/10 hover:text-blue-400 transition-colors"
+                          title="Open Google Maps"
                         >
-                          <a
-                            href={lead.googleMapsUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            View Details
-                          </a>
-                        </Button>
+                          <ExternalLink className="h-4 w-4" />
+                        </a>
                       )
                     )}
                     {onEnrichPatch && (
