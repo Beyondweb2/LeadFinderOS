@@ -105,20 +105,6 @@ const Index = () => {
         </div>
       )}
 
-      {/* Outcome-focused Results Header */}
-      {leads.length > 0 && noWebsiteCount > 0 && (
-        <div className="flex flex-col items-center gap-1 py-2 sm:py-3 px-3 sm:px-4 bg-primary/5 border border-primary/10 rounded-lg">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            <Target className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-            <span className="text-sm sm:text-base font-medium text-foreground">
-              <span className="text-primary font-bold">{noWebsiteCount}</span> potential client{noWebsiteCount !== 1 ? 's' : ''} found in this search
-            </span>
-          </div>
-          <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-            Add to Outreach to start contacting them
-          </p>
-        </div>
-      )}
 
       {/* Expanded search indicator */}
       {leads.length > 0 && expanded && noWebsiteCount >= 5 && (
