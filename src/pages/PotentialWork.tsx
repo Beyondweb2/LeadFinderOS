@@ -158,19 +158,19 @@ const NEXT_ACTION_COLORS: Record<string, string> = {
   none: 'bg-muted text-muted-foreground border-border/50',
 };
 
-// Solid status pills — mirrors the Outreach page's solid badge style.
+// Solid status pills — uses the exact same --badge-* palette as the Outreach page.
 const STATUS_COLORS: Record<string, string> = {
-  qualified: 'bg-blue-500 text-white border-transparent',
-  discovery_call_booked: 'bg-cyan-500 text-white border-transparent',
-  proposal_sent: 'bg-purple-500 text-white border-transparent',
-  reviewing_proposal: 'bg-sky-500 text-white border-transparent',
-  revision_requested: 'bg-amber-500 text-white border-transparent',
-  paid: 'bg-emerald-500 text-white border-transparent',
-  payment_received: 'bg-green-600 text-white border-transparent',
-  closed_lost: 'bg-zinc-500 text-white border-transparent',
+  qualified: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent',
+  discovery_call_booked: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent',
+  proposal_sent: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent',
+  reviewing_proposal: 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))] border-transparent',
+  revision_requested: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))] border-transparent',
+  paid: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent',
+  payment_received: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent',
+  closed_lost: 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))] border-transparent',
   // Legacy fallbacks
-  interested: 'bg-blue-500 text-white border-transparent',
-  not_interested: 'bg-zinc-500 text-white border-transparent',
+  interested: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent',
+  not_interested: 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))] border-transparent',
 };
 
 const STATUS_BORDER_COLORS: Record<string, string> = {
@@ -222,7 +222,7 @@ const getStatusLabel = (status: string, customStatuses: { value: string; label: 
 
 const getMappedStatusColor = (status: string): string => {
   const mapped = mapLegacyStatus(status);
-  return STATUS_COLORS[mapped] || STATUS_COLORS[status] || 'bg-muted text-muted-foreground border-border/50';
+  return STATUS_COLORS[mapped] || STATUS_COLORS[status] || 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent';
 };
 
 const getStageIndex = (status: string): number => {
@@ -496,29 +496,14 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           onToggleExpand();
         }}
       >
-        {/* Chevron — left edge carries the deal-stage accent colour */}
-        <TableCell className={cn('w-[36px] pr-0 border-l-2', statusBorderColor)}>
+        {/* Chevron */}
+        <TableCell className="w-[36px] pr-0">
           <ChevronDown className={cn('h-4 w-4 text-muted-foreground/40 transition-transform', isExpanded && 'rotate-180')} />
         </TableCell>
 
         {/* Business */}
         <TableCell className="font-medium">
-          <div className="flex items-center gap-3">
-            <div className="relative group/avatar shrink-0" data-no-expand onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}>
-              {lead.image_url ? (
-                <div className="w-8 h-8 rounded-md overflow-hidden bg-muted/40 ring-1 ring-border/40">
-                  <img src={lead.image_url} alt="" className="w-full h-full object-cover" />
-                </div>
-              ) : (
-                <div className="w-8 h-8 rounded-md bg-primary/15 border border-primary/30 flex items-center justify-center text-[11px] font-bold text-primary">
-                  {getInitials(lead.business_name)}
-                </div>
-              )}
-              <div className="absolute inset-0 rounded-md bg-black/40 flex items-center justify-center opacity-0 group-hover/avatar:opacity-100 transition-opacity">
-                <Pencil className="h-2.5 w-2.5 text-white" />
-              </div>
-            </div>
-            <div className="min-w-0">
+          <div className="min-w-0">
               <div className="flex items-center gap-1.5">
                 {claim && (
                   <span title={`${claim.displayName || 'A teammate'} ${claim.contacted ? 'has contacted' : 'claimed'} this in the same campaign`} data-no-expand onClick={(e) => e.stopPropagation()}>
@@ -557,13 +542,17 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   {SALE_TYPE_LABELS[effectiveSaleType]}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-0.5 truncate">
-                {lead.phone && <span className="font-mono truncate">{lead.phone}</span>}
-                {lead.phone && lead.category && <span className="text-muted-foreground/30">·</span>}
-                {lead.category && <span className="truncate">{lead.category}</span>}
+              <div className="flex items-center gap-1.5 mt-0.5 truncate" data-no-expand onClick={(e) => e.stopPropagation()}>
+                {lead.phone && (
+                  <a href={`tel:${lead.phone}`} className="text-primary hover:underline flex items-center gap-1.5 text-sm" onClick={(e) => e.stopPropagation()}>
+                    <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+                    <span className="font-mono">{lead.phone}</span>
+                  </a>
+                )}
+                {lead.phone && lead.category && <span className="text-muted-foreground/30 text-xs">·</span>}
+                {lead.category && <span className="text-xs text-muted-foreground truncate">{lead.category}</span>}
               </div>
             </div>
-          </div>
         </TableCell>
 
         {/* Status */}
