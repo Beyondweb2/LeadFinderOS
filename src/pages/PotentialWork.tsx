@@ -58,6 +58,9 @@ import {
   DollarSign,
   Package,
   Users,
+  Mail,
+  Facebook,
+  Instagram,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -492,8 +495,8 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           onToggleExpand();
         }}
       >
-        {/* Chevron */}
-        <TableCell className="w-[36px] pr-0">
+        {/* Chevron — left edge carries the deal-stage accent colour */}
+        <TableCell className={cn('w-[36px] pr-0 border-l-2', statusBorderColor)}>
           <ChevronDown className={cn('h-4 w-4 text-muted-foreground/40 transition-transform', isExpanded && 'rotate-180')} />
         </TableCell>
 
@@ -618,6 +621,39 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 <ExternalLink className="h-4 w-4" />
               </a>
             )}
+            {/* Display-only found contacts (no enrich here — Track Leads is monitoring-only) */}
+            {lead.email && (
+              <a
+                href={`mailto:${lead.email}`}
+                onClick={(e) => e.stopPropagation()}
+                className="p-1.5 rounded-md text-blue-500 hover:bg-blue-500/10 hover:text-blue-400 transition-colors"
+                title={`Email: ${lead.email}`}
+              >
+                <Mail className="h-4 w-4" />
+              </a>
+            )}
+            {lead.facebook_url && (
+              <a
+                href={lead.facebook_url}
+                target="_blank" rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="p-1.5 rounded-md text-blue-600 hover:bg-blue-500/10 hover:text-blue-500 transition-colors"
+                title="Facebook page"
+              >
+                <Facebook className="h-4 w-4" />
+              </a>
+            )}
+            {lead.instagram_url && (
+              <a
+                href={lead.instagram_url}
+                target="_blank" rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="p-1.5 rounded-md text-pink-500 hover:bg-pink-500/10 hover:text-pink-400 transition-colors"
+                title="Instagram"
+              >
+                <Instagram className="h-4 w-4" />
+              </a>
+            )}
             {lead.phone && (
               <>
                 <a
@@ -666,11 +702,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-[160px]">
-                <DropdownMenuItem asChild>
-                  <a href={`https://www.facebook.com/search/pages/?q=${encodeURIComponent(lead.business_name)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 cursor-pointer">
-                    <ExternalLink className="h-3.5 w-3.5" /> Facebook search
-                  </a>
-                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => { fileInputRef.current?.click(); }} className="text-xs" disabled={isUploadingImage}>
                   <Pencil className="h-3.5 w-3.5 mr-2" /> {lead.image_url ? 'Change Image' : 'Add Image'}
                 </DropdownMenuItem>
@@ -694,7 +725,36 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
       {isExpanded && (
         <TableRow className="border-border/50 hover:bg-transparent">
           <TableCell colSpan={6} className="p-0">
-            <div ref={expandRef} className="px-3.5 sm:px-5 py-4 space-y-4 bg-muted/10">
+            <div ref={expandRef} className="px-3.5 sm:px-5 py-5 space-y-5 bg-gradient-to-b from-muted/25 to-transparent">
+            {/* ── DEAL panel: stage progress + the four deal controls ── */}
+            <section className="rounded-xl border border-border/50 bg-card/40 p-3.5 sm:p-4 space-y-4">
+            {(() => {
+              const currentIdx = getStageIndex(lead.status);
+              const isPaid = mapLegacyStatus(lead.status) === 'paid';
+              const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
+              const stages = PIPELINE_STAGES.filter(s => s !== 'closed_lost');
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Deal stage</span>
+                    <span className={cn('text-[11px] font-bold', isPaid ? 'text-emerald-400' : isLost ? 'text-zinc-400' : 'text-foreground/80')}>
+                      {getStatusLabel(lead.status, customStatuses)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-0.5">
+                    {stages.map((stage, idx) => {
+                      const isActive = idx === currentIdx;
+                      const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
+                      return (
+                        <div key={stage} className="flex items-center flex-1 gap-0.5">
+                          <div className={cn('h-1.5 rounded-full flex-1 transition-colors', isCompleted || isActive ? isPaid ? 'bg-emerald-500' : 'bg-primary' : isLost ? 'bg-zinc-700' : 'bg-border/60')} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
             {/* Row: Status / Action / Due / Revenue side-by-side */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-no-expand onClick={(e) => e.stopPropagation()}>
               <div>
@@ -804,28 +864,10 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </div>
             </div>
 
-            {/* Pipeline stage tracker */}
-            {(() => {
-              const currentIdx = getStageIndex(lead.status);
-              const isPaid = mapLegacyStatus(lead.status) === 'paid';
-              const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
-              return (
-                <div className="flex items-center gap-0.5">
-                  {PIPELINE_STAGES.filter(s => s !== 'closed_lost').map((stage, idx) => {
-                    const isActive = idx === currentIdx;
-                    const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
-                    return (
-                      <div key={stage} className="flex items-center flex-1 gap-0.5">
-                        <div className={cn('h-1.5 rounded-full flex-1 transition-colors', isCompleted || isActive ? isPaid ? 'bg-emerald-500' : 'bg-primary' : isLost ? 'bg-zinc-700' : 'bg-border/60')} />
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
+            </section>
 
             {/* Notes: private | team side-by-side */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-3 border-t border-border/40">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Private note */}
               <div data-walkthrough="notes">
                 <label className="text-[11px] font-medium text-muted-foreground block mb-1.5 flex items-center gap-1">
@@ -876,7 +918,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             </div>
 
             {/* Service Delivery — uses full width; adapts to the lead's sale type */}
-            <div className="pt-3 border-t border-border/40" data-no-expand onClick={(e) => e.stopPropagation()}>
+            <div className="rounded-xl border border-border/50 bg-card/40 p-3.5 sm:p-4" data-no-expand onClick={(e) => e.stopPropagation()}>
               <div className="flex items-center justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2 text-xs font-semibold text-primary">
                   <Package className="h-3.5 w-3.5" /> Service Delivery
@@ -981,7 +1023,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
             {/* Activity log — Track Leads is for monitoring only; contact
                 enrichment now lives on the search results and the Outreach row. */}
-            <div className="pt-3 border-t border-border/40">
+            <div className="rounded-xl border border-border/50 bg-card/40 p-3.5 sm:p-4">
               {!isDemoLead(lead.id) && (
                 <div>
                   <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-2">
@@ -1291,7 +1333,15 @@ const PotentialWorkPage = () => {
             Manage your deal pipeline from first interest to closed deal.
           </p>
         </div>
-        <AddCustomLeadDialog onLeadAdded={refetch} />
+        <div className="flex items-center gap-3 shrink-0">
+          {totalPotentialRevenue > 0 && (
+            <div className="text-right hidden sm:block">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-none mb-1">Pipeline value</p>
+              <p className="text-lg font-bold text-green-500/90 leading-none">£{totalPotentialRevenue.toLocaleString()}</p>
+            </div>
+          )}
+          <AddCustomLeadDialog onLeadAdded={refetch} />
+        </div>
       </div>
 
       {/* Status-pill stage counter removed — Track Leads now mirrors the Outreach
