@@ -6,6 +6,7 @@ import { CampaignPicker } from '@/components/CampaignPicker';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 
 import { useOutreach } from '@/hooks/useOutreach';
+import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTeamClaims } from '@/hooks/useTeamClaims';
 import { Flame, Target, Zap, Search, MapPin, Info } from 'lucide-react';
@@ -17,6 +18,7 @@ const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 const Index = () => {
   const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, expanded } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach } = useOutreach();
+  const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
 
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
@@ -159,8 +161,10 @@ const Index = () => {
           <LeadsTable
             leads={leads}
             onExport={exportToCsv}
-            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign)}
+            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id))}
             isInOutreach={isInOutreach}
+            searchEnrichment={searchEnrichment}
+            onEnrichPatch={patchEnrichment}
             onMapLinkClick={(name, url) => {
               markAsChecked(name, url);
             }}

@@ -16,6 +16,8 @@ import {
 } from '@/components/ui/tooltip';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import type { Lead, WebsiteStatus } from '@/types/lead';
+import type { OutreachLead } from '@/types/outreach';
+import { SearchLeadContact } from './SearchLeadContact';
 import type { TeamClaim } from '@/hooks/useTeamClaims';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
@@ -74,9 +76,13 @@ interface LeadsTableProps {
   viewDetailsExhausted?: boolean;
   /** Resolve a teammate's claim on this business in the active campaign (soft indicator). */
   getTeamClaim?: (lead: Lead) => TeamClaim | null;
+  /** Contact-enrichment found per place_id before the lead is saved (search-time). */
+  searchEnrichment?: Record<string, Partial<OutreachLead>>;
+  /** Patch search-time enrichment state, keyed by place_id. */
+  onEnrichPatch?: (placeId: string, patch: Partial<OutreachLead>) => Promise<any>;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
@@ -210,6 +216,11 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     )}
                   </div>
                   <div className="mt-1"><StatusBadge status={lead.websiteStatus} compact /></div>
+                  {onEnrichPatch && (
+                    <div className="mt-1.5">
+                      <SearchLeadContact lead={lead} enrichment={searchEnrichment?.[lead.id]} onPatch={onEnrichPatch} />
+                    </div>
+                  )}
                 </div>
                  <div className="flex items-center gap-1.5 flex-shrink-0">
                    {/* View Details — gated after 5 views for free users */}
@@ -339,6 +350,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     </Tooltip>
                   </TableCell>
                   <TableCell>
+                    <div className="flex flex-col gap-1.5">
                     {lead.googleMapsUrl && (
                       viewDetailsExhausted ? (
                         <Button
@@ -369,6 +381,10 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                         </Button>
                       )
                     )}
+                    {onEnrichPatch && (
+                      <SearchLeadContact lead={lead} enrichment={searchEnrichment?.[lead.id]} onPatch={onEnrichPatch} />
+                    )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center">

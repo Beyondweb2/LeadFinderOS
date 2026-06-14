@@ -294,7 +294,7 @@ export function useOutreach() {
     }
   }, [leads, archivedLeads, removeLeadNoPhone]);
 
-  const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website', campaignId: string | null = null) => {
+  const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website', campaignId: string | null = null, enrichment?: Partial<OutreachLead> | null) => {
     if (!user) {
       toast({
         title: 'Not authenticated',
@@ -335,6 +335,22 @@ export function useOutreach() {
       return null;
     }
 
+    // Carry over any contact enrichment already found at search time. The
+    // enrich-lead cache is keyed by place_id, so these values are free here — no
+    // new paid call is made on add. Only copy fields the engine actually set.
+    const carriedEnrichment: Partial<OutreachLead> = {};
+    if (enrichment) {
+      const carryKeys: (keyof OutreachLead)[] = [
+        'email', 'email_status', 'email_method', 'email_last_checked_at',
+        'facebook_url', 'facebook_status', 'facebook_method', 'facebook_last_checked_at',
+        'instagram_url', 'instagram_status', 'instagram_method', 'instagram_last_checked_at',
+        'enrichment_source',
+      ];
+      for (const k of carryKeys) {
+        if (enrichment[k] != null) (carriedEnrichment as any)[k] = enrichment[k];
+      }
+    }
+
     const { data, error } = await supabase
       .from('outreach_leads')
       .insert({
@@ -355,6 +371,7 @@ export function useOutreach() {
         list_type: listType,
         campaign_id: campaignId,
         place_id: lead.id || null,
+        ...carriedEnrichment,
       } as any)
       .select()
       .single();
