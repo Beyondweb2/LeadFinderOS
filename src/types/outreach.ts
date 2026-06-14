@@ -104,6 +104,10 @@ export interface OutreachLead {
   facebook_confidence?: number | null;
   facebook_method?: string | null;
   facebook_last_checked_at?: string | null;
+  // Email enrichment (Phase 1: website scrape)
+  email_status?: string | null;   // 'found' | 'none' | 'error' | null
+  email_method?: string | null;   // 'website_scrape' | 'manual' | null
+  email_last_checked_at?: string | null;
   contact_method?: string | null;
   whatsapp_status?: string | null;
   whatsapp_checked_at?: string | null;

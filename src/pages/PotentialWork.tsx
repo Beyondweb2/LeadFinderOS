@@ -71,6 +71,7 @@ import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from '@/types/outreach';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { FacebookSection } from '@/components/FacebookSection';
+import { EmailSection } from '@/components/EmailSection';
 import { cn } from '@/lib/utils';
 
 /* ───────── constants ───────── */
@@ -681,6 +682,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   </DropdownMenuItem>
                 )}
                 <FacebookSection lead={lead} onUpdate={onUpdateLead} compact />
+                <EmailSection lead={lead} onUpdate={onUpdateLead} compact />
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
                   <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
@@ -983,8 +985,9 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
 
             {/* Facebook | Activity log side-by-side */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-3 border-t border-border/40">
-              <div data-no-expand onClick={(e) => e.stopPropagation()}>
+              <div data-no-expand onClick={(e) => e.stopPropagation()} className="space-y-4">
                 <FacebookSection lead={lead} onUpdate={onUpdateLead} />
+                <EmailSection lead={lead} onUpdate={onUpdateLead} />
               </div>
               {!isDemoLead(lead.id) && (
                 <div>

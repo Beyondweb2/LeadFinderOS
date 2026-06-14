@@ -638,6 +638,9 @@ export type Database = {
           created_at: string
           delivery_notes: string | null
           email: string | null
+          email_last_checked_at: string | null
+          email_method: string | null
+          email_status: string | null
           facebook_confidence: number | null
           facebook_last_checked_at: string | null
           facebook_method: string | null
@@ -685,6 +688,9 @@ export type Database = {
           created_at?: string
           delivery_notes?: string | null
           email?: string | null
+          email_last_checked_at?: string | null
+          email_method?: string | null
+          email_status?: string | null
           facebook_confidence?: number | null
           facebook_last_checked_at?: string | null
           facebook_method?: string | null
@@ -732,6 +738,9 @@ export type Database = {
           created_at?: string
           delivery_notes?: string | null
           email?: string | null
+          email_last_checked_at?: string | null
+          email_method?: string | null
+          email_status?: string | null
           facebook_confidence?: number | null
           facebook_last_checked_at?: string | null
           facebook_method?: string | null
