@@ -23,6 +23,7 @@ import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionBadge } from './NextActionBadge';
 import { NextActionEditor } from './NextActionEditor';
+import { LeadEnrichButtons } from './LeadEnrichButtons';
 import type { OutreachLead, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, OUTREACH_STATUS_OPTIONS } from '@/types/outreach';
 
@@ -52,6 +53,7 @@ interface OutreachMobileCardProps {
   onGenerateSite?: (template: 'barber' | 'salon') => void;
   isGeneratingSite?: boolean;
   onManageSite?: () => void;
+  onUpdateLead?: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
 }
 
 export const OutreachMobileCard = memo(function OutreachMobileCard({
@@ -80,6 +82,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   onGenerateSite,
   isGeneratingSite = false,
   onManageSite,
+  onUpdateLead,
 }: OutreachMobileCardProps) {
   const isPhoneFetching = phoneFetchStatus === 'pending';
   const isPhoneFailed = phoneFetchStatus === 'failed';
@@ -132,6 +135,13 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
             <a href={`tel:${lead.phone}`} className="text-[11px] text-muted-foreground leading-none truncate">
               {lead.phone}
             </a>
+          )}
+
+          {/* Per-type contact enrichment (email / facebook / instagram) */}
+          {onUpdateLead && (
+            <div className="pt-0.5">
+              <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} />
+            </div>
           )}
 
           {/* Three dropdowns: Contact Method, Status, Next Action */}

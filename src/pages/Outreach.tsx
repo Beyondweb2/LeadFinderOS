@@ -128,6 +128,10 @@ const Outreach = () => {
         readOnly={isReadOnly}
         phoneFetchStatus={phoneFetchStatus}
         onRetryPhoneFetch={retryPhoneFetch}
+        onUpdateLead={(leadId, data) => {
+          if (isDemoLead(leadId)) return Promise.resolve(null);
+          return updateLead(leadId, data);
+        }}
       />
 
       {/* First-time outreach tips */}

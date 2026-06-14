@@ -71,6 +71,8 @@ import { PipelineStatusBadge } from './PipelineStatusBadge';
 import { NextActionEditor } from './NextActionEditor';
 import { CSVImportDialog } from './CSVImportDialog';
 import { OutreachMobileCard } from './OutreachMobileCard';
+import { LeadEnrichButtons } from './LeadEnrichButtons';
+import { isDemoLead } from '@/lib/demoLeads';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS } from '@/types/outreach';
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
@@ -103,6 +105,8 @@ interface OutreachTableProps {
   onRetryPhoneFetch?: (leadId: string) => void;
   /** Called before a contact action. Return true to allow, false to block (show paywall). */
   onContactGated?: (channel: 'call' | 'sms' | 'whatsapp', leadId?: string) => boolean;
+  /** Persist enrichment results found via the per-row enrich buttons. */
+  onUpdateLead?: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
 }
 
 const ITEMS_PER_PAGE_DESKTOP = 15;
@@ -134,6 +138,7 @@ export function OutreachTable({
   phoneFetchStatus = {},
   onRetryPhoneFetch,
   onContactGated,
+  onUpdateLead,
 }: OutreachTableProps) {
   const { toast } = useToast();
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
@@ -1133,6 +1138,7 @@ export function OutreachTable({
                   phoneFetchStatus={phoneFetchStatus[lead.id]}
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
                   isWalkthroughContacted={walkthroughContactedIds.has(lead.id)}
+                  onUpdateLead={onUpdateLead && !isDemoLead(lead.id) ? onUpdateLead : undefined}
                   onGenerateSite={isAdmin && !sitesByLead[lead.id] ? (template) => handleGenerateSite(lead, template) : undefined}
                   isGeneratingSite={generatingSiteId === lead.id}
                   onManageSite={isAdmin && sitesByLead[lead.id] ? () => navigate(`/admin/sites/${sitesByLead[lead.id].id}`) : undefined}
@@ -1343,6 +1349,9 @@ export function OutreachTable({
                           >
                             <Facebook className="h-4 w-4" />
                           </button>
+                          {onUpdateLead && !isDemoLead(lead.id) && (
+                            <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} />
+                          )}
                           {lead.phone ? (
                             <>
                               <DropdownMenu>
