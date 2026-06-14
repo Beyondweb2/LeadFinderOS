@@ -142,19 +142,20 @@ const CONTACT_METHOD_LABELS: Record<string, string> = {
   facebook_msg: 'Facebook',
 };
 
+// Solid next-action pills — uses the same --badge-* palette as the Outreach page.
 const NEXT_ACTION_COLORS: Record<string, string> = {
-  schedule_discovery: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
-  prepare_proposal: 'bg-orange-500/20 text-orange-400 border-orange-500/40',
-  send_proposal: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
-  follow_up_proposal: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
-  send_revision: 'bg-amber-500/20 text-amber-400 border-amber-500/40',
-  collect_payment: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40',
-  start_project: 'bg-green-500/20 text-green-400 border-green-500/40',
-  check_in: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/40',
+  schedule_discovery: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent',
+  prepare_proposal: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))] border-transparent',
+  send_proposal: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent',
+  follow_up_proposal: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent',
+  send_revision: 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))] border-transparent',
+  collect_payment: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent',
+  start_project: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent',
+  check_in: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent',
   // Legacy fallbacks
-  call: 'bg-blue-500/20 text-blue-400 border-blue-500/40',
-  follow_up: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/40',
-  send_draft: 'bg-purple-500/20 text-purple-400 border-purple-500/40',
+  call: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent',
+  follow_up: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent',
+  send_draft: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent',
   none: 'bg-muted text-muted-foreground border-border/50',
 };
 
@@ -504,7 +505,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
   const trackActionKey = getTrackActionForLead(lead.id);
   const resolvedActionKey = customLabel ? 'custom' : (trackActionKey || mapLegacyAction(lead.next_action || 'none'));
   const actionColorCls = customLabel
-    ? 'bg-teal-500/15 text-teal-400 border-teal-500/25'
+    ? 'bg-teal-500 text-white border-transparent'
     : NEXT_ACTION_COLORS[resolvedActionKey] || NEXT_ACTION_COLORS.none;
 
   return (
@@ -527,7 +528,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
         {/* Business */}
         <TableCell className="font-medium">
           <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-start gap-1.5 min-w-0">
                 {claim && (
                   <span title={`${claim.displayName || 'A teammate'} ${claim.contacted ? 'has contacted' : 'claimed'} this in the same campaign`} data-no-expand onClick={(e) => e.stopPropagation()}>
                     <Avatar className="h-4 w-4 shrink-0 ring-1 ring-amber-400/60">
@@ -550,10 +551,10 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   </div>
                 ) : (
                   <>
-                    <span className="text-sm truncate">{lead.business_name}</span>
+                    <span className="text-sm break-words min-w-0 leading-snug">{lead.business_name}</span>
                     <button
                       onClick={(e) => { e.stopPropagation(); setEditingName(true); }}
-                      className="h-4 w-4 flex items-center justify-center text-muted-foreground/30 hover:text-foreground rounded transition-colors shrink-0"
+                      className="h-4 w-4 flex items-center justify-center text-muted-foreground/30 hover:text-foreground rounded transition-colors shrink-0 mt-0.5"
                       data-no-expand
                       title="Edit name"
                     >
@@ -561,9 +562,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                     </button>
                   </>
                 )}
-                <span className="shrink-0 inline-flex items-center px-1.5 h-[18px] rounded text-[10px] font-semibold uppercase tracking-wide bg-primary/10 text-primary/70 border border-primary/20" title="What we're selling">
-                  {SALE_TYPE_LABELS[effectiveSaleType]}
-                </span>
               </div>
               {lead.category && (
                 <div className="text-xs text-muted-foreground mt-0.5 truncate">{lead.category}</div>
@@ -574,12 +572,12 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
         {/* Phone — own column, styled exactly like Outreach */}
         <TableCell className="hidden md:table-cell" data-no-expand onClick={(e) => e.stopPropagation()}>
           {lead.phone ? (
-            <a href={`tel:${lead.phone}`} className="text-primary hover:underline flex items-center gap-1.5 text-sm" onClick={(e) => e.stopPropagation()}>
+            <a href={`tel:${lead.phone}`} className="text-primary hover:underline flex items-center gap-1.5 text-sm whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
               <Phone className="h-3.5 w-3.5 flex-shrink-0" />
               <span className="font-mono">{lead.phone}</span>
             </a>
           ) : (
-            <span className="text-muted-foreground text-xs">No phone listed</span>
+            <span className="text-muted-foreground text-xs whitespace-nowrap">No phone listed</span>
           )}
         </TableCell>
 
@@ -610,7 +608,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             <Select value={nextAction} onValueChange={handleNextActionChange}>
               <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" data-walkthrough="next-action" data-walkthrough-step="follow-up-action">
                 {nextActionLabel ? (
-                  <span className="text-sm font-semibold truncate">{nextActionLabel}</span>
+                  <span className={cn('inline-flex items-center rounded-full border border-transparent px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap', actionColorCls)}>{nextActionLabel}</span>
                 ) : (
                   <span className="text-sm text-muted-foreground/50">+ Set action</span>
                 )}
@@ -662,7 +660,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
             const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
             const stages = PIPELINE_STAGES.filter(s => s !== 'closed_lost');
             return (
-              <div className="flex items-center gap-1 w-[110px]">
+              <div className="flex items-center gap-1 w-[72px]">
                 {stages.map((stage, idx) => {
                   const isActive = idx === currentIdx;
                   const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
@@ -673,11 +671,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </div>
             );
           })()}
-        </TableCell>
-
-        {/* Revenue */}
-        <TableCell className="hidden lg:table-cell text-right text-sm font-semibold text-green-500/80">
-          {(lead as any).potential_revenue > 0 ? `£${(lead as any).potential_revenue.toLocaleString()}` : <span className="text-muted-foreground/25">—</span>}
         </TableCell>
 
         {/* Actions */}
@@ -796,7 +789,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
       {/* ═══ EXPANDED DETAIL — second row spanning all columns (only when open) ═══ */}
       {isExpanded && (
         <TableRow className="border-border/50 hover:bg-transparent">
-          <TableCell colSpan={8} className="p-0">
+          <TableCell colSpan={7} className="p-0">
             <div ref={expandRef} className="px-3.5 sm:px-5 py-3.5 space-y-3 bg-gradient-to-b from-muted/25 to-transparent">
             {/* ── DEAL panel: stage progress + the four deal controls ── */}
             <section className="rounded-xl border border-border/50 bg-card/40 p-3 space-y-3">
@@ -1375,11 +1368,10 @@ const PotentialWorkPage = () => {
               <TableRow className="border-border/50 hover:bg-transparent">
                 <TableHead className="w-[36px]" />
                 <TableHead>Business</TableHead>
-                <TableHead className="hidden md:table-cell">Phone</TableHead>
-                <TableHead className="hidden sm:table-cell">Status</TableHead>
-                <TableHead className="hidden md:table-cell">Next action</TableHead>
-                <TableHead className="hidden lg:table-cell">Stage</TableHead>
-                <TableHead className="hidden lg:table-cell text-right">Revenue</TableHead>
+                <TableHead className="hidden md:table-cell w-[140px]">Phone</TableHead>
+                <TableHead className="hidden sm:table-cell w-[130px]">Status</TableHead>
+                <TableHead className="hidden md:table-cell w-[140px]">Next action</TableHead>
+                <TableHead className="hidden lg:table-cell w-[88px]">Stage</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
