@@ -11,21 +11,21 @@ import type { OutreachLead } from '@/types/outreach';
  * engine produces), so it drops straight into the outreach insert.
  */
 export function useSearchEnrichment() {
-  const [enrichment, setEnrichment] = useState<Record<string, Partial<OutreachLead>>>({});
+  const [searchEnrichment, setSearchEnrichment] = useState<Record<string, Partial<OutreachLead>>>({});
 
   // Patch shape matches useEnrichLead's onUpdate callback (leadId is ignored here;
   // we key by the search lead's place_id instead).
   const patchEnrichment = useCallback((placeId: string, patch: Partial<OutreachLead>) => {
     if (!placeId) return Promise.resolve(null);
-    setEnrichment((prev) => ({ ...prev, [placeId]: { ...prev[placeId], ...patch } }));
+    setSearchEnrichment((prev) => ({ ...prev, [placeId]: { ...prev[placeId], ...patch } }));
     return Promise.resolve(null);
   }, []);
 
   const getEnrichment = useCallback(
     (placeId: string | undefined): Partial<OutreachLead> | undefined =>
-      placeId ? enrichment[placeId] : undefined,
-    [enrichment],
+      placeId ? searchEnrichment[placeId] : undefined,
+    [searchEnrichment],
   );
 
-  return { enrichment, patchEnrichment, getEnrichment };
+  return { searchEnrichment, patchEnrichment, getEnrichment };
 }
