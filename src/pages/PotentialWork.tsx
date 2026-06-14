@@ -472,6 +472,29 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     handleNextActionChange(`custom::${trimmed}`);
   };
 
+  // Inline status change (same logic as the expanded select) — used by the
+  // collapsed-row Status dropdown so it edits + saves directly like Outreach.
+  const handleStatusSelect = async (v: string) => {
+    if (v === '__add_custom__') { onAddCustomStatus(); return; }
+    onStatusChange(lead.id, v as LeadStatus);
+    if (v === 'paid' || v === 'closed_lost' || v === 'payment_received') {
+      setNextAction('none');
+      setNextActionDate(undefined);
+      setTrackActionForLead(lead.id, null);
+      setLeadCustomAction(lead.id, null);
+      await onNextActionChange(lead.id, 'none' as NextActionType);
+    }
+    if (v === 'payment_received') {
+      const seenKey = 'leadfinder_seen_paid_popup';
+      if (!localStorage.getItem(seenKey)) {
+        localStorage.setItem(seenKey, '1');
+        setShowPaidPopup(true);
+      }
+    }
+    window.dispatchEvent(new CustomEvent('demo-checklist-track-status-changed'));
+    window.dispatchEvent(new CustomEvent('demo-checklist-track-status-update'));
+  };
+
   const statusBorderColor = STATUS_BORDER_COLORS[mapLegacyStatus(lead.status)] || 'border-l-border/40';
   const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
   const contactMethodDisplay = lead.contact_method ? CONTACT_METHOD_LABELS[lead.contact_method] || lead.contact_method : null;
@@ -542,39 +565,77 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   {SALE_TYPE_LABELS[effectiveSaleType]}
                 </span>
               </div>
-              <div className="flex items-center gap-1.5 mt-0.5 truncate" data-no-expand onClick={(e) => e.stopPropagation()}>
-                {lead.phone && (
-                  <a href={`tel:${lead.phone}`} className="text-primary hover:underline flex items-center gap-1.5 text-sm" onClick={(e) => e.stopPropagation()}>
-                    <Phone className="h-3.5 w-3.5 flex-shrink-0" />
-                    <span className="font-mono">{lead.phone}</span>
-                  </a>
-                )}
-                {lead.phone && lead.category && <span className="text-muted-foreground/30 text-xs">·</span>}
-                {lead.category && <span className="text-xs text-muted-foreground truncate">{lead.category}</span>}
-              </div>
+              {lead.category && (
+                <div className="text-xs text-muted-foreground mt-0.5 truncate">{lead.category}</div>
+              )}
             </div>
         </TableCell>
 
-        {/* Status */}
-        <TableCell className="hidden sm:table-cell">
-          <span className={cn('inline-flex items-center rounded-full border border-transparent px-2.5 py-0.5 text-xs font-semibold', statusColorCls)} data-walkthrough="status">
-            {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-3 w-3 mr-0.5" />}
-            <span className="truncate">{statusLabel}</span>
-          </span>
+        {/* Phone — own column, styled exactly like Outreach */}
+        <TableCell className="hidden md:table-cell" data-no-expand onClick={(e) => e.stopPropagation()}>
+          {lead.phone ? (
+            <a href={`tel:${lead.phone}`} className="text-primary hover:underline flex items-center gap-1.5 text-sm" onClick={(e) => e.stopPropagation()}>
+              <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="font-mono">{lead.phone}</span>
+            </a>
+          ) : (
+            <span className="text-muted-foreground text-xs">No phone listed</span>
+          )}
         </TableCell>
 
-        {/* Next action + due */}
+        {/* Status — inline editable dropdown (click pill → select → saves) */}
+        <TableCell className="hidden sm:table-cell" data-no-expand onClick={(e) => e.stopPropagation()}>
+          <Select value={mapLegacyStatus(lead.status)} onValueChange={handleStatusSelect}>
+            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" data-walkthrough="status" data-walkthrough-step="track-status-select">
+              <span className={cn('inline-flex items-center rounded-full border border-transparent px-2.5 py-0.5 text-xs font-semibold', statusColorCls)}>
+                {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-3 w-3 mr-0.5" />}
+                <span className="truncate">{statusLabel}</span>
+              </span>
+            </SelectTrigger>
+            <SelectContent>
+              {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+              {customStatuses.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+              <SelectItem value="__add_custom__" className="text-primary">+ Custom Status</SelectItem>
+            </SelectContent>
+          </Select>
+        </TableCell>
+
+        {/* Next action — inline editable dropdown (click → select → saves) */}
         <TableCell className="hidden md:table-cell" data-no-expand onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center gap-1.5 flex-wrap">
-            {nextActionLabel ? (
-              <span className={cn('text-sm font-semibold truncate', (NEXT_ACTION_COLORS[lead.next_action || 'none'] || '').replace(/bg-\S+/g, '').replace(/border-\S+/g, '').trim())}>
-                {nextActionLabel}
-              </span>
-            ) : (
-              <button className="text-sm text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors" onClick={(e) => { e.stopPropagation(); onToggleExpand(); }}>
-                + Set action
-              </button>
-            )}
+            <Select value={nextAction} onValueChange={handleNextActionChange}>
+              <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" data-walkthrough="next-action" data-walkthrough-step="follow-up-action">
+                {nextActionLabel ? (
+                  <span className="text-sm font-semibold truncate">{nextActionLabel}</span>
+                ) : (
+                  <span className="text-sm text-muted-foreground/50">+ Set action</span>
+                )}
+              </SelectTrigger>
+              <SelectContent>
+                {TRACK_NEXT_ACTION_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                ))}
+                {customActions.length > 0 && (
+                  <>
+                    <div className="h-px bg-border my-1" />
+                    {customActions.map((ca) => (
+                      <SelectItem key={ca.id} value={`custom::${ca.label}`}>
+                        <div className="flex items-center gap-2">
+                          <Tag className="h-3 w-3 text-teal-400" />
+                          {ca.label}
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </>
+                )}
+                <div className="h-px bg-border my-1" />
+                <SelectItem value="__add_custom_action__" className="text-primary">+ Custom Action</SelectItem>
+              </SelectContent>
+            </Select>
             {dueLabel && (
               <span className={cn('inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full border', dueLabel.cls)}>
                 <Clock className="h-3 w-3" />
@@ -591,6 +652,27 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </button>
             )}
           </div>
+        </TableCell>
+
+        {/* Deal stage progress — compact, visible without expanding */}
+        <TableCell className="hidden lg:table-cell">
+          {(() => {
+            const currentIdx = getStageIndex(lead.status);
+            const isPaid = mapLegacyStatus(lead.status) === 'paid';
+            const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
+            const stages = PIPELINE_STAGES.filter(s => s !== 'closed_lost');
+            return (
+              <div className="flex items-center gap-1 w-[110px]">
+                {stages.map((stage, idx) => {
+                  const isActive = idx === currentIdx;
+                  const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
+                  return (
+                    <div key={stage} className={cn('h-1 rounded-full flex-1 transition-colors', isCompleted || isActive ? isPaid ? 'bg-emerald-500' : 'bg-primary' : isLost ? 'bg-zinc-700' : 'bg-border/60')} />
+                  );
+                })}
+              </div>
+            );
+          })()}
         </TableCell>
 
         {/* Revenue */}
@@ -714,105 +796,12 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
       {/* ═══ EXPANDED DETAIL — second row spanning all columns (only when open) ═══ */}
       {isExpanded && (
         <TableRow className="border-border/50 hover:bg-transparent">
-          <TableCell colSpan={6} className="p-0">
+          <TableCell colSpan={8} className="p-0">
             <div ref={expandRef} className="px-3.5 sm:px-5 py-3.5 space-y-3 bg-gradient-to-b from-muted/25 to-transparent">
             {/* ── DEAL panel: stage progress + the four deal controls ── */}
             <section className="rounded-xl border border-border/50 bg-card/40 p-3 space-y-3">
-            {(() => {
-              const currentIdx = getStageIndex(lead.status);
-              const isPaid = mapLegacyStatus(lead.status) === 'paid';
-              const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
-              const stages = PIPELINE_STAGES.filter(s => s !== 'closed_lost');
-              return (
-                <div className="space-y-1.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Deal stage</span>
-                    <span className={cn('text-[11px] font-bold', isPaid ? 'text-emerald-400' : isLost ? 'text-zinc-400' : 'text-foreground/80')}>
-                      {getStatusLabel(lead.status, customStatuses)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 max-w-[260px]">
-                    {stages.map((stage, idx) => {
-                      const isActive = idx === currentIdx;
-                      const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
-                      return (
-                        <div key={stage} className="flex items-center flex-1 gap-1">
-                          <div className={cn('h-1 rounded-full flex-1 transition-colors', isCompleted || isActive ? isPaid ? 'bg-emerald-500' : 'bg-primary' : isLost ? 'bg-zinc-700' : 'bg-border/60')} />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })()}
-            {/* Row: Status / Action / Due / Revenue side-by-side */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5" data-no-expand onClick={(e) => e.stopPropagation()}>
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Status</label>
-                <Select value={mapLegacyStatus(lead.status)} onValueChange={async (v) => {
-                  if (v === '__add_custom__') { onAddCustomStatus(); return; }
-                  onStatusChange(lead.id, v as LeadStatus);
-                  if (v === 'paid' || v === 'closed_lost' || v === 'payment_received') {
-                    setNextAction('none');
-                    setNextActionDate(undefined);
-                    setTrackActionForLead(lead.id, null);
-                    setLeadCustomAction(lead.id, null);
-                    await onNextActionChange(lead.id, 'none' as NextActionType);
-                  }
-                  if (v === 'payment_received') {
-                    const seenKey = 'leadfinder_seen_paid_popup';
-                    if (!localStorage.getItem(seenKey)) {
-                      localStorage.setItem(seenKey, '1');
-                      setShowPaidPopup(true);
-                    }
-                  }
-                  window.dispatchEvent(new CustomEvent('demo-checklist-track-status-changed'));
-                  window.dispatchEvent(new CustomEvent('demo-checklist-track-status-update'));
-                }}>
-                  <SelectTrigger className="h-8 text-xs border-border/50 w-full" data-walkthrough-step="track-status-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                    {customStatuses.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                    <SelectItem value="__add_custom__" className="text-primary">+ Custom Status</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div data-walkthrough="next-action">
-                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Next action</label>
-                <Select value={nextAction} onValueChange={handleNextActionChange}>
-                  <SelectTrigger className="h-8 text-xs border-border/50 w-full" data-walkthrough-step="follow-up-action">
-                    <SelectValue placeholder="Next action" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TRACK_NEXT_ACTION_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
-                    ))}
-                    {customActions.length > 0 && (
-                      <>
-                        <div className="h-px bg-border my-1" />
-                        {customActions.map((ca) => (
-                          <SelectItem key={ca.id} value={`custom::${ca.label}`}>
-                            <div className="flex items-center gap-2">
-                              <Tag className="h-3 w-3 text-teal-400" />
-                              {ca.label}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </>
-                    )}
-                    <div className="h-px bg-border my-1" />
-                    <SelectItem value="__add_custom_action__" className="text-primary">+ Custom Action</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
+            {/* Due date + Revenue — Status, Next action & stage are edited inline on the row */}
+            <div className="grid grid-cols-2 gap-2.5" data-no-expand onClick={(e) => e.stopPropagation()}>
               <div>
                 <label className="text-[11px] font-medium text-muted-foreground block mb-1">Due date</label>
                 <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
@@ -1386,8 +1375,10 @@ const PotentialWorkPage = () => {
               <TableRow className="border-border/50 hover:bg-transparent">
                 <TableHead className="w-[36px]" />
                 <TableHead>Business</TableHead>
+                <TableHead className="hidden md:table-cell">Phone</TableHead>
                 <TableHead className="hidden sm:table-cell">Status</TableHead>
                 <TableHead className="hidden md:table-cell">Next action</TableHead>
+                <TableHead className="hidden lg:table-cell">Stage</TableHead>
                 <TableHead className="hidden lg:table-cell text-right">Revenue</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
