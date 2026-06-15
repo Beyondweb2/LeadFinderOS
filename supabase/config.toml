@@ -53,3 +53,6 @@ verify_jwt = false
 
 [functions.send-reminders]
 verify_jwt = false
+
+[functions.create-barber-checkout]
+verify_jwt = false
