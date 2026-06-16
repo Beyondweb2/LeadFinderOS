@@ -1003,7 +1003,7 @@ function MobileBookBar({ onBook }: { onBook: () => void }) {
  *  A clean light platform bar (charcoal text, rose button) to suit the salon. */
 function ClaimBar({ onClaim }: { onClaim: () => void }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-salon-line bg-white/95 px-4 py-3 salon-shadow-lg backdrop-blur-xl sm:py-5">
+    <div className="pointer-events-auto fixed inset-x-0 bottom-0 z-[60] border-t border-salon-line bg-white/95 px-4 py-3 salon-shadow-lg backdrop-blur-xl sm:py-5">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 sm:gap-6">
         <div className="min-w-0">
           <div className="text-sm font-bold text-salon-ink sm:text-xl">This is your new website</div>

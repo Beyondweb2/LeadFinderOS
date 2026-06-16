@@ -1057,7 +1057,7 @@ function MobileBookBar({ onBook }: { onBook: () => void }) {
  *  barber site whatever accent they picked. Compact on mobile; taller on desktop. */
 function ClaimBar({ onClaim }: { onClaim: () => void }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t-2 border-white/15 bg-ink/95 px-4 py-3 shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:py-5">
+    <div className="pointer-events-auto fixed inset-x-0 bottom-0 z-[60] border-t-2 border-white/15 bg-ink/95 px-4 py-3 shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:py-5">
       {/* Fixed neutral hairline (NOT the per-site accent) for contrast. */}
       <div
         aria-hidden
