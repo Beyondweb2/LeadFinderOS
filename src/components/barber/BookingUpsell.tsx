@@ -47,7 +47,20 @@ function CountUp({ to, suffix = "", duration = 1400, start }: {
   return <>{val}{suffix}</>;
 }
 
-function FeaturePill({ icon: Icon, label }: { icon: LucideIcon; label: string }) {
+function FeaturePill({ icon: Icon, label, soon = false }: { icon: LucideIcon; label: string; soon?: boolean }) {
+  // `soon` renders a muted, clearly not-yet-available pill (greyed + "Soon"
+  // tag) so a feature that isn't ready can't read as live.
+  if (soon) {
+    return (
+      <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white/[0.02] px-3 py-1.5 text-sm font-medium text-zinc-500">
+        <Icon className="h-4 w-4 text-zinc-600" />
+        {label}
+        <span className="rounded-full border border-line px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+          Soon
+        </span>
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center gap-2 rounded-full border border-line bg-white/[0.04] px-3 py-1.5 text-sm font-medium text-zinc-200">
       <Icon className="h-4 w-4 text-amber" />
@@ -90,9 +103,9 @@ export function BookingUpsell({ onNotify, interested }: { onNotify: () => void; 
       </h2>
 
       <div className="mt-5 flex flex-wrap gap-2">
-        <FeaturePill icon={Globe} label="Custom domain" />
         <FeaturePill icon={Calendar} label="Online booking (24/7)" />
         <FeaturePill icon={MessageSquare} label="SMS reminders" />
+        <FeaturePill icon={Globe} label="Custom domain" soon />
       </div>
 
       <div className="mt-6 flex flex-wrap gap-x-10 gap-y-4">
@@ -109,13 +122,13 @@ export function BookingUpsell({ onNotify, interested }: { onNotify: () => void; 
           {interested ? (
             <><Check className="mr-2 h-4 w-4" /> We'll notify you</>
           ) : (
-            <><Bell className="mr-2 h-4 w-4" /> I'm interested — notify me</>
+            <><Bell className="mr-2 h-4 w-4" /> I'm interested - notify me</>
           )}
         </Button>
       </div>
 
       <p className="mt-5 text-[11px] leading-snug text-zinc-600">
-        Figures are from general appointment-reminder research, not barbershop-specific — Imperial
+        Figures are from general appointment-reminder research, not barbershop-specific - Imperial
         College London study; systematic review of reminder studies.
       </p>
     </div>

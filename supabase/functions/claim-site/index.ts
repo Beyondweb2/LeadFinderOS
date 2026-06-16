@@ -232,6 +232,22 @@ serve(async (req) => {
       timestamp: new Date().toISOString(),
     }));
 
+    // Record the claim in the Phase 1 tracking funnel — best-effort, never
+    // blocks the claim. Sets claimed_at once + logs a site_events row, so a
+    // claim shows in LeadFinder regardless of how it was initiated.
+    try {
+      await serviceClient
+        .from("generated_sites")
+        .update({ claimed_at: new Date().toISOString() })
+        .eq("id", claimedSiteId)
+        .is("claimed_at", null);
+      await serviceClient
+        .from("site_events")
+        .insert({ site_id: claimedSiteId, event_type: "claim", meta: { source: "claim-site" } });
+    } catch (e) {
+      console.error("[CLAIM-SITE] tracking write failed (non-blocking):", (e as Error).message);
+    }
+
     // Notify the operator (best-effort; never blocks or fails the claim).
     await notifyAdminOfClaim({
       serviceClient,

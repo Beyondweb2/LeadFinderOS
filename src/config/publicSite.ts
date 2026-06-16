@@ -15,3 +15,9 @@ export const publicSiteUrl = (slug: string) => `${PUBLIC_SITE_ORIGIN}/p/${slug}`
 /** Display label without the scheme — e.g. "yoursites.uk/p/<slug>". */
 export const publicSiteLabel = (slug: string) =>
   `${PUBLIC_SITE_ORIGIN.replace(/^https?:\/\//, "")}/p/${slug}`;
+
+/**
+ * The unguessable, permanent link sent to the barber to view + claim their site
+ * (the `/s/:token` route). Re-openable forever; only the claim is one-time.
+ */
+export const barberSiteUrl = (shareToken: string) => `${PUBLIC_SITE_ORIGIN}/s/${shareToken}`;

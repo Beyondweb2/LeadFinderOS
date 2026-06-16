@@ -223,7 +223,7 @@ const productPreviewSlides = [
   {
     image: previewDashboard,
     title: 'Dashboard',
-    desc: 'See your entire pipeline at a glance — revenue, active leads and what needs attention today.',
+    desc: 'See your entire pipeline at a glance - revenue, active leads and what needs attention today.',
     points: ['Track total revenue & deals won', 'See pipeline by stage', 'Upcoming follow-ups listed'],
   },
   {
@@ -485,7 +485,7 @@ const MobileTestimonialSlider = ({ testimonials }: { testimonials: Testimonial[]
   );
 };
 
-// Compact phone preview for desktop hero — no arrows, no side feature boxes
+// Compact phone preview for desktop hero - no arrows, no side feature boxes
 const HeroPhonePreview = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -741,7 +741,7 @@ const Landing = () => {
               </h1>
               
               <p className="text-sm sm:text-lg md:text-lg lg:text-[17px] text-foreground/60 max-w-2xl lg:max-w-[30rem] mx-auto lg:mx-0 leading-relaxed sm:leading-[1.7] px-2 lg:px-0 mt-5 sm:mt-6">
-                Find businesses that need a website, contact them instantly and close deals — all from one dashboard.
+                Find businesses that need a website, contact them instantly and close deals - all from one dashboard.
               </p>
               
               {/* CTA */}
@@ -1209,7 +1209,7 @@ const Landing = () => {
               © {new Date().getFullYear()} LeadFinder Pro. All rights reserved.
             </p>
             <p className="text-[10px] sm:text-xs text-muted-foreground/40">
-              Need help? <a href="mailto:beyondwebcraft@outlook.com" className="hover:text-muted-foreground transition-colors">beyondwebcraft@outlook.com</a>
+              Need help? <a href="mailto:paul@move37.fun" className="hover:text-muted-foreground transition-colors">paul@move37.fun</a>
             </p>
           </div>
         </div>

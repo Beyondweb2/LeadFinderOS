@@ -14,11 +14,11 @@ import { useBarberBranding } from "@/hooks/useBarberBranding";
 import "@/templates/barber/fonts.css";
 
 /**
- * /claim/:token — the barber's self-contained front door. Barber-branded (NO
+ * /claim/:token - the barber's self-contained front door. Barber-branded (NO
  * LeadFinder chrome). Two steps:
- *   1. "preview" — the barber sees their ACTUAL website (the real template,
+ *   1. "preview" - the barber sees their ACTUAL website (the real template,
  *      booking disabled) with a fixed "Claim for free" bar.
- *   2. "signup"  — clicking claim brings up the create-account form (or a
+ *   2. "signup"  - clicking claim brings up the create-account form (or a
  *      one-click claim if already signed in), then claims the site → /barber.
  *
  * Barbers are invite-only: this page is only reachable with a token, and account
@@ -78,7 +78,7 @@ export default function Claim() {
 
   useBarberBranding(
     businessName && businessName !== "your business"
-      ? `Claim your website — ${businessName}`
+      ? `Claim your website - ${businessName}`
       : "Claim your website",
   );
 
@@ -130,7 +130,7 @@ export default function Claim() {
       password,
     });
     if (signInError) {
-      // Claim succeeded but auto-login failed — send them to log in manually.
+      // Claim succeeded but auto-login failed - send them to log in manually.
       navigate("/barber-login", { replace: true });
       return;
     }
@@ -162,14 +162,14 @@ export default function Claim() {
     );
   }
 
-  // Step 1 — show the barber their ACTUAL website, with a "Claim for free" bar.
+  // Step 1 - show the barber their ACTUAL website, with a "Claim for free" bar.
   if (phase === "ready" && step === "preview" && content) {
     return (
       <BarberSiteTemplate content={content} bookingEnabled={false} onClaim={() => setStep("signup")} />
     );
   }
 
-  // Card layout — sign-up step, plus the invalid / already-claimed states.
+  // Card layout - sign-up step, plus the invalid / already-claimed states.
   return (
     <div className={SHELL} style={{ backgroundImage: SHELL_BG }}>
       <div className={CARD}>
@@ -229,7 +229,7 @@ export default function Claim() {
               {/* Honest reassurance: the SITE is free; booking + reminders are the paid add-on. */}
               <div className="rounded-lg border border-line bg-white/[0.02] p-3 text-xs leading-relaxed text-zinc-400">
                 <p>
-                  <span className="font-semibold text-white">Your website is free</span> — no card needed.
+                  <span className="font-semibold text-white">Your website is free</span> - no card needed.
                 </p>
                 <p className="mt-1">
                   Add online booking &amp; no-show SMS reminders for{" "}
@@ -317,7 +317,7 @@ export default function Claim() {
           Set up by {SETUP_BY_NAME}
           {SUPPORT_CONTACT && (
             <>
-              {" "}— questions?{" "}
+              {" "}- questions?{" "}
               {supportContactHref ? (
                 <a href={supportContactHref} className="text-amber underline hover:text-amber-soft">
                   {SUPPORT_CONTACT}

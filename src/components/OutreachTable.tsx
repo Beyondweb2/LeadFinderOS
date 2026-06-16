@@ -61,6 +61,7 @@ import { useCopiedPhones } from '@/hooks/useCopiedPhones';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { useNavigate } from 'react-router-dom';
 import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
@@ -146,7 +147,7 @@ export function OutreachTable({
   const { isAdmin } = useSubscription();
   const [aiOpenerLead, setAiOpenerLead] = useState<OutreachLead | null>(null);
   const [generatingSiteId, setGeneratingSiteId] = useState<string | null>(null);
-  const [sitesByLead, setSitesByLead] = useState<Record<string, { id: string; slug: string }>>({});
+  const [sitesByLead, setSitesByLead] = useState<Record<string, { id: string; slug: string; opened: boolean; claimed: boolean; addon: boolean }>>({});
   const navigate = useNavigate();
 
   // Admin-only: map lead_id -> existing generated site (most recent) so each row
@@ -156,14 +157,23 @@ export function OutreachTable({
     if (!isAdmin) return;
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
+      // Untyped client: tracking columns aren't in the generated types yet.
+      const { data } = await (supabase as unknown as SupabaseClient)
         .from('generated_sites')
-        .select('id, site_name, lead_id')
+        .select('id, site_name, lead_id, first_opened_at, claimed_at, addon_interest_at')
         .order('created_at', { ascending: false });
       if (cancelled || !data) return;
-      const map: Record<string, { id: string; slug: string }> = {};
-      for (const row of data as Array<{ id: string; site_name: string; lead_id: string | null }>) {
-        if (row.lead_id && !map[row.lead_id]) map[row.lead_id] = { id: row.id, slug: row.site_name };
+      const map: Record<string, { id: string; slug: string; opened: boolean; claimed: boolean; addon: boolean }> = {};
+      for (const row of data as Array<{ id: string; site_name: string; lead_id: string | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>) {
+        if (row.lead_id && !map[row.lead_id]) {
+          map[row.lead_id] = {
+            id: row.id,
+            slug: row.site_name,
+            opened: !!row.first_opened_at,
+            claimed: !!row.claimed_at,
+            addon: !!row.addon_interest_at,
+          };
+        }
       }
       setSitesByLead(map);
     })();
@@ -1216,6 +1226,19 @@ export function OutreachTable({
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
                           )}
                           <WhatsAppStatusBadge status={lead.whatsapp_status} />
+                          {/* Site claim/upsell funnel (admin) — from generated_sites tracking */}
+                          {(() => {
+                            const f = sitesByLead[lead.id];
+                            if (!f) return null;
+                            const pill = 'inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border-transparent';
+                            return (
+                              <span className="flex items-center gap-1">
+                                {f.opened && <span className={`${pill} bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))]`} title="Opened the site link">Opened</span>}
+                                {f.claimed && <span className={`${pill} bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))]`} title="Claimed the free site">Claimed</span>}
+                                {f.addon && <span className={`${pill} bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))]`} title="Requested the booking + SMS add-on">Upsell</span>}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </TableCell>
                       <TableCell>

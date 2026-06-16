@@ -13,7 +13,7 @@ export const SETUP_BY_NAME = "Paul";
  * Contact for barber questions — an email or a phone number. Leave empty to hide
  * the "questions?" part. Set this before sending links to real barbers.
  */
-export const SUPPORT_CONTACT: string = "beyondwebcraft@outlook.com";
+export const SUPPORT_CONTACT: string = "paul@move37.fun";
 
 /** mailto:/tel: href derived from SUPPORT_CONTACT (undefined when unset). */
 export const supportContactHref = SUPPORT_CONTACT
