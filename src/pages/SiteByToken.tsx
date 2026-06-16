@@ -61,7 +61,10 @@ export default function SiteByToken() {
         return;
       }
       if (data?.ok && data?.claim_path) {
-        navigate(data.claim_path);
+        // Skip the redundant site-preview step on /claim: the barber has already
+        // seen + browsed their site here on /s/, so land them straight on the
+        // claim/account form. URL stays the clean /claim/<token>.
+        navigate(data.claim_path, { state: { fromShare: true } });
         return;
       }
       throw new Error("no_claim_path");

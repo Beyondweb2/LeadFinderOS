@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -45,9 +45,15 @@ export default function Claim() {
   const { token = "" } = useParams();
   const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Coming from the /s/:token share link, the barber has already seen + browsed
+  // their site, so skip the redundant preview step and land on the claim form.
+  // Direct /claim visits (e.g. an admin-sent link) still see the preview first.
+  const fromShare = (location.state as { fromShare?: boolean } | null)?.fromShare === true;
 
   const [phase, setPhase] = useState<Phase>("loading");
-  const [step, setStep] = useState<Step>("preview");
+  const [step, setStep] = useState<Step>(fromShare ? "signup" : "preview");
   const [businessName, setBusinessName] = useState("your business");
   const [content, setContent] = useState<BarberSiteContent | null>(null);
   const [email, setEmail] = useState("");
