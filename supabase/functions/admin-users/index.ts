@@ -146,8 +146,35 @@ serve(async (req) => {
 
       const metricsMap = new Map(metricsData.map((m: any) => [m.user_id, m]));
 
+      // Per-user site funnel: attribute generated_sites to a user via the linked
+      // lead (generated_sites.lead_id -> outreach_leads.user_id). Counts sites
+      // Sent / Claimed / Upsell from the same tracking columns the Outreach
+      // badges use.
+      const leadOwnerRes = userIds.length > 0
+        ? await serviceClient.from('outreach_leads').select('id, user_id').in('user_id', userIds)
+        : { data: [] };
+      const leadOwner = new Map<string, string>();
+      for (const l of ((leadOwnerRes as any).data || [])) leadOwner.set(l.id, l.user_id);
+
+      const leadIds = [...leadOwner.keys()];
+      const sitesRes = leadIds.length > 0
+        ? await serviceClient.from('generated_sites').select('lead_id, sent_at, claimed_at, addon_interest_at').in('lead_id', leadIds)
+        : { data: [] };
+
+      const siteAgg = new Map<string, { sent: number; claimed: number; upsell: number }>();
+      for (const s of ((sitesRes as any).data || [])) {
+        const ownerId = leadOwner.get(s.lead_id);
+        if (!ownerId) continue;
+        const a = siteAgg.get(ownerId) || { sent: 0, claimed: 0, upsell: 0 };
+        if (s.sent_at) a.sent++;
+        if (s.claimed_at) a.claimed++;
+        if (s.addon_interest_at) a.upsell++;
+        siteAgg.set(ownerId, a);
+      }
+
       let users = authUsers.map(u => {
         const metrics = metricsMap.get(u.id) as any;
+        const sites = siteAgg.get(u.id) || { sent: 0, claimed: 0, upsell: 0 };
 
         return {
           id: u.id,
@@ -157,6 +184,9 @@ serve(async (req) => {
           businesses_added_count: metrics?.businesses_added_count ?? 0,
           messages_sent_count: contactedCountMap.get(u.id) ?? 0,
           replies_count: metrics?.replies_count ?? 0,
+          sites_sent_count: sites.sent,
+          sites_claimed_count: sites.claimed,
+          sites_upsell_count: sites.upsell,
           last_active_at: metrics?.last_active_at || null,
           last_search_at: metrics?.last_search_at || null,
         };

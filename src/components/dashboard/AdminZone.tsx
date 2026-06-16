@@ -63,6 +63,9 @@ interface AdminUser {
   businesses_added_count: number;
   messages_sent_count: number;
   replies_count: number;
+  sites_sent_count?: number;
+  sites_claimed_count?: number;
+  sites_upsell_count?: number;
   last_active_at: string | null;
   last_search_at: string | null;
 }
@@ -446,6 +449,9 @@ export function AdminZone() {
                     <TableHead className="text-right">Added</TableHead>
                     <TableHead className="text-right">Messages</TableHead>
                     <TableHead className="text-right">Replies</TableHead>
+                    <TableHead className="text-right">Sites Sent</TableHead>
+                    <TableHead className="text-right">Claimed</TableHead>
+                    <TableHead className="text-right">Upsell</TableHead>
                     <TableHead>Last Active</TableHead>
                     <TableHead>Last Search</TableHead>
                     <TableHead className="w-10"></TableHead>
@@ -454,7 +460,7 @@ export function AdminZone() {
                 <TableBody>
                   {filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={13} className="text-center py-8 text-muted-foreground">
                         No users found
                       </TableCell>
                     </TableRow>
@@ -483,6 +489,9 @@ export function AdminZone() {
                         <TableCell className="text-right tabular-nums">{u.businesses_added_count}</TableCell>
                         <TableCell className="text-right tabular-nums">{u.messages_sent_count ?? 0}</TableCell>
                         <TableCell className="text-right tabular-nums">{u.replies_count ?? 0}</TableCell>
+                        <TableCell className="text-right tabular-nums">{u.sites_sent_count ?? 0}</TableCell>
+                        <TableCell className="text-right tabular-nums">{u.sites_claimed_count ?? 0}</TableCell>
+                        <TableCell className="text-right tabular-nums">{u.sites_upsell_count ?? 0}</TableCell>
                         <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                           {timeAgo(u.last_active_at)}
                         </TableCell>
