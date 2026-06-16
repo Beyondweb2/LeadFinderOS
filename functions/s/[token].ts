@@ -41,12 +41,12 @@ export const onRequestGet = async (context: { request: Request; params: Record<s
   try {
     if (token) {
       const apiUrl = `${SUPABASE_URL}/rest/v1/generated_sites` +
-        `?share_token=eq.${encodeURIComponent(token)}&select=site_name,content&limit=1`;
+        `?share_token=eq.${encodeURIComponent(token)}&select=site_name,content,template&limit=1`;
       const r = await fetch(apiUrl, {
         headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
       });
       if (r.ok) {
-        const rows = await r.json() as Array<{ site_name?: string; content?: Record<string, unknown> }>;
+        const rows = await r.json() as Array<{ site_name?: string; content?: Record<string, unknown>; template?: string }>;
         const row = Array.isArray(rows) ? rows[0] : null;
         if (row) {
           const content = (row.content ?? {}) as Record<string, unknown>;
@@ -54,8 +54,18 @@ export const onRequestGet = async (context: { request: Request; params: Record<s
             ? content.businessName.trim() : (row.site_name || "Your new website");
           const desc = (typeof content.tagline === "string" && content.tagline.trim())
             ? content.tagline.trim() : "Your new website — take a look.";
-          const img = (typeof content.heroImageUrl === "string" && content.heroImageUrl)
-            || (typeof content.logoUrl === "string" && content.logoUrl) || "";
+          // og:image: the barber's own hero, else their first gallery photo, else a
+          // neutral stock photo for their template — never the LeadFinder logo.
+          // The site's hero is `heroImageUrl || STOCK_HERO`, so we mirror that here.
+          const gallery = Array.isArray(content.galleryImageUrls) ? content.galleryImageUrls : [];
+          const isSalon = (typeof row.template === "string" ? row.template : "barber") === "salon";
+          const fallbackImg = `${SITE_ORIGIN}/og-default-${isSalon ? "salon" : "barber"}.jpg`;
+          const rawImg = (typeof content.heroImageUrl === "string" && content.heroImageUrl.trim())
+            || (typeof gallery[0] === "string" && (gallery[0] as string).trim())
+            || "";
+          const img = rawImg
+            ? (/^https?:\/\//i.test(rawImg) ? rawImg : `${SITE_ORIGIN}${rawImg.startsWith("/") ? "" : "/"}${rawImg}`)
+            : fallbackImg;
           const url = `${SITE_ORIGIN}/s/${token}`;
 
           html = html.replace(/<title>[^<]*<\/title>/i, `<title>${escAttr(biz)}</title>`);
