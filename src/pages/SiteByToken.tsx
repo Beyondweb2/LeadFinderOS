@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +8,8 @@ import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
 import { SalonSiteTemplate } from "@/templates/salon/SalonSiteTemplate";
 import type { SiteContent } from "@/templates/shared/content";
 import { useSiteBranding } from "@/hooks/useSiteBranding";
-import { ClaimPopup } from "@/components/site/ClaimPopup";
+import { useToast } from "@/hooks/use-toast";
+import { IntroPopup } from "@/components/site/IntroPopup";
 import { recordSiteEvent } from "@/lib/siteTracking";
 
 // Untyped client: share_token + tracking columns aren't in the generated types
@@ -37,9 +38,38 @@ interface SiteRow {
  */
 export default function SiteByToken() {
   const { token = "" } = useParams();
+  const navigate = useNavigate();
+  const { toast } = useToast();
   const [popupOpen, setPopupOpen] = useState(false);
+  const [claiming, setClaiming] = useState(false);
   const openedRef = useRef(false);
   const autoOpenedRef = useRef(false);
+
+  // Bottom "Claim for free" bar → mint a one-time claim link from the share_token
+  // (begin-claim) and hand off to the EXISTING /claim account-creation flow.
+  const handleClaim = async () => {
+    if (claiming) return;
+    setClaiming(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("begin-claim", {
+        body: { share_token: token },
+      });
+      if (error) throw error;
+      if (data?.already_claimed) {
+        toast({ title: "Already claimed", description: "This website has already been claimed — log in to manage it." });
+        navigate("/barber-login");
+        return;
+      }
+      if (data?.ok && data?.claim_path) {
+        navigate(data.claim_path);
+        return;
+      }
+      throw new Error("no_claim_path");
+    } catch {
+      toast({ title: "Couldn't start the claim", description: "Please try again, or contact Paul.", variant: "destructive" });
+      setClaiming(false);
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["site-by-token", token],
@@ -111,15 +141,17 @@ export default function SiteByToken() {
 
   return (
     <>
-      <Template content={content} bookingEnabled={false} onClaim={() => setPopupOpen(true)} />
-      <ClaimPopup
+      <Template content={content} bookingEnabled={false} onClaim={handleClaim} />
+      <IntroPopup
         open={popupOpen}
         onOpenChange={setPopupOpen}
         businessName={businessName || "your business"}
-        shareToken={token}
-        initialClaimed={!!data.claimed_at}
-        initialAddonWanted={!!data.addon_interest_at}
       />
+      {claiming && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/70 backdrop-blur-sm">
+          <Loader2 className="h-8 w-8 animate-spin text-amber" />
+        </div>
+      )}
     </>
   );
 }

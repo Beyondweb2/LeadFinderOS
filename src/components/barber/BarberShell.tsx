@@ -8,6 +8,7 @@ import {
   LayoutDashboard, CalendarDays, Pencil, Settings as SettingsIcon, LogOut, Menu, X,
   ExternalLink, Globe, EyeOff, Loader2, Sparkles, Check, ArrowLeft,
 } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SiteEditor } from "@/components/SiteEditor";
 import { StaffManager } from "@/components/StaffManager";
 import { BookingsManager } from "@/components/BookingsManager";
@@ -15,9 +16,10 @@ import { WeekCalendar } from "@/components/barber/WeekCalendar";
 import { BookingUpsell } from "@/components/barber/BookingUpsell";
 import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
 import { londonInstant, londonYMD } from "@/components/barber/london";
+import { recordSiteEvent } from "@/lib/siteTracking";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
-export type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent; is_paid?: boolean };
+export type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent; is_paid?: boolean; share_token?: string; addon_interest_at?: string | null };
 
 const SHELL_BG =
   "radial-gradient(1100px 600px at 85% -8%, rgba(230,162,75,0.10), transparent 60%)," +
@@ -57,7 +59,8 @@ export function BarberShell({
   const [page, setPage] = useState<PageKey>("dashboard");
   const [navOpen, setNavOpen] = useState(false);
   const [savingStatus, setSavingStatus] = useState(false);
-  const [interested, setInterested] = useState(false);
+  const [interested, setInterested] = useState(!!site.addon_interest_at);
+  const [showAddonConfirm, setShowAddonConfirm] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
 
   const shopName = site.content?.businessName || site.site_name;
@@ -92,9 +95,15 @@ export function BarberShell({
     });
   };
 
-  const handleNotifyInterest = () => {
+  // Add-on interest CTA (shared by the welcome modal, the announcement bar and
+  // the settings upsell card). Records interest against this site's share_token
+  // (NO payment) and shows the 24-hour confirmation. Sticky via addon_interest_at.
+  const handleNotifyInterest = async () => {
     setInterested(true);
-    toast({ title: "You're on the list", description: "We'll email you the moment online booking & SMS reminders go live." });
+    setShowAddonConfirm(true);
+    if (site.share_token) {
+      await recordSiteEvent(site.share_token, "addon_interest");
+    }
   };
 
   const go = (k: PageKey) => { setPage(k); setNavOpen(false); };
@@ -192,11 +201,11 @@ export function BarberShell({
         {!site.is_paid && (
           <button
             type="button"
-            onClick={() => go("settings")}
+            onClick={handleNotifyInterest}
             className="flex w-full items-center justify-center gap-2 bg-amber px-4 py-2 text-center text-sm font-semibold text-ink transition-colors hover:bg-amber-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/40"
           >
-            <span>Unlock online booking &amp; SMS reminders — get more clients, stop the no-shows</span>
-            <span aria-hidden="true">→</span>
+            <span>Online booking &amp; SMS reminders — get more clients, stop the no-shows</span>
+            <span className="rounded-full bg-ink/15 px-2 py-0.5 text-xs font-bold">{interested ? "Requested ✓" : "Get access"}</span>
           </button>
         )}
 
@@ -267,14 +276,31 @@ export function BarberShell({
         </main>
       </div>
 
-      {/* One-time welcome (single-site owner, first visit) */}
+      {/* One-time welcome (single-site owner, first visit) — leads with the upsell. */}
       {showWelcome && (
         <WelcomeOverlay
           site={site}
+          interested={interested}
           onClose={dismissWelcome}
-          onEdit={() => { dismissWelcome(); go("edit"); }}
+          onUpsell={() => { dismissWelcome(); handleNotifyInterest(); }}
         />
       )}
+
+      {/* Add-on interest confirmation (24h message) — shown after any upsell CTA. */}
+      <Dialog open={showAddonConfirm} onOpenChange={setShowAddonConfirm}>
+        <DialogContent className="max-w-sm rounded-2xl border-line bg-ink-card p-6 text-center text-zinc-200">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-amber/30 bg-amber/10">
+            <Check className="h-6 w-6 text-amber" />
+          </div>
+          <h2 className="mt-3 text-xl font-bold text-white">Thanks — noted!</h2>
+          <p className="mt-1 text-sm text-zinc-300">
+            You'll receive a message from us with more info within 24 hours.
+          </p>
+          <Button onClick={() => setShowAddonConfirm(false)} className="mt-5 w-full rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">
+            Got it
+          </Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -328,29 +354,30 @@ function StatCard({ label, value }: { label: string; value: number | null }) {
   );
 }
 
-/** One-time, friendly welcome shown the first time a barber opens their dashboard
- *  after claiming. Ink/amber, with their real public URL + next steps. */
-function WelcomeOverlay({ site, onClose, onEdit }: { site: OwnedSite; onClose: () => void; onEdit: () => void }) {
+/** One-time first-visit popup after claiming. Welcomes the barber, then leads
+ *  with the online-booking + SMS upsell (interest-capture only — no payment).
+ *  "Get access" records add-on interest; "Maybe later" dismisses. */
+function WelcomeOverlay({ site, interested, onClose, onUpsell }: { site: OwnedSite; interested: boolean; onClose: () => void; onUpsell: () => void }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-ink/85 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div role="dialog" aria-modal="true" className="relative w-full max-w-md overflow-hidden rounded-2xl border border-amber/30 bg-ink-card p-6 shadow-accent-lg sm:p-8" style={{ backgroundImage: SHELL_BG }}>
         <div className="inline-flex items-center gap-2 rounded-full border border-amber/30 bg-amber/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-soft">
-          <Sparkles className="h-3.5 w-3.5" /> Welcome
+          <Sparkles className="h-3.5 w-3.5" /> Your site is live
         </div>
-        <h2 className="mt-4 font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">Your site is live 🎉</h2>
-        <p className="mt-2 text-sm text-zinc-400">It's online now at your own link:</p>
-        <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer" className="mt-2 flex max-w-full items-center gap-2 rounded-lg border border-line bg-white/[0.04] px-3 py-2 font-mono text-sm text-amber-soft transition-colors hover:border-amber/50 hover:text-amber">
-          <span className="truncate">{publicSiteLabel(site.site_name)}</span>
-          <ExternalLink className="h-4 w-4 shrink-0" />
-        </a>
+        <h2 className="mt-4 font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">Get more clients, stop no-shows</h2>
+        <p className="mt-2 text-sm text-zinc-300">
+          Add <span className="font-semibold text-white">online booking (24/7)</span> and <span className="font-semibold text-white">no-show SMS reminders</span> so clients can book themselves and actually turn up.
+        </p>
         <ul className="mt-5 space-y-2 text-sm text-zinc-300">
-          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-amber" /><span>Edit your text, services, prices, hours, photos, logo and accent colour anytime — the <span className="font-semibold text-white">Edit Site</span> tab.</span></li>
-          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-amber" /><span>Share your link with customers so they can find and book you.</span></li>
+          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-amber" /><span>Clients book online any time — no back-and-forth.</span></li>
+          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-amber" /><span>Automatic SMS reminders cut no-shows.</span></li>
         </ul>
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="outline" onClick={onClose} className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white">Got it</Button>
-          <Button onClick={onEdit} className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">Edit my site</Button>
+          <Button variant="outline" onClick={onClose} className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white">Maybe later</Button>
+          <Button onClick={onUpsell} disabled={interested} className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft disabled:opacity-100">
+            {interested ? <><Check className="mr-2 h-4 w-4" /> Requested</> : "Get access"}
+          </Button>
         </div>
       </div>
     </div>

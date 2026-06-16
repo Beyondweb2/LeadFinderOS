@@ -59,3 +59,6 @@ verify_jwt = false
 
 [functions.record-site-event]
 verify_jwt = false
+
+[functions.begin-claim]
+verify_jwt = false
