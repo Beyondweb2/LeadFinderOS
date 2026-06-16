@@ -348,6 +348,15 @@
     animation: float 8s ease-in-out infinite;
   }
 
+  /* Subtle up/down float for the "Claim for free" CTA. Reuses the gentle
+     subtle-bounce keyframe (-4px) and respects reduced-motion. */
+  .animate-claim-float {
+    animation: subtle-bounce 2.6s ease-in-out infinite;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .animate-claim-float { animation: none; }
+  }
+
   .animate-gradient {
     animation: gradient-shift 8s ease infinite;
     background-size: 200% 200%;

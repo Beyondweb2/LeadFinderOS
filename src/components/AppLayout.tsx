@@ -50,7 +50,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           {/* Main content area */}
           <div className="flex-1 flex flex-col min-w-0 relative z-10">
             <main ref={mainRef} className="flex-1 overflow-auto pb-20 md:pb-0">
-              <div className="container max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+              <div className="container max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
                 <Suspense fallback={
                   <div className="flex items-center justify-center py-32">
                     <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />

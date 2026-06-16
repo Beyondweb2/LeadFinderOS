@@ -1016,7 +1016,7 @@ function ClaimBar({ onClaim }: { onClaim: () => void }) {
           <div className="text-sm font-bold text-salon-ink sm:text-xl">This is your new website</div>
           <div className="text-xs text-salon-muted sm:text-sm">It&apos;s free — no card needed.</div>
         </div>
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 animate-claim-float">
           <span
             aria-hidden
             className="absolute -inset-1 rounded-full bg-salon-rose/25 opacity-60 blur-lg animate-pulse-slow"

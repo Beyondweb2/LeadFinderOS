@@ -1075,7 +1075,7 @@ function ClaimBar({ onClaim }: { onClaim: () => void }) {
           <div className="text-sm font-bold text-white sm:text-xl">This is your new website</div>
           <div className="text-xs text-zinc-300 sm:text-sm">It's free — no card needed.</div>
         </div>
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 animate-claim-float">
           {/* Soft pulsing white glow (fixed, not accent-tied). */}
           <span
             aria-hidden
