@@ -6,6 +6,7 @@ import { CampaignPicker } from '@/components/CampaignPicker';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 
 import { useOutreach } from '@/hooks/useOutreach';
+import { useCampaigns } from '@/hooks/useCampaigns';
 import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTeamClaims } from '@/hooks/useTeamClaims';
@@ -35,6 +36,18 @@ const Index = () => {
       else localStorage.removeItem(ACTIVE_CAMPAIGN_KEY);
     } catch {}
   }, []);
+
+  // Self-heal a stale active campaign: if the persisted id no longer exists
+  // (campaign deleted by anyone, or the whole account was wiped), fall back to
+  // "No campaign" so adding a lead can't fail with a campaign_id foreign-key
+  // violation. Reconciles only after the real list has loaded.
+  const { campaigns, isLoading: campaignsLoading } = useCampaigns();
+  useEffect(() => {
+    if (campaignsLoading) return;
+    if (activeCampaign && !campaigns.some((c) => c.id === activeCampaign)) {
+      handleCampaignChange(null);
+    }
+  }, [campaignsLoading, campaigns, activeCampaign, handleCampaignChange]);
 
   // Teammate claims on the current results, scoped to the active campaign.
   const { getTeamClaim } = useTeamClaims(leads, activeCampaign);
