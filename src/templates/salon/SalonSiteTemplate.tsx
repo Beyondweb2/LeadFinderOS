@@ -26,6 +26,7 @@ export function SalonSiteTemplate({
   bookingEnabled = false,
   bookingSlug,
   onClaim,
+  showClaimBar = true,
 }: {
   content: SiteContent;
   /**
@@ -46,6 +47,12 @@ export function SalonSiteTemplate({
    * signing up. Used by the /claim page; the public /p/:slug site never sets it.
    */
   onClaim?: () => void;
+  /**
+   * Hide the fixed "Claim for free" bar while it should not be tappable — e.g.
+   * while the intro popup is open on /s/:token, so a tap can't land on the bar
+   * behind the popup (the cause of the "double-press"). Defaults to shown.
+   */
+  showClaimBar?: boolean;
 }) {
   const {
     businessName,
@@ -151,7 +158,7 @@ export function SalonSiteTemplate({
       </div>
 
       {/* Mobile-only sticky Book bar — owners open the link on a phone. */}
-      {onClaim ? <ClaimBar onClaim={onClaim} /> : <MobileBookBar onBook={openBooking} />}
+      {onClaim ? (showClaimBar ? <ClaimBar onClaim={onClaim} /> : null) : <MobileBookBar onBook={openBooking} />}
 
       {/* Public site → real booking flow (keyed off the slug). Admin/claim
           preview (no slug) → the frontend-only demo modal. */}

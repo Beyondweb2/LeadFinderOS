@@ -144,7 +144,7 @@ export default function SiteByToken() {
 
   return (
     <>
-      <Template content={content} bookingEnabled={false} onClaim={handleClaim} />
+      <Template content={content} bookingEnabled={false} onClaim={handleClaim} showClaimBar={!popupOpen} />
       <IntroPopup
         open={popupOpen}
         onOpenChange={setPopupOpen}

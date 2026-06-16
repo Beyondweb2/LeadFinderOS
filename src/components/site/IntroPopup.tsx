@@ -1,4 +1,4 @@
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Mail, Phone } from 'lucide-react';
 
@@ -13,19 +13,44 @@ const SHELL_BG =
   'radial-gradient(800px 500px at -10% 8%, rgba(230,162,75,0.06), transparent 55%)';
 
 /**
- * Light, trust-building intro shown once when a barber opens their /s/:token
- * link. NOT a claim or upsell - it just reassures them the site is genuinely
- * free and easy to edit, then gets out of the way ("See my site"). Claiming
- * happens later via the bottom "Claim for free" bar; the upsell lives on the
- * dashboard. Styled to match the barber template (condensed uppercase display
- * type, dark/amber theme). Copy is intentionally human/understated - keep it.
+ * Light, trust-building intro shown once when a barber opens their /s/:token link.
+ *
+ * Intentionally NON-BLOCKING (not a Radix modal): the dim backdrop is purely
+ * visual (`pointer-events-none`) so it never intercepts a click on the page
+ * beneath — in particular the fixed "Claim for free" bar stays clickable on the
+ * FIRST press. A Radix Dialog here used to swallow the first tap (it sets
+ * body{pointer-events:none} + closes on outside-pointerdown), which is what made
+ * the claim button feel like it needed two presses. Only the card + its
+ * "See my site" button are interactive; Escape also closes it. Copy is
+ * intentionally human/understated - keep it.
  */
 export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps) {
   const name = businessName?.trim() || 'your business';
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onOpenChange(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onOpenChange]);
+
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="max-w-md overflow-hidden rounded-2xl border-line bg-ink-card p-6 text-zinc-300 sm:p-8"
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      onClick={() => onOpenChange(false)}
+    >
+      {/* Dim backdrop — clicking it (or "See my site") closes. While this popup is
+          open the Claim bar is hidden (showClaimBar=false on /s/), so there is no
+          bar behind the popup to mis-tap — the cause of the old "double-press". */}
+      <div aria-hidden className="absolute inset-0 bg-ink/80 backdrop-blur-sm animate-in fade-in" />
+
+      <div
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        className="relative w-full max-w-md overflow-hidden rounded-2xl border border-line bg-ink-card p-6 text-zinc-300 shadow-[0_24px_70px_-24px_rgba(0,0,0,0.75)] animate-in fade-in zoom-in-95 sm:p-8"
         style={{ backgroundImage: SHELL_BG }}
       >
         <div className="flex flex-col">
@@ -77,7 +102,7 @@ export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps
             See my site
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }
