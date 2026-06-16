@@ -73,7 +73,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { format, isToday, isPast, startOfDay, formatDistanceToNow } from 'date-fns';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
-import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from '@/types/outreach';
+import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS } from '@/types/outreach';
+import { ContactMethodBadge } from '@/components/ContactMethodBadge';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { cn } from '@/lib/utils';
 
@@ -632,6 +634,20 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           )}
         </TableCell>
 
+        {/* Contact method — inline editable, same column + badge styling as Outreach */}
+        <TableCell className="hidden lg:table-cell" data-no-expand onClick={(e) => e.stopPropagation()}>
+          <Select value={lead.contact_method || ''} onValueChange={(v) => handleContactMethodUpdate(v)}>
+            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+              <ContactMethodBadge method={lead.contact_method as ContactMethod} />
+            </SelectTrigger>
+            <SelectContent>
+              {CONTACT_METHOD_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </TableCell>
+
         {/* Status — inline editable dropdown (click pill → select → saves) */}
         <TableCell className="hidden sm:table-cell" data-no-expand onClick={(e) => e.stopPropagation()}>
           <Select value={mapLegacyStatus(lead.status)} onValueChange={handleStatusSelect}>
@@ -701,27 +717,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </button>
             )}
           </div>
-        </TableCell>
-
-        {/* Deal stage progress — compact, visible without expanding */}
-        <TableCell className="hidden lg:table-cell">
-          {(() => {
-            const currentIdx = getStageIndex(lead.status);
-            const isPaid = mapLegacyStatus(lead.status) === 'paid';
-            const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
-            const stages = PIPELINE_STAGES.filter(s => s !== 'closed_lost');
-            return (
-              <div className="flex items-center gap-1 w-[72px]">
-                {stages.map((stage, idx) => {
-                  const isActive = idx === currentIdx;
-                  const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
-                  return (
-                    <div key={stage} className={cn('h-1 rounded-full flex-1 transition-colors', isCompleted || isActive ? isPaid ? 'bg-emerald-500' : 'bg-primary' : isLost ? 'bg-zinc-700' : 'bg-border/60')} />
-                  );
-                })}
-              </div>
-            );
-          })()}
         </TableCell>
 
         {/* Actions */}
@@ -885,6 +880,28 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                 </div>
               </section>
             )}
+            {/* ── STAGE progress (moved here so the collapsed row matches Outreach's columns) ── */}
+            <section className="rounded-xl border border-border/50 bg-card/40 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Stage</label>
+                <span className="text-[11px] text-muted-foreground">{statusLabel}</span>
+              </div>
+              <div className="mt-2 flex items-center gap-1">
+                {(() => {
+                  const currentIdx = getStageIndex(lead.status);
+                  const isPaid = mapLegacyStatus(lead.status) === 'paid';
+                  const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
+                  const stages = PIPELINE_STAGES.filter(s => s !== 'closed_lost');
+                  return stages.map((stage, idx) => {
+                    const isActive = idx === currentIdx;
+                    const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
+                    return (
+                      <div key={stage} className={cn('h-1.5 rounded-full flex-1 transition-colors', isCompleted || isActive ? isPaid ? 'bg-emerald-500' : 'bg-primary' : isLost ? 'bg-zinc-700' : 'bg-border/60')} />
+                    );
+                  });
+                })()}
+              </div>
+            </section>
             {/* ── DEAL panel: stage progress + the four deal controls ── */}
             <section className="rounded-xl border border-border/50 bg-card/40 p-3 space-y-3">
             {/* Due date + Revenue — Status, Next action & stage are edited inline on the row */}
@@ -1489,9 +1506,9 @@ const PotentialWorkPage = () => {
                 <TableHead className="w-[36px]" />
                 <TableHead>Business</TableHead>
                 <TableHead className="hidden md:table-cell w-[140px]">Phone</TableHead>
+                <TableHead className="hidden lg:table-cell w-[120px]">Contact</TableHead>
                 <TableHead className="hidden sm:table-cell w-[130px]">Status</TableHead>
                 <TableHead className="hidden md:table-cell w-[140px]">Next action</TableHead>
-                <TableHead className="hidden lg:table-cell w-[88px]">Stage</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
