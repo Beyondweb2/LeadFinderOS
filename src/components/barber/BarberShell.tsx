@@ -196,7 +196,7 @@ export function BarberShell({
 
       {/* Content */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Upsell announcement bar — shown ONLY to unpaid barbers; paid sites
+        {/* Upsell announcement bar - shown ONLY to unpaid barbers; paid sites
             never see it. Clicking opens Settings where the full upsell lives. */}
         {!site.is_paid && (
           <button
@@ -204,7 +204,7 @@ export function BarberShell({
             onClick={handleNotifyInterest}
             className="flex w-full items-center justify-center gap-2 bg-amber px-4 py-2 text-center text-sm font-semibold text-ink transition-colors hover:bg-amber-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/40"
           >
-            <span>Online booking &amp; SMS reminders — get more clients, stop the no-shows</span>
+            <span>Online booking &amp; SMS reminders - get more clients, stop the no-shows</span>
             <span className="rounded-full bg-ink/15 px-2 py-0.5 text-xs font-bold">{interested ? "Requested ✓" : "Get access"}</span>
           </button>
         )}
@@ -250,7 +250,7 @@ export function BarberShell({
 
           {page === "settings" && (
             <div className="space-y-6">
-              {/* Upsell card — unpaid barbers only; paid never see an upsell. */}
+              {/* Upsell card - unpaid barbers only; paid never see an upsell. */}
               {!site.is_paid && <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />}
               <Card>
                 <CardHeader>
@@ -258,7 +258,7 @@ export function BarberShell({
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <div className="text-sm text-muted-foreground">
-                    Plan: <span className="font-medium text-zinc-200">{site.is_paid ? "Pro — booking & reminders active" : "Free"}</span>
+                    Plan: <span className="font-medium text-zinc-200">{site.is_paid ? "Pro - booking & reminders active" : "Free"}</span>
                   </div>
                   <div className="text-sm text-muted-foreground">Your public site link:</div>
                   <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-mono text-sm text-amber-soft hover:text-amber">
@@ -276,7 +276,7 @@ export function BarberShell({
         </main>
       </div>
 
-      {/* One-time welcome (single-site owner, first visit) — leads with the upsell. */}
+      {/* One-time welcome (single-site owner, first visit) - leads with the upsell. */}
       {showWelcome && (
         <WelcomeOverlay
           site={site}
@@ -286,13 +286,13 @@ export function BarberShell({
         />
       )}
 
-      {/* Add-on interest confirmation (24h message) — shown after any upsell CTA. */}
+      {/* Add-on interest confirmation (24h message) - shown after any upsell CTA. */}
       <Dialog open={showAddonConfirm} onOpenChange={setShowAddonConfirm}>
         <DialogContent className="max-w-sm rounded-2xl border-line bg-ink-card p-6 text-center text-zinc-200">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-amber/30 bg-amber/10">
             <Check className="h-6 w-6 text-amber" />
           </div>
-          <h2 className="mt-3 text-xl font-bold text-white">Thanks — noted!</h2>
+          <h2 className="mt-3 text-xl font-bold text-white">Thanks - noted!</h2>
           <p className="mt-1 text-sm text-zinc-300">
             You'll receive a message from us with more info within 24 hours.
           </p>
@@ -348,14 +348,14 @@ function DashboardPage({ site }: { site: OwnedSite }) {
 function StatCard({ label, value }: { label: string; value: number | null }) {
   return (
     <div className="rounded-2xl border border-line bg-ink-card p-4">
-      <div className="font-display text-4xl text-amber">{value === null ? "—" : value}</div>
+      <div className="font-display text-4xl text-amber">{value === null ? "-" : value}</div>
       <div className="mt-1 text-xs uppercase tracking-wider text-zinc-500">{label}</div>
     </div>
   );
 }
 
 /** One-time first-visit popup after claiming. Welcomes the barber, then leads
- *  with the online-booking + SMS upsell (interest-capture only — no payment).
+ *  with the online-booking + SMS upsell (interest-capture only - no payment).
  *  "Get access" records add-on interest; "Maybe later" dismisses. */
 function WelcomeOverlay({ site, interested, onClose, onUpsell }: { site: OwnedSite; interested: boolean; onClose: () => void; onUpsell: () => void }) {
   return (
@@ -370,7 +370,7 @@ function WelcomeOverlay({ site, interested, onClose, onUpsell }: { site: OwnedSi
           Add <span className="font-semibold text-white">online booking (24/7)</span> and <span className="font-semibold text-white">no-show SMS reminders</span> so clients can book themselves and actually turn up.
         </p>
         <ul className="mt-5 space-y-2 text-sm text-zinc-300">
-          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-amber" /><span>Clients book online any time — no back-and-forth.</span></li>
+          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-amber" /><span>Clients book online any time - no back-and-forth.</span></li>
           <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-amber" /><span>Automatic SMS reminders cut no-shows.</span></li>
         </ul>
         <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

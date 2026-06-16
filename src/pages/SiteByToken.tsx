@@ -29,11 +29,11 @@ interface SiteRow {
 }
 
 /**
- * /s/:token — the barber's own site link. Unguessable, permanent, re-openable
+ * /s/:token - the barber's own site link. Unguessable, permanent, re-openable
  * forever (viewing is unlimited). Renders their real site with a claim popup;
  * only the CLAIM is one-time. Records an `open` event on load, and claim /
  * add-on-interest events from the popup (all via record-site-event, keyed by the
- * share token). Booking is shown as a preview (disabled) — this is the barber's
+ * share token). Booking is shown as a preview (disabled) - this is the barber's
  * claim view, not their live customer booking page.
  */
 export default function SiteByToken() {
@@ -56,7 +56,7 @@ export default function SiteByToken() {
       });
       if (error) throw error;
       if (data?.already_claimed) {
-        toast({ title: "Already claimed", description: "This website has already been claimed — log in to manage it." });
+        toast({ title: "Already claimed", description: "This website has already been claimed - log in to manage it." });
         navigate("/barber-login");
         return;
       }
