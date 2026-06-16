@@ -70,6 +70,9 @@ interface DashboardMetrics {
 
   // Tracked leads
   trackedLeads: OutreachLead[];
+
+  // Site funnel — generated_sites tracking (admin-visible; RLS-scoped)
+  siteFunnel: { sent: number; opened: number; claimed: number; addonRequested: number };
 }
 
 const getDateRanges = () => {
@@ -103,6 +106,7 @@ export function useDashboardMetrics() {
     totalPhonesCopied: 0, totalLeadsContacted: 0,
   });
   const [outreachEvents7d, setOutreachEvents7d] = useState<{ channel: string; created_at: string }[]>([]);
+  const [siteFunnel, setSiteFunnel] = useState({ sent: 0, opened: 0, claimed: 0, addonRequested: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const hasLoadedOnceRef = useRef(false);
   const { user } = useAuth();
@@ -138,6 +142,24 @@ export function useDashboardMetrics() {
 
     setAllLeads((leadsResult.data || []) as OutreachLead[]);
     setOutreachEvents7d(eventsResult.data || []);
+
+    // Site funnel from generated_sites tracking. Untyped client (tracking cols
+    // aren't in the generated types). RLS scopes it — admins see all sites.
+    // Best-effort: never blocks the rest of the dashboard.
+    try {
+      const { data: sites } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
+        .from('generated_sites')
+        .select('sent_at, first_opened_at, claimed_at, addon_interest_at');
+      const rows = (sites || []) as Array<{ sent_at: string | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>;
+      setSiteFunnel({
+        sent: rows.filter(r => r.sent_at).length,
+        opened: rows.filter(r => r.first_opened_at).length,
+        claimed: rows.filter(r => r.claimed_at).length,
+        addonRequested: rows.filter(r => r.addon_interest_at).length,
+      });
+    } catch (e) {
+      console.error('Site funnel fetch failed (non-blocking):', e);
+    }
 
     const searchHistory = searchHistoryResult.data || [];
     setTotalNoWebsiteFound(searchHistory.reduce((sum, s) => sum + (s.no_website_count || 0), 0));
@@ -295,8 +317,9 @@ export function useDashboardMetrics() {
       recordDay, avgPerDayAllTime, avgPerDayLast7Days,
       activity: activityData,
       trackedLeads,
+      siteFunnel,
     };
-  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d]);
+  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, siteFunnel]);
 
   return { metrics, isLoading, refetch: fetchAllData };
 }

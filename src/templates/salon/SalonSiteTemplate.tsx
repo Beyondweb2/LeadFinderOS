@@ -26,6 +26,7 @@ export function SalonSiteTemplate({
   bookingEnabled = false,
   bookingSlug,
   onClaim,
+  showClaimBar = true,
 }: {
   content: SiteContent;
   /**
@@ -46,6 +47,12 @@ export function SalonSiteTemplate({
    * signing up. Used by the /claim page; the public /p/:slug site never sets it.
    */
   onClaim?: () => void;
+  /**
+   * Hide the fixed "Claim for free" bar while it should not be tappable — e.g.
+   * while the intro popup is open on /s/:token, so a tap can't land on the bar
+   * behind the popup (the cause of the "double-press"). Defaults to shown.
+   */
+  showClaimBar?: boolean;
 }) {
   const {
     businessName,
@@ -151,7 +158,7 @@ export function SalonSiteTemplate({
       </div>
 
       {/* Mobile-only sticky Book bar — owners open the link on a phone. */}
-      {onClaim ? <ClaimBar onClaim={onClaim} /> : <MobileBookBar onBook={openBooking} />}
+      {onClaim ? (showClaimBar ? <ClaimBar onClaim={onClaim} /> : null) : <MobileBookBar onBook={openBooking} />}
 
       {/* Public site → real booking flow (keyed off the slug). Admin/claim
           preview (no slug) → the frontend-only demo modal. */}
@@ -1003,13 +1010,13 @@ function MobileBookBar({ onBook }: { onBook: () => void }) {
  *  A clean light platform bar (charcoal text, rose button) to suit the salon. */
 function ClaimBar({ onClaim }: { onClaim: () => void }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t border-salon-line bg-white/95 px-4 py-3 salon-shadow-lg backdrop-blur-xl sm:py-5">
+    <div className="pointer-events-auto fixed inset-x-0 bottom-0 z-[60] border-t border-salon-line bg-white/95 px-4 py-3 salon-shadow-lg backdrop-blur-xl sm:py-5">
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 sm:gap-6">
         <div className="min-w-0">
           <div className="text-sm font-bold text-salon-ink sm:text-xl">This is your new website</div>
           <div className="text-xs text-salon-muted sm:text-sm">It&apos;s free — no card needed.</div>
         </div>
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 animate-claim-float">
           <span
             aria-hidden
             className="absolute -inset-1 rounded-full bg-salon-rose/25 opacity-60 blur-lg animate-pulse-slow"

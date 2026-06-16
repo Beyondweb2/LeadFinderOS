@@ -18,6 +18,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import { barberSiteUrl } from '@/config/publicSite';
 import { useAuth } from '@/hooks/useAuth';
 import { AddCustomLeadDialog } from '@/components/AddCustomLeadDialog';
 import {
@@ -71,7 +73,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { format, isToday, isPast, startOfDay, formatDistanceToNow } from 'date-fns';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
-import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from '@/types/outreach';
+import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS } from '@/types/outreach';
+import { ContactMethodBadge } from '@/components/ContactMethodBadge';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { cn } from '@/lib/utils';
 
@@ -286,6 +290,8 @@ interface LeadCardProps {
   fetchActivities?: (leadId: string) => Promise<OutreachActivity[]>;
   /** The lead's campaign default sale type (for resolving the effective type). */
   campaignDefaultSaleType?: string | null;
+  /** Funnel tracking for this lead's site (auto-filled badges + timeline + link). */
+  funnel?: LeadFunnel | null;
 }
 
 const claimInitials = (name: string | null): string => {
@@ -302,7 +308,24 @@ const PROJECT_STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
 ];
 
-const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId, onContactGated, claim, fetchActivities, campaignDefaultSaleType }: LeadCardProps) => {
+/** Per-lead funnel tracking pulled from generated_sites (by lead_id). Powers the
+ *  auto-filled Opened/Claimed/Upsell badges + the expanded timeline + site link. */
+interface LeadFunnel {
+  share_token: string | null;
+  site_name: string | null;
+  sent_at: string | null;
+  first_opened_at: string | null;
+  claimed_at: string | null;
+  addon_interest_at: string | null;
+}
+
+/** Paid/lost statuses — a lead in any of these has EXITED Track Leads (paid ->
+ *  Paid Clients page, lost -> cleared), so Track shows only active leads. */
+const TRACK_EXIT_MAPPED = ['paid', 'payment_received', 'closed_lost'];
+const isTrackExited = (status: string): boolean =>
+  TRACK_EXIT_MAPPED.includes(mapLegacyStatus(status)) || status === 'not_interested';
+
+const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActionChange, onNotesChange, onBusinessNameChange, onImageChange, onUpdateLead, onDelete, customStatuses, onAddCustomStatus, userId, onContactGated, claim, fetchActivities, campaignDefaultSaleType, funnel }: LeadCardProps) => {
   const effectiveSaleType: SaleType = resolveSaleType(lead.sale_type, campaignDefaultSaleType);
   const deliverableOptions = DELIVERABLE_OPTIONS[effectiveSaleType];
   const [notes, setNotes] = useState(lead.notes || '');
@@ -496,6 +519,21 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
     window.dispatchEvent(new CustomEvent('demo-checklist-track-status-update'));
   };
 
+  // Stage-exit actions. Paid -> Payment Received (shows on Paid Clients) and
+  // leaves Track; Lost -> Not Going Ahead and leaves Track. Both also clear
+  // is_potential_work so the lead no longer counts as active work. The Track
+  // filter excludes these statuses, so the row moves out (no duplication).
+  const handleMarkPaid = async () => {
+    await onStatusChange(lead.id, 'payment_received' as LeadStatus);
+    await onUpdateLead(lead.id, { is_potential_work: false } as Partial<OutreachLead>);
+    const seenKey = 'leadfinder_seen_paid_popup';
+    if (!localStorage.getItem(seenKey)) { localStorage.setItem(seenKey, '1'); setShowPaidPopup(true); }
+  };
+  const handleMarkLost = async () => {
+    await onStatusChange(lead.id, 'closed_lost' as LeadStatus);
+    await onUpdateLead(lead.id, { is_potential_work: false } as Partial<OutreachLead>);
+  };
+
   const statusBorderColor = STATUS_BORDER_COLORS[mapLegacyStatus(lead.status)] || 'border-l-border/40';
   const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
   const contactMethodDisplay = lead.contact_method ? CONTACT_METHOD_LABELS[lead.contact_method] || lead.contact_method : null;
@@ -566,6 +604,21 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               {lead.category && (
                 <div className="text-xs text-muted-foreground mt-0.5 truncate">{lead.category}</div>
               )}
+              {/* Auto-filled funnel status from generated_sites tracking (same
+                  pill styling as the Outreach row badges) — no manual entry. */}
+              {funnel && (funnel.first_opened_at || funnel.claimed_at || funnel.addon_interest_at) && (
+                <div className="mt-1 flex items-center gap-1 flex-wrap">
+                  {funnel.first_opened_at && (
+                    <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border-transparent bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))]" title="Opened the site link">Opened</span>
+                  )}
+                  {funnel.claimed_at && (
+                    <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border-transparent bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))]" title="Claimed the free site">Claimed</span>
+                  )}
+                  {funnel.addon_interest_at && (
+                    <span className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border-transparent bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))]" title="Requested the booking + SMS add-on">Upsell</span>
+                  )}
+                </div>
+              )}
             </div>
         </TableCell>
 
@@ -579,6 +632,20 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           ) : (
             <span className="text-muted-foreground text-xs whitespace-nowrap">No phone listed</span>
           )}
+        </TableCell>
+
+        {/* Contact method — inline editable, same column + badge styling as Outreach */}
+        <TableCell className="hidden lg:table-cell" data-no-expand onClick={(e) => e.stopPropagation()}>
+          <Select value={lead.contact_method || ''} onValueChange={(v) => handleContactMethodUpdate(v)}>
+            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+              <ContactMethodBadge method={lead.contact_method as ContactMethod} />
+            </SelectTrigger>
+            <SelectContent>
+              {CONTACT_METHOD_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </TableCell>
 
         {/* Status — inline editable dropdown (click pill → select → saves) */}
@@ -650,27 +717,6 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
               </button>
             )}
           </div>
-        </TableCell>
-
-        {/* Deal stage progress — compact, visible without expanding */}
-        <TableCell className="hidden lg:table-cell">
-          {(() => {
-            const currentIdx = getStageIndex(lead.status);
-            const isPaid = mapLegacyStatus(lead.status) === 'paid';
-            const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
-            const stages = PIPELINE_STAGES.filter(s => s !== 'closed_lost');
-            return (
-              <div className="flex items-center gap-1 w-[72px]">
-                {stages.map((stage, idx) => {
-                  const isActive = idx === currentIdx;
-                  const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
-                  return (
-                    <div key={stage} className={cn('h-1 rounded-full flex-1 transition-colors', isCompleted || isActive ? isPaid ? 'bg-emerald-500' : 'bg-primary' : isLost ? 'bg-zinc-700' : 'bg-border/60')} />
-                  );
-                })}
-              </div>
-            );
-          })()}
         </TableCell>
 
         {/* Actions */}
@@ -776,6 +822,13 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleMarkPaid} className="text-xs text-emerald-600 focus:text-emerald-600">
+                  <Check className="h-3.5 w-3.5 mr-2" /> Mark Paid → Paid Clients
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleMarkLost} className="text-xs">
+                  <X className="h-3.5 w-3.5 mr-2" /> Lost / Not interested
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleDelete} className="text-xs text-destructive focus:text-destructive">
                   <Trash2 className="h-3.5 w-3.5 mr-2" /> Remove Lead
                 </DropdownMenuItem>
@@ -791,6 +844,64 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
         <TableRow className="border-border/50 hover:bg-transparent">
           <TableCell colSpan={7} className="p-0">
             <div ref={expandRef} className="px-3.5 sm:px-5 py-3.5 space-y-3 bg-gradient-to-b from-muted/25 to-transparent">
+            {/* ── FUNNEL panel: their journey timeline + the /s/ site link I sent ── */}
+            {funnel && (funnel.sent_at || funnel.first_opened_at || funnel.claimed_at || funnel.addon_interest_at || funnel.share_token) && (
+              <section className="rounded-xl border border-border/50 bg-card/40 p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Funnel</label>
+                  {funnel.share_token && (
+                    <a
+                      href={barberSiteUrl(funnel.share_token)}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                      title="Open the site link you sent them"
+                    >
+                      <ExternalLink className="h-3 w-3" /> Their site
+                    </a>
+                  )}
+                </div>
+                <div className="flex items-center flex-wrap gap-x-1 gap-y-1.5 text-[11px]">
+                  {([
+                    { label: 'Sent', at: funnel.sent_at },
+                    { label: 'Opened', at: funnel.first_opened_at },
+                    { label: 'Claimed', at: funnel.claimed_at },
+                    { label: 'Upsell', at: funnel.addon_interest_at },
+                  ] as { label: string; at: string | null }[]).map((s, i, arr) => (
+                    <span key={s.label} className="inline-flex items-center gap-1">
+                      <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold', s.at ? 'bg-primary/15 text-primary' : 'bg-muted/40 text-muted-foreground/50')}>
+                        {s.at && <Check className="h-2.5 w-2.5" />}
+                        {s.label}{s.at ? ` ${format(new Date(s.at), 'd MMM')}` : ''}
+                      </span>
+                      {i < arr.length - 1 && <span className="text-muted-foreground/30 px-0.5">→</span>}
+                    </span>
+                  ))}
+                </div>
+              </section>
+            )}
+            {/* ── STAGE progress (moved here so the collapsed row matches Outreach's columns) ── */}
+            <section className="rounded-xl border border-border/50 bg-card/40 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Stage</label>
+                <span className="text-[11px] text-muted-foreground">{statusLabel}</span>
+              </div>
+              <div className="mt-2 flex items-center gap-1">
+                {(() => {
+                  const currentIdx = getStageIndex(lead.status);
+                  const isPaid = mapLegacyStatus(lead.status) === 'paid';
+                  const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
+                  const stages = PIPELINE_STAGES.filter(s => s !== 'closed_lost');
+                  return stages.map((stage, idx) => {
+                    const isActive = idx === currentIdx;
+                    const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
+                    return (
+                      <div key={stage} className={cn('h-1.5 rounded-full flex-1 transition-colors', isCompleted || isActive ? isPaid ? 'bg-emerald-500' : 'bg-primary' : isLost ? 'bg-zinc-700' : 'bg-border/60')} />
+                    );
+                  });
+                })()}
+              </div>
+            </section>
             {/* ── DEAL panel: stage progress + the four deal controls ── */}
             <section className="rounded-xl border border-border/50 bg-card/40 p-3 space-y-3">
             {/* Due date + Revenue — Status, Next action & stage are edited inline on the row */}
@@ -1080,6 +1191,29 @@ const PotentialWorkPage = () => {
   const [stageFilter, setStageFilter] = useState<string | null>(null);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
 
+  // Funnel tracking per lead, keyed by lead_id (generated_sites tracking — the
+  // same source as the Outreach badges). Auto-fills the Track row's Claimed/
+  // Upsell/Opened badges + the expanded timeline + site link. RLS-scoped;
+  // untyped client (tracking cols aren't in the generated types). Best-effort.
+  const [funnelByLead, setFunnelByLead] = useState<Record<string, LeadFunnel>>({});
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await (supabase as unknown as SupabaseClient)
+        .from('generated_sites')
+        .select('lead_id, site_name, share_token, sent_at, first_opened_at, claimed_at, addon_interest_at')
+        .order('created_at', { ascending: false });
+      if (cancelled || !data) return;
+      const map: Record<string, LeadFunnel> = {};
+      for (const row of data as unknown as (LeadFunnel & { lead_id: string | null })[]) {
+        if (row.lead_id && !map[row.lead_id]) map[row.lead_id] = row;
+      }
+      setFunnelByLead(map);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
   // Auto-expand first card during walkthrough (only once)
   let isWalkthroughNeedsExpand = false;
   try {
@@ -1154,6 +1288,9 @@ const PotentialWorkPage = () => {
     const allLeads = [...leads, ...archivedLeads];
     let result = allLeads.filter((lead) => {
       const mapped = mapLegacyStatus(lead.status);
+      // Paid -> Paid Clients page, Lost -> cleared: exited leads never show in
+      // Track Leads, so this page only lists active in-progress work.
+      if (isTrackExited(lead.status)) return false;
       return lead.is_potential_work || pipelineStatuses.includes(mapped) || lead.status === 'interested';
     });
     if (searchQuery) {
@@ -1369,9 +1506,9 @@ const PotentialWorkPage = () => {
                 <TableHead className="w-[36px]" />
                 <TableHead>Business</TableHead>
                 <TableHead className="hidden md:table-cell w-[140px]">Phone</TableHead>
+                <TableHead className="hidden lg:table-cell w-[120px]">Contact</TableHead>
                 <TableHead className="hidden sm:table-cell w-[130px]">Status</TableHead>
                 <TableHead className="hidden md:table-cell w-[140px]">Next action</TableHead>
-                <TableHead className="hidden lg:table-cell w-[88px]">Stage</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -1395,6 +1532,7 @@ const PotentialWorkPage = () => {
                   claim={claimsByLead[lead.id] || null}
                   fetchActivities={fetchActivities}
                   campaignDefaultSaleType={lead.campaign_id ? campaignDefaultSaleType[lead.campaign_id] : null}
+                  funnel={funnelByLead[lead.id] || null}
                 />
               ))}
             </TableBody>

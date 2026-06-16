@@ -42,6 +42,7 @@ export function BarberSiteTemplate({
   bookingEnabled = false,
   bookingSlug,
   onClaim,
+  showClaimBar = true,
 }: {
   content: BarberSiteContent;
   /**
@@ -63,6 +64,12 @@ export function BarberSiteTemplate({
    * signing up. Used by the /claim page; the public /p/:slug site never sets it.
    */
   onClaim?: () => void;
+  /**
+   * Hide the fixed "Claim for free" bar while it should not be tappable — e.g.
+   * while the intro popup is open on /s/:token, so a tap can't land on the bar
+   * behind the popup (the cause of the "double-press"). Defaults to shown.
+   */
+  showClaimBar?: boolean;
 }) {
   const {
     businessName,
@@ -182,7 +189,7 @@ export function BarberSiteTemplate({
       </div>
 
       {/* Mobile-only sticky Book bar — owners open the link on a phone. */}
-      {onClaim ? <ClaimBar onClaim={onClaim} /> : <MobileBookBar onBook={openBooking} />}
+      {onClaim ? (showClaimBar ? <ClaimBar onClaim={onClaim} /> : null) : <MobileBookBar onBook={openBooking} />}
 
       {/* Public site → real booking flow (keyed off the slug). Admin/claim
           preview (no slug) → the frontend-only demo modal. */}
@@ -1057,7 +1064,7 @@ function MobileBookBar({ onBook }: { onBook: () => void }) {
  *  barber site whatever accent they picked. Compact on mobile; taller on desktop. */
 function ClaimBar({ onClaim }: { onClaim: () => void }) {
   return (
-    <div className="fixed inset-x-0 bottom-0 z-50 border-t-2 border-white/15 bg-ink/95 px-4 py-3 shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:py-5">
+    <div className="pointer-events-auto fixed inset-x-0 bottom-0 z-[60] border-t-2 border-white/15 bg-ink/95 px-4 py-3 shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:py-5">
       {/* Fixed neutral hairline (NOT the per-site accent) for contrast. */}
       <div
         aria-hidden
@@ -1068,7 +1075,7 @@ function ClaimBar({ onClaim }: { onClaim: () => void }) {
           <div className="text-sm font-bold text-white sm:text-xl">This is your new website</div>
           <div className="text-xs text-zinc-300 sm:text-sm">It's free — no card needed.</div>
         </div>
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 animate-claim-float">
           {/* Soft pulsing white glow (fixed, not accent-tied). */}
           <span
             aria-hidden

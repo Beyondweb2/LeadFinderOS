@@ -9,6 +9,7 @@ import { PipelineCard } from '@/components/dashboard/PipelineCard';
 import { OutreachCard } from '@/components/dashboard/OutreachCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
 import { TeamActivity } from '@/components/dashboard/TeamActivity';
+import { SiteFunnelCard } from '@/components/dashboard/SiteFunnelCard';
 import { AdminZone } from '@/components/dashboard/AdminZone';
 
 import { Card } from '@/components/ui/card';
@@ -118,6 +119,19 @@ const Dashboard = () => {
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Team activity</h2>
         <TeamActivity />
       </section>
+
+      {/* Site funnel — operator-level barber-site tracking; admins only */}
+      {isAdmin && (
+        <section>
+          <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Sites</h2>
+          <SiteFunnelCard
+            sent={metrics.siteFunnel.sent}
+            opened={metrics.siteFunnel.opened}
+            claimed={metrics.siteFunnel.claimed}
+            addonRequested={metrics.siteFunnel.addonRequested}
+          />
+        </section>
+      )}
 
       {/* Admin zone — rendered ONLY for admins (role-based useSubscription().isAdmin) */}
       {isAdmin && (
