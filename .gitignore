@@ -28,3 +28,8 @@ dist-ssr
 *.sln
 *.sw?
 supabase/.temp/
+
+# Stray local docs/artifacts — keep them out of git
+*.zip
+HANDOVER.md
+ENRICHMENT-PLACEMENT-SPEC.md
