@@ -120,6 +120,30 @@ export function fillBusinessName(template: string, businessName: string): string
   return template.replace(new RegExp(BUSINESS_NAME_TOKEN, 'gi'), businessName);
 }
 
+// Share-link placeholder: {{link}}, {{Link}}, {{share link}}, {{share_link}},
+// {{sharelink}} — case-insensitive. The barber's /s/ link substitutes in.
+const LINK_TOKEN = '\\{\\{\\s*(?:share[\\s_]*)?link\\s*\\}\\}';
+
+/** True if the template contains a share-link placeholder in any form. */
+export function hasLinkToken(template: string): boolean {
+  return new RegExp(LINK_TOKEN, 'i').test(template);
+}
+
+/**
+ * Fill a message template's tokens. Business name is always substituted (tolerant);
+ * the share link is substituted only when provided (otherwise {{link}} is left as-is
+ * so an empty link never injects a broken URL).
+ */
+export function fillTemplate(
+  template: string,
+  vars: { businessName?: string | null; link?: string | null },
+): string {
+  let out = template;
+  if (vars.businessName != null) out = fillBusinessName(out, vars.businessName);
+  if (vars.link) out = out.replace(new RegExp(LINK_TOKEN, 'gi'), vars.link);
+  return out;
+}
+
 /**
  * Open WhatsApp for multiple leads (opens first, queues rest)
  */

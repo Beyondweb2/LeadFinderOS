@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import type { OutreachLead } from '@/types/outreach';
+import { isSentStatus, type OutreachLead } from '@/types/outreach';
 
 // No hardcoded revenue constants — uses actual amount_paid from leads
 
@@ -143,22 +143,25 @@ export function useDashboardMetrics() {
     setAllLeads((leadsResult.data || []) as OutreachLead[]);
     setOutreachEvents7d(eventsResult.data || []);
 
-    // Site funnel from generated_sites tracking. Untyped client (tracking cols
-    // aren't in the generated types). RLS scopes it — admins see all sites.
-    // Best-effort: never blocks the rest of the dashboard.
+    // Site funnel. SENT is driven by the Outreach status (source of truth) —
+    // every lead past "New" counts as sent. Opened/Claimed/Add-on come from the
+    // automatic generated_sites event columns. Untyped client (tracking cols
+    // aren't in the generated types). RLS scopes it. Best-effort.
+    const sentFromStatus = (leadsResult.data || []).filter(l => isSentStatus((l as OutreachLead).status)).length;
     try {
       const { data: sites } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
         .from('generated_sites')
-        .select('sent_at, first_opened_at, claimed_at, addon_interest_at');
-      const rows = (sites || []) as Array<{ sent_at: string | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>;
+        .select('first_opened_at, claimed_at, addon_interest_at');
+      const rows = (sites || []) as Array<{ first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>;
       setSiteFunnel({
-        sent: rows.filter(r => r.sent_at).length,
+        sent: sentFromStatus,
         opened: rows.filter(r => r.first_opened_at).length,
         claimed: rows.filter(r => r.claimed_at).length,
         addonRequested: rows.filter(r => r.addon_interest_at).length,
       });
     } catch (e) {
       console.error('Site funnel fetch failed (non-blocking):', e);
+      setSiteFunnel(prev => ({ ...prev, sent: sentFromStatus }));
     }
 
     const searchHistory = searchHistoryResult.data || [];

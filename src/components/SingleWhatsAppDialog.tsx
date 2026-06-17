@@ -13,7 +13,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MessageSquare, Send, AlertTriangle, RotateCcw, Loader2, Sparkles } from 'lucide-react';
-import { generateWhatsAppUrl, fillBusinessName } from '@/lib/leadUtils';
+import { generateWhatsAppUrl, fillTemplate } from '@/lib/leadUtils';
+import { barberSiteUrl } from '@/config/publicSite';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { TemplatePicker } from '@/components/TemplatePicker';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAutoRotateTemplate } from '@/hooks/useAutoRotateTemplate';
@@ -28,12 +30,17 @@ interface SingleWhatsAppDialogProps {
   onSent?: (leadId: string, channel: 'whatsapp') => void;
   /** Admin-only: open AI opener modal for this lead */
   onAiOpener?: () => void;
+  /** Launch-pad: pre-fill this template content fresh on open (overrides saved/localStorage). */
+  initialTemplate?: string | null;
+  /** Launch-pad: the barber's /s/ link to substitute for {{link}}. If omitted, the
+   *  lead's own site link is resolved automatically on open. */
+  shareLink?: string | null;
 }
 
 const DEFAULT_TEMPLATE = `Hi, is this the right number for {{business_name}}?`;
 const STORAGE_KEY = 'leadfinder_whatsapp_template';
 
-export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpener }: SingleWhatsAppDialogProps) {
+export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpener, initialTemplate, shareLink }: SingleWhatsAppDialogProps) {
   const handleOpenChange = (v: boolean) => {
     onOpenChange(v);
     if (!v) {
@@ -54,23 +61,52 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
   const isWalkthroughStep3 = isDemoUser && state.addedToCrm && !state.contactAttempted;
 
 
-  // Auto-rotate on dialog open
+  // On open: a launch (initialTemplate) always wins and opens FRESH — ignores
+  // auto-rotate and localStorage so a previous barber's content can't leak.
   useEffect(() => {
-    if (open && autoOn) {
+    if (!open) return;
+    setIsSending(false);
+    if (initialTemplate != null) {
+      setTemplate(initialTemplate);
+      setIsModified(true);
+      return;
+    }
+    if (autoOn) {
       const next = getNextTemplate(template);
       setTemplate(next);
       setIsModified(next !== DEFAULT_TEMPLATE);
       localStorage.setItem(STORAGE_KEY, next);
-    } else if (open && !autoOn) {
+    } else {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         setTemplate(saved);
         setIsModified(saved !== DEFAULT_TEMPLATE);
       }
     }
-    if (open) setIsSending(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, initialTemplate, lead?.id]);
+
+  // Resolve the barber's /s/ link for {{link}} (launch link wins; else lead's own site).
+  const [resolvedLink, setResolvedLink] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open || !lead?.id) { setResolvedLink(shareLink ?? null); return; }
+    if (shareLink) { setResolvedLink(shareLink); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await (supabase as unknown as SupabaseClient)
+          .from('generated_sites')
+          .select('share_token')
+          .eq('lead_id', lead.id)
+          .maybeSingle();
+        const token = (data as { share_token?: string } | null)?.share_token;
+        if (!cancelled) setResolvedLink(token ? barberSiteUrl(token) : null);
+      } catch {
+        if (!cancelled) setResolvedLink(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, lead?.id, shareLink]);
 
   // Listen for AI opener message selection
   useEffect(() => {
@@ -113,14 +149,14 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
 
   const previewMessage = useMemo(() => {
     if (!lead) return template;
-    return fillBusinessName(template, lead.business_name);
-  }, [template, lead]);
+    return fillTemplate(template, { businessName: lead.business_name, link: resolvedLink });
+  }, [template, lead, resolvedLink]);
 
   const handleSend = async () => {
     if (!lead || !lead.phone || isSending) return;
     setIsSending(true);
     
-    const message = fillBusinessName(template, lead.business_name);
+    const message = fillTemplate(template, { businessName: lead.business_name, link: resolvedLink });
     const url = generateWhatsAppUrl(lead.phone, message);
 
     // Store pending WhatsApp check markers in localStorage

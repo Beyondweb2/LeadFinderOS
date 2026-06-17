@@ -106,6 +106,16 @@ interface OutreachTableProps {
   onContactGated?: (channel: 'call' | 'sms' | 'whatsapp', leadId?: string) => boolean;
   /** Persist enrichment results found via the per-row enrich buttons. */
   onUpdateLead?: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
+  /** Launch-pad intent (e.g. from the Manage page): open a specific lead's composer
+   *  fresh with a chosen template + that barber's /s/ link. */
+  launchIntent?: {
+    leadId: string;
+    channel: 'sms' | 'whatsapp' | 'call';
+    templateContent?: string | null;
+    shareLink?: string | null;
+  } | null;
+  /** Called once a launchIntent has been acted on, so the parent can clear it. */
+  onLaunchConsumed?: () => void;
 }
 
 const ITEMS_PER_PAGE_DESKTOP = 15;
@@ -138,6 +148,8 @@ export function OutreachTable({
   onRetryPhoneFetch,
   onContactGated,
   onUpdateLead,
+  launchIntent,
+  onLaunchConsumed,
 }: OutreachTableProps) {
   const { toast } = useToast();
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
@@ -194,6 +206,10 @@ export function OutreachTable({
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
   // Dialog state for WhatsApp/SMS template pages
   const [whatsappDialogLead, setWhatsappDialogLead] = useState<OutreachLead | null>(null);
+  // Launch-pad: template + /s/ link injected into the composer for THIS launch only
+  // (cleared on dialog close so a later manual open behaves normally).
+  const [launchTemplate, setLaunchTemplate] = useState<string | null>(null);
+  const [launchLink, setLaunchLink] = useState<string | null>(null);
   const [smsDialogLead, setSmsDialogLead] = useState<OutreachLead | null>(null);
   // Optimistic UI state: leadId -> partial overrides
   const [optimisticUpdates, setOptimisticUpdates] = useState<Map<string, Record<string, any>>>(new Map());
@@ -488,7 +504,21 @@ export function OutreachTable({
     executeContact(lead, 'call');
   }, [executeContact, onContactMethodChange]);
 
-  // handleCallClick is defined below with walkthrough tracking
+  // Launch-pad: when the parent passes a launchIntent (e.g. from Manage), open the
+  // matching lead's composer FRESH with the chosen template + that barber's link.
+  // Waits until the target lead is present in the list, then consumes the intent.
+  useEffect(() => {
+    if (!launchIntent) return;
+    const lead = leads.find((l) => l.id === launchIntent.leadId);
+    if (!lead) return; // not loaded/filtered yet — rerun when leads change
+    setLaunchTemplate(launchIntent.templateContent ?? null);
+    setLaunchLink(launchIntent.shareLink ?? null);
+    if (launchIntent.channel === 'sms') setSmsDialogLead(lead);
+    else if (launchIntent.channel === 'whatsapp') setWhatsappDialogLead(lead);
+    else if (launchIntent.channel === 'call') handleCallClick(lead);
+    onLaunchConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [launchIntent, leads]);
 
   // Called when user clicks "Open App" in WhatsApp/SMS dialog
   const handleDialogSent = useCallback((leadId: string, channel: 'whatsapp' | 'sms') => {
@@ -1567,10 +1597,14 @@ export function OutreachTable({
         onOpenChange={(open) => {
           if (!open) {
             setWhatsappDialogLead(null);
+            setLaunchTemplate(null);
+            setLaunchLink(null);
             window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
           }
         }}
         lead={whatsappDialogLead}
+        initialTemplate={launchTemplate}
+        shareLink={launchLink}
         onSent={handleDialogSent}
         onAiOpener={isAdmin && whatsappDialogLead ? () => {
           setAiOpenerLead(whatsappDialogLead);
@@ -1583,10 +1617,14 @@ export function OutreachTable({
         onOpenChange={(open) => {
           if (!open) {
             setSmsDialogLead(null);
+            setLaunchTemplate(null);
+            setLaunchLink(null);
             window.dispatchEvent(new CustomEvent('demo-checklist-contact-panel-closed'));
           }
         }}
         lead={smsDialogLead}
+        initialTemplate={launchTemplate}
+        shareLink={launchLink}
         onSent={handleDialogSent}
         onAiOpener={isAdmin && smsDialogLead ? () => {
           setAiOpenerLead(smsDialogLead);

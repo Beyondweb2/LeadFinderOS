@@ -7,6 +7,7 @@ export type LeadStatus =
   | 'wants_draft'
   | 'interested'
   | 'not_interested'
+  | 'delivered'
   | 'sent_initial_text'
   | 'replied'
   | 'sent_voice_note'
@@ -188,9 +189,10 @@ export const CONTACT_METHOD_OPTIONS: { value: ContactMethod; label: string }[] =
 ];
 
 // Pipeline status options (where the lead is in the pipeline)
-export type PipelineStatus = 
+export type PipelineStatus =
   | 'not_contacted'
   | 'waiting'
+  | 'delivered'
   | 'contacted'
   | 'replied'
   | 'interested'
@@ -200,12 +202,28 @@ export type PipelineStatus =
 export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [
   { value: 'not_contacted', label: 'New' },
   { value: 'waiting', label: 'Attempted' },
+  { value: 'delivered', label: 'Delivered' },
   { value: 'contacted', label: 'Contacted' },
   { value: 'replied', label: 'Replied' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'completed', label: 'Closed' },
 ];
+
+// ── Status semantics shared by the dashboard (Outreach status = source of truth) ──
+// A lead counts as "contacted / sent" once it has left "New" (any status except
+// not_contacted). This deliberately includes Not Interested and Closed — i.e.
+// "everyone I've actually contacted".
+export function isSentStatus(status?: string | null): boolean {
+  return !!status && status !== 'not_contacted';
+}
+
+// "Replied or beyond" on the pipeline pill — used for the Replied funnel count
+// now that the manual Mark-replied button is gone.
+const REPLIED_OR_BEYOND = ['replied', 'interested', 'completed'];
+export function isRepliedStatus(status?: string | null): boolean {
+  return !!status && REPLIED_OR_BEYOND.includes(status);
+}
 
 export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'send_initial_text', label: 'Send Initial Text' },
