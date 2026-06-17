@@ -781,19 +781,23 @@ function Gallery({ images, businessName }: { images: string[]; businessName: str
     </Reveal>
   );
 
-  // 1 image → a single wide feature tile.
-  if (imgs.length === 1) {
+  // 1–2 images → simple centered portrait tiles (no mosaic needed).
+  if (imgs.length <= 2) {
     return (
       <section id="gallery" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
         {header}
-        <Reveal as="figure" className="mx-auto max-w-3xl">
-          <SmartImg
-            src={imgs[0]}
-            alt={`${businessName} — gallery 1`}
-            className="group w-full rounded-2xl border border-salon-line aspect-[16/10]"
-            imgClassName="transition-transform duration-700 group-hover:scale-105"
-          />
-        </Reveal>
+        <div className={imgs.length === 1 ? "mx-auto max-w-md" : "mx-auto grid max-w-2xl grid-cols-2 gap-3 sm:gap-4"}>
+          {imgs.map((src, i) => (
+            <Reveal as="figure" key={`${src}-${i}`} delay={Math.min(i * 0.05, 0.3)}>
+              <SmartImg
+                src={src}
+                alt={`${businessName} — gallery ${i + 1}`}
+                className="group w-full rounded-2xl border border-salon-line aspect-[4/5]"
+                imgClassName="transition-transform duration-700 group-hover:scale-105"
+              />
+            </Reveal>
+          ))}
+        </div>
       </section>
     );
   }
@@ -809,13 +813,13 @@ function Gallery({ images, businessName }: { images: string[]; businessName: str
             key={`${src}-${i}`}
             delay={Math.min(i * 0.05, 0.3)}
             className={`${layout.tiles[i] ?? ""} ${
-              imgs.length % 2 === 1 && i === imgs.length - 1 ? "max-sm:col-span-2" : ""
+              imgs.length % 2 === 1 && i === imgs.length - 1 ? "max-md:col-span-2" : ""
             } h-full`}
           >
             <SmartImg
               src={src}
               alt={`${businessName} — gallery ${i + 1}`}
-              className="group h-full w-full rounded-2xl border border-salon-line aspect-square sm:aspect-auto"
+              className="group h-full w-full rounded-2xl border border-salon-line aspect-square md:aspect-auto"
               imgClassName="transition-transform duration-700 group-hover:scale-105"
             />
           </Reveal>
