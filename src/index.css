@@ -504,3 +504,21 @@ textarea,
 .salon-dash .hover\:bg-amber:hover,
 .salon-dash .hover\:bg-amber-soft:hover { background-color: #000000; color: #FFFFFF; }
 .salon-dash .font-display { font-family: "Playfair Display", Georgia, serif; font-weight: 500; }
+
+/* Thin, rounded, dark-theme scrollbar for scrollable dialog/log areas
+   (replaces the chunky default). Opt-in via the .thin-scrollbar class. */
+.thin-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
+}
+.thin-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+.thin-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.thin-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.25);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.thin-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.4);
+}

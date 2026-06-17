@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide } from 'lucide-react';
+import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, Users, PoundSterling, ImagePlus } from 'lucide-react';
 import { TeamNotes } from '@/components/TeamNotes';
+import { Badge } from '@/components/ui/badge';
+import { ContactMethodBadge } from '@/components/ContactMethodBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,13 +22,15 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, formatDistanceToNow, startOfDay } from 'date-fns';
 import { SALE_TYPES, SALE_TYPE_LABELS, resolveSaleType, type SaleType } from '@/lib/saleType';
-import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType } from '@/types/outreach';
+import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS } from '@/types/outreach';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { cn } from '@/lib/utils';
 
@@ -182,6 +186,18 @@ interface LeadFunnel {
   addon_interest_at: string | null;
 }
 
+/** Small coloured section header for visual hierarchy + fast scanning. */
+function SectionLabel({ icon: Icon, color, children }: { icon: React.ComponentType<{ className?: string }>; color: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-2 flex items-center gap-1.5">
+      <Icon className={cn('h-3.5 w-3.5', color)} />
+      <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">{children}</span>
+    </div>
+  );
+}
+
+const CARD = 'rounded-xl border border-border/60 bg-card/60 p-3.5 shadow-sm';
+
 interface LeadDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -218,7 +234,7 @@ export function LeadDetailDialog({
   if (!lead) return null;
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[88vh] overflow-hidden !flex flex-col !p-0 !gap-0">
         <LeadDetailBody
           key={lead.id}
           lead={lead}
@@ -471,319 +487,228 @@ function LeadDetailBody({
 
   return (
     <>
-      <DialogHeader>
-        <DialogTitle className="flex items-center gap-2 min-w-0">
-          {editingName ? (
-            <div className="flex items-center gap-1 flex-1 min-w-0">
-              <Input
-                value={editedName}
-                onChange={(e) => setEditedName(e.target.value)}
-                className="h-7 text-sm font-semibold px-1.5 flex-1"
-                autoFocus
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveName();
-                  if (e.key === 'Escape') {
-                    setEditedName(lead.business_name);
-                    setEditingName(false);
-                  }
-                }}
-              />
-              <button onClick={handleSaveName} className="h-6 w-6 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded">
-                <Check className="h-3.5 w-3.5" />
-              </button>
-              <button
-                onClick={() => {
-                  setEditedName(lead.business_name);
-                  setEditingName(false);
-                }}
-                className="h-6 w-6 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          ) : (
-            <>
-              <span className="truncate">{lead.business_name}</span>
-              <button
-                onClick={() => setEditingName(true)}
-                className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-foreground rounded transition-colors shrink-0"
-                title="Edit name"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            </>
-          )}
-        </DialogTitle>
-      </DialogHeader>
-
-      <div className="space-y-3">
-        {/* Hero image */}
-        <section className="rounded-xl border border-border/50 bg-card/40 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Image</label>
-            <div className="flex items-center gap-1.5">
-              <Button size="sm" variant="outline" className="h-7 text-xs" disabled={isUploadingImage} onClick={() => fileInputRef.current?.click()}>
-                <Pencil className="h-3 w-3 mr-1" /> {lead.image_url ? 'Change' : 'Add image'}
-              </Button>
-              {lead.image_url && (
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={handleRemoveImage}>
-                  <X className="h-3 w-3 mr-1" /> Remove
-                </Button>
-              )}
-            </div>
-          </div>
-          {lead.image_url && (
-            <img src={lead.image_url} alt={lead.business_name} className="mt-2 w-full max-h-40 object-cover rounded-lg border border-border/50" />
-          )}
-          <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-        </section>
-
-        {/* Funnel panel: their journey timeline + the /s/ site link */}
-        {funnel && (funnel.sent_at || funnel.first_opened_at || funnel.replied_at || funnel.claimed_at || funnel.addon_interest_at || funnel.share_token) && (
-          <section className="rounded-xl border border-border/50 bg-card/40 p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Funnel</label>
-              {funnel.share_token && (
-                <a
-                  href={barberSiteUrl(funnel.share_token)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
-                  title="Open the site link you sent them"
-                >
-                  <ExternalLink className="h-3 w-3" /> Their site
-                </a>
-              )}
-            </div>
-            <div className="flex items-center flex-wrap gap-x-1 gap-y-1.5 text-[11px]">
-              {(
-                [
-                  { label: 'Sent', at: funnel.sent_at },
-                  { label: 'Opened', at: funnel.first_opened_at },
-                  { label: 'Replied', at: funnel.replied_at },
-                  { label: 'Claimed', at: funnel.claimed_at },
-                  { label: 'Upsell', at: funnel.addon_interest_at },
-                ] as { label: string; at: string | null }[]
-              ).map((s, i, arr) => (
-                <span key={s.label} className="inline-flex items-center gap-1">
-                  <span className={cn('inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold', s.at ? 'bg-primary/15 text-primary' : 'bg-muted/40 text-muted-foreground/50')}>
-                    {s.at && <Check className="h-2.5 w-2.5" />}
-                    {s.label}
-                    {s.at ? ` ${format(new Date(s.at), 'd MMM')}` : ''}
-                  </span>
-                  {i < arr.length - 1 && <span className="text-muted-foreground/30 px-0.5">→</span>}
-                </span>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Stage progress */}
-        <section className="rounded-xl border border-border/50 bg-card/40 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Stage</label>
-            <span className="text-[11px] text-muted-foreground">{statusLabel}</span>
-          </div>
-          <div className="mt-2 flex items-center gap-1">
-            {(() => {
-              const currentIdx = getStageIndex(lead.status);
-              const isPaid = mapLegacyStatus(lead.status) === 'paid';
-              const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
-              const stages = PIPELINE_STAGES.filter((s) => s !== 'closed_lost');
-              return stages.map((stage, idx) => {
-                const isActive = idx === currentIdx;
-                const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
-                return (
-                  <div
-                    key={stage}
-                    className={cn('h-1.5 rounded-full flex-1 transition-colors', isCompleted || isActive ? (isPaid ? 'bg-emerald-500' : 'bg-primary') : isLost ? 'bg-zinc-700' : 'bg-border/60')}
-                  />
-                );
-              });
-            })()}
-          </div>
-        </section>
-
-        {/* Status + Next action editors */}
-        <section className="rounded-xl border border-border/50 bg-card/40 p-3 space-y-3">
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground block mb-1">Status</label>
-              <Select value={mapLegacyStatus(lead.status)} onValueChange={handleStatusSelect}>
-                <SelectTrigger className="w-full h-auto p-0 border-0 bg-transparent focus:ring-0">
-                  <span className={cn('inline-flex items-center rounded-full border border-transparent px-2.5 py-0.5 text-xs font-semibold', statusColorCls)}>
-                    {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-3 w-3 mr-0.5" />}
-                    <span className="truncate">{statusLabel}</span>
-                  </span>
-                </SelectTrigger>
-                <SelectContent>
-                  {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                  {customStatuses.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                  {onAddCustomStatus && (
-                    <SelectItem value="__add_custom__" className="text-primary">
-                      + Custom Status
-                    </SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground block mb-1">Next action</label>
-              <Select value={nextAction} onValueChange={handleNextActionChange}>
-                <SelectTrigger className="w-full h-auto p-0 border-0 bg-transparent focus:ring-0">
-                  {(() => {
-                    const cl = getLeadCustomAction(lead.id);
-                    const trackKey = getTrackActionForLead(lead.id);
-                    const opt = TRACK_NEXT_ACTION_OPTIONS.find((o) => o.value === (trackKey || mapLegacyAction(lead.next_action || 'none')));
-                    const label = cl || (opt && opt.value !== 'none' ? opt.label : null);
-                    const colorCls = cl ? 'bg-teal-500 text-white border-transparent' : NEXT_ACTION_COLORS[trackKey || mapLegacyAction(lead.next_action || 'none')] || NEXT_ACTION_COLORS.none;
-                    return label ? (
-                      <span className={cn('inline-flex items-center rounded-full border border-transparent px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap', colorCls)}>{label}</span>
-                    ) : (
-                      <span className="text-sm text-muted-foreground/50">+ Set action</span>
-                    );
-                  })()}
-                </SelectTrigger>
-                <SelectContent>
-                  {TRACK_NEXT_ACTION_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                  {customActions.length > 0 && (
-                    <>
-                      <div className="h-px bg-border my-1" />
-                      {customActions.map((ca) => (
-                        <SelectItem key={ca.id} value={`custom::${ca.label}`}>
-                          <div className="flex items-center gap-2">
-                            <Tag className="h-3 w-3 text-teal-400" />
-                            {ca.label}
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </>
-                  )}
-                  <div className="h-px bg-border my-1" />
-                  <SelectItem value="__add_custom_action__" className="text-primary">
-                    + Custom Action
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Due date + Revenue */}
-          <div className="grid grid-cols-2 gap-2.5">
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground block mb-1">Due date</label>
-              <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" size="sm" className={cn('h-8 px-2.5 text-xs w-full justify-start gap-1', dueLabel ? dueLabel.cls : 'text-muted-foreground')}>
-                    <CalendarIconLucide className="h-3 w-3" />
-                    {nextActionDate ? format(nextActionDate, 'MMM d') : 'Date'}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar mode="single" selected={nextActionDate} onSelect={handleDateChange} initialFocus className="p-3 pointer-events-auto" />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground block mb-1">Revenue</label>
-              <div className="relative">
-                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">£</span>
+      {/* ── Header: name + glanceable pills (does not scroll) ── */}
+      <div className="shrink-0 border-b border-border/60 bg-card/30 px-5 pt-5 pb-3.5">
+        <div className="flex items-start justify-between gap-3 pr-9">
+          <DialogTitle className="flex items-center gap-2 min-w-0 text-lg">
+            {editingName ? (
+              <div className="flex items-center gap-1 flex-1 min-w-0">
                 <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={potentialRevenue}
-                  onChange={(e) => setPotentialRevenue(e.target.value)}
-                  onBlur={async () => {
-                    const val = potentialRevenue ? parseFloat(potentialRevenue) : null;
-                    if (val !== (lead.potential_revenue ?? null)) {
-                      await onUpdateLead(lead.id, { potential_revenue: val } as Partial<OutreachLead>);
-                    }
-                  }}
-                  className="h-8 text-xs border-border/50 pl-6 w-full"
-                  placeholder="0.00"
-                />
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Notes: private | team side-by-side */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {/* Private note */}
-          <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-1 flex items-center gap-1">
-              <StickyNote className="h-3 w-3" /> Private note <span className="text-muted-foreground/40 font-normal">· only you</span>
-            </label>
-            {isEditingNotes ? (
-              <div className="space-y-1.5">
-                <Textarea
-                  ref={notesRef}
-                  value={notes}
-                  onChange={(e) => {
-                    setNotes(e.target.value);
-                    setNotesDirty(true);
-                  }}
-                  rows={2}
-                  className="resize-none text-xs border-border/50 min-h-[52px]"
-                  placeholder="Add a private note..."
+                  value={editedName}
+                  onChange={(e) => setEditedName(e.target.value)}
+                  className="h-8 text-base font-semibold px-2 flex-1"
                   autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSaveName();
+                    if (e.key === 'Escape') { setEditedName(lead.business_name); setEditingName(false); }
+                  }}
                 />
-                <div className="flex items-center justify-end gap-1.5">
-                  <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onClick={handleCancelNotes}>
-                    Cancel
-                  </Button>
-                  <Button size="sm" className="h-6 text-[11px] gap-1" onClick={handleSaveNotes}>
-                    <Save className="h-2.5 w-2.5" /> Save
-                  </Button>
-                </div>
+                <button onClick={handleSaveName} className="h-7 w-7 flex items-center justify-center text-green-500 hover:bg-green-500/10 rounded">
+                  <Check className="h-4 w-4" />
+                </button>
+                <button onClick={() => { setEditedName(lead.business_name); setEditingName(false); }} className="h-7 w-7 flex items-center justify-center text-muted-foreground hover:bg-muted/40 rounded">
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             ) : (
-              <div
-                className="flex items-start gap-2 cursor-pointer rounded-md p-2 border border-border/40 bg-background/40 hover:bg-muted/30 transition-colors min-h-[36px]"
-                onClick={() => setIsEditingNotes(true)}
+              <>
+                <span className="truncate">{lead.business_name}</span>
+                <button onClick={() => setEditingName(true)} className="h-5 w-5 flex items-center justify-center text-muted-foreground/40 hover:text-foreground rounded transition-colors shrink-0" title="Edit name">
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
+          </DialogTitle>
+
+          {/* Compact image control */}
+          <div className="flex items-center gap-2 shrink-0">
+            {lead.image_url && (
+              <img src={lead.image_url} alt={lead.business_name} className="h-9 w-9 rounded-md object-cover border border-border/60" />
+            )}
+            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={isUploadingImage} onClick={() => fileInputRef.current?.click()}>
+              <ImagePlus className="h-3 w-3" /> {lead.image_url ? 'Change' : 'Photo'}
+            </Button>
+            {lead.image_url && (
+              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground" onClick={handleRemoveImage} title="Remove image">
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            )}
+            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+          </div>
+        </div>
+
+        <DialogDescription className="sr-only">Lead detail, pipeline status and notes for {lead.business_name}</DialogDescription>
+
+        {/* Glanceable pills — status / next action / due / contact / revenue */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <Select value={mapLegacyStatus(lead.status)} onValueChange={handleStatusSelect}>
+            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+              <Badge variant="outline" className={cn('cursor-pointer font-semibold gap-1', statusColorCls)}>
+                {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-3 w-3" />}
+                {statusLabel}
+              </Badge>
+            </SelectTrigger>
+            <SelectContent>
+              {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+              {customStatuses.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+              {onAddCustomStatus && (<SelectItem value="__add_custom__" className="text-primary">+ Custom Status</SelectItem>)}
+            </SelectContent>
+          </Select>
+
+          <Select value={nextAction} onValueChange={handleNextActionChange}>
+            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+              {(() => {
+                const cl = getLeadCustomAction(lead.id);
+                const trackKey = getTrackActionForLead(lead.id);
+                const opt = TRACK_NEXT_ACTION_OPTIONS.find((o) => o.value === (trackKey || mapLegacyAction(lead.next_action || 'none')));
+                const label = cl || (opt && opt.value !== 'none' ? opt.label : null);
+                const colorCls = cl ? 'bg-teal-500 text-white border-transparent' : NEXT_ACTION_COLORS[trackKey || mapLegacyAction(lead.next_action || 'none')] || NEXT_ACTION_COLORS.none;
+                return label
+                  ? <Badge variant="outline" className={cn('cursor-pointer font-semibold whitespace-nowrap', colorCls)}>{label}</Badge>
+                  : <Badge variant="outline" className="cursor-pointer font-medium text-muted-foreground bg-muted/40 border-border/50">+ Set action</Badge>;
+              })()}
+            </SelectTrigger>
+            <SelectContent>
+              {TRACK_NEXT_ACTION_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+              {customActions.length > 0 && (
+                <>
+                  <div className="h-px bg-border my-1" />
+                  {customActions.map((ca) => (
+                    <SelectItem key={ca.id} value={`custom::${ca.label}`}>
+                      <div className="flex items-center gap-2"><Tag className="h-3 w-3 text-teal-400" />{ca.label}</div>
+                    </SelectItem>
+                  ))}
+                </>
+              )}
+              <div className="h-px bg-border my-1" />
+              <SelectItem value="__add_custom_action__" className="text-primary">+ Custom Action</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Popover open={datePopoverOpen} onOpenChange={setDatePopoverOpen}>
+            <PopoverTrigger asChild>
+              <button className={cn('inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold', dueLabel ? dueLabel.cls : 'text-muted-foreground bg-muted/40 border-border/50')}>
+                <CalendarIconLucide className="h-3 w-3" />
+                {nextActionDate ? format(nextActionDate, 'MMM d') : 'Due date'}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={nextActionDate} onSelect={handleDateChange} initialFocus className="p-3 pointer-events-auto" />
+            </PopoverContent>
+          </Popover>
+
+          {/* Contact method — same component + dropdown as the Outreach table */}
+          <Select value={lead.contact_method || ''} onValueChange={(v) => onUpdateLead(lead.id, { contact_method: v } as Partial<OutreachLead>)}>
+            <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
+              <ContactMethodBadge method={lead.contact_method as ContactMethod} />
+            </SelectTrigger>
+            <SelectContent>
+              {CONTACT_METHOD_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+            </SelectContent>
+          </Select>
+
+          <div className="relative ml-auto">
+            <PoundSterling className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+            <Input
+              type="number" min="0" step="0.01"
+              value={potentialRevenue}
+              onChange={(e) => setPotentialRevenue(e.target.value)}
+              onBlur={async () => {
+                const val = potentialRevenue ? parseFloat(potentialRevenue) : null;
+                if (val !== (lead.potential_revenue ?? null)) await onUpdateLead(lead.id, { potential_revenue: val } as Partial<OutreachLead>);
+              }}
+              className="h-7 w-24 text-xs pl-6"
+              placeholder="Revenue"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Scrollable body ── */}
+      <div className="flex-1 overflow-y-auto thin-scrollbar px-5 py-4 space-y-4">
+
+        {/* ── Journey: funnel stepper + deal stage (the visual highlight) ── */}
+        <section className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-4 shadow-sm">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <SectionLabel icon={Route} color="text-primary">Journey</SectionLabel>
+            {funnel?.share_token && (
+              <a
+                href={barberSiteUrl(funnel.share_token)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
+                title="Open the site link you sent them"
               >
-                <div className="flex-1 min-w-0">
-                  {notes ? (
-                    <p className="text-xs text-foreground/70 leading-relaxed whitespace-pre-wrap">{notes}</p>
-                  ) : (
-                    <span className="text-xs text-muted-foreground/30 italic">Click to add a private note...</span>
-                  )}
-                </div>
-                {notesSaved && (
-                  <span className="text-[10px] text-green-500 shrink-0 flex items-center gap-0.5">
-                    <Check className="h-2.5 w-2.5" /> Saved
-                  </span>
-                )}
-              </div>
+                <ExternalLink className="h-3 w-3" /> Their site
+              </a>
             )}
           </div>
 
-          {/* Team notes */}
-          {!isDemoLead(lead.id) && (
-            <div>
-              <TeamNotes placeId={(lead as any).place_id ?? null} googleMapsUrl={lead.google_maps_url ?? null} businessName={lead.business_name} />
+          {/* Funnel stepper — coloured nodes for reached steps, connectors fill in */}
+          <div className="overflow-x-auto thin-scrollbar">
+            <div className="flex items-start min-w-[320px]">
+              {(
+                [
+                  { label: 'Sent', at: funnel?.sent_at ?? null },
+                  { label: 'Opened', at: funnel?.first_opened_at ?? null },
+                  { label: 'Replied', at: funnel?.replied_at ?? null },
+                  { label: 'Claimed', at: funnel?.claimed_at ?? null },
+                  { label: 'Upsell', at: funnel?.addon_interest_at ?? null },
+                ] as { label: string; at: string | null }[]
+              ).map((s, i, arr) => {
+                const done = !!s.at;
+                const nextDone = i < arr.length - 1 && !!arr[i + 1].at;
+                return (
+                  <Fragment key={s.label}>
+                    <div className="flex w-14 shrink-0 flex-col items-center px-1 text-center">
+                      <div className={cn('flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold transition-colors', done ? 'bg-primary text-primary-foreground' : 'border border-border bg-muted text-muted-foreground/40')}>
+                        {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                      </div>
+                      <span className={cn('mt-1 text-[10px] font-medium leading-tight', done ? 'text-foreground' : 'text-muted-foreground/40')}>{s.label}</span>
+                      {s.at && <span className="text-[9px] text-muted-foreground/60">{format(new Date(s.at), 'd MMM')}</span>}
+                    </div>
+                    {i < arr.length - 1 && (
+                      <div className={cn('mt-3.5 h-0.5 flex-1 rounded-full transition-colors', nextDone ? 'bg-primary' : 'bg-border')} />
+                    )}
+                  </Fragment>
+                );
+              })}
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Project delivery */}
-        <div className="rounded-xl border border-border/50 bg-card/40 p-3">
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_160px] gap-3">
-            <div>
-              <label className="text-[11px] font-medium text-muted-foreground block mb-1">What you're delivering</label>
+          {/* Deal stage */}
+          <div className="mt-4 border-t border-border/40 pt-3">
+            <div className="mb-1.5 flex items-center justify-between gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">Stage</span>
+              <Badge variant="outline" className={cn('font-semibold', statusColorCls)}>{statusLabel}</Badge>
+            </div>
+            <div className="flex items-center gap-1">
+              {(() => {
+                const currentIdx = getStageIndex(lead.status);
+                const isPaid = mapLegacyStatus(lead.status) === 'paid';
+                const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
+                const stages = PIPELINE_STAGES.filter((s) => s !== 'closed_lost');
+                return stages.map((stage, idx) => {
+                  const isActive = idx === currentIdx;
+                  const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
+                  return (
+                    <div
+                      key={stage}
+                      className={cn('h-1.5 flex-1 rounded-full transition-colors', isCompleted || isActive ? (isPaid ? 'bg-emerald-500' : 'bg-primary') : isLost ? 'bg-zinc-700' : 'bg-border/60')}
+                    />
+                  );
+                });
+              })()}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Two-column body ── */}
+        <div className="grid gap-4 lg:grid-cols-2">
+          {/* Left: Project / delivery */}
+          <div className="space-y-4">
+            <section className={CARD}>
+              <SectionLabel icon={Briefcase} color="text-sky-400">Project</SectionLabel>
               <Textarea
                 value={projectOverview}
                 onChange={(e) => setProjectOverview(e.target.value)}
@@ -793,87 +718,132 @@ function LeadDetailBody({
                   }
                 }}
                 rows={3}
-                className="resize-none text-xs border-border/50 min-h-[64px]"
+                className="resize-none text-xs border-border/50 min-h-[72px]"
                 placeholder="What are you building / delivering for this lead?"
               />
-            </div>
-            <div className="space-y-2.5">
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Project status</label>
-                <Select
-                  value={projectStatus}
-                  onValueChange={async (v) => {
-                    setProjectStatus(v);
-                    await onUpdateLead(lead.id, { project_status: v } as Partial<OutreachLead>);
-                  }}
-                >
-                  <SelectTrigger className="h-8 text-xs border-border/50 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PROJECT_STATUS_OPTIONS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
+              <div className="mt-2.5 grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">Project status</label>
+                  <Select
+                    value={projectStatus}
+                    onValueChange={async (v) => {
+                      setProjectStatus(v);
+                      await onUpdateLead(lead.id, { project_status: v } as Partial<OutreachLead>);
+                    }}
+                  >
+                    <SelectTrigger className="h-8 text-xs border-border/50 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {PROJECT_STATUS_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-muted-foreground block mb-1">Selling</label>
+                  <Select value={lead.sale_type ?? '__default__'} onValueChange={(v) => onUpdateLead(lead.id, { sale_type: v === '__default__' ? null : v } as Partial<OutreachLead>)}>
+                    <SelectTrigger className="h-8 text-xs border-border/50 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__default__">
+                        Default{campaignDefaultSaleType ? ` (${SALE_TYPE_LABELS[resolveSaleType(null, campaignDefaultSaleType)]})` : ' (Website)'}
                       </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      {SALE_TYPES.map((t) => (
+                        <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <div>
-                <label className="text-[11px] font-medium text-muted-foreground block mb-1">Selling</label>
-                <Select value={lead.sale_type ?? '__default__'} onValueChange={(v) => onUpdateLead(lead.id, { sale_type: v === '__default__' ? null : v } as Partial<OutreachLead>)}>
-                  <SelectTrigger className="h-8 text-xs border-border/50 w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__default__">
-                      Default{campaignDefaultSaleType ? ` (${SALE_TYPE_LABELS[resolveSaleType(null, campaignDefaultSaleType)]})` : ' (Website)'}
-                    </SelectItem>
-                    {SALE_TYPES.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            </section>
           </div>
-        </div>
 
-        {/* Activity log */}
-        {!isDemoLead(lead.id) && (
-          <div className="rounded-xl border border-border/50 bg-card/40 p-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-muted-foreground mb-1.5">
-              <Clock className="h-3.5 w-3.5" /> Activity log
-            </div>
-            {activities.length === 0 ? (
-              <p className="text-[11px] text-muted-foreground/50">No activity yet.</p>
-            ) : (
-              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                {activities.slice(0, 20).map((a) => (
-                  <div key={a.id} className="flex items-start gap-2 text-[11px]">
-                    <Clock className="h-3 w-3 text-muted-foreground/40 mt-0.5 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <span className="text-foreground/70">{a.description}</span>
-                      <span className="text-muted-foreground/40 ml-1.5">{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
+          {/* Right: Notes + Activity */}
+          <div className="space-y-4">
+            <section className={CARD}>
+              <SectionLabel icon={StickyNote} color="text-amber-400">Notes</SectionLabel>
+              {/* Private note */}
+              <div>
+                <div className="text-[11px] font-medium text-muted-foreground mb-1 flex items-center gap-1">
+                  Private <span className="text-muted-foreground/40 font-normal">· only you</span>
+                </div>
+                {isEditingNotes ? (
+                  <div className="space-y-1.5">
+                    <Textarea
+                      ref={notesRef}
+                      value={notes}
+                      onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
+                      rows={2}
+                      className="resize-none text-xs border-border/50 min-h-[52px]"
+                      placeholder="Add a private note..."
+                      autoFocus
+                    />
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground" onClick={handleCancelNotes}>Cancel</Button>
+                      <Button size="sm" className="h-6 text-[11px] gap-1" onClick={handleSaveNotes}><Save className="h-2.5 w-2.5" /> Save</Button>
                     </div>
                   </div>
-                ))}
+                ) : (
+                  <div
+                    className="flex items-start gap-2 cursor-pointer rounded-md p-2 border border-border/40 bg-background/40 hover:bg-muted/30 transition-colors min-h-[36px]"
+                    onClick={() => setIsEditingNotes(true)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      {notes ? (
+                        <p className="text-xs text-foreground/70 leading-relaxed whitespace-pre-wrap">{notes}</p>
+                      ) : (
+                        <span className="text-xs text-muted-foreground/30 italic">Click to add a private note...</span>
+                      )}
+                    </div>
+                    {notesSaved && (
+                      <span className="text-[10px] text-green-500 shrink-0 flex items-center gap-0.5"><Check className="h-2.5 w-2.5" /> Saved</span>
+                    )}
+                  </div>
+                )}
               </div>
+              {/* Team notes */}
+              {!isDemoLead(lead.id) && (
+                <div className="mt-3 border-t border-border/40 pt-3">
+                  <TeamNotes placeId={(lead as any).place_id ?? null} googleMapsUrl={lead.google_maps_url ?? null} businessName={lead.business_name} />
+                </div>
+              )}
+            </section>
+
+            {!isDemoLead(lead.id) && (
+              <section className={CARD}>
+                <SectionLabel icon={Clock} color="text-cyan-400">Activity</SectionLabel>
+                {activities.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground/50">No activity yet.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-44 overflow-y-auto thin-scrollbar pr-1">
+                    {activities.slice(0, 20).map((a) => (
+                      <div key={a.id} className="flex items-start gap-2 text-[11px]">
+                        <Clock className="h-3 w-3 text-muted-foreground/40 mt-0.5 shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <span className="text-foreground/70">{a.description}</span>
+                          <span className="text-muted-foreground/40 ml-1.5">{formatDistanceToNow(new Date(a.created_at), { addSuffix: true })}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
             )}
           </div>
-        )}
+        </div>
       </div>
 
-      <DialogFooter className="gap-2 sm:gap-2">
-        <Button variant="ghost" size="sm" onClick={handleMarkLost}>
+      <div className="shrink-0 flex items-center justify-end gap-2 border-t border-border/60 bg-card/30 px-5 py-3">
+        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-red-400" onClick={handleMarkLost}>
           <X className="h-3.5 w-3.5 mr-1.5" /> Mark Lost
         </Button>
         <Button size="sm" className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={handleMarkPaid}>
           <Check className="h-3.5 w-3.5 mr-1.5" /> Mark Paid
         </Button>
-      </DialogFooter>
+      </div>
 
       {/* Custom Action Dialog */}
       <Dialog open={showAddCustomAction} onOpenChange={setShowAddCustomAction}>
