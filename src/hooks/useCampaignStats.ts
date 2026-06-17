@@ -3,7 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useCampaigns, type Campaign } from '@/hooks/useCampaigns';
-import type { ContactMethod } from '@/types/outreach';
+import { isSentStatus, isRepliedStatus, type ContactMethod } from '@/types/outreach';
 
 /** Per-campaign rollup. All numbers come from real, tracked columns — never faked. */
 export interface CampaignStats {
@@ -20,12 +20,10 @@ export interface CampaignStats {
   methods: Record<ContactMethod, number>;
 }
 
-interface LeadRow { id: string; campaign_id: string | null; contact_method: string | null }
+interface LeadRow { id: string; campaign_id: string | null; contact_method: string | null; status: string | null }
 interface SiteRow {
   lead_id: string | null;
-  sent_at: string | null;
   first_opened_at: string | null;
-  replied_at: string | null;
   claimed_at: string | null;
   addon_interest_at: string | null;
 }
@@ -54,9 +52,9 @@ export function useCampaignStats() {
     try {
       const client = supabase as unknown as SupabaseClient;
       const [leadsRes, sitesRes] = await Promise.all([
-        client.from('outreach_leads').select('id, campaign_id, contact_method'),
+        client.from('outreach_leads').select('id, campaign_id, contact_method, status'),
         client.from('generated_sites')
-          .select('lead_id, sent_at, first_opened_at, replied_at, claimed_at, addon_interest_at'),
+          .select('lead_id, first_opened_at, claimed_at, addon_interest_at'),
       ]);
       setLeads((leadsRes.data || []) as LeadRow[]);
       setSites((sitesRes.data || []) as SiteRow[]);
@@ -92,21 +90,22 @@ export function useCampaignStats() {
     return buckets.get(key)!;
   };
 
-  // Leads → lead counts + contact-method breakdown.
+  // Leads → lead counts + contact-method breakdown + Sent/Replied (status is the
+  // source of truth: Outreach status pill drives these, NOT generated_sites).
   for (const l of leads) {
     const b = bucketFor(l.campaign_id ?? null);
     b.leadCount += 1;
     const m = l.contact_method as ContactMethod | null;
     if (m && m in b.methods) b.methods[m] += 1;
+    if (isSentStatus(l.status)) b.funnel.sent += 1;
+    if (isRepliedStatus(l.status)) b.funnel.replied += 1;
   }
 
-  // Sites → funnel counts (campaign resolved through the linked lead).
+  // Sites → automatic event counts (campaign resolved through the linked lead).
   for (const s of sites) {
     const campaignId = s.lead_id ? (leadToCampaign.get(s.lead_id) ?? null) : null;
     const b = bucketFor(campaignId);
-    if (s.sent_at) b.funnel.sent += 1;
     if (s.first_opened_at) b.funnel.opened += 1;
-    if (s.replied_at) b.funnel.replied += 1;
     if (s.claimed_at) b.funnel.claimed += 1;
     if (s.addon_interest_at) b.funnel.addon += 1;
   }

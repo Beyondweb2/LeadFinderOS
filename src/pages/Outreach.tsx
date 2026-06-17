@@ -1,4 +1,5 @@
 import { useCallback, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { OutreachTable } from '@/components/OutreachTable';
 
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
@@ -33,6 +34,24 @@ const Outreach = () => {
 
   // Campaign filter (null = all campaigns)
   const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+
+  // Launch-pad intent carried from the Manage page via router state. Consumed once
+  // (cleared from history so a refresh/back won't reopen the composer).
+  const location = useLocation();
+  type LaunchIntent = { leadId: string; channel: 'sms' | 'whatsapp' | 'call'; templateContent?: string | null; shareLink?: string | null };
+  const [launchIntent, setLaunchIntent] = useState<LaunchIntent | null>(
+    ((location.state as { launch?: LaunchIntent } | null)?.launch) ?? null,
+  );
+  useEffect(() => {
+    if (launchIntent) {
+      // Ensure the launched lead isn't hidden by an active campaign filter.
+      setCampaignFilter(null);
+      // Drop the router state so a manual refresh doesn't relaunch.
+      window.history.replaceState({}, document.title);
+    }
+    // run once on mount for the initial intent
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Combine active and archived leads into one unified list, filtered by campaign
   const allLeads = useMemo(() => {
@@ -132,6 +151,8 @@ const Outreach = () => {
           if (isDemoLead(leadId)) return Promise.resolve(null);
           return updateLead(leadId, data);
         }}
+        launchIntent={launchIntent}
+        onLaunchConsumed={() => setLaunchIntent(null)}
       />
 
       {/* First-time outreach tips */}

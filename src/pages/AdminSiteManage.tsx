@@ -7,11 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, Send, Reply } from "lucide-react";
+import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, MessageCircle, MessageSquare, Phone } from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
 import { publicSiteUrl, barberSiteUrl } from "@/config/publicSite";
-import type { SiteTracking } from "@/lib/siteTracking";
+import { useTemplates } from "@/hooks/useTemplates";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
 /**
@@ -34,6 +35,8 @@ type SiteRow = {
   owner_id: string | null;
 };
 
+type LeadInfo = { id: string; phone: string | null; business_name: string };
+
 export default function AdminSiteManage() {
   const { id } = useParams();
   const { isAdmin, isLoading: roleLoading } = useSubscription();
@@ -47,13 +50,14 @@ export default function AdminSiteManage() {
   const [savingStatus, setSavingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  // Phase 1 claim/tracking — fetched separately + resiliently so this page keeps
-  // working even before the tracking migration is run (columns absent → degrade).
-  type TrackingRow = SiteTracking & { share_token: string; template: string };
-  const [tracking, setTracking] = useState<TrackingRow | null>(null);
-  const [trackingReady, setTrackingReady] = useState(false);
-  const [sentMessage, setSentMessage] = useState("");
-  const [marking, setMarking] = useState<null | "sent" | "replied">(null);
+  // Launch pad: the barber's /s/ link + the linked lead (to target its Outreach row).
+  const [shareToken, setShareToken] = useState<string | null>(null);
+  const [leadInfo, setLeadInfo] = useState<LeadInfo | null>(null);
+  const { templates } = useTemplates();
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+
+  // Only the user's saved text templates (voice scripts aren't sent as messages).
+  const textTemplates = templates.filter((t) => t.template_type === "text");
 
   useEffect(() => {
     if (!isAdmin || !id) return;
@@ -72,19 +76,31 @@ export default function AdminSiteManage() {
       setSite(data as unknown as SiteRow);
       setLoading(false);
 
-      // Tracking columns (may not exist yet) — never block the page on these.
-      const { data: tk, error: tkErr } = await sb
+      // Share token (the /s/ link) + the linked lead — never block the page on these.
+      const { data: tk } = await sb
         .from("generated_sites")
-        .select("share_token, template, segment, sent_at, sent_template, sent_message, first_opened_at, open_count, replied_at, claimed_at, addon_interest_at")
+        .select("share_token, lead_id")
         .eq("id", id)
         .maybeSingle();
-      if (!tkErr && tk) {
-        setTracking(tk as unknown as TrackingRow);
-        setTrackingReady(true);
-        setSentMessage((tk as { sent_message?: string }).sent_message ?? "");
+      const row = tk as { share_token?: string; lead_id?: string } | null;
+      if (row?.share_token) setShareToken(row.share_token);
+      if (row?.lead_id) {
+        const { data: lead } = await sb
+          .from("outreach_leads")
+          .select("id, phone, business_name")
+          .eq("id", row.lead_id)
+          .maybeSingle();
+        if (lead) setLeadInfo(lead as unknown as LeadInfo);
       }
     })();
   }, [isAdmin, id]);
+
+  // Default the template selector to the first saved text template.
+  useEffect(() => {
+    if (!selectedTemplateId && textTemplates.length > 0) {
+      setSelectedTemplateId(textTemplates[0].id);
+    }
+  }, [textTemplates, selectedTemplateId]);
 
   if (roleLoading) {
     return (
@@ -160,10 +176,9 @@ export default function AdminSiteManage() {
     }
   };
 
-  // ── Phase 1: tracked barber link + sent/replied capture ──
-  const fmtTs = (s?: string | null) =>
-    s ? new Date(s).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "—";
-  const barberLink = tracking?.share_token ? barberSiteUrl(tracking.share_token) : null;
+  // ── Launch pad: the barber's /s/ link + jump-to-Outreach composer ──
+  const barberLink = shareToken ? barberSiteUrl(shareToken) : null;
+  const selectedTemplate = textTemplates.find((t) => t.id === selectedTemplateId) || null;
 
   const copyBarberLink = async () => {
     if (!barberLink) return;
@@ -175,40 +190,23 @@ export default function AdminSiteManage() {
     }
   };
 
-  const logSiteEvent = async (event: string, patch: Record<string, unknown>) => {
-    const { error } = await sb.from("generated_sites").update(patch).eq("id", site.id);
-    if (error) throw error;
-    await sb.from("site_events").insert({ site_id: site.id, event_type: event, meta: { source: "admin" } });
-  };
-
-  const handleMarkSent = async () => {
-    if (!tracking) return;
-    setMarking("sent");
-    try {
-      const now = new Date().toISOString();
-      await logSiteEvent("sent", { sent_at: now, sent_template: tracking.template, sent_message: sentMessage || null });
-      setTracking({ ...tracking, sent_at: now, sent_template: tracking.template, sent_message: sentMessage || null });
-      toast({ title: "Marked as sent" });
-    } catch (e) {
-      toast({ title: "Couldn't mark sent", description: (e as Error).message, variant: "destructive" });
-    } finally {
-      setMarking(null);
+  // Jump to the Outreach page (single source of truth) with THIS barber's row +
+  // composer open, the chosen template pre-filled, and the /s/ link carried in.
+  const launchOutreach = (channel: "sms" | "whatsapp" | "call") => {
+    if (!leadInfo) {
+      toast({ title: "No lead linked", description: "This site isn't linked to an Outreach lead.", variant: "destructive" });
+      return;
     }
-  };
-
-  const handleMarkReplied = async () => {
-    if (!tracking) return;
-    setMarking("replied");
-    try {
-      const now = new Date().toISOString();
-      await logSiteEvent("replied", { replied_at: now });
-      setTracking({ ...tracking, replied_at: now });
-      toast({ title: "Marked as replied" });
-    } catch (e) {
-      toast({ title: "Couldn't mark replied", description: (e as Error).message, variant: "destructive" });
-    } finally {
-      setMarking(null);
-    }
+    navigate("/outreach", {
+      state: {
+        launch: {
+          leadId: leadInfo.id,
+          channel,
+          templateContent: selectedTemplate?.content ?? null,
+          shareLink: barberLink,
+        },
+      },
+    });
   };
 
   return (
@@ -264,65 +262,63 @@ export default function AdminSiteManage() {
       {/* Editable form + images + save bar (shared with the barber dashboard).
           The admin-only "Barber access" card is slotted between images and save. */}
       <SiteEditor site={site} onSaved={(content) => setSite({ ...site, content })}>
-        {/* Phase 1 — tracked barber link + claim/tracking scoreboard (per site) */}
+        {/* Launch pad — send this barber's link via the Outreach page (the single
+            source of truth for all tracking). No duplicate stats live here. */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Barber link &amp; tracking</CardTitle>
+            <CardTitle className="text-lg">Contact this barber</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {!trackingReady ? (
-              <p className="text-sm text-muted-foreground">
-                Run the Phase 1 tracking migration to enable the unguessable barber link and event tracking.
-              </p>
-            ) : (
-              <>
-                <div className="space-y-1.5">
-                  <p className="text-sm font-medium">Barber site link <span className="font-normal text-muted-foreground">(unguessable, re-openable — send this)</span></p>
-                  <div className="flex items-center gap-2">
-                    <Input readOnly value={barberLink ?? ""} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
-                    <Button variant="outline" size="icon" title="Copy barber link" onClick={copyBarberLink}>
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                    {barberLink && (
-                      <a href={barberLink} target="_blank" rel="noreferrer">
-                        <Button variant="outline" size="icon" title="Open"><ExternalLink className="h-4 w-4" /></Button>
-                      </a>
-                    )}
-                  </div>
-                </div>
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Barber site link <span className="font-normal text-muted-foreground">(unguessable, re-openable)</span></p>
+              <div className="flex items-center gap-2">
+                <Input readOnly value={barberLink ?? ""} className="font-mono text-xs" onFocus={(e) => e.target.select()} />
+                <Button variant="outline" size="icon" title="Copy barber link" onClick={copyBarberLink} disabled={!barberLink}>
+                  <Copy className="h-4 w-4" />
+                </Button>
+                {barberLink && (
+                  <a href={barberLink} target="_blank" rel="noreferrer">
+                    <Button variant="outline" size="icon" title="Open"><ExternalLink className="h-4 w-4" /></Button>
+                  </a>
+                )}
+              </div>
+            </div>
 
-                <div className="space-y-1.5">
-                  <p className="text-sm font-medium">Message / template sent to this lead</p>
-                  <Input value={sentMessage} onChange={(e) => setSentMessage(e.target.value)} placeholder="e.g. Template A · WhatsApp opener v2" className="text-sm" />
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button size="sm" variant="outline" onClick={handleMarkSent} disabled={marking === "sent"}>
-                      {marking === "sent" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-                      {tracking?.sent_at ? "Update sent" : "Mark as sent"}
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={handleMarkReplied} disabled={marking === "replied"}>
-                      {marking === "replied" ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Reply className="h-4 w-4 mr-2" />}
-                      {tracking?.replied_at ? "Replied ✓" : "Mark replied"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-border/50 p-3 text-xs sm:grid-cols-3">
-                  {[
-                    ["Segment", tracking?.segment === "A" ? "A · No website" : tracking?.segment === "B" ? "B · Bad website" : "—"],
-                    ["Sent", fmtTs(tracking?.sent_at)],
-                    ["Opened", tracking?.first_opened_at ? `${fmtTs(tracking.first_opened_at)} · ${tracking.open_count}×` : "—"],
-                    ["Replied", fmtTs(tracking?.replied_at)],
-                    ["Claimed", fmtTs(tracking?.claimed_at)],
-                    ["Add-on wanted", fmtTs(tracking?.addon_interest_at)],
-                  ].map(([label, value]) => (
-                    <div key={label}>
-                      <p className="text-muted-foreground">{label}</p>
-                      <p className="font-medium text-foreground">{value}</p>
-                    </div>
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Template</p>
+              <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                <SelectTrigger className="text-sm">
+                  <SelectValue placeholder={textTemplates.length ? "Choose a saved template" : "No saved templates"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {textTemplates.map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
                   ))}
-                </div>
-              </>
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Opens the Outreach composer with this template, the business name and the link above auto-filled.
+              </p>
+            </div>
+
+            {!leadInfo && (
+              <p className="text-sm text-muted-foreground">This site isn't linked to an Outreach lead, so it can't launch a composer.</p>
             )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Button size="sm" onClick={() => launchOutreach("sms")} disabled={!leadInfo}>
+                <MessageCircle className="h-4 w-4 mr-2" /> SMS
+              </Button>
+              <Button size="sm" onClick={() => launchOutreach("whatsapp")} disabled={!leadInfo}>
+                <MessageSquare className="h-4 w-4 mr-2" /> WhatsApp
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => launchOutreach("call")} disabled={!leadInfo}>
+                <Phone className="h-4 w-4 mr-2" /> Call
+              </Button>
+              <Button size="sm" variant="outline" onClick={copyBarberLink} disabled={!barberLink}>
+                <Copy className="h-4 w-4 mr-2" /> Copy link
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </SiteEditor>

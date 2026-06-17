@@ -18,6 +18,11 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Attempted',
     className: 'bg-[hsl(var(--badge-attempted))] text-[hsl(var(--badge-attempted-fg))] border-transparent font-semibold',
   },
+  delivered: {
+    label: 'Delivered',
+    shortLabel: 'Delivered',
+    className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
+  },
   contacted: {
     label: 'Contacted',
     shortLabel: 'Contacted',
