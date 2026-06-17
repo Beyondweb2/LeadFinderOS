@@ -1,7 +1,19 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
-import { isSentStatus, type OutreachLead } from '@/types/outreach';
+import { isSentStatus, isRepliedStatus, type OutreachLead } from '@/types/outreach';
+
+export interface ChannelStat { sent: number; replied: number; replyRate: number | null; claimed: number; }
+export interface ChannelPerformance {
+  whatsapp: ChannelStat;
+  sms: ChannelStat;
+  call: ChannelStat;
+  facebook_msg: ChannelStat;
+  /** Leads that count as sent (past New) but have no contact-method pill set —
+   *  shown honestly as a residual rather than mis-assigned to a channel. */
+  noMethodSent: number;
+}
+const emptyChannelStat = (): ChannelStat => ({ sent: 0, replied: 0, replyRate: null, claimed: 0 });
 
 // No hardcoded revenue constants — uses actual amount_paid from leads
 
@@ -73,6 +85,10 @@ interface DashboardMetrics {
 
   // Site funnel — generated_sites tracking (admin-visible; RLS-scoped)
   siteFunnel: { sent: number; opened: number; claimed: number; addonRequested: number };
+
+  // Per-channel performance — Sent/Replied/Reply-rate from outreach_leads
+  // (contact_method + status), Claimed joined from generated_sites.claimed_at.
+  channelPerf: ChannelPerformance;
 }
 
 const getDateRanges = () => {
@@ -107,6 +123,9 @@ export function useDashboardMetrics() {
   });
   const [outreachEvents7d, setOutreachEvents7d] = useState<{ channel: string; created_at: string }[]>([]);
   const [siteFunnel, setSiteFunnel] = useState({ sent: 0, opened: 0, claimed: 0, addonRequested: 0 });
+  // lead_ids of generated_sites that the barber has CLAIMED — used to attribute
+  // site-claims to the lead's contact channel for the per-channel card.
+  const [claimedLeadIds, setClaimedLeadIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const hasLoadedOnceRef = useRef(false);
   const { user } = useAuth();
@@ -151,14 +170,15 @@ export function useDashboardMetrics() {
     try {
       const { data: sites } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
         .from('generated_sites')
-        .select('first_opened_at, claimed_at, addon_interest_at');
-      const rows = (sites || []) as Array<{ first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>;
+        .select('lead_id, first_opened_at, claimed_at, addon_interest_at');
+      const rows = (sites || []) as Array<{ lead_id: string | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>;
       setSiteFunnel({
         sent: sentFromStatus,
         opened: rows.filter(r => r.first_opened_at).length,
         claimed: rows.filter(r => r.claimed_at).length,
         addonRequested: rows.filter(r => r.addon_interest_at).length,
       });
+      setClaimedLeadIds(rows.filter(r => r.claimed_at && r.lead_id).map(r => r.lead_id as string));
     } catch (e) {
       console.error('Site funnel fetch failed (non-blocking):', e);
       setSiteFunnel(prev => ({ ...prev, sent: sentFromStatus }));
@@ -310,6 +330,39 @@ export function useDashboardMetrics() {
     // Closed revenue: actual amount_paid from paid clients
     const closedRevenue = totalRevenue;
 
+    // ── Per-channel performance (source of truth: lead contact_method + status) ──
+    const channelPerf: ChannelPerformance = {
+      whatsapp: emptyChannelStat(),
+      sms: emptyChannelStat(),
+      call: emptyChannelStat(),
+      facebook_msg: emptyChannelStat(),
+      noMethodSent: 0,
+    };
+    const activeLeads = allLeads.filter(l => !l.is_archived);
+    const leadMethodById = new Map<string, string | null>(activeLeads.map(l => [l.id, l.contact_method ?? null]));
+    for (const l of activeLeads) {
+      if (!isSentStatus(l.status)) continue;
+      const m = l.contact_method as keyof ChannelPerformance | null;
+      if (m && m in channelPerf && m !== 'noMethodSent') {
+        const stat = channelPerf[m] as ChannelStat;
+        stat.sent += 1;
+        if (isRepliedStatus(l.status)) stat.replied += 1;
+      } else {
+        channelPerf.noMethodSent += 1;
+      }
+    }
+    // Attribute barber site-claims to the lead's channel.
+    for (const leadId of claimedLeadIds) {
+      const m = leadMethodById.get(leadId) as keyof ChannelPerformance | undefined;
+      if (m && m in channelPerf && m !== 'noMethodSent') {
+        (channelPerf[m] as ChannelStat).claimed += 1;
+      }
+    }
+    for (const key of ['whatsapp', 'sms', 'call', 'facebook_msg'] as const) {
+      const stat = channelPerf[key];
+      stat.replyRate = stat.sent > 0 ? Math.round((stat.replied / stat.sent) * 100) : null;
+    }
+
     return {
       totalRevenue, revenueThisMonth, revenueLastMonth,
       draftRevenue, completionRevenue, fullyPaidClients, paidForDraftCount, activeProposals,
@@ -321,8 +374,9 @@ export function useDashboardMetrics() {
       activity: activityData,
       trackedLeads,
       siteFunnel,
+      channelPerf,
     };
-  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, siteFunnel]);
+  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, siteFunnel, claimedLeadIds]);
 
   return { metrics, isLoading, refetch: fetchAllData };
 }
