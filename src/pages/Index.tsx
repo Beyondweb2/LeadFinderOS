@@ -17,7 +17,7 @@ import type { Country } from '@/types/lead';
 const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 
 const Index = () => {
-  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, expanded } = useLeadSearchContext();
+  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, expanded, setWebsiteOverride } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach } = useOutreach();
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
@@ -169,6 +169,7 @@ const Index = () => {
             }}
             isChecked={isChecked}
             getTeamClaim={getTeamClaim}
+            onSetWebsiteStatus={setWebsiteOverride}
           />
         </section>
       )}
