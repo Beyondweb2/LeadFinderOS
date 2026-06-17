@@ -123,18 +123,66 @@ const DEFAULT_SERVICES_BY_TEMPLATE: Record<SiteTemplate, BarberService[]> = {
 // Per-template copy cues: the business noun the model writes about, plus the
 // factual GOOD/BAD 'about' examples. The honesty rules are identical for both —
 // only the worked example and noun change so the copy reads naturally.
-const TEMPLATE_COPY: Record<SiteTemplate, { noun: string; good: string; bad: string }> = {
+const TEMPLATE_COPY: Record<SiteTemplate, { noun: string; focus: string; good: string; bad: string }> = {
   barber: {
     noun: "barbershop",
+    focus: "getting every cut right",
     good: "Northern Quarter Barber is a barbershop in Manchester, rated 4.5 from 203 Google reviews.",
     bad: "a welcoming shop where skilled barbers deliver a top-notch grooming experience.",
   },
   salon: {
     noun: "hair salon",
+    focus: "getting every look right",
     good: "Aveline is a hair salon in London, rated 4.8 from 156 Google reviews.",
     bad: "a welcoming salon where talented stylists deliver a luxurious pampering experience.",
   },
 };
+
+/**
+ * Deterministic, factually-safe "about" text. Uses ONLY known data — verbatim
+ * business name, a Google-verified town, real listed service names, and the real
+ * Google rating/review count. It writes NO history, founders, years, awards or
+ * subjective praise — by construction it cannot invent or flatter. Every clause
+ * drops cleanly when its data is missing (no "rated undefined" / "0 reviews").
+ */
+function joinNatural(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  if (items.length === 2) return `${items[0]} and ${items[1]}`;
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+function buildAbout(opts: {
+  name: string;
+  noun: string;
+  focus: string;
+  area?: string;
+  services: string[];
+  rating?: number;
+  reviewCount?: number;
+}): string {
+  const services = opts.services
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 3);
+
+  let s1 = `${opts.name} is a ${opts.noun}`;
+  if (opts.area && opts.area.trim()) s1 += ` in ${opts.area.trim()}`;
+  s1 += ` focused on ${opts.focus}`;
+  if (services.length) s1 += ` — ${joinNatural(services)}`;
+  s1 += ".";
+
+  const s2 = "Walk in or book ahead.";
+
+  let s3 = "";
+  if (
+    typeof opts.rating === "number" && opts.rating > 0 &&
+    typeof opts.reviewCount === "number" && opts.reviewCount > 0
+  ) {
+    const r = Number.isInteger(opts.rating) ? String(opts.rating) : opts.rating.toFixed(1);
+    s3 = `Rated ${r} from ${opts.reviewCount} Google reviews.`;
+  }
+
+  return [s1, s2, s3].filter(Boolean).join(" ");
+}
 
 // ---- Google enrichment ------------------------------------------------------
 // Reuses the SAME Google integration as the google-place-details function:
@@ -153,6 +201,8 @@ interface GoogleEnrichment {
   phone?: string;
   address?: string;
   mapsUri?: string;
+  /** Verified town/city from Google address components (UK postal_town, else locality). */
+  area?: string;
 }
 
 async function fetchGoogleEnrichment(placeId: string): Promise<GoogleEnrichment | null> {
@@ -166,6 +216,7 @@ async function fetchGoogleEnrichment(placeId: string): Promise<GoogleEnrichment 
     "internationalPhoneNumber",
     "nationalPhoneNumber",
     "formattedAddress",
+    "addressComponents",
     "googleMapsUri",
   ].join(",");
 
@@ -201,6 +252,12 @@ async function fetchGoogleEnrichment(placeId: string): Promise<GoogleEnrichment 
     const phone = g.internationalPhoneNumber || g.nationalPhoneNumber;
     if (typeof phone === "string" && phone.trim()) out.phone = phone.trim();
     if (typeof g.formattedAddress === "string" && g.formattedAddress.trim()) out.address = g.formattedAddress.trim();
+    // Verified town from Google's structured components (real data, not guessed):
+    // prefer UK postal_town, then locality, then postal/admin area level 2.
+    const comps: Array<{ longText?: string; types?: string[] }> = Array.isArray(g.addressComponents) ? g.addressComponents : [];
+    const pick = (t: string) => comps.find((c) => Array.isArray(c.types) && c.types.includes(t))?.longText;
+    const town = pick("postal_town") || pick("locality") || pick("administrative_area_level_2");
+    if (typeof town === "string" && town.trim()) out.area = town.trim();
     // Canonical Google Maps link for the place (its reviews live on this page).
     if (typeof g.googleMapsUri === "string" && g.googleMapsUri.trim()) out.mapsUri = g.googleMapsUri.trim();
 
@@ -562,11 +619,24 @@ serve(async (req) => {
       return defaultServices;
     })();
 
+    // Deterministic, factually-safe "about" — built from known data only, NOT the
+    // model (so it can never invent history/founders/awards or flatter). Uses the
+    // resolved service names, the Google-verified town, and the real rating/reviews.
+    const aboutText = buildAbout({
+      name: lead.business_name || "",
+      noun: TEMPLATE_COPY[template].noun,
+      focus: TEMPLATE_COPY[template].focus,
+      area: google?.area,
+      services: services.map((s) => s.name),
+      rating: googleRating,
+      reviewCount,
+    });
+
     const content: BarberSiteContent = {
       businessName: lead.business_name || "", // real, verbatim
       tagline: typeof modelContent.tagline === "string" ? modelContent.tagline : "",
       heroHeadline: typeof modelContent.heroHeadline === "string" ? modelContent.heroHeadline : "",
-      about: typeof modelContent.about === "string" ? modelContent.about : "",
+      about: aboutText,
       services,
       hours, // real Google hours if fetched, else [] (section omitted)
       phone, // real lead/Google value or "" (omitted)
