@@ -6,8 +6,8 @@ import { generateToken, sha256Hex } from "../_shared/claim-crypto.ts";
 // The barber's /s/:token page carries an unguessable share_token. The existing
 // account-creation claim (claim-info / claim-site / claim_generated_site) is
 // keyed by a one-time claim_token. This function exchanges a valid share_token
-// for a fresh one-time claim_token (same minting as create-claim-link), so the
-// page can hand off to the UNCHANGED /claim/<token> flow. The share_token is the
+// for a fresh one-time claim_token, so the page can hand off to the UNCHANGED
+// /claim/<token> flow (claim-info / claim-site). The share_token is the
 // barber's private credential, so no extra auth is required; the claim itself
 // stays one-time (owner_id guard in claim_generated_site). verify_jwt = false.
 

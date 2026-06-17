@@ -33,16 +33,10 @@ verify_jwt = false
 [functions.generate-barber-site]
 verify_jwt = false
 
-[functions.create-claim-link]
-verify_jwt = false
-
 [functions.claim-info]
 verify_jwt = false
 
 [functions.claim-site]
-verify_jwt = false
-
-[functions.claim-share]
 verify_jwt = false
 
 [functions.create-booking]
