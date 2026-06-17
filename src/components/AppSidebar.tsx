@@ -11,7 +11,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { 
-  LayoutDashboard, Search, ClipboardList, FileText, Star,
+  LayoutDashboard, Search, ClipboardList, FileText,
   DollarSign, HelpCircle, Users, MessageSquare, Lightbulb, StickyNote
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -30,7 +30,6 @@ export function AppSidebar() {
     { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard, description: t('nav.dashboardDesc') },
     { title: t('nav.findLeads'), url: '/find-leads', icon: Search, description: t('nav.findLeadsDesc') },
     { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
-    { title: t('nav.trackLeads'), url: '/potential-work', icon: Star, description: t('nav.trackLeadsDesc') },
     { title: t('nav.paidClients'), url: '/paid-clients', icon: DollarSign, description: t('nav.paidClientsDesc') },
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
     { title: 'Playbook', url: '/playbook', icon: Lightbulb, description: 'Closing tips & tactics' },
@@ -41,29 +40,23 @@ export function AppSidebar() {
 
   let searchPulse = false;
   let crmPulseWalkthrough = false;
-  let trackPulseWalkthrough = false;
   try {
     const { state: demoState, isDemoUser, isOpen: walkthroughActive } = useDemoChecklist();
     searchPulse = isDemoUser && walkthroughActive && !demoState.searchDone;
     crmPulseWalkthrough = isDemoUser && walkthroughActive && demoState.addedToCrm && !demoState.firstContactMade;
-    trackPulseWalkthrough = isDemoUser && walkthroughActive && demoState.contactPanelClosed && !demoState.viewedProgress;
   } catch {}
 
   const [flashCRM, setFlashCRM] = useState(false);
-  const [flashTrack, setFlashTrack] = useState(false);
   const [flashSearch, setFlashSearch] = useState(false);
   const [searchTooltip, setSearchTooltip] = useState(false);
 
   useEffect(() => {
     const onCRMAdded = () => { setFlashCRM(true); setTimeout(() => setFlashCRM(false), 2000); };
-    const onTrackAdded = () => { setFlashTrack(true); setTimeout(() => setFlashTrack(false), 600); };
     const onSearchPulse = () => { setFlashSearch(true); setSearchTooltip(true); setTimeout(() => setFlashSearch(false), 1200); setTimeout(() => setSearchTooltip(false), 2500); };
     window.addEventListener('crm-lead-added', onCRMAdded);
-    window.addEventListener('track-lead-added', onTrackAdded);
     window.addEventListener('pulse-search-nav', onSearchPulse);
     return () => {
       window.removeEventListener('crm-lead-added', onCRMAdded);
-      window.removeEventListener('track-lead-added', onTrackAdded);
       window.removeEventListener('pulse-search-nav', onSearchPulse);
     };
   }, []);
@@ -88,11 +81,10 @@ export function AppSidebar() {
             <SidebarMenu>
               {navItems.map((item) => {
                 const isActive = item.url !== '#notepad' && location.pathname === item.url;
-                const isFlashing = 
-                  (item.url === '/outreach' && flashCRM) || 
-                  (item.url === '/potential-work' && flashTrack) ||
+                const isFlashing =
+                  (item.url === '/outreach' && flashCRM) ||
                   (item.url === '/find-leads' && flashSearch);
-                const flashColor = item.url === '/outreach' ? 'text-green-400' : (item.url === '/potential-work' || item.url === '/find-leads') ? 'text-yellow-400' : '';
+                const flashColor = item.url === '/outreach' ? 'text-green-400' : (item.url === '/find-leads') ? 'text-yellow-400' : '';
                 return (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild isActive={isActive}>
@@ -103,12 +95,9 @@ export function AppSidebar() {
                             e.preventDefault();
                             setNotepadOpen(true);
                           }
-                          if (item.url === '/potential-work') {
-                            window.dispatchEvent(new CustomEvent('demo-checklist-track-pressed'));
-                          }
                         }}
-                        data-walkthrough-step={item.url === '/potential-work' ? 'track-leads' : item.url === '/outreach' ? 'outreach-crm' : undefined}
-                        data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : item.url === '/potential-work' ? 'track-nav' : undefined}
+                        data-walkthrough-step={item.url === '/outreach' ? 'outreach-crm' : undefined}
+                        data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : undefined}
                         className={cn(
                           'relative flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
                           isActive ? 'bg-sidebar-accent text-sidebar-primary font-medium' : 'text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground'

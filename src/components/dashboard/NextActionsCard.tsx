@@ -155,7 +155,7 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
             {upcoming.length > 0 && currentLead ? (
               <div className="pt-2 border-t border-border/50">
                 <Link
-                  to="/potential-work"
+                  to="/outreach"
                   className="block p-2 rounded-md hover:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-1.5 mb-1">

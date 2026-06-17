@@ -28,7 +28,6 @@ const Index = lazy(() => import("./pages/Index"));
 const Outreach = lazy(() => import("./pages/Outreach"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Templates = lazy(() => import("./pages/Templates"));
-const PotentialWorkPage = lazy(() => import("./pages/PotentialWork"));
 const PaidClientsPage = lazy(() => import("./pages/PaidClients"));
 const HowToUse = lazy(() => import("./pages/HowToUse"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
@@ -254,20 +253,9 @@ const App = () => {
               } 
             />
             {/* Archive route removed - merged into Outreach */}
-            <Route 
-              path="/potential-work" 
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <PotentialWorkPage />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/paid-clients" 
+            {/* Track Leads route removed - folded into Outreach (row-click detail modal) */}
+            <Route
+              path="/paid-clients"
               element={
                 <ProtectedRoute>
                    <SubscriptionGate>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { 
-  LayoutDashboard, Search, ClipboardList, FileText, Star,
+  LayoutDashboard, Search, ClipboardList, FileText,
   DollarSign, MoreHorizontal, Palette, LogOut, HelpCircle,
   MessageSquare, Users, ShieldCheck
 } from 'lucide-react';
@@ -56,7 +56,6 @@ export function MobileBottomNav() {
   const [themeSheetOpen, setThemeSheetOpen] = useState(false);
   const [notepadOpen, setNotepadOpen] = useState(false);
   const [crmGlow, setCrmGlow] = useState(false);
-  const [trackGlow, setTrackGlow] = useState(false);
   const [searchGlow, setSearchGlow] = useState(false);
   const [searchTooltip, setSearchTooltip] = useState(false);
 
@@ -64,7 +63,6 @@ export function MobileBottomNav() {
     { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard },
     { title: t('nav.search'), url: '/find-leads', icon: Search },
     { title: t('nav.outreach'), url: '/outreach', icon: ClipboardList },
-    { title: t('nav.track'), url: '/potential-work', icon: Star },
   ];
 
   const moreNavItems = [
@@ -76,24 +74,19 @@ export function MobileBottomNav() {
 
   let searchPulse = false;
   let crmPulseWalkthrough = false;
-  let trackPulseWalkthrough = false;
   try {
     const { state, isDemoUser, isOpen: walkthroughActive } = useDemoChecklist();
     searchPulse = isDemoUser && walkthroughActive && !state.searchDone;
     crmPulseWalkthrough = isDemoUser && walkthroughActive && state.addedToCrm && !state.firstContactMade;
-    trackPulseWalkthrough = isDemoUser && walkthroughActive && state.contactPanelClosed && !state.viewedProgress;
   } catch {}
 
   useEffect(() => {
     const crmHandler = () => { setCrmGlow(true); setTimeout(() => setCrmGlow(false), 2000); };
-    const trackHandler = () => { setTrackGlow(true); setTimeout(() => setTrackGlow(false), 600); };
     const searchHandler = () => { setSearchGlow(true); setSearchTooltip(true); setTimeout(() => setSearchGlow(false), 1200); setTimeout(() => setSearchTooltip(false), 2500); };
     window.addEventListener('crm-lead-added', crmHandler);
-    window.addEventListener('track-lead-added', trackHandler);
     window.addEventListener('pulse-search-nav', searchHandler);
     return () => {
       window.removeEventListener('crm-lead-added', crmHandler);
-      window.removeEventListener('track-lead-added', trackHandler);
       window.removeEventListener('pulse-search-nav', searchHandler);
     };
   }, []);
@@ -124,18 +117,12 @@ export function MobileBottomNav() {
             const isActive = location.pathname === item.url;
             return (
               <Link key={item.url} to={item.url}
-                onClick={() => {
-                  if (item.url === '/potential-work') {
-                    window.dispatchEvent(new CustomEvent('demo-checklist-track-pressed'));
-                  }
-                }}
-                data-walkthrough-step={item.url === '/potential-work' ? 'track-leads' : item.url === '/outreach' ? 'outreach-crm' : undefined}
-                data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : item.url === '/potential-work' ? 'track-nav' : undefined}
+                data-walkthrough-step={item.url === '/outreach' ? 'outreach-crm' : undefined}
+                data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : undefined}
                 className={cn(
                   'relative flex flex-col items-center justify-center gap-1 px-3 py-2 rounded-lg transition-all min-w-[60px]',
                   item.url === '/find-leads' && searchGlow ? 'text-yellow-400 animate-pulse'
                     : item.url === '/outreach' && crmGlow ? 'text-green-400 animate-pulse'
-                    : item.url === '/potential-work' && trackGlow ? 'text-yellow-400 animate-pulse'
                     : isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
                 )}>
                 {item.url === '/find-leads' && searchTooltip && (
@@ -147,13 +134,11 @@ export function MobileBottomNav() {
                 )}
                 <item.icon className={cn(
                   'h-5 w-5 transition-all',
-                  item.url === '/outreach' && (crmGlow || crmPulseWalkthrough) && 'scale-110',
-                  item.url === '/potential-work' && (trackGlow || trackPulseWalkthrough) && 'scale-110'
+                  item.url === '/outreach' && (crmGlow || crmPulseWalkthrough) && 'scale-110'
                 )} />
                 <span className={cn(
                   "text-[10px] font-medium",
-                  item.url === '/outreach' && crmGlow && 'text-green-400',
-                  item.url === '/potential-work' && trackGlow && 'text-yellow-400'
+                  item.url === '/outreach' && crmGlow && 'text-green-400'
                 )}>{item.title}</span>
               </Link>
             );
