@@ -33,3 +33,6 @@ supabase/.temp/
 *.zip
 HANDOVER.md
 ENRICHMENT-PLACEMENT-SPEC.md
+
+email-preview.html
+email-preview.txt

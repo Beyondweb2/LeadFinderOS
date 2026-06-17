@@ -315,6 +315,7 @@ interface LeadFunnel {
   site_name: string | null;
   sent_at: string | null;
   first_opened_at: string | null;
+  replied_at: string | null;
   claimed_at: string | null;
   addon_interest_at: string | null;
 }
@@ -845,7 +846,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
           <TableCell colSpan={7} className="p-0">
             <div ref={expandRef} className="px-3.5 sm:px-5 py-3.5 space-y-3 bg-gradient-to-b from-muted/25 to-transparent">
             {/* ── FUNNEL panel: their journey timeline + the /s/ site link I sent ── */}
-            {funnel && (funnel.sent_at || funnel.first_opened_at || funnel.claimed_at || funnel.addon_interest_at || funnel.share_token) && (
+            {funnel && (funnel.sent_at || funnel.first_opened_at || funnel.replied_at || funnel.claimed_at || funnel.addon_interest_at || funnel.share_token) && (
               <section className="rounded-xl border border-border/50 bg-card/40 p-3 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <label className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Funnel</label>
@@ -866,6 +867,7 @@ const LeadCard = ({ lead, isExpanded, onToggleExpand, onStatusChange, onNextActi
                   {([
                     { label: 'Sent', at: funnel.sent_at },
                     { label: 'Opened', at: funnel.first_opened_at },
+                    { label: 'Replied', at: funnel.replied_at },
                     { label: 'Claimed', at: funnel.claimed_at },
                     { label: 'Upsell', at: funnel.addon_interest_at },
                   ] as { label: string; at: string | null }[]).map((s, i, arr) => (
@@ -1202,7 +1204,7 @@ const PotentialWorkPage = () => {
     (async () => {
       const { data } = await (supabase as unknown as SupabaseClient)
         .from('generated_sites')
-        .select('lead_id, site_name, share_token, sent_at, first_opened_at, claimed_at, addon_interest_at')
+        .select('lead_id, site_name, share_token, sent_at, first_opened_at, replied_at, claimed_at, addon_interest_at')
         .order('created_at', { ascending: false });
       if (cancelled || !data) return;
       const map: Record<string, LeadFunnel> = {};
