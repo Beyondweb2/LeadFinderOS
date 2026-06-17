@@ -71,7 +71,9 @@ import { NextActionEditor } from './NextActionEditor';
 import { CSVImportDialog } from './CSVImportDialog';
 import { OutreachMobileCard } from './OutreachMobileCard';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
+import { LeadDetailDialog } from './LeadDetailDialog';
 import { isDemoLead } from '@/lib/demoLeads';
+import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS } from '@/types/outreach';
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
@@ -106,6 +108,12 @@ interface OutreachTableProps {
   onContactGated?: (channel: 'call' | 'sms' | 'whatsapp', leadId?: string) => boolean;
   /** Persist enrichment results found via the per-row enrich buttons. */
   onUpdateLead?: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
+  /** Lead-detail modal callbacks (opened on row click) — fold-in of Track Leads. */
+  onNotesChange?: (leadId: string, notes: string) => Promise<any> | void;
+  onBusinessNameChange?: (leadId: string, name: string) => Promise<any> | void;
+  onImageChange?: (leadId: string, imageUrl: string | null) => Promise<any> | void;
+  fetchActivities?: (leadId: string) => Promise<any[]>;
+  campaignDefaultSaleTypeByLead?: Record<string, string | null>;
   /** Launch-pad intent (e.g. from the Manage page): open a specific lead's composer
    *  fresh with a chosen template + that barber's /s/ link. */
   launchIntent?: {
@@ -121,7 +129,7 @@ interface OutreachTableProps {
 const ITEMS_PER_PAGE_DESKTOP = 15;
 const ITEMS_PER_PAGE_MOBILE = 10;
 
-type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at';
+type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at' | 'tracked';
 type SortDirection = 'asc' | 'desc';
 
 export function OutreachTable({ 
@@ -148,6 +156,11 @@ export function OutreachTable({
   onRetryPhoneFetch,
   onContactGated,
   onUpdateLead,
+  onNotesChange,
+  onBusinessNameChange,
+  onImageChange,
+  fetchActivities,
+  campaignDefaultSaleTypeByLead,
   launchIntent,
   onLaunchConsumed,
 }: OutreachTableProps) {
@@ -195,6 +208,9 @@ export function OutreachTable({
   const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
   const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
+  const [trackedOnly, setTrackedOnly] = useState(false);
+  // Lead-detail modal (Track Leads fold-in) — opened on row click.
+  const [detailLead, setDetailLead] = useState<OutreachLead | null>(null);
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -816,10 +832,15 @@ export function OutreachTable({
       result = result.filter((lead) => lead.country === countryFilter);
     }
 
+    // Filter: tracked-only (is_potential_work) toggle
+    if (trackedOnly) {
+      result = result.filter((lead) => lead.is_potential_work);
+    }
+
     // Sort
     result.sort((a, b) => {
       let comparison = 0;
-      
+
       switch (sortField) {
         case 'business_name':
           comparison = a.business_name.localeCompare(b.business_name);
@@ -835,13 +856,17 @@ export function OutreachTable({
         case 'created_at':
           comparison = new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
           break;
+        case 'tracked':
+          // Tracked (is_potential_work) leads first.
+          comparison = (b.is_potential_work ? 1 : 0) - (a.is_potential_work ? 1 : 0);
+          break;
       }
-      
+
       return sortDirection === 'asc' ? comparison : -comparison;
     });
 
     return result;
-  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, sortField, sortDirection]);
+  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, sortField, sortDirection]);
 
   const newestLeadId = useMemo(() => {
     if (leads.length === 0) return null;
@@ -1132,6 +1157,40 @@ export function OutreachTable({
                 <SelectItem value="AUS">🇦🇺 AUS</SelectItem>
               </SelectContent>
             </Select>
+            {/* Tracked filter toggle — show only tracked (is_potential_work) leads */}
+            <Button
+              variant={trackedOnly ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => { setTrackedOnly((v) => !v); setCurrentPage(1); }}
+              className={cn('h-8 text-xs', !trackedOnly && 'bg-background')}
+              title="Show only tracked leads"
+            >
+              <Star className={cn('h-3.5 w-3.5 mr-1.5', trackedOnly && 'fill-current')} />
+              Tracked
+            </Button>
+            {/* Sort — status / date added / due date / tracked-first */}
+            <Select
+              value={`${sortField}:${sortDirection}`}
+              onValueChange={(v) => {
+                const [field, dir] = v.split(':') as [SortField, SortDirection];
+                setSortField(field);
+                setSortDirection(dir);
+                setCurrentPage(1);
+              }}
+            >
+              <SelectTrigger className="w-[130px] sm:w-[150px] bg-background h-8 text-xs">
+                <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 shrink-0" />
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="tracked:asc">Tracked first</SelectItem>
+                <SelectItem value="created_at:desc">Newest added</SelectItem>
+                <SelectItem value="created_at:asc">Oldest added</SelectItem>
+                <SelectItem value="next_action_date:asc">Due date</SelectItem>
+                <SelectItem value="status:asc">Status</SelectItem>
+                <SelectItem value="business_name:asc">A → Z</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </CardHeader>
@@ -1154,7 +1213,7 @@ export function OutreachTable({
                   lead={lead}
                   isSelected={selectedIds.has(lead.id)}
                   onSelect={(checked) => handleSelectOne(lead.id, checked as boolean)}
-                  onLeadClick={() => onLeadClick(lead)}
+                  onLeadClick={() => { onLeadClick(lead); setDetailLead(lead); }}
                   onStatusChange={(status) => onStatusChange(lead.id, status)}
                   onNextActionChange={(action, date) => onNextActionChange(lead.id, action, date)}
                   onContactMethodChange={onContactMethodChange ? (method) => onContactMethodChange(lead.id, method) : undefined}
@@ -1237,7 +1296,7 @@ export function OutreachTable({
                       className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
                         lead.is_potential_work ? 'bg-primary/5' : ''
                       } ${lastContactedLeadId === lead.id ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
-                      onClick={() => onLeadClick(lead)}
+                      onClick={() => { onLeadClick(lead); setDetailLead(lead); }}
                     >
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <Checkbox
@@ -1629,6 +1688,22 @@ export function OutreachTable({
         onAiOpener={isAdmin && smsDialogLead ? () => {
           setAiOpenerLead(smsDialogLead);
         } : undefined}
+      />
+
+      {/* Lead detail modal (Track Leads fold-in) — opened on row click */}
+      <LeadDetailDialog
+        open={!!detailLead}
+        onOpenChange={(open) => { if (!open) setDetailLead(null); }}
+        lead={detailLead}
+        onStatusChange={onStatusChange}
+        onNextActionChange={onNextActionChange}
+        onUpdateLead={onUpdateLead ?? (() => Promise.resolve(null))}
+        onNotesChange={onNotesChange}
+        onBusinessNameChange={onBusinessNameChange}
+        onImageChange={onImageChange}
+        fetchActivities={fetchActivities}
+        userId={user?.id}
+        campaignDefaultSaleType={detailLead && campaignDefaultSaleTypeByLead ? campaignDefaultSaleTypeByLead[detailLead.id] ?? null : null}
       />
 
       {/* Admin AI Opener Modal */}

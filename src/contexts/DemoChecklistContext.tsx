@@ -229,13 +229,15 @@ export function DemoChecklistProvider({
     };
   }, [isDemoUser, isReplay, completeStep, isOpen]);
 
-  // Complete viewedTrackLeads when user visits /potential-work
+  // Complete viewedTrackLeads when the user tracks a lead. Track Leads is now
+  // folded into Outreach (no /potential-work page), so the equivalent action is
+  // pressing Track / marking a lead as interested, which fires 'track-lead-added'.
   useEffect(() => {
     if (!isDemoUser && !isReplay) return;
-    if (location.pathname === '/potential-work') {
-      completeStep('viewedTrackLeads');
-    }
-  }, [isDemoUser, isReplay, location.pathname, completeStep]);
+    const onTracked = () => completeStep('viewedTrackLeads');
+    window.addEventListener('track-lead-added', onTracked);
+    return () => window.removeEventListener('track-lead-added', onTracked);
+  }, [isDemoUser, isReplay, completeStep]);
 
   const completedCount = [
     state.searchDone,
