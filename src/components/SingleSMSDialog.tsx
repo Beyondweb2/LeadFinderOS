@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MessageCircle, Send, AlertTriangle, RotateCcw, Sparkles } from 'lucide-react';
-import { generateSMSUrl } from '@/lib/leadUtils';
+import { generateSMSUrl, fillBusinessName, hasBusinessNameToken } from '@/lib/leadUtils';
 import { TemplatePicker } from '@/components/TemplatePicker';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAutoRotateTemplate } from '@/hooks/useAutoRotateTemplate';
@@ -103,17 +103,17 @@ export function SingleSMSDialog({ open, onOpenChange, lead, onSent, onAiOpener }
     localStorage.setItem(STORAGE_KEY, DEFAULT_TEMPLATE);
   };
 
-  const hasBusinessNamePlaceholder = template.includes('{{business_name}}');
+  const hasBusinessNamePlaceholder = hasBusinessNameToken(template);
 
   const previewMessage = useMemo(() => {
     if (!lead) return template;
-    return template.replace(/\{\{business_name\}\}/g, lead.business_name);
+    return fillBusinessName(template, lead.business_name);
   }, [template, lead]);
 
   const handleSend = async () => {
     if (!lead || !lead.phone) return;
     
-    const message = template.replace(/\{\{business_name\}\}/g, lead.business_name);
+    const message = fillBusinessName(template, lead.business_name);
     const url = generateSMSUrl(lead.phone, message);
     window.open(url, '_self');
     // demo-checklist-contact dispatched by OutreachTable on button click
