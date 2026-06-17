@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   LayoutDashboard, CalendarDays, Pencil, Settings as SettingsIcon, LogOut, Menu, X,
-  ExternalLink, Globe, EyeOff, Loader2, Sparkles, Check, ArrowLeft,
+  ExternalLink, Globe, EyeOff, Loader2, Sparkles, Check, ArrowLeft, Smartphone, Monitor, Share,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SiteEditor } from "@/components/SiteEditor";
@@ -55,6 +56,7 @@ export function BarberShell({
   welcome?: boolean;
 }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [page, setPage] = useState<PageKey>("dashboard");
   const [navOpen, setNavOpen] = useState(false);
@@ -271,9 +273,45 @@ export function BarberShell({
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Install this app — same steps as the welcome email, for barbers
+                  who are already logged in. */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Install this app</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Add this dashboard to your phone or computer so it opens like an app — full-screen,
+                    with its own icon, and one tap back to your bookings.
+                  </p>
+                  <div className="space-y-2.5">
+                    <div className="flex items-start gap-2.5 text-sm text-zinc-300">
+                      <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+                      <span><span className="font-semibold text-white">iPhone:</span> open in Safari, tap the <span className="inline-flex items-center gap-1"><Share className="h-3.5 w-3.5" />Share</span> button, then “Add to Home Screen”.</span>
+                    </div>
+                    <div className="flex items-start gap-2.5 text-sm text-zinc-300">
+                      <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+                      <span><span className="font-semibold text-white">Android:</span> open in Chrome, tap the menu (⋮), then “Install app” / “Add to Home Screen”.</span>
+                    </div>
+                    <div className="flex items-start gap-2.5 text-sm text-zinc-300">
+                      <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+                      <span><span className="font-semibold text-white">Desktop:</span> open in Chrome or Edge, then click the install icon in the address bar.</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
         </main>
+
+        {/* Persistent, low-key reminder so a barber can always find their way
+            back to log in + manage their site (they won't have bookmarked it). */}
+        <footer className="border-t border-line px-4 py-3 text-center text-[11px] leading-relaxed text-zinc-500">
+          Bookmark this page to manage your site:{" "}
+          <a href="https://yoursites.uk/barber" className="text-amber-soft hover:text-amber">yoursites.uk/barber</a>
+          {user?.email ? <> — log in anytime with <span className="text-zinc-400">{user.email}</span></> : null}
+        </footer>
       </div>
 
       {/* One-time welcome (single-site owner, first visit) - leads with the upsell. */}
