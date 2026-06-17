@@ -63,9 +63,18 @@ export const onRequestGet = async (context: { request: Request; params: Record<s
           const rawImg = (typeof content.heroImageUrl === "string" && content.heroImageUrl.trim())
             || (typeof gallery[0] === "string" && (gallery[0] as string).trim())
             || "";
-          const img = rawImg
+          const abs = rawImg
             ? (/^https?:\/\//i.test(rawImg) ? rawImg : `${SITE_ORIGIN}${rawImg.startsWith("/") ? "" : "/"}${rawImg}`)
             : fallbackImg;
+          // Custom hero uploads land in Supabase Storage and can be several MB —
+          // WhatsApp silently drops OG images over ~300KB. Rewrite Supabase
+          // public-object URLs to the on-the-fly image transform (1200x630, q70
+          // → ~60KB) so the custom image actually renders. Defaults + any non-
+          // Supabase URLs (already small) pass through untouched.
+          const OBJ_PATH = "/storage/v1/object/public/";
+          const img = abs.includes(OBJ_PATH)
+            ? abs.replace(OBJ_PATH, "/storage/v1/render/image/public/") + "?width=1200&height=630&resize=cover&quality=70"
+            : abs;
           const url = `${SITE_ORIGIN}/s/${token}`;
 
           html = html.replace(/<title>[^<]*<\/title>/i, `<title>${escAttr(biz)}</title>`);
