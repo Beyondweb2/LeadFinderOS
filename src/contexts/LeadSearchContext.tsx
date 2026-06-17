@@ -4,7 +4,13 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { reportClientError } from '@/lib/errorReporting';
-import type { Lead, SearchFilters, SearchResponse } from '@/types/lead';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { Lead, SearchFilters, SearchResponse, WebsiteStatus } from '@/types/lead';
+
+// Manual website-status overrides table isn't in the generated types yet, so its
+// reads/writes go through an untyped client (same pattern as other new tables).
+const odb = supabase as unknown as SupabaseClient;
+const normUrl = (u?: string) => (u || '').trim();
 
 interface ExcludedBusiness {
   business_name: string;
@@ -20,6 +26,8 @@ interface LeadSearchContextType {
   leads: Lead[];
   isLoading: boolean;
   search: (filters: SearchFilters, skipTrialCount?: boolean, isDemo?: boolean) => Promise<void>;
+  /** Manually correct a result's website status. Persists + wins over auto-detection. */
+  setWebsiteOverride: (lead: Lead, status: WebsiteStatus) => void;
   retryLastSearch: () => void;
   exportToCsv: () => void;
   trialLimitError: TrialLimitError | null;
@@ -49,6 +57,10 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [searchError, setSearchError] = useState<{ message: string; errorId: string } | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [gated, setGated] = useState(false);
+  // Manual website-status overrides, keyed by normalized googleMapsUrl. Applied
+  // over auto-detected results so a hand-correction always wins, even after a
+  // re-search of the same query.
+  const [websiteOverrides, setWebsiteOverrides] = useState<Record<string, WebsiteStatus>>({});
   const [freeSearchExhaustedPersisted, setFreeSearchExhaustedPersisted] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const lastSearchRef = useRef<{ filters: SearchFilters; skipTrialCount: boolean; isDemo: boolean } | null>(null);
@@ -145,6 +157,48 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
       // ignore quota/unavailable errors
     }
   }, [leads, storageKeys]);
+
+  // Load this user's manual website-status overrides (once per user).
+  useEffect(() => {
+    if (!user?.id) { setWebsiteOverrides({}); return; }
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await odb
+        .from('website_status_overrides')
+        .select('google_maps_url, website_status');
+      if (cancelled || error || !data) return;
+      const map: Record<string, WebsiteStatus> = {};
+      for (const r of data as Array<{ google_maps_url: string; website_status: string }>) {
+        map[normUrl(r.google_maps_url)] = r.website_status as WebsiteStatus;
+      }
+      setWebsiteOverrides(map);
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  // Hand-correct a result's website status. Optimistic (wins instantly) + upsert
+  // so it survives re-search and other sessions. Keyed by the business's map URL.
+  const setWebsiteOverride = useCallback((lead: Lead, status: WebsiteStatus) => {
+    const key = normUrl(lead.googleMapsUrl);
+    if (!key) {
+      toast({ title: "Can't save", description: 'This result has no map link to key the override on.', variant: 'destructive' });
+      return;
+    }
+    setWebsiteOverrides(prev => ({ ...prev, [key]: status }));
+    if (!user?.id) return;
+    (async () => {
+      const { error } = await odb
+        .from('website_status_overrides')
+        .upsert(
+          { user_id: user.id, google_maps_url: key, business_name: lead.name, website_status: status, updated_at: new Date().toISOString() },
+          { onConflict: 'user_id,google_maps_url' },
+        );
+      if (error) {
+        console.error('website override upsert failed', error);
+        toast({ title: 'Override not saved', description: error.message, variant: 'destructive' });
+      }
+    })();
+  }, [user?.id, toast]);
 
   // Fetch all businesses to exclude (checked + outreach history + current leads)
   const fetchExcludedBusinesses = useCallback(async () => {
@@ -480,10 +534,22 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     }
   }, [leads, toast]);
 
-  const contextValue = useMemo(() => ({ 
-    leads, 
-    isLoading, 
-    search, 
+  // Apply manual overrides over the raw (auto-detected) results. Runs after every
+  // fetch AND cache-restore (both set `leads`), so a correction always wins. The
+  // row keeps its position — only the label changes.
+  const displayedLeads = useMemo(() => {
+    if (!leads.length || !Object.keys(websiteOverrides).length) return leads;
+    return leads.map(l => {
+      const ov = websiteOverrides[normUrl(l.googleMapsUrl)];
+      return ov && ov !== l.websiteStatus ? { ...l, websiteStatus: ov } : l;
+    });
+  }, [leads, websiteOverrides]);
+
+  const contextValue = useMemo(() => ({
+    leads: displayedLeads,
+    isLoading,
+    search,
+    setWebsiteOverride,
     retryLastSearch,
     exportToCsv,
     trialLimitError,
@@ -493,7 +559,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     searchError,
     expanded,
     gated,
-  }), [leads, isLoading, search, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded, gated]);
+  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded, gated]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>

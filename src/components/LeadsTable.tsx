@@ -5,6 +5,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from './StatusBadge';
+import { WebsiteStatusToggle } from './WebsiteStatusToggle';
 import {
   Download, Filter, ChevronLeft, ChevronRight, ClipboardList, Check, Eye, Lock, MapPin, ExternalLink,
 } from 'lucide-react';
@@ -80,9 +81,11 @@ interface LeadsTableProps {
   searchEnrichment?: Record<string, Partial<OutreachLead>>;
   /** Patch search-time enrichment state, keyed by place_id. */
   onEnrichPatch?: (placeId: string, patch: Partial<OutreachLead>) => Promise<any>;
+  /** Manually correct a result's website status (persists + wins over auto-detection). */
+  onSetWebsiteStatus?: (lead: Lead, status: WebsiteStatus) => void;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch, onSetWebsiteStatus }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
@@ -215,7 +218,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
                     )}
                   </div>
-                  <div className="mt-1"><StatusBadge status={lead.websiteStatus} compact /></div>
+                  <div className="mt-1"><WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} compact /></div>
                   {onEnrichPatch && (
                     <div className="mt-1.5">
                       <SearchLeadContact lead={lead} enrichment={searchEnrichment?.[lead.id]} onPatch={onEnrichPatch} />
@@ -342,7 +345,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   <TableCell>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <div><StatusBadge status={lead.websiteStatus} /></div>
+                        <div><WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} /></div>
                       </TooltipTrigger>
                       <TooltipContent side="left" className="max-w-[300px] bg-popover border-border">
                         <p className="text-sm">{lead.reason}</p>
