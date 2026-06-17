@@ -10,6 +10,7 @@ import { OutreachCard } from '@/components/dashboard/OutreachCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
 import { TeamActivity } from '@/components/dashboard/TeamActivity';
 import { SiteFunnelCard } from '@/components/dashboard/SiteFunnelCard';
+import { CampaignStatsSection } from '@/components/dashboard/CampaignStatsSection';
 import { AdminZone } from '@/components/dashboard/AdminZone';
 
 import { Card } from '@/components/ui/card';
@@ -56,19 +57,18 @@ const Dashboard = () => {
     if (!user) return;
     setIsFullResetting(true);
     try {
-      const results = await Promise.all([
-        supabase.from('copied_phones').delete().eq('user_id', user.id),
-        supabase.from('outreach_activities').delete().eq('user_id', user.id),
-        supabase.from('lead_contacts').delete().eq('user_id', user.id),
-        supabase.from('search_history').delete().eq('user_id', user.id),
-        supabase.from('checked_businesses').delete().eq('user_id', user.id),
-        supabase.from('outreach_leads').delete().eq('user_id', user.id),
-        supabase.from('outreach_history').delete().eq('user_id', user.id),
-        supabase.from('templates').delete().eq('user_id', user.id),
-        supabase.rpc('reset_my_metrics'),
-      ]);
-      const errors = results.filter(r => r.error);
-      if (errors.length > 0) console.error('Full reset errors:', errors.map(e => e.error));
+      // One atomic, user-scoped wipe (SECURITY DEFINER fn keyed to auth.uid()).
+      // FK cascades clean the site/booking/claim children; templates + login +
+      // admin survive. Reusable — safe to press between test runs.
+      const { error } = await (supabase as unknown as {
+        rpc: (fn: string) => Promise<{ error: { message: string } | null }>;
+      }).rpc('reset_my_account');
+      if (error) {
+        console.error('Full reset failed:', error);
+        toast({ title: 'Reset failed', description: error.message, variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Account reset', description: 'All your test data was cleared. Templates and login kept.' });
       refetch();
     } catch (err) {
       console.error('Full reset failed:', err);
@@ -130,6 +130,14 @@ const Dashboard = () => {
             claimed={metrics.siteFunnel.claimed}
             addonRequested={metrics.siteFunnel.addonRequested}
           />
+        </section>
+      )}
+
+      {/* Per-campaign monitoring — operator-level; admins only (same gate as Sites) */}
+      {isAdmin && (
+        <section>
+          <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Campaigns</h2>
+          <CampaignStatsSection />
         </section>
       )}
 
@@ -200,7 +208,9 @@ const Dashboard = () => {
             <AlertDialogHeader>
               <AlertDialogTitle>Full account reset?</AlertDialogTitle>
               <AlertDialogDescription>
-                This will delete <strong>everything</strong> — all outreach leads, outreach history, templates, contact logs, search history, and metrics. This cannot be undone.
+                This wipes <strong>all your data</strong> — every lead (Outreach, Track Leads &amp; Paid Clients), outreach history &amp; activity, contact logs, search history, and every generated site along with its bookings, staff, claim links and visit tracking. It also clears your claims &amp; business notes and resets your metrics to zero.
+                <br /><br />
+                Your <strong>login, admin access and saved message/voice templates are kept</strong>. This only affects your own account and <strong>cannot be undone</strong>.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useCampaigns } from '@/hooks/useCampaigns';
+import { useCampaigns, type CampaignInput } from '@/hooks/useCampaigns';
 import {
   Select,
   SelectContent,
@@ -7,17 +7,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Plus } from 'lucide-react';
-import { SALE_TYPES, type SaleType } from '@/lib/saleType';
+import { CampaignFormDialog } from '@/components/CampaignFormDialog';
 
 const NEW_CAMPAIGN = '__new__';
 const ALL_CAMPAIGNS = '__all__';
@@ -34,14 +25,11 @@ interface CampaignPickerProps {
 
 /**
  * Thin campaign dropdown shared by Outreach (filter) and Find Leads (assign).
- * Includes an inline "New campaign…" action that opens a small create dialog.
+ * Includes an inline "New campaign…" action that opens the shared create dialog.
  */
 export function CampaignPicker({ value, onChange, mode, className }: CampaignPickerProps) {
   const { campaigns, createCampaign } = useCampaigns();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newSaleType, setNewSaleType] = useState<SaleType>('website');
-  const [creating, setCreating] = useState(false);
 
   const sentinel = mode === 'filter' ? ALL_CAMPAIGNS : NO_CAMPAIGN;
   const selectValue = value ?? sentinel;
@@ -58,16 +46,10 @@ export function CampaignPicker({ value, onChange, mode, className }: CampaignPic
     onChange(v);
   };
 
-  const handleCreate = async () => {
-    setCreating(true);
-    const created = await createCampaign(newName, newSaleType);
-    setCreating(false);
-    if (created) {
-      setNewName('');
-      setNewSaleType('website');
-      setDialogOpen(false);
-      onChange(created.id);
-    }
+  const handleCreate = async (values: CampaignInput) => {
+    const created = await createCampaign(values);
+    if (created) onChange(created.id);
+    return created;
   };
 
   return (
@@ -94,42 +76,11 @@ export function CampaignPicker({ value, onChange, mode, className }: CampaignPic
         </SelectContent>
       </Select>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle>New campaign</DialogTitle>
-          </DialogHeader>
-          <Input
-            autoFocus
-            placeholder="e.g. Birmingham Barbers"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && newName.trim() && !creating) handleCreate();
-            }}
-          />
-          <div>
-            <label className="text-xs text-muted-foreground block mb-1.5">Default sale type for this campaign</label>
-            <Select value={newSaleType} onValueChange={(v) => setNewSaleType(v as SaleType)}>
-              <SelectTrigger className="h-9">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SALE_TYPES.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-[11px] text-muted-foreground/60 mt-1">Leads in this campaign default to this; each lead can override.</p>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={!newName.trim() || creating}>
-              {creating ? 'Creating…' : 'Create'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <CampaignFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSubmit={handleCreate}
+      />
     </>
   );
 }
