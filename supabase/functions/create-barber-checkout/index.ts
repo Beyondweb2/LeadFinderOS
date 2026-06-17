@@ -19,7 +19,7 @@ const corsHeaders = {
 };
 
 // Keep in sync with src/config/pricing.ts (BARBER_PRO_PRICE_GBP).
-const BARBER_PRO_PRICE_GBP = 19.99;
+const BARBER_PRO_PRICE_GBP = 29.99;
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
