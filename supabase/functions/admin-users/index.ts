@@ -122,51 +122,52 @@ serve(async (req) => {
 
       const userIds = authUsers.map(u => u.id);
 
-      // Fetch contacted leads count per user (status != not_contacted, 1 per business)
-      const contactedLeadsRes = userIds.length > 0
-        ? await serviceClient
-            .from('outreach_leads')
-            .select('user_id, status')
-            .in('user_id', userIds)
-            .neq('status', 'not_contacted')
+      // Single source of truth: pull every lead (id, owner, status) once and
+      // DERIVE Added / Messages (contacted) / Replies from status — never from a
+      // drift-prone user_metrics counter (that was the bug). Also yields the
+      // contacted-lead set used for the per-site "sent" signal.
+      const leadsRes = userIds.length > 0
+        ? await serviceClient.from('outreach_leads').select('id, user_id, status').in('user_id', userIds)
         : { data: [] };
-
-      // Build contacted count map
-      const contactedCountMap = new Map<string, number>();
-      for (const lead of ((contactedLeadsRes as any).data || [])) {
-        contactedCountMap.set(lead.user_id, (contactedCountMap.get(lead.user_id) || 0) + 1);
+      const leadOwner = new Map<string, string>();          // lead_id -> user_id
+      const addedCountMap = new Map<string, number>();       // total leads (Added)
+      const contactedCountMap = new Map<string, number>();   // status past New (Messages)
+      const repliesCountMap = new Map<string, number>();     // replied/interested/completed
+      const contactedLeadIds = new Set<string>();            // for site "sent"
+      const REPLIED = new Set(['replied', 'interested', 'completed']);
+      for (const l of ((leadsRes as any).data || [])) {
+        leadOwner.set(l.id, l.user_id);
+        addedCountMap.set(l.user_id, (addedCountMap.get(l.user_id) || 0) + 1);
+        if (l.status && l.status !== 'not_contacted') {
+          contactedCountMap.set(l.user_id, (contactedCountMap.get(l.user_id) || 0) + 1);
+          contactedLeadIds.add(l.id);
+        }
+        if (REPLIED.has(l.status)) repliesCountMap.set(l.user_id, (repliesCountMap.get(l.user_id) || 0) + 1);
       }
 
+      // Only activity timestamps + search count still come from user_metrics.
       const metricsRes = userIds.length > 0
-        ? await serviceClient.from('user_metrics').select('user_id, search_count, businesses_added_count, messages_sent_count, replies_count, last_active_at, last_search_at').in('user_id', userIds)
+        ? await serviceClient.from('user_metrics').select('user_id, search_count, last_active_at, last_search_at').in('user_id', userIds)
         : { data: [] };
-
       const metricsData = (metricsRes as any).data || [];
-      console.log('[ADMIN-USERS] Joined data - metrics:', metricsData.length);
-
       const metricsMap = new Map(metricsData.map((m: any) => [m.user_id, m]));
 
-      // Per-user site funnel: attribute generated_sites to a user via the linked
-      // lead (generated_sites.lead_id -> outreach_leads.user_id). Counts sites
-      // Sent / Claimed / Upsell from the same tracking columns the Outreach
-      // badges use.
-      const leadOwnerRes = userIds.length > 0
-        ? await serviceClient.from('outreach_leads').select('id, user_id').in('user_id', userIds)
-        : { data: [] };
-      const leadOwner = new Map<string, string>();
-      for (const l of ((leadOwnerRes as any).data || [])) leadOwner.set(l.id, l.user_id);
-
+      // Per-user site funnel (generated_sites attributed via lead_id -> owner).
+      // "Sent" has no per-site timestamp, so it = sites whose lead was contacted
+      // (the link goes out when you contact the lead). Opened/Claimed/Upsell are
+      // the real automatic site-event columns.
       const leadIds = [...leadOwner.keys()];
       const sitesRes = leadIds.length > 0
-        ? await serviceClient.from('generated_sites').select('lead_id, sent_at, claimed_at, addon_interest_at').in('lead_id', leadIds)
+        ? await serviceClient.from('generated_sites').select('lead_id, first_opened_at, claimed_at, addon_interest_at').in('lead_id', leadIds)
         : { data: [] };
 
-      const siteAgg = new Map<string, { sent: number; claimed: number; upsell: number }>();
+      const siteAgg = new Map<string, { sent: number; opened: number; claimed: number; upsell: number }>();
       for (const s of ((sitesRes as any).data || [])) {
         const ownerId = leadOwner.get(s.lead_id);
         if (!ownerId) continue;
-        const a = siteAgg.get(ownerId) || { sent: 0, claimed: 0, upsell: 0 };
-        if (s.sent_at) a.sent++;
+        const a = siteAgg.get(ownerId) || { sent: 0, opened: 0, claimed: 0, upsell: 0 };
+        if (contactedLeadIds.has(s.lead_id)) a.sent++;
+        if (s.first_opened_at) a.opened++;
         if (s.claimed_at) a.claimed++;
         if (s.addon_interest_at) a.upsell++;
         siteAgg.set(ownerId, a);
@@ -174,17 +175,18 @@ serve(async (req) => {
 
       let users = authUsers.map(u => {
         const metrics = metricsMap.get(u.id) as any;
-        const sites = siteAgg.get(u.id) || { sent: 0, claimed: 0, upsell: 0 };
+        const sites = siteAgg.get(u.id) || { sent: 0, opened: 0, claimed: 0, upsell: 0 };
 
         return {
           id: u.id,
           email: u.email || 'N/A',
           created_at: u.created_at,
           search_count: metrics?.search_count ?? 0,
-          businesses_added_count: metrics?.businesses_added_count ?? 0,
+          businesses_added_count: addedCountMap.get(u.id) ?? 0,
           messages_sent_count: contactedCountMap.get(u.id) ?? 0,
-          replies_count: metrics?.replies_count ?? 0,
+          replies_count: repliesCountMap.get(u.id) ?? 0,
           sites_sent_count: sites.sent,
+          sites_opened_count: sites.opened,
           sites_claimed_count: sites.claimed,
           sites_upsell_count: sites.upsell,
           last_active_at: metrics?.last_active_at || null,
