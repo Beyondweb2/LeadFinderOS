@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -55,6 +56,7 @@ export function BarberShell({
   welcome?: boolean;
 }) {
   const { toast } = useToast();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [page, setPage] = useState<PageKey>("dashboard");
   const [navOpen, setNavOpen] = useState(false);
@@ -274,6 +276,14 @@ export function BarberShell({
             </div>
           )}
         </main>
+
+        {/* Persistent, low-key reminder so a barber can always find their way
+            back to log in + manage their site (they won't have bookmarked it). */}
+        <footer className="border-t border-line px-4 py-3 text-center text-[11px] leading-relaxed text-zinc-500">
+          Bookmark this page to manage your site:{" "}
+          <a href="https://yoursites.uk/barber" className="text-amber-soft hover:text-amber">yoursites.uk/barber</a>
+          {user?.email ? <> — log in anytime with <span className="text-zinc-400">{user.email}</span></> : null}
+        </footer>
       </div>
 
       {/* One-time welcome (single-site owner, first visit) - leads with the upsell. */}

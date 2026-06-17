@@ -115,6 +115,80 @@ async function notifyAdminOfClaim(opts: {
   }
 }
 
+/** Best-effort confirmation email to the BARBER (their own signup email) right
+ *  after a successful claim, so they know their site is live and how to log back
+ *  in. Same Resend infra/verified domain as the operator notification, but
+ *  barber-facing: FROM "Paul" (no "LeadFinder") with reply-to paul@move37.fun so
+ *  replies reach a real inbox. Any failure is logged + swallowed — never blocks
+ *  or fails the claim. */
+async function notifyBarberOfClaim(opts: {
+  serviceClient: ReturnType<typeof createClient>;
+  siteId: string;
+  toEmail: string;
+}): Promise<void> {
+  const resendKey = Deno.env.get("RESEND_API_KEY");
+  if (!resendKey) {
+    console.warn("[CLAIM-SITE] RESEND_API_KEY not set; skipping barber confirmation");
+    return;
+  }
+  if (!opts.toEmail) {
+    console.warn("[CLAIM-SITE] no barber email resolved; skipping barber confirmation");
+    return;
+  }
+  try {
+    const { data: site } = await opts.serviceClient
+      .from("generated_sites")
+      .select("site_name, content")
+      .eq("id", opts.siteId)
+      .maybeSingle();
+
+    const content = (site?.content ?? {}) as Record<string, unknown>;
+    const slug = typeof site?.site_name === "string" ? site.site_name : "";
+    const shopName =
+      typeof content.businessName === "string" && content.businessName.trim()
+        ? content.businessName.trim()
+        : (slug || "your business");
+    const publicUrl = `https://yoursites.uk/p/${slug}`;
+    const dashUrl = "https://yoursites.uk/barber";
+
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${resendKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: "Paul <noreply@lead-finder-app.com>",
+        reply_to: "paul@move37.fun",
+        to: [opts.toEmail],
+        subject: "Your website is live",
+        text:
+          `Hi ${shopName},\n\n` +
+          `Your website is claimed and live: ${publicUrl}\n\n` +
+          `To edit it or manage bookings, log in here anytime: ${dashUrl}\n` +
+          `Just log in with this email address.\n\n` +
+          `Any questions, reply to this email.\n\n` +
+          `Paul`,
+        html:
+          `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.6;color:#1e293b">` +
+          `<p style="margin:0 0 12px">Hi ${esc(shopName)},</p>` +
+          `<p style="margin:0 0 12px">Your website is claimed and live: <a href="${esc(publicUrl)}">${esc(publicUrl)}</a></p>` +
+          `<p style="margin:0 0 4px">To edit it or manage bookings, log in here anytime: <a href="${dashUrl}">${dashUrl}</a></p>` +
+          `<p style="margin:0 0 12px">Just log in with this email address.</p>` +
+          `<p style="margin:0 0 12px">Any questions, reply to this email.</p>` +
+          `<p style="margin:0">Paul</p>` +
+          `</div>`,
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => "");
+      console.error("[CLAIM-SITE] barber email non-OK:", res.status, errBody.slice(0, 200));
+    }
+  } catch (e) {
+    console.error("[CLAIM-SITE] barber email failed (non-blocking):", (e as Error).message);
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -254,6 +328,26 @@ serve(async (req) => {
       siteId: claimedSiteId as string,
       accountEmail: email,
       newAccount: !!createdUserId,
+    });
+
+    // Confirmation email to the BARBER. Fires exactly once per successful claim
+    // (this path only runs after claim_generated_site succeeds, which is atomic +
+    // one-time). Recipient is the barber's OWN signup email; for the rare
+    // existing/logged-in claim (no signup email in the body) we look it up from
+    // their auth record. Best-effort — never blocks the claim.
+    let barberEmail = email;
+    if (!barberEmail && userId) {
+      try {
+        const { data: u } = await serviceClient.auth.admin.getUserById(userId);
+        barberEmail = u?.user?.email ?? "";
+      } catch (e) {
+        console.error("[CLAIM-SITE] barber email lookup failed:", (e as Error).message);
+      }
+    }
+    await notifyBarberOfClaim({
+      serviceClient,
+      siteId: claimedSiteId as string,
+      toEmail: barberEmail,
     });
 
     // For new accounts the client now signs in with the same email/password.

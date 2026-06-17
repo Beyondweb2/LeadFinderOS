@@ -41,7 +41,7 @@ export default function BarberLogin() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useBarberBranding("Log in to your website");
+  useBarberBranding("Log in to manage your website");
 
   // Already signed in → straight through (e.g. opened a claim link while logged in).
   if (!isLoading && user) {
@@ -71,7 +71,7 @@ export default function BarberLogin() {
             <Scissors className="h-5 w-5 text-amber" />
           </div>
           <h1 className="mt-4 font-display text-3xl uppercase tracking-wide text-white">
-            Log in to your website
+            Log in to manage your website
           </h1>
         </div>
 
