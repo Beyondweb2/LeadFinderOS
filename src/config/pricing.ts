@@ -12,12 +12,12 @@
  */
 
 /** The ONE value to edit when testing price points with barbers. */
-export const BARBER_PRO_PRICE_GBP = 19.99;
+export const BARBER_PRO_PRICE_GBP = 29.99;
 
 /** Billing interval shown next to the price. */
 export const BARBER_PRO_INTERVAL = "month";
 
-/** Derived label, e.g. "£19.99/month". Never hardcode this elsewhere. */
+/** Derived label, e.g. "£29.99/month". Never hardcode this elsewhere. */
 export const barberProPriceLabel = `£${BARBER_PRO_PRICE_GBP.toFixed(2)}/${BARBER_PRO_INTERVAL}`;
 
 /** What the paid tier unlocks — display only (not yet built). */

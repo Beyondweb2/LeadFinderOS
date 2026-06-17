@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   LayoutDashboard, CalendarDays, Pencil, Settings as SettingsIcon, LogOut, Menu, X,
-  ExternalLink, Globe, EyeOff, Loader2, Sparkles, Check, ArrowLeft,
+  ExternalLink, Globe, EyeOff, Loader2, Sparkles, Check, ArrowLeft, Smartphone, Monitor, Share,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SiteEditor } from "@/components/SiteEditor";
@@ -270,6 +270,34 @@ export function BarberShell({
                     <Button variant="outline" size="sm" onClick={onSignOut} className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white">
                       <LogOut className="h-4 w-4 mr-2" /> Sign out
                     </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Install this app — same steps as the welcome email, for barbers
+                  who are already logged in. */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Install this app</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    Add this dashboard to your phone or computer so it opens like an app — full-screen,
+                    with its own icon, and one tap back to your bookings.
+                  </p>
+                  <div className="space-y-2.5">
+                    <div className="flex items-start gap-2.5 text-sm text-zinc-300">
+                      <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+                      <span><span className="font-semibold text-white">iPhone:</span> open in Safari, tap the <span className="inline-flex items-center gap-1"><Share className="h-3.5 w-3.5" />Share</span> button, then “Add to Home Screen”.</span>
+                    </div>
+                    <div className="flex items-start gap-2.5 text-sm text-zinc-300">
+                      <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+                      <span><span className="font-semibold text-white">Android:</span> open in Chrome, tap the menu (⋮), then “Install app” / “Add to Home Screen”.</span>
+                    </div>
+                    <div className="flex items-start gap-2.5 text-sm text-zinc-300">
+                      <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+                      <span><span className="font-semibold text-white">Desktop:</span> open in Chrome or Edge, then click the install icon in the address bar.</span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
