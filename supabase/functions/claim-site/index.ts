@@ -171,9 +171,9 @@ async function notifyBarberOfClaim(opts: {
           `Make it yours:\n` +
           `You can edit everything yourself from the dashboard - change your text, prices and services, and swap in your own photos (hero image and gallery). No tech skills needed.\n\n` +
           `Install it as an app (optional, but handy):\n` +
-          `- iPhone: open ${dashUrl} in Safari, tap the Share button, then "Add to Home Screen."\n` +
-          `- Android: open ${dashUrl} in Chrome, tap the menu (three dots), then "Install app" / "Add to Home Screen."\n` +
-          `- Desktop: open ${dashUrl} in Chrome or Edge, click the install icon in the address bar.\n` +
+          `- iPhone (Safari): open ${dashUrl}, tap the Share button, scroll down, then "Add to Home Screen."\n` +
+          `- Android (Chrome): open ${dashUrl}, tap the menu (three dots, top-right), then "Install app" (or "Add to Home screen").\n` +
+          `- Desktop (Chrome or Edge): open ${dashUrl}, then click the install icon at the right-hand end of the address bar (a small screen icon with a down-arrow). Don't see it? In Chrome: menu (three dots) > "Cast, save, and share" > "Install page as app". In Edge: menu > "Apps" > "Install this site as an app". (It won't show in a private/Incognito window or if it's already installed.)\n` +
           `It'll appear as an app with its own icon, opens full-screen, and is the quickest way back to your bookings.\n\n` +
           `Want more bookings?\n` +
           `Your website is free forever. If you'd like online booking and automatic SMS reminders to cut no-shows and fill your diary, that's an optional add-on for £29.99/month - and you can switch it on any time from the dashboard.\n\n` +
@@ -189,12 +189,13 @@ async function notifyBarberOfClaim(opts: {
           `<p style="margin:0 0 16px"><a href="${dashUrl}">${dashUrl}</a><br>Just use this email address to log in.</p>` +
           `<p style="margin:0 0 2px"><strong>Make it yours</strong></p>` +
           `<p style="margin:0 0 16px">You can edit everything yourself from the dashboard — change your text, prices and services, and swap in your own photos (hero image and gallery). No tech skills needed.</p>` +
-          `<p style="margin:0 0 2px"><strong>Install it as an app</strong> (optional, but handy)</p>` +
-          `<ul style="margin:0 0 16px;padding-left:18px">` +
-          `<li><strong>iPhone:</strong> open <a href="${dashUrl}">yoursites.uk/barber</a> in Safari, tap Share, then "Add to Home Screen."</li>` +
-          `<li><strong>Android:</strong> open it in Chrome, tap the menu (three dots), then "Install app" / "Add to Home Screen."</li>` +
-          `<li><strong>Desktop:</strong> open it in Chrome or Edge, click the install icon in the address bar.</li>` +
+          `<p style="margin:0 0 4px"><strong>Install it as an app</strong> (optional, but handy)</p>` +
+          `<ul style="margin:0 0 8px;padding-left:18px">` +
+          `<li style="margin:0 0 6px"><strong>iPhone (Safari):</strong> open <a href="${dashUrl}">yoursites.uk/barber</a>, tap the Share button, scroll down, then "Add to Home Screen."</li>` +
+          `<li style="margin:0 0 6px"><strong>Android (Chrome):</strong> open it, tap the menu (⋮, top-right), then "Install app" (or "Add to Home screen").</li>` +
+          `<li style="margin:0 0 6px"><strong>Desktop (Chrome or Edge):</strong> open it, then click the install icon at the right-hand end of the address bar (a small screen icon with a down-arrow). Don't see it? Chrome: ⋮ menu → "Cast, save, and share" → "Install page as app". Edge: ⋯ menu → "Apps" → "Install this site as an app".</li>` +
           `</ul>` +
+          `<p style="margin:0 0 16px;font-size:13px;color:#64748b">The desktop install option won't appear in a private/Incognito window, or if it's already installed.</p>` +
           `<p style="margin:0 0 16px">It'll appear as an app with its own icon, opens full-screen, and is the quickest way back to your bookings.</p>` +
           `<p style="margin:0 0 2px"><strong>Want more bookings?</strong></p>` +
           `<p style="margin:0 0 16px">Your website is free forever. If you'd like online booking and automatic SMS reminders to cut no-shows and fill your diary, that's an optional add-on for <strong>£29.99/month</strong> — switch it on any time from the dashboard.</p>` +

@@ -285,20 +285,28 @@ export function BarberShell({
                     Add this dashboard to your phone or computer so it opens like an app — full-screen,
                     with its own icon, and one tap back to your bookings.
                   </p>
-                  <div className="space-y-2.5">
+                  <div className="space-y-3">
                     <div className="flex items-start gap-2.5 text-sm text-zinc-300">
                       <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
-                      <span><span className="font-semibold text-white">iPhone:</span> open in Safari, tap the <span className="inline-flex items-center gap-1"><Share className="h-3.5 w-3.5" />Share</span> button, then “Add to Home Screen”.</span>
+                      <span><span className="font-semibold text-white">iPhone (Safari):</span> tap the <span className="inline-flex items-center gap-1"><Share className="h-3.5 w-3.5" />Share</span> button, scroll down, then tap “Add to Home Screen”.</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-sm text-zinc-300">
                       <Smartphone className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
-                      <span><span className="font-semibold text-white">Android:</span> open in Chrome, tap the menu (⋮), then “Install app” / “Add to Home Screen”.</span>
+                      <span><span className="font-semibold text-white">Android (Chrome):</span> tap the menu (⋮, top-right), then tap “Install app” (or “Add to Home screen”).</span>
                     </div>
                     <div className="flex items-start gap-2.5 text-sm text-zinc-300">
                       <Monitor className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
-                      <span><span className="font-semibold text-white">Desktop:</span> open in Chrome or Edge, then click the install icon in the address bar.</span>
+                      <span>
+                        <span className="font-semibold text-white">Desktop (Chrome / Edge):</span> click the install icon at the
+                        right-hand end of the address bar (a small <span className="inline-flex items-center gap-1"><Monitor className="h-3.5 w-3.5" />screen</span> icon with a down-arrow).
+                        Can’t see it? <span className="text-zinc-200">Chrome:</span> menu (⋮) → “Cast, save, and share” → “Install page as app”.
+                        <span className="text-zinc-200"> Edge:</span> menu (⋯) → “Apps” → “Install this site as an app”.
+                      </span>
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground/70">
+                    The desktop install option doesn’t appear in a private / Incognito window, or if the app is already installed.
+                  </p>
                 </CardContent>
               </Card>
             </div>
