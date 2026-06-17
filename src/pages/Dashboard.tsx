@@ -8,7 +8,7 @@ import { RevenueCard } from '@/components/dashboard/RevenueCard';
 import { PipelineCard } from '@/components/dashboard/PipelineCard';
 import { OutreachCard } from '@/components/dashboard/OutreachCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
-import { TeamActivity } from '@/components/dashboard/TeamActivity';
+import { ChannelPerformanceCard } from '@/components/dashboard/ChannelPerformanceCard';
 import { SiteFunnelCard } from '@/components/dashboard/SiteFunnelCard';
 import { CampaignStatsSection } from '@/components/dashboard/CampaignStatsSection';
 import { AdminZone } from '@/components/dashboard/AdminZone';
@@ -90,20 +90,21 @@ const Dashboard = () => {
         </p>
       </div>
 
+      {/* Outreach performance — per-channel (what's working) leads the dashboard */}
       <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Your performance</h2>
-        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
-          <RevenueCard
-            revenueThisMonth={metrics.revenueThisMonth}
-            revenueLastMonth={metrics.revenueLastMonth}
-            totalRevenue={metrics.totalRevenue}
-            fullyPaidClients={metrics.fullyPaidClients}
-            activeProposals={metrics.activeProposals}
-            pipelineDeals={metrics.pipeline.interested + metrics.pipeline.proposalSent}
-            totalPotentialRevenue={metrics.totalPotentialRevenue}
-            closedRevenue={metrics.closedRevenue}
-          />
+        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Outreach performance</h2>
+        <div className="grid gap-3 sm:gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <ChannelPerformanceCard data={metrics.channelPerf} />
+          </div>
           <PipelineCard pipeline={metrics.pipeline} />
+        </div>
+      </section>
+
+      {/* Activity pulse + next steps */}
+      <section>
+        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Activity &amp; next steps</h2>
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
           <OutreachCard
             contactedToday={metrics.contactedToday}
             contactedYesterday={metrics.contactedYesterday}
@@ -112,12 +113,6 @@ const Dashboard = () => {
           />
           <NextActionsCard trackedLeads={metrics.trackedLeads} />
         </div>
-      </section>
-
-      {/* Team zone — visible to ALL users; built only from team-readable tables */}
-      <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Team activity</h2>
-        <TeamActivity />
       </section>
 
       {/* Site funnel — operator-level barber-site tracking; admins only */}
@@ -140,6 +135,23 @@ const Dashboard = () => {
           <CampaignStatsSection />
         </section>
       )}
+
+      {/* Revenue — kept for when Stripe is live; de-emphasised at the bottom */}
+      <section>
+        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Revenue</h2>
+        <div className="sm:max-w-md">
+          <RevenueCard
+            revenueThisMonth={metrics.revenueThisMonth}
+            revenueLastMonth={metrics.revenueLastMonth}
+            totalRevenue={metrics.totalRevenue}
+            fullyPaidClients={metrics.fullyPaidClients}
+            activeProposals={metrics.activeProposals}
+            pipelineDeals={metrics.pipeline.interested + metrics.pipeline.proposalSent}
+            totalPotentialRevenue={metrics.totalPotentialRevenue}
+            closedRevenue={metrics.closedRevenue}
+          />
+        </div>
+      </section>
 
       {/* Admin zone — rendered ONLY for admins (role-based useSubscription().isAdmin) */}
       {isAdmin && (
