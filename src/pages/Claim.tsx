@@ -315,6 +315,10 @@ export default function Claim() {
                   </p>
                 </div>
               )}
+
+              <p className="text-center text-xs text-zinc-500">
+                All text and images can be customised once you claim — it's easy.
+              </p>
             </div>
           )}
         </div>
