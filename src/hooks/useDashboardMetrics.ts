@@ -42,11 +42,6 @@ interface PipelineCounts {
   closedWon: number;
 }
 
-interface OutreachChannels7d {
-  calls: number;
-  whatsapp: number;
-  sms: number;
-}
 
 interface DashboardMetrics {
   // Revenue
@@ -69,10 +64,14 @@ interface DashboardMetrics {
   noWebsiteBusinesses: number;
   addedToday: number;
   addedYesterday: number;
+  // HERO: businesses contacted = leads past "New" (status, source of truth). Reconciles with Sent.
+  contactedTotal: number;
+  // Daily activity pulse — DISTINCT businesses per day from the send log (deduped, never per-press).
   contactedToday: number;
   contactedYesterday: number;
   avg7Day: number;
-  channels7d: OutreachChannels7d;
+  // How many of the contacted businesses have a logged send (for the honest "X of Y logged" note).
+  loggedLeads: number;
 
   // Activity (legacy)
   recordDay: { date: string; count: number } | null;
@@ -121,7 +120,7 @@ export function useDashboardMetrics() {
     activitiesToday: 0, activitiesYesterday: 0, activitiesThisWeek: 0,
     totalPhonesCopied: 0, totalLeadsContacted: 0,
   });
-  const [outreachEvents7d, setOutreachEvents7d] = useState<{ channel: string; created_at: string }[]>([]);
+  const [outreachEvents7d, setOutreachEvents7d] = useState<{ lead_id: string; created_at: string }[]>([]);
   const [siteFunnel, setSiteFunnel] = useState({ sent: 0, opened: 0, claimed: 0, addonRequested: 0 });
   // lead_ids of generated_sites that the barber has CLAIMED — used to attribute
   // site-claims to the lead's contact channel for the per-channel card.
@@ -148,7 +147,7 @@ export function useDashboardMetrics() {
       supabase.from('outreach_activities').select('created_at').eq('user_id', uid),
       supabase.from('lead_contacts').select('contacted_at').eq('user_id', uid),
       supabase.from('search_history').select('no_website_count').eq('user_id', uid),
-      supabase.from('outreach_events').select('channel, created_at').eq('user_id', uid).gte('created_at', sevenDaysAgo.toISOString()),
+      supabase.from('outreach_events').select('lead_id, created_at').eq('user_id', uid).gte('created_at', sevenDaysAgo.toISOString()),
     ]);
 
     hasLoadedOnceRef.current = true;
@@ -278,30 +277,30 @@ export function useDashboardMetrics() {
       closedWon: allLeads.filter(l => ['paid_for_draft', 'completed'].includes(l.status) && !l.is_archived).length,
     };
 
-    // Contacted today/yesterday from outreach_events or status-based
-    const contactedStatuses = [
-      'contacted', 'call_back', 'not_answered', 'on_hold', 'wants_draft', 'interested', 'not_interested',
-      'sent_initial_text', 'replied', 'sent_voice_note', 'awaiting_decision', 'waiting',
-      'reviewing_draft', 'paid_for_draft', 'completed', 'no_whatsapp', 'sms', 'whatsapp', 'facebook_msg'
-    ];
+    // HERO — businesses contacted = leads past "New" (status, source of truth).
+    // Reconciles exactly with Sent / pipeline / channel card. Never per-press.
+    const contactedTotal = allLeads.filter(l => !l.is_archived && isSentStatus(l.status)).length;
 
-    // Use outreach_events for contacted today/yesterday
+    // Daily activity pulse — DISTINCT businesses per day from the send log
+    // (outreach_events deduped by lead_id). Pressing WhatsApp then SMS for one
+    // business = 1, not 2. Bounded by the lead count; never per-press.
     const todayISO = today.toISOString();
     const yesterdayISO = yesterday.toISOString();
-    const tomorrowISO = new Date(today.getTime() + 86400000).toISOString();
-
-    const contactedToday = outreachEvents7d.filter(e => e.created_at >= todayISO).length;
-    const contactedYesterday = outreachEvents7d.filter(e => e.created_at >= yesterdayISO && e.created_at < todayISO).length;
-
-    // 7-day average
-    const avg7Day = Math.round((outreachEvents7d.length / 7) * 10) / 10;
-
-    // Channel breakdown 7d
-    const channels7d: OutreachChannels7d = {
-      calls: outreachEvents7d.filter(e => e.channel === 'call' || e.channel === 'Call').length,
-      whatsapp: outreachEvents7d.filter(e => e.channel === 'whatsapp' || e.channel === 'WhatsApp').length,
-      sms: outreachEvents7d.filter(e => e.channel === 'sms' || e.channel === 'SMS').length,
-    };
+    const dayKey = (iso: string) => iso.split('T')[0];
+    const leadsByDay = new Map<string, Set<string>>();
+    for (const e of outreachEvents7d) {
+      if (!e.lead_id) continue;
+      const d = dayKey(e.created_at);
+      if (!leadsByDay.has(d)) leadsByDay.set(d, new Set());
+      leadsByDay.get(d)!.add(e.lead_id);
+    }
+    const contactedToday = leadsByDay.get(dayKey(todayISO))?.size ?? 0;
+    const contactedYesterday = leadsByDay.get(dayKey(yesterdayISO))?.size ?? 0;
+    // Avg businesses contacted per day = total distinct (business, day) pairs / 7.
+    const distinctBusinessDayPairs = [...leadsByDay.values()].reduce((sum, set) => sum + set.size, 0);
+    const avg7Day = Math.round((distinctBusinessDayPairs / 7) * 10) / 10;
+    // Distinct businesses with any logged send (for the honest "X of Y logged" note).
+    const loggedLeads = new Set(outreachEvents7d.map(e => e.lead_id).filter(Boolean)).size;
 
     // Legacy activity metrics
     const dailyCounts: Record<string, number> = {};
@@ -369,7 +368,7 @@ export function useDashboardMetrics() {
       totalPotentialRevenue, closedRevenue,
       pipeline,
       totalBusinessesAdded, noWebsiteBusinesses, addedToday, addedYesterday,
-      contactedToday, contactedYesterday, avg7Day, channels7d,
+      contactedTotal, contactedToday, contactedYesterday, avg7Day, loggedLeads,
       recordDay, avgPerDayAllTime, avgPerDayLast7Days,
       activity: activityData,
       trackedLeads,

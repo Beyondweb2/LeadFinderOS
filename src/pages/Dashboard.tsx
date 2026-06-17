@@ -106,10 +106,11 @@ const Dashboard = () => {
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Activity &amp; next steps</h2>
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
           <OutreachCard
+            contactedTotal={metrics.contactedTotal}
             contactedToday={metrics.contactedToday}
             contactedYesterday={metrics.contactedYesterday}
             avg7Day={metrics.avg7Day}
-            channels7d={metrics.channels7d}
+            loggedLeads={metrics.loggedLeads}
           />
           <NextActionsCard trackedLeads={metrics.trackedLeads} />
         </div>
