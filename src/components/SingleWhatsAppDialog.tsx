@@ -13,7 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MessageSquare, Send, AlertTriangle, RotateCcw, Loader2, Sparkles } from 'lucide-react';
-import { generateWhatsAppUrl } from '@/lib/leadUtils';
+import { generateWhatsAppUrl, fillBusinessName } from '@/lib/leadUtils';
 import { TemplatePicker } from '@/components/TemplatePicker';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAutoRotateTemplate } from '@/hooks/useAutoRotateTemplate';
@@ -113,14 +113,14 @@ export function SingleWhatsAppDialog({ open, onOpenChange, lead, onSent, onAiOpe
 
   const previewMessage = useMemo(() => {
     if (!lead) return template;
-    return template.replace(/\{\{business_name\}\}/g, lead.business_name);
+    return fillBusinessName(template, lead.business_name);
   }, [template, lead]);
 
   const handleSend = async () => {
     if (!lead || !lead.phone || isSending) return;
     setIsSending(true);
     
-    const message = template.replace(/\{\{business_name\}\}/g, lead.business_name);
+    const message = fillBusinessName(template, lead.business_name);
     const url = generateWhatsAppUrl(lead.phone, message);
 
     // Store pending WhatsApp check markers in localStorage

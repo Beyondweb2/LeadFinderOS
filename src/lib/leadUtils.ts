@@ -103,6 +103,23 @@ export function generateSMSUrl(phone: string, message: string): string {
   return `sms:+${formattedPhone}?body=${encodedMessage}`;
 }
 
+// Business-name placeholder. Matches any reasonable form a saved template might
+// use — {{business_name}}, {{Business name}}, {{ business name }}, {{BusinessName}}
+// — case-insensitive, with a space, underscore, or nothing between the words.
+// Deliberately does NOT match the separate {{name}} token. A fresh RegExp is
+// built per call so the global `lastIndex` can never leak between test/replace.
+const BUSINESS_NAME_TOKEN = '\\{\\{\\s*business[\\s_]*name\\s*\\}\\}';
+
+/** True if the template contains a business-name placeholder in any form. */
+export function hasBusinessNameToken(template: string): boolean {
+  return new RegExp(BUSINESS_NAME_TOKEN, 'i').test(template);
+}
+
+/** Replace every business-name placeholder (any form) with the real name. */
+export function fillBusinessName(template: string, businessName: string): string {
+  return template.replace(new RegExp(BUSINESS_NAME_TOKEN, 'gi'), businessName);
+}
+
 /**
  * Open WhatsApp for multiple leads (opens first, queues rest)
  */
@@ -111,10 +128,10 @@ export function openBulkWhatsApp(
   messageTemplate: string
 ): void {
   if (leads.length === 0) return;
-  
+
   // Open first lead immediately
   const firstLead = leads[0];
-  const message = messageTemplate.replace('{{business_name}}', firstLead.business_name);
+  const message = fillBusinessName(messageTemplate, firstLead.business_name);
   const url = generateWhatsAppUrl(firstLead.phone, message);
   window.open(url, '_blank');
   
