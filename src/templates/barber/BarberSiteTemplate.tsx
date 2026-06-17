@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 
 import "./fonts.css";
 import { STOCK_GALLERY, STOCK_HERO, STOCK_INTERIOR } from "./assets";
+import { GALLERY_LAYOUTS, GALLERY_GRID_BASE } from "../shared/galleryLayout";
 import { BookingFlow } from "./BookingFlow";
 import type { BarberOpeningHours, BarberService, BarberSiteContent, BarberStat } from "./types";
 
@@ -811,34 +812,54 @@ function Services({
 /* --------------------------------- gallery -------------------------------- */
 
 function Gallery({ images, businessName }: { images: string[]; businessName: string }) {
-  // Render 1–10 images in a responsive grid that adapts to the count.
+  // Render 1–10 images as a varied mosaic that adapts to the count (no gaps).
   const imgs = images.slice(0, 10);
   if (imgs.length === 0) return null;
-  const single = imgs.length === 1;
+
+  const header = (
+    <Reveal className="mb-12">
+      <Eyebrow>The gallery</Eyebrow>
+      <h2 className="mt-5 font-display text-4xl uppercase tracking-wide text-white sm:text-5xl">
+        Work off the chair
+      </h2>
+    </Reveal>
+  );
+
+  // 1 image → a single wide feature tile.
+  if (imgs.length === 1) {
+    return (
+      <section id="gallery" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+        {header}
+        <Reveal as="figure" className="mx-auto max-w-3xl">
+          <SmartImg
+            src={imgs[0]}
+            alt={`${businessName} — gallery 1`}
+            className="group w-full rounded-2xl border border-white/[0.06] aspect-[16/10]"
+            imgClassName="transition-transform duration-700 group-hover:scale-105"
+          />
+        </Reveal>
+      </section>
+    );
+  }
+
+  const layout = GALLERY_LAYOUTS[imgs.length];
   return (
     <section id="gallery" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
-      <Reveal className="mb-12">
-        <Eyebrow>The gallery</Eyebrow>
-        <h2 className="mt-5 font-display text-4xl uppercase tracking-wide text-white sm:text-5xl">
-          Work off the chair
-        </h2>
-      </Reveal>
-
-      <div
-        className={
-          single
-            ? "mx-auto max-w-3xl"
-            : "grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-4"
-        }
-      >
+      {header}
+      <div className={`${GALLERY_GRID_BASE} ${layout.container}`}>
         {imgs.map((src, i) => (
-          <Reveal as="figure" key={`${src}-${i}`} delay={Math.min(i * 0.05, 0.3)}>
+          <Reveal
+            as="figure"
+            key={`${src}-${i}`}
+            delay={Math.min(i * 0.05, 0.3)}
+            className={`${layout.tiles[i] ?? ""} ${
+              imgs.length % 2 === 1 && i === imgs.length - 1 ? "max-sm:col-span-2" : ""
+            } h-full`}
+          >
             <SmartImg
               src={src}
               alt={`${businessName} — gallery ${i + 1}`}
-              className={`group w-full rounded-2xl border border-white/[0.06] ${
-                single ? "aspect-[16/10]" : "aspect-square"
-              }`}
+              className="group h-full w-full rounded-2xl border border-white/[0.06] aspect-square sm:aspect-auto"
               imgClassName="transition-transform duration-700 group-hover:scale-105"
             />
           </Reveal>
