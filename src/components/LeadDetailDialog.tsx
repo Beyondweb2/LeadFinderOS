@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, Users, PoundSterling, ImagePlus } from 'lucide-react';
+import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Send, PhoneCall } from 'lucide-react';
 import { TeamNotes } from '@/components/TeamNotes';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { barberSiteUrl } from '@/config/publicSite';
+import { barberSiteUrl, publicSiteUrl } from '@/config/publicSite';
 import {
   Select,
   SelectContent,
@@ -30,7 +30,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format, formatDistanceToNow, startOfDay } from 'date-fns';
 import { SALE_TYPES, SALE_TYPE_LABELS, resolveSaleType, type SaleType } from '@/lib/saleType';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod } from '@/types/outreach';
-import { CONTACT_METHOD_OPTIONS } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS, isSentStatus, isRepliedStatus } from '@/types/outreach';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { cn } from '@/lib/utils';
 
@@ -198,6 +198,18 @@ function SectionLabel({ icon: Icon, color, children }: { icon: React.ComponentTy
 
 const CARD = 'rounded-xl border border-border/60 bg-card/60 p-3.5 shadow-sm';
 
+// Untyped client for the journey-marker columns not in the generated types yet.
+const odb = supabase as unknown as SupabaseClient;
+
+// Conversation stage options for the Status pill. Values stay INSIDE the set the
+// dashboard reads (contacted/replied/interested) so Sent/Replied reconciliation
+// is preserved. Outcomes (Won/Lost) are the footer Mark Paid/Lost actions.
+const STAGE_OPTIONS: { value: string; label: string; cls: string }[] = [
+  { value: 'contacted', label: 'Contacted', cls: 'bg-[hsl(var(--badge-attempted))] text-[hsl(var(--badge-attempted-fg))] border-transparent' },
+  { value: 'replied', label: 'Replied', cls: 'bg-[hsl(var(--badge-replied))] text-[hsl(var(--badge-replied-fg))] border-transparent' },
+  { value: 'interested', label: 'Following up', cls: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent' },
+];
+
 interface LeadDetailDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -291,8 +303,10 @@ function LeadDetailBody({
   );
   const [editingName, setEditingName] = useState(false);
   const [editedName, setEditedName] = useState(lead.business_name);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Journey markers (manual milestones) — local state, persisted via untyped client.
+  const [siteSentAt, setSiteSentAt] = useState<string | null>(lead.site_sent_at ?? null);
+  const [callBookedAt, setCallBookedAt] = useState<string | null>(lead.call_booked_at ?? null);
+  const [emailCopied, setEmailCopied] = useState(false);
   const { customActions, addAction } = useCustomNextActions();
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const [showAddCustomAction, setShowAddCustomAction] = useState(false);
@@ -403,32 +417,31 @@ function LeadDetailBody({
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !userId) return;
-    setIsUploadingImage(true);
+  // Journey markers — toggle the timestamp; persist via the untyped client
+  // (these columns aren't in the generated types). Local state drives the stepper.
+  const markSiteSent = async () => {
+    const v = siteSentAt ? null : new Date().toISOString();
+    setSiteSentAt(v);
+    if (!isDemoLead(lead.id)) await odb.from('outreach_leads').update({ site_sent_at: v }).eq('id', lead.id);
+  };
+  const markCallBooked = async () => {
+    const v = callBookedAt ? null : new Date().toISOString();
+    setCallBookedAt(v);
+    if (!isDemoLead(lead.id)) await odb.from('outreach_leads').update({ call_booked_at: v }).eq('id', lead.id);
+  };
+  const copyEmail = async () => {
+    if (!lead.email) return;
     try {
-      const ext = file.name.split('.').pop();
-      const path = `${userId}/${lead.id}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from('lead-images').upload(path, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from('lead-images').getPublicUrl(path);
-      if (onImageChange) await onImageChange(lead.id, publicUrl);
-      else await onUpdateLead(lead.id, { image_url: publicUrl });
-    } catch (err) {
-      console.error('Image upload failed:', err);
-    } finally {
-      setIsUploadingImage(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+      await navigator.clipboard.writeText(lead.email);
+      setEmailCopied(true);
+      setTimeout(() => setEmailCopied(false), 1500);
+    } catch { /* ignore */ }
   };
 
-  const handleRemoveImage = async () => {
-    if (onImageChange) await onImageChange(lead.id, null);
-    else await onUpdateLead(lead.id, { image_url: null });
-  };
+  // The barber's site link (what we send) — /s/ share link, else the /p/ public URL.
+  const siteUrl = funnel?.share_token
+    ? barberSiteUrl(funnel.share_token)
+    : (funnel?.site_name ? publicSiteUrl(funnel.site_name) : null);
 
   const handleAddCustomActionSubmit = () => {
     const trimmed = newCustomAction.trim();
@@ -482,8 +495,18 @@ function LeadDetailBody({
   };
 
   const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
-  const statusLabel = getStatusLabel(lead.status, customStatuses);
-  const statusColorCls = getMappedStatusColor(lead.status);
+  // Stage pill label/colour — exact match in STAGE_OPTIONS, else a dashboard-safe
+  // fallback so existing statuses still read sensibly (replied/interested → Replied,
+  // anything past New → Contacted, else New).
+  const stageMatch = STAGE_OPTIONS.find((s) => s.value === lead.status);
+  const stageLabel = stageMatch?.label
+    ?? (isRepliedStatus(lead.status) ? 'Replied' : isSentStatus(lead.status) ? 'Contacted' : 'Set stage');
+  const stageCls = stageMatch?.cls
+    ?? (isRepliedStatus(lead.status)
+      ? 'bg-[hsl(var(--badge-replied))] text-[hsl(var(--badge-replied-fg))] border-transparent'
+      : isSentStatus(lead.status)
+        ? 'bg-[hsl(var(--badge-attempted))] text-[hsl(var(--badge-attempted-fg))] border-transparent'
+        : 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent');
 
   return (
     <>
@@ -519,39 +542,18 @@ function LeadDetailBody({
               </>
             )}
           </DialogTitle>
-
-          {/* Compact image control */}
-          <div className="flex items-center gap-2 shrink-0">
-            {lead.image_url && (
-              <img src={lead.image_url} alt={lead.business_name} className="h-9 w-9 rounded-md object-cover border border-border/60" />
-            )}
-            <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={isUploadingImage} onClick={() => fileInputRef.current?.click()}>
-              <ImagePlus className="h-3 w-3" /> {lead.image_url ? 'Change' : 'Photo'}
-            </Button>
-            {lead.image_url && (
-              <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground" onClick={handleRemoveImage} title="Remove image">
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-          </div>
         </div>
 
         <DialogDescription className="sr-only">Lead detail, pipeline status and notes for {lead.business_name}</DialogDescription>
 
         {/* Glanceable pills — status / next action / due / contact / revenue */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Select value={mapLegacyStatus(lead.status)} onValueChange={handleStatusSelect}>
+          <Select value={STAGE_OPTIONS.some((s) => s.value === lead.status) ? lead.status : ''} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}>
             <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
-              <Badge variant="outline" className={cn('cursor-pointer font-semibold gap-1', statusColorCls)}>
-                {mapLegacyStatus(lead.status) === 'paid' && <Check className="h-3 w-3" />}
-                {statusLabel}
-              </Badge>
+              <Badge variant="outline" className={cn('cursor-pointer font-semibold', stageCls)}>{stageLabel}</Badge>
             </SelectTrigger>
-            <SelectContent>
-              {DEFAULT_POTENTIAL_WORK_STATUSES.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
-              {customStatuses.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
-              {onAddCustomStatus && (<SelectItem value="__add_custom__" className="text-primary">+ Custom Status</SelectItem>)}
+            <SelectContent className="pointer-events-auto">
+              {STAGE_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
             </SelectContent>
           </Select>
 
@@ -568,7 +570,7 @@ function LeadDetailBody({
                   : <Badge variant="outline" className="cursor-pointer font-medium text-muted-foreground bg-muted/40 border-border/50">+ Set action</Badge>;
               })()}
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="pointer-events-auto">
               {TRACK_NEXT_ACTION_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
               {customActions.length > 0 && (
                 <>
@@ -602,7 +604,7 @@ function LeadDetailBody({
             <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
               <ContactMethodBadge method={lead.contact_method as ContactMethod} />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="pointer-events-auto">
               {CONTACT_METHOD_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
             </SelectContent>
           </Select>
@@ -622,49 +624,75 @@ function LeadDetailBody({
             />
           </div>
         </div>
+
+        {/* Contact + site — email (from scraping or when they claim) and the live site link */}
+        {(lead.email || siteUrl) && (
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-border/40 pt-2.5 text-xs">
+            {lead.email && (
+              <div className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
+                <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <a href={`mailto:${lead.email}`} className="truncate text-foreground/80 hover:text-primary hover:underline">{lead.email}</a>
+                <button onClick={copyEmail} className="text-muted-foreground/60 hover:text-foreground shrink-0" title="Copy email">
+                  {emailCopied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+                </button>
+              </div>
+            )}
+            {siteUrl && (
+              <div className="inline-flex items-center gap-1.5 min-w-0">
+                <ExternalLink className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                <span className="truncate font-mono text-[11px] text-muted-foreground/80">{siteUrl.replace(/^https?:\/\//, '')}</span>
+                <a href={siteUrl} target="_blank" rel="noreferrer">
+                  <Button size="sm" variant="outline" className="h-6 px-2 text-[11px]">Preview</Button>
+                </a>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Scrollable body ── */}
       <div className="flex-1 overflow-y-auto thin-scrollbar px-5 py-4 space-y-4">
 
-        {/* ── Journey: funnel stepper + deal stage (the visual highlight) ── */}
+        {/* ── Journey: the real flow you work — contact → reply → site → open → add-on → call ── */}
         <section className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/[0.07] to-transparent p-4 shadow-sm">
           <div className="mb-3 flex items-center justify-between gap-2">
             <SectionLabel icon={Route} color="text-primary">Journey</SectionLabel>
-            {funnel?.share_token && (
+            {siteUrl && (
               <a
-                href={barberSiteUrl(funnel.share_token)}
+                href={siteUrl}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-medium text-primary transition-colors hover:bg-primary/20"
-                title="Open the site link you sent them"
+                title="Open the live site link"
               >
                 <ExternalLink className="h-3 w-3" /> Their site
               </a>
             )}
           </div>
 
-          {/* Funnel stepper — coloured nodes for reached steps, connectors fill in */}
+          {/* Milestone stepper. Contacted/Replied come from the lead status (the dashboard
+              source of truth); Opened/Add-on are auto site signals; Site sent + Call booked
+              are the manual markers you toggle below. */}
           <div className="overflow-x-auto thin-scrollbar">
-            <div className="flex items-start min-w-[320px]">
+            <div className="flex items-start min-w-[420px]">
               {(
                 [
-                  { label: 'Sent', at: funnel?.sent_at ?? null },
-                  { label: 'Opened', at: funnel?.first_opened_at ?? null },
-                  { label: 'Replied', at: funnel?.replied_at ?? null },
-                  { label: 'Claimed', at: funnel?.claimed_at ?? null },
-                  { label: 'Upsell', at: funnel?.addon_interest_at ?? null },
-                ] as { label: string; at: string | null }[]
+                  { label: 'Contacted', done: isSentStatus(lead.status), at: lead.last_outreach_attempt_at ?? null },
+                  { label: 'Replied', done: isRepliedStatus(lead.status) || !!funnel?.replied_at, at: funnel?.replied_at ?? null },
+                  { label: 'Site sent', done: !!siteSentAt || !!funnel?.sent_at, at: siteSentAt ?? funnel?.sent_at ?? null },
+                  { label: 'Opened', done: !!funnel?.first_opened_at, at: funnel?.first_opened_at ?? null },
+                  { label: 'Add-on', done: !!funnel?.addon_interest_at, at: funnel?.addon_interest_at ?? null },
+                  { label: 'Call booked', done: !!callBookedAt, at: callBookedAt ?? null },
+                ] as { label: string; done: boolean; at: string | null }[]
               ).map((s, i, arr) => {
-                const done = !!s.at;
-                const nextDone = i < arr.length - 1 && !!arr[i + 1].at;
+                const nextDone = i < arr.length - 1 && arr[i + 1].done;
                 return (
                   <Fragment key={s.label}>
-                    <div className="flex w-14 shrink-0 flex-col items-center px-1 text-center">
-                      <div className={cn('flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold transition-colors', done ? 'bg-primary text-primary-foreground' : 'border border-border bg-muted text-muted-foreground/40')}>
-                        {done ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                    <div className="flex w-16 shrink-0 flex-col items-center px-1 text-center">
+                      <div className={cn('flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-bold transition-colors', s.done ? 'bg-primary text-primary-foreground' : 'border border-border bg-muted text-muted-foreground/40')}>
+                        {s.done ? <Check className="h-3.5 w-3.5" /> : i + 1}
                       </div>
-                      <span className={cn('mt-1 text-[10px] font-medium leading-tight', done ? 'text-foreground' : 'text-muted-foreground/40')}>{s.label}</span>
+                      <span className={cn('mt-1 text-[10px] font-medium leading-tight', s.done ? 'text-foreground' : 'text-muted-foreground/40')}>{s.label}</span>
                       {s.at && <span className="text-[9px] text-muted-foreground/60">{format(new Date(s.at), 'd MMM')}</span>}
                     </div>
                     {i < arr.length - 1 && (
@@ -676,30 +704,26 @@ function LeadDetailBody({
             </div>
           </div>
 
-          {/* Deal stage */}
-          <div className="mt-4 border-t border-border/40 pt-3">
-            <div className="mb-1.5 flex items-center justify-between gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">Stage</span>
-              <Badge variant="outline" className={cn('font-semibold', statusColorCls)}>{statusLabel}</Badge>
-            </div>
-            <div className="flex items-center gap-1">
-              {(() => {
-                const currentIdx = getStageIndex(lead.status);
-                const isPaid = mapLegacyStatus(lead.status) === 'paid';
-                const isLost = mapLegacyStatus(lead.status) === 'closed_lost';
-                const stages = PIPELINE_STAGES.filter((s) => s !== 'closed_lost');
-                return stages.map((stage, idx) => {
-                  const isActive = idx === currentIdx;
-                  const isCompleted = currentIdx >= 0 && idx < currentIdx && !isLost;
-                  return (
-                    <div
-                      key={stage}
-                      className={cn('h-1.5 flex-1 rounded-full transition-colors', isCompleted || isActive ? (isPaid ? 'bg-emerald-500' : 'bg-primary') : isLost ? 'bg-zinc-700' : 'bg-border/60')}
-                    />
-                  );
-                });
-              })()}
-            </div>
+          {/* Manual markers — the two milestones only you know about */}
+          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border/40 pt-3">
+            <Button
+              size="sm"
+              variant={siteSentAt ? 'default' : 'outline'}
+              onClick={markSiteSent}
+              className="h-7 gap-1.5 text-xs"
+            >
+              <Send className="h-3.5 w-3.5" />
+              {siteSentAt ? `Site sent · ${format(new Date(siteSentAt), 'd MMM')}` : 'Mark site sent'}
+            </Button>
+            <Button
+              size="sm"
+              variant={callBookedAt ? 'default' : 'outline'}
+              onClick={markCallBooked}
+              className="h-7 gap-1.5 text-xs"
+            >
+              <PhoneCall className="h-3.5 w-3.5" />
+              {callBookedAt ? `Call booked · ${format(new Date(callBookedAt), 'd MMM')}` : 'Mark call booked'}
+            </Button>
           </div>
         </section>
 
@@ -734,7 +758,7 @@ function LeadDetailBody({
                     <SelectTrigger className="h-8 text-xs border-border/50 w-full">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="pointer-events-auto">
                       {PROJECT_STATUS_OPTIONS.map((opt) => (
                         <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                       ))}
@@ -747,7 +771,7 @@ function LeadDetailBody({
                     <SelectTrigger className="h-8 text-xs border-border/50 w-full">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="pointer-events-auto">
                       <SelectItem value="__default__">
                         Default{campaignDefaultSaleType ? ` (${SALE_TYPE_LABELS[resolveSaleType(null, campaignDefaultSaleType)]})` : ' (Website)'}
                       </SelectItem>

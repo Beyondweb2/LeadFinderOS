@@ -131,6 +131,9 @@ export interface OutreachLead {
   project_value?: number | null;
   project_status?: string | null;
   delivery_notes?: string | null;
+  // Lead-detail journey markers (manual milestones set in the detail popup).
+  site_sent_at?: string | null;
+  call_booked_at?: string | null;
 }
 
 export interface OutreachActivity {
