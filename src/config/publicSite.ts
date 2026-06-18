@@ -21,3 +21,12 @@ export const publicSiteLabel = (slug: string) =>
  * (the `/s/:token` route). Re-openable forever; only the claim is one-time.
  */
 export const barberSiteUrl = (shareToken: string) => `${PUBLIC_SITE_ORIGIN}/s/${shareToken}`;
+
+/**
+ * Operator-only PREVIEW of the barber's /s/ link. Identical route + token, but
+ * with ?preview=1 — which makes SiteByToken skip the `open` tracking event and
+ * hide the claim splash. Use this for "view their site" buttons inside the CRM so
+ * our own testing never inflates Opened. The barber NEVER receives this URL; the
+ * plain barberSiteUrl (no param) is what they get and is unchanged.
+ */
+export const barberSitePreviewUrl = (shareToken: string) => `${barberSiteUrl(shareToken)}?preview=1`;

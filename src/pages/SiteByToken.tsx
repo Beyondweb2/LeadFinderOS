@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,6 +38,11 @@ interface SiteRow {
  */
 export default function SiteByToken() {
   const { token = "" } = useParams();
+  const [searchParams] = useSearchParams();
+  // Operator preview (?preview=1): view-only. Skips the `open` tracking event and
+  // hides the claim splash. The barber NEVER gets this param, so their normal link
+  // is byte-for-byte unchanged.
+  const isPreview = searchParams.get("preview") === "1";
   const navigate = useNavigate();
   const { toast } = useToast();
   const [popupOpen, setPopupOpen] = useState(false);
@@ -104,21 +109,25 @@ export default function SiteByToken() {
   useSiteBranding(businessName || (isSalon ? "Salon website" : "Barber website"), template);
 
   // Record exactly one `open` per page load, once the site resolves.
+  // In preview mode we record NOTHING — operator views must not inflate Opened.
   useEffect(() => {
+    if (isPreview) return;
     if (data && !openedRef.current) {
       openedRef.current = true;
       recordSiteEvent(token, "open");
     }
-  }, [data, token]);
+  }, [data, token, isPreview]);
 
   // Auto-open the claim popup once, so the offer is front-and-centre on arrival.
+  // Suppressed in preview mode (operator wants the clean site, no claim splash).
   useEffect(() => {
+    if (isPreview) return;
     if (data && content && !autoOpenedRef.current) {
       autoOpenedRef.current = true;
       const t = setTimeout(() => setPopupOpen(true), 600);
       return () => clearTimeout(t);
     }
-  }, [data, content]);
+  }, [data, content, isPreview]);
 
   if (isLoading) {
     return (
@@ -144,12 +153,17 @@ export default function SiteByToken() {
 
   return (
     <>
-      <Template content={content} bookingEnabled={false} onClaim={handleClaim} showClaimBar={!popupOpen} />
+      <Template content={content} bookingEnabled={false} onClaim={handleClaim} showClaimBar={!popupOpen && !isPreview} />
       <IntroPopup
         open={popupOpen}
         onOpenChange={setPopupOpen}
         businessName={businessName || "your business"}
       />
+      {isPreview && (
+        <div className="fixed top-3 right-3 z-[70] rounded-full border border-white/15 bg-black/70 px-3 py-1 text-[11px] font-medium text-white shadow-lg backdrop-blur-sm">
+          Preview · not tracked
+        </div>
+      )}
       {claiming && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-ink/70 backdrop-blur-sm">
           <Loader2 className="h-8 w-8 animate-spin text-amber" />

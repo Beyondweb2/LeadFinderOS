@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { barberSiteUrl, publicSiteUrl } from '@/config/publicSite';
+import { barberSitePreviewUrl, publicSiteUrl } from '@/config/publicSite';
 import {
   Select,
   SelectContent,
@@ -62,27 +62,32 @@ export const PIPELINE_STAGES = DEFAULT_POTENTIAL_WORK_STATUSES.map((s) => s.valu
 export const mapLegacyStatus = (status: string): string => LEGACY_STATUS_MAP[status] || status;
 
 /* Track Leads pipeline actions — mapped to DB enum values */
+// The barber-outreach Next Action list. Each option carries a dbValue that is a
+// valid NextActionType (we reuse existing DB enum values rather than adding new
+// columns); LEGACY_ACTION_MAP below maps every DB value back to exactly one of
+// these keys so a lead always renders as one of the five (never blank/wrong).
 const TRACK_NEXT_ACTION_OPTIONS: { value: string; label: string; dbValue: NextActionType }[] = [
   { value: 'none', label: 'None', dbValue: 'none' },
-  { value: 'follow_up_proposal', label: 'Follow Up', dbValue: 'follow_up' },
-  { value: 'send_proposal', label: 'Send Quote', dbValue: 'send_draft' },
-  { value: 'prepare_proposal', label: 'Send Draft', dbValue: 'send_draft' },
-  { value: 'send_revision', label: 'Send Updated Draft', dbValue: 'send_follow_up' },
-  { value: 'schedule_discovery', label: 'Book Call', dbValue: 'call' },
-  { value: 'collect_payment', label: 'Send Invoice', dbValue: 'follow_up' },
-  { value: 'check_in', label: 'Check In', dbValue: 'follow_up' },
-  { value: 'start_project', label: 'Start Work', dbValue: 'follow_up' },
+  { value: 'follow_up', label: 'Follow Up', dbValue: 'follow_up' },
+  { value: 'send_link', label: 'Send Link', dbValue: 'send_draft' },
+  { value: 'book_call', label: 'Book Call', dbValue: 'call' },
+  { value: 'check_in', label: 'Check In', dbValue: 'send_follow_up' },
+  { value: 'send_invoice', label: 'Send Invoice', dbValue: '2nd_follow_up' },
 ];
 
-/* Map legacy DB actions → new Track page action keys */
+/* Map every DB next_action value → one of the five Track action keys above, so
+   stored/auto-filled actions always round-trip to a valid option. */
 const LEGACY_ACTION_MAP: Record<string, string> = {
-  call: 'schedule_discovery',
-  send_draft: 'send_proposal',
-  follow_up: 'follow_up_proposal',
-  '2nd_follow_up': 'follow_up_proposal',
-  send_initial_text: 'schedule_discovery',
-  send_voice_note: 'follow_up_proposal',
-  send_follow_up: 'follow_up_proposal',
+  follow_up: 'follow_up',
+  send_draft: 'send_link',
+  call: 'book_call',
+  send_follow_up: 'check_in',
+  '2nd_follow_up': 'send_invoice',
+  // Older / Outreach-side enum values fold to sensible equivalents.
+  send_initial_text: 'send_link',
+  send_voice_note: 'follow_up',
+  check_3_day_removal: 'follow_up',
+  remove_if_no_reply: 'follow_up',
 };
 
 const mapLegacyAction = (action: string | null): string => {
@@ -101,6 +106,15 @@ const getTrackActionForLead = (leadId: string): string | null => {
   }
 };
 
+// The UI choice is stored device-locally; an older build may have saved a key
+// that no longer exists in TRACK_NEXT_ACTION_OPTIONS. Only trust it if it's still
+// a valid option — otherwise callers fall back to the DB value (mapLegacyAction),
+// which always resolves to one of the five. Keeps the pill from showing blank.
+const getValidTrackActionForLead = (leadId: string): string | null => {
+  const raw = getTrackActionForLead(leadId);
+  return raw && TRACK_NEXT_ACTION_OPTIONS.some((o) => o.value === raw) ? raw : null;
+};
+
 const setTrackActionForLead = (leadId: string, actionKey: string | null) => {
   try {
     if (actionKey && actionKey !== 'none') {
@@ -111,18 +125,13 @@ const setTrackActionForLead = (leadId: string, actionKey: string | null) => {
   } catch {}
 };
 
+// Keyed by Track action key (the value in TRACK_NEXT_ACTION_OPTIONS).
 const NEXT_ACTION_COLORS: Record<string, string> = {
-  schedule_discovery: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent',
-  prepare_proposal: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))] border-transparent',
-  send_proposal: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent',
-  follow_up_proposal: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent',
-  send_revision: 'bg-[hsl(var(--badge-waiting))] text-[hsl(var(--badge-waiting-fg))] border-transparent',
-  collect_payment: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent',
-  start_project: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent',
-  check_in: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent',
-  call: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent',
   follow_up: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent',
-  send_draft: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent',
+  send_link: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent',
+  book_call: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent',
+  check_in: 'bg-[hsl(var(--badge-cyan))] text-[hsl(var(--badge-cyan-fg))] border-transparent',
+  send_invoice: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent',
   none: 'bg-muted text-muted-foreground border-border/50',
 };
 
@@ -296,7 +305,7 @@ function LeadDetailBody({
   const [notesSaved, setNotesSaved] = useState(false);
   const customLabel = getLeadCustomAction(lead.id);
   const [nextAction, setNextAction] = useState<string>(
-    customLabel ? `custom::${customLabel}` : getTrackActionForLead(lead.id) || mapLegacyAction(lead.next_action || 'none')
+    customLabel ? `custom::${customLabel}` : getValidTrackActionForLead(lead.id) || mapLegacyAction(lead.next_action || 'none')
   );
   const [nextActionDate, setNextActionDate] = useState<Date | undefined>(
     lead.next_action_date ? new Date(lead.next_action_date) : undefined
@@ -438,9 +447,12 @@ function LeadDetailBody({
     } catch { /* ignore */ }
   };
 
-  // The barber's site link (what we send) — /s/ share link, else the /p/ public URL.
+  // Operator-facing site link for the popup (Preview button / URL / "Their site").
+  // Uses the ?preview=1 variant so OUR clicks never record an Opened event and the
+  // claim splash is hidden. The barber's actual /s/ link (sent elsewhere) is the
+  // plain barberSiteUrl and is unaffected. The /p/ fallback already records nothing.
   const siteUrl = funnel?.share_token
-    ? barberSiteUrl(funnel.share_token)
+    ? barberSitePreviewUrl(funnel.share_token)
     : (funnel?.site_name ? publicSiteUrl(funnel.site_name) : null);
 
   const handleAddCustomActionSubmit = () => {
@@ -561,10 +573,10 @@ function LeadDetailBody({
             <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
               {(() => {
                 const cl = getLeadCustomAction(lead.id);
-                const trackKey = getTrackActionForLead(lead.id);
-                const opt = TRACK_NEXT_ACTION_OPTIONS.find((o) => o.value === (trackKey || mapLegacyAction(lead.next_action || 'none')));
+                const trackKey = getValidTrackActionForLead(lead.id) || mapLegacyAction(lead.next_action || 'none');
+                const opt = TRACK_NEXT_ACTION_OPTIONS.find((o) => o.value === trackKey);
                 const label = cl || (opt && opt.value !== 'none' ? opt.label : null);
-                const colorCls = cl ? 'bg-teal-500 text-white border-transparent' : NEXT_ACTION_COLORS[trackKey || mapLegacyAction(lead.next_action || 'none')] || NEXT_ACTION_COLORS.none;
+                const colorCls = cl ? 'bg-teal-500 text-white border-transparent' : NEXT_ACTION_COLORS[trackKey] || NEXT_ACTION_COLORS.none;
                 return label
                   ? <Badge variant="outline" className={cn('cursor-pointer font-semibold whitespace-nowrap', colorCls)}>{label}</Badge>
                   : <Badge variant="outline" className="cursor-pointer font-medium text-muted-foreground bg-muted/40 border-border/50">+ Set action</Badge>;
