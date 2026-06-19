@@ -104,6 +104,7 @@ export function PlumberSiteTemplate({
             heroHeadline={heroHeadline}
             tagline={tagline}
             heroImageUrl={heroImageUrl}
+            services={services}
             googleRating={googleRating}
             reviewCount={reviewCount}
           />
@@ -429,6 +430,7 @@ function Hero({
   heroHeadline,
   tagline,
   heroImageUrl,
+  services,
   googleRating,
   reviewCount,
 }: {
@@ -437,6 +439,7 @@ function Hero({
   heroHeadline: string;
   tagline: string;
   heroImageUrl?: string;
+  services: SiteService[];
   googleRating?: number;
   reviewCount?: number;
 }) {
@@ -444,7 +447,7 @@ function Hero({
     <section id="top" className="relative overflow-hidden">
       <div id="home" className="absolute -top-20" />
       <MarineBg />
-      <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 pb-16 pt-16 sm:px-8 sm:pb-24 sm:pt-24 lg:grid-cols-[1.05fr_0.95fr]">
+      <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 pb-10 pt-12 sm:px-8 sm:pb-14 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr]">
         <div>
           <Reveal>
             <Eyebrow>{category || "Plumbing & heating"}</Eyebrow>
@@ -470,7 +473,7 @@ function Hero({
           </Reveal>
           {typeof googleRating === "number" && (
             <Reveal delay={330}>
-              <div className="mt-8 inline-flex items-center gap-3 rounded-full border border-plumber-line bg-white px-4 py-2">
+              <div className="mt-7 inline-flex items-center gap-3 rounded-full border border-plumber-line bg-white px-4 py-2">
                 <Stars rating={googleRating} />
                 <span className="text-sm text-plumber-muted">
                   <span className="font-bold text-plumber-ink">{googleRating.toFixed(1)}</span>
@@ -479,11 +482,26 @@ function Hero({
               </div>
             </Reveal>
           )}
+          {services.length > 0 && (
+            <Reveal delay={400}>
+              {/* Honest "feature row" — real service names only (no fabricated stats). */}
+              <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2.5 border-t border-plumber-line/70 pt-6">
+                {services.slice(0, 3).map((s) => (
+                  <li key={s.name} className="inline-flex items-center gap-2 text-sm font-semibold text-plumber-ink">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-plumber-primary/12 text-plumber-primary">
+                      <Check className="h-3 w-3" />
+                    </span>
+                    {s.name}
+                  </li>
+                ))}
+              </ul>
+            </Reveal>
+          )}
         </div>
 
         <Reveal direction="right" delay={140} distance={72} duration={780} className="relative">
           <SquareLines className="absolute -left-6 -top-6 h-28 w-28 sm:h-36 sm:w-36" />
-          <div className="relative mx-auto aspect-square w-full max-w-md">
+          <div className="relative mx-auto aspect-square w-full max-w-sm">
             {/* cyan accent ring around the circular hero image */}
             <span aria-hidden className="absolute -inset-2 rounded-full border border-plumber-accent/30" />
             <MediaPanel
@@ -854,7 +872,7 @@ function FaqContact({
   hours: SiteContent["hours"];
 }) {
   return (
-    <section id="faq" className="relative scroll-mt-20 overflow-hidden bg-plumber-ink py-20 text-white/80 sm:py-28">
+    <section id="faq" className="relative scroll-mt-20 overflow-hidden bg-plumber-ink pb-12 pt-20 text-white/80 sm:pb-16 sm:pt-28">
       <TopoLines className="absolute inset-0 h-full w-full" />
       <div className="relative mx-auto grid max-w-6xl gap-12 px-5 sm:px-8 lg:grid-cols-2">
         <div>
@@ -976,7 +994,7 @@ function Footer({ businessName, services, address, logoUrl }: { businessName: st
   return (
     <footer className="relative overflow-hidden bg-plumber-ink text-white/80">
       <span aria-hidden className="absolute -left-16 -top-16 h-48 w-48 rounded-full bg-plumber-accent/10" />
-      <div className="relative mx-auto grid max-w-6xl gap-10 px-5 py-14 sm:px-8 md:grid-cols-[1.4fr_1fr_1fr]">
+      <div className="relative mx-auto grid max-w-6xl gap-10 px-5 pb-12 pt-10 sm:px-8 md:grid-cols-[1.4fr_1fr_1fr]">
         <div>
           <div className="[&_*]:!text-white">
             <Wordmark businessName={businessName} logoUrl={logoUrl} size="lg" />
