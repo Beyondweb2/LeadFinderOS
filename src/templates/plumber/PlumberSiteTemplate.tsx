@@ -149,12 +149,37 @@ export default PlumberSiteTemplate;
 
 type IconType = ComponentType<{ className?: string }>;
 
-/** Branded image slot. Renders a real photo when a URL is supplied, otherwise a
- *  Deep-Marine gradient panel with the section's icon + drop graphics. This means
- *  a missing image is ALWAYS a clean intentional panel — never a broken <img>
- *  showing alt text. (Real photos arrive via the separate Apify image build.) */
+/* Curated plumbing stock fallbacks (Unsplash — free for commercial use under the
+ * Unsplash License, no attribution required; stable CDN URLs). These are a
+ * FALLBACK ONLY so a freshly generated site looks full immediately. The real
+ * per-business photo (Google hero now, Apify later) is always preferred and
+ * overrides stock — see MediaPanel's `src || stock` order. Same set across sites
+ * is fine for a fallback. */
+const STOCK_IMG = "https://images.unsplash.com/";
+const stockUrl = (id: string, w: number) => `${STOCK_IMG}${id}?auto=format&fit=crop&w=${w}&q=70`;
+const STOCK = {
+  hero: stockUrl("photo-1749532125405-70950966b0e5", 1200), // plumber repairing a bathroom
+  about: stockUrl("photo-1676210134188-4c05dd172f89", 1000), // working on pipework in a wall
+  work: stockUrl("photo-1676210133055-eab6ef033ce3", 1000), // engineer on pipework in a cabinet
+};
+/** Stock image for a service card, chosen by service name (mirrors serviceIcon). */
+function stockForService(name: string): string {
+  const n = name.toLowerCase();
+  if (/bath|kitchen|shower/.test(n)) return stockUrl("photo-1521207418485-99c705420785", 800); // kitchen sink/tap
+  if (/block|drain|sink|toilet/.test(n)) return stockUrl("photo-1542013936693-884638332954", 800); // tap/water
+  if (/leak|repair/.test(n)) return stockUrl("photo-1676210134188-4c05dd172f89", 800); // pipe repair
+  if (/boiler|heat|central|radiator/.test(n)) return stockUrl("photo-1650551182991-b07558247564", 800); // pipes & valves
+  if (/emergency|call-?out|burst|urgent/.test(n)) return stockUrl("photo-1558618666-fcd25c85cd64", 800); // engineer with tool
+  return stockUrl("photo-1530124566582-a618bc2615dc", 800); // tools
+}
+
+/** Branded image slot. Prefers the real photo (`src`), then a curated stock photo
+ *  (`stock`), and only falls back to a Deep-Marine gradient panel (icon + drops)
+ *  if neither exists. The real-photo path always wins, so Apify/Google images
+ *  override stock. A missing image is never a broken <img>/alt-text. */
 function MediaPanel({
   src,
+  stock,
   alt,
   icon: Icon,
   className = "",
@@ -162,16 +187,18 @@ function MediaPanel({
   eager = false,
 }: {
   src?: string;
+  stock?: string;
   alt: string;
   icon: IconType;
   className?: string;
   rounded?: string;
   eager?: boolean;
 }) {
-  if (src) {
+  const url = src || stock; // real photo wins; stock is fallback only
+  if (url) {
     return (
       <img
-        src={src}
+        src={url}
         alt={alt}
         loading={eager ? "eager" : "lazy"}
         className={`${className} ${rounded} object-cover`}
@@ -417,10 +444,11 @@ function Hero({
           )}
         </div>
 
-        <Reveal direction="right" delay={140} className="relative">
+        <Reveal direction="right" delay={140} distance={72} duration={780} className="relative">
           <span aria-hidden className="absolute -left-5 -top-5 h-20 w-20 rounded-full bg-plumber-accent/15" />
           <MediaPanel
             src={heroImageUrl}
+            stock={STOCK.hero}
             alt={businessName}
             icon={Droplets}
             eager
@@ -453,9 +481,10 @@ function About({
     <section id="about" className="relative scroll-mt-20 py-20 sm:py-28">
       <MarineBg />
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 sm:px-8 lg:grid-cols-2">
-        <Reveal direction="left" className="relative">
+        <Reveal direction="left" distance={72} duration={780} className="relative">
           <MediaPanel
             src={aboutImageUrl}
+            stock={STOCK.about}
             alt={`About ${businessName}`}
             icon={ShowerHead}
             className="aspect-[5/6] w-full max-w-md shadow-[0_24px_60px_-28px_rgba(15,34,51,0.45)]"
@@ -539,7 +568,7 @@ function ServiceCard({ service }: { service: SiteService }) {
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-plumber-line bg-plumber-bg transition-all hover:-translate-y-1.5 hover:shadow-[0_28px_55px_-26px_rgba(15,34,51,0.4)]">
       <div className="relative">
-        <MediaPanel src={service.imageUrl} alt={service.name} icon={Icon} rounded="rounded-none" className="aspect-[4/3] w-full" />
+        <MediaPanel src={service.imageUrl} stock={stockForService(service.name)} alt={service.name} icon={Icon} rounded="rounded-none" className="aspect-[4/3] w-full" />
         <span className="absolute -bottom-5 left-5 grid h-11 w-11 place-items-center rounded-xl bg-plumber-primary text-white shadow-[0_10px_24px_-10px_rgba(14,116,144,0.8)]">
           <Icon className="h-5 w-5" />
         </span>
@@ -569,9 +598,9 @@ function WhyUs({ whyUsPoints, reviewCount }: { whyUsPoints?: string[]; reviewCou
       <MarineBg />
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
         <div className="grid items-center gap-12 lg:grid-cols-2">
-          <Reveal direction="left" className="relative">
+          <Reveal direction="left" distance={72} duration={780} className="relative">
             <MediaPanel
-              src={undefined}
+              stock={STOCK.work}
               alt="Our work"
               icon={Wrench}
               className="aspect-[5/5] w-full max-w-md shadow-[0_24px_60px_-28px_rgba(15,34,51,0.45)]"
@@ -752,7 +781,7 @@ function FaqContact({
         </div>
 
         <div id="contact" className="scroll-mt-20">
-          <Reveal direction="right">
+          <Reveal direction="right" distance={60} duration={760}>
             <div className="relative overflow-hidden rounded-3xl border border-plumber-line bg-plumber-bg p-7 shadow-[0_22px_55px_-30px_rgba(15,34,51,0.4)] sm:p-9">
               <span aria-hidden className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-plumber-accent/10" />
               <h3 className="font-plumber-display text-2xl font-extrabold text-plumber-ink">Get a free quote</h3>
