@@ -112,11 +112,12 @@ export function PlumberSiteTemplate({
             businessName={businessName}
             aboutImageUrl={aboutImageUrl}
             services={services}
+            googleRating={googleRating}
             reviewCount={reviewCount}
           />
           <Services services={services} />
           {(whyUsPoints?.length || googleRating) && (
-            <WhyUs whyUsPoints={whyUsPoints} reviewCount={reviewCount} />
+            <WhyUs whyUsPoints={whyUsPoints} googleRating={googleRating} reviewCount={reviewCount} />
           )}
           {processSteps?.length ? <HowItWorks steps={processSteps} /> : null}
           <Reviews googleRating={googleRating} reviewCount={reviewCount} googleReviewsUrl={googleReviewsUrl} />
@@ -301,9 +302,22 @@ function MarineBg() {
   );
 }
 
-function CountStat({ target, label }: { target: number; label: string }) {
+// Below this many Google reviews we DON'T broadcast the count (a tiny number like
+// "2" reads as weak). We still show the real rating + stars + Google link — we
+// just lead with the rating instead of the count. Honesty-safe: nothing hidden is
+// fabricated, nothing fabricated is added.
+const REVIEW_COUNT_MIN = 5;
+
+/** Floating photo badge. With a healthy review count it leads with "N+ customer
+ *  reviews" (count-up); with a low count it leads with the real rating instead,
+ *  so the small number is never put on display. Renders only when there's a real
+ *  rating or a healthy count. */
+function ReviewsBadge({ rating, reviewCount }: { rating?: number; reviewCount?: number }) {
+  const showCount = typeof reviewCount === "number" && reviewCount >= REVIEW_COUNT_MIN;
+  const hasRating = typeof rating === "number" && rating > 0;
   const { ref, visible } = useReveal<HTMLDivElement>();
-  const n = useCountUp(target, { start: visible });
+  const n = useCountUp(showCount ? reviewCount! : 0, { start: visible && showCount });
+  if (!showCount && !hasRating) return null;
   return (
     <div
       ref={ref}
@@ -313,8 +327,10 @@ function CountStat({ target, label }: { target: number; label: string }) {
         <Star className="h-5 w-5 fill-current" />
       </span>
       <div>
-        <div className="font-plumber-display text-2xl font-extrabold leading-none text-plumber-ink">{n}+</div>
-        <div className="text-xs text-plumber-faint">{label}</div>
+        <div className="font-plumber-display text-2xl font-extrabold leading-none text-plumber-ink">
+          {showCount ? `${n}+` : rating!.toFixed(1)}
+        </div>
+        <div className="text-xs text-plumber-faint">{showCount ? "Customer reviews" : "Rated on Google"}</div>
       </div>
     </div>
   );
@@ -458,7 +474,7 @@ function Hero({
                 <Stars rating={googleRating} />
                 <span className="text-sm text-plumber-muted">
                   <span className="font-bold text-plumber-ink">{googleRating.toFixed(1)}</span>
-                  {typeof reviewCount === "number" && <> · {reviewCount} reviews</>}
+                  {typeof reviewCount === "number" && reviewCount >= REVIEW_COUNT_MIN && <> · {reviewCount} reviews</>}
                 </span>
               </div>
             </Reveal>
@@ -495,12 +511,14 @@ function About({
   businessName,
   aboutImageUrl,
   services,
+  googleRating,
   reviewCount,
 }: {
   about: string;
   businessName: string;
   aboutImageUrl?: string;
   services: SiteService[];
+  googleRating?: number;
   reviewCount?: number;
 }) {
   const points = services.slice(0, 6).map((s) => s.name);
@@ -530,9 +548,7 @@ function About({
                 className="aspect-[5/6] w-full"
               />
             </div>
-            {typeof reviewCount === "number" && reviewCount > 0 && (
-              <CountStat target={reviewCount} label="Customer reviews" />
-            )}
+            <ReviewsBadge rating={googleRating} reviewCount={reviewCount} />
           </div>
         </Reveal>
 
@@ -654,7 +670,7 @@ const WHY_CARDS: { n: string; icon: IconType; title: string; desc: string }[] = 
   { n: "03", icon: Home, title: "Respect for your home", desc: "Tidy tradespeople who explain the work and leave your property as they found it." },
 ];
 
-function WhyUs({ whyUsPoints, reviewCount }: { whyUsPoints?: string[]; reviewCount?: number }) {
+function WhyUs({ whyUsPoints, googleRating, reviewCount }: { whyUsPoints?: string[]; googleRating?: number; reviewCount?: number }) {
   return (
     <section id="why-us" className="relative scroll-mt-20 overflow-hidden py-20 sm:py-28">
       <MarineBg />
@@ -668,9 +684,7 @@ function WhyUs({ whyUsPoints, reviewCount }: { whyUsPoints?: string[]; reviewCou
               icon={Wrench}
               className="aspect-[5/5] w-full max-w-md shadow-[0_24px_60px_-28px_rgba(15,34,51,0.45)]"
             />
-            {typeof reviewCount === "number" && reviewCount > 0 && (
-              <CountStat target={reviewCount} label="Customer reviews" />
-            )}
+            <ReviewsBadge rating={googleRating} reviewCount={reviewCount} />
           </Reveal>
           <div>
             <SectionHeading eyebrow="What to expect from us" title="Why choose us" />
@@ -775,6 +789,7 @@ function Reviews({
   googleReviewsUrl?: string;
 }) {
   const hasRating = typeof googleRating === "number" && googleRating > 0;
+  const showCount = typeof reviewCount === "number" && reviewCount >= REVIEW_COUNT_MIN;
   return (
     <section id="reviews" className="relative scroll-mt-20 py-20 sm:py-28">
       <MarineBg />
@@ -783,7 +798,7 @@ function Reviews({
           center
           flank
           eyebrow="Testimonials"
-          title={hasRating ? `Rated ${googleRating!.toFixed(1)}/5${typeof reviewCount === "number" ? ` by ${reviewCount} customers` : ""}` : "What our customers say"}
+          title={hasRating ? `Rated ${googleRating!.toFixed(1)}/5${showCount ? ` by ${reviewCount} customers` : ""}` : "What our customers say"}
         />
         <Reveal delay={110}>
           <div className="mt-8 inline-flex flex-col items-center gap-5 rounded-3xl border border-plumber-line bg-white px-8 py-10 shadow-[0_24px_60px_-30px_rgba(15,34,51,0.4)]">
