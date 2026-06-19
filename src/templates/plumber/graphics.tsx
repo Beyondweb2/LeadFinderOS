@@ -78,18 +78,24 @@ export function TopoLines({ className = "" }: { className?: string }) {
 
 const DROP_PATH = "M12 2s7 8 7 13a7 7 0 1 1-14 0c0-5 7-13 7-13z";
 
-/** Scattered grey/cyan water-drop shapes for the Why-Us background. */
+/** Faint, small, scattered water-drops for the Why-Us background — light texture,
+ *  barely there. A WIDE viewBox keeps each drop small when the SVG is sliced to
+ *  cover a full-width section (the old 100x100 box ballooned them into big blobs). */
 export function DropField({ className = "" }: { className?: string }) {
   const drops = [
-    { x: 8, y: 16, s: 2.2, o: 0.10 },
-    { x: 78, y: 10, s: 3.0, o: 0.08 },
-    { x: 90, y: 64, s: 1.8, o: 0.10 },
-    { x: 20, y: 74, s: 2.6, o: 0.07 },
-    { x: 54, y: 40, s: 1.4, o: 0.08 },
-    { x: 40, y: 88, s: 1.6, o: 0.09 },
+    { x: 80, y: 90, s: 1.1, o: 0.05 },
+    { x: 300, y: 54, s: 1.5, o: 0.04 },
+    { x: 540, y: 120, s: 1.0, o: 0.05 },
+    { x: 760, y: 70, s: 1.3, o: 0.04 },
+    { x: 930, y: 150, s: 1.1, o: 0.05 },
+    { x: 200, y: 330, s: 1.2, o: 0.04 },
+    { x: 470, y: 400, s: 1.0, o: 0.05 },
+    { x: 700, y: 350, s: 1.4, o: 0.035 },
+    { x: 980, y: 440, s: 1.0, o: 0.05 },
+    { x: 120, y: 470, s: 1.2, o: 0.04 },
   ];
   return (
-    <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" className={className} aria-hidden>
+    <svg viewBox="0 0 1080 560" preserveAspectRatio="xMidYMid slice" className={className} aria-hidden>
       {drops.map((d, i) => (
         <g key={i} transform={`translate(${d.x} ${d.y}) scale(${d.s})`}>
           <path d={DROP_PATH} fill={i % 2 ? CYAN : NAVY} fillOpacity={d.o} />
