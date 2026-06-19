@@ -3,25 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
-import { SalonSiteTemplate } from "@/templates/salon/SalonSiteTemplate";
-import { demoContent as barberDemo } from "@/templates/barber/demoContent";
-import { demoContent as salonDemo } from "@/templates/salon/demoContent";
 import type { SiteContent } from "@/templates/shared/content";
+import { getTemplateDef, normaliseTemplate, DEFAULT_TEMPLATE_KEY } from "@/templates/registry";
 import { useSiteBranding } from "@/hooks/useSiteBranding";
 
 // booking_staff isn't in the generated types yet (Phase 1 migration applied via
 // the SQL runner) — untyped view for the booking-ready probe. RLS still applies.
 const sb = supabase as unknown as SupabaseClient;
-
-/** Which design template a generated site renders with. Stored in the
- *  generated_sites.template column (text, default 'barber'). Unknown/missing
- *  values fall back to the barber template. */
-type Template = "barber" | "salon";
-
-function normaliseTemplate(value: unknown): Template {
-  return value === "salon" ? "salon" : "barber";
-}
 
 /**
  * Public, unauthenticated generated site at /p/:slug.
@@ -48,7 +36,7 @@ export default function PublicSite() {
   const { data, isLoading } = useQuery({
     queryKey: ["generated-site", slug],
     enabled: !!slug,
-    queryFn: async (): Promise<{ content: SiteContent | null; template: Template }> => {
+    queryFn: async (): Promise<{ content: SiteContent | null; template: string }> => {
       const res = await supabase
         .from("generated_sites")
         .select("content, template")
@@ -62,10 +50,10 @@ export default function PublicSite() {
           .select("content")
           .eq("site_name", slug!)
           .maybeSingle();
-        if (fallback.error) return { content: null, template: "barber" };
+        if (fallback.error) return { content: null, template: DEFAULT_TEMPLATE_KEY };
         return {
           content: (fallback.data?.content as unknown as SiteContent) ?? null,
-          template: "barber",
+          template: DEFAULT_TEMPLATE_KEY,
         };
       }
       const row = res.data as { content: unknown; template: unknown } | null;
@@ -77,7 +65,7 @@ export default function PublicSite() {
   });
 
   const content = data?.content ?? null;
-  const template = data?.template ?? "barber";
+  const template = data?.template ?? DEFAULT_TEMPLATE_KEY;
 
   // Booking is enabled only when the shop has set up bookable staff (Phase 2).
   // Counts active staff for this published site (no rows fetched, just the count).
@@ -95,38 +83,22 @@ export default function PublicSite() {
   });
 
   // Tab title = the business name, template-appropriate favicon — not LeadFinder's.
-  const isSalon = template === "salon";
+  const def = getTemplateDef(template);
   const businessName = content?.businessName ?? "";
-  useSiteBranding(
-    businessName || (isSalon ? "Salon website" : "Barber website"),
-    template
-  );
+  useSiteBranding(businessName || def.brandFallbackLabel, template);
 
   if (isLoading) {
     return (
-      <div
-        className={`min-h-screen flex items-center justify-center ${
-          isSalon ? "bg-salon-bg" : "bg-ink"
-        }`}
-      >
-        <Loader2 className={`h-8 w-8 animate-spin ${isSalon ? "text-salon-rose" : "text-amber"}`} />
+      <div className={`min-h-screen flex items-center justify-center ${def.loadingBgClass}`}>
+        <Loader2 className={`h-8 w-8 animate-spin ${def.loadingSpinnerClass}`} />
       </div>
     );
   }
 
-  if (isSalon) {
-    return (
-      <SalonSiteTemplate
-        content={content ?? salonDemo}
-        bookingEnabled={!!bookingReady}
-        bookingSlug={content ? slug : undefined}
-      />
-    );
-  }
-
+  const Template = def.Component;
   return (
-    <BarberSiteTemplate
-      content={content ?? barberDemo}
+    <Template
+      content={content ?? def.demoContent}
       bookingEnabled={!!bookingReady}
       bookingSlug={content ? slug : undefined}
     />

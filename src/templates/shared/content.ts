@@ -24,6 +24,32 @@ export interface SiteService {
    * from the service name.
    */
   durationMins?: number;
+  /**
+   * Optional icon key for templates that render a per-service icon (e.g. the
+   * plumber service cards). Maps to a template-local icon set; ignored by
+   * templates that don't use icons (barber/salon). Never fabricated facts.
+   */
+  icon?: string;
+  /**
+   * Optional per-service image URL for templates whose service cards show a photo
+   * (plumber). When omitted, the template falls back to a bundled stock image.
+   * Image-picking is a separate build — this is just the slot.
+   */
+  imageUrl?: string;
+}
+
+/** One FAQ entry (generic Q&A — not a business-specific factual claim). */
+export interface SiteFaq {
+  question: string;
+  answer: string;
+}
+
+/** One "how it works" step. Rendered numbered by array order. */
+export interface SiteProcessStep {
+  /** Optional icon key (template-local icon set). */
+  icon?: string;
+  title: string;
+  description: string;
 }
 
 export interface SiteOpeningHours {
@@ -114,4 +140,20 @@ export interface SiteContent {
    * barber template honours this; the salon template uses its fixed rose palette.)
    */
   accentColor?: string;
+
+  // ── Optional sections used by trade-style templates (e.g. plumber). All
+  // optional, so barber/salon payloads are unaffected and no migration is needed
+  // (these live inside the existing generated_sites.content JSONB). The reviews
+  // section deliberately has NO quoted-testimonial field: per the system-wide
+  // honesty rule we never republish review text — templates show the real
+  // googleRating/reviewCount and link out via googleReviewsUrl instead.
+
+  /** Optional "why choose us" bullet points. */
+  whyUsPoints?: string[];
+  /** Optional numbered "how it works" steps. */
+  processSteps?: SiteProcessStep[];
+  /** Optional FAQ entries (generic Q&A, operator-editable; not factual claims). */
+  faqs?: SiteFaq[];
+  /** Optional service-area / coverage line, e.g. "Wigan & surrounding areas". */
+  serviceArea?: string;
 }
