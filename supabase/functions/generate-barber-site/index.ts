@@ -92,11 +92,16 @@ interface BarberSiteContent {
   googleReviewsUrl?: string;
   heroImageUrl?: string;
   galleryImageUrls?: string[];
+  // Optional trade-template sections (plumber). Generic, operator-editable later.
+  whyUsPoints?: string[];
+  processSteps?: { title: string; description: string }[];
+  faqs?: { question: string; answer: string }[];
+  serviceArea?: string;
 }
 
 // Which design template to generate for. Selected by the admin in the Outreach
 // table and stored on the generated_sites row; also steers the copy flavour.
-type SiteTemplate = "barber" | "salon";
+type SiteTemplate = "barber" | "salon" | "plumber";
 
 // Default service set used ONLY when the lead has no stored services. Generic
 // names + generic descriptions — no prices, no business-specific claims. One set
@@ -118,7 +123,36 @@ const DEFAULT_SERVICES_BY_TEMPLATE: Record<SiteTemplate, BarberService[]> = {
     { name: "Blow-Dry", description: "A smooth, polished finish." },
     { name: "Conditioning Treatment", description: "A nourishing treatment for the hair." },
   ],
+  plumber: [
+    { name: "Bathroom & kitchen plumbing", description: "Taps, toilets, showers and pipework fitted and repaired." },
+    { name: "Blocked toilets, sinks & drains", description: "Toilets, sinks and external drains cleared with minimal disruption." },
+    { name: "Leak detection & repairs", description: "Hidden leaks located and fixed, plus reliable everyday repairs." },
+    { name: "Boilers & central heating", description: "Boiler repairs, servicing and heating work to keep you warm." },
+    { name: "Emergency call-outs", description: "Burst pipes and major leaks — fast response when it can't wait." },
+    { name: "General plumbing & maintenance", description: "Day-to-day upkeep, inspections and non-emergency fixes." },
+  ],
 };
+
+// Generic plumber sections (not business-factual — safe defaults, operator-editable
+// in Phase 3). Injected into content only when template === 'plumber'. Reviews are
+// NOT included here: the honesty rule means we never fabricate testimonials.
+const PLUMBER_WHY_US = [
+  "Clear pricing options before we start",
+  "Expert, guaranteed workmanship",
+  "Fast, friendly local service",
+];
+const PLUMBER_PROCESS = [
+  { title: "Call or message", description: "Tell us the problem — we'll arrange a convenient visit or emergency attendance." },
+  { title: "Assess & quote", description: "We diagnose on site and agree the price before work begins where possible." },
+  { title: "Repair & test", description: "Quality parts and proven methods, with checks before we leave." },
+  { title: "Invoice & guarantee", description: "Clear paperwork and a warranty on our labour." },
+];
+const PLUMBER_FAQS = [
+  { question: "How quickly can you attend an emergency?", answer: "We prioritise urgent jobs such as major leaks and loss of water. Availability depends on your location — call us for the soonest slot." },
+  { question: "Do you charge a call-out fee?", answer: "We explain any call-out or diagnostic charges before work starts, and give a clear quote for the repair wherever possible." },
+  { question: "Which areas do you cover?", answer: "We serve homeowners and landlords across the local area. Contact us with your postcode to confirm coverage." },
+  { question: "Can I use chemical drain cleaners?", answer: "They may work temporarily but can damage pipes with repeated use. For stubborn blockages a professional clear is safer and more effective." },
+];
 
 // Per-template copy cues: the business noun the model writes about, plus the
 // factual GOOD/BAD 'about' examples. The honesty rules are identical for both —
@@ -135,6 +169,12 @@ const TEMPLATE_COPY: Record<SiteTemplate, { noun: string; focus: string; good: s
     focus: "getting every look right",
     good: "Aveline is a hair salon in London, rated 4.8 from 156 Google reviews.",
     bad: "a welcoming salon where talented stylists deliver a luxurious pampering experience.",
+  },
+  plumber: {
+    noun: "plumbing service",
+    focus: "fixing it right",
+    good: "Riverside Plumbing is a plumbing service in Manchester, rated 4.9 from 112 Google reviews.",
+    bad: "a trusted plumber delivering expert emergency repairs with a friendly, professional touch.",
   },
 };
 
@@ -361,8 +401,9 @@ serve(async (req) => {
       return jsonResponse({ error: "lead_id required" }, 400, corsHeaders, rlHeaders);
     }
     // Which template to generate. Defaults to 'barber' so existing callers that
-    // don't pass `template` are unchanged. Anything other than 'salon' is barber.
-    const template: SiteTemplate = body.template === "salon" ? "salon" : "barber";
+    // don't pass `template` are unchanged. Only known templates are accepted.
+    const template: SiteTemplate =
+      body.template === "salon" || body.template === "plumber" ? body.template : "barber";
     const copy = TEMPLATE_COPY[template];
     const defaultServices = DEFAULT_SERVICES_BY_TEMPLATE[template];
 
@@ -651,6 +692,17 @@ serve(async (req) => {
       ...(googleReviewsUrl ? { googleReviewsUrl } : {}),
       ...(lead.image_url ? { heroImageUrl: lead.image_url as string } : {}),
       // galleryImageUrls: omitted — no real gallery; template falls back to stock.
+      // Plumber-only sections: generic defaults (not business-factual), plus a
+      // real service-area line from the Google-verified town when we have it.
+      // NO testimonials — the honesty rule forbids fabricated reviews.
+      ...(template === "plumber"
+        ? {
+            whyUsPoints: PLUMBER_WHY_US,
+            processSteps: PLUMBER_PROCESS,
+            faqs: PLUMBER_FAQS,
+            ...(google?.area ? { serviceArea: `${google.area} & surrounding areas` } : {}),
+          }
+        : {}),
     };
     // facebookHigh is computed for completeness, but BarberSiteContent has no social
     // field, so a social link is not part of generated content (see notes to user).
@@ -661,7 +713,12 @@ serve(async (req) => {
     // the arbiter of uniqueness. Try the bare base, then -2, -3, …, reacting to a
     // unique-violation (Postgres 23505) — race-safe, since two concurrent inserts
     // cannot both win the same slug.
-    const baseSlug = slugify(content.businessName, template === "salon" ? "salon-site" : "barber-site");
+    const SLUG_FALLBACK: Record<SiteTemplate, string> = {
+      barber: "barber-site",
+      salon: "salon-site",
+      plumber: "plumber-site",
+    };
+    const baseSlug = slugify(content.businessName, SLUG_FALLBACK[template]);
 
     type SavedRow = { id: string; lead_id: string; site_name: string; status: string; created_at: string };
     let saved: SavedRow | null = null;

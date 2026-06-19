@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Sparkles, Settings2, Scissors, Flower2 } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Sparkles, Settings2, Scissors, Flower2, Wrench } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
@@ -49,7 +49,7 @@ interface OutreachMobileCardProps {
   onRetryPhoneFetch?: () => void;
   isWalkthroughContacted?: boolean;
   onAiOpener?: () => void;
-  onGenerateSite?: (template: 'barber' | 'salon') => void;
+  onGenerateSite?: (template: 'barber' | 'salon' | 'plumber') => void;
   isGeneratingSite?: boolean;
   onManageSite?: () => void;
   onUpdateLead?: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
@@ -357,6 +357,10 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                       <DropdownMenuItem onSelect={() => onGenerateSite('salon')}>
                         <Flower2 className="h-4 w-4 mr-2" />
                         Salon site
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => onGenerateSite('plumber')}>
+                        <Wrench className="h-4 w-4 mr-2" />
+                        Plumber site
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
