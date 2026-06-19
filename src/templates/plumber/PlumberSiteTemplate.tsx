@@ -120,7 +120,6 @@ export function PlumberSiteTemplate({
             <WhyUs whyUsPoints={whyUsPoints} googleRating={googleRating} reviewCount={reviewCount} />
           )}
           {processSteps?.length ? <HowItWorks steps={processSteps} /> : null}
-          <Reviews googleRating={googleRating} reviewCount={reviewCount} googleReviewsUrl={googleReviewsUrl} />
           <FaqContact
             faqs={faqs}
             businessName={businessName}
@@ -130,6 +129,8 @@ export function PlumberSiteTemplate({
             serviceArea={serviceArea}
             mapSrc={mapSrc}
             hours={hours}
+            googleRating={googleRating}
+            googleReviewsUrl={googleReviewsUrl}
           />
         </main>
 
@@ -444,13 +445,14 @@ function Hero({
     <section id="top" className="relative overflow-hidden">
       <div id="home" className="absolute -top-20" />
       <MarineBg />
-      <div className="mx-auto grid max-w-6xl items-stretch gap-10 px-5 pb-14 pt-14 sm:px-8 sm:pb-20 sm:pt-20 lg:grid-cols-[1fr_1fr]">
+      <div className="mx-auto grid max-w-6xl items-stretch gap-8 px-5 py-12 sm:gap-12 sm:px-8 sm:py-16 lg:grid-cols-[1.1fr_0.9fr] lg:py-20">
+        {/* Copy — vertically centred against the image so it never strands at the top */}
         <div className="flex flex-col justify-center">
           <Reveal>
             <Eyebrow>{category || "Plumbing & heating"}</Eyebrow>
           </Reveal>
           <Reveal delay={90}>
-            <h1 className="mt-4 font-plumber-display text-5xl font-extrabold leading-[1.03] tracking-tight text-plumber-ink sm:text-6xl md:text-7xl">
+            <h1 className="mt-4 font-plumber-display text-5xl font-extrabold leading-[1.04] tracking-tight text-plumber-ink sm:text-6xl md:text-7xl">
               {heroHeadline}
             </h1>
           </Reveal>
@@ -481,23 +483,24 @@ function Hero({
           )}
         </div>
 
-        <Reveal direction="right" delay={140} distance={72} duration={780} className="relative flex items-center justify-center">
-          <SquareLines className="absolute -left-6 -top-2 h-28 w-28 sm:h-40 sm:w-40" />
-          <div className="relative mx-auto aspect-square w-full max-w-md">
-            {/* cyan accent ring around the circular hero image */}
-            <span aria-hidden className="absolute -inset-2 rounded-full border border-plumber-accent/30" />
+        {/* Image — a tall rounded panel that FILLS the column height (object-cover),
+            so the hero sizes to its content with no leftover void. Real photo wins
+            over stock; stock over a gradient panel. */}
+        <Reveal direction="right" delay={140} distance={72} duration={780} className="relative">
+          <span aria-hidden className="absolute -bottom-5 -right-5 h-28 w-28 rounded-full bg-plumber-accent/15 blur-2xl" />
+          <div className="relative h-full min-h-[300px] w-full overflow-hidden rounded-[2rem] shadow-[0_30px_70px_-32px_rgba(15,34,51,0.55)] ring-1 ring-plumber-line sm:min-h-[380px]">
             <MediaPanel
               src={heroImageUrl}
               stock={STOCK.hero}
               alt={businessName}
               icon={Droplets}
               eager
-              rounded="rounded-full"
-              className="h-full w-full ring-8 ring-white shadow-[0_30px_70px_-30px_rgba(15,34,51,0.5)]"
+              rounded="rounded-none"
+              className="absolute inset-0 h-full w-full"
             />
             <PlayGlyph className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2" />
-            <span aria-hidden className="absolute -bottom-2 -right-2 h-24 w-24 rounded-full bg-plumber-accent/20 blur-2xl" />
           </div>
+          <SquareLines className="absolute -left-5 -top-4 z-10 h-24 w-24 sm:h-32 sm:w-32" />
         </Reveal>
       </div>
     </section>
@@ -777,61 +780,6 @@ function HowItWorks({ steps }: { steps: NonNullable<SiteContent["processSteps"]>
   );
 }
 
-/* --------------------------------- reviews -------------------------------- */
-
-function Reviews({
-  googleRating,
-  reviewCount,
-  googleReviewsUrl,
-}: {
-  googleRating?: number;
-  reviewCount?: number;
-  googleReviewsUrl?: string;
-}) {
-  const hasRating = typeof googleRating === "number" && googleRating > 0;
-  const showCount = typeof reviewCount === "number" && reviewCount >= REVIEW_COUNT_MIN;
-  return (
-    <section id="reviews" className="relative scroll-mt-20 py-20 sm:py-28">
-      <MarineBg />
-      <div className="mx-auto max-w-3xl px-5 text-center sm:px-8">
-        <SectionHeading
-          center
-          flank
-          eyebrow="Testimonials"
-          title={hasRating ? `Rated ${googleRating!.toFixed(1)}/5${showCount ? ` by ${reviewCount} customers` : ""}` : "What our customers say"}
-        />
-        <Reveal delay={110}>
-          <div className="mt-8 inline-flex flex-col items-center gap-5 rounded-3xl border border-plumber-line bg-white px-8 py-10 shadow-[0_24px_60px_-30px_rgba(15,34,51,0.4)]">
-            {hasRating ? (
-              <>
-                <Stars rating={googleRating!} className="scale-125" />
-                <p className="max-w-md text-sm leading-relaxed text-plumber-muted">
-                  Our reviews live on Google, where every rating is verified — read them in full and see what
-                  customers really say.
-                </p>
-              </>
-            ) : (
-              <p className="max-w-md text-sm leading-relaxed text-plumber-muted">
-                Happy to provide references on request — just ask when you get in touch.
-              </p>
-            )}
-            {googleReviewsUrl && (
-              <a
-                href={googleReviewsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-full border border-plumber-line bg-white px-5 py-2.5 text-sm font-bold text-plumber-ink transition-all hover:-translate-y-0.5 hover:border-plumber-primary hover:text-plumber-primary"
-              >
-                <GoogleG className="h-4 w-4" /> Read our Google reviews
-              </a>
-            )}
-          </div>
-        </Reveal>
-      </div>
-    </section>
-  );
-}
-
 /* ----------------------------- faq + contact ------------------------------ */
 
 function FaqContact({
@@ -843,6 +791,8 @@ function FaqContact({
   serviceArea,
   mapSrc,
   hours,
+  googleRating,
+  googleReviewsUrl,
 }: {
   faqs?: SiteContent["faqs"];
   businessName: string;
@@ -852,6 +802,8 @@ function FaqContact({
   serviceArea?: string;
   mapSrc: string;
   hours: SiteContent["hours"];
+  googleRating?: number;
+  googleReviewsUrl?: string;
 }) {
   return (
     <section id="faq" className="relative scroll-mt-20 overflow-hidden bg-plumber-ink pb-12 pt-20 text-white/80 sm:pb-16 sm:pt-28">
@@ -882,6 +834,28 @@ function FaqContact({
               >
                 <PhoneCall className="h-5 w-5" /> Call {phone}
               </a>
+
+              {/* Folded-in reviews: real rating + Google link (no fabricated text/quotes). */}
+              {(typeof googleRating === "number" && googleRating > 0) || googleReviewsUrl ? (
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 border-t border-white/10 pt-5 text-sm">
+                  {typeof googleRating === "number" && googleRating > 0 && (
+                    <span className="inline-flex items-center gap-2">
+                      <Stars rating={googleRating} />
+                      <span className="font-bold text-white">{googleRating.toFixed(1)}</span>
+                    </span>
+                  )}
+                  {googleReviewsUrl && (
+                    <a
+                      href={googleReviewsUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 font-bold text-plumber-accent transition-colors hover:text-white"
+                    >
+                      <GoogleG className="h-4 w-4" /> Read our Google reviews
+                    </a>
+                  )}
+                </div>
+              ) : null}
 
               <dl className="mt-7 space-y-4 text-sm">
                 {address.trim() && (
