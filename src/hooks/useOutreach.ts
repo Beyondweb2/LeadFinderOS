@@ -524,7 +524,14 @@ export function useOutreach() {
     if (CONTACT_METHOD_STATUSES.includes(status)) {
       updates.contact_method = status;
     }
-    
+    // Not Interested = a dead prospect → untrack it so the Tracked filter stays
+    // clean (only live prospects). Status stays 'not_interested', so the dashboard
+    // Sent/Replied reconciliation is unchanged. Covers already-archived leads too,
+    // since updateLead routes local state by is_archived.
+    if (status === 'not_interested') {
+      updates.is_potential_work = false;
+    }
+
     const result = await updateLead(leadId, updates);
     
     // Log activity inline (avoid dependency issue with logActivity)
@@ -585,7 +592,7 @@ export function useOutreach() {
 
         if (!error) {
           setLeads((prev) => prev.filter((l) => l.id !== leadId));
-          setArchivedLeads((prev) => [{ ...lead, is_archived: true, status: 'not_interested' }, ...prev]);
+          setArchivedLeads((prev) => [{ ...lead, is_archived: true, is_potential_work: false, status: 'not_interested' }, ...prev]);
         }
       } catch (e) {
         console.error('Failed to auto-archive (non-blocking):', e);
