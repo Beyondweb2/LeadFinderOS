@@ -20,6 +20,8 @@ export default {
         body: ['"Manrope"', 'system-ui', 'sans-serif'],
         // Salon template display face — soft premium serif (scoped to salon use).
         'salon-display': ['"Playfair Display"', 'Georgia', 'serif'],
+        // Plumber template display face — modern, sturdy sans (scoped to plumber).
+        'plumber-display': ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
       },
       colors: {
         // Barber accent — backed by a CSS variable so a per-site accentColor can
@@ -49,6 +51,22 @@ export default {
           'rose-soft': '#B07084',   // eyebrow labels
           'rose-border': '#D8C3C9', // soft outline for secondary buttons
           sage: '#8FA98C',          // MINOR accent only (small touches)
+        },
+        // Plumber template palette — "Deep Marine": navy + cyan, reads as
+        // trustworthy/established for a trade selling emergency call-outs. Fixed
+        // (not CSS-var-backed), self-contained, used only inside .plumber-site.
+        plumber: {
+          bg: '#F2F7FB',            // cool light page background
+          surface: '#FFFFFF',       // cards / raised surfaces
+          line: '#D8E6F0',          // hairline dividers / borders
+          ink: '#0F2233',           // deep navy headings/text
+          muted: '#52677A',         // muted body copy
+          faint: '#8597A8',         // faint captions / labels
+          primary: '#0E7490',       // primary accent (teal-cyan, CTAs)
+          'primary-deep': '#0B5566',// deeper accent for emphasis/hover
+          'primary-soft': '#3FA3B8',// eyebrow labels / soft fills
+          accent: '#06B6D4',        // bright cyan — "water" highlights/drops
+          'accent-soft': '#67E8F9', // cyan tint for glows / drop shapes
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

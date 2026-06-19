@@ -4,9 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
-import { SalonSiteTemplate } from "@/templates/salon/SalonSiteTemplate";
 import type { SiteContent } from "@/templates/shared/content";
+import { getTemplateDef, normaliseTemplate, DEFAULT_TEMPLATE_KEY } from "@/templates/registry";
 import { useSiteBranding } from "@/hooks/useSiteBranding";
 import { useToast } from "@/hooks/use-toast";
 import { IntroPopup } from "@/components/site/IntroPopup";
@@ -16,14 +15,11 @@ import { recordSiteEvent } from "@/lib/siteTracking";
 // yet (added by the Phase 1 migration). RLS still applies. Mirrors PublicSite.
 const sb = supabase as unknown as SupabaseClient;
 
-type Template = "barber" | "salon";
-const normaliseTemplate = (v: unknown): Template => (v === "salon" ? "salon" : "barber");
-
 interface SiteRow {
   id: string;
   site_name: string;
   content: SiteContent | null;
-  template: Template;
+  template: string;
   claimed_at: string | null;
   addon_interest_at: string | null;
 }
@@ -102,11 +98,11 @@ export default function SiteByToken() {
   });
 
   const content = data?.content ?? null;
-  const template = data?.template ?? "barber";
-  const isSalon = template === "salon";
+  const template = data?.template ?? DEFAULT_TEMPLATE_KEY;
+  const def = getTemplateDef(template);
   const businessName = content?.businessName ?? "";
 
-  useSiteBranding(businessName || (isSalon ? "Salon website" : "Barber website"), template);
+  useSiteBranding(businessName || def.brandFallbackLabel, template);
 
   // Record exactly one `open` per page load, once the site resolves.
   // In preview mode we record NOTHING — operator views must not inflate Opened.
@@ -131,8 +127,8 @@ export default function SiteByToken() {
 
   if (isLoading) {
     return (
-      <div className={`min-h-screen flex items-center justify-center ${isSalon ? "bg-salon-bg" : "bg-ink"}`}>
-        <Loader2 className={`h-8 w-8 animate-spin ${isSalon ? "text-salon-rose" : "text-amber"}`} />
+      <div className={`min-h-screen flex items-center justify-center ${def.loadingBgClass}`}>
+        <Loader2 className={`h-8 w-8 animate-spin ${def.loadingSpinnerClass}`} />
       </div>
     );
   }
@@ -149,7 +145,7 @@ export default function SiteByToken() {
     );
   }
 
-  const Template = isSalon ? SalonSiteTemplate : BarberSiteTemplate;
+  const Template = def.Component;
 
   return (
     <>
