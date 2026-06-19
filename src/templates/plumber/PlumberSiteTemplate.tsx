@@ -104,7 +104,6 @@ export function PlumberSiteTemplate({
             heroHeadline={heroHeadline}
             tagline={tagline}
             heroImageUrl={heroImageUrl}
-            services={services}
             googleRating={googleRating}
             reviewCount={reviewCount}
           />
@@ -430,7 +429,6 @@ function Hero({
   heroHeadline,
   tagline,
   heroImageUrl,
-  services,
   googleRating,
   reviewCount,
 }: {
@@ -439,7 +437,6 @@ function Hero({
   heroHeadline: string;
   tagline: string;
   heroImageUrl?: string;
-  services: SiteService[];
   googleRating?: number;
   reviewCount?: number;
 }) {
@@ -447,13 +444,13 @@ function Hero({
     <section id="top" className="relative overflow-hidden">
       <div id="home" className="absolute -top-20" />
       <MarineBg />
-      <div className="mx-auto grid max-w-6xl items-center gap-10 px-5 pb-10 pt-12 sm:px-8 sm:pb-14 sm:pt-16 lg:grid-cols-[1.05fr_0.95fr]">
-        <div>
+      <div className="mx-auto grid max-w-6xl items-stretch gap-10 px-5 pb-14 pt-14 sm:px-8 sm:pb-20 sm:pt-20 lg:grid-cols-[1fr_1fr]">
+        <div className="flex flex-col justify-center">
           <Reveal>
             <Eyebrow>{category || "Plumbing & heating"}</Eyebrow>
           </Reveal>
           <Reveal delay={90}>
-            <h1 className="mt-4 font-plumber-display text-4xl font-extrabold leading-[1.05] tracking-tight text-plumber-ink sm:text-5xl md:text-6xl">
+            <h1 className="mt-4 font-plumber-display text-5xl font-extrabold leading-[1.03] tracking-tight text-plumber-ink sm:text-6xl md:text-7xl">
               {heroHeadline}
             </h1>
           </Reveal>
@@ -482,26 +479,11 @@ function Hero({
               </div>
             </Reveal>
           )}
-          {services.length > 0 && (
-            <Reveal delay={400}>
-              {/* Honest "feature row" — real service names only (no fabricated stats). */}
-              <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2.5 border-t border-plumber-line/70 pt-6">
-                {services.slice(0, 3).map((s) => (
-                  <li key={s.name} className="inline-flex items-center gap-2 text-sm font-semibold text-plumber-ink">
-                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-plumber-primary/12 text-plumber-primary">
-                      <Check className="h-3 w-3" />
-                    </span>
-                    {s.name}
-                  </li>
-                ))}
-              </ul>
-            </Reveal>
-          )}
         </div>
 
-        <Reveal direction="right" delay={140} distance={72} duration={780} className="relative">
-          <SquareLines className="absolute -left-6 -top-6 h-28 w-28 sm:h-36 sm:w-36" />
-          <div className="relative mx-auto aspect-square w-full max-w-sm">
+        <Reveal direction="right" delay={140} distance={72} duration={780} className="relative flex items-center justify-center">
+          <SquareLines className="absolute -left-6 -top-2 h-28 w-28 sm:h-40 sm:w-40" />
+          <div className="relative mx-auto aspect-square w-full max-w-md">
             {/* cyan accent ring around the circular hero image */}
             <span aria-hidden className="absolute -inset-2 rounded-full border border-plumber-accent/30" />
             <MediaPanel
@@ -874,7 +856,7 @@ function FaqContact({
   return (
     <section id="faq" className="relative scroll-mt-20 overflow-hidden bg-plumber-ink pb-12 pt-20 text-white/80 sm:pb-16 sm:pt-28">
       <TopoLines className="absolute inset-0 h-full w-full" />
-      <div className="relative mx-auto grid max-w-6xl gap-12 px-5 sm:px-8 lg:grid-cols-2">
+      <div className="relative mx-auto grid max-w-6xl items-start gap-12 px-5 sm:px-8 lg:grid-cols-2">
         <div>
           <SectionHeading onDark eyebrow="FAQ" title="Common questions" />
           <div className="mt-8">
@@ -937,22 +919,26 @@ function FaqContact({
                   </div>
                 )}
               </dl>
-
-              {mapSrc && (
-                <a
-                  href={mapSrc.replace("&output=embed", "")}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-6 block overflow-hidden rounded-2xl border border-white/10"
-                  aria-label={`Open ${businessName} in Google Maps`}
-                >
-                  <iframe src={mapSrc} title={`Map to ${businessName}`} loading="lazy" className="h-44 w-full" style={{ border: 0, pointerEvents: "none" }} />
-                </a>
-              )}
             </div>
           </Reveal>
         </div>
       </div>
+
+      {/* Full-width map below the two columns — keeps the FAQ and contact columns
+          balanced in height (the map was the main mismatch leaving a navy void). */}
+      {mapSrc && (
+        <div className="relative mx-auto mt-10 max-w-6xl px-5 sm:px-8">
+          <a
+            href={mapSrc.replace("&output=embed", "")}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block overflow-hidden rounded-2xl border border-white/10"
+            aria-label={`Open ${businessName} in Google Maps`}
+          >
+            <iframe src={mapSrc} title={`Map to ${businessName}`} loading="lazy" className="h-56 w-full" style={{ border: 0, pointerEvents: "none" }} />
+          </a>
+        </div>
+      )}
     </section>
   );
 }
