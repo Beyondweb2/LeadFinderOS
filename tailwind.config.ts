@@ -20,8 +20,9 @@ export default {
         body: ['"Manrope"', 'system-ui', 'sans-serif'],
         // Salon template display face — soft premium serif (scoped to salon use).
         'salon-display': ['"Playfair Display"', 'Georgia', 'serif'],
-        // Plumber template display face — modern, sturdy sans (scoped to plumber).
-        'plumber-display': ['"Plus Jakarta Sans"', 'system-ui', 'sans-serif'],
+        // Plumber template display face — bold Manrope (bundled), big/sturdy
+        // headings that read modern + trustworthy for a trade (scoped to plumber).
+        'plumber-display': ['"Manrope"', 'system-ui', 'sans-serif'],
       },
       colors: {
         // Barber accent — backed by a CSS variable so a per-site accentColor can

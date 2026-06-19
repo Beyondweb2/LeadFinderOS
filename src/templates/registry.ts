@@ -17,8 +17,10 @@
 import type { ComponentType } from "react";
 import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
 import { SalonSiteTemplate } from "@/templates/salon/SalonSiteTemplate";
+import { PlumberSiteTemplate } from "@/templates/plumber/PlumberSiteTemplate";
 import { demoContent as barberDemo } from "@/templates/barber/demoContent";
 import { demoContent as salonDemo } from "@/templates/salon/demoContent";
+import { demoContent as plumberDemo } from "@/templates/plumber/demoContent";
 import type { SiteContent } from "@/templates/shared/content";
 
 /** Props every site template accepts (superset across all callers). */
@@ -66,6 +68,11 @@ const SALON_FAVICON = `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#FAF6F3"/><g transform="translate(16 16)" fill="none" stroke="#C08497" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="0" cy="0" r="2.6"/><path d="M0 -2.6V-8M0 2.6V8M2.6 0H8M-2.6 0H-8M1.84 -1.84 5.66 -5.66M-1.84 1.84 -5.66 5.66M1.84 1.84 5.66 5.66M-1.84 -1.84 -5.66 -5.66"/></g></svg>`,
 )}`;
 
+// Cyan water-drop on a deep-navy tile — the plumber mark.
+const PLUMBER_FAVICON = `data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#0F2233"/><path d="M16 6s7 7.8 7 13a7 7 0 0 1-14 0c0-5.2 7-13 7-13z" fill="#06B6D4"/></svg>`,
+)}`;
+
 export const SITE_TEMPLATES: Record<string, TemplateDef> = {
   barber: {
     key: "barber",
@@ -89,7 +96,20 @@ export const SITE_TEMPLATES: Record<string, TemplateDef> = {
     loadingSpinnerClass: "text-salon-rose",
     brandFallbackLabel: "Salon website",
   },
-  // Phase 2 adds: plumber: { … PlumberSiteTemplate, plumberDemo, plumber favicon … }
+  plumber: {
+    key: "plumber",
+    label: "Plumber site",
+    Component: PlumberSiteTemplate,
+    demoContent: plumberDemo,
+    favicon: PLUMBER_FAVICON,
+    // Phase 3: drop og-default-plumber.jpg into /public + teach the Cloudflare
+    // /s/ head-rewriter about it. Until then plumber shares fall back to the
+    // barber OG image (the rewriter defaults non-salon → barber).
+    ogImage: "og-default-plumber.jpg",
+    loadingBgClass: "bg-plumber-bg",
+    loadingSpinnerClass: "text-plumber-primary",
+    brandFallbackLabel: "Plumbing website",
+  },
 };
 
 /** The default vertical when a row has no/unknown template (historical: barber). */

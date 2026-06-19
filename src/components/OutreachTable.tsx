@@ -45,6 +45,7 @@ import {
   Settings2,
   Scissors,
   Flower2,
+  Wrench,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -448,7 +449,7 @@ export function OutreachTable({
   // Handle Call button click - direct open + count walkthrough contact
   // Admin-only: generate a barber site for this lead via the (admin-gated)
   // generate-barber-site edge function, then surface links to view / add images.
-  const handleGenerateSite = useCallback(async (lead: OutreachLead, template: 'barber' | 'salon' = 'barber') => {
+  const handleGenerateSite = useCallback(async (lead: OutreachLead, template: 'barber' | 'salon' | 'plumber' = 'barber') => {
     setGeneratingSiteId(lead.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -1555,6 +1556,10 @@ export function OutreachTable({
                                   <DropdownMenuItem onSelect={() => handleGenerateSite(lead, 'salon')}>
                                     <Flower2 className="h-4 w-4 mr-2" />
                                     Salon site
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => handleGenerateSite(lead, 'plumber')}>
+                                    <Wrench className="h-4 w-4 mr-2" />
+                                    Plumber site
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
