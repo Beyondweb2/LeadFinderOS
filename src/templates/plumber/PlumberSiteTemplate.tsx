@@ -27,6 +27,7 @@ import type { SiteContent, SiteService } from "../shared/content";
 import { Reveal, useReveal } from "../shared/useReveal";
 import { useCountUp } from "../shared/useCountUp";
 import { Carousel } from "../shared/Carousel";
+import { Gears, ToolSketches, TopoLines, DropField, SquareLines, PlayGlyph } from "./graphics";
 
 /* -------------------------------------------------------------------------- */
 /*  PlumberSiteTemplate                                                        */
@@ -94,7 +95,7 @@ export function PlumberSiteTemplate({
       <div
         className={`relative min-h-screen bg-plumber-bg ${onClaim ? "pb-[104px] sm:pb-[140px]" : "pb-[68px] sm:pb-0"}`}
       >
-        <Header businessName={businessName} telHref={telHref} phone={phone} logoUrl={logoUrl} />
+        <Header businessName={businessName} telHref={telHref} phone={phone} address={address} logoUrl={logoUrl} />
 
         <main>
           <Hero
@@ -258,13 +259,17 @@ function Eyebrow({ children, center = false }: { children: ReactNode; center?: b
   );
 }
 
-function SectionHeading({ eyebrow, title, center = false }: { eyebrow: string; title: string; center?: boolean }) {
+function SectionHeading({ eyebrow, title, center = false, flank = false, onDark = false }: { eyebrow: string; title: string; center?: boolean; flank?: boolean; onDark?: boolean }) {
   return (
     <Reveal className={center ? "text-center" : ""}>
       <Eyebrow center={center}>{eyebrow}</Eyebrow>
-      <h2 className={`mt-3 font-plumber-display text-3xl font-extrabold leading-tight tracking-tight text-plumber-ink sm:text-4xl ${center ? "mx-auto max-w-2xl" : ""}`}>
-        {title}
-      </h2>
+      <div className={`mt-3 flex items-center gap-3 ${center ? "justify-center" : ""}`}>
+        {flank && <Wrench aria-hidden className="hidden h-5 w-5 -rotate-12 text-plumber-primary/40 sm:block" />}
+        <h2 className={`font-plumber-display text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl ${onDark ? "text-white" : "text-plumber-ink"} ${center ? "max-w-2xl" : ""}`}>
+          {title}
+        </h2>
+        {flank && <Wrench aria-hidden className="hidden h-5 w-5 rotate-12 text-plumber-primary/40 sm:block" />}
+      </div>
     </Reveal>
   );
 }
@@ -342,7 +347,7 @@ function GoogleG({ className = "" }: { className?: string }) {
 
 /* --------------------------------- header --------------------------------- */
 
-function Header({ businessName, telHref, phone, logoUrl }: { businessName: string; telHref: string; phone: string; logoUrl?: string }) {
+function Header({ businessName, telHref, phone, address, logoUrl }: { businessName: string; telHref: string; phone: string; address: string; logoUrl?: string }) {
   const NAV = [
     ["#about", "About"],
     ["#services", "Services"],
@@ -352,7 +357,22 @@ function Header({ businessName, telHref, phone, logoUrl }: { businessName: strin
     ["#contact", "Contact"],
   ];
   return (
-    <header className="sticky top-0 z-40 border-b border-plumber-line bg-plumber-bg/80 backdrop-blur-xl supports-[backdrop-filter]:bg-plumber-bg/65">
+    <>
+      {/* Top contact bar (scrolls away; header below stays sticky). No socials —
+          we have no per-business social data, so we don't add dead links. */}
+      <div className="bg-plumber-ink text-white/80">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-6 gap-y-1 px-5 py-2 text-xs sm:justify-between sm:px-8">
+          <a href={telHref} className="inline-flex items-center gap-1.5 transition-colors hover:text-plumber-accent">
+            <Phone className="h-3.5 w-3.5 text-plumber-accent" /> {phone}
+          </a>
+          {address.trim() && (
+            <span className="inline-flex items-center gap-1.5 text-white/60">
+              <MapPin className="h-3.5 w-3.5 text-plumber-accent" /> <span className="max-w-[60vw] truncate sm:max-w-none">{address}</span>
+            </span>
+          )}
+        </div>
+      </div>
+      <header className="sticky top-0 z-40 border-b border-plumber-line bg-plumber-bg/80 backdrop-blur-xl supports-[backdrop-filter]:bg-plumber-bg/65">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3.5 sm:px-8">
         <a href="#top" aria-label={`${businessName} — home`} className="shrink-0">
           <Wordmark businessName={businessName} logoUrl={logoUrl} />
@@ -380,7 +400,8 @@ function Header({ businessName, telHref, phone, logoUrl }: { businessName: strin
           </a>
         </div>
       </div>
-    </header>
+      </header>
+    </>
   );
 }
 
@@ -445,16 +466,22 @@ function Hero({
         </div>
 
         <Reveal direction="right" delay={140} distance={72} duration={780} className="relative">
-          <span aria-hidden className="absolute -left-5 -top-5 h-20 w-20 rounded-full bg-plumber-accent/15" />
-          <MediaPanel
-            src={heroImageUrl}
-            stock={STOCK.hero}
-            alt={businessName}
-            icon={Droplets}
-            eager
-            className="aspect-[6/5] w-full shadow-[0_30px_70px_-30px_rgba(15,34,51,0.5)]"
-          />
-          <span aria-hidden className="absolute -bottom-6 -right-4 h-24 w-24 rounded-full bg-plumber-accent/20 blur-2xl" />
+          <SquareLines className="absolute -left-6 -top-6 h-28 w-28 sm:h-36 sm:w-36" />
+          <div className="relative mx-auto aspect-square w-full max-w-md">
+            {/* cyan accent ring around the circular hero image */}
+            <span aria-hidden className="absolute -inset-2 rounded-full border border-plumber-accent/30" />
+            <MediaPanel
+              src={heroImageUrl}
+              stock={STOCK.hero}
+              alt={businessName}
+              icon={Droplets}
+              eager
+              rounded="rounded-full"
+              className="h-full w-full ring-8 ring-white shadow-[0_30px_70px_-30px_rgba(15,34,51,0.5)]"
+            />
+            <PlayGlyph className="absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2" />
+            <span aria-hidden className="absolute -bottom-2 -right-2 h-24 w-24 rounded-full bg-plumber-accent/20 blur-2xl" />
+          </div>
         </Reveal>
       </div>
     </section>
@@ -482,16 +509,31 @@ function About({
       <MarineBg />
       <div className="mx-auto grid max-w-6xl items-center gap-12 px-5 sm:px-8 lg:grid-cols-2">
         <Reveal direction="left" distance={72} duration={780} className="relative">
-          <MediaPanel
-            src={aboutImageUrl}
-            stock={STOCK.about}
-            alt={`About ${businessName}`}
-            icon={ShowerHead}
-            className="aspect-[5/6] w-full max-w-md shadow-[0_24px_60px_-28px_rgba(15,34,51,0.45)]"
-          />
-          {typeof reviewCount === "number" && reviewCount > 0 && (
-            <CountStat target={reviewCount} label="Customer reviews" />
-          )}
+          <div className="relative mx-auto w-full max-w-md">
+            {/* tinted petal shape layered behind the image */}
+            <span
+              aria-hidden
+              className="absolute -left-4 -top-4 h-full w-full bg-plumber-primary/10"
+              style={{ borderRadius: "52% 48% 42% 58% / 50% 54% 46% 50%" }}
+            />
+            <Gears className="absolute -right-7 -top-9 z-10 h-28 w-28" />
+            <div
+              className="relative overflow-hidden shadow-[0_24px_60px_-28px_rgba(15,34,51,0.45)]"
+              style={{ borderRadius: "46% 54% 56% 44% / 48% 42% 58% 52%" }}
+            >
+              <MediaPanel
+                src={aboutImageUrl}
+                stock={STOCK.about}
+                alt={`About ${businessName}`}
+                icon={ShowerHead}
+                rounded="rounded-none"
+                className="aspect-[5/6] w-full"
+              />
+            </div>
+            {typeof reviewCount === "number" && reviewCount > 0 && (
+              <CountStat target={reviewCount} label="Customer reviews" />
+            )}
+          </div>
         </Reveal>
 
         <div>
@@ -514,14 +556,30 @@ function About({
             </Reveal>
           )}
           <Reveal delay={230}>
-            <div className="mt-8">
-              <PrimaryBtn href="#contact">Get in touch</PrimaryBtn>
+            <div className="mt-8 flex flex-wrap items-center gap-5">
+              <PrimaryBtn href="#why-us">Read more</PrimaryBtn>
+              <div className="flex items-center gap-3">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-plumber-primary font-plumber-display text-sm font-extrabold text-white">
+                  {initials(businessName)}
+                </span>
+                <div className="leading-tight">
+                  <div className="text-sm font-bold text-plumber-ink">{businessName}</div>
+                  <div className="text-xs text-plumber-faint">Your local plumbing team</div>
+                </div>
+              </div>
             </div>
           </Reveal>
         </div>
       </div>
     </section>
   );
+}
+
+/** Up-to-two-letter initials from a business name, for the avatar chip. */
+function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "•";
+  return (words[0][0] + (words[1]?.[0] ?? "")).toUpperCase();
 }
 
 /* -------------------------------- services -------------------------------- */
@@ -539,9 +597,10 @@ function serviceIcon(name: string): IconType {
 function Services({ services }: { services: SiteService[] }) {
   if (!services.length) return null;
   return (
-    <section id="services" className="relative scroll-mt-20 bg-white py-20 sm:py-28">
-      <div className="mx-auto max-w-6xl px-5 sm:px-8">
-        <SectionHeading center eyebrow="Services" title="Our plumbing services" />
+    <section id="services" className="relative scroll-mt-20 overflow-hidden bg-white py-20 sm:py-28">
+      <ToolSketches className="absolute inset-0" />
+      <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
+        <SectionHeading center flank eyebrow="Services" title="Our plumbing services" />
         <div className="mt-12">
           <Carousel
             slideClassName="basis-full sm:basis-1/2 lg:basis-1/3"
@@ -569,7 +628,10 @@ function ServiceCard({ service }: { service: SiteService }) {
     <article className="flex h-full flex-col overflow-hidden rounded-2xl border border-plumber-line bg-plumber-bg transition-all hover:-translate-y-1.5 hover:shadow-[0_28px_55px_-26px_rgba(15,34,51,0.4)]">
       <div className="relative">
         <MediaPanel src={service.imageUrl} stock={stockForService(service.name)} alt={service.name} icon={Icon} rounded="rounded-none" className="aspect-[4/3] w-full" />
-        <span className="absolute -bottom-5 left-5 grid h-11 w-11 place-items-center rounded-xl bg-plumber-primary text-white shadow-[0_10px_24px_-10px_rgba(14,116,144,0.8)]">
+        <span
+          className="absolute -bottom-5 left-5 grid h-12 w-12 place-items-center bg-plumber-primary text-white shadow-[0_10px_24px_-10px_rgba(14,116,144,0.8)]"
+          style={{ borderRadius: "42% 58% 60% 40% / 45% 45% 55% 55%" }}
+        >
           <Icon className="h-5 w-5" />
         </span>
       </div>
@@ -594,9 +656,10 @@ const WHY_CARDS: { n: string; icon: IconType; title: string; desc: string }[] = 
 
 function WhyUs({ whyUsPoints, reviewCount }: { whyUsPoints?: string[]; reviewCount?: number }) {
   return (
-    <section id="why-us" className="relative scroll-mt-20 py-20 sm:py-28">
+    <section id="why-us" className="relative scroll-mt-20 overflow-hidden py-20 sm:py-28">
       <MarineBg />
-      <div className="mx-auto max-w-6xl px-5 sm:px-8">
+      <DropField className="absolute inset-0 h-full w-full" />
+      <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
         <div className="grid items-center gap-12 lg:grid-cols-2">
           <Reveal direction="left" distance={72} duration={780} className="relative">
             <MediaPanel
@@ -669,19 +732,27 @@ function HowItWorks({ steps }: { steps: NonNullable<SiteContent["processSteps"]>
   return (
     <section className="relative scroll-mt-20 bg-white py-20 sm:py-28">
       <div className="mx-auto max-w-6xl px-5 sm:px-8">
-        <SectionHeading center eyebrow="How we work" title="How it works" />
-        <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <SectionHeading center flank eyebrow="How we work" title="How it works" />
+        <div className="mt-14 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map((step, i) => {
             const Icon = processIcon(step.title, i);
             return (
-              <Reveal key={step.title} delay={i * 110}>
-                <div className="relative h-full overflow-hidden rounded-2xl border border-plumber-line bg-plumber-bg p-7 shadow-[0_18px_44px_-26px_rgba(15,34,51,0.35)] transition-all hover:-translate-y-1.5 hover:shadow-[0_28px_60px_-26px_rgba(15,34,51,0.45)]">
-                  <span aria-hidden className="absolute right-5 top-4 font-plumber-display text-5xl font-extrabold text-plumber-line/70">
-                    {String(i + 1).padStart(2, "0")}
+              <Reveal key={step.title} delay={i * 110} className="h-full">
+                <div className="relative h-full pt-8">
+                  {/* second card behind → the layered "sits on another card" depth */}
+                  <span aria-hidden className="absolute left-2 right-[-7px] bottom-[-7px] top-11 rounded-2xl bg-plumber-primary/[0.08]" />
+                  {/* main card */}
+                  <div className="relative z-10 h-full rounded-2xl border border-plumber-line bg-white px-6 pb-7 pt-11 shadow-[0_18px_44px_-26px_rgba(15,34,51,0.4)] transition-all hover:-translate-y-1.5 hover:shadow-[0_30px_62px_-26px_rgba(15,34,51,0.5)]">
+                    <span aria-hidden className="absolute right-5 top-3 font-plumber-display text-5xl font-extrabold text-plumber-line/70">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <h3 className="font-plumber-display text-lg font-extrabold text-plumber-ink">{step.title}</h3>
+                    <p className="mt-2 text-sm leading-relaxed text-plumber-muted">{step.description}</p>
+                  </div>
+                  {/* icon circle overlapping the card's top edge */}
+                  <span className="absolute left-6 top-0 z-20 grid h-16 w-16 place-items-center rounded-full bg-plumber-primary text-white ring-4 ring-white shadow-[0_12px_28px_-10px_rgba(14,116,144,0.85)]">
+                    <Icon className="h-7 w-7" />
                   </span>
-                  <IconBlob icon={Icon} className="relative" />
-                  <h3 className="relative mt-5 font-plumber-display text-lg font-extrabold text-plumber-ink">{step.title}</h3>
-                  <p className="relative mt-2 text-sm leading-relaxed text-plumber-muted">{step.description}</p>
                 </div>
               </Reveal>
             );
@@ -710,6 +781,7 @@ function Reviews({
       <div className="mx-auto max-w-3xl px-5 text-center sm:px-8">
         <SectionHeading
           center
+          flank
           eyebrow="Testimonials"
           title={hasRating ? `Rated ${googleRating!.toFixed(1)}/5${typeof reviewCount === "number" ? ` by ${reviewCount} customers` : ""}` : "What our customers say"}
         />
@@ -767,25 +839,26 @@ function FaqContact({
   hours: SiteContent["hours"];
 }) {
   return (
-    <section id="faq" className="relative scroll-mt-20 bg-white py-20 sm:py-28">
-      <div className="mx-auto grid max-w-6xl gap-12 px-5 sm:px-8 lg:grid-cols-2">
+    <section id="faq" className="relative scroll-mt-20 overflow-hidden bg-plumber-ink py-20 text-white/80 sm:py-28">
+      <TopoLines className="absolute inset-0 h-full w-full" />
+      <div className="relative mx-auto grid max-w-6xl gap-12 px-5 sm:px-8 lg:grid-cols-2">
         <div>
-          <SectionHeading eyebrow="FAQ" title="Common questions" />
+          <SectionHeading onDark eyebrow="FAQ" title="Common questions" />
           <div className="mt-8">
             {faqs?.length ? (
               <Accordion items={faqs} />
             ) : (
-              <p className="text-sm text-plumber-muted">Have a question? Give us a call — we're happy to help.</p>
+              <p className="text-sm text-white/60">Have a question? Give us a call — we're happy to help.</p>
             )}
           </div>
         </div>
 
         <div id="contact" className="scroll-mt-20">
           <Reveal direction="right" distance={60} duration={760}>
-            <div className="relative overflow-hidden rounded-3xl border border-plumber-line bg-plumber-bg p-7 shadow-[0_22px_55px_-30px_rgba(15,34,51,0.4)] sm:p-9">
-              <span aria-hidden className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-plumber-accent/10" />
-              <h3 className="font-plumber-display text-2xl font-extrabold text-plumber-ink">Get a free quote</h3>
-              <p className="mt-2 text-sm text-plumber-muted">
+            <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] p-7 shadow-[0_22px_55px_-30px_rgba(0,0,0,0.5)] sm:p-9">
+              <span aria-hidden className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-plumber-accent/15" />
+              <h3 className="font-plumber-display text-2xl font-extrabold text-white">Get a free quote</h3>
+              <p className="mt-2 text-sm text-white/70">
                 Tell us the problem and we'll arrange a visit or emergency attendance.
               </p>
               <a
@@ -798,32 +871,32 @@ function FaqContact({
               <dl className="mt-7 space-y-4 text-sm">
                 {address.trim() && (
                   <div className="flex items-start gap-3">
-                    <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-plumber-primary" />
+                    <MapPin className="mt-0.5 h-5 w-5 shrink-0 text-plumber-accent" />
                     <div>
-                      <dt className="font-semibold text-plumber-ink">Location</dt>
-                      <dd className="text-plumber-muted">{address}</dd>
+                      <dt className="font-semibold text-white">Location</dt>
+                      <dd className="text-white/70">{address}</dd>
                     </div>
                   </div>
                 )}
                 {serviceArea && (
                   <div className="flex items-start gap-3">
-                    <Droplet className="mt-0.5 h-5 w-5 shrink-0 text-plumber-primary" />
+                    <Droplet className="mt-0.5 h-5 w-5 shrink-0 text-plumber-accent" />
                     <div>
-                      <dt className="font-semibold text-plumber-ink">Service area</dt>
-                      <dd className="text-plumber-muted">{serviceArea}</dd>
+                      <dt className="font-semibold text-white">Service area</dt>
+                      <dd className="text-white/70">{serviceArea}</dd>
                     </div>
                   </div>
                 )}
                 {hours.length > 0 && (
                   <div className="flex items-start gap-3">
-                    <Clock className="mt-0.5 h-5 w-5 shrink-0 text-plumber-primary" />
+                    <Clock className="mt-0.5 h-5 w-5 shrink-0 text-plumber-accent" />
                     <div className="min-w-0">
-                      <dt className="font-semibold text-plumber-ink">Opening hours</dt>
-                      <dd className="mt-1 space-y-0.5 text-plumber-muted">
+                      <dt className="font-semibold text-white">Opening hours</dt>
+                      <dd className="mt-1 space-y-0.5 text-white/70">
                         {hours.map((h) => (
                           <div key={h.day} className="flex justify-between gap-6">
                             <span>{h.day}</span>
-                            <span className="text-plumber-ink/80">{h.open}</span>
+                            <span className="text-white/90">{h.open}</span>
                           </div>
                         ))}
                       </dd>
@@ -837,7 +910,7 @@ function FaqContact({
                   href={mapSrc.replace("&output=embed", "")}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-6 block overflow-hidden rounded-2xl border border-plumber-line"
+                  className="mt-6 block overflow-hidden rounded-2xl border border-white/10"
                   aria-label={`Open ${businessName} in Google Maps`}
                 >
                   <iframe src={mapSrc} title={`Map to ${businessName}`} loading="lazy" className="h-44 w-full" style={{ border: 0, pointerEvents: "none" }} />
@@ -859,19 +932,19 @@ function Accordion({ items }: { items: NonNullable<SiteContent["faqs"]> }) {
         const isOpen = open === i;
         return (
           <Reveal key={f.question} delay={i * 70}>
-            <div className="overflow-hidden rounded-2xl border border-plumber-line bg-plumber-bg">
+            <div className={`overflow-hidden rounded-2xl border transition-colors ${isOpen ? "border-plumber-accent/45 bg-white/[0.08]" : "border-white/10 bg-white/[0.03]"}`}>
               <button
                 type="button"
                 aria-expanded={isOpen}
                 onClick={() => setOpen(isOpen ? -1 : i)}
-                className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left font-semibold text-plumber-ink"
+                className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left font-semibold text-white"
               >
                 {f.question}
-                <ChevronDown className={`h-5 w-5 shrink-0 text-plumber-primary transition-transform ${isOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-5 w-5 shrink-0 text-plumber-accent transition-transform ${isOpen ? "rotate-180" : ""}`} />
               </button>
               <div className={`grid transition-all duration-300 ${isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
                 <div className="overflow-hidden">
-                  <p className="px-5 pb-5 text-sm leading-relaxed text-plumber-muted">{f.answer}</p>
+                  <p className="px-5 pb-5 text-sm leading-relaxed text-white/70">{f.answer}</p>
                 </div>
               </div>
             </div>
