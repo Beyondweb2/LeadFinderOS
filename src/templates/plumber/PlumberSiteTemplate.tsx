@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 
 import "./fonts.css";
-import type { SiteContent, SiteService } from "../shared/content";
+import type { SiteContent, SiteService, SiteReview } from "../shared/content";
 import { Reveal, useReveal } from "../shared/useReveal";
 import { useCountUp } from "../shared/useCountUp";
 import { Carousel } from "../shared/Carousel";
@@ -79,6 +79,7 @@ export function PlumberSiteTemplate({
     processSteps,
     faqs,
     serviceArea,
+    reviews,
   } = content;
 
   const telHref = useMemo(() => `tel:${phone.replace(/[^\d+]/g, "")}`, [phone]);
@@ -116,10 +117,10 @@ export function PlumberSiteTemplate({
             reviewCount={reviewCount}
           />
           <Services services={services} />
+          {processSteps?.length ? <HowItWorks steps={processSteps} /> : null}
           {(whyUsPoints?.length || googleRating) && (
             <WhyUs whyUsPoints={whyUsPoints} googleRating={googleRating} reviewCount={reviewCount} />
           )}
-          {processSteps?.length ? <HowItWorks steps={processSteps} /> : null}
           <FaqContact
             faqs={faqs}
             businessName={businessName}
@@ -129,7 +130,11 @@ export function PlumberSiteTemplate({
             serviceArea={serviceArea}
             mapSrc={mapSrc}
             hours={hours}
+          />
+          <Reviews
+            reviews={reviews}
             googleRating={googleRating}
+            reviewCount={reviewCount}
             googleReviewsUrl={googleReviewsUrl}
           />
         </main>
@@ -675,7 +680,7 @@ const WHY_CARDS: { n: string; icon: IconType; title: string; desc: string }[] = 
 
 function WhyUs({ whyUsPoints, googleRating, reviewCount }: { whyUsPoints?: string[]; googleRating?: number; reviewCount?: number }) {
   return (
-    <section id="why-us" className="relative scroll-mt-20 overflow-hidden py-20 sm:py-28">
+    <section id="why-us" className="relative scroll-mt-20 overflow-hidden bg-white py-20 sm:py-28">
       <MarineBg />
       <DropField className="absolute inset-0 h-full w-full" />
       <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
@@ -747,8 +752,9 @@ function processIcon(title: string, i: number): IconType {
 
 function HowItWorks({ steps }: { steps: NonNullable<SiteContent["processSteps"]> }) {
   return (
-    <section className="relative scroll-mt-20 bg-white py-20 sm:py-28">
-      <div className="mx-auto max-w-6xl px-5 sm:px-8">
+    <section className="relative scroll-mt-20 overflow-hidden py-20 sm:py-28">
+      <MarineBg />
+      <div className="relative mx-auto max-w-6xl px-5 sm:px-8">
         <SectionHeading center flank eyebrow="How we work" title="How it works" />
         <div className="mt-14 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
           {steps.map((step, i) => {
@@ -791,8 +797,6 @@ function FaqContact({
   serviceArea,
   mapSrc,
   hours,
-  googleRating,
-  googleReviewsUrl,
 }: {
   faqs?: SiteContent["faqs"];
   businessName: string;
@@ -802,8 +806,6 @@ function FaqContact({
   serviceArea?: string;
   mapSrc: string;
   hours: SiteContent["hours"];
-  googleRating?: number;
-  googleReviewsUrl?: string;
 }) {
   return (
     <section id="faq" className="relative scroll-mt-20 overflow-hidden bg-plumber-ink pb-12 pt-20 text-white/80 sm:pb-16 sm:pt-28">
@@ -834,28 +836,6 @@ function FaqContact({
               >
                 <PhoneCall className="h-5 w-5" /> Call {phone}
               </a>
-
-              {/* Folded-in reviews: real rating + Google link (no fabricated text/quotes). */}
-              {(typeof googleRating === "number" && googleRating > 0) || googleReviewsUrl ? (
-                <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 border-t border-white/10 pt-5 text-sm">
-                  {typeof googleRating === "number" && googleRating > 0 && (
-                    <span className="inline-flex items-center gap-2">
-                      <Stars rating={googleRating} />
-                      <span className="font-bold text-white">{googleRating.toFixed(1)}</span>
-                    </span>
-                  )}
-                  {googleReviewsUrl && (
-                    <a
-                      href={googleReviewsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 font-bold text-plumber-accent transition-colors hover:text-white"
-                    >
-                      <GoogleG className="h-4 w-4" /> Read our Google reviews
-                    </a>
-                  )}
-                </div>
-              ) : null}
 
               <dl className="mt-7 space-y-4 text-sm">
                 {address.trim() && (
@@ -945,6 +925,108 @@ function Accordion({ items }: { items: NonNullable<SiteContent["faqs"]> }) {
         );
       })}
     </div>
+  );
+}
+
+/* --------------------------------- reviews -------------------------------- */
+
+/** Reviewer avatar — real photo if present, else initials (never a stock face). */
+function Avatar({ name, url }: { name: string; url?: string }) {
+  if (url) {
+    return <img src={url} alt={name} loading="lazy" className="h-11 w-11 shrink-0 rounded-full object-cover" />;
+  }
+  return (
+    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-plumber-primary font-plumber-display text-sm font-extrabold text-white">
+      {initials(name)}
+    </span>
+  );
+}
+
+function ReviewCard({ review }: { review: SiteReview }) {
+  return (
+    <article className="flex h-full flex-col rounded-2xl border border-plumber-line bg-white p-6 text-left shadow-[0_18px_44px_-26px_rgba(15,34,51,0.35)]">
+      <div className="flex items-center gap-3">
+        <Avatar name={review.author} url={review.avatarUrl} />
+        <div className="min-w-0">
+          <div className="truncate font-bold text-plumber-ink">{review.author}</div>
+          {typeof review.rating === "number" && review.rating > 0 && <Stars rating={review.rating} />}
+        </div>
+        <GoogleG className="ml-auto h-5 w-5 shrink-0" />
+      </div>
+      <p className="mt-4 flex-1 text-sm leading-relaxed text-plumber-muted">{review.text}</p>
+      {review.date && <div className="mt-3 text-xs text-plumber-faint">{review.date}</div>}
+    </article>
+  );
+}
+
+/**
+ * Closing testimonials section. Renders the real-review cards when (and only when)
+ * the content supplies real reviews — wired so the Apify build can drop a
+ * `content.reviews` array in and this lights up with no further work. With NO real
+ * reviews it shows ONLY the honest rating + Google-reviews link (or nothing if we
+ * have neither). It NEVER renders fabricated names/quotes/faces.
+ */
+function Reviews({
+  reviews,
+  googleRating,
+  reviewCount,
+  googleReviewsUrl,
+}: {
+  reviews?: SiteReview[];
+  googleRating?: number;
+  reviewCount?: number;
+  googleReviewsUrl?: string;
+}) {
+  const list = (reviews ?? []).filter((r) => r && r.author?.trim() && r.text?.trim());
+  const hasRating = typeof googleRating === "number" && googleRating > 0;
+  const showCount = typeof reviewCount === "number" && reviewCount >= REVIEW_COUNT_MIN;
+  // Nothing real to show at all → render nothing (never fabricate).
+  if (list.length === 0 && !hasRating && !googleReviewsUrl) return null;
+
+  const title = hasRating
+    ? `Rated ${googleRating!.toFixed(1)}/5${showCount ? ` by ${reviewCount} customers` : ""}`
+    : "What our customers say";
+
+  return (
+    <section id="reviews" className="relative scroll-mt-20 overflow-hidden py-20 sm:py-28">
+      <MarineBg />
+      <div className="relative mx-auto max-w-6xl px-5 text-center sm:px-8">
+        <SectionHeading center flank eyebrow="Testimonials" title={title} />
+
+        {list.length > 0 ? (
+          // Real reviews present → faces + cards grid.
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {list.map((r, i) => (
+              <Reveal key={`${r.author}-${i}`} delay={i * 90} className="h-full">
+                <ReviewCard review={r} />
+              </Reveal>
+            ))}
+          </div>
+        ) : (
+          // No real review TEXT yet → honest rating + Google link only (no fake cards).
+          <Reveal delay={100}>
+            <div className="mx-auto mt-8 flex max-w-md flex-col items-center gap-5 rounded-3xl border border-plumber-line bg-white px-8 py-10 shadow-[0_24px_60px_-30px_rgba(15,34,51,0.4)]">
+              {hasRating && <Stars rating={googleRating!} className="scale-125" />}
+              <p className="text-sm leading-relaxed text-plumber-muted">
+                {hasRating
+                  ? "Our reviews are verified on Google — read them in full and see what customers say."
+                  : "Happy to provide references on request — just ask when you get in touch."}
+              </p>
+              {googleReviewsUrl && (
+                <a
+                  href={googleReviewsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 rounded-full border border-plumber-line bg-white px-5 py-2.5 text-sm font-bold text-plumber-ink transition-all hover:-translate-y-0.5 hover:border-plumber-primary hover:text-plumber-primary"
+                >
+                  <GoogleG className="h-4 w-4" /> Read our Google reviews
+                </a>
+              )}
+            </div>
+          </Reveal>
+        )}
+      </div>
+    </section>
   );
 }
 
