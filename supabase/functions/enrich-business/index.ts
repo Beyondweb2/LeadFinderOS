@@ -18,7 +18,29 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { lookupLineType } from "../_shared/enrichment/whatsapp.ts";
-import { fetchFacebookPhotos, fetchInstagramPhotos } from "../_shared/enrichment/socialImages.ts";
+import { fetchFacebookContacts, fetchFacebookPhotos, fetchInstagramPhotos } from "../_shared/enrichment/socialImages.ts";
+
+/** Last-resort Facebook URL discovery: crawl the business website for a FB link
+ *  via the existing extract-facebook function. Graceful — "" on any failure. */
+async function discoverFacebookFromWebsite(website: string, authHeader: string): Promise<string> {
+  if (!website) return "";
+  try {
+    const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extract-facebook`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+        apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+      },
+      body: JSON.stringify({ websiteUrl: website }),
+    });
+    if (!res.ok) return "";
+    const d = await res.json();
+    return typeof d?.facebookUrl === "string" ? d.facebookUrl : "";
+  } catch {
+    return "";
+  }
+}
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -86,6 +108,7 @@ serve(async (req) => {
     const businessName: string = body.business_name ?? "";
     const existingFacebook: string = body.facebook_url ?? "";
     const existingInstagram: string = body.instagram_url ?? "";
+    const website: string = body.website ?? "";
     if (!leadId) return json({ error: "lead_id required" }, 400);
 
     const service = createClient(
@@ -124,17 +147,27 @@ serve(async (req) => {
           } catch (_e) { /* graceful */ }
         }
 
-        const fbUrl = existingFacebook || place?.facebook || "";
+        // 2) Discover the FB/IG profile URLs via a CASCADE — only scrape socials
+        //    when a URL actually exists (don't pay for a profile that isn't there).
+        //    FB: existing → Maps → website crawl. IG: existing → Maps.
+        let fbUrl = existingFacebook || place?.facebook || "";
+        if (!fbUrl) fbUrl = await discoverFacebookFromWebsite(website, authHeader);
         const igUrl = existingInstagram || place?.instagram || "";
 
-        // 2) FB/IG photo pool (graceful; actor ids verify-on-test).
+        // 3) Conditional FB/IG scrape: FB → email (pages-scraper) + photos
+        //    (photos-scraper); IG → photos. Skipped entirely when no URL.
+        let fbEmail: string | null = null;
         let fbPhotos: string[] = [];
         let igPhotos: string[] = [];
         if (apifyToken) {
-          [fbPhotos, igPhotos] = await Promise.all([
+          const [fbContacts, fbP, igP] = await Promise.all([
+            fbUrl ? fetchFacebookContacts(fbUrl, { token: apifyToken }) : Promise.resolve({ email: null, website: null }),
             fbUrl ? fetchFacebookPhotos(fbUrl, { token: apifyToken, max: 20 }) : Promise.resolve([]),
             igUrl ? fetchInstagramPhotos(igUrl, { token: apifyToken, max: 20 }) : Promise.resolve([]),
           ]);
+          fbEmail = fbContacts.email;
+          fbPhotos = fbP;
+          igPhotos = igP;
         }
 
         const mapsPhotos = place?.imageUrls ?? [];
@@ -143,19 +176,22 @@ serve(async (req) => {
         ).slice(0, 40);
         const poolBreakdown = { maps: mapsPhotos.length, facebook: fbPhotos.length, instagram: igPhotos.length };
 
-        // 3) HLR line-type (Twilio) — about the lead's OWN phone, always safe.
+        // 4) HLR line-type (Twilio) — about the lead's OWN phone, always safe.
         let lineType = "unknown";
         if (twilioSid && twilioToken && phone) {
           lineType = await lookupLineType(phone, { sid: twilioSid, token: twilioToken, country });
         }
 
-        // 4) Match confidence — high when we enriched a real place whose name
+        // 5) Match confidence — high when we enriched a real place whose name
         //    matches; low when there's no place ref or the name differs.
         const sim = place?.title && businessName ? nameSimilarity(place.title, businessName) : 0;
         const lowConfidence = !hasPlaceRef || (!!place?.title && sim < 0.34);
 
+        // Email: Maps first, then the Facebook page (where trades often list it).
+        const email = place?.emails?.[0] ?? fbEmail ?? null;
+
         const result: EnrichResult = {
-          email: place?.emails?.[0] ?? null,
+          email,
           facebook: fbUrl || null,
           instagram: igUrl || null,
           lineType,

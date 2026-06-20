@@ -1,36 +1,77 @@
 /**
- * Facebook / Instagram PHOTO pooling for the image picker.
+ * Facebook / Instagram enrichment — CONTACTS (email) + PHOTOS for the pool.
  *
- * FB pages usually have more/better photos than Maps. Given the lead's FB page URL
- * and/or IG profile URL (from contact enrich), pull candidate image URLs.
+ * Actor ids + INPUT shapes verified against Apify's public API (not guessed):
+ *  - apify~facebook-pages-scraper   input: startUrls:[{url}]   → page details incl EMAIL/website
+ *  - premiumscraper~facebook-photos-scraper  input: facebook_urls:[url], photos_count → photos
+ *  - apify~instagram-scraper        input: directUrls:[url], resultsType:'posts', resultsLimit → posts
  *
- * GRACEFUL BY DESIGN: any error (wrong actor id, private profile, rate limit)
- * returns [] so it never breaks the enrich — the pool just gets fewer images.
- * NOTE: the exact actor ids + output shapes below are to be CONFIRMED on the 2A
- * live test against the user's Apify account; they're isolated here so fixing an
- * id is a one-line change. Returned FB/IG URLs are CDN links that EXPIRE — only
- * SELECTED images get re-hosted (sub-phase 2B/2C), not the whole pool.
+ * OUTPUT field names vary per actor, so we DEEP-SCAN each item for image URLs and
+ * emails rather than hardcode keys (this is what bit us before). Everything is
+ * GRACEFUL: any error → [] / null, so the enrich never breaks and falls back to
+ * the Maps-only pool. FB/IG image URLs are expiring CDN links — only SELECTED
+ * images get re-hosted later (2B/2C), not the whole pool.
  */
 import { runApifyActor } from "./apify.ts";
 
-const FB_PHOTOS_ACTOR = "apify~facebook-photos-scraper"; // confirm on live test
-const IG_SCRAPER_ACTOR = "apify~instagram-scraper"; // confirm on live test
+const FB_PAGES_ACTOR = "apify~facebook-pages-scraper"; // email/website/details
+const FB_PHOTOS_ACTOR = "premiumscraper~facebook-photos-scraper"; // page photo gallery
+const IG_SCRAPER_ACTOR = "apify~instagram-scraper"; // posts → images
 
-function collectUrls(items: unknown[], keys: string[]): string[] {
-  const out: string[] = [];
-  for (const it of items) {
-    const o = (it ?? {}) as Record<string, unknown>;
-    for (const k of keys) {
-      const v = o[k];
-      if (typeof v === "string" && v.startsWith("http")) out.push(v);
-      else if (Array.isArray(v)) {
-        for (const u of v) if (typeof u === "string" && u.startsWith("http")) out.push(u);
-      }
-    }
+const IMG_RE = /^https?:\/\/[^\s"']+(\.(jpe?g|png|webp|gif)|fbcdn\.net|cdninstagram\.com|scontent)[^\s"']*/i;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** Walk an arbitrary JSON value, collecting strings that look like image URLs. */
+function deepImageUrls(node: unknown, out: Set<string>, depth = 0): void {
+  if (depth > 6 || out.size > 200) return;
+  if (typeof node === "string") {
+    if (IMG_RE.test(node)) out.add(node);
+  } else if (Array.isArray(node)) {
+    for (const v of node) deepImageUrls(v, out, depth + 1);
+  } else if (node && typeof node === "object") {
+    for (const v of Object.values(node as Record<string, unknown>)) deepImageUrls(v, out, depth + 1);
   }
-  return Array.from(new Set(out));
 }
 
+/** Find the first plausible email anywhere in an item (prefers an `email` field). */
+function deepEmail(node: unknown, depth = 0): string | null {
+  if (depth > 6) return null;
+  if (typeof node === "string") return EMAIL_RE.test(node.trim()) ? node.trim() : null;
+  if (Array.isArray(node)) {
+    for (const v of node) { const e = deepEmail(v, depth + 1); if (e) return e; }
+  } else if (node && typeof node === "object") {
+    const o = node as Record<string, unknown>;
+    // Prefer explicit email-ish keys first.
+    for (const k of Object.keys(o)) {
+      if (/email/i.test(k) && typeof o[k] === "string" && EMAIL_RE.test((o[k] as string).trim())) return (o[k] as string).trim();
+    }
+    for (const v of Object.values(o)) { const e = deepEmail(v, depth + 1); if (e) return e; }
+  }
+  return null;
+}
+
+/** Facebook page contacts (email + website) via facebook-pages-scraper. */
+export async function fetchFacebookContacts(
+  pageUrl: string,
+  opts: { token: string; timeoutMs?: number },
+): Promise<{ email: string | null; website: string | null }> {
+  if (!pageUrl) return { email: null, website: null };
+  try {
+    const { items } = await runApifyActor(
+      FB_PAGES_ACTOR,
+      { startUrls: [{ url: pageUrl }] },
+      { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
+    );
+    const item = (items[0] ?? {}) as Record<string, unknown>;
+    const email = deepEmail(item);
+    const website = typeof item.website === "string" ? item.website : null;
+    return { email, website };
+  } catch (_e) {
+    return { email: null, website: null };
+  }
+}
+
+/** Facebook page photos via facebook-photos-scraper (verified input keys). */
 export async function fetchFacebookPhotos(
   pageUrl: string,
   opts: { token: string; max?: number; timeoutMs?: number },
@@ -39,15 +80,18 @@ export async function fetchFacebookPhotos(
   try {
     const { items } = await runApifyActor(
       FB_PHOTOS_ACTOR,
-      { startUrls: [{ url: pageUrl }], maxPhotos: opts.max ?? 20 },
+      { facebook_urls: [pageUrl], photos_count: opts.max ?? 20 },
       { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
     );
-    return collectUrls(items, ["imageUrl", "image", "url", "photoUrl"]).slice(0, opts.max ?? 20);
+    const out = new Set<string>();
+    deepImageUrls(items, out);
+    return Array.from(out).slice(0, opts.max ?? 20);
   } catch (_e) {
     return [];
   }
 }
 
+/** Instagram profile/post images via instagram-scraper (verified input keys). */
 export async function fetchInstagramPhotos(
   profileUrl: string,
   opts: { token: string; max?: number; timeoutMs?: number },
@@ -59,7 +103,9 @@ export async function fetchInstagramPhotos(
       { directUrls: [profileUrl], resultsType: "posts", resultsLimit: opts.max ?? 20 },
       { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
     );
-    return collectUrls(items, ["displayUrl", "imageUrl", "images"]).slice(0, opts.max ?? 20);
+    const out = new Set<string>();
+    deepImageUrls(items, out);
+    return Array.from(out).slice(0, opts.max ?? 20);
   } catch (_e) {
     return [];
   }
