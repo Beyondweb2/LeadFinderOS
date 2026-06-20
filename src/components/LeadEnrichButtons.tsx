@@ -1,6 +1,5 @@
 import { Mail, Facebook, Instagram, Globe, Loader2, Ban, Sparkles, Smartphone, PhoneOff } from 'lucide-react';
 import { useEnrichBusiness } from '@/hooks/useEnrichBusiness';
-import { ContactUrlPopover } from './ContactUrlPopover';
 import type { OutreachLead } from '@/types/outreach';
 
 interface LeadEnrichButtonsProps {
@@ -12,9 +11,6 @@ interface LeadEnrichButtonsProps {
   lead: OutreachLead;
   /** Persist/mirror resolved fields. Outreach passes updateLead; search a local patcher. */
   onUpdate: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
-  /** Show the 🔗 manual FB/IG URL editor. On for persisted Outreach leads only
-   *  (not search-result pseudo-leads, which have no DB persistence). */
-  allowManualEdit?: boolean;
   className?: string;
 }
 
@@ -27,7 +23,7 @@ interface LeadEnrichButtonsProps {
  * contact icons, never a shown-but-dead link. The always-visible ✨ Enrich button
  * is the single way real contacts get found (enrich-business → Maps + Facebook).
  */
-export function LeadEnrichButtons({ lead, onUpdate, allowManualEdit, className }: LeadEnrichButtonsProps) {
+export function LeadEnrichButtons({ lead, onUpdate, className }: LeadEnrichButtonsProps) {
   const { enrich: enrichAll, enriching, limitReached } = useEnrichBusiness(lead, onUpdate);
   const lt = lead.line_type; // HLR line-type: WhatsApp-capability proxy
 
@@ -51,9 +47,6 @@ export function LeadEnrichButtons({ lead, onUpdate, allowManualEdit, className }
       >
         {enriching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : limitReached ? <Ban className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
       </button>
-
-      {/* Manual FB/IG URL paste (2C) — persisted leads only. Feeds the same Enrich. */}
-      {allowManualEdit && <ContactUrlPopover lead={lead} onUpdate={onUpdate} />}
 
       {/* WhatsApp-capability chip (HLR line-type): mobile → likely WhatsApp. */}
       {lt === 'mobile' && (

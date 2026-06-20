@@ -139,7 +139,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
           {/* Per-type contact enrichment (email / facebook / instagram) */}
           {onUpdateLead && (
             <div className="pt-0.5">
-              <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} allowManualEdit />
+              <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} />
             </div>
           )}
 
