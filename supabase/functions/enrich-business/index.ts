@@ -21,10 +21,15 @@ import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { lookupLineType } from "../_shared/enrichment/whatsapp.ts";
 import { fetchFacebookContacts, fetchFacebookPhotos, fetchInstagramPhotos } from "../_shared/enrichment/socialImages.ts";
 
-/** Last-resort Facebook URL discovery: crawl the business website for a FB link
- *  via the existing extract-facebook function. Graceful — "" on any failure. */
-async function discoverFacebookFromWebsite(website: string, authHeader: string): Promise<string> {
-  if (!website) return "";
+/** Last-resort social discovery: crawl the business website for FB + IG links via
+ *  the extract-facebook function (one fetch returns both). Graceful — empty on
+ *  any failure. */
+async function discoverSocialsFromWebsite(
+  website: string,
+  authHeader: string,
+): Promise<{ facebook: string; instagram: string }> {
+  const empty = { facebook: "", instagram: "" };
+  if (!website) return empty;
   try {
     const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extract-facebook`, {
       method: "POST",
@@ -35,11 +40,14 @@ async function discoverFacebookFromWebsite(website: string, authHeader: string):
       },
       body: JSON.stringify({ websiteUrl: website }),
     });
-    if (!res.ok) return "";
+    if (!res.ok) return empty;
     const d = await res.json();
-    return typeof d?.facebookUrl === "string" ? d.facebookUrl : "";
+    return {
+      facebook: typeof d?.facebookUrl === "string" ? d.facebookUrl : "",
+      instagram: typeof d?.instagramUrl === "string" ? d.instagramUrl : "",
+    };
   } catch {
-    return "";
+    return empty;
   }
 }
 
@@ -107,6 +115,12 @@ interface EnrichResult {
    *  verify + paste manually, never auto-attached. */
   facebookSuggestion: { url: string; reason: string } | null;
   instagram: string | null;
+  /** How `instagram` was found: 'manual' | 'apify' (maps/website-crawl) | 'websearch'. */
+  instagramMethod: string | null;
+  /** A web-results IG whose location did NOT match — verify + paste, not attached. */
+  instagramSuggestion: { url: string; reason: string } | null;
+  /** Discovered business website (own listing or location-matched web result). */
+  website: string | null;
   lineType: string;
   imagePool: string[];
   poolBreakdown: { maps: number; facebook: number; instagram: number };
@@ -186,43 +200,43 @@ serve(async (req) => {
           }
         }
 
-        // 2) Discover the FB/IG profile URLs via a CASCADE — only scrape socials
-        //    when a URL actually exists (don't pay for a profile that isn't there).
-        //    FB: existing → Maps listing → web-results (location-guarded) → website
-        //    crawl. IG: existing → Maps.
+        // 2) Discover FB / IG / website via a SYMMETRIC CASCADE. For each social:
+        //    existing → Maps listing → web-results (location-guarded) → website
+        //    crawl. A web-found URL is trusted only when the result's text matches
+        //    the lead's Maps location (Birmingham-vs-Swindon); otherwise it's a
+        //    suggestion to verify, never auto-attached. Manual paste stays override.
         let fbUrl = existingFacebook || place?.facebook || "";
         let fbMethod: string | null = existingFacebook ? "manual" : place?.facebook ? "apify" : null;
-        let fbSuggestion: { url: string; reason: string } | null = null;
-        // Provenance for the one-line log: how FB was discovered + (for web-results)
-        // whether the location guard matched.
         let fbSource = existingFacebook ? "manual" : place?.facebook ? "maps-listing" : "none";
         let fbLoc = "n/a";
+        let fbSuggestion: { url: string; reason: string } | null = null;
 
-        // 2b) Web-results discovery (includeWebResults). Scan the place's "Web
-        //     results" for a facebook.com URL and a non-social website. A web-found
-        //     URL is only trusted when the result's text matches the lead's Maps
-        //     location (Birmingham-vs-Swindon guard); otherwise it's surfaced as a
-        //     suggestion to verify, never auto-attached.
-        let webSite = "";
+        let igUrl = existingInstagram || place?.instagram || "";
+        let igMethod: string | null = existingInstagram ? "manual" : place?.instagram ? "apify" : null;
+        let igSource = existingInstagram ? "manual" : place?.instagram ? "maps-listing" : "none";
+        let igLoc = "n/a";
+        let igSuggestion: { url: string; reason: string } | null = null;
+
+        // 2b) Web-results discovery (includeWebResults): FB, IG, and the website.
         const webResults = place?.webResults ?? [];
+        let webSite = "";
         if (webResults.length) {
+          // First web-result on `domainRe`, with the SAME location guard for both.
+          const fromWeb = (domainRe: RegExp): { url: string; matched: boolean } | null => {
+            const entry = webResults.find((w) => domainRe.test(w.url));
+            return entry ? { url: entry.url, matched: !!locationMatch(entry.text, place) } : null;
+          };
           if (!fbUrl) {
-            const fbEntry = webResults.find((w) => /(?:^|\.)facebook\.com\//i.test(w.url));
-            if (fbEntry) {
-              const hit = locationMatch(fbEntry.text, place);
-              if (hit) {
-                fbUrl = fbEntry.url;
-                fbMethod = "websearch";
-                fbSource = "web-results";
-                fbLoc = "matched";
-              } else {
-                fbSuggestion = { url: fbEntry.url, reason: "location_mismatch" };
-                fbSource = "web-results";
-                fbLoc = "unconfirmed";
-              }
-            }
+            const r = fromWeb(/(?:^|\.)facebook\.com\//i);
+            if (r?.matched) { fbUrl = r.url; fbMethod = "websearch"; fbSource = "web-results"; fbLoc = "matched"; }
+            else if (r) { fbSuggestion = { url: r.url, reason: "location_mismatch" }; fbSource = "web-results"; fbLoc = "unconfirmed"; }
           }
-          // A location-matched website feeds the crawl fallback below.
+          if (!igUrl) {
+            const r = fromWeb(/(?:^|\.)instagram\.com\//i);
+            if (r?.matched) { igUrl = r.url; igMethod = "websearch"; igSource = "web-results"; igLoc = "matched"; }
+            else if (r) { igSuggestion = { url: r.url, reason: "location_mismatch" }; igSource = "web-results"; igLoc = "unconfirmed"; }
+          }
+          // A location-matched non-social website feeds the crawl + website store.
           const siteEntry = webResults.find(
             (w) => !/(?:facebook|instagram|twitter|x|youtube|tiktok|linkedin)\.com\//i.test(w.url),
           );
@@ -230,23 +244,33 @@ serve(async (req) => {
         }
 
         // 2c) Last resort: crawl a website (lead's own, else a location-matched
-        //     web-results site) for a FB link.
-        if (!fbUrl) {
+        //     web-results site) for FB + IG links (one fetch returns both).
+        if (!fbUrl || !igUrl) {
           const crawlSite = website || webSite;
-          const crawled = await discoverFacebookFromWebsite(crawlSite, authHeader);
-          if (crawled) {
-            fbUrl = crawled;
-            fbMethod = crawlSite === webSite ? "websearch" : "apify";
-            fbSource = "website-crawl";
-            fbLoc = crawlSite === webSite ? "matched" : "n/a"; // web-site was already location-checked
+          if (crawlSite) {
+            const socials = await discoverSocialsFromWebsite(crawlSite, authHeader);
+            const fromWebSite = crawlSite === webSite; // web-site was already location-checked
+            if (!fbUrl && socials.facebook) {
+              fbUrl = socials.facebook; fbMethod = fromWebSite ? "websearch" : "apify";
+              fbSource = "website-crawl"; fbLoc = fromWebSite ? "matched" : "n/a";
+            }
+            if (!igUrl && socials.instagram) {
+              igUrl = socials.instagram; igMethod = fromWebSite ? "websearch" : "apify";
+              igSource = "website-crawl"; igLoc = fromWebSite ? "matched" : "n/a";
+            }
           }
         }
-        const igUrl = existingInstagram || place?.instagram || "";
-        const igSource = existingInstagram ? "manual" : place?.instagram ? "maps-listing" : "none";
 
-        // Permanent provenance one-liner (one line each for FB/IG; not per-image).
-        console.log(`[enrich] FB via ${fbSource} (${fbLoc}): ${fbUrl || (fbSuggestion ? `${fbSuggestion.url} [suggestion]` : "none")}`);
-        console.log(`[enrich] IG via ${igSource} (n/a): ${igUrl || "none"}`);
+        // 2d) Website to store on the lead: existing value wins (never overwrite),
+        //     else the Maps listing's own website (own pin → trusted), else a
+        //     location-matched web-results site.
+        const discoveredWebsite = website || place?.website || webSite || "";
+        const webSource = website ? "existing" : place?.website ? "maps-listing" : webSite ? "web-results" : "none";
+
+        // Permanent provenance one-liners (one line per channel; not per-image).
+        console.log(`[enrich] FB  via ${fbSource} (${fbLoc}): ${fbUrl || (fbSuggestion ? `${fbSuggestion.url} [suggestion]` : "none")}`);
+        console.log(`[enrich] IG  via ${igSource} (${igLoc}): ${igUrl || (igSuggestion ? `${igSuggestion.url} [suggestion]` : "none")}`);
+        console.log(`[enrich] WEB via ${webSource} (n/a): ${discoveredWebsite || "none"}`);
 
         // 3) Conditional FB/IG scrape: FB → email (pages-scraper) + photos
         //    (photos-scraper); IG → photos. Skipped entirely when no URL.
@@ -290,6 +314,9 @@ serve(async (req) => {
           facebookMethod: fbUrl ? fbMethod : null,
           facebookSuggestion: fbSuggestion,
           instagram: igUrl || null,
+          instagramMethod: igUrl ? igMethod : null,
+          instagramSuggestion: igSuggestion,
+          website: discoveredWebsite || null,
           lineType,
           imagePool,
           poolBreakdown,
@@ -315,11 +342,14 @@ serve(async (req) => {
     const now = new Date().toISOString();
     const update: Record<string, unknown> = {
       ...(r.lineType ? { line_type: r.lineType, line_type_checked_at: now } : {}),
+      // Website: store when the lead has none (own-pin or location-matched → safe;
+      // never overwrite an existing/manual value). Store-only, no reclassification.
+      ...(!website && r.website ? { website: r.website } : {}),
     };
     if (!r.match.lowConfidence) {
       if (r.email) Object.assign(update, { email: r.email, email_status: "found", email_method: "apify", email_last_checked_at: now, enrichment_source: "apify" });
       if (r.facebook) Object.assign(update, { facebook_url: r.facebook, facebook_status: "found", facebook_method: r.facebookMethod ?? "apify", facebook_last_checked_at: now });
-      if (r.instagram) Object.assign(update, { instagram_url: r.instagram, instagram_status: "found", instagram_method: "apify", instagram_last_checked_at: now });
+      if (r.instagram) Object.assign(update, { instagram_url: r.instagram, instagram_status: "found", instagram_method: r.instagramMethod ?? "apify", instagram_last_checked_at: now });
     }
     if (Object.keys(update).length) {
       try { await service.from("outreach_leads").update(update).eq("id", leadId); } catch { /* non-blocking */ }

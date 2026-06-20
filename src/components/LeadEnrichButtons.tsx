@@ -1,4 +1,4 @@
-import { Mail, Facebook, Instagram, Loader2, Ban, Sparkles, Smartphone, PhoneOff } from 'lucide-react';
+import { Mail, Facebook, Instagram, Globe, Loader2, Ban, Sparkles, Smartphone, PhoneOff } from 'lucide-react';
 import { useEnrichBusiness } from '@/hooks/useEnrichBusiness';
 import { ContactUrlPopover } from './ContactUrlPopover';
 import type { OutreachLead } from '@/types/outreach';
@@ -36,6 +36,7 @@ export function LeadEnrichButtons({ lead, onUpdate, allowManualEdit, className }
     lead.email ? { key: 'email', Icon: Mail, href: `mailto:${lead.email}`, color: 'text-blue-500 hover:text-blue-400', title: `Email: ${lead.email}`, external: false } : null,
     lead.facebook_url ? { key: 'facebook', Icon: Facebook, href: lead.facebook_url, color: 'text-blue-600 hover:text-blue-500', title: `Facebook: ${lead.facebook_url}`, external: true } : null,
     lead.instagram_url ? { key: 'instagram', Icon: Instagram, href: lead.instagram_url, color: 'text-pink-500 hover:text-pink-400', title: `Instagram: ${lead.instagram_url}`, external: true } : null,
+    lead.website ? { key: 'website', Icon: Globe, href: lead.website, color: 'text-emerald-500 hover:text-emerald-400', title: `Website: ${lead.website}`, external: true } : null,
   ].filter(Boolean) as { key: string; Icon: typeof Mail; href: string; color: string; title: string; external: boolean }[];
 
   return (
