@@ -3,7 +3,9 @@
  *
  * Actor ids + INPUT shapes verified against Apify's public API (not guessed):
  *  - apify~facebook-pages-scraper   input: startUrls:[{url}]   → page details incl EMAIL/website
- *  - premiumscraper~facebook-photos-scraper  input: facebook_urls:[url], photos_count → photos
+ *  - premiumscraper~facebook-photos-scraper  input: facebook_urls:[{url}], photos_count → photos
+ *      (facebook_urls uses editor 'requestListSources' → ARRAY OF OBJECTS, verified
+ *       against the actor's public build schema; bare strings are rejected HTTP 400)
  *  - apify~instagram-scraper        input: directUrls:[url], resultsType:'posts', resultsLimit → posts
  *
  * OUTPUT field names vary per actor, so we DEEP-SCAN each item for image URLs and
