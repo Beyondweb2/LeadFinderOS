@@ -19,8 +19,6 @@ import { checkRateLimit, rateLimitHeaders } from "../_shared/rate-limiter.ts";
 import type { NormalizedPlace } from "../_shared/enrichment/apify.ts";
 import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
-import { scorePool, assignSlots } from "../_shared/enrichment/imageSelect.ts";
-import { rehostImage } from "../_shared/enrichment/rehost.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -793,61 +791,32 @@ serve(async (req) => {
       reviewCount,
     });
 
-    // Real images (Apify) → hero/about/gallery slots; a curated lead.image_url
-    // still wins the hero. Real reviews → content.reviews (templates show cards;
-    // empty = no fabricated testimonials).
-    //
-    // PLUMBER (2B): AI slot-aware selection. One gpt-4o-mini vision call scores
-    // the candidate pool (the Maps+FB+IG imagePool that enrich-business already
-    // cached — reused for FREE; falls back to this generate's Maps images if the
-    // lead was never enriched). Deterministic assignment picks the best-fit image
-    // per slot; chosen images are re-hosted (FB/IG CDN URLs expire). Any failure /
-    // missing key / nothing above threshold → the existing assignment below.
-    // Barber/salon are untouched (this whole block is plumber-gated).
-    let aiHero: string | undefined;
-    let aiAbout: string | undefined;
-    let aiWhyUs: string | undefined;
-    if (template === "plumber" && openAiKey) {
-      try {
-        // Prefer the richer pool enrich-business cached for this lead (Maps+FB+IG).
-        let pool: string[] = mapsImages;
-        const enrichKey = `${(lead.place_id as string) || leadMapsUrlForEnrich || `lead:${leadId}`}:business_enrich`;
-        const { data: cachedRow } = await serviceClient
-          .from("enrichment_cache")
-          .select("result, expires_at")
-          .eq("cache_key", enrichKey)
-          .maybeSingle();
-        const cachedPool = (cachedRow?.result as { imagePool?: unknown })?.imagePool;
-        if (Array.isArray(cachedPool) && cachedPool.length) {
-          pool = (cachedPool.filter((u) => typeof u === "string") as string[]);
-        }
-
-        const scored = pool.length ? await scorePool(pool, { openAiKey }) : null;
-        if (scored) {
-          const assigned = assignSlots(scored);
-          // Re-host the chosen images (drop a pick if its re-host fails).
-          const [h, a, w] = await Promise.all([
-            assigned.hero ? rehostImage(assigned.hero, { service: serviceClient, leadId, slot: "hero" }) : Promise.resolve(null),
-            assigned.about ? rehostImage(assigned.about, { service: serviceClient, leadId, slot: "about" }) : Promise.resolve(null),
-            assigned.whyUs ? rehostImage(assigned.whyUs, { service: serviceClient, leadId, slot: "whyus" }) : Promise.resolve(null),
-          ]);
-          aiHero = h ?? undefined;
-          aiAbout = a ?? undefined;
-          aiWhyUs = w ?? undefined;
-          console.log(
-            `[GENERATE-BARBER-SITE] 2B image-select: pool=${pool.length} hero=${aiHero ? "ai" : "fallback"} about=${aiAbout ? "ai" : "stock/fallback"} whyUs=${aiWhyUs ? "ai" : "stock"}`,
-          );
-        }
-      } catch (e) {
-        console.error(`[GENERATE-BARBER-SITE] 2B image-select error (using fallback): ${(e as Error).message}`);
+    // Images: COLLECT the candidate pool (Maps + the cached FB/IG enrich pool) for
+    // the editor's MANUAL drag-and-drop board — but DON'T auto-place any into slots.
+    // Slots start EMPTY → the template's stock fallback shows (always presentable),
+    // and the operator drags real photos into hero/about/why-us/gallery in the
+    // editor, where they're re-hosted on save. No AI, no pool-order guessing.
+    let imagePool: string[] = [...mapsImages];
+    try {
+      const enrichKey = `${(lead.place_id as string) || leadMapsUrlForEnrich || `lead:${leadId}`}:business_enrich`;
+      const { data: cachedRow } = await serviceClient
+        .from("enrichment_cache")
+        .select("result")
+        .eq("cache_key", enrichKey)
+        .maybeSingle();
+      const cachedPool = (cachedRow?.result as { imagePool?: unknown })?.imagePool;
+      if (Array.isArray(cachedPool) && cachedPool.length) {
+        // The cached enrich pool (Maps+FB+IG) is the richer source — union it with
+        // this generate's Maps images, de-duped, so e.g. 20 FB photos all show.
+        imagePool = Array.from(
+          new Set([...(cachedPool.filter((u) => typeof u === "string") as string[]), ...mapsImages]),
+        );
       }
+    } catch (e) {
+      console.error(`[GENERATE-BARBER-SITE] imagePool collect failed (non-blocking): ${(e as Error).message}`);
     }
-
-    // hero: AI pick → curated lead image → first Maps image. about: AI pick →
-    // second Maps image. whyUs (plumber): AI pick only, else stock in template.
-    const heroImageUrl = aiHero || (lead.image_url as string) || mapsImages[0];
-    const aboutImageUrl = aiAbout || mapsImages[1];
-    const whyUsImageUrl = aiWhyUs;
+    imagePool = imagePool.slice(0, 40);
+    console.log(`[GENERATE-BARBER-SITE] imagePool collected: ${imagePool.length} (slots start empty → stock; manual board fills them)`);
 
     const content: BarberSiteContent = {
       businessName: lead.business_name || "", // real, verbatim
@@ -866,10 +835,9 @@ serve(async (req) => {
       showExamplePrices: true,
       // Pre-fill the real Google reviews link when we have one (verifiable, not invented).
       ...(googleReviewsUrl ? { googleReviewsUrl } : {}),
-      // Real images: hero (curated lead image wins), about accent, and gallery.
-      ...(heroImageUrl ? { heroImageUrl } : {}),
-      ...(aboutImageUrl ? { aboutImageUrl } : {}),
-      ...(mapsImages.length ? { galleryImageUrls: mapsImages.slice(0, 10) } : {}),
+      // Image slots start EMPTY (stock fallback). The collected pool is handed to
+      // the editor's manual drag-and-drop board; nothing is auto-placed.
+      ...(imagePool.length ? { imagePool } : {}),
       // Real Google reviews → testimonial cards, capped at the 3 BEST (highest
       // stars first; tie-break toward longer/substantial text). Site-output cap —
       // the enrich cache still holds the full set. Empty = no cards (never faked).
@@ -893,8 +861,6 @@ serve(async (req) => {
             processSteps: PLUMBER_PROCESS,
             faqs: PLUMBER_FAQS,
             ...(area ? { serviceArea: `${area} & surrounding areas` } : {}),
-            // 2B: AI-chosen close-up work shot (re-hosted). Absent → template stock.
-            ...(whyUsImageUrl ? { whyUsImageUrl } : {}),
           }
         : {}),
     };

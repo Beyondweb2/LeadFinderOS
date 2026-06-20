@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, X } from "lucide-react";
 import { SiteImageManager, type SiteImageManagerHandle } from "@/components/SiteImageManager";
+import { SiteImagePicker, type SiteImagePickerHandle } from "@/components/SiteImagePicker";
 import type { BarberSiteContent, BarberService, BarberOpeningHours } from "@/templates/barber/types";
 import type { Json } from "@/integrations/supabase/types";
 
@@ -18,6 +19,9 @@ export type EditableSite = {
   site_name: string;
   status: string;
   content: BarberSiteContent;
+  /** Design template ('barber' | 'salon' | 'plumber'); drives the image board's
+   *  slots. Optional — defaults to barber/salon slots (hero/about/gallery). */
+  template?: string;
 };
 
 // Preset accent colours (no free entry) — hexes chosen to read well on the dark
@@ -64,6 +68,8 @@ export function SiteEditor({
 }) {
   const { toast } = useToast();
   const imageRef = useRef<SiteImageManagerHandle>(null);
+  const pickerRef = useRef<SiteImagePickerHandle>(null);
+  const [pickerDirty, setPickerDirty] = useState(false);
 
   const [heroHeadline, setHeroHeadline] = useState("");
   const [tagline, setTagline] = useState("");
@@ -80,7 +86,7 @@ export function SiteEditor({
   const [imageDirty, setImageDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const anyDirty = textDirty || imageDirty;
+  const anyDirty = textDirty || imageDirty || pickerDirty;
 
   // Seed local edit state from the loaded site (once per site id).
   useEffect(() => {
@@ -99,6 +105,7 @@ export function SiteEditor({
     setAccentColor(c.accentColor || undefined);
     setTextDirty(false);
     setImageDirty(false);
+    setPickerDirty(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [site.id]);
 
@@ -180,8 +187,10 @@ export function SiteEditor({
         accentColor: accentColor || undefined,
       };
 
-      // Upload any pending images and merge them in — one combined content write.
-      const finalContent = imageRef.current ? await imageRef.current.uploadPendingInto(base) : base;
+      // Upload any pending file images, then re-host + merge the board's placed
+      // pool images — one combined content write.
+      let finalContent = imageRef.current ? await imageRef.current.uploadPendingInto(base) : base;
+      finalContent = pickerRef.current ? await pickerRef.current.applyInto(finalContent) : finalContent;
 
       const { error } = await supabase
         .from("generated_sites")
@@ -193,6 +202,7 @@ export function SiteEditor({
       setHours(cleanedHours.map((h) => ({ ...h })));
       setTextDirty(false);
       setImageDirty(false);
+      setPickerDirty(false);
       onSaved?.(finalContent);
       toast({ title: "Saved", description: "All changes saved." });
     } catch (e) {
@@ -370,10 +380,27 @@ export function SiteEditor({
         </CardContent>
       </Card>
 
-      {/* Images + logo */}
+      {/* Place enriched photos — drag-and-drop board */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Images &amp; logo</CardTitle>
+          <CardTitle className="text-lg">Place photos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <SiteImagePicker
+            ref={pickerRef}
+            key={`picker-${site.id}`}
+            siteId={site.id}
+            template={site.template}
+            content={site.content}
+            onDirtyChange={() => setPickerDirty(true)}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Images + logo (file uploads) */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Upload images &amp; logo</CardTitle>
         </CardHeader>
         <CardContent>
           <SiteImageManager
