@@ -33,6 +33,7 @@ type SiteRow = {
   status: string;
   content: BarberSiteContent;
   owner_id: string | null;
+  template?: string | null;
 };
 
 type LeadInfo = { id: string; phone: string | null; business_name: string };
@@ -65,7 +66,7 @@ export default function AdminSiteManage() {
       setLoading(true);
       const { data, error } = await supabase
         .from("generated_sites")
-        .select("id, site_name, status, content, owner_id")
+        .select("id, site_name, status, content, owner_id, template")
         .eq("id", id)
         .maybeSingle();
       if (error || !data) {
