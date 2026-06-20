@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Globe, Instagram, Facebook, Loader2, Plus, ExternalLink } from 'lucide-react';
+import { Globe, Instagram, Facebook, Loader2, Plus, ExternalLink, Sparkles, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import type { Lead } from '@/types/lead';
 
@@ -30,15 +30,27 @@ interface BroadListBuilderProps {
   isInOutreach: (lead: Lead) => boolean;
   /** Adds the given leads to Outreach (deduped); returns how many were added/skipped. */
   onBulkAdd: (leads: Lead[]) => Promise<{ added: number; skipped: number }>;
+  /** Adds each selected lead to Outreach then runs full enrich on it, sequentially.
+   *  Reports progress; can be cancelled; stops on the daily cap. */
+  onBulkEnrich: (
+    leads: Lead[],
+    onProgress: (done: number) => void,
+    shouldCancel: () => boolean,
+  ) => Promise<{ added: number; enriched: number; cached: number; failed: number; stoppedAtCap: boolean; cancelled: boolean }>;
 }
 
-export function BroadListBuilder({ leads, isLoading, isInOutreach, onBulkAdd }: BroadListBuilderProps) {
+export function BroadListBuilder({ leads, isLoading, isInOutreach, onBulkAdd, onBulkEnrich }: BroadListBuilderProps) {
   const { toast } = useToast();
   const [fHasWebsite, setFHasWebsite] = useState(false);
   const [fIg, setFIg] = useState(false);
   const [fFb, setFFb] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
+  const [enriching, setEnriching] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  // Leads processed this session (added/enriched) → shown as "In CRM" without a refetch.
+  const [processedIds, setProcessedIds] = useState<Set<string>>(new Set());
+  const cancelRef = useRef(false);
 
   // Derive the cheap listing signals once per lead.
   const rows = useMemo(() => leads.map((l) => {
@@ -48,9 +60,9 @@ export function BroadListBuilder({ leads, isLoading, isInOutreach, onBulkAdd }: 
       hasWebsite: l.websiteStatus === 'HAS_OWN_WEBSITE',
       ig: d === 'instagram.com',
       fb: d === 'facebook.com',
-      inOutreach: isInOutreach(l),
+      inOutreach: isInOutreach(l) || processedIds.has(l.id),
     };
-  }), [leads, isInOutreach]);
+  }), [leads, isInOutreach, processedIds]);
 
   const filtered = useMemo(
     () => rows.filter((r) => (!fHasWebsite || r.hasWebsite) && (!fIg || r.ig) && (!fFb || r.fb)),
@@ -80,18 +92,50 @@ export function BroadListBuilder({ leads, isLoading, isInOutreach, onBulkAdd }: 
     [filtered, selected],
   );
 
+  const markProcessed = (ids: string[]) => setProcessedIds((prev) => new Set([...prev, ...ids]));
+
   const handleAdd = async () => {
     if (!selectedLeads.length) return;
     setAdding(true);
     try {
+      const ids = selectedLeads.map((l) => l.id);
       const { added, skipped } = await onBulkAdd(selectedLeads);
       toast({
         title: `Added ${added} to Outreach`,
         description: skipped ? `${skipped} skipped (already in your list).` : 'All added — enrich the promising ones next.',
       });
+      markProcessed(ids);
       setSelected(new Set());
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleEnrich = async () => {
+    if (!selectedLeads.length) return;
+    const n = selectedLeads.length;
+    if (n > 5 && !window.confirm(
+      `Enrich ${n} leads? Each is added to Outreach then discovered (Maps / website / web-results), ~20–30s each and counts toward your $2/day cap. You can cancel partway.`,
+    )) return;
+
+    const ids = selectedLeads.map((l) => l.id);
+    cancelRef.current = false;
+    setEnriching(true);
+    setProgress({ done: 0, total: n });
+    try {
+      const r = await onBulkEnrich(selectedLeads, (done) => setProgress({ done, total: n }), () => cancelRef.current);
+      const parts = [
+        `Enriched ${r.enriched}`,
+        r.cached ? `${r.cached} cached (free)` : null,
+        r.failed ? `${r.failed} failed` : null,
+      ].filter(Boolean).join(' · ');
+      const tail = r.stoppedAtCap ? ' — stopped at daily cap' : r.cancelled ? ' — cancelled' : '';
+      toast({ title: `Bulk enrich done${tail}`, description: `${parts}. Added ${r.added} to Outreach.` });
+      markProcessed(ids);
+      setSelected(new Set());
+    } finally {
+      setEnriching(false);
+      setProgress(null);
     }
   };
 
@@ -120,12 +164,25 @@ export function BroadListBuilder({ leads, isLoading, isInOutreach, onBulkAdd }: 
         </Button>
         <span className="text-xs text-muted-foreground">{filtered.length} of {leads.length}</span>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={toggleAll} disabled={!selectableIds.length}>
-            {allSelected ? 'Clear all' : `Select all (${selectableIds.length})`}
-          </Button>
-          <Button size="sm" className="h-8 text-xs" onClick={handleAdd} disabled={!selected.size || adding}>
+          {progress && (
+            <span className="text-xs text-muted-foreground whitespace-nowrap">Enriching {progress.done} of {progress.total}…</span>
+          )}
+          {enriching ? (
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => { cancelRef.current = true; }}>
+              <X className="h-3.5 w-3.5 mr-1.5" /> Cancel
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" className="h-8 text-xs" onClick={toggleAll} disabled={!selectableIds.length}>
+              {allSelected ? 'Clear all' : `Select all (${selectableIds.length})`}
+            </Button>
+          )}
+          <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleAdd} disabled={!selected.size || adding || enriching}>
             {adding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Plus className="h-3.5 w-3.5 mr-1.5" />}
-            Add{selected.size ? ` ${selected.size}` : ''} to Outreach
+            Add{selected.size ? ` ${selected.size}` : ''}
+          </Button>
+          <Button size="sm" className="h-8 text-xs" onClick={handleEnrich} disabled={!selected.size || adding || enriching}>
+            {enriching ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5" />}
+            Enrich{selected.size ? ` ${selected.size}` : ''} selected
           </Button>
         </div>
       </div>

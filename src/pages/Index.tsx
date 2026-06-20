@@ -4,6 +4,7 @@ import { LeadsTable } from '@/components/LeadsTable';
 import { BroadListBuilder } from '@/components/BroadListBuilder';
 import { CampaignPicker } from '@/components/CampaignPicker';
 
+import { supabase } from '@/integrations/supabase/client';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 
 import { useOutreach } from '@/hooks/useOutreach';
@@ -80,6 +81,47 @@ const Index = () => {
       if (res) added++; else skipped++;
     }
     return { added, skipped };
+  }, [addToOutreach, lastSearchCountry, activeCampaign, getEnrichment]);
+
+  // Bulk ENRICH: add each selected lead to Outreach (silent), then run the full
+  // enrich-business pipeline on it — SEQUENTIALLY so the $2/day cap is respected
+  // exactly (no concurrent overshoot) and progress is clean. Stops on cap or cancel.
+  const handleBulkEnrich = useCallback(async (
+    sel: Lead[],
+    onProgress: (done: number) => void,
+    shouldCancel: () => boolean,
+  ): Promise<{ added: number; enriched: number; cached: number; failed: number; stoppedAtCap: boolean; cancelled: boolean }> => {
+    let added = 0, enriched = 0, cached = 0, failed = 0, stoppedAtCap = false, cancelled = false;
+    for (let i = 0; i < sel.length; i++) {
+      if (shouldCancel()) { cancelled = true; break; }
+      const lead = sel[i];
+      // 1) Ensure the lead is stored in Outreach (enrich works on a stored row).
+      const row = await addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id), true);
+      if (!row) { failed++; onProgress(i + 1); continue; }
+      added++;
+      // 2) Full enrich on the stored row (reuses enrich-business + its cache/cap).
+      try {
+        const { data, error } = await supabase.functions.invoke('enrich-business', {
+          body: {
+            lead_id: row.id,
+            place_id: row.place_id ?? null,
+            google_maps_url: row.google_maps_url ?? null,
+            phone: row.phone ?? null,
+            country: row.country ?? null,
+            business_name: row.business_name ?? null,
+            facebook_url: row.facebook_url ?? null,
+            instagram_url: row.instagram_url ?? null,
+            website: row.website ?? null,
+          },
+        });
+        if (error) failed++;
+        else if (data?.limit_reached) { stoppedAtCap = true; onProgress(i + 1); break; }
+        else if (data?.success) { data.cached ? cached++ : enriched++; }
+        else failed++;
+      } catch { failed++; }
+      onProgress(i + 1);
+    }
+    return { added, enriched, cached, failed, stoppedAtCap, cancelled };
   }, [addToOutreach, lastSearchCountry, activeCampaign, getEnrichment]);
 
   return (
@@ -199,6 +241,7 @@ const Index = () => {
               isLoading={isLoading}
               isInOutreach={isInOutreach}
               onBulkAdd={handleBulkAdd}
+              onBulkEnrich={handleBulkEnrich}
             />
           ) : (
             <LeadsTable
