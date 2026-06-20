@@ -74,7 +74,10 @@ export async function mapsDiscover(
     locationQuery: input.location,
     maxCrawledPlacesPerSearch: input.maxPlaces,
     language: "en",
-    scrapePlaceDetailPage: true, // gives website/phone/rating reliably (cheap; no add-ons)
+    // Search-page-only: NO per-place detail visits → fast + cheap. Returns the
+    // fields discovery needs (title, website, url, address). Phone/rating/reviews/
+    // images all come later in the deep-enrich (mapsEnrich) on pick/generate.
+    scrapePlaceDetailPage: false,
     maxReviews: 0,
     maxImages: 0,
     scrapeContacts: false,

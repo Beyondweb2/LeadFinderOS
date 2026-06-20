@@ -609,7 +609,9 @@ async function performSearchGoogle(
 // ═══════════════════════════════════════════════
 // APIFY DISCOVERY (compass google-maps) — source #1
 // ═══════════════════════════════════════════════
-const APIFY_MAX_PLACES = 50; // cap batch size to bound run time/cost
+// Cap batch size to bound run time/cost. Env-tunable (APIFY_MAX_PLACES secret) so
+// we can trade latency vs coverage without a redeploy. Default 25.
+const APIFY_MAX_PLACES = Number(Deno.env.get('APIFY_MAX_PLACES')) || 25;
 
 async function performSearchApify(
   keyword: string,
@@ -671,8 +673,12 @@ async function performSearchWithExpansion(
   serviceClient?: ReturnType<typeof createClient>
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
   const apifyToken = Deno.env.get('APIFY_TOKEN');
-  const forceGoogle = (Deno.env.get('DISCOVERY_SOURCE') ?? '').toLowerCase() === 'google';
-  if (apifyToken && !forceGoogle) {
+  // DISCOVERY default = Google (fast: ~3s cold, instant cached). Apify discovery
+  // is OPT-IN only (DISCOVERY_SOURCE=apify) because the actor has a ~20s run floor
+  // — too slow for interactive search. Apify's value is the deep-enrich
+  // (reviews/images/contacts) in generate-barber-site, where latency is tolerable.
+  const useApifyDiscovery = (Deno.env.get('DISCOVERY_SOURCE') ?? '').toLowerCase() === 'apify';
+  if (apifyToken && useApifyDiscovery) {
     try {
       return await performSearchApify(keyword, location, apifyToken);
     } catch (e) {
