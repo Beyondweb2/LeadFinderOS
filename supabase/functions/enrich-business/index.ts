@@ -144,7 +144,9 @@ serve(async (req) => {
               timeoutMs: 90_000,
             });
             place = r.place;
-          } catch (_e) { /* graceful */ }
+          } catch (e) {
+            console.error("[enrich-business] mapsEnrich error:", (e as Error).message);
+          }
         }
 
         // 2) Discover the FB/IG profile URLs via a CASCADE — only scrape socials

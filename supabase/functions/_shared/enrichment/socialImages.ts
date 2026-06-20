@@ -3,7 +3,9 @@
  *
  * Actor ids + INPUT shapes verified against Apify's public API (not guessed):
  *  - apify~facebook-pages-scraper   input: startUrls:[{url}]   → page details incl EMAIL/website
- *  - premiumscraper~facebook-photos-scraper  input: facebook_urls:[url], photos_count → photos
+ *  - premiumscraper~facebook-photos-scraper  input: facebook_urls:[{url}], photos_count → photos
+ *      (facebook_urls uses editor 'requestListSources' → ARRAY OF OBJECTS, verified
+ *       against the actor's public build schema; bare strings are rejected HTTP 400)
  *  - apify~instagram-scraper        input: directUrls:[url], resultsType:'posts', resultsLimit → posts
  *
  * OUTPUT field names vary per actor, so we DEEP-SCAN each item for image URLs and
@@ -66,7 +68,8 @@ export async function fetchFacebookContacts(
     const email = deepEmail(item);
     const website = typeof item.website === "string" ? item.website : null;
     return { email, website };
-  } catch (_e) {
+  } catch (e) {
+    console.error(`[socialImages] FB pages error: ${(e as Error).message}`);
     return { email: null, website: null };
   }
 }
@@ -80,13 +83,17 @@ export async function fetchFacebookPhotos(
   try {
     const { items } = await runApifyActor(
       FB_PHOTOS_ACTOR,
-      { facebook_urls: [pageUrl], photos_count: opts.max ?? 20 },
+      // facebook_urls uses editor 'requestListSources' → ARRAY OF OBJECTS [{url}],
+      // not bare strings (verified against the actor's public build schema; bare
+      // strings are rejected HTTP 400 "do not contain valid URLs").
+      { facebook_urls: [{ url: pageUrl }], photos_count: opts.max ?? 20 },
       { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
     );
     const out = new Set<string>();
     deepImageUrls(items, out);
     return Array.from(out).slice(0, opts.max ?? 20);
-  } catch (_e) {
+  } catch (e) {
+    console.error(`[socialImages] FB photos error: ${(e as Error).message}`);
     return [];
   }
 }
@@ -106,7 +113,8 @@ export async function fetchInstagramPhotos(
     const out = new Set<string>();
     deepImageUrls(items, out);
     return Array.from(out).slice(0, opts.max ?? 20);
-  } catch (_e) {
+  } catch (e) {
+    console.error(`[socialImages] IG error: ${(e as Error).message}`);
     return [];
   }
 }
