@@ -16,7 +16,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Sparkles, Settings2, Scissors, Flower2, Wrench } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
@@ -313,7 +313,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                     onClick={onAiOpener}
                     title="Generate AI opener"
                   >
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <PenLine className="h-3.5 w-3.5" />
                   </Button>
                 )}
                 {onManageSite && (
@@ -341,7 +341,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                         {isGeneratingSite ? (
                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
                         ) : (
-                          <Sparkles className="h-3.5 w-3.5" />
+                          <Wand2 className="h-3.5 w-3.5" />
                         )}
                       </Button>
                     </DropdownMenuTrigger>
