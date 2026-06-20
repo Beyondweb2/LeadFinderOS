@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
 import { mapsDiscover } from '../_shared/enrichment/sources.ts';
+import { BOOKING_PLATFORM_DOMAINS } from '../_shared/aggregators.ts';
 
 // ═══════════════════════════════════════════════
 // CORS
@@ -64,6 +65,11 @@ const DIRECTORY_BLACKLIST = new Set([
   'gumtree.com', 'locanto.co.uk', 'fyple.co.uk',
   'citylocal.co.uk', 'thebestof.co.uk', 'locallife.co.uk',
 ]);
+
+// Booking platforms (Fresha/Booksy/Treatwell/…) are NOT a business's own website
+// either — a lead whose only "website" is one of these is NO_WEBSITE. Shared with
+// enrich-business so both treat them identically.
+for (const d of BOOKING_PLATFORM_DOMAINS) DIRECTORY_BLACKLIST.add(d);
 
 const PLATFORM_PATTERNS = [
   /\.myshopify\.com$/i, /\.wixsite\.com$/i, /\.webflow\.io$/i,
