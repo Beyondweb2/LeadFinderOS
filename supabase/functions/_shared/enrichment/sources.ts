@@ -135,6 +135,12 @@ export async function mapsEnrich(
     maxImages: input.maxImages ?? 10,
     scrapeContacts: true,
     scrapeSocialMediaProfiles: { facebooks: true, instagrams: true },
+    // Web-results discovery: surfaces FB/website that the bare listing lacks (e.g.
+    // no-website businesses). $0 extra — billed under the "additional place
+    // details" flat fee we already incur by scraping reviews+images. DEEP-ENRICH
+    // ONLY (mapsDiscover keeps these off to stay fast/cheap).
+    scrapePlaceDetailPage: true,
+    includeWebResults: true,
   };
   const { items, ms } = await runApifyActor(MAPS_ACTOR_ID, body, {
     token: input.token,

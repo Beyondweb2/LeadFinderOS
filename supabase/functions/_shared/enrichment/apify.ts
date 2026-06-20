@@ -40,6 +40,10 @@ export interface NormalizedPlace {
   emails?: string[];
   facebook?: string;
   instagram?: string;
+  /** The Google "Web results" section (only when includeWebResults is on). Each
+   *  entry: the result's link + a lowercased text blob (title/snippet/url) used
+   *  for the location-match guard before any web-found URL is trusted. */
+  webResults?: { url: string; text: string }[];
 }
 
 /**
@@ -128,6 +132,27 @@ export function mapCompassPlace(raw: unknown): NormalizedPlace {
     return str(v);
   };
 
+  // "Web results" (includeWebResults). Field names within each entry vary, so we
+  // defensively pull the first http(s) URL as the link and join all strings into a
+  // lowercased text blob (title/snippet/url) for the location-match guard.
+  const webResults = Array.isArray(p.webResults)
+    ? (p.webResults as unknown[])
+        .map((w) => {
+          const strs: string[] = [];
+          let url = "";
+          const walk = (n: unknown) => {
+            if (typeof n === "string") {
+              strs.push(n);
+              if (!url && /^https?:\/\//i.test(n)) url = n;
+            } else if (Array.isArray(n)) n.forEach(walk);
+            else if (n && typeof n === "object") Object.values(n as Record<string, unknown>).forEach(walk);
+          };
+          walk(w);
+          return { url, text: strs.join(" ").toLowerCase() };
+        })
+        .filter((w) => w.url)
+    : undefined;
+
   return {
     placeId: str(p.placeId) ?? str(p.id) ?? "",
     title: str(p.title) ?? str(p.name) ?? "",
@@ -148,5 +173,6 @@ export function mapCompassPlace(raw: unknown): NormalizedPlace {
     emails: emails.length ? emails : undefined,
     facebook: firstOf("facebooks") ?? str(p.facebook),
     instagram: firstOf("instagrams") ?? str(p.instagram),
+    webResults: webResults && webResults.length ? webResults : undefined,
   };
 }
