@@ -200,11 +200,14 @@ serve(async (req) => {
           }
         }
 
-        // 2) Discover FB / IG / website via a SYMMETRIC CASCADE. For each social:
-        //    existing → Maps listing → web-results (location-guarded) → website
-        //    crawl. A web-found URL is trusted only when the result's text matches
-        //    the lead's Maps location (Birmingham-vs-Swindon); otherwise it's a
-        //    suggestion to verify, never auto-attached. Manual paste stays override.
+        // 2) Discover FB / IG / website via a SYMMETRIC CASCADE, most-reliable first:
+        //    existing(manual) → Maps listing → OWN-SITE CRAWL (trusted) → web-results
+        //    (location-guarded, last resort). The own-site crawl is preferred over
+        //    web-results because web results for a generic search mix DIFFERENT
+        //    companies; a link on the business's own site is definitively theirs.
+        //    A web-results URL is trusted only when its text matches the lead's Maps
+        //    location (Birmingham-vs-Swindon); else it's a suggestion to verify,
+        //    never auto-attached. Manual paste stays the override.
         let fbUrl = existingFacebook || place?.facebook || "";
         let fbMethod: string | null = existingFacebook ? "manual" : place?.facebook ? "apify" : null;
         let fbSource = existingFacebook ? "manual" : place?.facebook ? "maps-listing" : "none";
@@ -217,11 +220,42 @@ serve(async (req) => {
         let igLoc = "n/a";
         let igSuggestion: { url: string; reason: string } | null = null;
 
-        // 2b) Web-results discovery (includeWebResults): FB, IG, and the website.
+        // 2b) Resolve the business's OWN website. Web-results mix companies (same
+        //     search term), so a web-results "website" is only trusted when its text
+        //     matches the lead's location — AND we reduce it to its ROOT DOMAIN.
+        //     Google returns websites as breadcrumbs ("abbeyplumbers.co.uk › Plumbing")
+        //     where the segments are SUB-PAGES, not a real path — so strip to origin
+        //     (homepage) where the footer/contact socials actually live. (Social
+        //     breadcrumbs are different — there the segment IS the handle — so this
+        //     root-strip is applied to WEBSITES only, not to social URLs.)
+        const rootDomain = (u: string): string => {
+          try { return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).origin; } catch { return ""; }
+        };
         const webResults = place?.webResults ?? [];
         let webSite = "";
         if (webResults.length) {
-          // First web-result on `domainRe`, with the SAME location guard for both.
+          const siteEntry = webResults.find(
+            (w) => !/(?:facebook|instagram|twitter|x|youtube|tiktok|linkedin)\.com\//i.test(w.url),
+          );
+          if (siteEntry && locationMatch(siteEntry.text, place)) webSite = rootDomain(siteEntry.url);
+        }
+
+        // 2c) OWN-SITE CRAWL (TRUSTED, runs first). A FB/IG link on the business's
+        //     own website definitely belongs to them — far more reliable than
+        //     web-results (which mix companies). Crawl the best own-site we have:
+        //     lead's stored → Maps-listing own pin → location-matched web-results
+        //     root. No per-link location guard needed — it's their own site.
+        const ownSite = website || place?.website || webSite;
+        if (ownSite && (!fbUrl || !igUrl)) {
+          const socials = await discoverSocialsFromWebsite(ownSite, authHeader);
+          if (!fbUrl && socials.facebook) { fbUrl = socials.facebook; fbMethod = "apify"; fbSource = "website-crawl"; fbLoc = "n/a"; }
+          if (!igUrl && socials.instagram) { igUrl = socials.instagram; igMethod = "apify"; igSource = "website-crawl"; igLoc = "n/a"; }
+        }
+
+        // 2d) WEB-RESULTS socials — LAST RESORT, location-guarded (results mix
+        //     companies). Match → attach ('websearch'); mismatch/unconfirmed →
+        //     surfaced as a suggestion to verify, never auto-attached.
+        if (webResults.length && (!fbUrl || !igUrl)) {
           const fromWeb = (domainRe: RegExp): { url: string; matched: boolean } | null => {
             const entry = webResults.find((w) => domainRe.test(w.url));
             return entry ? { url: entry.url, matched: !!locationMatch(entry.text, place) } : null;
@@ -236,34 +270,11 @@ serve(async (req) => {
             if (r?.matched) { igUrl = r.url; igMethod = "websearch"; igSource = "web-results"; igLoc = "matched"; }
             else if (r) { igSuggestion = { url: r.url, reason: "location_mismatch" }; igSource = "web-results"; igLoc = "unconfirmed"; }
           }
-          // A location-matched non-social website feeds the crawl + website store.
-          const siteEntry = webResults.find(
-            (w) => !/(?:facebook|instagram|twitter|x|youtube|tiktok|linkedin)\.com\//i.test(w.url),
-          );
-          if (siteEntry && locationMatch(siteEntry.text, place)) webSite = siteEntry.url;
         }
 
-        // 2c) Last resort: crawl a website (lead's own, else a location-matched
-        //     web-results site) for FB + IG links (one fetch returns both).
-        if (!fbUrl || !igUrl) {
-          const crawlSite = website || webSite;
-          if (crawlSite) {
-            const socials = await discoverSocialsFromWebsite(crawlSite, authHeader);
-            const fromWebSite = crawlSite === webSite; // web-site was already location-checked
-            if (!fbUrl && socials.facebook) {
-              fbUrl = socials.facebook; fbMethod = fromWebSite ? "websearch" : "apify";
-              fbSource = "website-crawl"; fbLoc = fromWebSite ? "matched" : "n/a";
-            }
-            if (!igUrl && socials.instagram) {
-              igUrl = socials.instagram; igMethod = fromWebSite ? "websearch" : "apify";
-              igSource = "website-crawl"; igLoc = fromWebSite ? "matched" : "n/a";
-            }
-          }
-        }
-
-        // 2d) Website to store on the lead: existing value wins (never overwrite),
-        //     else the Maps listing's own website (own pin → trusted), else a
-        //     location-matched web-results site.
+        // 2e) Website to store on the lead: existing value wins (never overwrite),
+        //     else the Maps listing's own website (own pin → trusted), else the
+        //     location-matched web-results ROOT domain.
         const discoveredWebsite = website || place?.website || webSite || "";
         const webSource = website ? "existing" : place?.website ? "maps-listing" : webSite ? "web-results" : "none";
 
