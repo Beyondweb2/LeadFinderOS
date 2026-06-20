@@ -870,8 +870,16 @@ serve(async (req) => {
       ...(heroImageUrl ? { heroImageUrl } : {}),
       ...(aboutImageUrl ? { aboutImageUrl } : {}),
       ...(mapsImages.length ? { galleryImageUrls: mapsImages.slice(0, 10) } : {}),
-      // Real Google reviews → testimonial cards. Empty = no cards (never faked).
-      ...(mapsReviews.length ? { reviews: mapsReviews } : {}),
+      // Real Google reviews → testimonial cards, capped at the 3 BEST (highest
+      // stars first; tie-break toward longer/substantial text). Site-output cap —
+      // the enrich cache still holds the full set. Empty = no cards (never faked).
+      ...(mapsReviews.length
+        ? {
+            reviews: [...mapsReviews]
+              .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.text?.length ?? 0) - (a.text?.length ?? 0))
+              .slice(0, 3),
+          }
+        : {}),
       // Real verified socials → header/footer icons. Only STORED lead values (enrich
       // never stores location-mismatch suggestions), so the site shows a confirmed
       // social or nothing — never a guessed/dead link. All templates.
