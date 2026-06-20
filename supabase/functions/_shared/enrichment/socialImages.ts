@@ -85,7 +85,10 @@ export async function fetchFacebookPhotos(
   try {
     const { items, ms } = await runApifyActor(
       FB_PHOTOS_ACTOR,
-      { facebook_urls: [pageUrl], photos_count: opts.max ?? 20 },
+      // facebook_urls expects ARRAY OF OBJECTS [{url}], not bare strings (verified
+      // against the actor's input schema — prefill is [{"url": "..."}]). Passing
+      // [pageUrl] made the actor return items=0.
+      { facebook_urls: [{ url: pageUrl }], photos_count: opts.max ?? 20 },
       { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
     );
     const out = new Set<string>();
