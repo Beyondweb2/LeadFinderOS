@@ -49,19 +49,28 @@ export function useEnrichBusiness(
       const now = new Date().toISOString();
       const patch: Partial<OutreachLead> = {};
       if (data.lineType) { patch.line_type = data.lineType; patch.line_type_checked_at = now; }
+      // Website: stored server-side when the lead had none; mirror it locally so the
+      // 🌐 link shows immediately.
+      if (data.website && !lead.website) patch.website = data.website;
       if (data.applied) {
         if (data.email) Object.assign(patch, { email: data.email, email_status: 'found', email_method: 'apify', enrichment_source: 'apify' });
         if (data.facebook) Object.assign(patch, { facebook_url: data.facebook, facebook_status: 'found', facebook_method: data.facebookMethod ?? 'apify' });
-        if (data.instagram) Object.assign(patch, { instagram_url: data.instagram, instagram_status: 'found', instagram_method: 'apify' });
+        if (data.instagram) Object.assign(patch, { instagram_url: data.instagram, instagram_status: 'found', instagram_method: data.instagramMethod ?? 'apify' });
       }
       if (Object.keys(patch).length) await onUpdate(lead.id, patch);
 
-      // Web-results found a possible Facebook whose location didn't match — surface
-      // it for the operator to verify + paste via 🔗 (never auto-attached).
+      // Web-results found a possible FB/IG whose location didn't match — surface it
+      // for the operator to verify + paste via 🔗 (never auto-attached).
       if (data.facebookSuggestion?.url) {
         toast({
           title: '⚠ Possible Facebook — verify (location mismatch)',
           description: `Found ${data.facebookSuggestion.url} but its location doesn't match this lead. Check it, then paste via the 🔗 button if it's right.`,
+        });
+      }
+      if (data.instagramSuggestion?.url) {
+        toast({
+          title: '⚠ Possible Instagram — verify (location mismatch)',
+          description: `Found ${data.instagramSuggestion.url} but its location doesn't match this lead. Check it, then paste via the 🔗 button if it's right.`,
         });
       }
 

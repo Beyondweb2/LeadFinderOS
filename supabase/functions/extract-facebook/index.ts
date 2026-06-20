@@ -157,49 +157,39 @@ Deno.serve(async (req) => {
     const decoder = new TextDecoder();
     const html = chunks.map(c => decoder.decode(c, { stream: true })).join('') + decoder.decode();
 
-    // Extract all href values containing facebook.com or fb.com
-    const hrefRegex = /href\s*=\s*["']([^"']*(?:facebook\.com|fb\.com)[^"']*)["']/gi;
-    const matches: string[] = [];
-    let match;
-    while ((match = hrefRegex.exec(html)) !== null) {
-      matches.push(match[1]);
-    }
-
-    // Filter out non-page links
+    // Generic social-link extractor: pull the first valid profile href for a
+    // given domain from the page (one fetch → both Facebook AND Instagram).
     const excludePatterns = [
       'sharer.php', '/share', '/dialog/', '/plugins/',
       'sharer/', 'login.php', 'connect/', '/ads/',
-      'tr?id=', 'pixel',
+      'tr?id=', 'pixel', '/explore/', '/p/', '/reel/', '/reels/',
     ];
+    const firstSocial = (domains: string[]): string | null => {
+      const re = new RegExp(`href\\s*=\\s*["']([^"']*(?:${domains.join('|')})[^"']*)["']`, 'gi');
+      const found: string[] = [];
+      let m;
+      while ((m = re.exec(html)) !== null) found.push(m[1]);
+      const valid = found.filter((link) => {
+        const lower = link.toLowerCase();
+        return !excludePatterns.some((p) => lower.includes(p));
+      });
+      if (!valid.length) return null;
+      let url = valid[0];
+      try {
+        const parsed = new URL(url.startsWith('http') ? url : `https://${url}`);
+        parsed.search = '';
+        parsed.hash = '';
+        parsed.protocol = 'https:';
+        url = parsed.toString().replace(/\/$/, '');
+      } catch { /* keep raw */ }
+      return url;
+    };
 
-    const validLinks = matches.filter(link => {
-      const lower = link.toLowerCase();
-      return !excludePatterns.some(p => lower.includes(p));
-    });
-
-    if (validLinks.length === 0) {
-      return new Response(
-        JSON.stringify({ success: false, facebookUrl: null }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Take the first valid link and normalize it
-    let fbUrl = validLinks[0];
-    try {
-      const parsed = new URL(fbUrl.startsWith('http') ? fbUrl : `https://${fbUrl}`);
-      // Remove query params
-      parsed.search = '';
-      parsed.hash = '';
-      // Ensure https
-      parsed.protocol = 'https:';
-      fbUrl = parsed.toString().replace(/\/$/, '');
-    } catch {
-      fbUrl = validLinks[0];
-    }
+    const facebookUrl = firstSocial(['facebook\\.com', 'fb\\.com']);
+    const instagramUrl = firstSocial(['instagram\\.com']);
 
     return new Response(
-      JSON.stringify({ success: true, facebookUrl: fbUrl }),
+      JSON.stringify({ success: !!(facebookUrl || instagramUrl), facebookUrl, instagramUrl }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
