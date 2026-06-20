@@ -135,6 +135,17 @@ export function mapCompassPlace(raw: unknown): NormalizedPlace {
   // "Web results" (includeWebResults). Field names within each entry vary, so we
   // defensively pull the first http(s) URL as the link and join all strings into a
   // lowercased text blob (title/snippet/url) for the location-match guard.
+  //
+  // Google returns these as DISPLAY/breadcrumb URLs, e.g.
+  //   "https://www.instagram.com › waas_barber"
+  // i.e. " › " (U+203A, also "»") separators + spaces instead of "/". normalizeWebUrl
+  // rebuilds a real URL ("https://www.instagram.com/waas_barber") so facebook.com/ /
+  // instagram.com/ detection works. The raw strings still feed `text` for the guard.
+  const normalizeWebUrl = (raw: string): string =>
+    raw
+      .trim()
+      .replace(/\s*[›»]\s*/g, "/") // breadcrumb separators → path slashes (handles nested)
+      .replace(/\s+/g, ""); // strip any remaining stray spaces (URLs have none)
   const webResults = Array.isArray(p.webResults)
     ? (p.webResults as unknown[])
         .map((w) => {
@@ -148,7 +159,7 @@ export function mapCompassPlace(raw: unknown): NormalizedPlace {
             else if (n && typeof n === "object") Object.values(n as Record<string, unknown>).forEach(walk);
           };
           walk(w);
-          return { url, text: strs.join(" ").toLowerCase() };
+          return { url: normalizeWebUrl(url), text: strs.join(" ").toLowerCase() };
         })
         .filter((w) => w.url)
     : undefined;
