@@ -432,7 +432,7 @@ serve(async (req) => {
     const { data: lead, error: leadError } = await serviceClient
       .from("outreach_leads")
       .select(
-        "id, business_name, category, address, phone, place_id, services_included, facebook_url, instagram_url, facebook_confidence, image_url, google_maps_url",
+        "id, business_name, category, address, phone, place_id, services_included, facebook_url, instagram_url, website, facebook_confidence, image_url, google_maps_url",
       )
       .eq("id", leadId)
       .maybeSingle();
@@ -509,6 +509,60 @@ serve(async (req) => {
         );
       } catch (e) {
         console.error("[GENERATE-BARBER-SITE] Apify enrich failed (non-blocking):", (e as Error).message);
+      }
+    }
+
+    // --- Step 9b: Auto-scan (Change 3) — ensure the lead is enriched (socials +
+    // image pool + line-type) BEFORE generating, reusing prior enrichment for free.
+    // "Already enriched" = a fresh business_enrich cache row exists; if so we skip
+    // (2B reads that same pool, Change 2 reads the already-stored socials). If not,
+    // run enrich-business ONCE — it persists socials to the lead + caches the pool.
+    // It's itself cache+cap guarded, so this never double-spends; and only STORED
+    // (confirmed) socials reach the site (location-mismatch suggestions are never
+    // stored), preserving the verify gate end-to-end. Non-blocking on failure.
+    if (apifyToken) {
+      try {
+        const enrichCacheKey = `${(lead.place_id as string) || leadMapsUrlForEnrich || `lead:${leadId}`}:business_enrich`;
+        const { data: enrichCached } = await serviceClient
+          .from("enrichment_cache")
+          .select("cache_key, expires_at")
+          .eq("cache_key", enrichCacheKey)
+          .maybeSingle();
+        const enrichedFresh = !!enrichCached &&
+          (!enrichCached.expires_at || new Date(enrichCached.expires_at as string) > new Date());
+        if (enrichedFresh) {
+          console.log("[GENERATE-BARBER-SITE] auto-scan: lead already enriched (cache hit) → reuse");
+        } else {
+          console.log("[GENERATE-BARBER-SITE] auto-scan: not enriched → running enrich-business once");
+          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/enrich-business`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: authHeader,
+              apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
+            },
+            body: JSON.stringify({
+              lead_id: leadId,
+              place_id: lead.place_id ?? null,
+              google_maps_url: leadMapsUrlForEnrich || null,
+              phone: lead.phone ?? null,
+              business_name: lead.business_name ?? null,
+              facebook_url: lead.facebook_url ?? null,
+              instagram_url: lead.instagram_url ?? null,
+              website: (lead.website as string) ?? null,
+            }),
+          });
+          // Refresh stored socials/website so the freshly-enriched values flow into
+          // the generated content (Change 2 reads lead.facebook_url/instagram_url).
+          const { data: refreshed } = await serviceClient
+            .from("outreach_leads")
+            .select("facebook_url, instagram_url, website")
+            .eq("id", leadId)
+            .maybeSingle();
+          if (refreshed) Object.assign(lead, refreshed);
+        }
+      } catch (e) {
+        console.error("[GENERATE-BARBER-SITE] auto-scan failed (non-blocking):", (e as Error).message);
       }
     }
 
