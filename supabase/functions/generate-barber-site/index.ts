@@ -98,6 +98,10 @@ interface BarberSiteContent {
   heroImageUrl?: string;
   aboutImageUrl?: string;
   galleryImageUrls?: string[];
+  // Real, verified socials (stored enrichment values only — never fabricated, never
+  // a location-mismatch suggestion). Rendered as icons; omitted when absent.
+  facebookUrl?: string;
+  instagramUrl?: string;
   // Optional trade-template sections (plumber). Generic, operator-editable later.
   whyUsImageUrl?: string;
   whyUsPoints?: string[];
@@ -428,7 +432,7 @@ serve(async (req) => {
     const { data: lead, error: leadError } = await serviceClient
       .from("outreach_leads")
       .select(
-        "id, business_name, category, address, phone, place_id, services_included, facebook_url, facebook_confidence, image_url, google_maps_url",
+        "id, business_name, category, address, phone, place_id, services_included, facebook_url, instagram_url, facebook_confidence, image_url, google_maps_url",
       )
       .eq("id", leadId)
       .maybeSingle();
@@ -814,6 +818,11 @@ serve(async (req) => {
       ...(mapsImages.length ? { galleryImageUrls: mapsImages.slice(0, 10) } : {}),
       // Real Google reviews → testimonial cards. Empty = no cards (never faked).
       ...(mapsReviews.length ? { reviews: mapsReviews } : {}),
+      // Real verified socials → header/footer icons. Only STORED lead values (enrich
+      // never stores location-mismatch suggestions), so the site shows a confirmed
+      // social or nothing — never a guessed/dead link. All templates.
+      ...(lead.facebook_url ? { facebookUrl: lead.facebook_url as string } : {}),
+      ...(lead.instagram_url ? { instagramUrl: lead.instagram_url as string } : {}),
       // Plumber-only sections: generic defaults (not business-factual), plus a
       // real service-area line from the verified town when we have it.
       ...(template === "plumber"

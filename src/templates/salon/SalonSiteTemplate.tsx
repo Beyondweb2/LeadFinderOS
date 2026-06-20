@@ -7,6 +7,7 @@ import { STOCK_GALLERY, STOCK_HERO, STOCK_INTERIOR } from "./assets";
 import { BookingFlow } from "../barber/BookingFlow";
 import type { SiteOpeningHours, SiteService, SiteContent, SiteStat } from "../shared/content";
 import { GALLERY_LAYOUTS, GALLERY_GRID_BASE } from "../shared/galleryLayout";
+import { SocialLinks } from "../shared/SocialLinks";
 
 /* -------------------------------------------------------------------------- */
 /*  SalonSiteTemplate                                                          */
@@ -74,6 +75,8 @@ export function SalonSiteTemplate({
     logoUrl,
     showExamplePrices,
     googleReviewsUrl,
+    facebookUrl,
+    instagramUrl,
   } = content;
 
   const heroSrc = heroImageUrl || STOCK_HERO;
@@ -123,6 +126,8 @@ export function SalonSiteTemplate({
           phone={phone}
           onBook={openBooking}
           logoUrl={logoUrl}
+          facebookUrl={facebookUrl}
+          instagramUrl={instagramUrl}
         />
 
         <main>
@@ -155,7 +160,7 @@ export function SalonSiteTemplate({
           />
         </main>
 
-        <Footer businessName={businessName} address={address} logoUrl={logoUrl} />
+        <Footer businessName={businessName} address={address} logoUrl={logoUrl} facebookUrl={facebookUrl} instagramUrl={instagramUrl} />
       </div>
 
       {/* Mobile-only sticky Book bar — owners open the link on a phone. */}
@@ -415,12 +420,16 @@ function Header({
   phone,
   onBook,
   logoUrl,
+  facebookUrl,
+  instagramUrl,
 }: {
   businessName: string;
   telHref: string;
   phone: string;
   onBook: () => void;
   logoUrl?: string;
+  facebookUrl?: string;
+  instagramUrl?: string;
 }) {
   return (
     <header className="sticky top-0 z-40 border-b border-salon-line bg-salon-bg/75 backdrop-blur-xl supports-[backdrop-filter]:bg-salon-bg/60">
@@ -445,6 +454,8 @@ function Header({
         </nav>
 
         <div className="flex shrink-0 items-center gap-2">
+          {/* Real socials (verified) — renders nothing when none present. */}
+          <SocialLinks variant="header" facebookUrl={facebookUrl} instagramUrl={instagramUrl} className="mr-1 text-salon-muted" />
           {/* Secondary: call */}
           <a
             href={telHref}
@@ -999,12 +1010,13 @@ function Contact({
 
 /* ---------------------------------- footer -------------------------------- */
 
-function Footer({ businessName, address, logoUrl }: { businessName: string; address: string; logoUrl?: string }) {
+function Footer({ businessName, address, logoUrl, facebookUrl, instagramUrl }: { businessName: string; address: string; logoUrl?: string; facebookUrl?: string; instagramUrl?: string }) {
   return (
     <footer className="border-t border-salon-line bg-salon-bg">
       <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-5 py-10 text-center sm:flex-row sm:justify-between sm:gap-6 sm:px-8 sm:text-left">
         <Wordmark businessName={businessName} logoUrl={logoUrl} />
         <p className="text-sm text-salon-faint">{address}</p>
+        <SocialLinks variant="footer" facebookUrl={facebookUrl} instagramUrl={instagramUrl} className="text-salon-muted" />
         <p className="text-xs text-salon-faint">© {businessName}. All rights reserved.</p>
       </div>
     </footer>

@@ -164,6 +164,14 @@ export interface SiteContent {
    */
   imagePool?: string[];
   /**
+   * Optional REAL, verified social profile URLs (from enrichment's STORED values
+   * only — never fabricated, never a location-mismatch suggestion). Rendered as
+   * social icons in the header + footer when present; omitted entirely when absent
+   * (no icon, no dead link). See SocialLinks.
+   */
+  facebookUrl?: string;
+  instagramUrl?: string;
+  /**
    * Optional accent (highlight) colour as a hex string, e.g. "#E6A24B". When
    * unset the template uses its own default accent. Only the accent hue changes —
    * the theme stays — via a CSS variable the template sets on its root. (The
