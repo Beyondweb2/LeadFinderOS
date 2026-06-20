@@ -193,6 +193,10 @@ serve(async (req) => {
         let fbUrl = existingFacebook || place?.facebook || "";
         let fbMethod: string | null = existingFacebook ? "manual" : place?.facebook ? "apify" : null;
         let fbSuggestion: { url: string; reason: string } | null = null;
+        // Provenance for the one-line log: how FB was discovered + (for web-results)
+        // whether the location guard matched.
+        let fbSource = existingFacebook ? "manual" : place?.facebook ? "maps-listing" : "none";
+        let fbLoc = "n/a";
 
         // 2b) Web-results discovery (includeWebResults). Scan the place's "Web
         //     results" for a facebook.com URL and a non-social website. A web-found
@@ -209,10 +213,12 @@ serve(async (req) => {
               if (hit) {
                 fbUrl = fbEntry.url;
                 fbMethod = "websearch";
-                console.log(`[enrich-business] web-results FB matched location "${hit}": ${fbEntry.url}`);
+                fbSource = "web-results";
+                fbLoc = "matched";
               } else {
                 fbSuggestion = { url: fbEntry.url, reason: "location_mismatch" };
-                console.log(`[enrich-business] web-results FB location UNCONFIRMED, not attaching: ${fbEntry.url}`);
+                fbSource = "web-results";
+                fbLoc = "unconfirmed";
               }
             }
           }
@@ -231,9 +237,16 @@ serve(async (req) => {
           if (crawled) {
             fbUrl = crawled;
             fbMethod = crawlSite === webSite ? "websearch" : "apify";
+            fbSource = "website-crawl";
+            fbLoc = crawlSite === webSite ? "matched" : "n/a"; // web-site was already location-checked
           }
         }
         const igUrl = existingInstagram || place?.instagram || "";
+        const igSource = existingInstagram ? "manual" : place?.instagram ? "maps-listing" : "none";
+
+        // Permanent provenance one-liner (one line each for FB/IG; not per-image).
+        console.log(`[enrich] FB via ${fbSource} (${fbLoc}): ${fbUrl || (fbSuggestion ? `${fbSuggestion.url} [suggestion]` : "none")}`);
+        console.log(`[enrich] IG via ${igSource} (n/a): ${igUrl || "none"}`);
 
         // 3) Conditional FB/IG scrape: FB → email (pages-scraper) + photos
         //    (photos-scraper); IG → photos. Skipped entirely when no URL.
