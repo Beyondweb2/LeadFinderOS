@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
+import { mapsDiscover } from '../_shared/enrichment/sources.ts';
 
 // ═══════════════════════════════════════════════
 // CORS
@@ -560,7 +561,7 @@ function jsonResponse(body: unknown, status = 200, extraHeaders: Record<string, 
 // ═══════════════════════════════════════════════
 // PERFORM SEARCH WITH OPTIONAL EXPANSION
 // ═══════════════════════════════════════════════
-async function performSearchWithExpansion(
+async function performSearchGoogle(
   keyword: string,
   location: string,
   radius: number,
@@ -603,6 +604,83 @@ async function performSearchWithExpansion(
   selectionDebug.expansionAttempts = attempts;
   selectionDebug.expanded = true;
   return { leads, selectionDebug, expanded: true };
+}
+
+// ═══════════════════════════════════════════════
+// APIFY DISCOVERY (compass google-maps) — source #1
+// ═══════════════════════════════════════════════
+const APIFY_MAX_PLACES = 50; // cap batch size to bound run time/cost
+
+async function performSearchApify(
+  keyword: string,
+  location: string,
+  token: string,
+): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
+  const { places, ms } = await mapsDiscover({
+    keyword,
+    location,
+    maxPlaces: APIFY_MAX_PLACES,
+    token,
+    timeoutMs: 90_000,
+  });
+
+  const seenIds = new Set<string>();
+  const pool: SearchLead[] = [];
+  for (const p of places) {
+    if (!p.placeId || seenIds.has(p.placeId)) continue;
+    seenIds.add(p.placeId);
+    // SAME classifier as the Google path — directory/IG/Booksy "websites" → NO_WEBSITE.
+    const { status, confidence, reason } = classifyWebsite(p.website ?? null);
+    pool.push({
+      id: p.placeId,
+      name: p.title || 'Unknown',
+      googleMapsUrl: p.googleMapsUrl || `https://www.google.com/maps/place/?q=place_id:${p.placeId}`,
+      websiteUrl: p.website ?? null,
+      websiteStatus: status,
+      confidence,
+      reason,
+    });
+  }
+
+  const noWeb = pool.filter((l) => l.websiteStatus === 'NO_WEBSITE');
+  const hasWeb = pool.filter((l) => l.websiteStatus === 'HAS_OWN_WEBSITE');
+  const finalLeads = [...noWeb, ...hasWeb].slice(0, MAX_RESULTS);
+
+  const selectionDebug: SelectionDebug = {
+    pagesFetched: 1,
+    totalPoolCount: pool.length,
+    noWebsiteCount: noWeb.length,
+    returnedNoWebsite: finalLeads.filter((l) => l.websiteStatus !== 'HAS_OWN_WEBSITE').length,
+    returnedHasWebsite: finalLeads.filter((l) => l.websiteStatus === 'HAS_OWN_WEBSITE').length,
+    expanded: false,
+  };
+
+  console.log(`[APIFY-DISCOVER] "${keyword}" @ "${location}" → ${places.length} places in ${ms}ms (noWeb=${noWeb.length}, returned=${finalLeads.length})`);
+  return { leads: finalLeads, selectionDebug, expanded: false };
+}
+
+// Dispatcher: use Apify when APIFY_TOKEN is set (unless DISCOVERY_SOURCE=google),
+// else the Google path. Apify failures fall back to Google so a bad run / missing
+// token never takes search down.
+async function performSearchWithExpansion(
+  keyword: string,
+  location: string,
+  radius: number,
+  apiKey: string,
+  debug: DebugMeta,
+  serviceClient?: ReturnType<typeof createClient>
+): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
+  const apifyToken = Deno.env.get('APIFY_TOKEN');
+  const forceGoogle = (Deno.env.get('DISCOVERY_SOURCE') ?? '').toLowerCase() === 'google';
+  if (apifyToken && !forceGoogle) {
+    try {
+      return await performSearchApify(keyword, location, apifyToken);
+    } catch (e) {
+      console.error(`[APIFY-DISCOVER] failed, falling back to Google: ${(e as Error).message}`);
+      // fall through to Google below
+    }
+  }
+  return await performSearchGoogle(keyword, location, radius, apiKey, debug, serviceClient);
 }
 
 // ═══════════════════════════════════════════════

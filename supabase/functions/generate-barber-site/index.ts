@@ -16,6 +16,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { checkRateLimit, rateLimitHeaders } from "../_shared/rate-limiter.ts";
+import type { NormalizedPlace } from "../_shared/enrichment/apify.ts";
+import { mapsEnrich } from "../_shared/enrichment/sources.ts";
+import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -91,12 +94,16 @@ interface BarberSiteContent {
   showExamplePrices?: boolean;
   googleReviewsUrl?: string;
   heroImageUrl?: string;
+  aboutImageUrl?: string;
   galleryImageUrls?: string[];
   // Optional trade-template sections (plumber). Generic, operator-editable later.
   whyUsPoints?: string[];
   processSteps?: { title: string; description: string }[];
   faqs?: { question: string; answer: string }[];
   serviceArea?: string;
+  // Real Google reviews (Apify deep-enrich). Empty/absent → templates show no
+  // testimonial cards (never fabricated).
+  reviews?: { author: string; text: string; rating?: number; date?: string }[];
 }
 
 // Which design template to generate for. Selected by the admin in the Outreach
@@ -461,22 +468,62 @@ serve(async (req) => {
       );
     }
 
-    // --- Step 9a: Fresh Google Places enrichment (best-effort, non-blocking) ---
-    // outreach_leads has no rating / review-count / opening-hours columns, so we
-    // fetch those live from Google. If this fails or is empty we carry on with
-    // whatever we already have — generation is never blocked on Google.
-    const google = lead.place_id ? await fetchGoogleEnrichment(lead.place_id as string) : null;
+    // --- Step 9a: Deep ENRICH (reviews + images + rating/hours/contacts) ---
+    // Source #1 = Apify Google Maps (compass) when APIFY_TOKEN is set, via the
+    // shared cache/cap runner. Falls back to a live Google Places call when Apify
+    // is off / fails / cap-reached, so generation is never blocked. Honesty:
+    // missing fields stay empty — never fabricated.
+    const apifyToken = Deno.env.get("APIFY_TOKEN");
+    const leadMapsUrlForEnrich = typeof lead.google_maps_url === "string" ? lead.google_maps_url.trim() : "";
+    let apifyPlace: NormalizedPlace | null = null;
+    if (apifyToken && (lead.place_id || leadMapsUrlForEnrich)) {
+      try {
+        const outcome = await runEnrichSource<NormalizedPlace | null>({
+          service: serviceClient,
+          userId: adminUserId,
+          type: "maps_enrich",
+          cacheKey: `${(lead.place_id as string) || leadMapsUrlForEnrich}:maps_enrich`,
+          estCostUsd: 0.02,
+          run: async () => {
+            const { place } = await mapsEnrich({
+              googleMapsUrl: leadMapsUrlForEnrich || undefined,
+              placeId: (lead.place_id as string) || undefined,
+              token: apifyToken,
+              maxReviews: 8,
+              maxImages: 10,
+              timeoutMs: 90_000,
+            });
+            return { result: place, costUsd: 0.02 };
+          },
+        });
+        apifyPlace = outcome.result;
+        console.log(
+          `[GENERATE-BARBER-SITE] Apify enrich: ${apifyPlace ? `rating=${apifyPlace.rating ?? "-"} reviews=${apifyPlace.reviews?.length ?? 0} images=${apifyPlace.imageUrls?.length ?? 0}` : outcome.capReached ? "cap-reached" : "none"}${outcome.cached ? " (cached)" : ""}`,
+        );
+      } catch (e) {
+        console.error("[GENERATE-BARBER-SITE] Apify enrich failed (non-blocking):", (e as Error).message);
+      }
+    }
+
+    // Google fallback ONLY when Apify produced nothing (avoids double-charging).
+    const google = apifyPlace
+      ? null
+      : lead.place_id
+        ? await fetchGoogleEnrichment(lead.place_id as string)
+        : null;
     console.log(
       "[GENERATE-BARBER-SITE] Google enrichment:",
       google
         ? `rating=${google.rating ?? "-"} reviews=${google.reviewCount ?? "-"} hoursRows=${google.hours?.length ?? 0}`
-        : "none",
+        : apifyPlace ? "skipped (apify)" : "none",
     );
-    // A non-null result means a billable Places (New) call returned 200. Log it
-    // (best-effort) exactly like google-place-details does.
     if (google) {
       logUsage(serviceClient, adminUserId, "place_details", GOOGLE_PLACE_DETAILS_COST_USD);
     }
+
+    // Reviews + images from the deep enrich (real data only).
+    const mapsReviews = Array.isArray(apifyPlace?.reviews) ? apifyPlace!.reviews! : [];
+    const mapsImages = Array.isArray(apifyPlace?.imageUrls) ? apifyPlace!.imageUrls! : [];
 
     // --- Step 9b: Build a facts object containing ONLY present values ---
     // (real lead values, then live Google values; nulls = unknown to the model).
@@ -486,12 +533,23 @@ serve(async (req) => {
     const facebookHigh =
       typeof lead.facebook_confidence === "number" && lead.facebook_confidence >= 80 && !!lead.facebook_url;
 
-    // Hard facts, resolved once: lead value preferred, Google fills gaps.
-    const phone = lead.phone || google?.phone || "";
-    const address = lead.address || google?.address || "";
-    const googleRating = typeof google?.rating === "number" ? google.rating : undefined;
-    const reviewCount = typeof google?.reviewCount === "number" ? google.reviewCount : undefined;
-    const hours: BarberOpeningHours[] = Array.isArray(google?.hours) ? google!.hours : [];
+    // Hard facts, resolved once: lead value preferred, then Apify, then Google.
+    const phone = lead.phone || apifyPlace?.phone || google?.phone || "";
+    const address = lead.address || apifyPlace?.address || google?.address || "";
+    const googleRating =
+      typeof apifyPlace?.rating === "number" ? apifyPlace.rating
+      : typeof google?.rating === "number" ? google.rating
+      : undefined;
+    const reviewCount =
+      typeof apifyPlace?.reviewCount === "number" ? apifyPlace.reviewCount
+      : typeof google?.reviewCount === "number" ? google.reviewCount
+      : undefined;
+    const hours: BarberOpeningHours[] =
+      apifyPlace?.openingHours && apifyPlace.openingHours.length ? apifyPlace.openingHours
+      : Array.isArray(google?.hours) ? google!.hours
+      : [];
+    // Verified town/city for the deterministic About line (Apify city, else Google area).
+    const area = apifyPlace?.city || google?.area;
     // Google reviews/Maps link. Precedence:
     //   1. the lead's stored google_maps_url (the SAME column the Outreach page
     //      shows) — the curated, verified source, so the editor matches Outreach;
@@ -502,6 +560,7 @@ serve(async (req) => {
     const leadMapsUrl = typeof lead.google_maps_url === "string" ? lead.google_maps_url.trim() : "";
     const googleReviewsUrl =
       leadMapsUrl ||
+      apifyPlace?.googleMapsUrl ||
       google?.mapsUri ||
       (lead.place_id
         ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
@@ -667,11 +726,17 @@ serve(async (req) => {
       name: lead.business_name || "",
       noun: TEMPLATE_COPY[template].noun,
       focus: TEMPLATE_COPY[template].focus,
-      area: google?.area,
+      area,
       services: services.map((s) => s.name),
       rating: googleRating,
       reviewCount,
     });
+
+    // Real images (Apify) → hero/about/gallery slots; a curated lead.image_url
+    // still wins the hero. Real reviews → content.reviews (templates show cards;
+    // empty = no fabricated testimonials).
+    const heroImageUrl = (lead.image_url as string) || mapsImages[0];
+    const aboutImageUrl = mapsImages[1];
 
     const content: BarberSiteContent = {
       businessName: lead.business_name || "", // real, verbatim
@@ -690,17 +755,20 @@ serve(async (req) => {
       showExamplePrices: true,
       // Pre-fill the real Google reviews link when we have one (verifiable, not invented).
       ...(googleReviewsUrl ? { googleReviewsUrl } : {}),
-      ...(lead.image_url ? { heroImageUrl: lead.image_url as string } : {}),
-      // galleryImageUrls: omitted — no real gallery; template falls back to stock.
+      // Real images: hero (curated lead image wins), about accent, and gallery.
+      ...(heroImageUrl ? { heroImageUrl } : {}),
+      ...(aboutImageUrl ? { aboutImageUrl } : {}),
+      ...(mapsImages.length ? { galleryImageUrls: mapsImages.slice(0, 10) } : {}),
+      // Real Google reviews → testimonial cards. Empty = no cards (never faked).
+      ...(mapsReviews.length ? { reviews: mapsReviews } : {}),
       // Plumber-only sections: generic defaults (not business-factual), plus a
-      // real service-area line from the Google-verified town when we have it.
-      // NO testimonials — the honesty rule forbids fabricated reviews.
+      // real service-area line from the verified town when we have it.
       ...(template === "plumber"
         ? {
             whyUsPoints: PLUMBER_WHY_US,
             processSteps: PLUMBER_PROCESS,
             faqs: PLUMBER_FAQS,
-            ...(google?.area ? { serviceArea: `${google.area} & surrounding areas` } : {}),
+            ...(area ? { serviceArea: `${area} & surrounding areas` } : {}),
           }
         : {}),
     };
