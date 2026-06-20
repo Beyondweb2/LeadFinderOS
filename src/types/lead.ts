@@ -31,6 +31,8 @@ export interface SearchFilters {
   minReviews?: number;
   requirePhone?: boolean;
   country?: Country;
+  /** List-builder "cast wide" mode → search-leads returns the full discovered pool. */
+  broad?: boolean;
 }
 
 export interface SearchResponse {

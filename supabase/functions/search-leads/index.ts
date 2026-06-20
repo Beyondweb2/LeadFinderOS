@@ -17,6 +17,7 @@ const corsHeaders = {
 // CONSTANTS
 // ═══════════════════════════════════════════════
 const MAX_RESULTS = 50;
+const BROAD_MAX = 120; // List-builder mode cap — return the full discovered pool.
 const CACHE_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours
 const FREE_SEARCH_LIMIT = 5;
 const MIN_NO_WEBSITE_TARGET = 1; // Only expand if ZERO no-website leads found
@@ -34,6 +35,9 @@ const SearchRequestSchema = z.object({
   demo: z.boolean().default(false),
   guest: z.boolean().default(false),
   country: z.string().max(10).optional(),
+  // List-builder "cast wide" mode: return the FULL discovered pool (with + without
+  // websites), no no-website-first culling, no expansion. Default off = curated.
+  broad: z.boolean().default(false),
   // Legacy fields — accepted but ignored
   minRating: z.number().optional(),
   minReviews: z.number().optional(),
@@ -273,7 +277,8 @@ async function textSearchPlaces(
   lng: number,
   radius: number,
   apiKey: string,
-  debug: DebugMeta
+  debug: DebugMeta,
+  broad = false,
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug }> {
   const pool: SearchLead[] = [];
   const seenIds = new Set<string>();
@@ -375,20 +380,25 @@ async function textSearchPlaces(
     console.log(`[DIAG-SEARCH] After page ${page}: pool=${pool.length}, noWebsite=${noWebsiteCount}`);
   }
 
-  // ── Selection: NO_WEBSITE first, fill remainder with HAS_OWN_WEBSITE ──
+  // ── Selection ──
   const noWebsiteLeads = pool.filter(l => l.websiteStatus === 'NO_WEBSITE');
   const hasWebsiteLeads = pool.filter(l => l.websiteStatus === 'HAS_OWN_WEBSITE');
 
   const finalLeads: SearchLead[] = [];
-  // Take NO_WEBSITE first (up to MAX_RESULTS)
-  for (const lead of noWebsiteLeads) {
-    if (finalLeads.length >= MAX_RESULTS) break;
-    finalLeads.push(lead);
-  }
-  // Fill remaining slots with HAS_WEBSITE
-  for (const lead of hasWebsiteLeads) {
-    if (finalLeads.length >= MAX_RESULTS) break;
-    finalLeads.push(lead);
+  if (broad) {
+    // List-builder: the FULL discovered pool (both types), discovered order, no
+    // no-website-first culling — "cast wide".
+    finalLeads.push(...pool.slice(0, BROAD_MAX));
+  } else {
+    // Curated: NO_WEBSITE first, fill remainder with HAS_OWN_WEBSITE (up to MAX_RESULTS).
+    for (const lead of noWebsiteLeads) {
+      if (finalLeads.length >= MAX_RESULTS) break;
+      finalLeads.push(lead);
+    }
+    for (const lead of hasWebsiteLeads) {
+      if (finalLeads.length >= MAX_RESULTS) break;
+      finalLeads.push(lead);
+    }
   }
 
   const selectionDebug: SelectionDebug = {
@@ -573,10 +583,16 @@ async function performSearchGoogle(
   radius: number,
   apiKey: string,
   debug: DebugMeta,
-  serviceClient?: ReturnType<typeof createClient>
+  serviceClient?: ReturnType<typeof createClient>,
+  broad = false,
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
   const { lat, lng } = await geocodeLocation(location, apiKey, debug, serviceClient);
-  const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, apiKey, debug);
+  const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, apiKey, debug, broad);
+
+  // List-builder mode casts wide — never expand (expansion chases no-website leads).
+  if (broad) {
+    return { leads, selectionDebug, expanded: false };
+  }
 
   const noWebCount = leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length;
 
@@ -623,11 +639,12 @@ async function performSearchApify(
   keyword: string,
   location: string,
   token: string,
+  broad = false,
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
   const { places, ms } = await mapsDiscover({
     keyword,
     location,
-    maxPlaces: APIFY_MAX_PLACES,
+    maxPlaces: broad ? Math.max(APIFY_MAX_PLACES, BROAD_MAX) : APIFY_MAX_PLACES,
     token,
     timeoutMs: 90_000,
   });
@@ -652,7 +669,8 @@ async function performSearchApify(
 
   const noWeb = pool.filter((l) => l.websiteStatus === 'NO_WEBSITE');
   const hasWeb = pool.filter((l) => l.websiteStatus === 'HAS_OWN_WEBSITE');
-  const finalLeads = [...noWeb, ...hasWeb].slice(0, MAX_RESULTS);
+  // Broad: full pool (discovered order); curated: no-website-first up to MAX_RESULTS.
+  const finalLeads = broad ? pool.slice(0, BROAD_MAX) : [...noWeb, ...hasWeb].slice(0, MAX_RESULTS);
 
   const selectionDebug: SelectionDebug = {
     pagesFetched: 1,
@@ -676,7 +694,8 @@ async function performSearchWithExpansion(
   radius: number,
   apiKey: string,
   debug: DebugMeta,
-  serviceClient?: ReturnType<typeof createClient>
+  serviceClient?: ReturnType<typeof createClient>,
+  broad = false,
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
   const apifyToken = Deno.env.get('APIFY_TOKEN');
   // DISCOVERY default = Google (fast: ~3s cold, instant cached). Apify discovery
@@ -686,13 +705,13 @@ async function performSearchWithExpansion(
   const useApifyDiscovery = (Deno.env.get('DISCOVERY_SOURCE') ?? '').toLowerCase() === 'apify';
   if (apifyToken && useApifyDiscovery) {
     try {
-      return await performSearchApify(keyword, location, apifyToken);
+      return await performSearchApify(keyword, location, apifyToken, broad);
     } catch (e) {
       console.error(`[APIFY-DISCOVER] failed, falling back to Google: ${(e as Error).message}`);
       // fall through to Google below
     }
   }
-  return await performSearchGoogle(keyword, location, radius, apiKey, debug, serviceClient);
+  return await performSearchGoogle(keyword, location, radius, apiKey, debug, serviceClient, broad);
 }
 
 // ═══════════════════════════════════════════════
@@ -740,13 +759,13 @@ serve(async (req) => {
         return jsonResponse({ error: 'Invalid search parameters.', _debug: debug }, 400);
       }
 
-      const { keyword, location, radius } = validationResult.data;
+      const { keyword, location, radius, broad } = validationResult.data;
       if (!GOOGLE_MAPS_API_KEY) {
         return jsonResponse({ error: 'Service temporarily unavailable.', _debug: debug }, 503);
       }
 
       console.log(`[DEMO] Searching for "${keyword}" in "${location}" within ${radius}m`);
-      const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug);
+      const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, undefined, broad);
       console.log(`[DEMO] Found ${leads.length} leads (expanded: ${expanded})`);
 
       return jsonResponse({
@@ -781,7 +800,7 @@ serve(async (req) => {
         return jsonResponse({ error: 'Invalid search parameters.', _debug: debug }, 400);
       }
 
-      const { keyword, location, radius } = validationResult.data;
+      const { keyword, location, radius, broad } = validationResult.data;
       if (!GOOGLE_MAPS_API_KEY) {
         return jsonResponse({ error: 'Service temporarily unavailable.', _debug: debug }, 503);
       }
@@ -820,7 +839,7 @@ serve(async (req) => {
         });
       }
 
-      const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient);
+      const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient, broad);
 
       // Cache the results
       try {
@@ -915,7 +934,7 @@ serve(async (req) => {
       return jsonResponse({ error: 'Invalid search parameters. Please check your input.', _debug: debug }, 400);
     }
 
-    const { keyword, location, radius } = validationResult.data;
+    const { keyword, location, radius, broad } = validationResult.data;
 
     if (!GOOGLE_MAPS_API_KEY) {
       console.error('GOOGLE_MAPS_API_KEY not configured');
@@ -962,7 +981,7 @@ serve(async (req) => {
 
     // ─── SEARCH WITH EXPANSION ───────────────────
     console.log(`[DIAG-HANDLER] Starting search for "${keyword}" in "${location}" within ${radius}m`);
-    const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient);
+    const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient, broad);
     console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb, expanded: ${expanded})`);
 
     // ─── CACHE STORE ─────────────────────────────
