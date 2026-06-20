@@ -52,6 +52,25 @@ export interface SiteProcessStep {
   description: string;
 }
 
+/**
+ * One real customer review. Populated by the review-enrichment build (Apify →
+ * real Google reviews). NEVER fabricated: when no real reviews exist the array is
+ * empty/undefined and templates show no testimonial cards (honesty rule).
+ */
+export interface SiteReview {
+  /** Reviewer's display name (real). */
+  author: string;
+  /** Review body text (real, verbatim from the source). */
+  text: string;
+  /** Optional 0–5 star rating for this review. */
+  rating?: number;
+  /** Optional real avatar photo URL; templates fall back to initials, never a
+   *  stock-photo face. */
+  avatarUrl?: string;
+  /** Optional human date label, e.g. "2 weeks ago". */
+  date?: string;
+}
+
 export interface SiteOpeningHours {
   /** Day label, e.g. "Monday" or "Mon". */
   day: string;
@@ -156,4 +175,9 @@ export interface SiteContent {
   faqs?: SiteFaq[];
   /** Optional service-area / coverage line, e.g. "Wigan & surrounding areas". */
   serviceArea?: string;
+  /**
+   * Optional REAL customer reviews (Apify → Google reviews). Empty/undefined when
+   * we have none — templates then show no testimonial cards (never fabricated).
+   */
+  reviews?: SiteReview[];
 }
