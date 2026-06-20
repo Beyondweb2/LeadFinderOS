@@ -153,6 +153,17 @@ export interface SiteContent {
    */
   galleryImageUrls?: string[];
   /**
+   * Optional "Why choose us / our work" image (trade templates, e.g. plumber).
+   * When omitted the template uses its bundled stock. Barber/salon ignore it.
+   */
+  whyUsImageUrl?: string;
+  /**
+   * Optional pool of candidate image URLs (Maps/Facebook/Instagram), gathered by
+   * enrichment, for the editor's per-slot picker to choose from. Presentation
+   * templates do NOT render this — it's editor-only data.
+   */
+  imagePool?: string[];
+  /**
    * Optional accent (highlight) colour as a hex string, e.g. "#E6A24B". When
    * unset the template uses its own default accent. Only the accent hue changes —
    * the theme stays — via a CSS variable the template sets on its root. (The

@@ -120,6 +120,10 @@ export interface OutreachLead {
   contact_method?: string | null;
   whatsapp_status?: string | null;
   whatsapp_checked_at?: string | null;
+  // HLR line-type (Twilio Lookup): 'mobile' | 'landline' | 'voip' | 'unknown' | null.
+  // 'mobile' = WhatsApp-capable proxy (legal; no WhatsApp probing).
+  line_type?: string | null;
+  line_type_checked_at?: string | null;
   outreach_attempts?: number;
   last_outreach_attempt_at?: string | null;
   // New fields

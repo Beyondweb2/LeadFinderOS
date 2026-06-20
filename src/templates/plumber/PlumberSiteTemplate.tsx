@@ -76,6 +76,7 @@ export function PlumberSiteTemplate({
     logoUrl,
     googleReviewsUrl,
     whyUsPoints,
+    whyUsImageUrl,
     processSteps,
     faqs,
     serviceArea,
@@ -119,7 +120,7 @@ export function PlumberSiteTemplate({
           <Services services={services} />
           {processSteps?.length ? <HowItWorks steps={processSteps} /> : null}
           {(whyUsPoints?.length || googleRating) && (
-            <WhyUs whyUsPoints={whyUsPoints} googleRating={googleRating} reviewCount={reviewCount} />
+            <WhyUs whyUsPoints={whyUsPoints} whyUsImageUrl={whyUsImageUrl} googleRating={googleRating} reviewCount={reviewCount} />
           )}
           <Reviews
             reviews={reviews}
@@ -678,7 +679,7 @@ const WHY_CARDS: { n: string; icon: IconType; title: string; desc: string }[] = 
   { n: "03", icon: Home, title: "Respect for your home", desc: "Tidy tradespeople who explain the work and leave your property as they found it." },
 ];
 
-function WhyUs({ whyUsPoints, googleRating, reviewCount }: { whyUsPoints?: string[]; googleRating?: number; reviewCount?: number }) {
+function WhyUs({ whyUsPoints, whyUsImageUrl, googleRating, reviewCount }: { whyUsPoints?: string[]; whyUsImageUrl?: string; googleRating?: number; reviewCount?: number }) {
   return (
     <section id="why-us" className="relative scroll-mt-20 overflow-hidden bg-white py-20 sm:py-28">
       <MarineBg />
@@ -687,6 +688,7 @@ function WhyUs({ whyUsPoints, googleRating, reviewCount }: { whyUsPoints?: strin
         <div className="grid items-center gap-12 lg:grid-cols-2">
           <Reveal direction="left" distance={72} duration={780} className="relative">
             <MediaPanel
+              src={whyUsImageUrl}
               stock={STOCK.work}
               alt="Our work"
               icon={Wrench}

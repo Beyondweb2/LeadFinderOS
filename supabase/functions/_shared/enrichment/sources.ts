@@ -16,7 +16,7 @@ import {
   type NormalizedPlace,
 } from "./apify.ts";
 
-export type SourceKey = "maps" | "contact_scraper";
+export type SourceKey = "maps" | "contact_scraper" | "social_images" | "whatsapp";
 export type SourceStage = "discovery" | "enrich";
 
 export interface EnrichmentSourceDef {
@@ -51,6 +51,21 @@ export const SOURCES: Record<SourceKey, EnrichmentSourceDef> = {
     estCostUsd: 0.0011, // ~$1.05 / 1k pages
     description: "Email/contact scraper from a business website (Phase 3)",
     enabled: false,
+  },
+  social_images: {
+    key: "social_images",
+    stage: "enrich",
+    actorId: "apify~facebook-photos-scraper / apify~instagram-scraper",
+    estCostUsd: 0.01, // per business (FB + IG photo pull); actor ids verify-on-test
+    description: "Facebook/Instagram photo pool for the image picker (2A)",
+    enabled: true,
+  },
+  whatsapp: {
+    key: "whatsapp",
+    stage: "enrich",
+    estCostUsd: 0.005, // Twilio Lookup line_type_intelligence (HLR proxy)
+    description: "HLR line-type (mobile/landline) via Twilio Lookup — WhatsApp-capable proxy",
+    enabled: true,
   },
 };
 
