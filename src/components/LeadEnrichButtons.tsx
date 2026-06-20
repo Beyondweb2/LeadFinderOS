@@ -1,5 +1,6 @@
-import { Mail, Facebook, Instagram, Loader2, Ban } from 'lucide-react';
+import { Mail, Facebook, Instagram, Loader2, Ban, Sparkles, Smartphone, PhoneOff } from 'lucide-react';
 import { useEnrichLead, type EnrichType } from '@/hooks/useEnrichLead';
+import { useEnrichBusiness } from '@/hooks/useEnrichBusiness';
 import type { OutreachLead } from '@/types/outreach';
 
 interface LeadEnrichButtonsProps {
@@ -34,6 +35,9 @@ type TypeConfig = {
  */
 export function LeadEnrichButtons({ lead, onUpdate, className }: LeadEnrichButtonsProps) {
   const { enrich, enriching, limitReached } = useEnrichLead(lead, onUpdate);
+  const { enrich: enrichAll, enriching: enrichingAll, limitReached: allLimitReached } = useEnrichBusiness(lead, onUpdate);
+  // WhatsApp-capability proxy from HLR line-type: mobile = capable, landline = not.
+  const lt = lead.line_type;
 
   const types: TypeConfig[] = [
     {
@@ -67,6 +71,25 @@ export function LeadEnrichButtons({ lead, onUpdate, className }: LeadEnrichButto
 
   return (
     <div className={`flex items-center gap-0.5 ${className ?? ''}`} onClick={(e) => e.stopPropagation()}>
+      {/* Combined enrich: contacts + WhatsApp/line-type signal + image pool. */}
+      <button
+        type="button"
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!allLimitReached) enrichAll(); }}
+        disabled={enrichingAll || allLimitReached}
+        title={allLimitReached ? 'Daily enrichment limit reached' : 'Enrich business — contacts, WhatsApp signal & photos'}
+        className="p-1.5 rounded-md hover:bg-muted/40 transition-colors text-violet-500 hover:text-violet-400 disabled:opacity-60"
+      >
+        {enrichingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : allLimitReached ? <Ban className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+      </button>
+
+      {/* WhatsApp-capability chip (HLR line-type): mobile → likely WhatsApp. */}
+      {lt === 'mobile' && (
+        <span title="Mobile — WhatsApp-capable (line-type check)" className="p-1.5 text-green-500"><Smartphone className="h-3.5 w-3.5" /></span>
+      )}
+      {(lt === 'landline' || lt === 'voip') && (
+        <span title={`${lt} — not WhatsApp-capable`} className="p-1.5 text-muted-foreground/50"><PhoneOff className="h-3.5 w-3.5" /></span>
+      )}
+
       {types.map(({ type, label, Icon, value, href, status, color }) => {
         // ── Found: clickable icon/link ──
         if (value && href) {
