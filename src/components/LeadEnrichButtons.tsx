@@ -1,5 +1,4 @@
 import { Mail, Facebook, Instagram, Loader2, Ban, Sparkles, Smartphone, PhoneOff } from 'lucide-react';
-import { useEnrichLead, type EnrichType } from '@/hooks/useEnrichLead';
 import { useEnrichBusiness } from '@/hooks/useEnrichBusiness';
 import type { OutreachLead } from '@/types/outreach';
 
@@ -7,79 +6,45 @@ interface LeadEnrichButtonsProps {
   /**
    * Any OutreachLead-shaped object. On the Outreach row this is the real lead;
    * on a search result it's a lightweight pseudo-lead (synthetic id + place_id +
-   * business_name + website) so the same engine works before the lead is saved.
+   * business_name) so the same Enrich engine works before the lead is saved.
    */
   lead: OutreachLead;
-  /** Persist/mirror the resolved fields. Outreach passes updateLead; search passes a local-state patcher. */
+  /** Persist/mirror resolved fields. Outreach passes updateLead; search a local patcher. */
   onUpdate: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
   className?: string;
 }
 
-type TypeConfig = {
-  type: EnrichType;
-  label: string;
-  Icon: typeof Mail;
-  value: string | null | undefined;
-  href: string | null;
-  status: string | null | undefined;
-  /** Tailwind text colour for the "found" link state. */
-  color: string;
-};
-
 /**
- * Compact, per-type contact-enrichment control reused on BOTH the search results
- * and the Outreach row. Each type (email | facebook | instagram) is its own
- * single button = its own single (cost-efficient) enrich-lead call, fired ONLY
- * on click — never auto-fetched. Once a value is found it renders as a clickable
- * icon/link instead of a button.
+ * Per-lead contact controls.
+ *
+ * HONESTY: contact icons are DISPLAY-ONLY links that render ONLY when a REAL,
+ * verified value is stored on the lead (the fields enrich writes). There is NO
+ * URL guessing/construction anywhere — a lead with no found contact shows no
+ * contact icons, never a shown-but-dead link. The always-visible ✨ Enrich button
+ * is the single way real contacts get found (enrich-business → Maps + Facebook).
  */
 export function LeadEnrichButtons({ lead, onUpdate, className }: LeadEnrichButtonsProps) {
-  const { enrich, enriching, limitReached } = useEnrichLead(lead, onUpdate);
-  const { enrich: enrichAll, enriching: enrichingAll, limitReached: allLimitReached } = useEnrichBusiness(lead, onUpdate);
-  // WhatsApp-capability proxy from HLR line-type: mobile = capable, landline = not.
-  const lt = lead.line_type;
+  const { enrich: enrichAll, enriching, limitReached } = useEnrichBusiness(lead, onUpdate);
+  const lt = lead.line_type; // HLR line-type: WhatsApp-capability proxy
 
-  const types: TypeConfig[] = [
-    {
-      type: 'email',
-      label: 'Email',
-      Icon: Mail,
-      value: lead.email,
-      href: lead.email ? `mailto:${lead.email}` : null,
-      status: lead.email_status,
-      color: 'text-blue-500 hover:text-blue-400',
-    },
-    {
-      type: 'facebook',
-      label: 'Facebook',
-      Icon: Facebook,
-      value: lead.facebook_url,
-      href: lead.facebook_url ?? null,
-      status: lead.facebook_status,
-      color: 'text-blue-600 hover:text-blue-500',
-    },
-    {
-      type: 'instagram',
-      label: 'Instagram',
-      Icon: Instagram,
-      value: lead.instagram_url,
-      href: lead.instagram_url ?? null,
-      status: lead.instagram_status,
-      color: 'text-pink-500 hover:text-pink-400',
-    },
-  ];
+  // Real, stored contacts only — no constructed URLs.
+  const contacts = [
+    lead.email ? { key: 'email', Icon: Mail, href: `mailto:${lead.email}`, color: 'text-blue-500 hover:text-blue-400', title: `Email: ${lead.email}`, external: false } : null,
+    lead.facebook_url ? { key: 'facebook', Icon: Facebook, href: lead.facebook_url, color: 'text-blue-600 hover:text-blue-500', title: `Facebook: ${lead.facebook_url}`, external: true } : null,
+    lead.instagram_url ? { key: 'instagram', Icon: Instagram, href: lead.instagram_url, color: 'text-pink-500 hover:text-pink-400', title: `Instagram: ${lead.instagram_url}`, external: true } : null,
+  ].filter(Boolean) as { key: string; Icon: typeof Mail; href: string; color: string; title: string; external: boolean }[];
 
   return (
     <div className={`flex items-center gap-0.5 ${className ?? ''}`} onClick={(e) => e.stopPropagation()}>
-      {/* Combined enrich: contacts + WhatsApp/line-type signal + image pool. */}
+      {/* Always visible: combined enrich (contacts + WhatsApp signal + image pool). */}
       <button
         type="button"
-        onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!allLimitReached) enrichAll(); }}
-        disabled={enrichingAll || allLimitReached}
-        title={allLimitReached ? 'Daily enrichment limit reached' : 'Enrich business — contacts, WhatsApp signal & photos'}
+        onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!limitReached) enrichAll(); }}
+        disabled={enriching || limitReached}
+        title={limitReached ? 'Daily enrichment limit reached' : 'Enrich business — find real contacts, WhatsApp signal & photos'}
         className="p-1.5 rounded-md hover:bg-muted/40 transition-colors text-violet-500 hover:text-violet-400 disabled:opacity-60"
       >
-        {enrichingAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : allLimitReached ? <Ban className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+        {enriching ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : limitReached ? <Ban className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
       </button>
 
       {/* WhatsApp-capability chip (HLR line-type): mobile → likely WhatsApp. */}
@@ -90,60 +55,18 @@ export function LeadEnrichButtons({ lead, onUpdate, className }: LeadEnrichButto
         <span title={`${lt} — not WhatsApp-capable`} className="p-1.5 text-muted-foreground/50"><PhoneOff className="h-3.5 w-3.5" /></span>
       )}
 
-      {types.map(({ type, label, Icon, value, href, status, color }) => {
-        // ── Found: clickable icon/link ──
-        if (value && href) {
-          const isEmail = type === 'email';
-          return (
-            <a
-              key={type}
-              href={href}
-              {...(isEmail ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
-              className={`p-1.5 rounded-md hover:bg-muted/40 transition-colors ${color}`}
-              title={`${label}: ${value}`}
-            >
-              <Icon className="h-3.5 w-3.5" />
-            </a>
-          );
-        }
-
-        // ── Not found yet: enrich button ──
-        const isBusy = enriching === type;
-        const isError = status === 'error';
-        const isNone = status === 'none';
-        const title = limitReached
-          ? 'Daily enrichment limit reached'
-          : isError
-            ? `${label} lookup failed — click to retry`
-            : isNone
-              ? `No ${label} found — click to retry`
-              : `Find ${label}`;
-
-        const stateColor = limitReached
-          ? 'text-amber-500'
-          : isError
-            ? 'text-destructive hover:text-destructive'
-            : 'text-muted-foreground/50 hover:text-foreground';
-
-        return (
-          <button
-            key={type}
-            type="button"
-            onClick={(e) => { e.preventDefault(); e.stopPropagation(); if (!limitReached) enrich(type); }}
-            disabled={isBusy || limitReached}
-            title={title}
-            className={`p-1.5 rounded-md hover:bg-muted/40 transition-colors disabled:opacity-60 ${stateColor}`}
-          >
-            {isBusy ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : limitReached ? (
-              <Ban className="h-3.5 w-3.5" />
-            ) : (
-              <Icon className="h-3.5 w-3.5" />
-            )}
-          </button>
-        );
-      })}
+      {/* Verified contact links — only render when a real value exists. */}
+      {contacts.map(({ key, Icon, href, color, title, external }) => (
+        <a
+          key={key}
+          href={href}
+          {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+          className={`p-1.5 rounded-md hover:bg-muted/40 transition-colors ${color}`}
+          title={title}
+        >
+          <Icon className="h-3.5 w-3.5" />
+        </a>
+      ))}
     </div>
   );
 }
