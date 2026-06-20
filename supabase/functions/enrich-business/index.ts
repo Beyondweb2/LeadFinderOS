@@ -220,11 +220,6 @@ serve(async (req) => {
         // 2b) Web-results discovery (includeWebResults): FB, IG, and the website.
         const webResults = place?.webResults ?? [];
         let webSite = "";
-
-        // [enrich-diag] TEMP: what did the raw sources actually contain? Strip after.
-        console.log(`[enrich-diag] context: hasApifyToken=${!!apifyToken} hasPlaceRef=${hasPlaceRef} placeId=${placeId || "-"} mapsUrl=${googleMapsUrl ? "y" : "n"}`);
-        console.log(`[enrich-diag] maps: present=${!!place} website=${place?.website ?? "null"} instagram=${place?.instagram ?? "null"} facebook=${place?.facebook ?? "null"} emails=${place?.emails?.length ?? 0} images=${place?.imageUrls?.length ?? 0}`);
-        console.log(`[enrich-diag] webResults: count=${webResults.length}, first3=${JSON.stringify(webResults.slice(0, 3).map((w) => w.url))}`);
         if (webResults.length) {
           // First web-result on `domainRe`, with the SAME location guard for both.
           const fromWeb = (domainRe: RegExp): { url: string; matched: boolean } | null => {
@@ -254,7 +249,6 @@ serve(async (req) => {
           const crawlSite = website || webSite;
           if (crawlSite) {
             const socials = await discoverSocialsFromWebsite(crawlSite, authHeader);
-            console.log(`[enrich-diag] website-crawl: ran=y site=${crawlSite} foundFb=${socials.facebook || "none"} foundIg=${socials.instagram || "none"}`);
             const fromWebSite = crawlSite === webSite; // web-site was already location-checked
             if (!fbUrl && socials.facebook) {
               fbUrl = socials.facebook; fbMethod = fromWebSite ? "websearch" : "apify";
