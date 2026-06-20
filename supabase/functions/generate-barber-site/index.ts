@@ -19,6 +19,8 @@ import { checkRateLimit, rateLimitHeaders } from "../_shared/rate-limiter.ts";
 import type { NormalizedPlace } from "../_shared/enrichment/apify.ts";
 import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
+import { scorePool, assignSlots } from "../_shared/enrichment/imageSelect.ts";
+import { rehostImage } from "../_shared/enrichment/rehost.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -97,6 +99,7 @@ interface BarberSiteContent {
   aboutImageUrl?: string;
   galleryImageUrls?: string[];
   // Optional trade-template sections (plumber). Generic, operator-editable later.
+  whyUsImageUrl?: string;
   whyUsPoints?: string[];
   processSteps?: { title: string; description: string }[];
   faqs?: { question: string; answer: string }[];
@@ -735,8 +738,58 @@ serve(async (req) => {
     // Real images (Apify) → hero/about/gallery slots; a curated lead.image_url
     // still wins the hero. Real reviews → content.reviews (templates show cards;
     // empty = no fabricated testimonials).
-    const heroImageUrl = (lead.image_url as string) || mapsImages[0];
-    const aboutImageUrl = mapsImages[1];
+    //
+    // PLUMBER (2B): AI slot-aware selection. One gpt-4o-mini vision call scores
+    // the candidate pool (the Maps+FB+IG imagePool that enrich-business already
+    // cached — reused for FREE; falls back to this generate's Maps images if the
+    // lead was never enriched). Deterministic assignment picks the best-fit image
+    // per slot; chosen images are re-hosted (FB/IG CDN URLs expire). Any failure /
+    // missing key / nothing above threshold → the existing assignment below.
+    // Barber/salon are untouched (this whole block is plumber-gated).
+    let aiHero: string | undefined;
+    let aiAbout: string | undefined;
+    let aiWhyUs: string | undefined;
+    if (template === "plumber" && openAiKey) {
+      try {
+        // Prefer the richer pool enrich-business cached for this lead (Maps+FB+IG).
+        let pool: string[] = mapsImages;
+        const enrichKey = `${(lead.place_id as string) || leadMapsUrlForEnrich || `lead:${leadId}`}:business_enrich`;
+        const { data: cachedRow } = await serviceClient
+          .from("enrichment_cache")
+          .select("result, expires_at")
+          .eq("cache_key", enrichKey)
+          .maybeSingle();
+        const cachedPool = (cachedRow?.result as { imagePool?: unknown })?.imagePool;
+        if (Array.isArray(cachedPool) && cachedPool.length) {
+          pool = (cachedPool.filter((u) => typeof u === "string") as string[]);
+        }
+
+        const scored = pool.length ? await scorePool(pool, { openAiKey }) : null;
+        if (scored) {
+          const assigned = assignSlots(scored);
+          // Re-host the chosen images (drop a pick if its re-host fails).
+          const [h, a, w] = await Promise.all([
+            assigned.hero ? rehostImage(assigned.hero, { service: serviceClient, leadId, slot: "hero" }) : Promise.resolve(null),
+            assigned.about ? rehostImage(assigned.about, { service: serviceClient, leadId, slot: "about" }) : Promise.resolve(null),
+            assigned.whyUs ? rehostImage(assigned.whyUs, { service: serviceClient, leadId, slot: "whyus" }) : Promise.resolve(null),
+          ]);
+          aiHero = h ?? undefined;
+          aiAbout = a ?? undefined;
+          aiWhyUs = w ?? undefined;
+          console.log(
+            `[GENERATE-BARBER-SITE] 2B image-select: pool=${pool.length} hero=${aiHero ? "ai" : "fallback"} about=${aiAbout ? "ai" : "stock/fallback"} whyUs=${aiWhyUs ? "ai" : "stock"}`,
+          );
+        }
+      } catch (e) {
+        console.error(`[GENERATE-BARBER-SITE] 2B image-select error (using fallback): ${(e as Error).message}`);
+      }
+    }
+
+    // hero: AI pick → curated lead image → first Maps image. about: AI pick →
+    // second Maps image. whyUs (plumber): AI pick only, else stock in template.
+    const heroImageUrl = aiHero || (lead.image_url as string) || mapsImages[0];
+    const aboutImageUrl = aiAbout || mapsImages[1];
+    const whyUsImageUrl = aiWhyUs;
 
     const content: BarberSiteContent = {
       businessName: lead.business_name || "", // real, verbatim
@@ -769,6 +822,8 @@ serve(async (req) => {
             processSteps: PLUMBER_PROCESS,
             faqs: PLUMBER_FAQS,
             ...(area ? { serviceArea: `${area} & surrounding areas` } : {}),
+            // 2B: AI-chosen close-up work shot (re-hosted). Absent → template stock.
+            ...(whyUsImageUrl ? { whyUsImageUrl } : {}),
           }
         : {}),
     };
