@@ -50,6 +50,7 @@ interface EnrichResult {
   instagram: string | null;
   lineType: string;
   imagePool: string[];
+  poolBreakdown: { maps: number; facebook: number; instagram: number };
   match: { title: string | null; address: string | null; similarity: number; lowConfidence: boolean };
 }
 
@@ -136,9 +137,11 @@ serve(async (req) => {
           ]);
         }
 
+        const mapsPhotos = place?.imageUrls ?? [];
         const imagePool = Array.from(
-          new Set([...(place?.imageUrls ?? []), ...fbPhotos, ...igPhotos]),
+          new Set([...mapsPhotos, ...fbPhotos, ...igPhotos]),
         ).slice(0, 40);
+        const poolBreakdown = { maps: mapsPhotos.length, facebook: fbPhotos.length, instagram: igPhotos.length };
 
         // 3) HLR line-type (Twilio) — about the lead's OWN phone, always safe.
         let lineType = "unknown";
@@ -157,6 +160,7 @@ serve(async (req) => {
           instagram: igUrl || null,
           lineType,
           imagePool,
+          poolBreakdown,
           match: {
             title: place?.title ?? null,
             address: place?.address ?? null,

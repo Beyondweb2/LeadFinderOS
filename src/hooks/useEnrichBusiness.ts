@@ -56,15 +56,17 @@ export function useEnrichBusiness(
       if (Object.keys(patch).length) await onUpdate(lead.id, patch);
 
       const poolN = Array.isArray(data.imagePool) ? data.imagePool.length : 0;
+      const b = data.poolBreakdown ?? { maps: 0, facebook: 0, instagram: 0 };
+      const photos = `${poolN} photos (Maps ${b.maps} / FB ${b.facebook} / IG ${b.instagram})`;
       const found = [data.email && 'email', data.facebook && 'FB', data.instagram && 'IG'].filter(Boolean).join(', ');
       const lt = data.lineType && data.lineType !== 'unknown' ? ` · ${data.lineType}` : '';
       if (data.match?.lowConfidence) {
         toast({
           title: '⚠ Verify this is the right business',
-          description: `Matched "${data.match.title ?? '—'}"${data.match.address ? ` · ${data.match.address}` : ''}. Contacts NOT auto-applied${lt}. ${poolN} photos found.`,
+          description: `Matched "${data.match.title ?? '—'}"${data.match.address ? ` · ${data.match.address}` : ''}. Contacts NOT auto-applied${lt}. ${photos}.`,
         });
       } else {
-        toast({ title: 'Business enriched', description: `${found || 'no contacts found'}${lt} · ${poolN} photos found.` });
+        toast({ title: 'Business enriched', description: `${found || 'no contacts found'}${lt} · ${photos}.` });
       }
       return data;
     } catch (e) {
