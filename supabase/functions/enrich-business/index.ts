@@ -20,6 +20,7 @@ import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { lookupLineType } from "../_shared/enrichment/whatsapp.ts";
 import { fetchFacebookContacts, fetchFacebookPhotos, fetchInstagramPhotos } from "../_shared/enrichment/socialImages.ts";
+import { isAggregatorUrl, isPlatformSocialUrl } from "../_shared/aggregators.ts";
 
 /** Last-resort social discovery: crawl the business website for FB + IG links via
  *  the extract-facebook function (one fetch returns both). Graceful — empty on
@@ -208,15 +209,19 @@ serve(async (req) => {
         //    A web-results URL is trusted only when its text matches the lead's Maps
         //    location (Birmingham-vs-Swindon); else it's a suggestion to verify,
         //    never auto-attached. Manual paste stays the override.
-        let fbUrl = existingFacebook || place?.facebook || "";
-        let fbMethod: string | null = existingFacebook ? "manual" : place?.facebook ? "apify" : null;
-        let fbSource = existingFacebook ? "manual" : place?.facebook ? "maps-listing" : "none";
+        // Maps-listing socials, minus any that are a platform's OWN account
+        // (e.g. facebook.com/fresha) — those are never the business's.
+        const mapsFb = place?.facebook && !isPlatformSocialUrl(place.facebook) ? place.facebook : "";
+        const mapsIg = place?.instagram && !isPlatformSocialUrl(place.instagram) ? place.instagram : "";
+        let fbUrl = existingFacebook || mapsFb;
+        let fbMethod: string | null = existingFacebook ? "manual" : mapsFb ? "apify" : null;
+        let fbSource = existingFacebook ? "manual" : mapsFb ? "maps-listing" : "none";
         let fbLoc = "n/a";
         let fbSuggestion: { url: string; reason: string } | null = null;
 
-        let igUrl = existingInstagram || place?.instagram || "";
-        let igMethod: string | null = existingInstagram ? "manual" : place?.instagram ? "apify" : null;
-        let igSource = existingInstagram ? "manual" : place?.instagram ? "maps-listing" : "none";
+        let igUrl = existingInstagram || mapsIg;
+        let igMethod: string | null = existingInstagram ? "manual" : mapsIg ? "apify" : null;
+        let igSource = existingInstagram ? "manual" : mapsIg ? "maps-listing" : "none";
         let igLoc = "n/a";
         let igSuggestion: { url: string; reason: string } | null = null;
 
@@ -234,9 +239,9 @@ serve(async (req) => {
         const webResults = place?.webResults ?? [];
         let webSite = "";
         if (webResults.length) {
-          const siteEntry = webResults.find(
-            (w) => !/(?:facebook|instagram|twitter|x|youtube|tiktok|linkedin)\.com\//i.test(w.url),
-          );
+          // First web result that's a real own-site: not a social/directory AND not
+          // a booking platform (Fresha/Booksy/… are never the business's website).
+          const siteEntry = webResults.find((w) => !isAggregatorUrl(w.url));
           if (siteEntry && locationMatch(siteEntry.text, place)) webSite = rootDomain(siteEntry.url);
         }
 
@@ -245,11 +250,13 @@ serve(async (req) => {
         //     web-results (which mix companies). Crawl the best own-site we have:
         //     lead's stored → Maps-listing own pin → location-matched web-results
         //     root. No per-link location guard needed — it's their own site.
-        const ownSite = website || place?.website || webSite;
+        // Crawl the best OWN site — never a booking platform / directory / social
+        // (crawling those pulls the PLATFORM's socials + images, not the business's).
+        const ownSite = [website, place?.website, webSite].find((u) => u && !isAggregatorUrl(u)) || "";
         if (ownSite && (!fbUrl || !igUrl)) {
           const socials = await discoverSocialsFromWebsite(ownSite, authHeader);
-          if (!fbUrl && socials.facebook) { fbUrl = socials.facebook; fbMethod = "apify"; fbSource = "website-crawl"; fbLoc = "n/a"; }
-          if (!igUrl && socials.instagram) { igUrl = socials.instagram; igMethod = "apify"; igSource = "website-crawl"; igLoc = "n/a"; }
+          if (!fbUrl && socials.facebook && !isPlatformSocialUrl(socials.facebook)) { fbUrl = socials.facebook; fbMethod = "apify"; fbSource = "website-crawl"; fbLoc = "n/a"; }
+          if (!igUrl && socials.instagram && !isPlatformSocialUrl(socials.instagram)) { igUrl = socials.instagram; igMethod = "apify"; igSource = "website-crawl"; igLoc = "n/a"; }
         }
 
         // 2d) WEB-RESULTS socials — LAST RESORT, location-guarded (results mix
@@ -257,7 +264,8 @@ serve(async (req) => {
         //     surfaced as a suggestion to verify, never auto-attached.
         if (webResults.length && (!fbUrl || !igUrl)) {
           const fromWeb = (domainRe: RegExp): { url: string; matched: boolean } | null => {
-            const entry = webResults.find((w) => domainRe.test(w.url));
+            // Skip a platform's own social account (facebook.com/fresha etc.).
+            const entry = webResults.find((w) => domainRe.test(w.url) && !isPlatformSocialUrl(w.url));
             return entry ? { url: entry.url, matched: !!locationMatch(entry.text, place) } : null;
           };
           if (!fbUrl) {
@@ -272,11 +280,16 @@ serve(async (req) => {
           }
         }
 
-        // 2e) Website to store on the lead: existing value wins (never overwrite),
-        //     else the Maps listing's own website (own pin → trusted), else the
-        //     location-matched web-results ROOT domain.
-        const discoveredWebsite = website || place?.website || webSite || "";
-        const webSource = website ? "existing" : place?.website ? "maps-listing" : webSite ? "web-results" : "none";
+        // 2e) Website to store on the lead — first REAL own-site (never a booking
+        //     platform / directory): existing → Maps listing → web-results root.
+        const websiteCandidates: [string, string][] = [
+          [website, "existing"],
+          [place?.website ?? "", "maps-listing"],
+          [webSite, "web-results"],
+        ];
+        const wsHit = websiteCandidates.find(([u]) => u && !isAggregatorUrl(u));
+        const discoveredWebsite = wsHit?.[0] ?? "";
+        const webSource = wsHit?.[1] ?? "none";
 
         // Permanent provenance one-liners (one line per channel; not per-image).
         console.log(`[enrich] FB  via ${fbSource} (${fbLoc}): ${fbUrl || (fbSuggestion ? `${fbSuggestion.url} [suggestion]` : "none")}`);
