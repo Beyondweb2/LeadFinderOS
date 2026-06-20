@@ -121,6 +121,12 @@ export function PlumberSiteTemplate({
           {(whyUsPoints?.length || googleRating) && (
             <WhyUs whyUsPoints={whyUsPoints} googleRating={googleRating} reviewCount={reviewCount} />
           )}
+          <Reviews
+            reviews={reviews}
+            googleRating={googleRating}
+            reviewCount={reviewCount}
+            googleReviewsUrl={googleReviewsUrl}
+          />
           <FaqContact
             faqs={faqs}
             businessName={businessName}
@@ -130,12 +136,6 @@ export function PlumberSiteTemplate({
             serviceArea={serviceArea}
             mapSrc={mapSrc}
             hours={hours}
-          />
-          <Reviews
-            reviews={reviews}
-            googleRating={googleRating}
-            reviewCount={reviewCount}
-            googleReviewsUrl={googleReviewsUrl}
           />
         </main>
 
