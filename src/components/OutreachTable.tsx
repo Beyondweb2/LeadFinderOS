@@ -1449,7 +1449,7 @@ export function OutreachTable({
                             </a>
                           )}
                           {onUpdateLead && !isDemoLead(lead.id) && (
-                            <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} allowManualEdit />
+                            <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} />
                           )}
                           {lead.phone ? (
                             <>

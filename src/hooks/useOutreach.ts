@@ -524,6 +524,14 @@ export function useOutreach() {
     if (CONTACT_METHOD_STATUSES.includes(status)) {
       updates.contact_method = status;
     }
+    // Marking a lead "Replied" ALWAYS queues a same-day "Send Draft" next action,
+    // overwriting any existing one — so a reply never sits without a follow-up step.
+    if (status === 'replied') {
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      updates.next_action = 'send_draft';
+      updates.next_action_date = today;
+    }
     // Not Interested = a dead prospect → untrack it so the Tracked filter stays
     // clean (only live prospects). Status stays 'not_interested', so the dashboard
     // Sent/Replied reconciliation is unchanged. Covers already-archived leads too,
