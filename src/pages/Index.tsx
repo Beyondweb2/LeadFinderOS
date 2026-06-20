@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
+import { BroadListBuilder } from '@/components/BroadListBuilder';
 import { CampaignPicker } from '@/components/CampaignPicker';
 
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
@@ -12,7 +13,7 @@ import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTeamClaims } from '@/hooks/useTeamClaims';
 import { Flame, Target, Zap, Search, MapPin, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import type { Country } from '@/types/lead';
+import type { Country, Lead } from '@/types/lead';
 
 const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 
@@ -23,6 +24,8 @@ const Index = () => {
   const { markAsChecked, isChecked } = useCheckedBusinesses();
 
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
+  // Find Leads mode: 'targeted' (curated no-website-first) | 'list' (broad list-builder).
+  const [mode, setMode] = useState<'targeted' | 'list'>('targeted');
 
   // Active campaign — new leads added from search are tagged with it.
   // Persisted so it survives navigation/reload.
@@ -64,8 +67,20 @@ const Index = () => {
 
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
-    search(filters, false, false);
-  }, [search]);
+    // List-builder mode asks search-leads for the full discovered pool (cast wide).
+    search({ ...filters, broad: mode === 'list' }, false, false);
+  }, [search, mode]);
+
+  // Bulk add (list-builder): add each selected lead, deduped + silent (one summary
+  // toast from the component). addToOutreach returns null on dupe/failure.
+  const handleBulkAdd = useCallback(async (sel: Lead[]) => {
+    let added = 0, skipped = 0;
+    for (const lead of sel) {
+      const res = await addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id), true);
+      if (res) added++; else skipped++;
+    }
+    return { added, skipped };
+  }, [addToOutreach, lastSearchCountry, activeCampaign, getEnrichment]);
 
   return (
     <div className="space-y-4 md:space-y-8">
@@ -81,6 +96,27 @@ const Index = () => {
           <div className="flex items-center gap-2">
             <span className="text-[10px] sm:text-xs text-muted-foreground">Adding to</span>
             <CampaignPicker mode="assign" value={activeCampaign} onChange={handleCampaignChange} className="h-8 w-[180px]" />
+          </div>
+          {/* Mode: Targeted (curated, no-website-first) vs List builder (cast wide). */}
+          <div className="inline-flex rounded-md border border-border p-0.5">
+            <Button
+              variant={mode === 'targeted' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setMode('targeted')}
+              title="Curated: no-website leads first"
+            >
+              <Target className="h-3.5 w-3.5 mr-1.5" /> Targeted
+            </Button>
+            <Button
+              variant={mode === 'list' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setMode('list')}
+              title="Cast wide: full list, filter by signal, bulk-add"
+            >
+              <Search className="h-3.5 w-3.5 mr-1.5" /> List builder
+            </Button>
           </div>
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
             <div className="flex items-center gap-1 sm:gap-2">
@@ -157,20 +193,29 @@ const Index = () => {
       {/* Results Section */}
       {leads.length > 0 && (
         <section data-walkthrough="results-header">
-          <LeadsTable
-            leads={leads}
-            onExport={exportToCsv}
-            onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id))}
-            isInOutreach={isInOutreach}
-            searchEnrichment={searchEnrichment}
-            onEnrichPatch={patchEnrichment}
-            onMapLinkClick={(name, url) => {
-              markAsChecked(name, url);
-            }}
-            isChecked={isChecked}
-            getTeamClaim={getTeamClaim}
-            onSetWebsiteStatus={setWebsiteOverride}
-          />
+          {mode === 'list' ? (
+            <BroadListBuilder
+              leads={leads}
+              isLoading={isLoading}
+              isInOutreach={isInOutreach}
+              onBulkAdd={handleBulkAdd}
+            />
+          ) : (
+            <LeadsTable
+              leads={leads}
+              onExport={exportToCsv}
+              onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id))}
+              isInOutreach={isInOutreach}
+              searchEnrichment={searchEnrichment}
+              onEnrichPatch={patchEnrichment}
+              onMapLinkClick={(name, url) => {
+                markAsChecked(name, url);
+              }}
+              isChecked={isChecked}
+              getTeamClaim={getTeamClaim}
+              onSetWebsiteStatus={setWebsiteOverride}
+            />
+          )}
         </section>
       )}
 

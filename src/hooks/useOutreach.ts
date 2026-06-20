@@ -294,7 +294,7 @@ export function useOutreach() {
     }
   }, [leads, archivedLeads, removeLeadNoPhone]);
 
-  const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website', campaignId: string | null = null, enrichment?: Partial<OutreachLead> | null) => {
+  const addLead = useCallback(async (lead: Lead, country: Country = 'UK', listType: ListType = 'no_website', campaignId: string | null = null, enrichment?: Partial<OutreachLead> | null, silent = false) => {
     if (!user) {
       toast({
         title: 'Not authenticated',
@@ -309,7 +309,7 @@ export function useOutreach() {
       (h) => h.business_name === lead.name || (lead.googleMapsUrl && h.google_maps_url === lead.googleMapsUrl)
     );
     if (inHistory) {
-      toast({
+      if (!silent) toast({
         title: 'Previously added',
         description: `${lead.name} was already added to your outreach list before.`,
         variant: 'destructive',
@@ -327,7 +327,7 @@ export function useOutreach() {
       const message = inArchived
         ? `${lead.name} is in your archive.`
         : `${lead.name} is already in your outreach list.`;
-      toast({
+      if (!silent) toast({
         title: 'Previously added',
         description: message,
         variant: 'destructive',
