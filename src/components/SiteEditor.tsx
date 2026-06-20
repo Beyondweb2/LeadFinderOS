@@ -43,6 +43,14 @@ const ACCENT_PRESETS: { name: string; hex: string }[] = [
 const DURATION_OPTIONS = [15, 30, 45, 60, 90] as const;
 const DEFAULT_DURATION = 30;
 
+/** Trim + auto-prepend https://; empty → undefined (so the key drops on save and
+ *  the social icon disappears). Non-blocking — the operator pastes verified URLs. */
+function normalizeSocialUrl(v: string): string | undefined {
+  const t = v.trim();
+  if (!t) return undefined;
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`;
+}
+
 /**
  * Reusable barber-site editor: text + services/prices + images/logo, with one
  * "Save all changes" that commits text + pending image uploads in a single write.
@@ -81,6 +89,10 @@ export function SiteEditor({
   const [address, setAddress] = useState("");
   const [hours, setHours] = useState<BarberOpeningHours[]>([]);
   const [accentColor, setAccentColor] = useState<string | undefined>(undefined);
+  // Manual social URLs — SITE-only (content.facebookUrl/instagramUrl). Override
+  // whatever auto-discovery put on the site; blank = no icon (honesty).
+  const [facebookUrl, setFacebookUrl] = useState("");
+  const [instagramUrl, setInstagramUrl] = useState("");
 
   const [textDirty, setTextDirty] = useState(false);
   const [imageDirty, setImageDirty] = useState(false);
@@ -103,6 +115,8 @@ export function SiteEditor({
     setAddress(c.address ?? "");
     setHours((c.hours ?? []).map((h) => ({ ...h })));
     setAccentColor(c.accentColor || undefined);
+    setFacebookUrl(c.facebookUrl ?? "");
+    setInstagramUrl(c.instagramUrl ?? "");
     setTextDirty(false);
     setImageDirty(false);
     setPickerDirty(false);
@@ -185,6 +199,10 @@ export function SiteEditor({
         address: address.trim(),
         hours: cleanedHours,
         accentColor: accentColor || undefined,
+        // Manual SITE socials → SocialLinks (header+footer). Trim + auto-prepend
+        // https://; blank → undefined (key dropped on save → no icon, honesty).
+        facebookUrl: normalizeSocialUrl(facebookUrl),
+        instagramUrl: normalizeSocialUrl(instagramUrl),
       };
 
       // Upload any pending file images, then re-host + merge the board's placed
@@ -377,6 +395,41 @@ export function SiteEditor({
           <p className="text-xs text-muted-foreground">
             {ACCENT_PRESETS.find((p) => p.hex.toLowerCase() === (accentColor ?? AMBER_HEX).toLowerCase())?.name ?? "Amber"}
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Social links — manual, SITE-only. Override auto-discovery; blank = no icon. */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Social links</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Shown as Facebook/Instagram icons in your site's header &amp; footer. Leave a field blank to show no icon.
+            These override anything auto-discovery added to the site.
+          </p>
+          <div className="space-y-1.5">
+            <Label>Facebook URL</Label>
+            <Input
+              value={facebookUrl}
+              placeholder="https://facebook.com/yourpage"
+              onChange={(e) => { setFacebookUrl(e.target.value); setTextDirty(true); }}
+            />
+            {facebookUrl.trim() && !/facebook\.com/i.test(facebookUrl) && (
+              <p className="text-xs text-amber-500">Doesn't look like a facebook.com URL — it'll still be saved.</p>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            <Label>Instagram URL</Label>
+            <Input
+              value={instagramUrl}
+              placeholder="https://instagram.com/yourhandle"
+              onChange={(e) => { setInstagramUrl(e.target.value); setTextDirty(true); }}
+            />
+            {instagramUrl.trim() && !/instagram\.com/i.test(instagramUrl) && (
+              <p className="text-xs text-amber-500">Doesn't look like an instagram.com URL — it'll still be saved.</p>
+            )}
+          </div>
         </CardContent>
       </Card>
 
