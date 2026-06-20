@@ -133,11 +133,6 @@ serve(async (req) => {
       run: async () => {
         // 1) Maps enrich (contacts + Maps photos + the matched business identity).
         let place = null;
-        // [diag] TEMP: trace exactly where FB/IG enrich stops. Remove after B2 test.
-        console.log("[enrich-business][diag] inputs", JSON.stringify({
-          leadId, businessName, hasPlaceRef, hasApifyToken: !!apifyToken,
-          existingFacebook, existingInstagram, website,
-        }));
         if (apifyToken && hasPlaceRef) {
           try {
             const r = await mapsEnrich({
@@ -149,40 +144,17 @@ serve(async (req) => {
               timeoutMs: 90_000,
             });
             place = r.place;
-            // [diag] What did Maps actually return for THIS business?
-            console.log("[enrich-business][diag] mapsEnrich place", JSON.stringify({
-              title: place?.title ?? null,
-              website: place?.website ?? null,
-              facebook: place?.facebook ?? null,
-              instagram: place?.instagram ?? null,
-              emails: place?.emails ?? null,
-              imageCount: place?.imageUrls?.length ?? 0,
-            }));
           } catch (e) {
-            // [diag] was previously swallowed silently — surface it.
-            console.error("[enrich-business][diag] mapsEnrich ERROR:", (e as Error).message);
+            console.error("[enrich-business] mapsEnrich error:", (e as Error).message);
           }
-        } else {
-          console.log("[enrich-business][diag] mapsEnrich SKIPPED (no token or no place ref)");
         }
 
         // 2) Discover the FB/IG profile URLs via a CASCADE — only scrape socials
         //    when a URL actually exists (don't pay for a profile that isn't there).
         //    FB: existing → Maps → website crawl. IG: existing → Maps.
         let fbUrl = existingFacebook || place?.facebook || "";
-        const fbFromStep = existingFacebook ? "existing" : place?.facebook ? "maps" : "";
-        let fbStep = fbFromStep;
-        if (!fbUrl) {
-          fbUrl = await discoverFacebookFromWebsite(website, authHeader);
-          if (fbUrl) fbStep = "website-crawl";
-        }
+        if (!fbUrl) fbUrl = await discoverFacebookFromWebsite(website, authHeader);
         const igUrl = existingInstagram || place?.instagram || "";
-        const igStep = existingInstagram ? "existing" : place?.instagram ? "maps" : "";
-        // [diag] Did the cascade find URLs to scrape, and from where?
-        console.log("[enrich-business][diag] cascade", JSON.stringify({
-          fbUrl: fbUrl || "NO FB URL FOUND", fbStep: fbStep || "none",
-          igUrl: igUrl || "NO IG URL FOUND", igStep: igStep || "none",
-        }));
 
         // 3) Conditional FB/IG scrape: FB → email (pages-scraper) + photos
         //    (photos-scraper); IG → photos. Skipped entirely when no URL.
@@ -190,22 +162,14 @@ serve(async (req) => {
         let fbPhotos: string[] = [];
         let igPhotos: string[] = [];
         if (apifyToken) {
-          // [diag] which actors will actually run this time?
-          console.log("[enrich-business][diag] scraping", JSON.stringify({
-            willRunFacebook: !!fbUrl, willRunInstagram: !!igUrl,
-          }));
           const [fbContacts, fbP, igP] = await Promise.all([
-            fbUrl ? fetchFacebookContacts(fbUrl, { token: apifyToken, debug: true }) : Promise.resolve({ email: null, website: null }),
-            fbUrl ? fetchFacebookPhotos(fbUrl, { token: apifyToken, max: 20, debug: true }) : Promise.resolve([]),
-            igUrl ? fetchInstagramPhotos(igUrl, { token: apifyToken, max: 20, debug: true }) : Promise.resolve([]),
+            fbUrl ? fetchFacebookContacts(fbUrl, { token: apifyToken }) : Promise.resolve({ email: null, website: null }),
+            fbUrl ? fetchFacebookPhotos(fbUrl, { token: apifyToken, max: 20 }) : Promise.resolve([]),
+            igUrl ? fetchInstagramPhotos(igUrl, { token: apifyToken, max: 20 }) : Promise.resolve([]),
           ]);
           fbEmail = fbContacts.email;
           fbPhotos = fbP;
           igPhotos = igP;
-          // [diag] what came back from the social actors?
-          console.log("[enrich-business][diag] scrape results", JSON.stringify({
-            fbEmail, fbPhotoCount: fbPhotos.length, igPhotoCount: igPhotos.length,
-          }));
         }
 
         const mapsPhotos = place?.imageUrls ?? [];

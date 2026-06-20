@@ -55,11 +55,11 @@ function deepEmail(node: unknown, depth = 0): string | null {
 /** Facebook page contacts (email + website) via facebook-pages-scraper. */
 export async function fetchFacebookContacts(
   pageUrl: string,
-  opts: { token: string; timeoutMs?: number; debug?: boolean },
+  opts: { token: string; timeoutMs?: number },
 ): Promise<{ email: string | null; website: string | null }> {
   if (!pageUrl) return { email: null, website: null };
   try {
-    const { items, ms } = await runApifyActor(
+    const { items } = await runApifyActor(
       FB_PAGES_ACTOR,
       { startUrls: [{ url: pageUrl }] },
       { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
@@ -67,13 +67,9 @@ export async function fetchFacebookContacts(
     const item = (items[0] ?? {}) as Record<string, unknown>;
     const email = deepEmail(item);
     const website = typeof item.website === "string" ? item.website : null;
-    if (opts.debug) {
-      console.log(`[social][diag] FB_PAGES ${FB_PAGES_ACTOR} ms=${ms} items=${items.length} keys=${JSON.stringify(Object.keys(item).slice(0, 25))} email=${email} sample=${JSON.stringify(item).slice(0, 400)}`);
-    }
     return { email, website };
   } catch (e) {
-    // [diag] surface the actor error instead of swallowing — this is case (c).
-    if (opts.debug) console.error(`[social][diag] FB_PAGES ERROR: ${(e as Error).message}`);
+    console.error(`[socialImages] FB pages error: ${(e as Error).message}`);
     return { email: null, website: null };
   }
 }
@@ -81,27 +77,23 @@ export async function fetchFacebookContacts(
 /** Facebook page photos via facebook-photos-scraper (verified input keys). */
 export async function fetchFacebookPhotos(
   pageUrl: string,
-  opts: { token: string; max?: number; timeoutMs?: number; debug?: boolean },
+  opts: { token: string; max?: number; timeoutMs?: number },
 ): Promise<string[]> {
   if (!pageUrl) return [];
   try {
-    const { items, ms } = await runApifyActor(
+    const { items } = await runApifyActor(
       FB_PHOTOS_ACTOR,
-      // facebook_urls expects ARRAY OF OBJECTS [{url}], not bare strings (verified
-      // against the actor's input schema — prefill is [{"url": "..."}]). Passing
-      // [pageUrl] made the actor return items=0.
+      // facebook_urls uses editor 'requestListSources' → ARRAY OF OBJECTS [{url}],
+      // not bare strings (verified against the actor's public build schema; bare
+      // strings are rejected HTTP 400 "do not contain valid URLs").
       { facebook_urls: [{ url: pageUrl }], photos_count: opts.max ?? 20 },
       { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
     );
     const out = new Set<string>();
     deepImageUrls(items, out);
-    if (opts.debug) {
-      const first = (items[0] ?? {}) as Record<string, unknown>;
-      console.log(`[social][diag] FB_PHOTOS ${FB_PHOTOS_ACTOR} ms=${ms} items=${items.length} imgsFound=${out.size} keys=${JSON.stringify(Object.keys(first).slice(0, 25))} sample=${JSON.stringify(items[0]).slice(0, 400)}`);
-    }
     return Array.from(out).slice(0, opts.max ?? 20);
   } catch (e) {
-    if (opts.debug) console.error(`[social][diag] FB_PHOTOS ERROR: ${(e as Error).message}`);
+    console.error(`[socialImages] FB photos error: ${(e as Error).message}`);
     return [];
   }
 }
@@ -109,24 +101,20 @@ export async function fetchFacebookPhotos(
 /** Instagram profile/post images via instagram-scraper (verified input keys). */
 export async function fetchInstagramPhotos(
   profileUrl: string,
-  opts: { token: string; max?: number; timeoutMs?: number; debug?: boolean },
+  opts: { token: string; max?: number; timeoutMs?: number },
 ): Promise<string[]> {
   if (!profileUrl) return [];
   try {
-    const { items, ms } = await runApifyActor(
+    const { items } = await runApifyActor(
       IG_SCRAPER_ACTOR,
       { directUrls: [profileUrl], resultsType: "posts", resultsLimit: opts.max ?? 20 },
       { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
     );
     const out = new Set<string>();
     deepImageUrls(items, out);
-    if (opts.debug) {
-      const first = (items[0] ?? {}) as Record<string, unknown>;
-      console.log(`[social][diag] IG ${IG_SCRAPER_ACTOR} ms=${ms} items=${items.length} imgsFound=${out.size} keys=${JSON.stringify(Object.keys(first).slice(0, 25))} sample=${JSON.stringify(items[0]).slice(0, 400)}`);
-    }
     return Array.from(out).slice(0, opts.max ?? 20);
   } catch (e) {
-    if (opts.debug) console.error(`[social][diag] IG ERROR: ${(e as Error).message}`);
+    console.error(`[socialImages] IG error: ${(e as Error).message}`);
     return [];
   }
 }
