@@ -24,6 +24,7 @@ import {
 
 import "./fonts.css";
 import type { SiteContent, SiteService, SiteReview } from "../shared/content";
+import { SocialLinks } from "../shared/SocialLinks";
 import { Reveal, useReveal } from "../shared/useReveal";
 import { useCountUp } from "../shared/useCountUp";
 import { Carousel } from "../shared/Carousel";
@@ -81,6 +82,8 @@ export function PlumberSiteTemplate({
     faqs,
     serviceArea,
     reviews,
+    facebookUrl,
+    instagramUrl,
   } = content;
 
   const telHref = useMemo(() => `tel:${phone.replace(/[^\d+]/g, "")}`, [phone]);
@@ -97,7 +100,7 @@ export function PlumberSiteTemplate({
       <div
         className={`relative min-h-screen bg-plumber-bg ${onClaim ? "pb-[104px] sm:pb-[140px]" : "pb-[68px] sm:pb-0"}`}
       >
-        <Header businessName={businessName} telHref={telHref} phone={phone} address={address} logoUrl={logoUrl} />
+        <Header businessName={businessName} telHref={telHref} phone={phone} address={address} logoUrl={logoUrl} facebookUrl={facebookUrl} instagramUrl={instagramUrl} />
 
         <main>
           <Hero
@@ -140,7 +143,7 @@ export function PlumberSiteTemplate({
           />
         </main>
 
-        <Footer businessName={businessName} services={services} address={address} logoUrl={logoUrl} />
+        <Footer businessName={businessName} services={services} address={address} logoUrl={logoUrl} facebookUrl={facebookUrl} instagramUrl={instagramUrl} />
       </div>
 
       {onClaim ? (
@@ -370,7 +373,7 @@ function GoogleG({ className = "" }: { className?: string }) {
 
 /* --------------------------------- header --------------------------------- */
 
-function Header({ businessName, telHref, phone, address, logoUrl }: { businessName: string; telHref: string; phone: string; address: string; logoUrl?: string }) {
+function Header({ businessName, telHref, phone, address, logoUrl, facebookUrl, instagramUrl }: { businessName: string; telHref: string; phone: string; address: string; logoUrl?: string; facebookUrl?: string; instagramUrl?: string }) {
   const NAV = [
     ["#about", "About"],
     ["#services", "Services"],
@@ -381,18 +384,22 @@ function Header({ businessName, telHref, phone, address, logoUrl }: { businessNa
   ];
   return (
     <>
-      {/* Top contact bar (scrolls away; header below stays sticky). No socials —
-          we have no per-business social data, so we don't add dead links. */}
+      {/* Top contact bar (scrolls away; header below stays sticky). Socials appear
+          ONLY when real verified profiles exist (SocialLinks → null otherwise), so
+          there are never dead links. */}
       <div className="bg-plumber-ink text-white/80">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-6 gap-y-1 px-5 py-2 text-xs sm:justify-between sm:px-8">
           <a href={telHref} className="inline-flex items-center gap-1.5 transition-colors hover:text-plumber-accent">
             <Phone className="h-3.5 w-3.5 text-plumber-accent" /> {phone}
           </a>
-          {address.trim() && (
-            <span className="inline-flex items-center gap-1.5 text-white/60">
-              <MapPin className="h-3.5 w-3.5 text-plumber-accent" /> <span className="max-w-[60vw] truncate sm:max-w-none">{address}</span>
-            </span>
-          )}
+          <div className="flex items-center gap-4">
+            {address.trim() && (
+              <span className="inline-flex items-center gap-1.5 text-white/60">
+                <MapPin className="h-3.5 w-3.5 text-plumber-accent" /> <span className="max-w-[60vw] truncate sm:max-w-none">{address}</span>
+              </span>
+            )}
+            <SocialLinks variant="header" facebookUrl={facebookUrl} instagramUrl={instagramUrl} className="text-white/70" />
+          </div>
         </div>
       </div>
       <header className="sticky top-0 z-40 border-b border-plumber-line bg-plumber-bg/80 backdrop-blur-xl supports-[backdrop-filter]:bg-plumber-bg/65">
@@ -1034,7 +1041,7 @@ function Reviews({
 
 /* --------------------------------- footer --------------------------------- */
 
-function Footer({ businessName, services, address, logoUrl }: { businessName: string; services: SiteService[]; address: string; logoUrl?: string }) {
+function Footer({ businessName, services, address, logoUrl, facebookUrl, instagramUrl }: { businessName: string; services: SiteService[]; address: string; logoUrl?: string; facebookUrl?: string; instagramUrl?: string }) {
   return (
     <footer className="relative overflow-hidden bg-plumber-ink text-white/80">
       <span aria-hidden className="absolute -left-16 -top-16 h-48 w-48 rounded-full bg-plumber-accent/10" />
@@ -1060,6 +1067,7 @@ function Footer({ businessName, services, address, logoUrl }: { businessName: st
         <div>
           <h4 className="font-plumber-display text-sm font-extrabold uppercase tracking-wider text-white">Get in touch</h4>
           <p className="mt-4 text-sm text-white/60">{address}</p>
+          <SocialLinks variant="footer" facebookUrl={facebookUrl} instagramUrl={instagramUrl} className="mt-4 text-white/70" />
           <a href="#contact" className="mt-4 inline-flex items-center gap-2 rounded-full bg-plumber-primary px-5 py-2.5 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-plumber-primary-deep">
             Get free quote <ArrowRight className="h-4 w-4" />
           </a>
