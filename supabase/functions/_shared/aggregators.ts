@@ -36,13 +36,22 @@ const SOCIAL_AND_DIRECTORY_DOMAINS = new Set<string>([
   "tripadvisor.co.uk", "google.com", "maps.google.com", "business.google.com",
 ]);
 
-/** Platform OWN social handles — a facebook.com/<handle> or instagram.com/<handle>
- *  whose handle is one of these is the PLATFORM's account, never the business's. */
+/** Exact platform social handles (covers short/ambiguous tokens safely). */
 const PLATFORM_SOCIAL_HANDLES = new Set<string>([
   "fresha", "booksy", "treatwell", "vagaro", "styleseat", "setmore",
   "gettimely", "timely", "squareup", "square", "schedulicity",
   "acuityscheduling", "ovatu", "simplybook", "mindbody", "calendly", "phorest",
 ]);
+
+/** Distinctive platform tokens — matched as a SUBSTRING of the handle so variant
+ *  accounts (facebook.com/freshabeauty, /fresha.salon, /booksyapp) are caught too.
+ *  Excludes short/ambiguous tokens ("square", "timely") that could appear in a real
+ *  business handle — those stay exact-match only. */
+const PLATFORM_SOCIAL_TOKENS = [
+  "fresha", "booksy", "treatwell", "vagaro", "styleseat", "schedulicity",
+  "acuityscheduling", "simplybook", "phorest", "ovatu", "setmore", "gettimely",
+  "calendly", "mindbody",
+];
 
 /** Lowercased registrable-ish domain (strip scheme, port, leading www.). */
 export function domainOf(url: string): string {
@@ -81,7 +90,11 @@ export function isPlatformSocialUrl(url: string): boolean {
   try {
     const path = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).pathname;
     const handle = path.split("/").filter(Boolean)[0]?.toLowerCase() ?? "";
-    return PLATFORM_SOCIAL_HANDLES.has(handle);
+    if (!handle) return false;
+    // Exact match (covers short/ambiguous tokens), OR the handle CONTAINS a
+    // distinctive platform token (catches variants like freshabeauty / fresha.salon).
+    if (PLATFORM_SOCIAL_HANDLES.has(handle)) return true;
+    return PLATFORM_SOCIAL_TOKENS.some((t) => handle.includes(t));
   } catch {
     return false;
   }
