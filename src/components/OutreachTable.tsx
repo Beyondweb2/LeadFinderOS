@@ -32,6 +32,10 @@ import {
   Copy,
   CheckCheck,
   Star,
+  Mail,
+  Instagram,
+  Facebook,
+  Smartphone,
   RefreshCw,
   Loader2,
   MessageSquare,
@@ -210,6 +214,12 @@ export function OutreachTable({
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
   const [countryFilter, setCountryFilter] = useState<Country | 'all'>('all');
   const [trackedOnly, setTrackedOnly] = useState(false);
+  // Contactability filters (AND-combined, stack with the others). Each matches the
+  // SAME stored fields that drive the row icons, so the count is consistent.
+  const [hasEmail, setHasEmail] = useState(false);
+  const [hasInstagram, setHasInstagram] = useState(false);
+  const [hasFacebook, setHasFacebook] = useState(false);
+  const [hasWhatsApp, setHasWhatsApp] = useState(false);
   // Lead-detail modal (Track Leads fold-in) — opened on row click.
   const [detailLead, setDetailLead] = useState<OutreachLead | null>(null);
   const [sortField, setSortField] = useState<SortField>('created_at');
@@ -838,6 +848,12 @@ export function OutreachTable({
       result = result.filter((lead) => lead.is_potential_work);
     }
 
+    // Contactability filters (AND) — only REAL stored values, matching the row icons.
+    if (hasEmail) result = result.filter((lead) => !!lead.email);
+    if (hasInstagram) result = result.filter((lead) => !!lead.instagram_url);
+    if (hasFacebook) result = result.filter((lead) => !!lead.facebook_url);
+    if (hasWhatsApp) result = result.filter((lead) => lead.line_type === 'mobile');
+
     // Sort
     result.sort((a, b) => {
       let comparison = 0;
@@ -867,7 +883,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, sortField, sortDirection]);
+  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sortField, sortDirection]);
 
   const newestLeadId = useMemo(() => {
     if (leads.length === 0) return null;
@@ -1169,6 +1185,24 @@ export function OutreachTable({
               <Star className={cn('h-3.5 w-3.5 mr-1.5', trackedOnly && 'fill-current')} />
               Tracked
             </Button>
+            {/* Contactability filters (AND, stack with the rest). Real stored values only. */}
+            <Button variant={hasEmail ? 'default' : 'outline'} size="sm" onClick={() => { setHasEmail((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !hasEmail && 'bg-background')} title="Has a real stored email">
+              <Mail className="h-3.5 w-3.5 mr-1.5" /> Email
+            </Button>
+            <Button variant={hasInstagram ? 'default' : 'outline'} size="sm" onClick={() => { setHasInstagram((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !hasInstagram && 'bg-background')} title="Has a real stored Instagram">
+              <Instagram className="h-3.5 w-3.5 mr-1.5" /> IG
+            </Button>
+            <Button variant={hasFacebook ? 'default' : 'outline'} size="sm" onClick={() => { setHasFacebook((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !hasFacebook && 'bg-background')} title="Has a real stored Facebook">
+              <Facebook className="h-3.5 w-3.5 mr-1.5" /> FB
+            </Button>
+            <Button variant={hasWhatsApp ? 'default' : 'outline'} size="sm" onClick={() => { setHasWhatsApp((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !hasWhatsApp && 'bg-background')} title="Mobile line-type — WhatsApp-capable">
+              <Smartphone className="h-3.5 w-3.5 mr-1.5" /> WhatsApp
+            </Button>
+            {(hasEmail || hasInstagram || hasFacebook || hasWhatsApp) && (
+              <span className="self-center text-xs text-muted-foreground whitespace-nowrap" title="Leads matching all active filters">
+                {filteredAndSortedLeads.length} match
+              </span>
+            )}
             {/* Sort — status / date added / due date / tracked-first */}
             <Select
               value={`${sortField}:${sortDirection}`}
