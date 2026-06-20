@@ -986,7 +986,13 @@ function Reviews({
   reviewCount?: number;
   googleReviewsUrl?: string;
 }) {
-  const list = (reviews ?? []).filter((r) => r && r.author?.trim() && r.text?.trim());
+  // Cap at the 3 BEST (highest stars first; tie-break toward longer/substantial
+  // text). Defensive — generate already sends the best 3, this also covers any
+  // already-stored content with more.
+  const list = (reviews ?? [])
+    .filter((r) => r && r.author?.trim() && r.text?.trim())
+    .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.text?.length ?? 0) - (a.text?.length ?? 0))
+    .slice(0, 3);
   const hasRating = typeof googleRating === "number" && googleRating > 0;
   const showCount = typeof reviewCount === "number" && reviewCount >= REVIEW_COUNT_MIN;
   // Nothing real to show at all → render nothing (never fabricate).
