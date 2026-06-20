@@ -32,38 +32,16 @@ export interface ApifyEnrichResult {
 // Per-call fake cost in stub mode (matches the ballpark of a real Apify actor run).
 const STUB_COST_USD = 0.01;
 
-/** Slugify a business name into a domain/handle-safe token. */
-function slugify(name: string): string {
-  return (name || "")
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[^a-z0-9]+/g, "")
-    .slice(0, 40);
-}
-
-/** Stub: deterministic, plausible fake data derived from the business name. */
-function stubResult(input: ApifyEnrichInput): ApifyEnrichResult {
-  const slug = slugify(input.businessName);
-
-  // No usable name → simulate a "not found" so the 'none' path is exercisable.
-  if (!slug || slug.length < 2) {
-    return { found: false, value: null, costUsd: STUB_COST_USD, source: "apify", mode: "stub" };
-  }
-
-  let value: string;
-  switch (input.enrichmentType) {
-    case "email":
-      value = `info@${slug}.co.uk`;
-      break;
-    case "facebook":
-      value = `https://www.facebook.com/${slug}`;
-      break;
-    case "instagram":
-      value = `https://www.instagram.com/${slug}`;
-      break;
-  }
-
-  return { found: true, value, costUsd: STUB_COST_USD, source: "apify", mode: "stub" };
+/**
+ * Stub: returns NOT-FOUND, always. It used to fabricate plausible URLs/emails
+ * from the business name (info@{slug}.co.uk, facebook.com/{slug}, …) which got
+ * stored on leads and rendered as dead/wrong links — an honesty-rule violation.
+ * That construction is deleted: this stub NEVER invents a value. Real contacts
+ * come only from verified enrichment (enrich-business → Maps + Facebook actors).
+ * Zero cost — it does no work.
+ */
+function stubResult(_input: ApifyEnrichInput): ApifyEnrichResult {
+  return { found: false, value: null, costUsd: 0, source: "apify", mode: "stub" };
 }
 
 /**
