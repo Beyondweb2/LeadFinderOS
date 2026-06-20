@@ -32,6 +32,7 @@ export function useEnrichBusiness(
           business_name: lead.business_name ?? null,
           facebook_url: lead.facebook_url ?? null,
           instagram_url: lead.instagram_url ?? null,
+          website: lead.website ?? null,
         },
       });
       if (error) throw error;
