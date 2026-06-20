@@ -15,6 +15,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { NormalizedPlace } from "../_shared/enrichment/apify.ts";
 import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { lookupLineType } from "../_shared/enrichment/whatsapp.ts";
@@ -66,9 +67,45 @@ function nameSimilarity(a: string, b: string): number {
   return inter / Math.min(A.size, B.size);
 }
 
+/** Postcode "outward" code, e.g. "B1 2AB" → "b1" (the area+district part). */
+function postcodeOutward(pc: string): string {
+  return (pc || "").toUpperCase().replace(/\s+/g, " ").trim().split(" ")[0].toLowerCase();
+}
+
+/**
+ * LOCATION-MATCH GUARD (Birmingham-vs-Swindon). A web-results FB/website can be a
+ * same-name business in another city. Only trust it if the result's own text
+ * (title/snippet/url) contains the lead's Maps city OR postcode-outward. Anything
+ * else — different city, or no location signal at all — is UNCONFIRMED → not
+ * auto-attached. Returns the matched needle for logging, or null.
+ */
+function locationMatch(candidateText: string, place: NormalizedPlace | null): string | null {
+  const t = (candidateText || "").toLowerCase();
+  if (!t || !place) return null;
+  const needles: string[] = [];
+  if (place.city) needles.push(place.city.toLowerCase().trim());
+  const pcOut = postcodeOutward(place.postalCode ?? "");
+  if (pcOut) needles.push(pcOut);
+  // Town from the address tail (compass often omits `city` but keeps it in address).
+  if (place.address) {
+    for (const part of place.address.split(",").map((s) => s.trim().toLowerCase())) {
+      if (part.length > 2 && !/^\d/.test(part)) needles.push(part);
+    }
+  }
+  for (const n of needles) {
+    if (n.length > 2 && t.includes(n)) return n;
+  }
+  return null;
+}
+
 interface EnrichResult {
   email: string | null;
   facebook: string | null;
+  /** How `facebook` was found: 'manual' | 'apify' (maps/website-crawl) | 'websearch'. */
+  facebookMethod: string | null;
+  /** A web-results FB whose location did NOT match — surfaced for the operator to
+   *  verify + paste manually, never auto-attached. */
+  facebookSuggestion: { url: string; reason: string } | null;
   instagram: string | null;
   lineType: string;
   imagePool: string[];
@@ -151,9 +188,51 @@ serve(async (req) => {
 
         // 2) Discover the FB/IG profile URLs via a CASCADE — only scrape socials
         //    when a URL actually exists (don't pay for a profile that isn't there).
-        //    FB: existing → Maps → website crawl. IG: existing → Maps.
+        //    FB: existing → Maps listing → web-results (location-guarded) → website
+        //    crawl. IG: existing → Maps.
         let fbUrl = existingFacebook || place?.facebook || "";
-        if (!fbUrl) fbUrl = await discoverFacebookFromWebsite(website, authHeader);
+        let fbMethod: string | null = existingFacebook ? "manual" : place?.facebook ? "apify" : null;
+        let fbSuggestion: { url: string; reason: string } | null = null;
+
+        // 2b) Web-results discovery (includeWebResults). Scan the place's "Web
+        //     results" for a facebook.com URL and a non-social website. A web-found
+        //     URL is only trusted when the result's text matches the lead's Maps
+        //     location (Birmingham-vs-Swindon guard); otherwise it's surfaced as a
+        //     suggestion to verify, never auto-attached.
+        let webSite = "";
+        const webResults = place?.webResults ?? [];
+        if (webResults.length) {
+          if (!fbUrl) {
+            const fbEntry = webResults.find((w) => /(?:^|\.)facebook\.com\//i.test(w.url));
+            if (fbEntry) {
+              const hit = locationMatch(fbEntry.text, place);
+              if (hit) {
+                fbUrl = fbEntry.url;
+                fbMethod = "websearch";
+                console.log(`[enrich-business] web-results FB matched location "${hit}": ${fbEntry.url}`);
+              } else {
+                fbSuggestion = { url: fbEntry.url, reason: "location_mismatch" };
+                console.log(`[enrich-business] web-results FB location UNCONFIRMED, not attaching: ${fbEntry.url}`);
+              }
+            }
+          }
+          // A location-matched website feeds the crawl fallback below.
+          const siteEntry = webResults.find(
+            (w) => !/(?:facebook|instagram|twitter|x|youtube|tiktok|linkedin)\.com\//i.test(w.url),
+          );
+          if (siteEntry && locationMatch(siteEntry.text, place)) webSite = siteEntry.url;
+        }
+
+        // 2c) Last resort: crawl a website (lead's own, else a location-matched
+        //     web-results site) for a FB link.
+        if (!fbUrl) {
+          const crawlSite = website || webSite;
+          const crawled = await discoverFacebookFromWebsite(crawlSite, authHeader);
+          if (crawled) {
+            fbUrl = crawled;
+            fbMethod = crawlSite === webSite ? "websearch" : "apify";
+          }
+        }
         const igUrl = existingInstagram || place?.instagram || "";
 
         // 3) Conditional FB/IG scrape: FB → email (pages-scraper) + photos
@@ -195,6 +274,8 @@ serve(async (req) => {
         const result: EnrichResult = {
           email,
           facebook: fbUrl || null,
+          facebookMethod: fbUrl ? fbMethod : null,
+          facebookSuggestion: fbSuggestion,
           instagram: igUrl || null,
           lineType,
           imagePool,
@@ -224,7 +305,7 @@ serve(async (req) => {
     };
     if (!r.match.lowConfidence) {
       if (r.email) Object.assign(update, { email: r.email, email_status: "found", email_method: "apify", email_last_checked_at: now, enrichment_source: "apify" });
-      if (r.facebook) Object.assign(update, { facebook_url: r.facebook, facebook_status: "found", facebook_method: "apify", facebook_last_checked_at: now });
+      if (r.facebook) Object.assign(update, { facebook_url: r.facebook, facebook_status: "found", facebook_method: r.facebookMethod ?? "apify", facebook_last_checked_at: now });
       if (r.instagram) Object.assign(update, { instagram_url: r.instagram, instagram_status: "found", instagram_method: "apify", instagram_last_checked_at: now });
     }
     if (Object.keys(update).length) {
