@@ -41,7 +41,7 @@ import {
   PhoneOff,
   PhoneCall,
   X,
-  Sparkles,
+  Wand2,
   Settings2,
   Scissors,
   Flower2,
@@ -1540,7 +1540,7 @@ export function OutreachTable({
                                     {generatingSiteId === lead.id ? (
                                       <Loader2 className="h-4 w-4 animate-spin" />
                                     ) : (
-                                      <Sparkles className="h-4 w-4" />
+                                      <Wand2 className="h-4 w-4" />
                                     )}
                                   </button>
                                 </DropdownMenuTrigger>
