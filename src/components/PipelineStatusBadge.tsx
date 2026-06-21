@@ -33,6 +33,11 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Replied',
     className: 'bg-[hsl(var(--badge-replied))] text-[hsl(var(--badge-replied-fg))] border-transparent font-semibold',
   },
+  site_sent: {
+    label: 'Site Sent',
+    shortLabel: 'Site Sent',
+    className: 'bg-emerald-500/20 text-emerald-400 border-transparent font-semibold',
+  },
   interested: {
     label: 'Interested',
     shortLabel: 'Interested',

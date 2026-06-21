@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Send, PhoneCall } from 'lucide-react';
+import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy } from 'lucide-react';
 import { TeamNotes } from '@/components/TeamNotes';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
@@ -208,9 +208,6 @@ function SectionLabel({ icon: Icon, color, children }: { icon: React.ComponentTy
 
 const CARD = 'rounded-xl border border-border/60 bg-card/60 p-3.5 shadow-sm';
 
-// Untyped client for the journey-marker columns not in the generated types yet.
-const odb = supabase as unknown as SupabaseClient;
-
 // Status options come from the shared PIPELINE_STATUS_OPTIONS (same list the
 // Outreach row uses) — one source of truth so a lead offers identical options
 // everywhere. Outcomes (Won/Lost) remain the footer Mark Paid/Lost actions.
@@ -308,9 +305,6 @@ function LeadDetailBody({
   );
   const [editingName, setEditingName] = useState(false);
   const [editedName, setEditedName] = useState(lead.business_name);
-  // Journey markers (manual milestones) — local state, persisted via untyped client.
-  const [siteSentAt, setSiteSentAt] = useState<string | null>(lead.site_sent_at ?? null);
-  const [callBookedAt, setCallBookedAt] = useState<string | null>(lead.call_booked_at ?? null);
   const [emailCopied, setEmailCopied] = useState(false);
   const { customActions, addAction } = useCustomNextActions();
   const notesRef = useRef<HTMLTextAreaElement>(null);
@@ -422,18 +416,6 @@ function LeadDetailBody({
     }
   };
 
-  // Journey markers — toggle the timestamp; persist via the untyped client
-  // (these columns aren't in the generated types). Local state drives the stepper.
-  const markSiteSent = async () => {
-    const v = siteSentAt ? null : new Date().toISOString();
-    setSiteSentAt(v);
-    if (!isDemoLead(lead.id)) await odb.from('outreach_leads').update({ site_sent_at: v }).eq('id', lead.id);
-  };
-  const markCallBooked = async () => {
-    const v = callBookedAt ? null : new Date().toISOString();
-    setCallBookedAt(v);
-    if (!isDemoLead(lead.id)) await odb.from('outreach_leads').update({ call_booked_at: v }).eq('id', lead.id);
-  };
   const copyEmail = async () => {
     if (!lead.email) return;
     try {
@@ -668,19 +650,20 @@ function LeadDetailBody({
             )}
           </div>
 
-          {/* Milestone stepper. Contacted/Replied come from the lead status (the dashboard
-              source of truth); Opened/Add-on are auto site signals; Site sent + Call booked
-              are the manual markers you toggle below. */}
+          {/* Milestone stepper, all derived from data: Contacted/Replied/Site sent from
+              the lead status (source of truth, set via the status dropdown); Opened/Add-on
+              from the site funnel signals. No manual toggles. */}
           <div className="overflow-x-auto thin-scrollbar">
             <div className="flex items-start min-w-[420px]">
               {(
                 [
                   { label: 'Contacted', done: isSentStatus(lead.status), at: lead.last_outreach_attempt_at ?? null },
                   { label: 'Replied', done: isRepliedStatus(lead.status) || !!funnel?.replied_at, at: funnel?.replied_at ?? null },
-                  { label: 'Site sent', done: !!siteSentAt || !!funnel?.sent_at, at: siteSentAt ?? funnel?.sent_at ?? null },
+                  // "Site sent" now derives from the status (single source of truth);
+                  // legacy site_sent_at + the site funnel's sent_at still count.
+                  { label: 'Site sent', done: lead.status === 'site_sent' || !!lead.site_sent_at || !!funnel?.sent_at, at: lead.site_sent_at ?? funnel?.sent_at ?? null },
                   { label: 'Opened', done: !!funnel?.first_opened_at, at: funnel?.first_opened_at ?? null },
                   { label: 'Add-on', done: !!funnel?.addon_interest_at, at: funnel?.addon_interest_at ?? null },
-                  { label: 'Call booked', done: !!callBookedAt, at: callBookedAt ?? null },
                 ] as { label: string; done: boolean; at: string | null }[]
               ).map((s, i, arr) => {
                 const nextDone = i < arr.length - 1 && arr[i + 1].done;
@@ -702,27 +685,6 @@ function LeadDetailBody({
             </div>
           </div>
 
-          {/* Manual markers — the two milestones only you know about */}
-          <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-border/40 pt-3">
-            <Button
-              size="sm"
-              variant={siteSentAt ? 'default' : 'outline'}
-              onClick={markSiteSent}
-              className="h-7 gap-1.5 text-xs"
-            >
-              <Send className="h-3.5 w-3.5" />
-              {siteSentAt ? `Site sent · ${format(new Date(siteSentAt), 'd MMM')}` : 'Mark site sent'}
-            </Button>
-            <Button
-              size="sm"
-              variant={callBookedAt ? 'default' : 'outline'}
-              onClick={markCallBooked}
-              className="h-7 gap-1.5 text-xs"
-            >
-              <PhoneCall className="h-3.5 w-3.5" />
-              {callBookedAt ? `Call booked · ${format(new Date(callBookedAt), 'd MMM')}` : 'Mark call booked'}
-            </Button>
-          </div>
         </section>
 
         {/* ── Two-column body ── */}
