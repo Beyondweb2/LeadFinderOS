@@ -1395,6 +1395,16 @@ export function OutreachTable({
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
                           )}
                           <WhatsAppStatusBadge status={lead.whatsapp_status} />
+                          {/* Site-sent marker (from the Journey "Mark site sent"). Leads the
+                              funnel pills so it reads: Sent → Opened → Claimed → Upsell. */}
+                          {lead.site_sent_at && (
+                            <span
+                              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border-transparent bg-emerald-500/20 text-emerald-400"
+                              title="You marked the site as sent"
+                            >
+                              Sent
+                            </span>
+                          )}
                           {/* Site claim/upsell funnel (admin) — from generated_sites tracking */}
                           {(() => {
                             const f = sitesByLead[lead.id];
