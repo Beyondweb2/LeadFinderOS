@@ -36,6 +36,7 @@ import {
   Instagram,
   Facebook,
   Smartphone,
+  Globe,
   RefreshCw,
   Loader2,
   MessageSquare,
@@ -137,6 +138,31 @@ const ITEMS_PER_PAGE_MOBILE = 10;
 type SortField = 'business_name' | 'status' | 'next_action_date' | 'created_at' | 'tracked';
 type SortDirection = 'asc' | 'desc';
 
+// Cheap LISTING-level channel signals — derived for free from the stored `website`
+// field (no API call, no enrich). "FB/IG (listing)" = the Maps listing's website is
+// a Facebook/Instagram link; "has own website" = a real site (not social/booking).
+// Honest: these are listing signals, NOT verified socials (those need deep enrich).
+const SIGNAL_NON_OWN_DOMAINS = [
+  'facebook.com', 'fb.com', 'instagram.com',
+  'fresha.com', 'booksy.com', 'treatwell.com', 'vagaro.com', 'styleseat.com',
+  'setmore.com', 'gettimely.com', 'squareup.com', 'acuityscheduling.com',
+  'linktr.ee', 'linktree.com',
+];
+function siteDomain(url?: string | null): string {
+  if (!url) return '';
+  try {
+    return new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname.toLowerCase().replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+const isFacebookListing = (url?: string | null) => /(?:^|\.)(?:facebook|fb)\.com$/.test(siteDomain(url));
+const isInstagramListing = (url?: string | null) => /(?:^|\.)instagram\.com$/.test(siteDomain(url));
+const isOwnWebsite = (url?: string | null) => {
+  const d = siteDomain(url);
+  return !!d && !SIGNAL_NON_OWN_DOMAINS.some((x) => d === x || d.endsWith(`.${x}`));
+};
+
 export function OutreachTable({ 
   leads, 
   onLeadClick, 
@@ -220,6 +246,10 @@ export function OutreachTable({
   const [hasInstagram, setHasInstagram] = useState(false);
   const [hasFacebook, setHasFacebook] = useState(false);
   const [hasWhatsApp, setHasWhatsApp] = useState(false);
+  // Listing-level signal filters — free (derived from stored website), not verified.
+  const [sigWebsite, setSigWebsite] = useState(false);
+  const [sigFacebook, setSigFacebook] = useState(false);
+  const [sigInstagram, setSigInstagram] = useState(false);
   // Lead-detail modal (Track Leads fold-in) — opened on row click.
   const [detailLead, setDetailLead] = useState<OutreachLead | null>(null);
   const [sortField, setSortField] = useState<SortField>('created_at');
@@ -854,6 +884,11 @@ export function OutreachTable({
     if (hasFacebook) result = result.filter((lead) => !!lead.facebook_url);
     if (hasWhatsApp) result = result.filter((lead) => lead.line_type === 'mobile');
 
+    // Listing-level signal filters (free, derived from stored website; AND).
+    if (sigWebsite) result = result.filter((lead) => isOwnWebsite(lead.website));
+    if (sigFacebook) result = result.filter((lead) => isFacebookListing(lead.website));
+    if (sigInstagram) result = result.filter((lead) => isInstagramListing(lead.website));
+
     // Sort
     result.sort((a, b) => {
       let comparison = 0;
@@ -883,7 +918,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sortField, sortDirection]);
+  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
 
   const newestLeadId = useMemo(() => {
     if (leads.length === 0) return null;
@@ -1198,7 +1233,17 @@ export function OutreachTable({
             <Button variant={hasWhatsApp ? 'default' : 'outline'} size="sm" onClick={() => { setHasWhatsApp((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !hasWhatsApp && 'bg-background')} title="Mobile line-type — WhatsApp-capable">
               <Smartphone className="h-3.5 w-3.5 mr-1.5" /> WhatsApp
             </Button>
-            {(hasEmail || hasInstagram || hasFacebook || hasWhatsApp) && (
+            {/* Listing-level signals — FREE (derived from the stored website), NOT verified. */}
+            <Button variant={sigWebsite ? 'default' : 'outline'} size="sm" onClick={() => { setSigWebsite((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !sigWebsite && 'bg-background')} title="Listing has a real own website (not social/booking) — from listing, not verified">
+              <Globe className="h-3.5 w-3.5 mr-1.5" /> Website
+            </Button>
+            <Button variant={sigFacebook ? 'default' : 'outline'} size="sm" onClick={() => { setSigFacebook((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !sigFacebook && 'bg-background')} title="Listing's website is a Facebook link — from listing, not verified">
+              <Facebook className="h-3.5 w-3.5 mr-1.5" /> FB (listing)
+            </Button>
+            <Button variant={sigInstagram ? 'default' : 'outline'} size="sm" onClick={() => { setSigInstagram((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !sigInstagram && 'bg-background')} title="Listing's website is an Instagram link — from listing, not verified">
+              <Instagram className="h-3.5 w-3.5 mr-1.5" /> IG (listing)
+            </Button>
+            {(hasEmail || hasInstagram || hasFacebook || hasWhatsApp || sigWebsite || sigFacebook || sigInstagram) && (
               <span className="self-center text-xs text-muted-foreground whitespace-nowrap" title="Leads matching all active filters">
                 {filteredAndSortedLeads.length} match
               </span>
