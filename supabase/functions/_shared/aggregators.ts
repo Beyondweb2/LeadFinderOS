@@ -36,6 +36,30 @@ const SOCIAL_AND_DIRECTORY_DOMAINS = new Set<string>([
   "tripadvisor.co.uk", "google.com", "maps.google.com", "business.google.com",
 ]);
 
+/** Directories, review sites, GOVERNMENT RECORDS, and aggregator LISTINGS that are
+ *  ABOUT a business but are NOT its own website (e.g. Companies House). Same
+ *  treatment as booking platforms: never crawled, never stored/shown as their site;
+ *  if the only "website" found is one of these → treat as NO own website. Subdomain
+ *  matching (inSet endsWith) covers e.g. find-and-update.company-information.service.gov.uk. */
+export const DIRECTORY_AND_RECORD_DOMAINS = new Set<string>([
+  // UK government company register (Companies House) + variants/subdomains
+  "company-information.service.gov.uk", "companieshouse.gov.uk",
+  // Company-data / credit-record aggregators
+  "endole.co.uk", "companycheck.co.uk", "company-check.co.uk", "companieslist.co.uk",
+  "opencorporates.com", "globaldatabase.com", "datanyze.com",
+  // Review sites
+  "trustpilot.com", "trustpilot.co.uk", "reviews.io", "feefo.com",
+  // Trades directories / lead marketplaces
+  "checkatrade.com", "bark.com", "mybuilder.com", "ratedpeople.com",
+  "trustatrader.com", "trustmark.org.uk", "which.co.uk",
+  // General business directories
+  "thomsonlocal.com", "cylex.co.uk", "cylex-uk.co.uk", "scoot.co.uk",
+  "freeindex.co.uk", "192.com", "hotfrog.co.uk", "hotfrog.com", "brownbook.net",
+  "misterwhat.co.uk", "findopen.co.uk", "opendi.co.uk", "tupalo.net",
+  "nextdoor.co.uk", "nextdoor.com", "bizify.co.uk", "uk.locanto",
+  "thebestof.co.uk", "freeola.com",
+]);
+
 /** Exact platform social handles (covers short/ambiguous tokens safely). */
 const PLATFORM_SOCIAL_HANDLES = new Set<string>([
   "fresha", "booksy", "treatwell", "vagaro", "styleseat", "setmore",
@@ -79,7 +103,9 @@ export function isBookingPlatformUrl(url: string): boolean {
  *  directory) — so it must not be crawled or stored as the business's website. */
 export function isAggregatorUrl(url: string): boolean {
   const d = domainOf(url);
-  return inSet(d, BOOKING_PLATFORM_DOMAINS) || inSet(d, SOCIAL_AND_DIRECTORY_DOMAINS);
+  return inSet(d, BOOKING_PLATFORM_DOMAINS)
+    || inSet(d, SOCIAL_AND_DIRECTORY_DOMAINS)
+    || inSet(d, DIRECTORY_AND_RECORD_DOMAINS);
 }
 
 /** True when a facebook.com / instagram.com URL points at a PLATFORM's own account
