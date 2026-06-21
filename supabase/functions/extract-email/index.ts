@@ -40,6 +40,9 @@ function cleanEmail(raw: string): string {
   let e = raw.trim().toLowerCase();
   try { e = decodeURIComponent(e); } catch { /* keep as-is */ }
   e = e.replace(/^mailto:/, '');
+  // Cut anything after the address — a /path, ?query, #fragment or whitespace that
+  // clings to mailto hrefs (e.g. "info@x.co.uk/msj" → "info@x.co.uk").
+  e = e.split(/[/?#\s]/)[0];
   // strip trailing punctuation that often clings to text-extracted emails
   e = e.replace(/[.,;:)>\]}'"]+$/, '');
   return e;
@@ -62,8 +65,14 @@ const JUNK_PATTERNS: RegExp[] = [
 // no-reply style: real addresses, but never a usable contact
 const SYSTEM_LOCAL = /^(no-?reply|do-?not-?reply|donotreply|mailer-daemon|postmaster|bounce|notifications?|automated)/i;
 
+// Strict, anchored shape: a clean local@domain.tld ONLY — rejects anything with a
+// "/", path, query, spaces, or a missing/short TLD (bad emails bounce).
+const STRICT_EMAIL = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}$/;
+
 function isJunk(email: string): boolean {
   if (!email || email.length > 100) return true;
+  if (!STRICT_EMAIL.test(email)) return true;   // not a clean valid email → reject
+  if (email.includes('..')) return true;        // no consecutive dots
   const at = email.indexOf('@');
   if (at < 1) return true;
   const local = email.slice(0, at);
@@ -97,7 +106,7 @@ function pickBest(candidates: string[]): string | null {
 function extractEmails(html: string): string | null {
   // 1) mailto: hrefs — most reliable signal of a real contact email.
   const mailto: string[] = [];
-  const mailtoRe = /mailto:([^"'?\s<>]+)/gi;
+  const mailtoRe = /mailto:([^"'?\s<>/]+)/gi;
   let mm: RegExpExecArray | null;
   while ((mm = mailtoRe.exec(html)) !== null) {
     const e = cleanEmail(mm[1]);
@@ -275,6 +284,18 @@ Deno.serve(async (req) => {
       pagesFetched++;
       email = extractEmails(html);
       if (email) break;
+    }
+
+    // If NOTHING was reachable this run (cold DNS/TLS, transient block), retry the
+    // homepage once — sites often fail the first hit. Bounded: one extra fetch, only
+    // when the whole run reached zero pages. (A still-unreachable site stays
+    // uncached below, so a later re-run retries it again.)
+    if (pagesFetched === 0) {
+      const retryHtml = await fetchHtml(url);
+      if (retryHtml !== null) {
+        pagesFetched++;
+        email = extractEmails(retryHtml);
+      }
     }
 
     // Usage log (best-effort) — still $0 (plain HTTP).
