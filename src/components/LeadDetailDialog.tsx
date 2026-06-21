@@ -29,8 +29,9 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, formatDistanceToNow, startOfDay } from 'date-fns';
 import { SALE_TYPES, SALE_TYPE_LABELS, resolveSaleType, type SaleType } from '@/lib/saleType';
-import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod } from '@/types/outreach';
-import { CONTACT_METHOD_OPTIONS, isSentStatus, isRepliedStatus } from '@/types/outreach';
+import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, isSentStatus, isRepliedStatus } from '@/types/outreach';
+import { PipelineStatusBadge } from '@/components/PipelineStatusBadge';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { cn } from '@/lib/utils';
 
@@ -210,14 +211,9 @@ const CARD = 'rounded-xl border border-border/60 bg-card/60 p-3.5 shadow-sm';
 // Untyped client for the journey-marker columns not in the generated types yet.
 const odb = supabase as unknown as SupabaseClient;
 
-// Conversation stage options for the Status pill. Values stay INSIDE the set the
-// dashboard reads (contacted/replied/interested) so Sent/Replied reconciliation
-// is preserved. Outcomes (Won/Lost) are the footer Mark Paid/Lost actions.
-const STAGE_OPTIONS: { value: string; label: string; cls: string }[] = [
-  { value: 'contacted', label: 'Contacted', cls: 'bg-[hsl(var(--badge-attempted))] text-[hsl(var(--badge-attempted-fg))] border-transparent' },
-  { value: 'replied', label: 'Replied', cls: 'bg-[hsl(var(--badge-replied))] text-[hsl(var(--badge-replied-fg))] border-transparent' },
-  { value: 'interested', label: 'Following up', cls: 'bg-[hsl(var(--badge-purple))] text-[hsl(var(--badge-purple-fg))] border-transparent' },
-];
+// Status options come from the shared PIPELINE_STATUS_OPTIONS (same list the
+// Outreach row uses) — one source of truth so a lead offers identical options
+// everywhere. Outcomes (Won/Lost) remain the footer Mark Paid/Lost actions.
 
 interface LeadDetailDialogProps {
   open: boolean;
@@ -507,18 +503,6 @@ function LeadDetailBody({
   };
 
   const dueLabel = getDueLabel(lead.next_action_date, lead.next_action);
-  // Stage pill label/colour — exact match in STAGE_OPTIONS, else a dashboard-safe
-  // fallback so existing statuses still read sensibly (replied/interested → Replied,
-  // anything past New → Contacted, else New).
-  const stageMatch = STAGE_OPTIONS.find((s) => s.value === lead.status);
-  const stageLabel = stageMatch?.label
-    ?? (isRepliedStatus(lead.status) ? 'Replied' : isSentStatus(lead.status) ? 'Contacted' : 'Set stage');
-  const stageCls = stageMatch?.cls
-    ?? (isRepliedStatus(lead.status)
-      ? 'bg-[hsl(var(--badge-replied))] text-[hsl(var(--badge-replied-fg))] border-transparent'
-      : isSentStatus(lead.status)
-        ? 'bg-[hsl(var(--badge-attempted))] text-[hsl(var(--badge-attempted-fg))] border-transparent'
-        : 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent');
 
   return (
     <>
@@ -560,12 +544,14 @@ function LeadDetailBody({
 
         {/* Glanceable pills — status / next action / due / contact / revenue */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Select value={STAGE_OPTIONS.some((s) => s.value === lead.status) ? lead.status : ''} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}>
+          {/* Status — the SAME list as the Outreach row (PIPELINE_STATUS_OPTIONS) so a
+              lead offers identical options everywhere; badge matches the row too. */}
+          <Select value={PIPELINE_STATUS_OPTIONS.some((o) => o.value === lead.status) ? lead.status : ''} onValueChange={(v) => onStatusChange(lead.id, v as LeadStatus)}>
             <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0">
-              <Badge variant="outline" className={cn('cursor-pointer font-semibold', stageCls)}>{stageLabel}</Badge>
+              <PipelineStatusBadge status={lead.status as PipelineStatus} />
             </SelectTrigger>
             <SelectContent className="pointer-events-auto">
-              {STAGE_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
+              {PIPELINE_STATUS_OPTIONS.map((opt) => (<SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>))}
             </SelectContent>
           </Select>
 
