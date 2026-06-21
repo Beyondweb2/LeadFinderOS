@@ -22,12 +22,12 @@ const Auth = () => {
   const emailParam = searchParamsInit.get('email');
   const existingParam = searchParamsInit.get('existing');
   const returnToParam = searchParamsInit.get('returnTo');
-  const [isLogin, setIsLogin] = useState(() => {
-    if (modeParam === 'signup' || intentParam === 'signup') return false;
-    if (modeParam === 'signin') return true;
-    if (existingParam === 'true') return true;
-    return true;
-  });
+  // Admin tool is INVITE-ONLY: this page is sign-in only. Public self-signup is
+  // disabled server-side (Supabase "Allow new users to sign up" = off); new admin
+  // users are created from the Supabase dashboard. (?mode=signup is ignored.)
+  // Barber onboarding is unaffected — it goes through /claim → claim-site
+  // (admin.createUser), a separate flow that bypasses the signup toggle.
+  const [isLogin] = useState(true);
   const [email, setEmail] = useState(emailParam || '');
   const [password, setPassword] = useState('');
   const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(() => {
@@ -240,32 +240,8 @@ const Auth = () => {
             </Button>
           </form>
 
-          {/* Toggle login/signup */}
-          <p className="text-[13px] text-muted-foreground/60 text-center mt-5">
-            {isLogin ? (
-              <>
-                {"Don't have an account? "}
-                <button
-                  type="button"
-                  onClick={() => { setIsLogin(false); setErrors({}); }}
-                  className="text-primary hover:text-primary/80 font-medium transition-colors duration-200"
-                >
-                  {t('auth.createAccount')}
-                </button>
-              </>
-            ) : (
-              <>
-                {t('auth.haveAccount') + ' '}
-                <button
-                  type="button"
-                  onClick={() => { setIsLogin(true); setErrors({}); }}
-                  className="text-primary hover:text-primary/80 font-medium transition-colors duration-200"
-                >
-                  {t('auth.signIn')}
-                </button>
-              </>
-            )}
-          </p>
+          {/* Invite-only: no public sign-up toggle. New admin users are created
+              from the Supabase dashboard; barbers onboard via /claim. */}
         </div>
       </div>
     </div>
