@@ -964,26 +964,8 @@ export function OutreachTable({
     || null
   );
 
-  const handleSort = (field: SortField) => {
-    if (sortField === field) {
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortField(field);
-      setSortDirection('asc');
-    }
-  };
-
-  const SortButton = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="h-auto p-0 hover:bg-transparent font-medium"
-      onClick={() => handleSort(field)}
-    >
-      {children}
-      <ArrowUpDown className="ml-1 h-3 w-3" />
-    </Button>
-  );
+  // Sorting is consolidated into the single "Sort by" dropdown in the toolbar — the
+  // per-column header sort buttons were removed (one place to sort).
 
   // Count overdue items
   const overdueCount = leads.filter(
@@ -1337,19 +1319,13 @@ export function OutreachTable({
                       aria-label="Select all"
                     />
                   </TableHead>
-                  <TableHead className="min-w-[150px] sm:w-[250px]">
-                    <SortButton field="business_name">Business</SortButton>
-                  </TableHead>
+                  <TableHead className="min-w-[150px] sm:w-[250px]">Business</TableHead>
                   <TableHead className="min-w-[120px] sm:w-[150px]">Phone</TableHead>
                   {!readOnly && (
                     <>
                       <TableHead className="min-w-[100px] sm:w-[120px]">Contact</TableHead>
-                      <TableHead className="min-w-[100px] sm:w-[140px]">
-                        <SortButton field="status">Status</SortButton>
-                      </TableHead>
-                      <TableHead className="min-w-[140px] sm:w-[180px]">
-                        <SortButton field="next_action_date">Next Action</SortButton>
-                      </TableHead>
+                      <TableHead className="min-w-[100px] sm:w-[140px]">Status</TableHead>
+                      <TableHead className="min-w-[140px] sm:w-[180px]">Next Action</TableHead>
                     </>
                   )}
                   <TableHead className="w-[160px] text-center">Actions</TableHead>
@@ -1395,16 +1371,6 @@ export function OutreachTable({
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
                           )}
                           <WhatsAppStatusBadge status={lead.whatsapp_status} />
-                          {/* Site-sent marker (from the Journey "Mark site sent"). Leads the
-                              funnel pills so it reads: Sent → Opened → Claimed → Upsell. */}
-                          {lead.site_sent_at && (
-                            <span
-                              className="inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold border-transparent bg-emerald-500/20 text-emerald-400"
-                              title="You marked the site as sent"
-                            >
-                              Sent
-                            </span>
-                          )}
                           {/* Site claim/upsell funnel (admin) — from generated_sites tracking */}
                           {(() => {
                             const f = sitesByLead[lead.id];

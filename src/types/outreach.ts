@@ -8,6 +8,7 @@ export type LeadStatus =
   | 'interested'
   | 'not_interested'
   | 'delivered'
+  | 'site_sent'
   | 'sent_initial_text'
   | 'replied'
   | 'sent_voice_note'
@@ -180,6 +181,7 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'call_back', label: 'Call Back' },
   { value: 'sent_voice_note', label: 'Sent Voice Note' },
   { value: 'replied', label: 'Replied' },
+  { value: 'site_sent', label: 'Site Sent' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'no_whatsapp', label: 'No WhatsApp' },
@@ -202,6 +204,7 @@ export type PipelineStatus =
   | 'delivered'
   | 'contacted'
   | 'replied'
+  | 'site_sent'
   | 'interested'
   | 'not_interested'
   | 'completed';
@@ -212,6 +215,7 @@ export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[]
   { value: 'delivered', label: 'Delivered' },
   { value: 'contacted', label: 'Contacted' },
   { value: 'replied', label: 'Replied' },
+  { value: 'site_sent', label: 'Site Sent' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'completed', label: 'Closed' },
