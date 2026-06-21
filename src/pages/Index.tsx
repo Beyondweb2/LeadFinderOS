@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { BroadListBuilder } from '@/components/BroadListBuilder';
+import { EmailListBuilder } from '@/components/EmailListBuilder';
 import { CampaignPicker } from '@/components/CampaignPicker';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -12,7 +13,7 @@ import { useCampaigns } from '@/hooks/useCampaigns';
 import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTeamClaims } from '@/hooks/useTeamClaims';
-import { Flame, Target, Zap, Search, MapPin, Info } from 'lucide-react';
+import { Flame, Target, Zap, Search, MapPin, Info, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Country, Lead } from '@/types/lead';
 
@@ -25,8 +26,8 @@ const Index = () => {
   const { markAsChecked, isChecked } = useCheckedBusinesses();
 
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
-  // Find Leads mode: 'targeted' (curated no-website-first) | 'list' (broad list-builder).
-  const [mode, setMode] = useState<'targeted' | 'list'>('targeted');
+  // Find Leads mode: 'targeted' (curated) | 'list' (broad list-builder) | 'email' (email sourcing).
+  const [mode, setMode] = useState<'targeted' | 'list' | 'email'>('targeted');
 
   // Active campaign — new leads added from search are tagged with it.
   // Persisted so it survives navigation/reload.
@@ -68,8 +69,8 @@ const Index = () => {
 
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
-    // List-builder mode asks search-leads for the full discovered pool (cast wide).
-    search({ ...filters, broad: mode === 'list' }, false, false);
+    // List-builder + Email modes ask search-leads for the full discovered pool.
+    search({ ...filters, broad: mode === 'list' || mode === 'email' }, false, false);
   }, [search, mode]);
 
   // Bulk add (list-builder): add each selected lead, deduped + silent (one summary
@@ -124,6 +125,19 @@ const Index = () => {
     return { added, enriched, cached, failed, stoppedAtCap, cancelled };
   }, [addToOutreach, lastSearchCountry, activeCampaign, getEnrichment]);
 
+  // Bulk add for the Email builder: carry each found email onto the lead (deduped).
+  const handleBulkAddEmails = useCallback(async (items: { lead: Lead; email: string | null }[]) => {
+    let added = 0, skipped = 0;
+    for (const { lead, email } of items) {
+      const enrichment = email
+        ? { email, email_status: 'found', email_method: 'website_scrape', enrichment_source: 'website_scrape' }
+        : getEnrichment(lead.id);
+      const res = await addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, enrichment as any, true);
+      if (res) added++; else skipped++;
+    }
+    return { added, skipped };
+  }, [addToOutreach, lastSearchCountry, activeCampaign, getEnrichment]);
+
   return (
     <div className="space-y-4 md:space-y-8">
       {/* Page Header */}
@@ -158,6 +172,15 @@ const Index = () => {
               title="Cast wide: full list, filter by signal, bulk-add"
             >
               <Search className="h-3.5 w-3.5 mr-1.5" /> List builder
+            </Button>
+            <Button
+              variant={mode === 'email' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setMode('email')}
+              title="Email sourcing: find emails across the list, export / bulk-add"
+            >
+              <Mail className="h-3.5 w-3.5 mr-1.5" /> Email
             </Button>
           </div>
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
@@ -235,7 +258,14 @@ const Index = () => {
       {/* Results Section */}
       {leads.length > 0 && (
         <section data-walkthrough="results-header">
-          {mode === 'list' ? (
+          {mode === 'email' ? (
+            <EmailListBuilder
+              leads={leads}
+              isLoading={isLoading}
+              isInOutreach={isInOutreach}
+              onBulkAddEmails={handleBulkAddEmails}
+            />
+          ) : mode === 'list' ? (
             <BroadListBuilder
               leads={leads}
               isLoading={isLoading}
