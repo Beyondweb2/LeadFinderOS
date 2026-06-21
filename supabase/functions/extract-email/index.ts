@@ -116,6 +116,45 @@ function extractEmails(html: string): string | null {
   return pickBest([...mailto, ...text]);
 }
 
+/** Fetch a page's HTML (≤1MB, 8s timeout) with the SSRF guard. Returns null on any
+ *  failure (bad URL / private host / non-2xx / timeout) so callers can try the next
+ *  candidate page. */
+async function fetchHtml(rawUrl: string): Promise<string | null> {
+  let url = rawUrl.trim();
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  let parsed: URL;
+  try { parsed = new URL(url); } catch { return null; }
+  if (!['http:', 'https:'].includes(parsed.protocol)) return null;
+  if (isPrivateHostname(parsed.hostname)) return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeadFinder/1.0)', 'Accept': 'text/html' },
+    });
+    if (!res.ok) return null;
+    const reader = res.body?.getReader();
+    if (!reader) return null;
+    const maxBytes = 1024 * 1024;
+    let total = 0;
+    const chunks: Uint8Array[] = [];
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.length;
+    }
+    reader.cancel();
+    const decoder = new TextDecoder();
+    return chunks.map((c) => decoder.decode(c, { stream: true })).join('') + decoder.decode();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -189,77 +228,62 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log('Fetching website for email extraction:', url);
+    console.log('Email extraction for:', url);
 
-    // Fetch with timeout
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
+    const serviceClient = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { auth: { persistSession: false } }
+    );
+    const domain = parsedUrl.hostname.toLowerCase().replace(/^www\./, '');
+    const cacheKey = `${domain}:email_find`;
 
-    let response: Response;
+    // Cache: reuse a prior email-find for this domain (30-day) — don't re-crawl.
     try {
-      response = await fetch(url, {
-        signal: controller.signal,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; LeadFinder/1.0)',
-          'Accept': 'text/html',
-        },
-      });
+      const { data: cached } = await serviceClient
+        .from('enrichment_cache')
+        .select('result, expires_at')
+        .eq('cache_key', cacheKey)
+        .maybeSingle();
+      if (cached && (!cached.expires_at || new Date(cached.expires_at as string) > new Date())) {
+        const cachedEmail = (cached.result as { email?: string | null })?.email ?? null;
+        return new Response(
+          JSON.stringify({ success: !!cachedEmail, email: cachedEmail, cached: true }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
     } catch (e) {
-      clearTimeout(timeout);
-      const msg = e instanceof Error && e.name === 'AbortError'
-        ? 'Website took too long to respond (8s timeout)'
-        : 'Could not reach website';
-      return new Response(
-        JSON.stringify({ success: false, error: msg }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      return new Response(
-        JSON.stringify({ success: false, error: `Website returned ${response.status}` }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      console.error('extract-email cache read failed (non-blocking):', e);
     }
 
-    // Read limited HTML (first 1MB)
-    const reader = response.body?.getReader();
-    if (!reader) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'No response body' }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Multi-page crawl: homepage + common contact/about paths. Stop at first hit.
+    // (Footer emails are already on the homepage.) All free HTTP fetches.
+    const origin = parsedUrl.origin;
+    const candidates = Array.from(new Set([
+      url,
+      `${origin}/contact`,
+      `${origin}/contact-us`,
+      `${origin}/about`,
+      `${origin}/about-us`,
+    ]));
+
+    let email: string | null = null;
+    let pagesFetched = 0;
+    for (const candidate of candidates) {
+      const html = await fetchHtml(candidate);
+      if (html === null) continue; // unreachable page → try the next
+      pagesFetched++;
+      email = extractEmails(html);
+      if (email) break;
     }
 
-    const maxBytes = 1024 * 1024; // 1MB
-    let totalBytes = 0;
-    const chunks: Uint8Array[] = [];
-
-    while (totalBytes < maxBytes) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      totalBytes += value.length;
-    }
-    reader.cancel();
-
-    const decoder = new TextDecoder();
-    const html = chunks.map(c => decoder.decode(c, { stream: true })).join('') + decoder.decode();
-
-    // --- Cost/usage log: one row per successful external fetch (best-effort) ---
-    // The fetch is what costs us, so log regardless of whether an email is found.
+    // Usage log (best-effort) — still $0 (plain HTTP).
     try {
-      const serviceClient = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-        { auth: { persistSession: false } }
-      );
       await serviceClient.from('api_usage_log').insert({
         user_id: userId,
         function_name: 'extract-email',
         api_type: 'website_scrape',
-        calls_made: 1,
+        calls_made: pagesFetched,
         cache_hit: false,
         estimated_cost_usd: 0,
         trigger_source: 'email_enrichment',
@@ -268,18 +292,22 @@ Deno.serve(async (req) => {
       console.error('extract-email usage logging failed (non-blocking):', e);
     }
 
-    // --- Extract the single best email ---
-    const email = extractEmails(html);
-
-    if (!email) {
-      return new Response(
-        JSON.stringify({ success: false, email: null }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Cache the result by domain — but only if we actually reached a page (don't
+    // cache a false "none" for a site that was just temporarily unreachable).
+    if (pagesFetched > 0) {
+      try {
+        const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        await serviceClient.from('enrichment_cache').upsert(
+          { cache_key: cacheKey, enrichment_type: 'email_find', result: { email }, expires_at: expires },
+          { onConflict: 'cache_key' }
+        );
+      } catch (e) {
+        console.error('extract-email cache write failed (non-blocking):', e);
+      }
     }
 
     return new Response(
-      JSON.stringify({ success: true, email }),
+      JSON.stringify({ success: !!email, email, reachable: pagesFetched > 0 }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
