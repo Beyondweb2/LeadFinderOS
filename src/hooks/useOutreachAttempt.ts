@@ -17,11 +17,11 @@ export function useOutreachAttempt() {
         contact_method: channel,
       };
 
-      // If status is New (not_contacted), auto-set to Attempted (waiting)
-      // Do not override Replied, Interested, Closed, Not Interested
-      const protectedStatuses = ['replied', 'interested', 'not_interested', 'completed'];
+      // If status is New (not_contacted), auto-set to Initial Contact
+      // Do not override Replied, Interested, Paid, Not Interested
+      const protectedStatuses = ['replied', 'interested', 'not_interested', 'payment_received', 'completed'];
       if (!currentStatus || currentStatus === 'not_contacted') {
-        updates.status = 'waiting';
+        updates.status = 'initial_contact';
       } else if (protectedStatuses.includes(currentStatus)) {
         // Don't change status
       }

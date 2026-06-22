@@ -280,11 +280,11 @@ export function useDashboardMetrics() {
     // Pipeline counts
     const pipeline: PipelineCounts = {
       new: allLeads.filter(l => l.status === 'not_contacted' && !l.is_archived).length,
-      contacted: allLeads.filter(l => ['contacted', 'waiting', 'sent_initial_text', 'sent_voice_note', 'sms', 'whatsapp', 'facebook_msg', 'no_whatsapp', 'not_answered', 'on_hold'].includes(l.status) && !l.is_archived).length,
+      contacted: allLeads.filter(l => ['initial_contact', 'contacted', 'waiting', 'delivered', 'sent_initial_text', 'sent_voice_note', 'sms', 'whatsapp', 'facebook_msg', 'no_whatsapp', 'not_answered', 'on_hold'].includes(l.status) && !l.is_archived).length,
       followUp: allLeads.filter(l => ['call_back', 'replied'].includes(l.status) && !l.is_archived).length,
       interested: allLeads.filter(l => l.status === 'interested' && !l.is_archived).length,
       proposalSent: allLeads.filter(l => ['wants_draft', 'reviewing_draft', 'awaiting_decision'].includes(l.status) && !l.is_archived).length,
-      closedWon: allLeads.filter(l => ['paid_for_draft', 'completed'].includes(l.status) && !l.is_archived).length,
+      closedWon: allLeads.filter(l => ['payment_received', 'paid_for_draft', 'completed'].includes(l.status) && !l.is_archived).length,
     };
 
     // HERO — businesses contacted = leads past "New" (status, source of truth).

@@ -13,18 +13,25 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Status',
     className: 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent font-semibold',
   },
+  initial_contact: {
+    label: 'Initial Contact',
+    shortLabel: 'Contacted',
+    className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
+  },
+  // Legacy values kept as fallbacks so any un-migrated/stray row still renders as
+  // "Initial Contact" (amber) rather than the generic New badge.
   waiting: {
-    label: 'Attempted',
-    shortLabel: 'Attempted',
-    className: 'bg-[hsl(var(--badge-attempted))] text-[hsl(var(--badge-attempted-fg))] border-transparent font-semibold',
+    label: 'Initial Contact',
+    shortLabel: 'Contacted',
+    className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
   },
   delivered: {
-    label: 'Delivered',
-    shortLabel: 'Delivered',
+    label: 'Initial Contact',
+    shortLabel: 'Contacted',
     className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
   },
   contacted: {
-    label: 'Contacted',
+    label: 'Initial Contact',
     shortLabel: 'Contacted',
     className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
   },
@@ -48,10 +55,16 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Not Int.',
     className: 'bg-[hsl(var(--badge-not-interested))] text-[hsl(var(--badge-not-interested-fg))] border-transparent font-semibold',
   },
+  payment_received: {
+    label: 'Paid',
+    shortLabel: 'Paid',
+    className: 'bg-green-500/20 text-green-400 border-transparent font-semibold',
+  },
+  // Legacy "Closed" → renders as Paid (green) for any pre-existing row.
   completed: {
-    label: 'Closed',
-    shortLabel: 'Closed',
-    className: 'bg-[hsl(var(--badge-closed))] text-[hsl(var(--badge-closed-fg))] border-transparent font-semibold',
+    label: 'Paid',
+    shortLabel: 'Paid',
+    className: 'bg-green-500/20 text-green-400 border-transparent font-semibold',
   },
 };
 
