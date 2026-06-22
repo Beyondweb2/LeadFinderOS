@@ -121,7 +121,7 @@ export interface MapsEnrichInput {
 /** Deep ENRICH for ONE picked place: reviews + images + contacts. */
 export async function mapsEnrich(
   input: MapsEnrichInput,
-): Promise<{ place: NormalizedPlace | null; ms: number; raw?: unknown }> {
+): Promise<{ place: NormalizedPlace | null; ms: number }> {
   // startUrls (the maps place URL) is the most reliable way to pull a single
   // place WITH review/image add-ons; fall back to placeIds if no URL.
   const target = input.googleMapsUrl
@@ -147,5 +147,5 @@ export async function mapsEnrich(
     timeoutMs: input.timeoutMs,
   });
   const place = items.length ? mapCompassPlace(items[0]) : null;
-  return { place, ms, raw: items[0] ?? null };
+  return { place, ms };
 }
