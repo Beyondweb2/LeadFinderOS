@@ -21,6 +21,7 @@ import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { lookupLineType } from "../_shared/enrichment/whatsapp.ts";
 import { fetchFacebookContacts, fetchFacebookPhotos, fetchInstagramPhotos } from "../_shared/enrichment/socialImages.ts";
 import { isAggregatorUrl, isPlatformSocialUrl } from "../_shared/aggregators.ts";
+import { classifyOwnWebsite } from "../_shared/enrichment/websiteClassify.ts";
 
 /** Last-resort social discovery: crawl the business website for FB + IG links via
  *  the extract-facebook function (one fetch returns both). Graceful — empty on
@@ -120,8 +121,12 @@ interface EnrichResult {
   instagramMethod: string | null;
   /** A web-results IG whose location did NOT match — verify + paste, not attached. */
   instagramSuggestion: { url: string; reason: string } | null;
-  /** Discovered business website (own listing or location-matched web result). */
+  /** Discovered business website (own listing or name/location-matched web result). */
   website: string | null;
+  /** Layered verdict: HAS_OWN_WEBSITE | UNCERTAIN | NO_WEBSITE. */
+  websiteStatus: string;
+  /** Possible-but-unconfirmed site (UNCERTAIN only) — surfaced to verify. */
+  websiteCandidate: string | null;
   lineType: string;
   imagePool: string[];
   poolBreakdown: { maps: number; facebook: number; instagram: number };
@@ -225,25 +230,23 @@ serve(async (req) => {
         let igLoc = "n/a";
         let igSuggestion: { url: string; reason: string } | null = null;
 
-        // 2b) Resolve the business's OWN website. Web-results mix companies (same
-        //     search term), so a web-results "website" is only trusted when its text
-        //     matches the lead's location — AND we reduce it to its ROOT DOMAIN.
-        //     Google returns websites as breadcrumbs ("abbeyplumbers.co.uk › Plumbing")
-        //     where the segments are SUB-PAGES, not a real path — so strip to origin
-        //     (homepage) where the footer/contact socials actually live. (Social
-        //     breadcrumbs are different — there the segment IS the handle — so this
-        //     root-strip is applied to WEBSITES only, not to social URLs.)
-        const rootDomain = (u: string): string => {
-          try { return new URL(/^https?:\/\//i.test(u) ? u : `https://${u}`).origin; } catch { return ""; }
-        };
+        // 2b) Resolve the business's OWN website via the SHARED classifier. It excludes
+        //     socials/aggregators/directories/booking, then upgrades a web-result to
+        //     the business's site on a NAME-match (booster) OR a location-match, and
+        //     reduces it to its root domain. A real-looking but unconfirmed candidate
+        //     is returned as UNCERTAIN (surfaced, never stored as the website).
         const webResults = place?.webResults ?? [];
-        let webSite = "";
-        if (webResults.length) {
-          // First web result that's a real own-site: not a social/directory AND not
-          // a booking platform (Fresha/Booksy/… are never the business's website).
-          const siteEntry = webResults.find((w) => !isAggregatorUrl(w.url));
-          if (siteEntry && locationMatch(siteEntry.text, place)) webSite = rootDomain(siteEntry.url);
-        }
+        const websiteVerdict = classifyOwnWebsite({
+          existingWebsite: website || null,
+          mapsWebsite: place?.website || null,
+          webResults,
+          place,
+          businessName,
+        });
+        // Only a confirmed web-result (name/location) feeds the own-site crawl below.
+        const webSite = (websiteVerdict.signal === "name" || websiteVerdict.signal === "location")
+          ? (websiteVerdict.website ?? "")
+          : "";
 
         // 2c) OWN-SITE CRAWL (TRUSTED, runs first). A FB/IG link on the business's
         //     own website definitely belongs to them — far more reliable than
@@ -280,16 +283,11 @@ serve(async (req) => {
           }
         }
 
-        // 2e) Website to store on the lead — first REAL own-site (never a booking
-        //     platform / directory): existing → Maps listing → web-results root.
-        const websiteCandidates: [string, string][] = [
-          [website, "existing"],
-          [place?.website ?? "", "maps-listing"],
-          [webSite, "web-results"],
-        ];
-        const wsHit = websiteCandidates.find(([u]) => u && !isAggregatorUrl(u));
-        const discoveredWebsite = wsHit?.[0] ?? "";
-        const webSource = wsHit?.[1] ?? "none";
+        // 2e) Website to store on the lead — the classifier's confirmed own-site
+        //     (existing → Maps listing → name/location-matched web-result). An
+        //     UNCERTAIN candidate is NOT stored (only surfaced via websiteStatus).
+        const discoveredWebsite = websiteVerdict.website ?? "";
+        const webSource = websiteVerdict.signal ?? "none";
 
         // Permanent provenance one-liners (one line per channel; not per-image).
         console.log(`[enrich] FB  via ${fbSource} (${fbLoc}): ${fbUrl || (fbSuggestion ? `${fbSuggestion.url} [suggestion]` : "none")}`);
@@ -341,6 +339,8 @@ serve(async (req) => {
           instagramMethod: igUrl ? igMethod : null,
           instagramSuggestion: igSuggestion,
           website: discoveredWebsite || null,
+          websiteStatus: websiteVerdict.status,
+          websiteCandidate: websiteVerdict.candidate,
           lineType,
           imagePool,
           poolBreakdown,
