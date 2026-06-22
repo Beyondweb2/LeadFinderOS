@@ -225,12 +225,24 @@ export function isSentStatus(status?: string | null): boolean {
   return !!status && status !== 'not_contacted';
 }
 
-// "Replied or beyond" on the pipeline pill — used for the Replied funnel count /
-// reply rate. Includes the Paid terminal (payment_received); 'completed' kept for
-// any legacy rows. Deliberately excludes Site Sent so the reply rate doesn't move.
-const REPLIED_OR_BEYOND = ['replied', 'interested', 'payment_received', 'completed'];
+// CUMULATIVE FUNNEL MILESTONES. Pipeline order:
+//   New → Contacted → Replied → Site Sent → Interested → Not Interested → Paid.
+// Leads progress strictly in order, so a milestone includes its status AND every
+// later one. These power FUNNEL metrics (reply rate, journey steps) — NOT the
+// discrete Pipeline-card buckets (each lead sits in exactly one bucket).
+
+// Replied-or-beyond: replied through every later stage. Includes not_interested
+// (they replied to say no — and were sent a site) and the Paid terminals.
+const REPLIED_OR_BEYOND = ['replied', 'site_sent', 'interested', 'not_interested', 'payment_received', 'completed'];
 export function isRepliedStatus(status?: string | null): boolean {
   return !!status && REPLIED_OR_BEYOND.includes(status);
+}
+
+// Site-sent-or-beyond: a site was sent once a lead reaches site_sent or any later
+// stage (interested / not_interested / paid all happen AFTER they've seen the site).
+const SITE_SENT_OR_BEYOND = ['site_sent', 'interested', 'not_interested', 'payment_received', 'completed'];
+export function isSiteSentStatus(status?: string | null): boolean {
+  return !!status && SITE_SENT_OR_BEYOND.includes(status);
 }
 
 export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
