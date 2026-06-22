@@ -26,8 +26,12 @@ const Index = () => {
   const { markAsChecked, isChecked } = useCheckedBusinesses();
 
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
-  // Find Leads mode: 'targeted' (curated) | 'list' (broad list-builder) | 'email' (email sourcing).
-  const [mode, setMode] = useState<'targeted' | 'list' | 'email'>('targeted');
+  // Find Leads mode: 'targeted' (curated) | 'list' (broad list-builder).
+  // (Email sourcing is no longer a separate mode — it's a "Find emails" action on
+  // the Targeted results below.)
+  const [mode, setMode] = useState<'targeted' | 'list'>('targeted');
+  // Targeted results: toggle the email-finder view over the current results.
+  const [showEmails, setShowEmails] = useState(false);
 
   // Active campaign — new leads added from search are tagged with it.
   // Persisted so it survives navigation/reload.
@@ -69,8 +73,9 @@ const Index = () => {
 
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
-    // List-builder + Email modes ask search-leads for the full discovered pool.
-    search({ ...filters, broad: mode === 'list' || mode === 'email' }, false, false);
+    setShowEmails(false); // a new search returns to the normal results view
+    // List-builder mode asks search-leads for the full discovered pool.
+    search({ ...filters, broad: mode === 'list' }, false, false);
   }, [search, mode]);
 
   // Bulk add (list-builder): add each selected lead, deduped + silent (one summary
@@ -173,15 +178,6 @@ const Index = () => {
             >
               <Search className="h-3.5 w-3.5 mr-1.5" /> List builder
             </Button>
-            <Button
-              variant={mode === 'email' ? 'default' : 'ghost'}
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setMode('email')}
-              title="Email sourcing: find emails across the list, export / bulk-add"
-            >
-              <Mail className="h-3.5 w-3.5 mr-1.5" /> Email
-            </Button>
           </div>
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
             <div className="flex items-center gap-1 sm:gap-2">
@@ -258,14 +254,7 @@ const Index = () => {
       {/* Results Section */}
       {leads.length > 0 && (
         <section data-walkthrough="results-header">
-          {mode === 'email' ? (
-            <EmailListBuilder
-              leads={leads}
-              isLoading={isLoading}
-              isInOutreach={isInOutreach}
-              onBulkAddEmails={handleBulkAddEmails}
-            />
-          ) : mode === 'list' ? (
+          {mode === 'list' ? (
             <BroadListBuilder
               leads={leads}
               isLoading={isLoading}
@@ -274,20 +263,45 @@ const Index = () => {
               onBulkEnrich={handleBulkEnrich}
             />
           ) : (
-            <LeadsTable
-              leads={leads}
-              onExport={exportToCsv}
-              onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id))}
-              isInOutreach={isInOutreach}
-              searchEnrichment={searchEnrichment}
-              onEnrichPatch={patchEnrichment}
-              onMapLinkClick={(name, url) => {
-                markAsChecked(name, url);
-              }}
-              isChecked={isChecked}
-              getTeamClaim={getTeamClaim}
-              onSetWebsiteStatus={setWebsiteOverride}
-            />
+            <div className="space-y-3">
+              {/* Find-emails action on the Targeted results — runs the website email
+                  crawl across the current results (replaces the old Email mode). */}
+              <div className="flex justify-end">
+                <Button
+                  variant={showEmails ? 'default' : 'outline'}
+                  size="sm"
+                  className="h-8 text-xs"
+                  onClick={() => setShowEmails((v) => !v)}
+                  title="Find emails across these results (free website crawl)"
+                >
+                  <Mail className="h-3.5 w-3.5 mr-1.5" />
+                  {showEmails ? 'Back to results' : 'Find emails for these'}
+                </Button>
+              </div>
+              {showEmails ? (
+                <EmailListBuilder
+                  leads={leads}
+                  isLoading={isLoading}
+                  isInOutreach={isInOutreach}
+                  onBulkAddEmails={handleBulkAddEmails}
+                />
+              ) : (
+                <LeadsTable
+                  leads={leads}
+                  onExport={exportToCsv}
+                  onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id))}
+                  isInOutreach={isInOutreach}
+                  searchEnrichment={searchEnrichment}
+                  onEnrichPatch={patchEnrichment}
+                  onMapLinkClick={(name, url) => {
+                    markAsChecked(name, url);
+                  }}
+                  isChecked={isChecked}
+                  getTeamClaim={getTeamClaim}
+                  onSetWebsiteStatus={setWebsiteOverride}
+                />
+              )}
+            </div>
           )}
         </section>
       )}
