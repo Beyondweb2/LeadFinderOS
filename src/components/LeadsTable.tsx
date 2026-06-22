@@ -7,8 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { StatusBadge } from './StatusBadge';
 import { WebsiteStatusToggle } from './WebsiteStatusToggle';
 import {
-  Download, Filter, ChevronLeft, ChevronRight, ClipboardList, Check, Eye, Lock, MapPin, ExternalLink,
+  Download, Filter, ChevronLeft, ChevronRight, ClipboardList, Check, Eye, Lock, MapPin, ExternalLink, Globe, Loader2,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -152,6 +154,77 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     writeSearchResultsView(user?.id, { filters: statusFilters, page: safePage });
   }, [user?.id, statusFilters, safePage]);
 
+  // ── On-demand "Check for website" (Apify web-results, ~$0.02/lead, daily-capped) ──
+  const { toast } = useToast();
+  const [checkingId, setCheckingId] = useState<string | null>(null);
+  const [bulkChecking, setBulkChecking] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const bulkCancelRef = useRef(false);
+
+  // Returns 'capped' if the daily cap stops it, else true/false for completed.
+  const runWebsiteCheck = useCallback(async (lead: Lead, quiet = false): Promise<'capped' | boolean> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('check-website', {
+        body: { google_maps_url: lead.googleMapsUrl, business_name: lead.name, website: lead.websiteUrl ?? null },
+      });
+      if (error) throw error;
+      if (data?.limit_reached) {
+        if (!quiet) toast({ title: 'Daily enrichment limit reached', description: 'Try again tomorrow.', variant: 'destructive' });
+        return 'capped';
+      }
+      if (!data?.success) {
+        if (!quiet) toast({ title: 'Check failed', description: data?.error ?? 'Please try again.', variant: 'destructive' });
+        return false;
+      }
+      const status = data.websiteStatus as WebsiteStatus;
+      // Apply + persist via the existing override (stays manually overridable).
+      onSetWebsiteStatus?.(lead, status);
+      if (!quiet) {
+        if (status === 'HAS_OWN_WEBSITE') toast({ title: 'Website found', description: data.website || 'Marked as has-website.' });
+        else if (status === 'UNCERTAIN') toast({ title: '⚠ Possible website — verify', description: `${data.candidate || 'A candidate was found'} — check it's theirs, then keep or change the status.` });
+        else toast({ title: 'No website found', description: 'No real own-site in web results — left as no-website.' });
+      }
+      return true;
+    } catch {
+      if (!quiet) toast({ title: 'Check failed', description: 'Please try again.', variant: 'destructive' });
+      return false;
+    }
+  }, [onSetWebsiteStatus, toast]);
+
+  const handleCheckOne = useCallback(async (lead: Lead) => {
+    setCheckingId(lead.id);
+    try { await runWebsiteCheck(lead); } finally { setCheckingId(null); }
+  }, [runWebsiteCheck]);
+
+  // Bulk: check every NO_WEBSITE lead in the current filtered set (confirm-before-spend).
+  const noWebsiteFiltered = useMemo(
+    () => filteredLeads.filter((l) => (l.websiteStatus === 'DIRECTORY_ONLY' ? 'NO_WEBSITE' : l.websiteStatus) === 'NO_WEBSITE'),
+    [filteredLeads],
+  );
+  const handleCheckBulk = useCallback(async () => {
+    const targets = noWebsiteFiltered;
+    if (!targets.length) return;
+    const est = (targets.length * 0.02).toFixed(2);
+    if (!window.confirm(`Check ${targets.length} no-website ${targets.length === 1 ? 'business' : 'businesses'} for a real website?\n\nUses Apify web search (~$0.02 each · ~$${est} total) and respects your daily cap. You can cancel partway.`)) return;
+    bulkCancelRef.current = false;
+    setBulkChecking(true);
+    setBulkProgress({ done: 0, total: targets.length });
+    let done = 0;
+    for (const lead of targets) {
+      if (bulkCancelRef.current) break;
+      const res = await runWebsiteCheck(lead, true);
+      if (res === 'capped') {
+        toast({ title: 'Daily limit reached', description: `Stopped after ${done} — cap hit. Resume tomorrow.`, variant: 'destructive' });
+        break;
+      }
+      done++;
+      setBulkProgress({ done, total: targets.length });
+    }
+    setBulkChecking(false);
+    setBulkProgress(null);
+    if (!bulkCancelRef.current) toast({ title: 'Website check done', description: `Checked ${done} of ${targets.length}.` });
+  }, [noWebsiteFiltered, runWebsiteCheck, toast]);
+
   const noWebsiteCount = leads.filter((l) => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
   const toggleFilter = useCallback((status: WebsiteStatus, checked: boolean) => {
@@ -197,8 +270,14 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                Tap 👁 to view details · 📋 to save to your list
              </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {renderFilterMenu('start')}
+            {!isLocked && onSetWebsiteStatus && noWebsiteFiltered.length > 0 && (
+              <Button onClick={handleCheckBulk} disabled={bulkChecking} size="sm" variant="outline" className="h-8 px-2.5 text-xs border-border" title="Web-search the no-website leads for a real own-site (~$0.02 each, daily-capped)">
+                {bulkChecking ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Globe className="h-3.5 w-3.5 mr-1.5" />}
+                {bulkChecking && bulkProgress ? `Checking ${bulkProgress.done}/${bulkProgress.total}` : `Check website (${noWebsiteFiltered.length})`}
+              </Button>
+            )}
             <Button onClick={isLocked ? () => onGatedAction?.() : handleExport} size="sm" className="h-8 px-2.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
               {gated ? <Lock className="h-3.5 w-3.5 mr-1.5" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}Export
             </Button>
@@ -217,6 +296,12 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           </div>
           <div className="flex items-center gap-2">
             {renderFilterMenu('end')}
+            {!isLocked && onSetWebsiteStatus && noWebsiteFiltered.length > 0 && (
+              <Button onClick={handleCheckBulk} disabled={bulkChecking} variant="outline" className="border-border" title="Web-search the no-website leads for a real own-site (~$0.02 each, daily-capped)">
+                {bulkChecking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
+                {bulkChecking && bulkProgress ? `Checking ${bulkProgress.done}/${bulkProgress.total}` : `Check website (${noWebsiteFiltered.length})`}
+              </Button>
+            )}
             <Button onClick={isLocked ? () => onGatedAction?.() : handleExport} className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
               {gated ? <Lock className="mr-2 h-4 w-4" /> : <Download className="mr-2 h-4 w-4" />}Export CSV
             </Button>
@@ -248,7 +333,14 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
                     )}
                   </div>
-                  <div className="mt-1"><WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} compact /></div>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} compact />
+                    {!isLocked && onSetWebsiteStatus && (lead.websiteStatus === 'NO_WEBSITE' || lead.websiteStatus === 'DIRECTORY_ONLY') && (
+                      <Button onClick={() => handleCheckOne(lead)} disabled={checkingId === lead.id} size="sm" variant="ghost" className="h-6 px-1.5 text-[11px] text-muted-foreground" title="Web-search for a real own-website (~$0.02, daily-capped)">
+                        {checkingId === lead.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Globe className="h-3 w-3 mr-1" />Check</>}
+                      </Button>
+                    )}
+                  </div>
                   {onEnrichPatch && (
                     <div className="mt-1.5">
                       <SearchLeadContact lead={lead} enrichment={searchEnrichment?.[lead.id]} onPatch={onEnrichPatch} />
@@ -373,14 +465,21 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <div><WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} /></div>
-                      </TooltipTrigger>
-                      <TooltipContent side="left" className="max-w-[300px] bg-popover border-border">
-                        <p className="text-sm">{lead.reason}</p>
-                      </TooltipContent>
-                    </Tooltip>
+                    <div className="flex items-center gap-1.5">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div><WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} /></div>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-[300px] bg-popover border-border">
+                          <p className="text-sm">{lead.reason}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                      {!isLocked && onSetWebsiteStatus && (lead.websiteStatus === 'NO_WEBSITE' || lead.websiteStatus === 'DIRECTORY_ONLY') && (
+                        <Button onClick={() => handleCheckOne(lead)} disabled={checkingId === lead.id} size="sm" variant="ghost" className="h-7 px-1.5 text-[11px] text-muted-foreground hover:text-foreground" title="Web-search for a real own-website (~$0.02, daily-capped)">
+                          {checkingId === lead.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Globe className="h-3 w-3 mr-1" />Check</>}
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">

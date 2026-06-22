@@ -253,7 +253,9 @@ interface SearchLead {
 
 function classifyWebsite(websiteUri: string | null | undefined): { status: SearchLead['websiteStatus']; confidence: number; reason: string } {
   if (!websiteUri) {
-    return { status: 'NO_WEBSITE', confidence: 1.0, reason: 'No website listed on Google' };
+    // Unverified: the Maps listing has no website, but the business may still have
+    // one that only shows in web search. Lower confidence nudges a "Check website".
+    return { status: 'NO_WEBSITE', confidence: 0.6, reason: 'No website on Google listing (unverified — may have one)' };
   }
   if (isDirectoryUrl(websiteUri)) {
     return { status: 'NO_WEBSITE', confidence: 0.95, reason: `Directory listing only: ${extractDomain(websiteUri)}` };
