@@ -30,7 +30,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { format, formatDistanceToNow, startOfDay } from 'date-fns';
 import { SALE_TYPES, SALE_TYPE_LABELS, resolveSaleType, type SaleType } from '@/lib/saleType';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
-import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, isSentStatus, isRepliedStatus } from '@/types/outreach';
+import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, isSentStatus, isRepliedStatus, isSiteSentStatus } from '@/types/outreach';
 import { PipelineStatusBadge } from '@/components/PipelineStatusBadge';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { cn } from '@/lib/utils';
@@ -659,9 +659,9 @@ function LeadDetailBody({
                 [
                   { label: 'Contacted', done: isSentStatus(lead.status), at: lead.last_outreach_attempt_at ?? null },
                   { label: 'Replied', done: isRepliedStatus(lead.status) || !!funnel?.replied_at, at: funnel?.replied_at ?? null },
-                  // "Site sent" now derives from the status (single source of truth);
-                  // legacy site_sent_at + the site funnel's sent_at still count.
-                  { label: 'Site sent', done: lead.status === 'site_sent' || !!lead.site_sent_at || !!funnel?.sent_at, at: lead.site_sent_at ?? funnel?.sent_at ?? null },
+                  // "Site sent" is cumulative — site_sent OR any later stage means a
+                  // site was sent; legacy site_sent_at + the site funnel's sent_at still count.
+                  { label: 'Site sent', done: isSiteSentStatus(lead.status) || !!lead.site_sent_at || !!funnel?.sent_at, at: lead.site_sent_at ?? funnel?.sent_at ?? null },
                   { label: 'Opened', done: !!funnel?.first_opened_at, at: funnel?.first_opened_at ?? null },
                   { label: 'Add-on', done: !!funnel?.addon_interest_at, at: funnel?.addon_interest_at ?? null },
                 ] as { label: string; done: boolean; at: string | null }[]
