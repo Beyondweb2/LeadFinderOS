@@ -196,6 +196,14 @@ serve(async (req) => {
               timeoutMs: 90_000,
             });
             place = r.place;
+            // ── TEMP DIAGNOSTIC (remove after) — raw vs normalized web-results to tell
+            //    bad source data from bad URL parsing (breadcrumb/ellipsis "..." class). ──
+            try {
+              const raw = (r.raw ?? {}) as Record<string, unknown>;
+              console.log(`[enrich-DIAG] lead=${leadId} norm.facebook=${place?.facebook ?? "∅"} norm.instagram=${place?.instagram ?? "∅"}`);
+              console.log(`[enrich-DIAG] RAW webResults=${JSON.stringify(raw.webResults)}`);
+              console.log(`[enrich-DIAG] NORMALIZED webResults=${JSON.stringify(place?.webResults ?? [])}`);
+            } catch (de) { console.log(`[enrich-DIAG] log err: ${(de as Error).message}`); }
           } catch (e) {
             console.error("[enrich-business] mapsEnrich error:", (e as Error).message);
           }
