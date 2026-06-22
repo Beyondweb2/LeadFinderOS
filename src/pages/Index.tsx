@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { BroadListBuilder } from '@/components/BroadListBuilder';
-import { EmailListBuilder } from '@/components/EmailListBuilder';
+// EmailListBuilder kept in the repo for the future bulk-add flow; no longer rendered
+// here (email finding is now an in-place scan on the Targeted results).
 import { CampaignPicker } from '@/components/CampaignPicker';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -11,9 +12,10 @@ import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
+import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTeamClaims } from '@/hooks/useTeamClaims';
-import { Flame, Target, Zap, Search, MapPin, Info, Mail } from 'lucide-react';
+import { Flame, Target, Zap, Search, MapPin, Info, Mail, Download, Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { Country, Lead } from '@/types/lead';
 
@@ -30,8 +32,6 @@ const Index = () => {
   // (Email sourcing is no longer a separate mode — it's a "Find emails" action on
   // the Targeted results below.)
   const [mode, setMode] = useState<'targeted' | 'list'>('targeted');
-  // Targeted results: toggle the email-finder view over the current results.
-  const [showEmails, setShowEmails] = useState(false);
 
   // Active campaign — new leads added from search are tagged with it.
   // Persisted so it survives navigation/reload.
@@ -73,7 +73,6 @@ const Index = () => {
 
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
-    setShowEmails(false); // a new search returns to the normal results view
     // List-builder mode asks search-leads for the full discovered pool.
     search({ ...filters, broad: mode === 'list' }, false, false);
   }, [search, mode]);
@@ -130,18 +129,33 @@ const Index = () => {
     return { added, enriched, cached, failed, stoppedAtCap, cancelled };
   }, [addToOutreach, lastSearchCountry, activeCampaign, getEnrichment]);
 
-  // Bulk add for the Email builder: carry each found email onto the lead (deduped).
-  const handleBulkAddEmails = useCallback(async (items: { lead: Lead; email: string | null }[]) => {
-    let added = 0, skipped = 0;
-    for (const { lead, email } of items) {
-      const enrichment = email
-        ? { email, email_status: 'found', email_method: 'website_scrape', enrichment_source: 'website_scrape' }
-        : getEnrichment(lead.id);
-      const res = await addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, enrichment as any, true);
-      if (res) added++; else skipped++;
-    }
-    return { added, skipped };
-  }, [addToOutreach, lastSearchCountry, activeCampaign, getEnrichment]);
+  // In-place email scan for the Targeted results (writes into searchEnrichment →
+  // Mail icon appears on rows via LeadEnrichButtons → carries over on add).
+  const { findEmails, cancel: cancelFindEmails, finding, progress: emailProgress, result: emailResult, withWebsiteCount } =
+    useFindEmails(leads, patchEnrichment);
+
+  // CSV export including any emails found this session (from searchEnrichment).
+  const handleExportWithEmails = useCallback(() => {
+    const cell = (v: string) => {
+      const s = (v ?? '').replace(/"/g, '""');
+      return /[",\n]/.test(s) ? `"${s}"` : s;
+    };
+    const header = ['Business', 'Email', 'Phone', 'Maps', 'Website'];
+    const rows = leads.map((l) => [
+      l.name,
+      (searchEnrichment[l.id]?.email as string) ?? '',
+      l.phone ?? '',
+      l.googleMapsUrl ?? '',
+      l.websiteUrl ?? '',
+    ]);
+    const csv = [header, ...rows].map((r) => r.map(cell).join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `leads-with-emails-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }, [leads, searchEnrichment]);
 
   return (
     <div className="space-y-4 md:space-y-8">
@@ -264,43 +278,58 @@ const Index = () => {
             />
           ) : (
             <div className="space-y-3">
-              {/* Find-emails action on the Targeted results — runs the website email
-                  crawl across the current results (replaces the old Email mode). */}
-              <div className="flex justify-end">
+              {/* In-place email scan: crawl the current results for emails, annotate
+                  the rows (Mail icon via LeadEnrichButtons), and export with emails.
+                  No table rebuild — found emails land in searchEnrichment. */}
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {emailResult && !finding && (
+                  <span className="text-xs text-muted-foreground">Found emails for {emailResult.found} of {emailResult.scanned}</span>
+                )}
+                {finding && emailProgress && (
+                  <span className="text-xs text-muted-foreground">Finding emails {emailProgress.done} of {emailProgress.total}…</span>
+                )}
+                {finding ? (
+                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={cancelFindEmails}>
+                    <X className="h-3.5 w-3.5 mr-1.5" /> Cancel
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={findEmails}
+                    disabled={!withWebsiteCount}
+                    title="Find emails across these results (free website crawl)"
+                  >
+                    <Mail className="h-3.5 w-3.5 mr-1.5" />
+                    Find emails ({withWebsiteCount} with a website)
+                  </Button>
+                )}
                 <Button
-                  variant={showEmails ? 'default' : 'outline'}
+                  variant="outline"
                   size="sm"
                   className="h-8 text-xs"
-                  onClick={() => setShowEmails((v) => !v)}
-                  title="Find emails across these results (free website crawl)"
+                  onClick={handleExportWithEmails}
+                  disabled={!leads.length}
+                  title="Export the results as CSV including any emails found"
                 >
-                  <Mail className="h-3.5 w-3.5 mr-1.5" />
-                  {showEmails ? 'Back to results' : 'Find emails for these'}
+                  <Download className="h-3.5 w-3.5 mr-1.5" /> Export with emails
                 </Button>
               </div>
-              {showEmails ? (
-                <EmailListBuilder
-                  leads={leads}
-                  isLoading={isLoading}
-                  isInOutreach={isInOutreach}
-                  onBulkAddEmails={handleBulkAddEmails}
-                />
-              ) : (
-                <LeadsTable
-                  leads={leads}
-                  onExport={exportToCsv}
-                  onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id))}
-                  isInOutreach={isInOutreach}
-                  searchEnrichment={searchEnrichment}
-                  onEnrichPatch={patchEnrichment}
-                  onMapLinkClick={(name, url) => {
-                    markAsChecked(name, url);
-                  }}
-                  isChecked={isChecked}
-                  getTeamClaim={getTeamClaim}
-                  onSetWebsiteStatus={setWebsiteOverride}
-                />
-              )}
+              <LeadsTable
+                leads={leads}
+                onExport={exportToCsv}
+                onAddToOutreach={(lead) => addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id))}
+                isInOutreach={isInOutreach}
+                searchEnrichment={searchEnrichment}
+                onEnrichPatch={patchEnrichment}
+                onMapLinkClick={(name, url) => {
+                  markAsChecked(name, url);
+                }}
+                isChecked={isChecked}
+                getTeamClaim={getTeamClaim}
+                onSetWebsiteStatus={setWebsiteOverride}
+              />
             </div>
           )}
         </section>
