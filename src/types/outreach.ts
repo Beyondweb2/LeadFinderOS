@@ -1,5 +1,6 @@
-export type LeadStatus = 
+export type LeadStatus =
   | 'not_contacted'
+  | 'initial_contact'   // unified "I've reached out" (replaces contacted/waiting/delivered)
   | 'contacted'
   | 'call_back'
   | 'not_answered'
@@ -16,6 +17,7 @@ export type LeadStatus =
   | 'waiting'
   | 'reviewing_draft'
   | 'paid_for_draft'
+  | 'payment_received'  // "Paid" — Outreach pipeline terminal (also Track Leads marker)
   | 'completed'
   | 'no_whatsapp'
   | 'sms'
@@ -170,21 +172,16 @@ export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'completed', label: 'Completed (Client)' },
 ];
 
-// Simplified status options for the Outreach page (initial contact only)
+// Status FILTER options for the Outreach page — mirrors the 7-status pipeline so
+// the filter and the row/expanded dropdowns are one consistent list.
 export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
-  { value: 'not_contacted', label: 'Not Contacted' },
-  { value: 'sms', label: 'SMS' },
-  { value: 'whatsapp', label: 'WhatsApp' },
-  { value: 'facebook_msg', label: 'FB Messenger' },
-  { value: 'contacted', label: 'Called' },
-  { value: 'not_answered', label: 'No Answer' },
-  { value: 'call_back', label: 'Call Back' },
-  { value: 'sent_voice_note', label: 'Sent Voice Note' },
+  { value: 'not_contacted', label: 'New' },
+  { value: 'initial_contact', label: 'Initial Contact' },
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
-  { value: 'no_whatsapp', label: 'No WhatsApp' },
+  { value: 'payment_received', label: 'Paid' },
 ];
 
 // Contact method options (how the business was contacted)
@@ -197,28 +194,27 @@ export const CONTACT_METHOD_OPTIONS: { value: ContactMethod; label: string }[] =
   { value: 'facebook_msg', label: 'Messenger' },
 ];
 
-// Pipeline status options (where the lead is in the pipeline)
+// Pipeline status options (where the lead is in the pipeline). Simplified to a
+// single linear funnel: New → Initial Contact → Replied → Site Sent → Interested
+// → Not Interested → Paid. The old Attempted/Contacted/Delivered all collapse to
+// "Initial Contact"; "Closed" becomes "Paid" (payment_received).
 export type PipelineStatus =
   | 'not_contacted'
-  | 'waiting'
-  | 'delivered'
-  | 'contacted'
+  | 'initial_contact'
   | 'replied'
   | 'site_sent'
   | 'interested'
   | 'not_interested'
-  | 'completed';
+  | 'payment_received';
 
 export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [
   { value: 'not_contacted', label: 'New' },
-  { value: 'waiting', label: 'Attempted' },
-  { value: 'delivered', label: 'Delivered' },
-  { value: 'contacted', label: 'Contacted' },
+  { value: 'initial_contact', label: 'Initial Contact' },
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
-  { value: 'completed', label: 'Closed' },
+  { value: 'payment_received', label: 'Paid' },
 ];
 
 // ── Status semantics shared by the dashboard (Outreach status = source of truth) ──
@@ -229,9 +225,10 @@ export function isSentStatus(status?: string | null): boolean {
   return !!status && status !== 'not_contacted';
 }
 
-// "Replied or beyond" on the pipeline pill — used for the Replied funnel count
-// now that the manual Mark-replied button is gone.
-const REPLIED_OR_BEYOND = ['replied', 'interested', 'completed'];
+// "Replied or beyond" on the pipeline pill — used for the Replied funnel count /
+// reply rate. Includes the Paid terminal (payment_received); 'completed' kept for
+// any legacy rows. Deliberately excludes Site Sent so the reply rate doesn't move.
+const REPLIED_OR_BEYOND = ['replied', 'interested', 'payment_received', 'completed'];
 export function isRepliedStatus(status?: string | null): boolean {
   return !!status && REPLIED_OR_BEYOND.includes(status);
 }

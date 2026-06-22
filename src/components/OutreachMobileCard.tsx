@@ -92,13 +92,15 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
   const statusBorderColor = (() => {
     const s = lead.status;
     if (s === 'not_contacted') return 'border-l-blue-400/60';
-    if (s === 'waiting' || s === 'sent_initial_text') return 'border-l-amber-500';
-    if (s === 'contacted' || s === 'sms' || s === 'whatsapp' || s === 'facebook_msg') return 'border-l-amber-400';
+    // Initial Contact (+ legacy waiting/delivered/contacted/contact-method statuses) → amber
+    if (s === 'initial_contact' || s === 'waiting' || s === 'delivered' || s === 'contacted' ||
+        s === 'sent_initial_text' || s === 'sms' || s === 'whatsapp' || s === 'facebook_msg') return 'border-l-amber-500';
     if (s === 'replied') return 'border-l-emerald-500';
+    if (s === 'site_sent') return 'border-l-emerald-400';
     if (s === 'call_back' || s === 'sent_voice_note') return 'border-l-purple-500';
     if (s === 'interested') return 'border-l-yellow-500';
     if (s === 'not_interested') return 'border-l-zinc-500';
-    if (s === 'completed') return 'border-l-green-600';
+    if (s === 'payment_received' || s === 'completed') return 'border-l-green-600';
     return 'border-l-blue-400/60';
   })();
 

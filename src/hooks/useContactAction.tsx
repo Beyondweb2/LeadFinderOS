@@ -28,9 +28,9 @@ export function useContactAction({ onUpdate, onPersisted }: UseContactActionOpti
       outreach_attempts: (lead.outreach_attempts || 0) + 1,
       last_outreach_attempt_at: new Date().toISOString(),
     };
-    // Auto-set status to Attempted (waiting) for new leads
+    // Auto-set status to Initial Contact for new leads on first outreach
     if (!previousStatus || previousStatus === 'not_contacted') {
-      updates.status = 'waiting';
+      updates.status = 'initial_contact';
     }
     onUpdate(lead.id, updates);
 

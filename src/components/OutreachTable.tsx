@@ -685,12 +685,12 @@ export function OutreachTable({
     // Copied — no toast
   };
 
-  // Mark selected leads as contacted
+  // Mark selected leads as contacted (Initial Contact)
   const handleMarkAsContacted = () => {
     if (selectedIds.size === 0) return;
     const ids = Array.from(selectedIds);
-    // Update each lead's status to 'contacted'
-    ids.forEach(id => onStatusChange(id, 'contacted'));
+    // Update each lead's status to 'initial_contact'
+    ids.forEach(id => onStatusChange(id, 'initial_contact'));
     setSelectedIds(new Set());
     // Status updated — no toast
   };

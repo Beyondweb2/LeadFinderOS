@@ -26,7 +26,7 @@ import type { LeadStatus, NextActionType } from '@/types/outreach';
 const CONTACT_METHOD_OPTIONS = [
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'sms', label: 'SMS' },
-  { value: 'contacted', label: 'Call' },
+  { value: 'call', label: 'Call' },
   { value: 'facebook_msg', label: 'Facebook' },
 ];
 
