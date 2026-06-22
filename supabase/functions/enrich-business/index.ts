@@ -196,16 +196,6 @@ serve(async (req) => {
               timeoutMs: 90_000,
             });
             place = r.place;
-            // ── TEMP DIAGNOSTIC (remove after) — why are Maps-listing socials not used? ──
-            try {
-              const raw = (r.raw ?? {}) as Record<string, unknown>;
-              const socialKeys = Object.keys(raw).filter((k) => /face|insta|social|additional/i.test(k));
-              console.log(`[enrich-DIAG] lead=${leadId} norm.facebook=${place?.facebook ?? "∅"} norm.instagram=${place?.instagram ?? "∅"}`);
-              console.log(`[enrich-DIAG] raw social-ish keys=${JSON.stringify(socialKeys)}`);
-              console.log(`[enrich-DIAG] raw.facebooks=${JSON.stringify(raw.facebooks)} raw.instagrams=${JSON.stringify(raw.instagrams)} raw.facebook=${JSON.stringify(raw.facebook)} raw.instagram=${JSON.stringify(raw.instagram)}`);
-              const wr = place?.webResults ?? [];
-              console.log(`[enrich-DIAG] webResults(${wr.length})=${JSON.stringify(wr.slice(0, 12))}`);
-            } catch (de) { console.log(`[enrich-DIAG] log error: ${(de as Error).message}`); }
           } catch (e) {
             console.error("[enrich-business] mapsEnrich error:", (e as Error).message);
           }
