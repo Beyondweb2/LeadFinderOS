@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, memo } from 'react';
+import { useState, useMemo, useCallback, memo, useEffect, useRef } from 'react';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -22,6 +22,7 @@ import { SearchLeadContact } from './SearchLeadContact';
 import type { TeamClaim } from '@/hooks/useTeamClaims';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
 import { useAuth } from '@/hooks/useAuth';
+import { readSearchResultsView, writeSearchResultsView } from '@/lib/searchResultsPrefs';
 
 function initials(name: string | null): string {
   if (!name) return '?';
@@ -102,10 +103,17 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     return isInOutreach?.(name, url) ?? false;
   }, [isInOutreach]);
 
-  const [statusFilters, setStatusFilters] = useState<WebsiteStatus[]>([
-    'NO_WEBSITE', 'HAS_OWN_WEBSITE', 'UNCERTAIN',
-  ]);
-  const [currentPage, setCurrentPage] = useState(1);
+  const ALL_STATUSES = useMemo<WebsiteStatus[]>(() => ['NO_WEBSITE', 'HAS_OWN_WEBSITE', 'UNCERTAIN'], []);
+
+  // Restore the saved page + website filter once (per-user, safe-wrapped storage).
+  // Invalid/empty saved filters fall back to "all" so we never restore a view that
+  // shows nothing. The saved page is clamped to the live result set below.
+  const savedView = useRef(readSearchResultsView(user?.id)).current;
+  const [statusFilters, setStatusFilters] = useState<WebsiteStatus[]>(() => {
+    const restored = (savedView?.filters ?? []).filter((s): s is WebsiteStatus => (ALL_STATUSES as string[]).includes(s));
+    return restored.length ? restored : ALL_STATUSES;
+  });
+  const [currentPage, setCurrentPage] = useState<number>(() => Math.max(1, savedView?.page ?? 1));
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
@@ -114,13 +122,35 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     });
   }, [leads, statusFilters]);
 
-  useMemo(() => { setCurrentPage(1); }, [statusFilters, leads]);
-
   const totalPages = Math.ceil(filteredLeads.length / ITEMS_PER_PAGE);
+  // Render against a CLAMPED page so a page beyond the current set (restored from
+  // storage, or after a filter toggle shrinks the results) never shows an empty
+  // page — it falls back to the LAST valid page, not page 1.
+  const safePage = Math.min(Math.max(1, currentPage), Math.max(1, totalPages));
   const paginatedLeads = filteredLeads.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE,
+    (safePage - 1) * ITEMS_PER_PAGE,
+    safePage * ITEMS_PER_PAGE,
   );
+
+  // Reset to page 1 only when a NEW search loads (leads change while mounted) — NOT
+  // on first mount (we restore the saved page) and NOT on filter toggle (Fix B:
+  // keep the page; the clamp below handles out-of-range).
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) { didMountRef.current = true; return; }
+    setCurrentPage(1);
+  }, [leads]);
+
+  // Reconcile state to the clamped page so persistence + pagination buttons stay
+  // in range (e.g. after a filter toggle reduces the page count).
+  useEffect(() => {
+    if (currentPage !== safePage) setCurrentPage(safePage);
+  }, [currentPage, safePage]);
+
+  // Persist page + filters (per-user, survives nav / reload / re-login).
+  useEffect(() => {
+    writeSearchResultsView(user?.id, { filters: statusFilters, page: safePage });
+  }, [user?.id, statusFilters, safePage]);
 
   const noWebsiteCount = leads.filter((l) => l.websiteStatus === 'NO_WEBSITE' || l.websiteStatus === 'DIRECTORY_ONLY').length;
 
@@ -278,7 +308,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                         >
                           <Lock className="h-3.5 w-3.5" />
                         </Button>
-                        {index === 0 && currentPage === 1 && (
+                        {index === 0 && safePage === 1 && (
                           <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 overflow-hidden rounded-md border bg-popover px-2 py-1 text-[11px] text-popover-foreground shadow-md whitespace-nowrap pointer-events-none">
                              🔒 Start trial to save this lead
                            </div>
@@ -401,7 +431,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                             >
                               <Lock className="h-4 w-4" />
                             </Button>
-                            {index === 0 && currentPage === 1 && (
+                            {index === 0 && safePage === 1 && (
                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50 overflow-hidden rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow-md whitespace-nowrap pointer-events-none">
                                 🔒 Start trial to save this lead
                               </div>
@@ -434,25 +464,25 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         {totalPages > 1 && (
           <div className="flex items-center justify-between mt-4 pt-4 border-t border-border">
             <p className="text-sm text-muted-foreground">
-              Showing {((currentPage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredLeads.length)} of {filteredLeads.length}
+              Showing {((safePage - 1) * ITEMS_PER_PAGE) + 1} to {Math.min(safePage * ITEMS_PER_PAGE, filteredLeads.length)} of {filteredLeads.length}
             </p>
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="border-border">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(Math.max(1, safePage - 1))} disabled={safePage === 1} className="border-border">
                 <ChevronLeft className="h-4 w-4 mr-1" />Previous
               </Button>
               <div className="flex items-center gap-1">
                 {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                   let pageNum: number;
                   if (totalPages <= 5) pageNum = i + 1;
-                  else if (currentPage <= 3) pageNum = i + 1;
-                  else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + i;
-                  else pageNum = currentPage - 2 + i;
+                  else if (safePage <= 3) pageNum = i + 1;
+                  else if (safePage >= totalPages - 2) pageNum = totalPages - 4 + i;
+                  else pageNum = safePage - 2 + i;
                   return (
                     <Button
                       key={pageNum}
-                      variant={currentPage === pageNum ? 'default' : 'outline'}
+                      variant={safePage === pageNum ? 'default' : 'outline'}
                       size="sm"
-                      className={`w-8 h-8 p-0 ${currentPage === pageNum ? 'bg-primary' : 'border-border'}`}
+                      className={`w-8 h-8 p-0 ${safePage === pageNum ? 'bg-primary' : 'border-border'}`}
                       onClick={() => setCurrentPage(pageNum)}
                     >
                       {pageNum}
@@ -460,7 +490,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   );
                 })}
               </div>
-              <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages} className="border-border">
+              <Button variant="outline" size="sm" onClick={() => setCurrentPage(Math.min(totalPages, safePage + 1))} disabled={safePage === totalPages} className="border-border">
                 Next<ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
