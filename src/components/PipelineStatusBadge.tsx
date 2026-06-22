@@ -14,24 +14,24 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     className: 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent font-semibold',
   },
   initial_contact: {
-    label: 'Initial Contact',
+    label: 'Contacted',
     shortLabel: 'Contacted',
     className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
   },
   // Legacy values kept as fallbacks so any un-migrated/stray row still renders as
   // "Initial Contact" (amber) rather than the generic New badge.
   waiting: {
-    label: 'Initial Contact',
+    label: 'Contacted',
     shortLabel: 'Contacted',
     className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
   },
   delivered: {
-    label: 'Initial Contact',
+    label: 'Contacted',
     shortLabel: 'Contacted',
     className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
   },
   contacted: {
-    label: 'Initial Contact',
+    label: 'Contacted',
     shortLabel: 'Contacted',
     className: 'bg-[hsl(var(--badge-contacted))] text-[hsl(var(--badge-contacted-fg))] border-transparent font-semibold',
   },
