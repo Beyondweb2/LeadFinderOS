@@ -7,11 +7,13 @@ import { OutreachIntroModal } from '@/components/OutreachIntroModal';
 import { PostContactModal } from '@/components/PostContactModal';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCampaigns } from '@/hooks/useCampaigns';
+import { useAuth } from '@/hooks/useAuth';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { Loader2 } from 'lucide-react';
 import { isDemoLead } from '@/lib/demoLeads';
+import { readCampaignFilter, writeCampaignFilter } from '@/lib/outreachPrefs';
 import type { ContactMethod, PipelineStatus } from '@/types/outreach';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 
 const Outreach = () => {
   const {
@@ -36,8 +38,18 @@ const Outreach = () => {
     retryPhoneFetch,
   } = useOutreach();
 
-  // Campaign filter (null = all campaigns)
+  const { user } = useAuth();
+
+  // Campaign filter (null = all campaigns). Persisted per-user so it survives
+  // navigation + reload + re-login (restored in an effect once campaigns load).
   const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+  const restoredRef = useRef(false);
+
+  // Wrap setter so every user-initiated change is persisted immediately.
+  const changeCampaignFilter = useCallback((next: string | null) => {
+    setCampaignFilter(next);
+    writeCampaignFilter(user?.id, next);
+  }, [user?.id]);
 
   // Launch-pad intent carried from the Manage page via router state. Consumed once
   // (cleared from history so a refresh/back won't reopen the composer).
@@ -46,6 +58,9 @@ const Outreach = () => {
   const [launchIntent, setLaunchIntent] = useState<LaunchIntent | null>(
     ((location.state as { launch?: LaunchIntent } | null)?.launch) ?? null,
   );
+  // A launch (e.g. from Manage) wins over the restored campaign so the launched
+  // lead is never hidden; we DON'T persist this temporary All view.
+  const hadInitialLaunchRef = useRef(launchIntent != null);
   useEffect(() => {
     if (launchIntent) {
       // Ensure the launched lead isn't hidden by an active campaign filter.
@@ -67,7 +82,19 @@ const Outreach = () => {
   const isReadOnly = false;
 
   // Campaign default sale types → map keyed by lead id, for the lead detail modal.
-  const { campaigns } = useCampaigns();
+  const { campaigns, isLoading: campaignsLoading } = useCampaigns();
+
+  // Restore the persisted campaign once campaigns have loaded (so we can validate
+  // it still exists). Runs once. A launch intent on this visit takes precedence.
+  useEffect(() => {
+    if (restoredRef.current || campaignsLoading || !user?.id) return;
+    restoredRef.current = true;
+    if (hadInitialLaunchRef.current) return; // launch already set All; don't restore
+    const stored = readCampaignFilter(user.id);
+    if (stored && campaigns.some((c) => c.id === stored)) {
+      setCampaignFilter(stored); // restore-only — no re-persist
+    }
+  }, [campaignsLoading, campaigns, user?.id]);
   const campaignDefaultSaleTypeByLead = useMemo(() => {
     const byCampaign: Record<string, string | null> = {};
     for (const c of campaigns) byCampaign[c.id] = c.default_sale_type;
@@ -128,7 +155,7 @@ const Outreach = () => {
         </div>
         <div className="flex items-center justify-center sm:justify-end gap-2 shrink-0">
           <span className="text-xs text-muted-foreground hidden sm:inline">Campaign</span>
-          <CampaignPicker mode="filter" value={campaignFilter} onChange={setCampaignFilter} />
+          <CampaignPicker mode="filter" value={campaignFilter} onChange={changeCampaignFilter} />
         </div>
       </div>
 

@@ -51,12 +51,16 @@ import {
   Scissors,
   Flower2,
   Wrench,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { useOutreachAttempt } from '@/hooks/useOutreachAttempt';
@@ -1202,29 +1206,70 @@ export function OutreachTable({
               <Star className={cn('h-3.5 w-3.5 mr-1.5', trackedOnly && 'fill-current')} />
               Tracked
             </Button>
-            {/* Contactability filters (AND, stack with the rest). Real stored values only. */}
-            <Button variant={hasEmail ? 'default' : 'outline'} size="sm" onClick={() => { setHasEmail((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !hasEmail && 'bg-background')} title="Has a real stored email">
-              <Mail className="h-3.5 w-3.5 mr-1.5" /> Email
-            </Button>
-            <Button variant={hasInstagram ? 'default' : 'outline'} size="sm" onClick={() => { setHasInstagram((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !hasInstagram && 'bg-background')} title="Has a real stored Instagram">
-              <Instagram className="h-3.5 w-3.5 mr-1.5" /> IG
-            </Button>
-            <Button variant={hasFacebook ? 'default' : 'outline'} size="sm" onClick={() => { setHasFacebook((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !hasFacebook && 'bg-background')} title="Has a real stored Facebook">
-              <Facebook className="h-3.5 w-3.5 mr-1.5" /> FB
-            </Button>
-            <Button variant={hasWhatsApp ? 'default' : 'outline'} size="sm" onClick={() => { setHasWhatsApp((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !hasWhatsApp && 'bg-background')} title="Mobile line-type — WhatsApp-capable">
-              <Smartphone className="h-3.5 w-3.5 mr-1.5" /> WhatsApp
-            </Button>
-            {/* Listing-level signals — FREE (derived from the stored website), NOT verified. */}
-            <Button variant={sigWebsite ? 'default' : 'outline'} size="sm" onClick={() => { setSigWebsite((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !sigWebsite && 'bg-background')} title="Listing has a real own website (not social/booking) — from listing, not verified">
-              <Globe className="h-3.5 w-3.5 mr-1.5" /> Website
-            </Button>
-            <Button variant={sigFacebook ? 'default' : 'outline'} size="sm" onClick={() => { setSigFacebook((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !sigFacebook && 'bg-background')} title="Listing's website is a Facebook link — from listing, not verified">
-              <Facebook className="h-3.5 w-3.5 mr-1.5" /> FB (listing)
-            </Button>
-            <Button variant={sigInstagram ? 'default' : 'outline'} size="sm" onClick={() => { setSigInstagram((v) => !v); setCurrentPage(1); }} className={cn('h-8 text-xs', !sigInstagram && 'bg-background')} title="Listing's website is an Instagram link — from listing, not verified">
-              <Instagram className="h-3.5 w-3.5 mr-1.5" /> IG (listing)
-            </Button>
+            {/* Contact / signal filters — collapsed into one dropdown. All AND-combined
+                (unchanged); the trigger shows the active count. */}
+            {(() => {
+              const activeFilterCount =
+                [hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigFacebook, sigInstagram].filter(Boolean).length;
+              const toggle = (setter: (updater: (prev: boolean) => boolean) => void) => () => {
+                setter((v) => !v);
+                setCurrentPage(1);
+              };
+              const clearAll = () => {
+                setHasEmail(false); setHasInstagram(false); setHasFacebook(false); setHasWhatsApp(false);
+                setSigWebsite(false); setSigFacebook(false); setSigInstagram(false);
+                setCurrentPage(1);
+              };
+              return (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant={activeFilterCount > 0 ? 'default' : 'outline'}
+                      size="sm"
+                      className={cn('h-8 text-xs', activeFilterCount === 0 && 'bg-background')}
+                      title="Filter by contact details and listing signals"
+                    >
+                      <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
+                      Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56">
+                    <DropdownMenuLabel>Has contact detail</DropdownMenuLabel>
+                    <DropdownMenuCheckboxItem checked={hasEmail} onCheckedChange={toggle(setHasEmail)} onSelect={(e) => e.preventDefault()}>
+                      <Mail className="h-3.5 w-3.5 mr-2" /> Email
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={hasInstagram} onCheckedChange={toggle(setHasInstagram)} onSelect={(e) => e.preventDefault()}>
+                      <Instagram className="h-3.5 w-3.5 mr-2" /> Instagram
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={hasFacebook} onCheckedChange={toggle(setHasFacebook)} onSelect={(e) => e.preventDefault()}>
+                      <Facebook className="h-3.5 w-3.5 mr-2" /> Facebook
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={hasWhatsApp} onCheckedChange={toggle(setHasWhatsApp)} onSelect={(e) => e.preventDefault()}>
+                      <Smartphone className="h-3.5 w-3.5 mr-2" /> WhatsApp-capable
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Listing signal (not verified)</DropdownMenuLabel>
+                    <DropdownMenuCheckboxItem checked={sigWebsite} onCheckedChange={toggle(setSigWebsite)} onSelect={(e) => e.preventDefault()}>
+                      <Globe className="h-3.5 w-3.5 mr-2" /> Has own website
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={sigFacebook} onCheckedChange={toggle(setSigFacebook)} onSelect={(e) => e.preventDefault()}>
+                      <Facebook className="h-3.5 w-3.5 mr-2" /> FB (listing)
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuCheckboxItem checked={sigInstagram} onCheckedChange={toggle(setSigInstagram)} onSelect={(e) => e.preventDefault()}>
+                      <Instagram className="h-3.5 w-3.5 mr-2" /> IG (listing)
+                    </DropdownMenuCheckboxItem>
+                    {activeFilterCount > 0 && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={clearAll} className="justify-center text-xs text-muted-foreground">
+                          Clear filters
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
+            })()}
             {(hasEmail || hasInstagram || hasFacebook || hasWhatsApp || sigWebsite || sigFacebook || sigInstagram) && (
               <span className="self-center text-xs text-muted-foreground whitespace-nowrap" title="Leads matching all active filters">
                 {filteredAndSortedLeads.length} match
