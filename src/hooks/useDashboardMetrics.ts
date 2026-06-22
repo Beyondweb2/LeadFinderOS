@@ -290,8 +290,11 @@ export function useDashboardMetrics() {
     };
 
     // HERO — businesses contacted = leads past "New" (status, source of truth).
-    // Reconciles exactly with Sent / pipeline / channel card. Never per-press.
-    const contactedTotal = allLeads.filter(l => !l.is_archived && isSentStatus(l.status)).length;
+    // INCLUDES archived: a lead you contacted then archived was still contacted, and
+    // it shows on the Outreach list + the per-campaign card (both archive-inclusive),
+    // so the channel "Sent" total reconciles here. (The Pipeline card stays active-
+    // only — archived aren't "active" — so it can be lower than this by the archived count.)
+    const contactedTotal = allLeads.filter(l => isSentStatus(l.status)).length;
 
     // Daily activity pulse — DISTINCT businesses per day from the send log
     // (outreach_events deduped by lead_id). Pressing WhatsApp then SMS for one
@@ -349,9 +352,11 @@ export function useDashboardMetrics() {
       facebook_msg: emptyChannelStat(),
       noMethodSent: 0,
     };
-    const activeLeads = allLeads.filter(l => !l.is_archived);
-    const leadMethodById = new Map<string, string | null>(activeLeads.map(l => [l.id, l.contact_method ?? null]));
-    for (const l of activeLeads) {
+    // Include archived — a contacted-then-archived lead still counts as contacted via
+    // its channel (matches the Outreach list + the per-campaign card).
+    const contactedLeads = allLeads;
+    const leadMethodById = new Map<string, string | null>(contactedLeads.map(l => [l.id, l.contact_method ?? null]));
+    for (const l of contactedLeads) {
       if (!isSentStatus(l.status)) continue;
       const m = l.contact_method as keyof ChannelPerformance | null;
       if (m && m in channelPerf && m !== 'noMethodSent') {
