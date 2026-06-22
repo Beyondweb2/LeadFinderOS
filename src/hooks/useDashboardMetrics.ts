@@ -161,26 +161,36 @@ export function useDashboardMetrics() {
     setAllLeads((leadsResult.data || []) as OutreachLead[]);
     setOutreachEvents7d(eventsResult.data || []);
 
-    // Site funnel. SENT is driven by the Outreach status (source of truth) —
-    // every lead past "New" counts as sent. Opened/Claimed/Add-on come from the
-    // automatic generated_sites event columns. Untyped client (tracking cols
-    // aren't in the generated types). RLS scopes it. Best-effort.
-    const sentFromStatus = (leadsResult.data || []).filter(l => isSentStatus((l as OutreachLead).status)).length;
+    // Site funnel. ALL four stats derive from generated_sites, deduped by lead_id,
+    // so the open rate (opened ÷ sent) compares like-for-like (sites vs sites).
+    //   sent    = distinct leads that have a generated site. A generated_sites row
+    //             existing is the real "a site went out" signal — generated_sites.
+    //             sent_at / lead.site_sent_at are not reliably populated, so they'd
+    //             undercount badly. NOTE: this counts sites GENERATED, which in this
+    //             workflow ≈ sites sent (you generate in order to send).
+    //   opened/claimed/addon = distinct leads reaching that stage (per-lead, not
+    //             per-row, so a regenerated/duplicated site can't double-count).
+    // This is deliberately SEPARATE from contactedTotal (leads past New), which
+    // stays the source of truth for "# contacted" and is unaffected by this.
+    // Untyped client (tracking cols aren't in the generated types). RLS scopes it.
     try {
       const { data: sites } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
         .from('generated_sites')
         .select('lead_id, first_opened_at, claimed_at, addon_interest_at');
       const rows = (sites || []) as Array<{ lead_id: string | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>;
+      const distinctLeads = (pred: (r: typeof rows[number]) => boolean) =>
+        new Set(rows.filter(r => r.lead_id && pred(r)).map(r => r.lead_id as string)).size;
       setSiteFunnel({
-        sent: sentFromStatus,
-        opened: rows.filter(r => r.first_opened_at).length,
-        claimed: rows.filter(r => r.claimed_at).length,
-        addonRequested: rows.filter(r => r.addon_interest_at).length,
+        sent: distinctLeads(() => true),
+        opened: distinctLeads(r => !!r.first_opened_at),
+        claimed: distinctLeads(r => !!r.claimed_at),
+        addonRequested: distinctLeads(r => !!r.addon_interest_at),
       });
       setClaimedLeadIds(rows.filter(r => r.claimed_at && r.lead_id).map(r => r.lead_id as string));
     } catch (e) {
+      // No status-based fallback — that mismatched-units fallback was the original
+      // bug. Leave the funnel at its previous value on a transient fetch failure.
       console.error('Site funnel fetch failed (non-blocking):', e);
-      setSiteFunnel(prev => ({ ...prev, sent: sentFromStatus }));
     }
 
     const searchHistory = searchHistoryResult.data || [];
