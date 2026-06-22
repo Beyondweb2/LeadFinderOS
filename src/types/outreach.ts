@@ -176,7 +176,7 @@ export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
 // the filter and the row/expanded dropdowns are one consistent list.
 export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'not_contacted', label: 'New' },
-  { value: 'initial_contact', label: 'Initial Contact' },
+  { value: 'initial_contact', label: 'Contacted' },
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'interested', label: 'Interested ⭐' },
@@ -209,7 +209,7 @@ export type PipelineStatus =
 
 export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [
   { value: 'not_contacted', label: 'New' },
-  { value: 'initial_contact', label: 'Initial Contact' },
+  { value: 'initial_contact', label: 'Contacted' },
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'interested', label: 'Interested ⭐' },
