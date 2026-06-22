@@ -532,18 +532,14 @@ export function useOutreach() {
       updates.next_action = 'send_draft';
       updates.next_action_date = today;
     }
-    // Marking a lead "Site Sent" queues a Follow-up 3 days out so it surfaces as due
-    // in the pipeline. Mirrors Replied→Send Draft, but NON-destructive: only set it
-    // when there's no next action already (never clobber a manual one).
+    // Marking a lead "Site Sent" ALWAYS queues a Follow-up the NEXT DAY, overwriting
+    // any existing next action — so a sent site always gets a timely chase.
     if (status === 'site_sent') {
-      const existingAction = targetLead?.next_action;
-      if (!existingAction || existingAction === 'none') {
-        const due = new Date();
-        due.setDate(due.getDate() + 3);
-        const dueStr = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
-        updates.next_action = 'follow_up';
-        updates.next_action_date = dueStr;
-      }
+      const due = new Date();
+      due.setDate(due.getDate() + 1);
+      const dueStr = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
+      updates.next_action = 'follow_up';
+      updates.next_action_date = dueStr;
     }
     // Not Interested = a dead prospect → untrack it so the Tracked filter stays
     // clean (only live prospects). Status stays 'not_interested', so the dashboard
