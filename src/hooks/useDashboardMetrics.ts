@@ -37,6 +37,7 @@ interface PipelineCounts {
   new: number;
   contacted: number;
   followUp: number;
+  siteSent: number;
   interested: number;
   proposalSent: number;
   closedWon: number;
@@ -282,6 +283,7 @@ export function useDashboardMetrics() {
       new: allLeads.filter(l => l.status === 'not_contacted' && !l.is_archived).length,
       contacted: allLeads.filter(l => ['initial_contact', 'contacted', 'waiting', 'delivered', 'sent_initial_text', 'sent_voice_note', 'sms', 'whatsapp', 'facebook_msg', 'no_whatsapp', 'not_answered', 'on_hold'].includes(l.status) && !l.is_archived).length,
       followUp: allLeads.filter(l => ['call_back', 'replied'].includes(l.status) && !l.is_archived).length,
+      siteSent: allLeads.filter(l => l.status === 'site_sent' && !l.is_archived).length,
       interested: allLeads.filter(l => l.status === 'interested' && !l.is_archived).length,
       proposalSent: allLeads.filter(l => ['wants_draft', 'reviewing_draft', 'awaiting_decision'].includes(l.status) && !l.is_archived).length,
       closedWon: allLeads.filter(l => ['payment_received', 'paid_for_draft', 'completed'].includes(l.status) && !l.is_archived).length,
