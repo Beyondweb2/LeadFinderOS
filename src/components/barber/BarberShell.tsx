@@ -2,12 +2,11 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   LayoutDashboard, CalendarDays, Pencil, Settings as SettingsIcon, LogOut, Menu, X,
-  ExternalLink, Globe, EyeOff, Loader2, Sparkles, Check, ArrowLeft, Smartphone, Monitor, Share,
+  ExternalLink, Globe, EyeOff, Loader2, Sparkles, Check, ArrowLeft, Smartphone, Monitor, Share, Download,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SiteEditor } from "@/components/SiteEditor";
@@ -33,15 +32,16 @@ const SHELL_BG =
   "radial-gradient(1100px 600px at 85% -8%, rgba(230,162,75,0.10), transparent 60%)," +
   "radial-gradient(800px 500px at -10% 8%, rgba(230,162,75,0.05), transparent 55%)";
 
-type PageKey = "dashboard" | "calendar" | "edit" | "settings";
+type PageKey = "dashboard" | "calendar" | "edit" | "install" | "settings";
 const NAV: { key: PageKey; label: string; icon: typeof LayoutDashboard }[] = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "calendar", label: "Calendar", icon: CalendarDays },
   { key: "edit", label: "Edit Site", icon: Pencil },
+  { key: "install", label: "Install", icon: Download },
   { key: "settings", label: "Settings", icon: SettingsIcon },
 ];
 const PAGE_TITLE: Record<PageKey, string> = {
-  dashboard: "Dashboard", calendar: "Calendar", edit: "Edit Site", settings: "Settings",
+  dashboard: "Dashboard", calendar: "Calendar", edit: "Edit Site", install: "Install", settings: "Settings",
 };
 
 const statusBadge = (status: string) =>
@@ -63,7 +63,6 @@ export function BarberShell({
   welcome?: boolean;
 }) {
   const { toast } = useToast();
-  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [page, setPage] = useState<PageKey>("dashboard");
   const [navOpen, setNavOpen] = useState(false);
@@ -71,9 +70,12 @@ export function BarberShell({
   const [interested, setInterested] = useState(!!site.addon_interest_at);
   const [showAddonConfirm, setShowAddonConfirm] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const shopName = site.content?.businessName || site.site_name;
-  const logoUrl = site.content?.logoUrl;
+  // Sidebar avatar = the site's hero photo (square crop), so it feels like theirs;
+  // fall back to the logo, then the letter monogram only if there's no image.
+  const avatarUrl = site.content?.heroImageUrl || site.content?.logoUrl;
   const published = site.status === "published";
 
   useEffect(() => {
@@ -130,8 +132,8 @@ export function BarberShell({
           </button>
         )}
         <div className="flex items-center gap-3">
-          {logoUrl ? (
-            <img src={logoUrl} alt={shopName} className="h-9 w-9 shrink-0 rounded-md object-contain" />
+          {avatarUrl ? (
+            <img src={avatarUrl} alt={shopName} className="h-9 w-9 shrink-0 rounded-md object-cover" />
           ) : (
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-amber/15 font-display text-lg text-amber-soft">
               {shopName.trim().slice(0, 1).toUpperCase()}
@@ -169,10 +171,10 @@ export function BarberShell({
       <div className="border-t border-line p-3">
         <button
           type="button"
-          onClick={onSignOut}
+          onClick={() => { setNavOpen(false); setShowLogoutConfirm(true); }}
           className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-white/[0.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/60"
         >
-          <LogOut className="h-4 w-4" /> Sign out
+          <LogOut className="h-4 w-4" /> Log out
         </button>
       </div>
     </div>
@@ -258,37 +260,8 @@ export function BarberShell({
             </div>
           )}
 
-          {page === "settings" && (
+          {page === "install" && (
             <div className="space-y-6">
-              {/* Upsell card - unpaid barbers only; kept HIDDEN for now (the
-                  announcement bar is the add-on route). is_paid gate intact. */}
-              {SHOW_BOOKING_CARD && !site.is_paid && <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Account</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  {/* Plan line shown only to paid sites; early/unpaid barbers see no
-                      plan/upgrade framing (Phase 0). is_paid logic unchanged. */}
-                  {site.is_paid && (
-                    <div className="text-sm text-muted-foreground">
-                      Plan: <span className="font-medium text-zinc-200">Pro - booking & reminders active</span>
-                    </div>
-                  )}
-                  <div className="text-sm text-muted-foreground">Your public site link:</div>
-                  <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-mono text-sm text-amber-soft hover:text-amber">
-                    {publicSiteLabel(site.site_name)} <ExternalLink className="h-4 w-4" />
-                  </a>
-                  <div>
-                    <Button variant="outline" size="sm" onClick={onSignOut} className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white">
-                      <LogOut className="h-4 w-4 mr-2" /> Sign out
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Install this app — same steps as the welcome email, for barbers
-                  who are already logged in. */}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Install this app</CardTitle>
@@ -324,6 +297,37 @@ export function BarberShell({
               </Card>
             </div>
           )}
+
+          {page === "settings" && (
+            <div className="space-y-6">
+              {/* Upsell card - unpaid barbers only; kept HIDDEN for now (the
+                  announcement bar is the add-on route). is_paid gate intact. */}
+              {SHOW_BOOKING_CARD && !site.is_paid && <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Account</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {/* Plan line shown only to paid sites; early/unpaid barbers see no
+                      plan/upgrade framing (Phase 0). is_paid logic unchanged. */}
+                  {site.is_paid && (
+                    <div className="text-sm text-muted-foreground">
+                      Plan: <span className="font-medium text-zinc-200">Pro - booking & reminders active</span>
+                    </div>
+                  )}
+                  <div className="text-sm text-muted-foreground">Your public site link:</div>
+                  <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-mono text-sm text-amber-soft hover:text-amber">
+                    {publicSiteLabel(site.site_name)} <ExternalLink className="h-4 w-4" />
+                  </a>
+                  <div>
+                    <Button variant="outline" size="sm" onClick={() => setShowLogoutConfirm(true)} className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white">
+                      <LogOut className="h-4 w-4 mr-2" /> Log out
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </main>
 
         {/* Persistent, low-key reminder so a barber can always find their way
@@ -331,7 +335,7 @@ export function BarberShell({
         <footer className="border-t border-line px-4 py-3 text-center text-[11px] leading-relaxed text-zinc-500">
           Bookmark this page to manage your site:{" "}
           <a href="https://yoursites.uk/barber" className="text-amber-soft hover:text-amber">yoursites.uk/barber</a>
-          {user?.email ? <> — log in anytime with <span className="text-zinc-400">{user.email}</span></> : null}
+          {" "}— log in anytime with your mobile number.
         </footer>
       </div>
 
@@ -351,6 +355,55 @@ export function BarberShell({
           <Button onClick={() => setShowAddonConfirm(false)} className="mt-5 w-full rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">
             Got it
           </Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reassuring log-out confirm: how to get back in (URL + mobile + password)
+          and a bookmark nudge. Confirm logs out; cancel keeps them in. */}
+      <Dialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+        <DialogContent className="max-w-sm rounded-2xl border-line bg-ink-card p-6 text-zinc-200">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-amber/30 bg-amber/10">
+            <LogOut className="h-6 w-6 text-amber" />
+          </div>
+          <h2 className="mt-3 text-center text-xl font-bold text-white">Before you go</h2>
+          <p className="mt-1 text-center text-sm text-zinc-300">
+            You can get back in any time — here's how, so you never lose your site.
+          </p>
+
+          <div className="mt-4 rounded-xl border border-line bg-white/[0.03] p-3.5 text-sm">
+            <div className="text-xs uppercase tracking-wider text-zinc-500">Log back in here</div>
+            <a
+              href="https://yoursites.uk/barber"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-1 inline-flex items-center gap-2 font-mono text-amber-soft hover:text-amber"
+            >
+              yoursites.uk/barber <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+            </a>
+            <p className="mt-2 text-zinc-300">
+              Log in with your <span className="font-semibold text-white">mobile number</span> and password.
+            </p>
+          </div>
+
+          <p className="mt-3 text-center text-sm text-zinc-300">
+            ⭐ <span className="font-semibold text-white">Bookmark this page</span> so it's always easy to find.
+          </p>
+
+          <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setShowLogoutConfirm(false)}
+              className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white"
+            >
+              Stay logged in
+            </Button>
+            <Button
+              onClick={() => { setShowLogoutConfirm(false); onSignOut(); }}
+              className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft"
+            >
+              <LogOut className="mr-2 h-4 w-4" /> Log out
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
