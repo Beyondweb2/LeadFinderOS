@@ -153,7 +153,7 @@ export function BarberSiteTemplate({
           styles. Two soft amber radials over deep ink. */}
       {/* pb on mobile clears the fixed bottom Book bar so no section sits under it */}
       <div
-        className={`relative min-h-screen bg-ink ${onClaim ? "pb-[168px] sm:pb-[140px]" : "pb-[76px] sm:pb-0"}`}
+        className={`relative min-h-screen bg-ink ${onClaim ? "pb-[184px] sm:pb-[140px]" : "pb-[76px] sm:pb-0"}`}
         style={{
           backgroundImage:
             "radial-gradient(1100px 600px at 85% -8%, rgb(var(--barber-accent) / 0.10), transparent 60%)," +

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Mail, Phone } from 'lucide-react';
+import { Mail, Phone, Scissors } from 'lucide-react';
 
 interface IntroPopupProps {
   open: boolean;
@@ -54,30 +54,29 @@ export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps
         style={{ backgroundImage: SHELL_BG }}
       >
         <div className="flex flex-col">
-          <span className="w-fit rounded-full border border-amber/30 bg-amber/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-soft">
-            Built for {name}
-          </span>
-
-          <h2 className="mt-4 font-display text-4xl uppercase leading-[1.02] tracking-wide text-white sm:text-5xl">
-            This is your
-            <br />
-            website
-          </h2>
-
-          <p className="mt-4 text-base font-semibold text-white">
-            It's free — no card, no catch.
-          </p>
-
-          <div className="mt-2 space-y-2 text-sm leading-relaxed text-zinc-400">
-            <p>
-              Tap a colour below to recolour it instantly.
-            </p>
-            <p>
-              Photos, text and services are all editable from your dashboard once you sign in.
+          {/* Centred focal hero — clean icon replaces the old border pill */}
+          <div className="flex flex-col items-center text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber/30 bg-amber/10">
+              <Scissors className="h-5 w-5 text-amber" />
+            </div>
+            <span className="mt-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-soft">
+              Built for {name}
+            </span>
+            <h2 className="mt-2 font-display text-4xl uppercase leading-[1.0] tracking-wide text-white sm:text-5xl">
+              This is your website
+            </h2>
+            <p className="mt-3 text-base font-semibold text-white">
+              It's free — no card, no catch.
             </p>
           </div>
 
-          <div className="mt-5 flex flex-col gap-2.5 rounded-xl border border-line bg-white/[0.03] p-3.5 sm:flex-row sm:items-center sm:gap-5">
+          {/* Left-aligned supporting copy + contact (editorial contrast) */}
+          <p className="mt-5 text-sm leading-relaxed text-zinc-400">
+            Have a proper look around — it's yours to keep, and yours to make your own.
+            The photos, colours, text and services are all editable.
+          </p>
+
+          <div className="mt-4 flex flex-col gap-2.5 rounded-xl border border-line bg-white/[0.03] p-3.5 sm:flex-row sm:items-center sm:gap-5">
             <a
               href="mailto:paul@move37.fun"
               className="inline-flex items-center gap-2 text-sm font-medium text-amber transition-colors hover:text-amber-soft"
@@ -91,7 +90,7 @@ export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps
               <Phone className="h-4 w-4 shrink-0" /> +44 7767 746740
             </a>
           </div>
-          <p className="mt-2 text-xs text-zinc-500">Any questions, just ask. - Paul</p>
+          <p className="mt-2 text-xs text-zinc-500">Any questions, just ask — Paul</p>
 
           <Button
             type="button"
