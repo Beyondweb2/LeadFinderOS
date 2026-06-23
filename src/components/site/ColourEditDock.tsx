@@ -32,7 +32,9 @@ export function ColourEditDock({ value, onChange, onKeep, keeping = false }: Col
             <div className="text-xs font-semibold text-zinc-200">Change the colour theme</div>
             <div className="text-xs text-zinc-400">Tap any photo to add your own</div>
           </div>
-          <div className="flex items-center gap-2.5 overflow-x-auto pb-0.5">
+          {/* px/py give the scaled + ringed SELECTED swatch room — overflow-x-auto
+              forces overflow-y to clip, so without padding the ring is cropped. */}
+          <div className="flex items-center gap-2.5 overflow-x-auto px-1.5 py-2">
             {BARBER_ACCENTS.map((a) => {
               const isDefault = a.hex.toLowerCase() === BARBER_ACCENT_DEFAULT_HEX.toLowerCase();
               const selected = current.toLowerCase() === a.hex.toLowerCase();
@@ -62,7 +64,7 @@ export function ColourEditDock({ value, onChange, onKeep, keeping = false }: Col
           className="relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-7 py-3 text-sm font-bold text-ink shadow-[0_6px_28px_-6px_rgba(255,255,255,0.45)] transition-all hover:-translate-y-0.5 hover:bg-zinc-100 active:scale-[0.98] disabled:opacity-70 sm:px-9 sm:py-3.5 sm:text-base"
         >
           {keeping && <Loader2 className="h-4 w-4 animate-spin" />}
-          Keep this site
+          Finish
         </button>
       </div>
     </div>
