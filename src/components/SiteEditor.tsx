@@ -13,6 +13,7 @@ import { SiteImageManager, type SiteImageManagerHandle } from "@/components/Site
 import { SiteImagePicker, type SiteImagePickerHandle } from "@/components/SiteImagePicker";
 import type { BarberSiteContent, BarberService, BarberOpeningHours } from "@/templates/barber/types";
 import type { Json } from "@/integrations/supabase/types";
+import { BARBER_ACCENTS, BARBER_ACCENT_DEFAULT_HEX } from "@/config/barberAccents";
 
 export type EditableSite = {
   id: string;
@@ -27,15 +28,9 @@ export type EditableSite = {
 // Preset accent colours (no free entry) — hexes chosen to read well on the dark
 // template. "Amber" is the default (stored as unset). Soft/deep shades are
 // derived by the template.
-const AMBER_HEX = "#E6A24B";
-const ACCENT_PRESETS: { name: string; hex: string }[] = [
-  { name: "Amber", hex: "#E6A24B" },
-  { name: "Barber red", hex: "#CE4B45" },
-  { name: "Steel blue", hex: "#5B8FC9" },
-  { name: "Forest green", hex: "#46A06A" },
-  { name: "Burgundy", hex: "#A8455F" },
-  { name: "Slate", hex: "#8C97AB" },
-];
+// Single source of truth for the palette (shared with the pre-sign-in dock).
+const AMBER_HEX = BARBER_ACCENT_DEFAULT_HEX;
+const ACCENT_PRESETS = BARBER_ACCENTS;
 
 // Per-service appointment length presets (minutes). New services default to 30;
 // existing services with no stored duration are treated as 30 at read time (no

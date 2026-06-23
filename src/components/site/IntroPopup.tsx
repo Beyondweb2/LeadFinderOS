@@ -70,11 +70,10 @@ export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps
 
           <div className="mt-2 space-y-2 text-sm leading-relaxed text-zinc-400">
             <p>
-              I build these for local barbers and made this one for you.
+              Make it yours right now — tap a colour below to recolour it instantly.
             </p>
             <p>
-              Have a proper look. Like it? It's yours to keep - easy to change
-              anytime, no tech skills needed.
+              Your photos, text and services are all yours to change too.
             </p>
           </div>
 
