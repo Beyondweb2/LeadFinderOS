@@ -65,17 +65,16 @@ export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps
           </h2>
 
           <p className="mt-4 text-base font-semibold text-white">
-            And it's yours, free.
+            And it's yours.
           </p>
 
           <div className="mt-2 space-y-2 text-sm leading-relaxed text-zinc-400">
             <p>
-              No catch, no card, nothing to pay. I build these for local barbers and
-              made this one for you.
+              I build these for local barbers and made this one for you.
             </p>
             <p>
-              Have a proper look. Like it? Claim it and it's yours to keep - easy to
-              change anytime, no tech skills needed.
+              Have a proper look. Like it? It's yours to keep - easy to change
+              anytime, no tech skills needed.
             </p>
           </div>
 

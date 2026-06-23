@@ -22,6 +22,11 @@ import type { BarberSiteContent } from "@/templates/barber/types";
 
 export type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent; is_paid?: boolean; share_token?: string; addon_interest_at?: string | null };
 
+// Phase 0: hide the booking/SMS upsell from the early barber experience (no pricing
+// in this flow yet). The `!site.is_paid` gates + all upsell logic stay intact —
+// flip this to true to bring the upsell back. Pure visibility switch.
+const SHOW_BARBER_UPSELL = false;
+
 const SHELL_BG =
   "radial-gradient(1100px 600px at 85% -8%, rgba(230,162,75,0.10), transparent 60%)," +
   "radial-gradient(800px 500px at -10% 8%, rgba(230,162,75,0.05), transparent 55%)";
@@ -199,8 +204,9 @@ export function BarberShell({
       {/* Content */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Upsell announcement bar - shown ONLY to unpaid barbers; paid sites
-            never see it. Clicking opens Settings where the full upsell lives. */}
-        {!site.is_paid && (
+            never see it. Clicking opens Settings where the full upsell lives.
+            Phase 0: hidden via SHOW_BARBER_UPSELL (is_paid gate kept intact). */}
+        {SHOW_BARBER_UPSELL && !site.is_paid && (
           <button
             type="button"
             onClick={handleNotifyInterest}
@@ -252,16 +258,21 @@ export function BarberShell({
 
           {page === "settings" && (
             <div className="space-y-6">
-              {/* Upsell card - unpaid barbers only; paid never see an upsell. */}
-              {!site.is_paid && <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />}
+              {/* Upsell card - unpaid barbers only; paid never see an upsell.
+                  Phase 0: hidden via SHOW_BARBER_UPSELL (is_paid gate kept intact). */}
+              {SHOW_BARBER_UPSELL && !site.is_paid && <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Account</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  <div className="text-sm text-muted-foreground">
-                    Plan: <span className="font-medium text-zinc-200">{site.is_paid ? "Pro - booking & reminders active" : "Free"}</span>
-                  </div>
+                  {/* Plan line shown only to paid sites; early/unpaid barbers see no
+                      plan/upgrade framing (Phase 0). is_paid logic unchanged. */}
+                  {site.is_paid && (
+                    <div className="text-sm text-muted-foreground">
+                      Plan: <span className="font-medium text-zinc-200">Pro - booking & reminders active</span>
+                    </div>
+                  )}
                   <div className="text-sm text-muted-foreground">Your public site link:</div>
                   <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-mono text-sm text-amber-soft hover:text-amber">
                     {publicSiteLabel(site.site_name)} <ExternalLink className="h-4 w-4" />
