@@ -22,6 +22,7 @@ import { demoContent as barberDemo } from "@/templates/barber/demoContent";
 import { demoContent as salonDemo } from "@/templates/salon/demoContent";
 import { demoContent as plumberDemo } from "@/templates/plumber/demoContent";
 import type { SiteContent } from "@/templates/shared/content";
+import type { BarberImageSlot } from "@/lib/barberEdits";
 
 /** Props every site template accepts (superset across all callers). */
 export interface SiteTemplateProps {
@@ -31,10 +32,11 @@ export interface SiteTemplateProps {
   onClaim?: () => void;
   showClaimBar?: boolean;
   /**
-   * Pre-sign-in photo swap on /s/:token (barber template only): tap the hero/about
-   * photo to drop in your own before claiming. Other templates ignore it.
+   * Pre-sign-in photo swap on /s/:token (barber template only): tap the
+   * hero / about / gallery photo to drop in your own before claiming. Other
+   * templates ignore it.
    */
-  onEditImage?: (slot: "hero" | "about") => void;
+  onEditImage?: (slot: BarberImageSlot) => void;
 }
 
 export interface TemplateDef {

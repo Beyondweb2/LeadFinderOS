@@ -8,6 +8,7 @@ import { GALLERY_LAYOUTS, GALLERY_GRID_BASE } from "../shared/galleryLayout";
 import { SocialLinks } from "../shared/SocialLinks";
 import { BookingFlow } from "./BookingFlow";
 import type { BarberOpeningHours, BarberService, BarberSiteContent, BarberStat } from "./types";
+import type { BarberImageSlot } from "@/lib/barberEdits";
 
 const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
@@ -74,11 +75,12 @@ export function BarberSiteTemplate({
    */
   showClaimBar?: boolean;
   /**
-   * Pre-sign-in photo swap on /s/:token: when set, the hero + about photos become
-   * tappable so a barber can drop in their own picture before claiming (held in the
-   * browser, uploaded on claim). Absent on the public /p/:slug site (view-only).
+   * Pre-sign-in photo swap on /s/:token: when set, the hero + about + gallery
+   * photos become tappable so a barber can drop in their own picture before
+   * claiming (held in the browser, uploaded on claim). Absent on the public
+   * /p/:slug site (view-only).
    */
-  onEditImage?: (slot: "hero" | "about") => void;
+  onEditImage?: (slot: BarberImageSlot) => void;
 }) {
   const {
     businessName,
@@ -183,7 +185,12 @@ export function BarberSiteTemplate({
           />
           <About about={about} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} onEditImage={onEditImage} />
           <Services services={services} showExamplePrices={showExamplePrices} />
-          <Gallery images={gallery} businessName={businessName} />
+          <Gallery
+            images={gallery}
+            businessName={businessName}
+            onEditImage={onEditImage}
+            editable={!!galleryImageUrls && galleryImageUrls.length > 0}
+          />
           <Hours hours={hours} />
           <Contact
             businessName={businessName}
@@ -415,6 +422,26 @@ function CameraIcon({ className = "" }: { className?: string }) {
   );
 }
 
+/**
+ * Tap-to-change overlay for an editable photo (about + gallery). Sits over the
+ * image (the parent must be `relative`); shows a "Change photo" pill. `radiusClass`
+ * matches the photo's corners so the hover wash doesn't spill past them.
+ */
+function ImageEditOverlay({ onClick, radiusClass = "rounded-2xl" }: { onClick: () => void; radiusClass?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Change this photo"
+      className={`group/edit absolute inset-0 z-10 flex items-center justify-center ${radiusClass} transition-colors hover:bg-ink/30 focus-visible:bg-ink/30`}
+    >
+      <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/65 px-3.5 py-2 text-xs font-semibold text-white shadow-lg backdrop-blur-sm transition-transform group-hover/edit:-translate-y-0.5 sm:text-sm">
+        <CameraIcon className="h-4 w-4" /> Change photo
+      </span>
+    </button>
+  );
+}
+
 function CheckIcon({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -560,7 +587,7 @@ function Hero({
   reviewCount?: number;
   googleReviewsUrl?: string;
   onBook: () => void;
-  onEditImage?: (slot: "hero" | "about") => void;
+  onEditImage?: (slot: BarberImageSlot) => void;
 }) {
   return (
     <section
@@ -676,7 +703,7 @@ function Hero({
 
 /* ---------------------------------- about --------------------------------- */
 
-function About({ about, businessName, stats, aboutImageUrl, onEditImage }: { about: string; businessName: string; stats?: BarberStat[]; aboutImageUrl?: string; onEditImage?: (slot: "hero" | "about") => void }) {
+function About({ about, businessName, stats, aboutImageUrl, onEditImage }: { about: string; businessName: string; stats?: BarberStat[]; aboutImageUrl?: string; onEditImage?: (slot: BarberImageSlot) => void }) {
   return (
     <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
@@ -706,18 +733,7 @@ function About({ about, businessName, stats, aboutImageUrl, onEditImage }: { abo
               className="aspect-[4/5] w-full rounded-3xl border border-white/[0.06] shadow-card"
               imgClassName="transition-transform duration-700 hover:scale-[1.04]"
             />
-            {onEditImage && (
-              <button
-                type="button"
-                onClick={() => onEditImage("about")}
-                aria-label="Change this photo"
-                className="group absolute inset-0 z-10 flex items-center justify-center rounded-3xl transition-colors hover:bg-ink/30 focus-visible:bg-ink/30"
-              >
-                <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/65 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-sm transition-transform group-hover:-translate-y-0.5">
-                  <CameraIcon className="h-4 w-4" /> Change photo
-                </span>
-              </button>
-            )}
+            {onEditImage && <ImageEditOverlay onClick={() => onEditImage("about")} radiusClass="rounded-3xl" />}
             {/* Floating accent badge. On mobile it sits INSIDE the image's bottom-left
                 (positive inset) so it never overhangs the screen edge; on desktop it
                 overhangs slightly as designed. */}
@@ -883,10 +899,23 @@ function Services({
 
 /* --------------------------------- gallery -------------------------------- */
 
-function Gallery({ images, businessName }: { images: string[]; businessName: string }) {
+function Gallery({
+  images,
+  businessName,
+  onEditImage,
+  editable = false,
+}: {
+  images: string[];
+  businessName: string;
+  onEditImage?: (slot: BarberImageSlot) => void;
+  // Tap-to-swap is only offered when the gallery holds REAL photos (the index maps
+  // to content.galleryImageUrls). Stock-fallback galleries aren't editable.
+  editable?: boolean;
+}) {
   // Render 1–10 images as a varied mosaic that adapts to the count (no gaps).
   const imgs = images.slice(0, 10);
   if (imgs.length === 0) return null;
+  const canEdit = !!onEditImage && editable;
 
   const header = (
     <Reveal className="mb-12">
@@ -904,13 +933,14 @@ function Gallery({ images, businessName }: { images: string[]; businessName: str
         {header}
         <div className={imgs.length === 1 ? "mx-auto max-w-md" : "mx-auto grid max-w-2xl grid-cols-2 gap-3 sm:gap-4"}>
           {imgs.map((src, i) => (
-            <Reveal as="figure" key={`${src}-${i}`} delay={Math.min(i * 0.05, 0.3)}>
+            <Reveal as="figure" key={`${src}-${i}`} delay={Math.min(i * 0.05, 0.3)} className="relative">
               <SmartImg
                 src={src}
                 alt={`${businessName} — gallery ${i + 1}`}
                 className="group w-full rounded-2xl border border-white/[0.06] aspect-[4/5]"
                 imgClassName="transition-transform duration-700 group-hover:scale-105"
               />
+              {canEdit && <ImageEditOverlay onClick={() => onEditImage!(`gallery-${i}` as BarberImageSlot)} />}
             </Reveal>
           ))}
         </div>
@@ -928,7 +958,7 @@ function Gallery({ images, businessName }: { images: string[]; businessName: str
             as="figure"
             key={`${src}-${i}`}
             delay={Math.min(i * 0.05, 0.3)}
-            className={`${layout.tiles[i] ?? ""} ${
+            className={`relative ${layout.tiles[i] ?? ""} ${
               imgs.length % 2 === 1 && i === imgs.length - 1 ? "max-md:col-span-2" : ""
             } h-full`}
           >
@@ -938,6 +968,7 @@ function Gallery({ images, businessName }: { images: string[]; businessName: str
               className="group h-full w-full rounded-2xl border border-white/[0.06] aspect-square md:aspect-auto"
               imgClassName="transition-transform duration-700 group-hover:scale-105"
             />
+            {canEdit && <ImageEditOverlay onClick={() => onEditImage!(`gallery-${i}` as BarberImageSlot)} />}
           </Reveal>
         ))}
       </div>

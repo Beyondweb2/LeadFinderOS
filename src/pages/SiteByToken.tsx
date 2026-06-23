@@ -222,6 +222,21 @@ export default function SiteByToken() {
 
   const Template = def.Component;
 
+  // Gallery previews: patch swapped indices into a copy of the real gallery so the
+  // mosaic shows the new photo instantly (index maps to content.galleryImageUrls).
+  const baseGallery = (content as unknown as { galleryImageUrls?: string[] }).galleryImageUrls;
+  let galleryOverride: string[] | undefined;
+  if (Array.isArray(baseGallery)) {
+    for (const [key, url] of Object.entries(imgPreviews)) {
+      if (!key.startsWith("gallery-") || !url) continue;
+      const idx = Number(key.slice("gallery-".length));
+      if (Number.isInteger(idx) && idx >= 0 && idx < baseGallery.length) {
+        if (!galleryOverride) galleryOverride = [...baseGallery];
+        galleryOverride[idx] = url;
+      }
+    }
+  }
+
   // Apply the chosen accent + any swapped photos client-side so the site
   // re-renders instantly. The template is a pure function of content, so
   // overriding these fields recolours / re-photographs it with no round-trip.
@@ -230,6 +245,7 @@ export default function SiteByToken() {
     ...(accent ? { accentColor: accent } : {}),
     ...(imgPreviews.hero ? { heroImageUrl: imgPreviews.hero } : {}),
     ...(imgPreviews.about ? { aboutImageUrl: imgPreviews.about } : {}),
+    ...(galleryOverride ? { galleryImageUrls: galleryOverride } : {}),
   } as SiteContent;
 
   return (

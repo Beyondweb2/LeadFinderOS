@@ -17,16 +17,14 @@ export interface PendingBarberEdit {
 
 /* --------------------------- pre-sign-in photos --------------------------- */
 
-export type BarberImageSlot = 'hero' | 'about';
+// Slots a barber can swap pre-sign-in. `gallery-${n}` is the nth gallery tile
+// (index into content.galleryImageUrls). hero/about are single fields.
+export type BarberImageSlot = 'hero' | 'about' | `gallery-${number}`;
 
 const IMAGE_BUCKET = 'barber-site-images';
 const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const IMAGE_ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
-// content field each slot maps to (mirrors SiteImageManager).
-const IMAGE_FIELD: Record<BarberImageSlot, string> = {
-  hero: 'heroImageUrl',
-  about: 'aboutImageUrl',
-};
+const GALLERY_PREFIX = 'gallery-';
 
 /**
  * Held in a MODULE singleton, NOT localStorage: a photo File is far too big for
@@ -108,6 +106,11 @@ export async function applyPendingBarberEdits(client: SupabaseClient): Promise<v
     const nextContent: Record<string, unknown> = { ...(site.content ?? {}) };
     if (pending.accentColor) nextContent.accentColor = pending.accentColor;
 
+    // Gallery swaps edit one index of the array — copy the site's current gallery
+    // once and patch the swapped indices into it.
+    let gallery: string[] | null = null;
+    const existingGallery = (site.content?.galleryImageUrls as string[] | undefined) ?? [];
+
     // Upload each held photo to the owner's site folder (<siteId>/), then point
     // content at the public bucket URL. Per-photo best-effort: a failed upload is
     // skipped (its slot keeps the default) rather than aborting the whole apply.
@@ -120,9 +123,19 @@ export async function applyPendingBarberEdits(client: SupabaseClient): Promise<v
         .from(IMAGE_BUCKET)
         .upload(path, file, { contentType: file.type, upsert: false });
       if (error) continue;
-      nextContent[IMAGE_FIELD[slot]] = client.storage.from(IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+      const url = client.storage.from(IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+      if (slot === 'hero') nextContent.heroImageUrl = url;
+      else if (slot === 'about') nextContent.aboutImageUrl = url;
+      else if (slot.startsWith(GALLERY_PREFIX)) {
+        const idx = Number(slot.slice(GALLERY_PREFIX.length));
+        if (Number.isInteger(idx) && idx >= 0) {
+          if (gallery === null) gallery = [...existingGallery];
+          gallery[idx] = url;
+        }
+      }
       delete pendingImages[slot];
     }
+    if (gallery !== null) nextContent.galleryImageUrls = gallery;
 
     await client.from('generated_sites').update({ content: nextContent }).eq('id', site.id);
   } catch {
