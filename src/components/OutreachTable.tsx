@@ -83,6 +83,8 @@ import { OutreachMobileCard } from './OutreachMobileCard';
 import { LeadEnrichButtons } from './LeadEnrichButtons';
 import { LeadDetailDialog } from './LeadDetailDialog';
 import { isDemoLead } from '@/lib/demoLeads';
+import { isTestBarberLead, TEST_BARBER_LEAD_ID } from '@/config/testBarber';
+import { clearPendingBarberEdit } from '@/lib/barberEdits';
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS } from '@/types/outreach';
@@ -209,6 +211,34 @@ export function OutreachTable({
   const [generatingSiteId, setGeneratingSiteId] = useState<string | null>(null);
   const [sitesByLead, setSitesByLead] = useState<Record<string, { id: string; slug: string; opened: boolean; claimed: boolean; addon: boolean }>>({});
   const navigate = useNavigate();
+  const [resettingTestBarber, setResettingTestBarber] = useState(false);
+
+  // One-click reset of the permanent TEST barber fixture. Guarded by a confirm and
+  // hard-locked server-side to the single test id (reset-test-barber refuses any
+  // other lead). Restores the site + lead to "newly added" and clears local edits.
+  const handleResetTestBarber = useCallback(async () => {
+    if (resettingTestBarber) return;
+    const ok = window.confirm(
+      "Reset the TEST barber to a fresh, unclaimed state?\n\n" +
+        "This wipes its test claim/ownership, colour + photo edits, and any test bookings, " +
+        "and puts the lead back to New. It only ever affects the test fixture — no real barber is touched.",
+    );
+    if (!ok) return;
+    setResettingTestBarber(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reset-test-barber', {
+        body: { lead_id: TEST_BARBER_LEAD_ID },
+      });
+      if (error || !data?.ok) throw new Error((data?.error as string) || 'reset_failed');
+      clearPendingBarberEdit(); // drop any pre-auth colour/photo edits held in this browser
+      toast({ title: 'Test barber reset', description: 'Back to New — site, claim, edits and test bookings cleared.' });
+      onRefreshLeads?.();
+    } catch (e) {
+      toast({ title: "Couldn't reset", description: (e as Error).message, variant: 'destructive' });
+    } finally {
+      setResettingTestBarber(false);
+    }
+  }, [resettingTestBarber, toast, onRefreshLeads]);
 
   // Admin-only: map lead_id -> existing generated site (most recent) so each row
   // shows "Manage Site" instead of "Generate Site". Purely additive — only runs
@@ -1414,6 +1444,20 @@ export function OutreachTable({
                           <span className="truncate max-w-[200px]">{lead.business_name}</span>
                           {lead.is_potential_work && (
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+                          )}
+                          {isTestBarberLead(lead.id) && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); handleResetTestBarber(); }}
+                              disabled={resettingTestBarber}
+                              title="Reset this TEST barber to a fresh, unclaimed state"
+                              className="inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-semibold text-amber-700 transition-colors hover:bg-amber-500/20 disabled:opacity-60 dark:text-amber-400"
+                            >
+                              {resettingTestBarber
+                                ? <Loader2 className="h-3 w-3 animate-spin" />
+                                : <RefreshCw className="h-3 w-3" />}
+                              Reset test
+                            </button>
                           )}
                           <WhatsAppStatusBadge status={lead.whatsapp_status} />
                           {/* Site claim/upsell funnel (admin) — from generated_sites tracking */}
