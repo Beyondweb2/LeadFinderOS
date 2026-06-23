@@ -153,7 +153,7 @@ export function BarberSiteTemplate({
           styles. Two soft amber radials over deep ink. */}
       {/* pb on mobile clears the fixed bottom Book bar so no section sits under it */}
       <div
-        className={`relative min-h-screen bg-ink ${onClaim ? "pb-[168px] sm:pb-[140px]" : "pb-[76px] sm:pb-0"}`}
+        className={`relative min-h-screen bg-ink ${onClaim ? "pb-[224px] sm:pb-[140px]" : "pb-[76px] sm:pb-0"}`}
         style={{
           backgroundImage:
             "radial-gradient(1100px 600px at 85% -8%, rgb(var(--barber-accent) / 0.10), transparent 60%)," +
@@ -663,16 +663,6 @@ function Hero({
               </a>
             </div>
           </Reveal>
-
-          {/* Pre-sign-in editing hint (only on /s/:token). */}
-          {onEditImage && (
-            <Reveal delay={0.22}>
-              <p className="mt-5 inline-flex items-center gap-2 text-sm text-zinc-300">
-                <CameraIcon className="h-4 w-4 text-amber" />
-                Tap any photo to add your own.
-              </p>
-            </Reveal>
-          )}
 
           {typeof googleRating === "number" && (
             <Reveal delay={0.24}>

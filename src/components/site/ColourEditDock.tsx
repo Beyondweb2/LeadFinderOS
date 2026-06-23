@@ -21,15 +21,16 @@ interface ColourEditDockProps {
 export function ColourEditDock({ value, onChange, onKeep, keeping = false }: ColourEditDockProps) {
   const current = value ?? BARBER_ACCENT_DEFAULT_HEX;
   return (
-    <div className="pointer-events-auto fixed inset-x-0 bottom-0 z-[60] border-t-2 border-white/15 bg-ink/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+    <div className="pointer-events-auto fixed inset-x-0 bottom-0 z-[60] border-t-2 border-white/15 bg-ink/95 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+3.5rem)] shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:pb-4">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent"
       />
       <div className="mx-auto flex max-w-3xl flex-col gap-3 sm:flex-row sm:items-center sm:gap-5">
         <div className="min-w-0 flex-1">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-300">
-            Make it yours — tap a colour
+          <div className="mb-2 leading-tight">
+            <div className="text-xs font-semibold text-zinc-200">Change the colour theme</div>
+            <div className="text-xs text-zinc-400">Tap any photo to add your own</div>
           </div>
           <div className="flex items-center gap-2.5 overflow-x-auto pb-0.5">
             {BARBER_ACCENTS.map((a) => {

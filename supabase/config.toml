@@ -56,3 +56,6 @@ verify_jwt = false
 
 [functions.begin-claim]
 verify_jwt = false
+
+[functions.reset-test-barber]
+verify_jwt = false
