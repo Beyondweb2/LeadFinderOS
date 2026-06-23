@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { ChangeEvent } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -10,7 +11,14 @@ import { useSiteBranding } from "@/hooks/useSiteBranding";
 import { useToast } from "@/hooks/use-toast";
 import { IntroPopup } from "@/components/site/IntroPopup";
 import { ColourEditDock } from "@/components/site/ColourEditDock";
-import { readPendingBarberEdit, writePendingBarberEdit, clearPendingBarberEdit } from "@/lib/barberEdits";
+import {
+  readPendingBarberEdit,
+  writePendingBarberEdit,
+  clearPendingBarberEdit,
+  setPendingBarberImage,
+  validateBarberImage,
+  type BarberImageSlot,
+} from "@/lib/barberEdits";
 import { recordSiteEvent } from "@/lib/siteTracking";
 
 // Untyped client: share_token + tracking columns aren't in the generated types
@@ -56,9 +64,62 @@ export default function SiteByToken() {
     else clearPendingBarberEdit();
   };
 
-  // Bottom "Claim for free" bar → mint a one-time claim link from the share_token
-  // (begin-claim) and hand off to the EXISTING /claim account-creation flow.
-  const handleClaim = async () => {
+  // Pre-sign-in photo swap (Phase 3). The File is held in a module singleton
+  // (uploaded on claim); here we keep an object-URL per slot purely for the live
+  // preview, and override the rendered content so the swap shows instantly.
+  const [imgPreviews, setImgPreviews] = useState<Partial<Record<BarberImageSlot, string>>>({});
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const editingSlotRef = useRef<BarberImageSlot | null>(null);
+
+  // Pre-sign-in image cap: a barber may personalise up to 3 DISTINCT photos
+  // (slots) before they have to make an account. Colour changes are unmetered —
+  // only photos count. The count is simply the number of distinct slots that
+  // currently hold a swap (the keys of imgPreviews: hero, about, + future
+  // gallery-N). Re-swapping a slot already chosen is FREE (same photo position);
+  // it's reaching for a NEW, 4th slot that triggers the redirect.
+  const PRE_SIGNIN_IMAGE_CAP = 3;
+
+  const handleEditImage = (slot: BarberImageSlot) => {
+    const alreadySwapped = slot in imgPreviews;
+    if (!alreadySwapped && Object.keys(imgPreviews).length >= PRE_SIGNIN_IMAGE_CAP) {
+      // 4th distinct photo → don't open the picker; send them to make an account.
+      // Framed as the natural next step, not a blocked action.
+      toast({
+        title: "Create an account to add more",
+        description:
+          "You've personalised 3 photos — make a free account to keep customising and save your site.",
+      });
+      beginClaim("more-photos");
+      return;
+    }
+    editingSlotRef.current = slot;
+    // Reset value so re-picking the SAME file still fires onChange.
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    fileInputRef.current?.click();
+  };
+
+  const handlePickImage = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const slot = editingSlotRef.current;
+    if (!file || !slot) return;
+    const err = validateBarberImage(file);
+    if (err) {
+      toast({ title: "Couldn't use that photo", description: err, variant: "destructive" });
+      return;
+    }
+    setPendingBarberImage(slot, file);
+    const url = URL.createObjectURL(file);
+    setImgPreviews((prev) => {
+      if (prev[slot]) URL.revokeObjectURL(prev[slot]!); // free the old preview
+      return { ...prev, [slot]: url };
+    });
+  };
+
+  // Bottom "Keep this site" button / hitting the image cap → mint a one-time claim
+  // link from the share_token (begin-claim) and hand off to the EXISTING /claim
+  // account-creation flow. `reason` lets /claim tailor its copy (e.g. the barber
+  // arrived because they hit the 3-photo cap).
+  const beginClaim = async (reason?: "more-photos") => {
     if (claiming) return;
     setClaiming(true);
     try {
@@ -75,7 +136,7 @@ export default function SiteByToken() {
         // Skip the redundant site-preview step on /claim: the barber has already
         // seen + browsed their site here on /s/, so land them straight on the
         // claim/account form. URL stays the clean /claim/<token>.
-        navigate(data.claim_path, { state: { fromShare: true } });
+        navigate(data.claim_path, { state: { fromShare: true, reason } });
         return;
       }
       throw new Error("no_claim_path");
@@ -84,6 +145,10 @@ export default function SiteByToken() {
       setClaiming(false);
     }
   };
+
+  // Param-less wrapper for click handlers (the dock / template pass a MouseEvent,
+  // which must NOT be forwarded as `reason`).
+  const handleClaim = () => beginClaim();
 
   const { data, isLoading } = useQuery({
     queryKey: ["site-by-token", token],
@@ -157,15 +222,51 @@ export default function SiteByToken() {
 
   const Template = def.Component;
 
-  // Apply the chosen accent client-side so the site re-renders instantly. The
-  // template is a pure function of content, so overriding accentColor recolours it.
-  const liveContent = accent ? ({ ...content, accentColor: accent } as SiteContent) : content;
+  // Gallery previews: patch swapped indices into a copy of the real gallery so the
+  // mosaic shows the new photo instantly (index maps to content.galleryImageUrls).
+  const baseGallery = (content as unknown as { galleryImageUrls?: string[] }).galleryImageUrls;
+  let galleryOverride: string[] | undefined;
+  if (Array.isArray(baseGallery)) {
+    for (const [key, url] of Object.entries(imgPreviews)) {
+      if (!key.startsWith("gallery-") || !url) continue;
+      const idx = Number(key.slice("gallery-".length));
+      if (Number.isInteger(idx) && idx >= 0 && idx < baseGallery.length) {
+        if (!galleryOverride) galleryOverride = [...baseGallery];
+        galleryOverride[idx] = url;
+      }
+    }
+  }
+
+  // Apply the chosen accent + any swapped photos client-side so the site
+  // re-renders instantly. The template is a pure function of content, so
+  // overriding these fields recolours / re-photographs it with no round-trip.
+  const liveContent = {
+    ...content,
+    ...(accent ? { accentColor: accent } : {}),
+    ...(imgPreviews.hero ? { heroImageUrl: imgPreviews.hero } : {}),
+    ...(imgPreviews.about ? { aboutImageUrl: imgPreviews.about } : {}),
+    ...(galleryOverride ? { galleryImageUrls: galleryOverride } : {}),
+  } as SiteContent;
 
   return (
     <>
       {/* On /s/ the template claim bar is replaced by the ColourEditDock below
-          (edit + keep in one place). Preview mode shows the clean site, no dock. */}
-      <Template content={liveContent} bookingEnabled={false} onClaim={handleClaim} showClaimBar={false} />
+          (edit + keep in one place). Preview mode shows the clean site, no dock
+          and no photo-edit affordances. */}
+      <Template
+        content={liveContent}
+        bookingEnabled={false}
+        onClaim={handleClaim}
+        showClaimBar={false}
+        onEditImage={isPreview ? undefined : handleEditImage}
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={handlePickImage}
+      />
       <IntroPopup
         open={popupOpen}
         onOpenChange={setPopupOpen}

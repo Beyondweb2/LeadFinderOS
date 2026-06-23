@@ -51,6 +51,9 @@ export default function Claim() {
   // their site, so skip the redundant preview step and land on the claim form.
   // Direct /claim visits (e.g. an admin-sent link) still see the preview first.
   const fromShare = (location.state as { fromShare?: boolean } | null)?.fromShare === true;
+  // Why they arrived: "more-photos" = they hit the 3-photo pre-sign-in cap, so we
+  // tailor the copy to explain the account unlocks more customising.
+  const claimReason = (location.state as { reason?: string } | null)?.reason;
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [step, setStep] = useState<Step>(fromShare ? "signup" : "preview");
@@ -232,6 +235,13 @@ export default function Claim() {
                 >
                   <ArrowLeft className="h-3.5 w-3.5" /> Back to your website
                 </button>
+              )}
+
+              {claimReason === "more-photos" && (
+                <div className="rounded-xl border border-amber/25 bg-amber/[0.07] px-4 py-3 text-sm leading-relaxed text-amber-soft">
+                  <span className="font-semibold text-amber">You've added 3 photos.</span>{" "}
+                  Create your account below to add more and keep everything you've changed.
+                </div>
               )}
 
               {user ? (

@@ -15,6 +15,43 @@ export interface PendingBarberEdit {
   accentColor?: string;
 }
 
+/* --------------------------- pre-sign-in photos --------------------------- */
+
+// Slots a barber can swap pre-sign-in. `gallery-${n}` is the nth gallery tile
+// (index into content.galleryImageUrls). hero/about are single fields.
+export type BarberImageSlot = 'hero' | 'about' | `gallery-${number}`;
+
+const IMAGE_BUCKET = 'barber-site-images';
+const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const IMAGE_ALLOWED = ['image/jpeg', 'image/png', 'image/webp'];
+const GALLERY_PREFIX = 'gallery-';
+
+/**
+ * Held in a MODULE singleton, NOT localStorage: a photo File is far too big for
+ * the ~5 MB storage quota, and it only needs to survive the in-app navigation
+ * from /s/ to /claim (same JS context, so a module variable persists). A hard
+ * refresh drops it — the colour (localStorage) survives, the photo reverts to
+ * default. Anon can't upload to the bucket, so the File is uploaded ON CLAIM
+ * once the barber owns the site (owner storage RLS, <siteId>/ folder).
+ */
+const pendingImages: Partial<Record<BarberImageSlot, File>> = {};
+
+/** Validate a picked photo. Returns a user-facing error, or null if OK. */
+export function validateBarberImage(file: File): string | null {
+  if (!IMAGE_ALLOWED.includes(file.type)) return 'Photo must be a JPEG, PNG or WebP.';
+  if (file.size > IMAGE_MAX_BYTES) return 'Photo must be under 5 MB.';
+  return null;
+}
+
+export function setPendingBarberImage(slot: BarberImageSlot, file: File | null): void {
+  if (file) pendingImages[slot] = file;
+  else delete pendingImages[slot];
+}
+
+function pendingImageSlots(): BarberImageSlot[] {
+  return Object.keys(pendingImages) as BarberImageSlot[];
+}
+
 export function readPendingBarberEdit(): PendingBarberEdit {
   try {
     const raw = localStorage.getItem(KEY) || sessionStorage.getItem(KEY);
@@ -46,13 +83,15 @@ export function clearPendingBarberEdit(): void {
 
 /**
  * APPLY-ON-CLAIM. Call right after a successful claim + sign-in (authenticated).
- * Writes the held accent colour onto the barber's just-claimed site via the
- * owner-RLS content update, then clears the pending edit. Best-effort — never
- * throws (a failed apply must not block the redirect to the dashboard).
+ * Writes the held accent colour AND uploads any held photos onto the barber's
+ * just-claimed site (owner-RLS content update + owner storage RLS), then clears
+ * the pending edit. Best-effort — never throws (a failed apply must not block the
+ * redirect to the dashboard).
  */
 export async function applyPendingBarberEdits(client: SupabaseClient): Promise<void> {
   const pending = readPendingBarberEdit();
-  if (!pending.accentColor) { clearPendingBarberEdit(); return; }
+  const slots = pendingImageSlots();
+  if (!pending.accentColor && slots.length === 0) { clearPendingBarberEdit(); return; }
   try {
     // The owner can only see their own sites (RLS); the most-recently-claimed is
     // the one they just claimed. Untyped: tracking cols aren't in generated types.
@@ -63,7 +102,41 @@ export async function applyPendingBarberEdits(client: SupabaseClient): Promise<v
       .limit(1);
     const site = (rows ?? [])[0] as { id: string; content: Record<string, unknown> | null } | undefined;
     if (!site) return;
-    const nextContent = { ...(site.content ?? {}), accentColor: pending.accentColor };
+
+    const nextContent: Record<string, unknown> = { ...(site.content ?? {}) };
+    if (pending.accentColor) nextContent.accentColor = pending.accentColor;
+
+    // Gallery swaps edit one index of the array — copy the site's current gallery
+    // once and patch the swapped indices into it.
+    let gallery: string[] | null = null;
+    const existingGallery = (site.content?.galleryImageUrls as string[] | undefined) ?? [];
+
+    // Upload each held photo to the owner's site folder (<siteId>/), then point
+    // content at the public bucket URL. Per-photo best-effort: a failed upload is
+    // skipped (its slot keeps the default) rather than aborting the whole apply.
+    for (const slot of slots) {
+      const file = pendingImages[slot];
+      if (!file) continue;
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `${site.id}/${slot}-${Date.now()}-${Math.floor(performance.now())}.${ext}`;
+      const { error } = await client.storage
+        .from(IMAGE_BUCKET)
+        .upload(path, file, { contentType: file.type, upsert: false });
+      if (error) continue;
+      const url = client.storage.from(IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+      if (slot === 'hero') nextContent.heroImageUrl = url;
+      else if (slot === 'about') nextContent.aboutImageUrl = url;
+      else if (slot.startsWith(GALLERY_PREFIX)) {
+        const idx = Number(slot.slice(GALLERY_PREFIX.length));
+        if (Number.isInteger(idx) && idx >= 0) {
+          if (gallery === null) gallery = [...existingGallery];
+          gallery[idx] = url;
+        }
+      }
+      delete pendingImages[slot];
+    }
+    if (gallery !== null) nextContent.galleryImageUrls = gallery;
+
     await client.from('generated_sites').update({ content: nextContent }).eq('id', site.id);
   } catch {
     // best-effort; leave the pending edit so a later load could retry if desired
