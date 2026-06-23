@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Mail, Phone, Scissors } from 'lucide-react';
+import { Mail, Phone } from 'lucide-react';
 
 interface IntroPopupProps {
   open: boolean;
@@ -54,12 +54,9 @@ export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps
         style={{ backgroundImage: SHELL_BG }}
       >
         <div className="flex flex-col">
-          {/* Centred focal hero — clean icon replaces the old border pill */}
+          {/* Centred focal hero — business name as a plain eyebrow (no pill/badge) */}
           <div className="flex flex-col items-center text-center">
-            <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber/30 bg-amber/10">
-              <Scissors className="h-5 w-5 text-amber" />
-            </div>
-            <span className="mt-4 text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-soft">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-soft">
               Built for {name}
             </span>
             <h2 className="mt-2 font-display text-4xl uppercase leading-[1.0] tracking-wide text-white sm:text-5xl">
