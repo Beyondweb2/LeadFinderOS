@@ -191,9 +191,9 @@ export default function Claim() {
               Already set up
             </h1>
           ) : (
-            <h1 className="mt-4 font-display text-3xl uppercase leading-tight tracking-wide text-white">
+            <h1 className="mt-4 font-display text-2xl sm:text-3xl uppercase leading-tight tracking-wide text-white break-words">
               Your website for{" "}
-              <span className="text-amber">{businessName}</span>
+              <span className="text-amber break-words">{businessName}</span>
             </h1>
           )}
         </div>

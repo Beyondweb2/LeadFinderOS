@@ -292,8 +292,8 @@ function SmartImg({
 function Eyebrow({ children }: { children: ReactNode }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="h-px w-8 bg-amber/70" />
-      <span className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-soft">
+      <span className="h-px w-8 shrink-0 bg-amber/70" />
+      <span className="min-w-0 break-words text-xs font-semibold uppercase tracking-[0.2em] text-amber-soft sm:tracking-[0.28em]">
         {children}
       </span>
     </div>
@@ -433,15 +433,17 @@ function Wordmark({ businessName, size = "md", logoUrl }: { businessName: string
     );
   }
   return (
-    <span className="inline-flex items-baseline gap-1">
+    <span className="inline-flex min-w-0 items-baseline gap-1">
       <span
-        className={`font-display uppercase leading-none text-white ${
-          size === "lg" ? "text-3xl tracking-[0.08em]" : "text-2xl tracking-[0.06em]"
+        className={`font-display uppercase leading-tight text-white break-words ${
+          size === "lg"
+            ? "text-2xl tracking-[0.06em] sm:text-3xl sm:tracking-[0.08em]"
+            : "text-lg tracking-[0.04em] sm:text-2xl sm:tracking-[0.06em]"
         }`}
       >
         {businessName}
       </span>
-      <span className="mb-0.5 inline-block h-1.5 w-1.5 rounded-full bg-amber" />
+      <span className="mb-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-amber" />
     </span>
   );
 }
@@ -468,7 +470,7 @@ function Header({
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-ink/70 backdrop-blur-xl supports-[backdrop-filter]:bg-ink/55">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3.5 sm:px-8">
-        <a href="#top" className="shrink-0" aria-label={`${businessName} — home`}>
+        <a href="#top" className="min-w-0" aria-label={`${businessName} — home`}>
           <Wordmark businessName={businessName} logoUrl={logoUrl} />
         </a>
 
@@ -570,7 +572,7 @@ function Hero({
           </Reveal>
 
           <Reveal delay={0.06}>
-            <h1 className="mt-5 font-display text-6xl uppercase leading-[0.92] tracking-[0.01em] text-white drop-shadow-[0_2px_20px_rgba(0,0,0,0.5)] sm:text-7xl md:text-8xl">
+            <h1 className="mt-5 font-display text-5xl uppercase leading-[0.92] tracking-[0.01em] text-white break-words drop-shadow-[0_2px_20px_rgba(0,0,0,0.5)] sm:text-7xl md:text-8xl">
               {heroHeadline}
             </h1>
           </Reveal>
