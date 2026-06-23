@@ -1110,7 +1110,7 @@ function ClaimBar({ onClaim }: { onClaim: () => void }) {
       <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 sm:gap-6">
         <div className="min-w-0">
           <div className="text-sm font-bold text-white sm:text-xl">This is your new website</div>
-          <div className="text-xs text-zinc-300 sm:text-sm">It's free — no card needed.</div>
+          <div className="text-xs text-zinc-300 sm:text-sm">It's yours to keep.</div>
         </div>
         <div className="relative shrink-0 animate-claim-float">
           {/* Soft pulsing white glow (fixed, not accent-tied). */}
@@ -1123,7 +1123,7 @@ function ClaimBar({ onClaim }: { onClaim: () => void }) {
             onClick={onClaim}
             className="relative inline-flex items-center gap-2 rounded-full bg-white px-6 py-2.5 text-sm font-bold text-ink shadow-[0_6px_28px_-6px_rgba(255,255,255,0.45)] transition-all hover:-translate-y-0.5 hover:bg-zinc-100 active:scale-[0.98] sm:px-9 sm:py-4 sm:text-lg"
           >
-            Claim for free
+            Edit your site
           </button>
         </div>
       </div>

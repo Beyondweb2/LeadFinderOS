@@ -57,7 +57,7 @@ export default function SiteByToken() {
       });
       if (error) throw error;
       if (data?.already_claimed) {
-        toast({ title: "Already claimed", description: "This website has already been claimed - log in to manage it." });
+        toast({ title: "Already set up", description: "This website has already been set up - log in to manage it." });
         navigate("/barber-login");
         return;
       }
@@ -70,7 +70,7 @@ export default function SiteByToken() {
       }
       throw new Error("no_claim_path");
     } catch {
-      toast({ title: "Couldn't start the claim", description: "Please try again, or contact Paul.", variant: "destructive" });
+      toast({ title: "Couldn't continue", description: "Please try again, or contact Paul.", variant: "destructive" });
       setClaiming(false);
     }
   };

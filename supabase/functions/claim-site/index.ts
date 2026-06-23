@@ -164,7 +164,7 @@ async function notifyBarberOfClaim(opts: {
         subject: "Your new website is live",
         text:
           `Hi ${shopName},\n\n` +
-          `Great news - your new website is claimed, live, and yours to keep. It's free, no card, nothing to pay.\n\n` +
+          `Great news - your new website is live and yours to keep.\n\n` +
           `Your live site:\n${publicUrl}\n\n` +
           `Log in any time to manage it:\n${dashUrl}\n` +
           `Just use this email address to log in.\n\n` +
@@ -175,14 +175,12 @@ async function notifyBarberOfClaim(opts: {
           `- Android (Chrome): open ${dashUrl}, tap the menu (three dots, top-right), then "Install app" (or "Add to Home screen").\n` +
           `- Desktop (Chrome or Edge): open ${dashUrl}, then click the install icon at the right-hand end of the address bar (a small screen icon with a down-arrow). Don't see it? In Chrome: menu (three dots) > "Cast, save, and share" > "Install page as app". In Edge: menu > "Apps" > "Install this site as an app". (It won't show in a private/Incognito window or if it's already installed.)\n` +
           `It'll appear as an app with its own icon, opens full-screen, and is the quickest way back to your bookings.\n\n` +
-          `Want more bookings?\n` +
-          `Your website is free forever. If you'd like online booking and automatic SMS reminders to cut no-shows and fill your diary, that's an optional add-on for £29.99/month - and you can switch it on any time from the dashboard.\n\n` +
           `Any questions, just reply to this email.\n\n` +
           `Paul`,
         html:
           `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.6;color:#1e293b;max-width:560px">` +
           `<p style="margin:0 0 12px">Hi ${esc(shopName)},</p>` +
-          `<p style="margin:0 0 16px">Great news — your new website is claimed, live, and yours to keep. It's <strong>free</strong>, no card, nothing to pay.</p>` +
+          `<p style="margin:0 0 16px">Great news — your new website is live and yours to keep.</p>` +
           `<p style="margin:0 0 2px"><strong>Your live site</strong></p>` +
           `<p style="margin:0 0 16px"><a href="${esc(publicUrl)}">${esc(publicUrl)}</a></p>` +
           `<p style="margin:0 0 2px"><strong>Log in any time to manage it</strong></p>` +
@@ -197,8 +195,6 @@ async function notifyBarberOfClaim(opts: {
           `</ul>` +
           `<p style="margin:0 0 16px;font-size:13px;color:#64748b">The desktop install option won't appear in a private/Incognito window, or if it's already installed.</p>` +
           `<p style="margin:0 0 16px">It'll appear as an app with its own icon, opens full-screen, and is the quickest way back to your bookings.</p>` +
-          `<p style="margin:0 0 2px"><strong>Want more bookings?</strong></p>` +
-          `<p style="margin:0 0 16px">Your website is free forever. If you'd like online booking and automatic SMS reminders to cut no-shows and fill your diary, that's an optional add-on for <strong>£29.99/month</strong> — switch it on any time from the dashboard.</p>` +
           `<p style="margin:0 0 12px">Any questions, just reply to this email.</p>` +
           `<p style="margin:0">Paul</p>` +
           `</div>`,

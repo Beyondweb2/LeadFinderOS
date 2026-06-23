@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Scissors, ArrowLeft } from "lucide-react";
-import { barberProPriceLabel } from "@/config/pricing";
 import { SETUP_BY_NAME, SUPPORT_CONTACT, supportContactHref } from "@/config/barberBrand";
 import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
 import type { BarberSiteContent } from "@/templates/barber/types";
@@ -84,8 +83,8 @@ export default function Claim() {
 
   useBarberBranding(
     businessName && businessName !== "your business"
-      ? `Claim your website - ${businessName}`
-      : "Claim your website",
+      ? `Your website - ${businessName}`
+      : "Your website",
   );
 
   const mapError = (code: string): string => {
@@ -93,9 +92,9 @@ export default function Claim() {
       case "invalid_token":
       case "already_used":
       case "expired":
-        return "This claim link is no longer valid. Ask for a fresh link.";
+        return "This link is no longer valid. Ask for a fresh link.";
       case "already_claimed":
-        return "This website has already been claimed.";
+        return "This website has already been set up.";
       case "invalid_email":
         return "Please enter a valid email address.";
       case "weak_password":
@@ -185,15 +184,15 @@ export default function Claim() {
           </div>
           {phase === "invalid" ? (
             <h1 className="mt-4 font-display text-3xl uppercase tracking-wide text-white">
-              Claim link unavailable
+              Link unavailable
             </h1>
           ) : phase === "claimed" ? (
             <h1 className="mt-4 font-display text-3xl uppercase tracking-wide text-white">
-              Already claimed
+              Already set up
             </h1>
           ) : (
             <h1 className="mt-4 font-display text-3xl uppercase leading-tight tracking-wide text-white">
-              Claim your website for{" "}
+              Your website for{" "}
               <span className="text-amber">{businessName}</span>
             </h1>
           )}
@@ -202,13 +201,13 @@ export default function Claim() {
         <div className="mt-6 space-y-4">
           {phase === "invalid" && (
             <p className="text-center text-sm text-zinc-400">
-              This claim link is invalid or has expired. Please ask for a fresh link.
+              This link is invalid or has expired. Please ask for a fresh link.
             </p>
           )}
 
           {phase === "claimed" && (
             <div className="space-y-4 text-center">
-              <p className="text-sm text-zinc-400">This website has already been claimed.</p>
+              <p className="text-sm text-zinc-400">This website has already been set up.</p>
               <Link to="/barber-login">
                 <Button
                   variant="outline"
@@ -232,29 +231,18 @@ export default function Claim() {
                 </button>
               )}
 
-              {/* Honest reassurance: the SITE is free; booking + reminders are the paid add-on. */}
-              <div className="rounded-lg border border-line bg-white/[0.02] p-3 text-xs leading-relaxed text-zinc-400">
-                <p>
-                  <span className="font-semibold text-white">Your website is free</span> - no card needed.
-                </p>
-                <p className="mt-1">
-                  Add online booking &amp; no-show SMS reminders for{" "}
-                  <span className="font-semibold text-amber-soft">{barberProPriceLabel}</span>.
-                </p>
-              </div>
-
               {user ? (
-                // Already signed in → one-click claim.
+                // Already signed in → one-click save.
                 <div className="space-y-4">
                   <p className="text-sm text-zinc-400">
                     You're signed in as{" "}
-                    <span className="font-medium text-zinc-200">{user.email}</span>. Claim this
-                    website to manage it.
+                    <span className="font-medium text-zinc-200">{user.email}</span>. Save this
+                    website to your account.
                   </p>
                   {error && <p className="text-sm text-red-400">{error}</p>}
                   <Button className={PRIMARY_BTN} onClick={handleClaimAsMe} disabled={phase === "working"}>
                     {phase === "working" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Claim my website
+                    Save my website
                   </Button>
                 </div>
               ) : (
@@ -302,7 +290,7 @@ export default function Claim() {
                   )}
                   <Button className={PRIMARY_BTN} onClick={handleCreateAndClaim} disabled={phase === "working"}>
                     {phase === "working" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Create account &amp; claim
+                    Create account &amp; save
                   </Button>
                   <p className="text-center text-xs text-zinc-500">
                     Already have an account?{" "}
@@ -317,7 +305,7 @@ export default function Claim() {
               )}
 
               <p className="text-center text-xs text-zinc-500">
-                All text and images can be customised once you claim — it's easy.
+                All your text, services and photos are fully editable from your dashboard once you sign in.
               </p>
             </div>
           )}
