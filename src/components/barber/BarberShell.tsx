@@ -243,7 +243,7 @@ export function BarberShell({
           {page === "edit" && (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">Your site's content, photos, services and staff. Changes save in place.</p>
+                <p className="text-sm text-muted-foreground">Your site's content, photos and services. Changes save in place.</p>
                 <Button size="sm" onClick={togglePublish} disabled={savingStatus} className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">
                   {savingStatus ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : published ? <EyeOff className="h-4 w-4 mr-2" /> : <Globe className="h-4 w-4 mr-2" />}
                   {published ? "Unpublish" : "Publish"}
@@ -256,7 +256,6 @@ export function BarberShell({
                   queryClient.invalidateQueries({ queryKey: ["generated-site", site.site_name] });
                 }}
               />
-              <StaffManager siteId={site.id} />
             </div>
           )}
 
@@ -326,6 +325,9 @@ export function BarberShell({
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Staff & working hours (moved here from Edit Site). */}
+              <StaffManager siteId={site.id} />
             </div>
           )}
         </main>
