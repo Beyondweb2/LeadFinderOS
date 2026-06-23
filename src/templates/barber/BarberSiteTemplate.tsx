@@ -289,9 +289,11 @@ function SmartImg({
 }
 
 /** Uppercase tracked eyebrow label with a short amber rule. */
-function Eyebrow({ children }: { children: ReactNode }) {
+function Eyebrow({ children, align = "center" }: { children: ReactNode; align?: "center" | "left" }) {
+  // Default: centred on mobile, left on desktop. align="left" stays left always
+  // (used by the hero, which keeps its original left layout on mobile).
   return (
-    <div className="flex items-center justify-center gap-3 md:justify-start">
+    <div className={`flex items-center gap-3 ${align === "center" ? "justify-center md:justify-start" : "justify-start"}`}>
       <span className="h-px w-8 shrink-0 bg-amber/70" />
       <span className="min-w-0 break-words text-xs font-semibold uppercase tracking-[0.2em] text-amber-soft sm:tracking-[0.28em]">
         {children}
@@ -564,9 +566,9 @@ function Hero({
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-ink/90 via-ink/35 to-transparent" />
 
       <div className="mx-auto w-full max-w-6xl px-5 pb-14 pt-24 sm:px-8 sm:pb-24 sm:pt-28">
-        <div className="mx-auto max-w-2xl text-center md:mx-0 md:text-left">
+        <div className="max-w-2xl">
           <Reveal>
-            <Eyebrow>
+            <Eyebrow align="left">
               {category ? `${businessName} · ${category}` : businessName}
             </Eyebrow>
           </Reveal>
@@ -578,13 +580,13 @@ function Hero({
           </Reveal>
 
           <Reveal delay={0.12}>
-            <p className="mt-6 mx-auto max-w-xl text-lg leading-relaxed text-zinc-300 md:mx-0 sm:text-xl">
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-zinc-300 sm:text-xl">
               {tagline}
             </p>
           </Reveal>
 
           <Reveal delay={0.18}>
-            <div className="mt-8 flex flex-wrap items-center justify-center gap-3 md:justify-start">
+            <div className="mt-8 flex flex-wrap items-center gap-3">
               <button
                 type="button"
                 onClick={onBook}

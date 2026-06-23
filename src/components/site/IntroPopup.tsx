@@ -65,12 +65,12 @@ export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps
           </h2>
 
           <p className="mt-4 text-base font-semibold text-white">
-            It's yours.
+            It's free — no card, no catch.
           </p>
 
           <div className="mt-2 space-y-2 text-sm leading-relaxed text-zinc-400">
             <p>
-              Make it your own right now — pick a colour below and the whole site updates.
+              Tap a colour below to recolour it instantly.
             </p>
             <p>
               Photos, text and services are all editable from your dashboard once you sign in.
