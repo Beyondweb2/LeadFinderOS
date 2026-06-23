@@ -9,6 +9,8 @@ import { getTemplateDef, normaliseTemplate, DEFAULT_TEMPLATE_KEY } from "@/templ
 import { useSiteBranding } from "@/hooks/useSiteBranding";
 import { useToast } from "@/hooks/use-toast";
 import { IntroPopup } from "@/components/site/IntroPopup";
+import { ColourEditDock } from "@/components/site/ColourEditDock";
+import { readPendingBarberEdit, writePendingBarberEdit, clearPendingBarberEdit } from "@/lib/barberEdits";
 import { recordSiteEvent } from "@/lib/siteTracking";
 
 // Untyped client: share_token + tracking columns aren't in the generated types
@@ -45,6 +47,14 @@ export default function SiteByToken() {
   const [claiming, setClaiming] = useState(false);
   const openedRef = useRef(false);
   const autoOpenedRef = useRef(false);
+
+  // Pre-sign-in colour edit (Phase 2). Held in the browser; applied on claim.
+  const [accent, setAccent] = useState<string | null>(() => readPendingBarberEdit().accentColor ?? null);
+  const handleAccent = (hex: string | null) => {
+    setAccent(hex);
+    if (hex) writePendingBarberEdit({ accentColor: hex });
+    else clearPendingBarberEdit();
+  };
 
   // Bottom "Claim for free" bar → mint a one-time claim link from the share_token
   // (begin-claim) and hand off to the EXISTING /claim account-creation flow.
@@ -147,14 +157,23 @@ export default function SiteByToken() {
 
   const Template = def.Component;
 
+  // Apply the chosen accent client-side so the site re-renders instantly. The
+  // template is a pure function of content, so overriding accentColor recolours it.
+  const liveContent = accent ? ({ ...content, accentColor: accent } as SiteContent) : content;
+
   return (
     <>
-      <Template content={content} bookingEnabled={false} onClaim={handleClaim} showClaimBar={!popupOpen && !isPreview} />
+      {/* On /s/ the template claim bar is replaced by the ColourEditDock below
+          (edit + keep in one place). Preview mode shows the clean site, no dock. */}
+      <Template content={liveContent} bookingEnabled={false} onClaim={handleClaim} showClaimBar={false} />
       <IntroPopup
         open={popupOpen}
         onOpenChange={setPopupOpen}
         businessName={businessName || "your business"}
       />
+      {!isPreview && !popupOpen && (
+        <ColourEditDock value={accent} onChange={handleAccent} onKeep={handleClaim} keeping={claiming} />
+      )}
       {isPreview && (
         <div className="fixed top-3 right-3 z-[70] rounded-full border border-white/15 bg-black/70 px-3 py-1 text-[11px] font-medium text-white shadow-lg backdrop-blur-sm">
           Preview · not tracked

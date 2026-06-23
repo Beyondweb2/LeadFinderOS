@@ -65,16 +65,15 @@ export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps
           </h2>
 
           <p className="mt-4 text-base font-semibold text-white">
-            And it's yours.
+            It's free — no card, no catch.
           </p>
 
           <div className="mt-2 space-y-2 text-sm leading-relaxed text-zinc-400">
             <p>
-              I build these for local barbers and made this one for you.
+              Tap a colour below to recolour it instantly.
             </p>
             <p>
-              Have a proper look. Like it? It's yours to keep - easy to change
-              anytime, no tech skills needed.
+              Photos, text and services are all editable from your dashboard once you sign in.
             </p>
           </div>
 
@@ -95,10 +94,11 @@ export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps
           <p className="mt-2 text-xs text-zinc-500">Any questions, just ask. - Paul</p>
 
           <Button
+            type="button"
             onClick={() => onOpenChange(false)}
             className="mt-6 w-full rounded-full bg-amber py-6 text-base font-bold text-ink shadow-[0_8px_30px_-6px_rgba(230,162,75,0.5)] transition-all hover:-translate-y-0.5 hover:bg-amber-soft"
           >
-            See my site
+            Start editing
           </Button>
         </div>
       </div>

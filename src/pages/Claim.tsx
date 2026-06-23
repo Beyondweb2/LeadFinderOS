@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Loader2, Scissors, ArrowLeft } from "lucide-react";
 import { SETUP_BY_NAME, SUPPORT_CONTACT, supportContactHref } from "@/config/barberBrand";
 import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
+import { applyPendingBarberEdits } from "@/lib/barberEdits";
 import type { BarberSiteContent } from "@/templates/barber/types";
 import { useBarberBranding } from "@/hooks/useBarberBranding";
 import "@/templates/barber/fonts.css";
@@ -139,6 +140,7 @@ export default function Claim() {
       navigate("/barber-login", { replace: true });
       return;
     }
+    await applyPendingBarberEdits(supabase); // apply pre-sign-in colour choice (best-effort)
     navigate("/barber", { replace: true });
   };
 
@@ -155,6 +157,7 @@ export default function Claim() {
       setPhase(code === "already_claimed" ? "claimed" : "ready");
       return;
     }
+    await applyPendingBarberEdits(supabase); // apply pre-sign-in colour choice (best-effort)
     navigate("/barber", { replace: true });
   };
 
