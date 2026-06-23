@@ -21,7 +21,7 @@ interface ColourEditDockProps {
 export function ColourEditDock({ value, onChange, onKeep, keeping = false }: ColourEditDockProps) {
   const current = value ?? BARBER_ACCENT_DEFAULT_HEX;
   return (
-    <div className="pointer-events-auto fixed inset-x-0 bottom-0 z-[60] border-t-2 border-white/15 bg-ink/95 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+3.5rem)] shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:pb-4">
+    <div className="pointer-events-auto fixed inset-x-0 bottom-0 z-[60] border-t-2 border-white/15 bg-ink/95 px-4 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+1.25rem)] shadow-[0_-10px_40px_-12px_rgba(0,0,0,0.85)] backdrop-blur-xl sm:pb-4">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/60 to-transparent"
@@ -57,11 +57,14 @@ export function ColourEditDock({ value, onChange, onKeep, keeping = false }: Col
             })}
           </div>
         </div>
+        {/* Fixed UI control: hardcoded amber + black text. NOT themed — it must
+            never recolour when a swatch is picked, so no --barber-accent / amber-*
+            classes here, only the literal hex. */}
         <button
           type="button"
           onClick={onKeep}
           disabled={keeping}
-          className="relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-white px-7 py-3 text-sm font-bold text-ink shadow-[0_6px_28px_-6px_rgba(255,255,255,0.45)] transition-all hover:-translate-y-0.5 hover:bg-zinc-100 active:scale-[0.98] disabled:opacity-70 sm:px-9 sm:py-3.5 sm:text-base"
+          className="relative inline-flex shrink-0 items-center justify-center gap-2 rounded-full bg-[#E6A24B] px-7 py-3 text-sm font-bold text-black shadow-[0_6px_28px_-6px_rgba(230,162,75,0.5)] transition-all hover:-translate-y-0.5 hover:bg-[#EAB05C] active:scale-[0.98] disabled:opacity-70 sm:px-9 sm:py-3.5 sm:text-base"
         >
           {keeping && <Loader2 className="h-4 w-4 animate-spin" />}
           Finish
