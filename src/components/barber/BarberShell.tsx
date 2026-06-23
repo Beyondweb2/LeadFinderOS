@@ -22,10 +22,12 @@ import type { BarberSiteContent } from "@/templates/barber/types";
 
 export type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent; is_paid?: boolean; share_token?: string; addon_interest_at?: string | null };
 
-// Phase 0: hide the booking/SMS upsell from the early barber experience (no pricing
-// in this flow yet). The `!site.is_paid` gates + all upsell logic stay intact —
-// flip this to true to bring the upsell back. Pure visibility switch.
-const SHOW_BARBER_UPSELL = false;
+// Post-claim upsell visibility — split so the announcement bar and the Settings
+// BookingUpsell card are controlled independently. Both keep the `!site.is_paid`
+// gate + interest-capture logic intact (NO payment). The announcement bar is the
+// dashboard route to "get access"; the booking card stays hidden for now.
+const SHOW_ANNOUNCEMENT_BAR = true;
+const SHOW_BOOKING_CARD = false;
 
 const SHELL_BG =
   "radial-gradient(1100px 600px at 85% -8%, rgba(230,162,75,0.10), transparent 60%)," +
@@ -204,9 +206,9 @@ export function BarberShell({
       {/* Content */}
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Upsell announcement bar - shown ONLY to unpaid barbers; paid sites
-            never see it. Clicking opens Settings where the full upsell lives.
-            Phase 0: hidden via SHOW_BARBER_UPSELL (is_paid gate kept intact). */}
-        {SHOW_BARBER_UPSELL && !site.is_paid && (
+            never see it. Interest-capture only: records addon_interest + shows the
+            24h confirm (NO payment). This is the dashboard route to "get access". */}
+        {SHOW_ANNOUNCEMENT_BAR && !site.is_paid && (
           <button
             type="button"
             onClick={handleNotifyInterest}
@@ -258,9 +260,9 @@ export function BarberShell({
 
           {page === "settings" && (
             <div className="space-y-6">
-              {/* Upsell card - unpaid barbers only; paid never see an upsell.
-                  Phase 0: hidden via SHOW_BARBER_UPSELL (is_paid gate kept intact). */}
-              {SHOW_BARBER_UPSELL && !site.is_paid && <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />}
+              {/* Upsell card - unpaid barbers only; kept HIDDEN for now (the
+                  announcement bar is the add-on route). is_paid gate intact. */}
+              {SHOW_BOOKING_CARD && !site.is_paid && <BookingUpsell onNotify={handleNotifyInterest} interested={interested} />}
               <Card>
                 <CardHeader>
                   <CardTitle className="text-lg">Account</CardTitle>
@@ -333,15 +335,8 @@ export function BarberShell({
         </footer>
       </div>
 
-      {/* One-time welcome (single-site owner, first visit) - leads with the upsell. */}
-      {showWelcome && (
-        <WelcomeOverlay
-          site={site}
-          interested={interested}
-          onClose={dismissWelcome}
-          onUpsell={() => { dismissWelcome(); handleNotifyInterest(); }}
-        />
-      )}
+      {/* One-time welcome (first visit after claiming) - a short orientation guide. */}
+      {showWelcome && <WelcomeOverlay site={site} onClose={dismissWelcome} />}
 
       {/* Add-on interest confirmation (24h message) - shown after any upsell CTA. */}
       <Dialog open={showAddonConfirm} onOpenChange={setShowAddonConfirm}>
@@ -411,31 +406,61 @@ function StatCard({ label, value }: { label: string; value: number | null }) {
   );
 }
 
-/** One-time first-visit popup after claiming. Welcomes the barber, then leads
- *  with the online-booking + SMS upsell (interest-capture only - no payment).
- *  "Get access" records add-on interest; "Maybe later" dismisses. */
-function WelcomeOverlay({ site, interested, onClose, onUpsell }: { site: OwnedSite; interested: boolean; onClose: () => void; onUpsell: () => void }) {
+/** One-time first-visit guide after claiming. A short, warm orientation: what the
+ *  dashboard sections are, where to edit, the barber's real live address, and
+ *  where to get the add-ons (the announcement bar). No pricing. Single dismiss. */
+function WelcomeOverlay({ site, onClose }: { site: OwnedSite; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-ink/85 backdrop-blur-sm" onClick={onClose} aria-hidden />
-      <div role="dialog" aria-modal="true" className="relative w-full max-w-md overflow-hidden rounded-2xl border border-amber/30 bg-ink-card p-6 shadow-accent-lg sm:p-8" style={{ backgroundImage: SHELL_BG }}>
+      <div role="dialog" aria-modal="true" className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-amber/30 bg-ink-card p-6 shadow-accent-lg sm:p-8" style={{ backgroundImage: SHELL_BG }}>
         <div className="inline-flex items-center gap-2 rounded-full border border-amber/30 bg-amber/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-soft">
           <Sparkles className="h-3.5 w-3.5" /> Your site is live
         </div>
-        <h2 className="mt-4 font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">Get more clients, stop no-shows</h2>
+        <h2 className="mt-4 font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">Welcome — it's all yours</h2>
         <p className="mt-2 text-sm text-zinc-300">
-          Add <span className="font-semibold text-white">online booking (24/7)</span> and <span className="font-semibold text-white">no-show SMS reminders</span> so clients can book themselves and actually turn up.
+          This is your dashboard. Have a look around — everything here is yours to manage, any time.
         </p>
-        <ul className="mt-5 space-y-2 text-sm text-zinc-300">
-          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-amber" /><span>Clients book online any time - no back-and-forth.</span></li>
-          <li className="flex gap-2"><Check className="mt-0.5 h-4 w-4 shrink-0 text-amber" /><span>Automatic SMS reminders cut no-shows.</span></li>
+
+        {/* Quick orientation — what the main sections do. */}
+        <ul className="mt-5 space-y-3 text-sm text-zinc-300">
+          <li className="flex gap-3">
+            <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+            <span><span className="font-semibold text-white">Edit Site</span> is where you change everything — your text, photos, services and colours.</span>
+          </li>
+          <li className="flex gap-3">
+            <LayoutDashboard className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+            <span><span className="font-semibold text-white">Dashboard &amp; Calendar</span> show your bookings as they come in.</span>
+          </li>
+          <li className="flex gap-3">
+            <SettingsIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
+            <span><span className="font-semibold text-white">Settings</span> has your site link, your account and how to install this as an app.</span>
+          </li>
         </ul>
-        <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button variant="outline" onClick={onClose} className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white">Maybe later</Button>
-          <Button onClick={onUpsell} disabled={interested} className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft disabled:opacity-100">
-            {interested ? <><Check className="mr-2 h-4 w-4" /> Requested</> : "Get access"}
-          </Button>
+
+        {/* The barber's REAL live address, so they know it. */}
+        <div className="mt-5 rounded-xl border border-line bg-white/[0.03] p-3.5">
+          <div className="text-xs uppercase tracking-wider text-zinc-500">Your live site address</div>
+          <a
+            href={publicSiteUrl(site.site_name)}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 inline-flex items-center gap-2 break-all font-mono text-sm text-amber-soft hover:text-amber"
+          >
+            {publicSiteLabel(site.site_name)} <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+          </a>
         </div>
+
+        {/* Where to get the add-ons — points to the announcement bar. No pricing. */}
+        <p className="mt-4 text-sm text-zinc-300">
+          Want <span className="font-medium text-white">online booking</span>,{" "}
+          <span className="font-medium text-white">SMS reminders</span> or your{" "}
+          <span className="font-medium text-white">own domain</span>? Tap the orange bar at the top to get access.
+        </p>
+
+        <Button onClick={onClose} className="mt-6 w-full rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">
+          Got it — explore my dashboard
+        </Button>
       </div>
     </div>
   );
