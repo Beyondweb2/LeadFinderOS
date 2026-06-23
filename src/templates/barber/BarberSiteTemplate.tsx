@@ -291,7 +291,7 @@ function SmartImg({
 /** Uppercase tracked eyebrow label with a short amber rule. */
 function Eyebrow({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center justify-center gap-3 md:justify-start">
       <span className="h-px w-8 shrink-0 bg-amber/70" />
       <span className="min-w-0 break-words text-xs font-semibold uppercase tracking-[0.2em] text-amber-soft sm:tracking-[0.28em]">
         {children}
@@ -542,7 +542,7 @@ function Hero({
   return (
     <section
       id="top"
-      className="relative isolate flex min-h-[88vh] flex-col justify-end overflow-hidden"
+      className="relative isolate flex min-h-[80vh] flex-col justify-end overflow-hidden sm:min-h-[88vh]"
     >
       {/* Full-bleed background image with slow ken-burns drift.
           NOTE: SmartImg's own wrapper is `position: relative`, which (by Tailwind
@@ -563,8 +563,8 @@ function Hero({
       <div className="absolute inset-0 -z-10 bg-gradient-to-t from-ink via-ink/70 to-ink/20" />
       <div className="absolute inset-0 -z-10 bg-gradient-to-r from-ink/90 via-ink/35 to-transparent" />
 
-      <div className="mx-auto w-full max-w-6xl px-5 pb-16 pt-28 sm:px-8 sm:pb-24">
-        <div className="max-w-2xl">
+      <div className="mx-auto w-full max-w-6xl px-5 pb-14 pt-24 sm:px-8 sm:pb-24 sm:pt-28">
+        <div className="mx-auto max-w-2xl text-center md:mx-0 md:text-left">
           <Reveal>
             <Eyebrow>
               {category ? `${businessName} · ${category}` : businessName}
@@ -578,13 +578,13 @@ function Hero({
           </Reveal>
 
           <Reveal delay={0.12}>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-zinc-300 sm:text-xl">
+            <p className="mt-6 mx-auto max-w-xl text-lg leading-relaxed text-zinc-300 md:mx-0 sm:text-xl">
               {tagline}
             </p>
           </Reveal>
 
           <Reveal delay={0.18}>
-            <div className="mt-8 flex flex-wrap items-center gap-3">
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-3 md:justify-start">
               <button
                 type="button"
                 onClick={onBook}
@@ -635,7 +635,7 @@ function About({ about, businessName, stats, aboutImageUrl }: { about: string; b
   return (
     <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
-        <Reveal className="order-2 md:order-1">
+        <Reveal className="order-2 text-center md:order-1 md:text-left">
           <Eyebrow>Our story</Eyebrow>
           <h2 className="mt-5 font-display text-4xl uppercase leading-[0.95] tracking-wide text-white sm:text-5xl">
             A proper cut,
@@ -645,7 +645,7 @@ function About({ about, businessName, stats, aboutImageUrl }: { about: string; b
           <p className="mt-6 text-lg leading-relaxed text-zinc-400">{about}</p>
 
           {stats && stats.length > 0 && (
-            <div className="mt-8 flex flex-wrap gap-8">
+            <div className="mt-8 flex flex-wrap justify-center gap-8 md:justify-start">
               {stats.map((s, i) => (
                 <Stat key={`${s.label}-${i}`} value={s.value} label={s.label} />
               ))}
@@ -661,11 +661,13 @@ function About({ about, businessName, stats, aboutImageUrl }: { about: string; b
               className="aspect-[4/5] w-full rounded-3xl border border-white/[0.06] shadow-card"
               imgClassName="transition-transform duration-700 hover:scale-[1.04]"
             />
-            {/* Floating accent badge */}
-            <div className="absolute -bottom-5 -left-3 flex items-center gap-3 rounded-2xl border border-white/10 bg-ink-card/90 px-5 py-4 shadow-card backdrop-blur-sm sm:-left-5">
-              <ScissorsIcon className="h-7 w-7 text-amber" />
+            {/* Floating accent badge. On mobile it sits INSIDE the image's bottom-left
+                (positive inset) so it never overhangs the screen edge; on desktop it
+                overhangs slightly as designed. */}
+            <div className="absolute -bottom-4 left-4 flex items-center gap-3 rounded-2xl border border-white/10 bg-ink-card/90 px-4 py-3 shadow-card backdrop-blur-sm sm:-bottom-5 sm:-left-5 sm:px-5 sm:py-4">
+              <ScissorsIcon className="h-6 w-6 shrink-0 text-amber sm:h-7 sm:w-7" />
               <div className="leading-tight">
-                <div className="font-display text-2xl uppercase tracking-wide text-white">
+                <div className="font-display text-xl uppercase tracking-wide text-white sm:text-2xl">
                   Master barbers
                 </div>
                 <div className="text-xs text-zinc-400">Skin fades · beards · classics</div>
@@ -830,7 +832,7 @@ function Gallery({ images, businessName }: { images: string[]; businessName: str
   if (imgs.length === 0) return null;
 
   const header = (
-    <Reveal className="mb-12">
+    <Reveal className="mb-12 text-center md:text-left">
       <Eyebrow>The gallery</Eyebrow>
       <h2 className="mt-5 font-display text-4xl uppercase tracking-wide text-white sm:text-5xl">
         Work off the chair
@@ -893,7 +895,7 @@ function Hours({ hours }: { hours: BarberSiteContent["hours"] }) {
   return (
     <section id="hours" className="border-t border-white/[0.06] bg-ink-soft/40 py-20 sm:py-28">
       <div className="mx-auto max-w-3xl px-5 sm:px-8">
-        <Reveal className="mb-10 flex items-center gap-4">
+        <Reveal className="mb-10 flex items-center justify-center gap-4 md:justify-start">
           <ClockIcon className="h-8 w-8 text-amber" />
           <div>
             <Eyebrow>Drop in</Eyebrow>
@@ -957,7 +959,7 @@ function Contact({
   return (
     <section id="visit" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <div className="grid gap-10 md:grid-cols-2 md:gap-14">
-        <Reveal>
+        <Reveal className="text-center md:text-left">
           <Eyebrow>Find us</Eyebrow>
           <h2 className="mt-5 font-display text-4xl uppercase tracking-wide text-white sm:text-5xl">
             Come and visit
