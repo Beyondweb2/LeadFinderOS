@@ -45,6 +45,7 @@ export function BarberSiteTemplate({
   bookingSlug,
   onClaim,
   showClaimBar = true,
+  onEditImage,
 }: {
   content: BarberSiteContent;
   /**
@@ -72,6 +73,12 @@ export function BarberSiteTemplate({
    * behind the popup (the cause of the "double-press"). Defaults to shown.
    */
   showClaimBar?: boolean;
+  /**
+   * Pre-sign-in photo swap on /s/:token: when set, the hero + about photos become
+   * tappable so a barber can drop in their own picture before claiming (held in the
+   * browser, uploaded on claim). Absent on the public /p/:slug site (view-only).
+   */
+  onEditImage?: (slot: "hero" | "about") => void;
 }) {
   const {
     businessName,
@@ -144,7 +151,7 @@ export function BarberSiteTemplate({
           styles. Two soft amber radials over deep ink. */}
       {/* pb on mobile clears the fixed bottom Book bar so no section sits under it */}
       <div
-        className={`relative min-h-screen bg-ink ${onClaim ? "pb-[104px] sm:pb-[140px]" : "pb-[76px] sm:pb-0"}`}
+        className={`relative min-h-screen bg-ink ${onClaim ? "pb-[168px] sm:pb-[140px]" : "pb-[76px] sm:pb-0"}`}
         style={{
           backgroundImage:
             "radial-gradient(1100px 600px at 85% -8%, rgb(var(--barber-accent) / 0.10), transparent 60%)," +
@@ -172,8 +179,9 @@ export function BarberSiteTemplate({
             reviewCount={reviewCount}
             googleReviewsUrl={googleReviewsUrl}
             onBook={openBooking}
+            onEditImage={onEditImage}
           />
-          <About about={about} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} />
+          <About about={about} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} onEditImage={onEditImage} />
           <Services services={services} showExamplePrices={showExamplePrices} />
           <Gallery images={gallery} businessName={businessName} />
           <Hours hours={hours} />
@@ -289,11 +297,9 @@ function SmartImg({
 }
 
 /** Uppercase tracked eyebrow label with a short amber rule. */
-function Eyebrow({ children, align = "center" }: { children: ReactNode; align?: "center" | "left" }) {
-  // Default: centred on mobile, left on desktop. align="left" stays left always
-  // (used by the hero, which keeps its original left layout on mobile).
+function Eyebrow({ children }: { children: ReactNode }) {
   return (
-    <div className={`flex items-center gap-3 ${align === "center" ? "justify-center md:justify-start" : "justify-start"}`}>
+    <div className="flex items-center gap-3">
       <span className="h-px w-8 shrink-0 bg-amber/70" />
       <span className="min-w-0 break-words text-xs font-semibold uppercase tracking-[0.2em] text-amber-soft sm:tracking-[0.28em]">
         {children}
@@ -392,6 +398,19 @@ function CalendarIcon({ className = "" }: { className?: string }) {
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
       <rect x="3.5" y="5" width="17" height="15" rx="2.5" stroke="currentColor" strokeWidth="1.6" />
       <path d="M3.5 9.5h17M8 3.5v3M16 3.5v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function CameraIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path
+        d="M4 8.5a2 2 0 0 1 2-2h1.2l.9-1.6a1 1 0 0 1 .87-.5h6.06a1 1 0 0 1 .87.5l.9 1.6H18a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8Z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <circle cx="12" cy="12.5" r="3.2" stroke="currentColor" strokeWidth="1.6" />
     </svg>
   );
 }
@@ -530,6 +549,7 @@ function Hero({
   reviewCount,
   googleReviewsUrl,
   onBook,
+  onEditImage,
 }: {
   businessName: string;
   category?: string;
@@ -540,12 +560,25 @@ function Hero({
   reviewCount?: number;
   googleReviewsUrl?: string;
   onBook: () => void;
+  onEditImage?: (slot: "hero" | "about") => void;
 }) {
   return (
     <section
       id="top"
       className="relative isolate flex min-h-[80vh] flex-col justify-end overflow-hidden sm:min-h-[88vh]"
     >
+      {/* Pre-sign-in photo swap (only on /s/:token): a tap target over the hero
+          photo, kept above the scrim (z-10) but the headline/CTAs sit in a higher
+          stacking context below so they stay clickable. */}
+      {onEditImage && (
+        <button
+          type="button"
+          onClick={() => onEditImage("hero")}
+          className="group absolute right-4 top-4 z-10 inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/55 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-sm transition-all hover:-translate-y-0.5 hover:bg-black/75"
+        >
+          <CameraIcon className="h-4 w-4" /> Change photo
+        </button>
+      )}
       {/* Full-bleed background image with slow ken-burns drift.
           NOTE: SmartImg's own wrapper is `position: relative`, which (by Tailwind
           source order) beats a plain `absolute`. `!absolute` forces it out of flow
@@ -568,7 +601,7 @@ function Hero({
       <div className="mx-auto w-full max-w-6xl px-5 pb-14 pt-24 sm:px-8 sm:pb-24 sm:pt-28">
         <div className="max-w-2xl">
           <Reveal>
-            <Eyebrow align="left">
+            <Eyebrow>
               {category ? `${businessName} · ${category}` : businessName}
             </Eyebrow>
           </Reveal>
@@ -604,6 +637,16 @@ function Hero({
             </div>
           </Reveal>
 
+          {/* Pre-sign-in editing hint (only on /s/:token). */}
+          {onEditImage && (
+            <Reveal delay={0.22}>
+              <p className="mt-5 inline-flex items-center gap-2 text-sm text-zinc-300">
+                <CameraIcon className="h-4 w-4 text-amber" />
+                Tap any photo to add your own.
+              </p>
+            </Reveal>
+          )}
+
           {typeof googleRating === "number" && (
             <Reveal delay={0.24}>
               <div className="mt-8 inline-flex items-center gap-3 rounded-full border border-white/10 bg-black/30 px-4 py-2 backdrop-blur-sm">
@@ -633,11 +676,11 @@ function Hero({
 
 /* ---------------------------------- about --------------------------------- */
 
-function About({ about, businessName, stats, aboutImageUrl }: { about: string; businessName: string; stats?: BarberStat[]; aboutImageUrl?: string }) {
+function About({ about, businessName, stats, aboutImageUrl, onEditImage }: { about: string; businessName: string; stats?: BarberStat[]; aboutImageUrl?: string; onEditImage?: (slot: "hero" | "about") => void }) {
   return (
     <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
-        <Reveal className="order-2 text-center md:order-1 md:text-left">
+        <Reveal className="order-2 md:order-1">
           <Eyebrow>Our story</Eyebrow>
           <h2 className="mt-5 font-display text-4xl uppercase leading-[0.95] tracking-wide text-white sm:text-5xl">
             A proper cut,
@@ -647,7 +690,7 @@ function About({ about, businessName, stats, aboutImageUrl }: { about: string; b
           <p className="mt-6 text-lg leading-relaxed text-zinc-400">{about}</p>
 
           {stats && stats.length > 0 && (
-            <div className="mt-8 flex flex-wrap justify-center gap-8 md:justify-start">
+            <div className="mt-8 flex flex-wrap gap-8">
               {stats.map((s, i) => (
                 <Stat key={`${s.label}-${i}`} value={s.value} label={s.label} />
               ))}
@@ -663,6 +706,18 @@ function About({ about, businessName, stats, aboutImageUrl }: { about: string; b
               className="aspect-[4/5] w-full rounded-3xl border border-white/[0.06] shadow-card"
               imgClassName="transition-transform duration-700 hover:scale-[1.04]"
             />
+            {onEditImage && (
+              <button
+                type="button"
+                onClick={() => onEditImage("about")}
+                aria-label="Change this photo"
+                className="group absolute inset-0 z-10 flex items-center justify-center rounded-3xl transition-colors hover:bg-ink/30 focus-visible:bg-ink/30"
+              >
+                <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/65 px-4 py-2 text-sm font-semibold text-white shadow-lg backdrop-blur-sm transition-transform group-hover:-translate-y-0.5">
+                  <CameraIcon className="h-4 w-4" /> Change photo
+                </span>
+              </button>
+            )}
             {/* Floating accent badge. On mobile it sits INSIDE the image's bottom-left
                 (positive inset) so it never overhangs the screen edge; on desktop it
                 overhangs slightly as designed. */}
@@ -834,7 +889,7 @@ function Gallery({ images, businessName }: { images: string[]; businessName: str
   if (imgs.length === 0) return null;
 
   const header = (
-    <Reveal className="mb-12 text-center md:text-left">
+    <Reveal className="mb-12">
       <Eyebrow>The gallery</Eyebrow>
       <h2 className="mt-5 font-display text-4xl uppercase tracking-wide text-white sm:text-5xl">
         Work off the chair
@@ -897,7 +952,7 @@ function Hours({ hours }: { hours: BarberSiteContent["hours"] }) {
   return (
     <section id="hours" className="border-t border-white/[0.06] bg-ink-soft/40 py-20 sm:py-28">
       <div className="mx-auto max-w-3xl px-5 sm:px-8">
-        <Reveal className="mb-10 flex items-center justify-center gap-4 md:justify-start">
+        <Reveal className="mb-10 flex items-center gap-4">
           <ClockIcon className="h-8 w-8 text-amber" />
           <div>
             <Eyebrow>Drop in</Eyebrow>
@@ -961,7 +1016,7 @@ function Contact({
   return (
     <section id="visit" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <div className="grid gap-10 md:grid-cols-2 md:gap-14">
-        <Reveal className="text-center md:text-left">
+        <Reveal>
           <Eyebrow>Find us</Eyebrow>
           <h2 className="mt-5 font-display text-4xl uppercase tracking-wide text-white sm:text-5xl">
             Come and visit

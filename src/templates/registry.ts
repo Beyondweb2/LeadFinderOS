@@ -30,6 +30,11 @@ export interface SiteTemplateProps {
   bookingSlug?: string;
   onClaim?: () => void;
   showClaimBar?: boolean;
+  /**
+   * Pre-sign-in photo swap on /s/:token (barber template only): tap the hero/about
+   * photo to drop in your own before claiming. Other templates ignore it.
+   */
+  onEditImage?: (slot: "hero" | "about") => void;
 }
 
 export interface TemplateDef {
