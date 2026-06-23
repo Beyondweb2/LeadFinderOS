@@ -9,6 +9,7 @@ import { Loader2, Scissors, ArrowLeft } from "lucide-react";
 import { SETUP_BY_NAME, SUPPORT_CONTACT, supportContactHref } from "@/config/barberBrand";
 import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
 import { applyPendingBarberEdits } from "@/lib/barberEdits";
+import { phoneToSyntheticEmail, isLikelyPhone, SYNTHETIC_EMAIL_DOMAIN } from "@/lib/phoneAuth";
 import type { BarberSiteContent } from "@/templates/barber/types";
 import { useBarberBranding } from "@/hooks/useBarberBranding";
 import "@/templates/barber/fonts.css";
@@ -26,8 +27,6 @@ import "@/templates/barber/fonts.css";
  */
 type Phase = "loading" | "invalid" | "ready" | "claimed" | "working";
 type Step = "preview" | "signup";
-
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const SHELL =
   "min-h-screen flex items-center justify-center bg-ink font-body text-zinc-300 antialiased p-4";
@@ -59,10 +58,10 @@ export default function Claim() {
   const [step, setStep] = useState<Step>(fromShare ? "signup" : "preview");
   const [businessName, setBusinessName] = useState("your business");
   const [content, setContent] = useState<BarberSiteContent | null>(null);
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [existingEmail, setExistingEmail] = useState(false);
+  const [existingAccount, setExistingAccount] = useState(false);
 
   // Validate the token / fetch the site content for the preview.
   useEffect(() => {
@@ -77,7 +76,10 @@ export default function Claim() {
         return;
       }
       setBusinessName(data.businessName || "your business");
-      setContent((data.content as BarberSiteContent) ?? null);
+      const siteContent = (data.content as BarberSiteContent) ?? null;
+      setContent(siteContent);
+      // Prefill the phone field from the lead's known number (barber can edit it).
+      setPhone((prev) => prev || (siteContent?.phone ?? ""));
       setPhase(data.alreadyClaimed ? "claimed" : "ready");
     })();
     return () => {
@@ -99,8 +101,8 @@ export default function Claim() {
         return "This link is no longer valid. Ask for a fresh link.";
       case "already_claimed":
         return "This website has already been set up.";
-      case "invalid_email":
-        return "Please enter a valid email address.";
+      case "invalid_phone":
+        return "Please enter a valid mobile number.";
       case "weak_password":
         return "Password must be at least 8 characters.";
       default:
@@ -111,20 +113,22 @@ export default function Claim() {
   // New-account claim: create the account + claim, then sign in and go to /barber.
   const handleCreateAndClaim = async () => {
     setError(null);
-    setExistingEmail(false);
-    if (!EMAIL_RE.test(email.trim())) return setError("Please enter a valid email address.");
+    setExistingAccount(false);
+    if (!isLikelyPhone(phone)) return setError("Please enter a valid mobile number.");
     if (password.length < 8) return setError("Password must be at least 8 characters.");
 
     setPhase("working");
+    // The barber sends only their phone; claim-site derives the hidden synthetic
+    // email and creates the account through the email path.
     const { data, error: invokeError } = await supabase.functions.invoke("claim-site", {
-      body: { token, email: email.trim(), password },
+      body: { token, phone: phone.trim(), password },
     });
 
     if (invokeError || !data?.ok) {
       const code = (data?.error as string) || "";
-      if (code === "email_exists") {
-        setExistingEmail(true);
-        setError("You already have an account with this email.");
+      if (code === "account_exists") {
+        setExistingAccount(true);
+        setError("You already have an account with this number.");
         setPhase("ready");
         return;
       }
@@ -133,9 +137,11 @@ export default function Claim() {
       return;
     }
 
-    // Account created + site claimed server-side. Sign in to get a session.
+    // Account created + site claimed server-side. Sign in with the hidden synthetic
+    // email (server returns it; fall back to deriving it from the same phone).
+    const loginEmail = (data.login_email as string) || phoneToSyntheticEmail(phone);
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+      email: loginEmail,
       password,
     });
     if (signInError) {
@@ -248,9 +254,14 @@ export default function Claim() {
                 // Already signed in → one-click save.
                 <div className="space-y-4">
                   <p className="text-sm text-zinc-400">
-                    You're signed in as{" "}
-                    <span className="font-medium text-zinc-200">{user.email}</span>. Save this
-                    website to your account.
+                    You're signed in
+                    {user.email && !user.email.toLowerCase().endsWith(`@${SYNTHETIC_EMAIL_DOMAIN}`) ? (
+                      <>
+                        {" "}as{" "}
+                        <span className="font-medium text-zinc-200">{user.email}</span>
+                      </>
+                    ) : null}
+                    . Save this website to your account.
                   </p>
                   {error && <p className="text-sm text-red-400">{error}</p>}
                   <Button className={PRIMARY_BTN} onClick={handleClaimAsMe} disabled={phase === "working"}>
@@ -265,15 +276,16 @@ export default function Claim() {
                     Create an account to manage your website. It takes a few seconds.
                   </p>
                   <div className="space-y-1.5">
-                    <Label htmlFor="claim-email" className="text-zinc-300">Email</Label>
+                    <Label htmlFor="claim-phone" className="text-zinc-300">Mobile number</Label>
                     <Input
-                      id="claim-email"
-                      type="email"
-                      autoComplete="email"
+                      id="claim-phone"
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="tel"
                       className={INPUT}
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      placeholder="07… or +44…"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -291,7 +303,7 @@ export default function Claim() {
                   {error && (
                     <p className="text-sm text-red-400">
                       {error}{" "}
-                      {existingEmail && (
+                      {existingAccount && (
                         <Link
                           to={`/barber-login?next=${encodeURIComponent(`/claim/${token}`)}`}
                           className="font-medium text-amber underline hover:text-amber-soft"

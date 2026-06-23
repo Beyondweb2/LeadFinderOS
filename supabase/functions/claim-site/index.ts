@@ -37,6 +37,30 @@ function clientIp(req: Request): string {
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// ── Phone → synthetic email (Phase 1) ───────────────────────────────────────
+// The barber enters only a phone; we derive a deterministic synthetic email and
+// run account creation through the normal email path (Supabase Phone provider
+// needs Twilio we don't have yet). This MUST stay byte-identical to
+// src/lib/phoneAuth.ts so an account created here can log in from the frontend.
+//
+// MIGRATION NOTE: these `<e164digits>@claimed.yoursites.uk` accounts are a stop-
+// gap. Once Move37 Twilio is live + the Phone provider is enabled, migrate each
+// to a real phone identifier (set auth.users.phone, drop the synthetic email).
+// Not built now — flagged so it isn't a surprise later.
+const SYNTHETIC_EMAIL_DOMAIN = "claimed.yoursites.uk";
+function toE164Digits(phone: string): string {
+  let cleaned = (phone || "").replace(/[^\d+]/g, "");
+  cleaned = cleaned.replace(/^\+/, "");
+  if (cleaned.startsWith("0")) cleaned = "44" + cleaned.slice(1);
+  return cleaned;
+}
+function phoneToSyntheticEmail(phone: string): string {
+  return `${toE164Digits(phone)}@${SYNTHETIC_EMAIL_DOMAIN}`;
+}
+function isSyntheticEmail(email: string): boolean {
+  return email.toLowerCase().endsWith(`@${SYNTHETIC_EMAIL_DOMAIN}`);
+}
+
 /** HTML-escape for safe interpolation into the notification email body. */
 function esc(s: string): string {
   return s
@@ -223,8 +247,10 @@ serve(async (req) => {
 
     const body = await req.json().catch(() => ({}));
     const token = typeof body.token === "string" ? body.token.trim() : "";
-    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const phone = typeof body.phone === "string" ? body.phone.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
+    // Set when we create a new phone-based account; reused for sign-in + guards.
+    let syntheticEmail = "";
     if (!token) {
       return jsonResponse({ error: "token required" }, 400, rlHeaders);
     }
@@ -258,27 +284,30 @@ serve(async (req) => {
     }
 
     if (!userId) {
-      // New-account mode — needs valid credentials. Expected validation outcomes
+      // New-account mode — barber enters only a PHONE; we derive a synthetic email
+      // and create the account through the email path. Expected validation outcomes
       // are returned as HTTP 200 with { ok:false, error } so the browser client
       // (supabase-js treats any non-2xx as a null-data error) can branch on them.
-      if (!EMAIL_RE.test(email)) {
-        return jsonResponse({ ok: false, error: "invalid_email" }, 200, rlHeaders);
+      const digits = toE164Digits(phone);
+      if (digits.length < 10) {
+        return jsonResponse({ ok: false, error: "invalid_phone" }, 200, rlHeaders);
       }
       if (password.length < 8) {
         return jsonResponse({ ok: false, error: "weak_password" }, 200, rlHeaders);
       }
 
+      syntheticEmail = phoneToSyntheticEmail(phone);
       const { data: created, error: createError } = await serviceClient.auth.admin.createUser({
-        email,
+        email: syntheticEmail,
         password,
-        email_confirm: true, // invite-only via token → trusted; skip confirmation email
+        email_confirm: true, // invite-only via token → trusted; no confirmation email
       });
 
       if (createError || !created?.user) {
         const msg = (createError?.message || "").toLowerCase();
-        // Already-registered email: tell the client to send them to barber-login.
+        // This phone already has an account → tell the client to send them to login.
         if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
-          return jsonResponse({ ok: false, error: "email_exists" }, 200, rlHeaders);
+          return jsonResponse({ ok: false, error: "account_exists" }, 200, rlHeaders);
         }
         console.error("[CLAIM-SITE] createUser failed:", createError?.message);
         return jsonResponse({ ok: false, error: "signup_failed" }, 200, rlHeaders);
@@ -342,20 +371,9 @@ serve(async (req) => {
       console.error("[CLAIM-SITE] tracking write failed (non-blocking):", (e as Error).message);
     }
 
-    // Notify the operator (best-effort; never blocks or fails the claim).
-    await notifyAdminOfClaim({
-      serviceClient,
-      siteId: claimedSiteId as string,
-      accountEmail: email,
-      newAccount: !!createdUserId,
-    });
-
-    // Confirmation email to the BARBER. Fires exactly once per successful claim
-    // (this path only runs after claim_generated_site succeeds, which is atomic +
-    // one-time). Recipient is the barber's OWN signup email; for the rare
-    // existing/logged-in claim (no signup email in the body) we look it up from
-    // their auth record. Best-effort — never blocks the claim.
-    let barberEmail = email;
+    // Resolve who claimed: a new phone account is the synthetic email; the rare
+    // existing/logged-in claim has no signup value in the body, so look it up.
+    let barberEmail = syntheticEmail;
     if (!barberEmail && userId) {
       try {
         const { data: u } = await serviceClient.auth.admin.getUserById(userId);
@@ -364,10 +382,20 @@ serve(async (req) => {
         console.error("[CLAIM-SITE] barber email lookup failed:", (e as Error).message);
       }
     }
-    // Capture the barber's email onto their linked CRM lead, so the email button
-    // auto-fills across the Outreach / Track Leads / Paid Clients cards (it reads
-    // outreach_leads.email + email_status). Best-effort; never blocks the claim.
-    if (barberEmail) {
+
+    // Notify the operator (best-effort; never blocks or fails the claim). Show the
+    // PHONE for phone-claims; a real email otherwise; "logged-in user" if neither.
+    await notifyAdminOfClaim({
+      serviceClient,
+      siteId: claimedSiteId as string,
+      accountEmail: phone || (isSyntheticEmail(barberEmail) ? "" : barberEmail),
+      newAccount: !!createdUserId,
+    });
+
+    // Capture email + send the barber a confirmation ONLY for a REAL inbox — never
+    // a synthetic phone address (it has no inbox: a send would bounce and it would
+    // pollute the lead's email field). Best-effort; never blocks the claim.
+    if (barberEmail && !isSyntheticEmail(barberEmail)) {
       try {
         const { data: linkedSite } = await serviceClient
           .from("generated_sites")
@@ -384,17 +412,18 @@ serve(async (req) => {
       } catch (e) {
         console.error("[CLAIM-SITE] email capture to lead failed (non-blocking):", (e as Error).message);
       }
+
+      await notifyBarberOfClaim({
+        serviceClient,
+        siteId: claimedSiteId as string,
+        toEmail: barberEmail,
+      });
     }
 
-    await notifyBarberOfClaim({
-      serviceClient,
-      siteId: claimedSiteId as string,
-      toEmail: barberEmail,
-    });
-
-    // For new accounts the client now signs in with the same email/password.
+    // New phone accounts: the client signs in with login_email + the password it
+    // already holds. (login_email is the hidden synthetic email — never shown.)
     return jsonResponse(
-      { ok: true, site_id: claimedSiteId, new_account: !!createdUserId },
+      { ok: true, site_id: claimedSiteId, new_account: !!createdUserId, login_email: syntheticEmail || null },
       200,
       rlHeaders,
     );

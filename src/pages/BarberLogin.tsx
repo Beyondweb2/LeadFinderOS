@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Scissors } from "lucide-react";
 import { useBarberBranding } from "@/hooks/useBarberBranding";
+import { phoneToSyntheticEmail } from "@/lib/phoneAuth";
 import "@/templates/barber/fonts.css";
 
 /**
@@ -36,7 +37,7 @@ export default function BarberLogin() {
   const [params] = useSearchParams();
   const next = params.get("next") || "/barber";
 
-  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -51,13 +52,24 @@ export default function BarberLogin() {
   const handleLogin = async () => {
     setError(null);
     setSubmitting(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
+    const entered = phone.trim();
+    // Phone → hidden synthetic email, then sign in via the email path.
+    const first = await supabase.auth.signInWithPassword({
+      email: phoneToSyntheticEmail(entered),
       password,
     });
+    // Legacy fallback: a handful of early barbers may have signed up with a REAL
+    // email before phone auth existed. If the field actually holds an email and the
+    // phone attempt failed, retry it as a raw email so they're not locked out.
+    // Invisible to phone users (a phone never contains "@").
+    let err = first.error;
+    if (err && entered.includes("@")) {
+      const retry = await supabase.auth.signInWithPassword({ email: entered, password });
+      err = retry.error;
+    }
     setSubmitting(false);
-    if (signInError) {
-      setError("Incorrect email or password.");
+    if (err) {
+      setError("Incorrect phone number or password.");
       return;
     }
     navigate(next, { replace: true });
@@ -83,15 +95,16 @@ export default function BarberLogin() {
           }}
         >
           <div className="space-y-1.5">
-            <Label htmlFor="barber-email" className="text-zinc-300">Email</Label>
+            <Label htmlFor="barber-phone" className="text-zinc-300">Mobile number</Label>
             <Input
-              id="barber-email"
-              type="email"
-              autoComplete="email"
+              id="barber-phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
               className={INPUT}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="07… or +44…"
             />
           </div>
           <div className="space-y-1.5">
