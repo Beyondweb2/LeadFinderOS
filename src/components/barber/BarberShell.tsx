@@ -16,6 +16,13 @@ import { BookingsManager } from "@/components/BookingsManager";
 import { WeekCalendar } from "@/components/barber/WeekCalendar";
 import { BookingUpsell } from "@/components/barber/BookingUpsell";
 import { LiveSiteEditor } from "@/components/barber/LiveSiteEditor";
+
+// SAFETY NET (2026-06-24): the live tap-to-edit editor is temporarily disabled
+// while we track down a production render crash. With this false, the editor is
+// never mounted — Edit Site always serves the proven classic SiteEditor form, so
+// nothing editor-related can crash the dashboard or Edit page. Flip to true to
+// re-enable once the root cause is fixed.
+const LIVE_EDITOR_ENABLED = false;
 import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
 import { londonInstant, londonYMD } from "@/components/barber/london";
 import { recordSiteEvent } from "@/lib/siteTracking";
@@ -286,16 +293,20 @@ export function BarberShell({
 
           {page === "calendar" && <WeekCalendar siteId={site.id} />}
 
-          {page === "edit" && useClassicEditor && (
+          {page === "edit" && (!LIVE_EDITOR_ENABLED || useClassicEditor) && (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => setUseClassicEditor(false)}
-                  className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-soft hover:text-amber"
-                >
-                  <Sparkles className="h-4 w-4" /> Live editor
-                </button>
+                {LIVE_EDITOR_ENABLED ? (
+                  <button
+                    type="button"
+                    onClick={() => setUseClassicEditor(false)}
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-soft hover:text-amber"
+                  >
+                    <Sparkles className="h-4 w-4" /> Live editor
+                  </button>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Your site's content, photos and services. Changes save in place.</p>
+                )}
                 <Button size="sm" onClick={togglePublish} disabled={savingStatus} className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">
                   {savingStatus ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : published ? <EyeOff className="h-4 w-4 mr-2" /> : <Globe className="h-4 w-4 mr-2" />}
                   {published ? "Unpublish" : "Publish"}
@@ -395,7 +406,7 @@ export function BarberShell({
 
       {/* Live tap-to-edit editor (full-screen overlay). Default for "Edit Site";
           the classic SiteEditor form is the one-click fallback above. */}
-      {page === "edit" && !useClassicEditor && (
+      {LIVE_EDITOR_ENABLED && page === "edit" && !useClassicEditor && (
         <LiveSiteEditor
           site={site}
           onContentSaved={(content) => {
