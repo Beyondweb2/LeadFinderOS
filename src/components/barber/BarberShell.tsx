@@ -1,12 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   LayoutDashboard, CalendarDays, Pencil, Settings as SettingsIcon, LogOut, Menu, X,
-  ExternalLink, Globe, EyeOff, Loader2, Sparkles, Check, ArrowLeft, Smartphone, Monitor, Share, Download,
+  ExternalLink, Globe, EyeOff, Loader2, Sparkles, Check, ArrowLeft, ArrowRight, Smartphone, Monitor, Share, Download,
 } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SiteEditor } from "@/components/SiteEditor";
@@ -128,6 +129,33 @@ export function BarberShell({
       if (result.ok) return; // redirecting to Stripe Checkout
     }
     await handleNotifyInterest();
+  };
+
+  // Bookings are "set up" once there's a staff member WITH working hours — that's
+  // when customers get real bookable slots. Drives the dashboard prompt, which
+  // hides once setup is done. Re-checked on page changes (e.g. after Settings).
+  const [bookingsSetUp, setBookingsSetUp] = useState<boolean | null>(null);
+  const checkBookingsSetUp = useCallback(async () => {
+    try {
+      const sb = supabase as unknown as SupabaseClient;
+      const { data: staffRows } = await sb
+        .from("booking_staff").select("id").eq("site_id", site.id).eq("is_active", true);
+      const ids = (staffRows ?? []).map((s: { id: string }) => s.id);
+      if (!ids.length) { setBookingsSetUp(false); return; }
+      const { count } = await sb
+        .from("staff_working_hours").select("id", { count: "exact", head: true }).in("staff_id", ids);
+      setBookingsSetUp((count ?? 0) > 0);
+    } catch {
+      setBookingsSetUp(false);
+    }
+  }, [site.id]);
+  useEffect(() => { checkBookingsSetUp(); }, [checkBookingsSetUp, page]);
+
+  // "Set up your bookings": PAID barbers go to the Settings editor (StaffManager);
+  // UNPAID barbers go to Stripe checkout (same flow as "Get access").
+  const handleSetUpBookings = () => {
+    if (site.is_paid) setPage("settings");
+    else handleGetAccess();
   };
 
   const go = (k: PageKey) => { setPage(k); setNavOpen(false); };
@@ -252,7 +280,7 @@ export function BarberShell({
         </header>
 
         <main className={`barber-surface mx-auto w-full flex-1 p-4 md:p-8 ${page === "calendar" ? "max-w-none" : "max-w-4xl"}`}>
-          {page === "dashboard" && <DashboardPage site={site} />}
+          {page === "dashboard" && <DashboardPage site={site} bookingsSetUp={bookingsSetUp} onSetUp={handleSetUpBookings} />}
 
           {page === "calendar" && <WeekCalendar siteId={site.id} />}
 
@@ -343,7 +371,7 @@ export function BarberShell({
               </Card>
 
               {/* Staff & working hours (moved here from Edit Site). */}
-              <StaffManager siteId={site.id} />
+              <StaffManager siteId={site.id} locked={!site.is_paid} onUpgrade={handleGetAccess} />
             </div>
           )}
         </main>
@@ -430,7 +458,7 @@ export function BarberShell({
 
 /** Dashboard page: quick stats + the existing upcoming-bookings list (which
  *  already carries the "new since last visit" indicator). */
-function DashboardPage({ site }: { site: OwnedSite }) {
+function DashboardPage({ site, bookingsSetUp, onSetUp }: { site: OwnedSite; bookingsSetUp: boolean | null; onSetUp: () => void }) {
   const [today, setToday] = useState<number | null>(null);
   const [week, setWeek] = useState<number | null>(null);
 
@@ -459,6 +487,29 @@ function DashboardPage({ site }: { site: OwnedSite }) {
 
   return (
     <div className="space-y-6">
+      {/* Shown until bookings are set up (a staff member with hours). Paid barbers
+          land in the Settings editor; unpaid barbers go to Stripe checkout. */}
+      {bookingsSetUp === false && (
+        <button
+          type="button"
+          onClick={onSetUp}
+          className="group flex w-full items-start gap-4 rounded-2xl border border-amber/30 bg-amber/[0.06] p-5 text-left transition-colors hover:bg-amber/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/60"
+        >
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber/15">
+            <CalendarDays className="h-5 w-5 text-amber" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-display text-lg uppercase tracking-wide text-white">Set up your bookings</div>
+            <p className="mt-1 text-sm text-zinc-300">
+              Add your weekly availability to switch on online booking — customers can book you
+              themselves, 24/7, and automatic SMS reminders help stop the no-shows.
+            </p>
+            <span className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-amber group-hover:text-amber-soft">
+              Set up your bookings <ArrowRight className="h-4 w-4" />
+            </span>
+          </div>
+        </button>
+      )}
       <div className="grid grid-cols-2 gap-3 sm:max-w-md">
         <StatCard label="Bookings today" value={today} />
         <StatCard label="This week" value={week} />
