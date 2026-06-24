@@ -9,7 +9,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { OwnerProvider } from "@/contexts/OwnerContext";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import { OwnerRedirect } from "@/components/OwnerRedirect";
+import { RequireAdmin } from "@/components/RequireAdmin";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
@@ -196,15 +196,13 @@ const App = () => {
               path="/"
               element={
                 <ProtectedRoute>
-                  <OwnerRedirect>
-                    <SubscriptionGate>
-                        <AppLayout>
-                          <FirstTimeRedirect>
-                            <Dashboard />
-                          </FirstTimeRedirect>
-                        </AppLayout>
-                    </SubscriptionGate>
-                  </OwnerRedirect>
+                  <SubscriptionGate>
+                    <AppLayout>
+                      <FirstTimeRedirect>
+                        <Dashboard />
+                      </FirstTimeRedirect>
+                    </AppLayout>
+                  </SubscriptionGate>
                 </ProtectedRoute>
               }
             />
@@ -308,7 +306,9 @@ const App = () => {
               path="/admin/api-usage"
               element={
                 <ProtectedRoute>
-                  <AdminApiUsage />
+                  <RequireAdmin>
+                    <AdminApiUsage />
+                  </RequireAdmin>
                 </ProtectedRoute>
               }
             />
@@ -316,7 +316,9 @@ const App = () => {
               path="/admin/site-images"
               element={
                 <ProtectedRoute>
-                  <AdminSiteImages />
+                  <RequireAdmin>
+                    <AdminSiteImages />
+                  </RequireAdmin>
                 </ProtectedRoute>
               }
             />
@@ -324,7 +326,9 @@ const App = () => {
               path="/admin/sites"
               element={
                 <ProtectedRoute>
-                  <AdminSitesList />
+                  <RequireAdmin>
+                    <AdminSitesList />
+                  </RequireAdmin>
                 </ProtectedRoute>
               }
             />
@@ -332,7 +336,9 @@ const App = () => {
               path="/admin/sites/:id"
               element={
                 <ProtectedRoute>
-                  <AdminSiteManage />
+                  <RequireAdmin>
+                    <AdminSiteManage />
+                  </RequireAdmin>
                 </ProtectedRoute>
               }
             />

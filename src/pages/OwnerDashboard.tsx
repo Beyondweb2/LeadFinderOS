@@ -77,6 +77,18 @@ export default function OwnerDashboard() {
     window.location.href = "/barber-login";
   };
 
+  // Orphaned-account guard: an authenticated user who owns NO site and isn't an
+  // admin has nowhere valid to land. Sign them out to a clean terminal so the
+  // operator gate (RequireAdmin) can never bounce them in a redirect loop
+  // (/barber → / → /barber-login → /barber …).
+  useEffect(() => {
+    if (loading || !user || isAdmin || sites.length > 0) return;
+    (async () => {
+      await supabase.auth.signOut();
+      window.location.href = "/barber-login";
+    })();
+  }, [loading, user, isAdmin, sites.length]);
+
   // Keep the local copy fresh when a shell saves content / toggles publish.
   const updateSite = (updated: OwnedSite) => {
     setSites((prev) => prev.map((x) => (x.id === updated.id ? { ...x, ...updated } : x)));
@@ -98,8 +110,17 @@ export default function OwnerDashboard() {
     );
   }
 
-  // Admins don't belong here; a non-owner who landed here goes home.
-  if (sites.length === 0) return <Navigate to={isAdmin ? "/admin" : "/"} replace />;
+  // No sites: an admin goes to the admin hub; a non-admin orphan sees a spinner
+  // while the effect above signs them out + redirects to /barber-login (no loop).
+  if (sites.length === 0) {
+    return isAdmin ? (
+      <Navigate to="/admin" replace />
+    ) : (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   // Single-site owner → straight into the right shell (welcome enabled).
   if (sites.length === 1) return renderShell(sites[0], { welcome: true });
