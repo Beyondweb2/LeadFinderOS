@@ -254,15 +254,6 @@
     "coolColorsOnly": "केवल ठंडे रंग (नीला, सियान, टील, वायलेट)",
     "themeColor": "थीम रंग"
   },
-  "trial": {
-    "threeDayFullAccess": "3 दिन का पूर्ण एक्सेस",
-    "settingUpTrial": "आपका मुफ्त ट्रायल सेट हो रहा है - 3 दिन के लिए £0, फिर £19.99/महीना। कभी भी रद्द करें।",
-    "unlimitedSearches": "असीमित व्यवसाय खोज",
-    "fullOutreach": "पूर्ण आउटरीच और पाइपलाइन ट्रैकिंग",
-    "whatsappTemplates": "WhatsApp और SMS आउटरीच टेम्पलेट",
-    "notReadyCard": "कार्ड जोड़ने के लिए तैयार नहीं?",
-    "freeSearchDemo": "1 मुफ्त खोज और डेमो में वॉकथ्रू →"
-  },
   "pipelineStatuses": {
     "callBooked": "कॉल बुक की गई",
     "sentQuote": "कोटेशन भेजा",
@@ -329,41 +320,11 @@
     "consistencyPays": "इसे लगातार करें और क्लाइंट आएंगे।",
     "letsGo": "चलिए शुरू करें"
   },
-  "checkout": {
-    "unlockUnlimited": "असीमित एक्सेस अनलॉक करें",
-    "priceMonthly": "£19.99/महीना · कभी भी रद्द करें",
-    "redirecting": "रीडायरेक्ट हो रहा है...",
-    "continueToCheckout": "सुरक्षित चेकआउट पर जाएं",
-    "cancelAnytimeNote": "अपने डैशबोर्ड से एक क्लिक में कभी भी रद्द करें।",
-    "unlimitedBenefits": {
-      "searches": "असीमित लीड खोज",
-      "outreach": "पूर्ण आउटरीच एक्सेस",
-      "tracking": "संपर्क ट्रैकिंग और नोट्स",
-      "templates": "ईमेल और कॉल टेम्पलेट"
-    },
-    "unlockPrice": "असीमित अनलॉक करें — £19.99/महीना",
-    "cancelAnytime": "कभी भी रद्द करें",
-    "checkoutFailed": "चेकआउट विफल",
-    "checkoutFailedDesc": "कृपया पुनः प्रयास करें।"
-  },
   "activation": {
     "waitingPayment": "भुगतान की प्रतीक्षा...",
     "completeCheckout": "नए टैब में चेकआउट पूरा करें। यह स्क्रीन स्वचालित रूप से अपडेट होगी।",
     "activated": "आप सक्रिय हो गए!",
     "fullAccessUnlocked": "पूर्ण एक्सेस अनलॉक। डैशबोर्ड पर रीडायरेक्ट हो रहा है..."
-  },
-  "trialLimit": {
-    "readyForNext": "अपने अगले",
-    "client": "क्लाइंट के लिए तैयार?",
-    "reachedLimit": "आपकी मुफ्त खोज सीमा समाप्त हो गई है।",
-    "keepBuilding": "अपनी पाइपलाइन बनाते रहें।",
-    "businessesFound": "व्यवसाय मिले",
-    "withoutWebsites": "बिना वेबसाइट",
-    "messagesSent": "संदेश भेजे गए",
-    "unlockMomentum": "असीमित खोजें अनलॉक करें और गति बनाए रखें।",
-    "pricingNote": "3 दिन के मुफ्त ट्रायल के बाद → £19.99/महीना",
-    "startTrial": "3 दिन का मुफ्त ट्रायल शुरू करें",
-    "openingCheckout": "चेकआउट खुल रहा है..."
   },
   "skipWalkthrough": {
     "buttonLabel": "वॉकथ्रू छोड़ें",

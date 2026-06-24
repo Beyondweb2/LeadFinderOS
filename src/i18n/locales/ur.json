@@ -254,15 +254,6 @@
     "coolColorsOnly": "صرف ٹھنڈے رنگ (نیلا، سیان، ٹیل، وائلٹ)",
     "themeColor": "تھیم رنگ"
   },
-  "trial": {
-    "threeDayFullAccess": "3 دن کی مکمل رسائی",
-    "settingUpTrial": "آپ کا مفت ٹرائل سیٹ ہو رہا ہے - 3 دن کے لیے £0، پھر £19.99/ماہ۔ کسی بھی وقت منسوخ کریں۔",
-    "unlimitedSearches": "لامحدود کاروباری تلاش",
-    "fullOutreach": "مکمل آؤٹ ریچ اور پائپ لائن ٹریکنگ",
-    "whatsappTemplates": "WhatsApp اور SMS آؤٹ ریچ ٹیمپلیٹس",
-    "notReadyCard": "کارڈ شامل کرنے کے لیے تیار نہیں؟",
-    "freeSearchDemo": "1 مفت تلاش اور ڈیمو میں واک تھرو →"
-  },
   "pipelineStatuses": {
     "callBooked": "کال بک ہو گئی",
     "sentQuote": "کوٹیشن بھیجا",
@@ -329,41 +320,11 @@
     "consistencyPays": "اسے مسلسل کریں اور کلائنٹس آئیں گے۔",
     "letsGo": "چلیں شروع کریں"
   },
-  "checkout": {
-    "unlockUnlimited": "لامحدود رسائی ان لاک کریں",
-    "priceMonthly": "£19.99/ماہ · کسی بھی وقت منسوخ کریں",
-    "redirecting": "...ری ڈائریکٹ ہو رہا ہے",
-    "continueToCheckout": "محفوظ چیک آؤٹ پر جائیں",
-    "cancelAnytimeNote": "اپنے ڈیش بورڈ سے ایک کلک میں کسی بھی وقت منسوخ کریں۔",
-    "unlimitedBenefits": {
-      "searches": "لامحدود لیڈ تلاش",
-      "outreach": "مکمل آؤٹ ریچ رسائی",
-      "tracking": "رابطہ ٹریکنگ اور نوٹس",
-      "templates": "ای میل اور کال ٹیمپلیٹس"
-    },
-    "unlockPrice": "لامحدود ان لاک — £19.99/ماہ",
-    "cancelAnytime": "کسی بھی وقت منسوخ",
-    "checkoutFailed": "چیک آؤٹ ناکام",
-    "checkoutFailedDesc": "براہ کرم دوبارہ کوشش کریں۔"
-  },
   "activation": {
     "waitingPayment": "...ادائیگی کا انتظار",
     "completeCheckout": "نئے ٹیب میں چیک آؤٹ مکمل کریں۔ یہ سکرین خود بخود اپ ڈیٹ ہو جائے گی۔",
     "activated": "!آپ فعال ہو گئے",
     "fullAccessUnlocked": "...مکمل رسائی ان لاک۔ ڈیش بورڈ پر ری ڈائریکٹ ہو رہا ہے"
-  },
-  "trialLimit": {
-    "readyForNext": "اپنے اگلے",
-    "client": "کلائنٹ کے لیے تیار؟",
-    "reachedLimit": "آپ کی مفت تلاش کی حد ختم ہو گئی ہے۔",
-    "keepBuilding": "اپنی پائپ لائن بناتے رہیں۔",
-    "businessesFound": "کاروبار ملے",
-    "withoutWebsites": "بغیر ویب سائٹ",
-    "messagesSent": "پیغامات بھیجے گئے",
-    "unlockMomentum": "لامحدود تلاشیں ان لاک کریں اور رفتار برقرار رکھیں۔",
-    "pricingNote": "3 دن کے مفت ٹرائل کے بعد → £19.99/ماہ",
-    "startTrial": "3 دن کا مفت ٹرائل شروع کریں",
-    "openingCheckout": "...چیک آؤٹ کھل رہا ہے"
   },
   "skipWalkthrough": {
     "buttonLabel": "واک تھرو چھوڑیں",
