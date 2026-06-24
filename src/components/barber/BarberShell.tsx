@@ -17,6 +17,7 @@ import { BookingUpsell } from "@/components/barber/BookingUpsell";
 import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
 import { londonInstant, londonYMD } from "@/components/barber/london";
 import { recordSiteEvent } from "@/lib/siteTracking";
+import { useBarberCheckout } from "@/hooks/useBarberCheckout";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
 export type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent; is_paid?: boolean; share_token?: string; addon_interest_at?: string | null };
@@ -106,15 +107,27 @@ export function BarberShell({
     });
   };
 
-  // Add-on interest CTA (shared by the welcome modal, the announcement bar and
-  // the settings upsell card). Records interest against this site's share_token
-  // (NO payment) and shows the 24-hour confirmation. Sticky via addon_interest_at.
+  const { startCheckout, enabled: checkoutEnabled, loading: checkoutLoading } = useBarberCheckout();
+
+  // Interest-capture (NO payment): records interest against this site's share_token
+  // and shows the 24-hour confirmation. Sticky via addon_interest_at. Used as the
+  // fallback when Stripe isn't live yet or a checkout attempt fails.
   const handleNotifyInterest = async () => {
     setInterested(true);
     setShowAddonConfirm(true);
     if (site.share_token) {
       await recordSiteEvent(site.share_token, "addon_interest");
     }
+  };
+
+  // "Get access" → real Stripe Checkout when payments are configured; otherwise
+  // (or if creating the session fails) it gracefully falls back to interest-capture.
+  const handleGetAccess = async () => {
+    if (checkoutEnabled) {
+      const result = await startCheckout({ generatedSiteId: site.id });
+      if (result.ok) return; // redirecting to Stripe Checkout
+    }
+    await handleNotifyInterest();
   };
 
   const go = (k: PageKey) => { setPage(k); setNavOpen(false); };
@@ -213,11 +226,14 @@ export function BarberShell({
         {SHOW_ANNOUNCEMENT_BAR && !site.is_paid && (
           <button
             type="button"
-            onClick={handleNotifyInterest}
-            className="flex w-full items-center justify-center gap-2 bg-amber px-4 py-2 text-center text-sm font-semibold text-ink transition-colors hover:bg-amber-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/40"
+            onClick={handleGetAccess}
+            disabled={checkoutLoading}
+            className="flex w-full items-center justify-center gap-2 bg-amber px-4 py-2 text-center text-sm font-semibold text-ink transition-colors hover:bg-amber-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/40 disabled:opacity-70"
           >
             <span>Online booking &amp; SMS reminders - get more clients, stop the no-shows</span>
-            <span className="rounded-full bg-ink/15 px-2 py-0.5 text-xs font-bold">{interested ? "Requested ✓" : "Get access"}</span>
+            <span className="rounded-full bg-ink/15 px-2 py-0.5 text-xs font-bold">
+              {checkoutLoading ? "Opening…" : interested ? "Requested ✓" : "Get access"}
+            </span>
           </button>
         )}
 

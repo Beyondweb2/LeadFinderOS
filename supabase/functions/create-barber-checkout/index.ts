@@ -68,7 +68,13 @@ Deno.serve(async (req) => {
     form.set("success_url", `${origin}/barber?checkout=success`);
     form.set("cancel_url", `${origin}/barber?checkout=cancelled`);
     form.set("client_reference_id", userId);
-    if (generatedSiteId) form.set("metadata[generated_site_id]", generatedSiteId);
+    if (generatedSiteId) {
+      // On the SESSION (read by checkout.session.completed → is_paid=true) AND on
+      // the SUBSCRIPTION (read by customer.subscription.* → is_paid=false on
+      // cancel), so the webhook can always map an event back to the right site.
+      form.set("metadata[generated_site_id]", generatedSiteId);
+      form.set("subscription_data[metadata][generated_site_id]", generatedSiteId);
+    }
 
     if (priceId) {
       form.set("line_items[0][price]", priceId);
