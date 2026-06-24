@@ -10,7 +10,6 @@ import { OwnerProvider } from "@/contexts/OwnerContext";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { RequireAdmin } from "@/components/RequireAdmin";
-import { OwnerRedirect } from "@/components/OwnerRedirect";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
 import { AppLayout } from "@/components/AppLayout";
@@ -197,15 +196,13 @@ const App = () => {
               path="/"
               element={
                 <ProtectedRoute>
-                  <OwnerRedirect>
-                    <SubscriptionGate>
-                        <AppLayout>
-                          <FirstTimeRedirect>
-                            <Dashboard />
-                          </FirstTimeRedirect>
-                        </AppLayout>
-                    </SubscriptionGate>
-                  </OwnerRedirect>
+                  <SubscriptionGate>
+                    <AppLayout>
+                      <FirstTimeRedirect>
+                        <Dashboard />
+                      </FirstTimeRedirect>
+                    </AppLayout>
+                  </SubscriptionGate>
                 </ProtectedRoute>
               }
             />
