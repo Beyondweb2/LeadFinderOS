@@ -924,7 +924,22 @@ serve(async (req) => {
       { auth: { persistSession: false } }
     );
 
-    // Internal tool: every authenticated account has full, ungated access.
+    // Operator-only: lead search triggers PAID Google API calls, so it requires
+    // an admin (a user_roles role='admin' row). A logged-in non-admin — e.g. a
+    // barber/site-owner account — is rejected. Defence-in-depth behind the
+    // frontend RequireAdmin gate.
+    const { data: adminRole } = await serviceClient
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('role', 'admin')
+      .maybeSingle();
+    if (!adminRole) {
+      console.warn(`[search-leads] non-admin user ${userId} blocked from search`);
+      return jsonResponse({ error: 'Not authorised.', _debug: debug }, 403);
+    }
+
+    // Internal tool: every authenticated (admin) account has full, ungated access.
     const isGated = false;
 
     // ─── RATE LIMIT ──────────────────────────────

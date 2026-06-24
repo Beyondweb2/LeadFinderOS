@@ -9,6 +9,7 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { OwnerProvider } from "@/contexts/OwnerContext";
 import { SubscriptionProvider } from "@/hooks/useSubscription";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { RequireAdmin } from "@/components/RequireAdmin";
 import { OwnerRedirect } from "@/components/OwnerRedirect";
 import { SubscriptionGate } from "@/components/SubscriptionGate";
 import { PublicRoute } from "@/components/PublicRoute";
@@ -308,7 +309,9 @@ const App = () => {
               path="/admin/api-usage"
               element={
                 <ProtectedRoute>
-                  <AdminApiUsage />
+                  <RequireAdmin>
+                    <AdminApiUsage />
+                  </RequireAdmin>
                 </ProtectedRoute>
               }
             />
@@ -316,7 +319,9 @@ const App = () => {
               path="/admin/site-images"
               element={
                 <ProtectedRoute>
-                  <AdminSiteImages />
+                  <RequireAdmin>
+                    <AdminSiteImages />
+                  </RequireAdmin>
                 </ProtectedRoute>
               }
             />
@@ -324,7 +329,9 @@ const App = () => {
               path="/admin/sites"
               element={
                 <ProtectedRoute>
-                  <AdminSitesList />
+                  <RequireAdmin>
+                    <AdminSitesList />
+                  </RequireAdmin>
                 </ProtectedRoute>
               }
             />
@@ -332,7 +339,9 @@ const App = () => {
               path="/admin/sites/:id"
               element={
                 <ProtectedRoute>
-                  <AdminSiteManage />
+                  <RequireAdmin>
+                    <AdminSiteManage />
+                  </RequireAdmin>
                 </ProtectedRoute>
               }
             />
