@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Loader2, ExternalLink, LogOut } from "lucide-react";
 import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
@@ -30,25 +31,46 @@ const isSalon = (s: OwnedSiteT) => (s.template ?? "barber") === "salon";
 export default function OwnerDashboard() {
   const { user } = useAuth();
   const { isAdmin } = useSubscription();
+  const { toast } = useToast();
   const [sites, setSites] = useState<OwnedSiteT[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<OwnedSiteT | null>(null);
+  const checkoutHandled = useRef(false);
 
   useEffect(() => { document.title = "Your website"; }, []);
 
-  useEffect(() => {
+  const loadSites = useCallback(async (silent = false) => {
     if (!user) return;
-    (async () => {
-      setLoading(true);
-      const { data } = await (supabase as unknown as import("@supabase/supabase-js").SupabaseClient)
-        .from("generated_sites")
-        .select("id, site_name, status, content, is_paid, template, share_token, addon_interest_at")
-        .eq("owner_id", user.id)
-        .order("created_at", { ascending: false });
-      setSites((data ?? []) as unknown as OwnedSiteT[]);
-      setLoading(false);
-    })();
+    if (!silent) setLoading(true);
+    const { data } = await (supabase as unknown as import("@supabase/supabase-js").SupabaseClient)
+      .from("generated_sites")
+      .select("id, site_name, status, content, is_paid, template, share_token, addon_interest_at")
+      .eq("owner_id", user.id)
+      .order("created_at", { ascending: false });
+    setSites((data ?? []) as unknown as OwnedSiteT[]);
+    if (!silent) setLoading(false);
   }, [user]);
+
+  useEffect(() => { loadSites(); }, [loadSites]);
+
+  // Stripe Checkout return (?checkout=success|cancelled). is_paid is flipped
+  // asynchronously by the stripe-webhook, so on success we confirm + silently
+  // refetch now and again shortly after to pick it up (the announcement bar then
+  // disappears once is_paid=true). Cancel returns quietly. Runs once.
+  useEffect(() => {
+    if (!user || checkoutHandled.current) return;
+    const params = new URLSearchParams(window.location.search);
+    const checkout = params.get("checkout");
+    if (!checkout) return;
+    checkoutHandled.current = true;
+    params.delete("checkout");
+    window.history.replaceState({}, "", window.location.pathname + (params.toString() ? `?${params}` : ""));
+    if (checkout === "success") {
+      toast({ title: "Payment received 🎉", description: "Your add-ons are unlocking — this can take a few seconds." });
+      loadSites(true);
+      window.setTimeout(() => loadSites(true), 4000);
+    }
+  }, [user, loadSites, toast]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
