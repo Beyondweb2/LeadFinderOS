@@ -255,15 +255,6 @@
     "coolColorsOnly": "Cool colors only (blue, cyan, teal, violet)",
     "themeColor": "Theme Color"
   },
-  "trial": {
-    "threeDayFullAccess": "3-Day Full Access",
-    "settingUpTrial": "Setting up your free trial - £0 for 3 days, then £19.99/mo. Cancel anytime.",
-    "unlimitedSearches": "Unlimited business searches",
-    "fullOutreach": "Full outreach & pipeline tracking",
-    "whatsappTemplates": "WhatsApp & SMS outreach templates",
-    "notReadyCard": "Not ready to add a card yet?",
-    "freeSearchDemo": "1 free search & walkthrough in demo →"
-  },
   "pipelineStatuses": {
     "callBooked": "Call Booked",
     "sentQuote": "Sent Quote",
@@ -330,41 +321,11 @@
     "consistencyPays": "Do it consistently and clients follow.",
     "letsGo": "Let's Go"
   },
-  "checkout": {
-    "unlockUnlimited": "Unlock unlimited access",
-    "priceMonthly": "£19.99/month · Cancel anytime",
-    "redirecting": "Redirecting...",
-    "continueToCheckout": "Continue to Secure Checkout",
-    "cancelAnytimeNote": "Cancel anytime from your dashboard in one click.",
-    "unlimitedBenefits": {
-      "searches": "Unlimited lead searches",
-      "outreach": "Full Outreach access",
-      "tracking": "Contact tracking & notes",
-      "templates": "Email & call templates"
-    },
-    "unlockPrice": "Unlock unlimited — £19.99/month",
-    "cancelAnytime": "Cancel anytime",
-    "checkoutFailed": "Checkout failed",
-    "checkoutFailedDesc": "Please try again."
-  },
   "activation": {
     "waitingPayment": "Waiting for payment...",
     "completeCheckout": "Complete checkout in the new tab. This screen will update automatically.",
     "activated": "You're activated!",
     "fullAccessUnlocked": "Full access unlocked. Redirecting to dashboard..."
-  },
-  "trialLimit": {
-    "readyForNext": "Ready to land your next",
-    "client": "client?",
-    "reachedLimit": "You've reached your free search limit.",
-    "keepBuilding": "Keep building your pipeline.",
-    "businessesFound": "Businesses Found",
-    "withoutWebsites": "Without Websites",
-    "messagesSent": "Messages Sent",
-    "unlockMomentum": "Unlock unlimited searches and keep building momentum.",
-    "pricingNote": "After 5-day free trial → £19.99/month",
-    "startTrial": "Start Free 5-Day Trial",
-    "openingCheckout": "Opening checkout..."
   },
   "skipWalkthrough": {
     "buttonLabel": "Skip walkthrough",

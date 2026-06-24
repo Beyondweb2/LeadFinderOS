@@ -76,7 +76,7 @@ const CityLeads = () => {
               <Link to="/auth?mode=signin">Sign in</Link>
             </Button>
             <Button size="sm" className="btn-premium font-semibold" asChild>
-              <Link to="/auth?mode=signup">Try free</Link>
+              <Link to="/auth?mode=signup">Get started</Link>
             </Button>
           </div>
         </div>
@@ -103,7 +103,6 @@ const CityLeads = () => {
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            <p className="text-xs text-muted-foreground/50 mt-3">£19.99/mo · Cancel anytime</p>
           </div>
         </section>
 
@@ -183,11 +182,10 @@ const CityLeads = () => {
             <h2 className="text-xl sm:text-2xl font-bold mb-5">Ready to find clients in {displayName}?</h2>
             <Button size="lg" className="btn-premium font-semibold text-base px-8 py-3.5 h-auto shadow-lg shadow-primary/20" asChild>
               <Link to="/auth?mode=signup">
-                Subscribe now
+                Get started
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Link>
             </Button>
-            <p className="text-xs text-muted-foreground/50 mt-3">£19.99/mo · Cancel anytime</p>
           </div>
         </section>
       </main>

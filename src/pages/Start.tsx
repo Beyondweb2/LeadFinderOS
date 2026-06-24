@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Check, ArrowRight, Shield, MessageCircle, CreditCard, Lock, Phone } from 'lucide-react';
+import { Check, ArrowRight, Shield, MessageCircle, Lock, Phone } from 'lucide-react';
 import { SEOHead } from '@/components/SEOHead';
 import appLogo from '@/assets/logo.png';
 import featureClassification from '@/assets/feature-classification.png';
@@ -29,13 +29,9 @@ const BENEFITS = [
   'Find businesses without websites in seconds',
   'Open WhatsApp or SMS instantly with templates',
   'Track every contact and follow-up',
-  'Cancel anytime',
 ];
 
 const TRUST_POINTS = [
-  'Full access · cancel anytime',
-  'Upgrade only if you want unlimited access',
-  'Cancel anytime',
   'Real human support via WhatsApp',
 ];
 
@@ -84,13 +80,10 @@ const Start = () => {
             asChild
           >
             <Link to="/auth?intent=upgrade">
-              Create free account
+              Create account
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
-          <p className="text-xs text-muted-foreground/50 mt-3">
-            £19.99/mo · Cancel anytime
-          </p>
         </div>
       </section>
 
@@ -142,7 +135,6 @@ const Start = () => {
       {/* Trust Section */}
       <ScrollReveal className="relative z-10 pb-16 sm:pb-24 px-4" delay={100}>
         <div className="container mx-auto max-w-lg text-center">
-          <h2 className="text-xl sm:text-2xl font-bold mb-6">No risk. No pressure.</h2>
           <ul className="space-y-3 mb-8">
             {TRUST_POINTS.map((t) => (
               <li key={t} className="flex items-center justify-center gap-3">
@@ -156,10 +148,6 @@ const Start = () => {
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Lock className="h-4 w-4" />
               <span>Secure</span>
-            </div>
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <CreditCard className="h-4 w-4" />
-              <span>Stripe</span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <MessageCircle className="h-4 w-4" />
@@ -208,13 +196,10 @@ const Start = () => {
             asChild
           >
             <Link to="/auth?intent=upgrade">
-              Create free account
+              Create account
               <ArrowRight className="ml-2 h-4 w-4" />
             </Link>
           </Button>
-          <p className="text-xs text-muted-foreground/50 mt-3">
-            £19.99/mo · Cancel anytime
-          </p>
         </div>
       </section>
     </div>

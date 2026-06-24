@@ -95,7 +95,7 @@ const InlineCTA = ({ text = 'Ready to find your next client?', onCTA }: { text?:
   <div className="hidden sm:flex items-center justify-center gap-4 py-6 sm:py-8">
     <p className="text-muted-foreground/70 text-sm sm:text-base font-medium">{text}</p>
     <Button className="btn-premium font-semibold text-sm px-6 h-10 shadow-lg shadow-primary/20" onClick={onCTA}>
-      Try for free
+      Get started
     </Button>
   </div>
 );
@@ -609,7 +609,7 @@ const Landing = () => {
     <div className="min-h-screen bg-background overflow-hidden" style={{ backgroundColor: 'hsl(220, 50%, 6%)' }}>
       <SEOHead
         title="Find Clients Who Need Websites | LeadFinder Pro"
-        description="Find businesses without websites in any city. Contact them via WhatsApp, SMS or phone and close web design deals fast. Cancel anytime."
+        description="Find businesses without websites in any city. Contact them via WhatsApp, SMS or phone and close web design deals fast."
         canonical="/landing"
         jsonLd={{
           '@context': 'https://schema.org',
@@ -618,12 +618,6 @@ const Landing = () => {
           applicationCategory: 'BusinessApplication',
           operatingSystem: 'Web',
           description: 'Find businesses without websites and turn them into paying clients.',
-          offers: {
-            '@type': 'Offer',
-            price: '0',
-            priceCurrency: 'GBP',
-            description: 'Cancel anytime',
-          },
         }}
       />
       {/* Feature Image Modal */}
@@ -712,7 +706,7 @@ const Landing = () => {
               className="font-semibold text-sm px-3 sm:px-4 btn-premium"
               onClick={handleCTA}
             >
-              Try for free
+              Get started
             </Button>
           </div>
         </div>
@@ -752,7 +746,7 @@ const Landing = () => {
                       className="btn-premium text-[13px] sm:text-[16px] font-semibold px-8 sm:px-12 h-[48px] sm:h-[52px] rounded-xl w-full sm:w-auto shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-300" 
                       onClick={handleCTA}
                     >
-                      Try it free
+                      Get started
                     </Button>
                   <Button 
                     variant="ghost" 
@@ -1091,13 +1085,6 @@ const Landing = () => {
                 boxShadow: '0 0 60px hsl(210 100% 50% / 0.1), 0 0 90px hsl(210 100% 50% / 0.05), 0 8px 32px hsl(220 40% 4% / 0.5)',
               }}
             >
-              <span
-                className="inline-block text-[11px] sm:text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full mb-5"
-                style={{ background: 'hsl(142 76% 45% / 0.12)', color: 'hsl(142 76% 55%)' }}
-              >
-                Subscribe
-              </span>
-
               <h3 className="text-[2rem] sm:text-[2.5rem] font-bold tracking-tight mb-3">LeadFinder <span className="text-gradient-primary">Pro</span></h3>
               <p className="text-sm sm:text-base text-foreground/65 leading-relaxed mb-8 max-w-sm mx-auto font-medium">
                 Everything you need to find, contact and close clients - in one system.
@@ -1124,12 +1111,8 @@ const Landing = () => {
                 className="btn-premium font-semibold h-[52px] sm:h-14 px-12 sm:px-16 text-[15px] sm:text-base rounded-xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5 transition-all duration-300 w-full sm:w-auto"
                 onClick={handleCTA}
               >
-                Try for free
+                Get started
               </Button>
-
-              <p className="text-[11px] sm:text-xs text-muted-foreground/50 mt-4">
-                £19.99/mo · Cancel anytime
-              </p>
             </div>
           </ScrollReveal>
         </div>
@@ -1177,7 +1160,7 @@ const Landing = () => {
                 Sign In
               </Link>
               <Link to="/auth?mode=signup" className="hover:text-foreground transition-colors duration-200">
-                Try it free
+                Get started
               </Link>
               <Link to="/feedback" className="hover:text-foreground transition-colors duration-200">
                 Feedback
@@ -1224,11 +1207,8 @@ const Landing = () => {
           style={{ background: 'hsl(220 40% 4% / 0.95)' }}
         >
           <Button size="lg" className="w-full btn-premium font-semibold h-[52px] text-sm rounded-xl" onClick={handleCTA}>
-              Try for free
+              Get started
           </Button>
-          <p className="text-[10px] text-muted-foreground text-center mt-1.5">
-            £19.99/mo · Cancel anytime
-          </p>
         </div>
       )}
 
