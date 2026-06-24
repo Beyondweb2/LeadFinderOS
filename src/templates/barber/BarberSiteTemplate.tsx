@@ -47,6 +47,8 @@ export function BarberSiteTemplate({
   onClaim,
   showClaimBar = true,
   onEditImage,
+  editable = false,
+  onEditElement,
 }: {
   content: BarberSiteContent;
   /**
@@ -81,6 +83,14 @@ export function BarberSiteTemplate({
    * /p/:slug site (view-only).
    */
   onEditImage?: (slot: BarberImageSlot) => void;
+  /**
+   * Live tap-to-edit mode (the barber's own editor). When `editable`, text
+   * elements get a tap affordance that calls `onEditElement(key)` to open the
+   * bottom-sheet editor, and the fixed book/claim bars are suppressed (the editor
+   * supplies its own global bar). Absent on the public /p/ site → byte-identical.
+   */
+  editable?: boolean;
+  onEditElement?: (key: string) => void;
 }) {
   const {
     businessName,
@@ -153,7 +163,7 @@ export function BarberSiteTemplate({
           styles. Two soft amber radials over deep ink. */}
       {/* pb on mobile clears the fixed bottom Book bar so no section sits under it */}
       <div
-        className={`relative min-h-screen bg-ink ${onClaim ? "pb-[188px] sm:pb-[140px]" : "pb-[76px] sm:pb-0"}`}
+        className={`relative min-h-screen bg-ink ${editable ? "pb-[132px]" : onClaim ? "pb-[188px] sm:pb-[140px]" : "pb-[76px] sm:pb-0"}`}
         style={{
           backgroundImage:
             "radial-gradient(1100px 600px at 85% -8%, rgb(var(--barber-accent) / 0.10), transparent 60%)," +
@@ -182,8 +192,10 @@ export function BarberSiteTemplate({
             googleReviewsUrl={googleReviewsUrl}
             onBook={openBooking}
             onEditImage={onEditImage}
+            editable={editable}
+            onEditElement={onEditElement}
           />
-          <About about={about} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} onEditImage={onEditImage} />
+          <About about={about} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} onEditImage={onEditImage} editable={editable} onEditElement={onEditElement} />
           <Services services={services} showExamplePrices={showExamplePrices} />
           <Gallery
             images={gallery}
@@ -209,8 +221,9 @@ export function BarberSiteTemplate({
         <Footer businessName={businessName} address={address} logoUrl={logoUrl} facebookUrl={facebookUrl} instagramUrl={instagramUrl} />
       </div>
 
-      {/* Mobile-only sticky Book bar — owners open the link on a phone. */}
-      {onClaim ? (showClaimBar ? <ClaimBar onClaim={onClaim} /> : null) : <MobileBookBar onBook={openBooking} />}
+      {/* Mobile-only sticky Book bar — owners open the link on a phone. In live
+          edit mode the editor supplies its own global bar, so suppress both. */}
+      {editable ? null : onClaim ? (showClaimBar ? <ClaimBar onClaim={onClaim} /> : null) : <MobileBookBar onBook={openBooking} />}
 
       {/* Public site → real booking flow (keyed off the slug). Admin/claim
           preview (no slug) → the frontend-only demo modal. */}
@@ -442,6 +455,28 @@ function ImageEditOverlay({ onClick, radiusClass = "rounded-2xl" }: { onClick: (
   );
 }
 
+/**
+ * Tap-to-edit affordance for an inline text element (live editor). When `editable`
+ * the text is wrapped in a subtly-outlined, clickable span that opens the bottom-
+ * sheet editor via onEdit(); otherwise it renders the plain text unchanged, so the
+ * public /p/ render is byte-identical.
+ */
+function EditableText({ editable, onEdit, children }: { editable?: boolean; onEdit?: () => void; children: ReactNode }) {
+  if (!editable || !onEdit) return <>{children}</>;
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      onClick={(e) => { e.stopPropagation(); onEdit(); }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onEdit(); } }}
+      title="Tap to edit"
+      className="cursor-pointer rounded-[4px] outline-dashed outline-1 outline-offset-2 outline-amber/40 transition-colors hover:bg-amber/10 hover:outline-amber focus-visible:outline-amber"
+    >
+      {children}
+    </span>
+  );
+}
+
 function CheckIcon({ className = "" }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
@@ -577,6 +612,8 @@ function Hero({
   googleReviewsUrl,
   onBook,
   onEditImage,
+  editable,
+  onEditElement,
 }: {
   businessName: string;
   category?: string;
@@ -588,6 +625,8 @@ function Hero({
   googleReviewsUrl?: string;
   onBook: () => void;
   onEditImage?: (slot: BarberImageSlot) => void;
+  editable?: boolean;
+  onEditElement?: (key: string) => void;
 }) {
   return (
     <section
@@ -629,19 +668,25 @@ function Hero({
         <div className="max-w-2xl">
           <Reveal>
             <Eyebrow>
-              {category ? `${businessName} · ${category}` : businessName}
+              <EditableText editable={editable} onEdit={() => onEditElement?.("businessName")}>
+                {category ? `${businessName} · ${category}` : businessName}
+              </EditableText>
             </Eyebrow>
           </Reveal>
 
           <Reveal delay={0.06}>
             <h1 className="mt-5 font-display text-5xl uppercase leading-[0.92] tracking-[0.01em] text-white break-words drop-shadow-[0_2px_20px_rgba(0,0,0,0.5)] sm:text-7xl md:text-8xl">
-              {heroHeadline}
+              <EditableText editable={editable} onEdit={() => onEditElement?.("heroHeadline")}>
+                {heroHeadline}
+              </EditableText>
             </h1>
           </Reveal>
 
           <Reveal delay={0.12}>
             <p className="mt-6 max-w-xl text-lg leading-relaxed text-zinc-300 sm:text-xl">
-              {tagline}
+              <EditableText editable={editable} onEdit={() => onEditElement?.("tagline")}>
+                {tagline}
+              </EditableText>
             </p>
           </Reveal>
 
@@ -693,7 +738,7 @@ function Hero({
 
 /* ---------------------------------- about --------------------------------- */
 
-function About({ about, businessName, stats, aboutImageUrl, onEditImage }: { about: string; businessName: string; stats?: BarberStat[]; aboutImageUrl?: string; onEditImage?: (slot: BarberImageSlot) => void }) {
+function About({ about, businessName, stats, aboutImageUrl, onEditImage, editable, onEditElement }: { about: string; businessName: string; stats?: BarberStat[]; aboutImageUrl?: string; onEditImage?: (slot: BarberImageSlot) => void; editable?: boolean; onEditElement?: (key: string) => void }) {
   return (
     <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
@@ -704,7 +749,9 @@ function About({ about, businessName, stats, aboutImageUrl, onEditImage }: { abo
             <br />
             <span className="text-amber">every time.</span>
           </h2>
-          <p className="mt-6 text-lg leading-relaxed text-zinc-400">{about}</p>
+          <p className="mt-6 text-lg leading-relaxed text-zinc-400">
+            <EditableText editable={editable} onEdit={() => onEditElement?.("about")}>{about}</EditableText>
+          </p>
 
           {stats && stats.length > 0 && (
             <div className="mt-8 flex flex-wrap gap-8">

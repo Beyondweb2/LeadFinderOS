@@ -15,6 +15,7 @@ import { StaffManager } from "@/components/StaffManager";
 import { BookingsManager } from "@/components/BookingsManager";
 import { WeekCalendar } from "@/components/barber/WeekCalendar";
 import { BookingUpsell } from "@/components/barber/BookingUpsell";
+import { LiveSiteEditor } from "@/components/barber/LiveSiteEditor";
 import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
 import { londonInstant, londonYMD } from "@/components/barber/london";
 import { recordSiteEvent } from "@/lib/siteTracking";
@@ -73,6 +74,7 @@ export function BarberShell({
   const [showAddonConfirm, setShowAddonConfirm] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [useClassicEditor, setUseClassicEditor] = useState(false);
 
   const shopName = site.content?.businessName || site.site_name;
   // Sidebar avatar = the site's hero photo (square crop), so it feels like theirs;
@@ -284,10 +286,16 @@ export function BarberShell({
 
           {page === "calendar" && <WeekCalendar siteId={site.id} />}
 
-          {page === "edit" && (
+          {page === "edit" && useClassicEditor && (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <p className="text-sm text-muted-foreground">Your site's content, photos and services. Changes save in place.</p>
+                <button
+                  type="button"
+                  onClick={() => setUseClassicEditor(false)}
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-soft hover:text-amber"
+                >
+                  <Sparkles className="h-4 w-4" /> Live editor
+                </button>
                 <Button size="sm" onClick={togglePublish} disabled={savingStatus} className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">
                   {savingStatus ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : published ? <EyeOff className="h-4 w-4 mr-2" /> : <Globe className="h-4 w-4 mr-2" />}
                   {published ? "Unpublish" : "Publish"}
@@ -384,6 +392,23 @@ export function BarberShell({
           {" "}— log in anytime with your mobile number.
         </footer>
       </div>
+
+      {/* Live tap-to-edit editor (full-screen overlay). Default for "Edit Site";
+          the classic SiteEditor form is the one-click fallback above. */}
+      {page === "edit" && !useClassicEditor && (
+        <LiveSiteEditor
+          site={site}
+          onContentSaved={(content) => {
+            onSiteUpdate({ ...site, content });
+            queryClient.invalidateQueries({ queryKey: ["generated-site", site.site_name] });
+          }}
+          onExit={() => setPage("dashboard")}
+          published={published}
+          onTogglePublish={togglePublish}
+          savingStatus={savingStatus}
+          onUseClassic={() => setUseClassicEditor(true)}
+        />
+      )}
 
       {/* One-time welcome (first visit after claiming) - a short orientation guide. */}
       {showWelcome && <WelcomeOverlay site={site} onClose={dismissWelcome} />}
