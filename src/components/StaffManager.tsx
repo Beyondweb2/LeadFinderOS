@@ -109,7 +109,18 @@ function buildDays(hours: WorkingHour[]): Record<number, DayState> {
   return days;
 }
 
-export function StaffManager({ siteId }: { siteId: string }) {
+export function StaffManager({
+  siteId,
+  locked = false,
+  onUpgrade,
+}: {
+  siteId: string;
+  /** When true, online booking is a paid feature this barber hasn't unlocked —
+   *  show an upgrade prompt instead of the staff/hours editor. Defaults to false
+   *  (e.g. the salon shell passes nothing → unlocked). */
+  locked?: boolean;
+  onUpgrade?: () => void;
+}) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [staff, setStaff] = useState<Staff[]>([]);
@@ -183,6 +194,31 @@ export function StaffManager({ siteId }: { siteId: string }) {
   };
 
   const onRemoved = (id: string) => setStaff((prev) => prev.filter((s) => s.id !== id));
+
+  // Paid feature: free barbers can't add staff / set hours — show the upgrade
+  // route to Stripe instead of the editor (defence-in-depth; the dashboard prompt
+  // also routes unpaid users to checkout, but this catches a direct visit).
+  if (locked) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg">Staff &amp; booking</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Online booking lets customers book your services 24/7, with automatic SMS reminders to
+            cut no-shows. Set your weekly availability and your booking page goes live.
+          </p>
+          <Button
+            onClick={() => onUpgrade?.()}
+            className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft"
+          >
+            <Clock className="h-4 w-4 mr-2" /> Set up your bookings
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <Card>
