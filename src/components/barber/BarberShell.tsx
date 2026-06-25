@@ -244,13 +244,15 @@ export function BarberShell({
       {navOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/60" onClick={() => setNavOpen(false)} aria-hidden />
-          <div className="absolute inset-y-0 left-0 w-64 border-r border-line bg-ink-card">
-            <div className="flex justify-end p-2">
+          <div className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-line bg-ink-card">
+            <div className="flex shrink-0 justify-end p-2">
               <button type="button" onClick={() => setNavOpen(false)} aria-label="Close menu" className="rounded p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white">
                 <X className="h-5 w-5" />
               </button>
             </div>
-            {SidebarBody}
+            {/* min-h-0 + flex-1 lets SidebarBody fill the space BELOW the close row,
+                so its bottom-pinned Log out footer stays on-screen (matches desktop). */}
+            <div className="min-h-0 flex-1">{SidebarBody}</div>
           </div>
         </div>
       )}
