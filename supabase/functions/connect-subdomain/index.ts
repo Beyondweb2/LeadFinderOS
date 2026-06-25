@@ -28,6 +28,8 @@ const corsHeaders = {
 
 // Cloudflare zone for yoursites.uk + the Pages target subdomains CNAME to.
 const ZONE_ID = "ffc2cd9ea580de285b62546f3e24e22f";
+const ACCOUNT_ID = "84cf9849ac9cb56bf9c163362c51cc42";
+const PAGES_PROJECT = "leadfinderos";
 const ROOT_DOMAIN = "yoursites.uk";
 const CNAME_TARGET = "leadfinderos.pages.dev";
 const CF_API = "https://api.cloudflare.com/client/v4";
@@ -88,6 +90,39 @@ async function createCname(token: string, label: string): Promise<{ ok: boolean;
   const mapped = (data.errors ?? []).map((e) => `${e.code}:${e.message}`).join("; ");
   const detail = `http_${res.status} ${mapped || rawBody.slice(0, 300)}`.trim();
   return { ok: false, detail };
+}
+
+/**
+ * Register the hostname as a custom domain on the Pages project. This is what makes
+ * Pages actually SERVE it — a DNS record alone returns 522. Idempotent: an already-
+ * added domain is treated as success.
+ */
+async function registerPagesDomain(token: string, hostname: string): Promise<{ ok: boolean; detail?: string }> {
+  const res = await fetch(`${CF_API}/accounts/${ACCOUNT_ID}/pages/projects/${PAGES_PROJECT}/domains`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: hostname }),
+  });
+  if (res.ok) return { ok: true };
+  const rawBody = await res.text().catch(() => "");
+  let data: CfResult = {};
+  try { data = JSON.parse(rawBody) as CfResult; } catch { /* non-JSON */ }
+  const mapped = (data.errors ?? []).map((e) => `${e.code}:${e.message}`).join("; ");
+  // Already attached → idempotent success.
+  if (res.status === 409 || /already|exists|duplicate/i.test(mapped + rawBody)) return { ok: true };
+  return { ok: false, detail: `http_${res.status} ${mapped || rawBody.slice(0, 300)}`.trim() };
+}
+
+/** Best-effort removal of a Pages custom domain (used when a barber changes label). */
+async function deletePagesDomain(token: string, hostname: string): Promise<void> {
+  try {
+    await fetch(`${CF_API}/accounts/${ACCOUNT_ID}/pages/projects/${PAGES_PROJECT}/domains/${encodeURIComponent(hostname)}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  } catch (e) {
+    console.error("[CONNECT-SUBDOMAIN] old Pages domain cleanup failed (non-blocking):", (e as Error).message);
+  }
 }
 
 /** Best-effort delete of a CNAME by name (used when a barber changes their label). */
@@ -164,12 +199,12 @@ serve(async (req) => {
     if (!row || row.owner_id !== userId) return jsonResponse({ error: "forbidden" }, 403, rlHeaders);
     if (!row.is_paid) return jsonResponse({ ok: false, error: "not_paid" }, 200, rlHeaders);
 
-    // Already on this exact label → idempotent no-op.
-    if ((row.subdomain ?? "").toLowerCase() === label) {
-      return jsonResponse({ ok: true, subdomain: label, url: `https://${label}.${ROOT_DOMAIN}` }, 200, rlHeaders);
-    }
+    const previous = (row.subdomain ?? "").trim().toLowerCase();
+    const hostname = `${label}.${ROOT_DOMAIN}`;
 
     // --- Availability (authoritative, service role) ----------------------------
+    // (.neq self so re-submitting the same label isn't a self-clash — we still
+    // re-ensure the CF resources below, since an older row may predate Pages reg.)
     const { data: clash } = await serviceClient
       .from("generated_sites")
       .select("id")
@@ -178,15 +213,21 @@ serve(async (req) => {
       .maybeSingle();
     if (clash) return jsonResponse({ ok: false, error: "taken" }, 200, rlHeaders);
 
-    // --- Cloudflare: create the proxied CNAME ----------------------------------
+    // --- Cloudflare: proxied CNAME (resolution) + Pages custom domain (routing) --
+    // Both are idempotent. The Pages registration is what makes Pages actually serve
+    // the host — a DNS record alone returns 522.
     const created = await createCname(cfToken, label);
     if (!created.ok) {
-      console.error("[CONNECT-SUBDOMAIN] CF create failed:", created.detail);
+      console.error("[CONNECT-SUBDOMAIN] CF DNS create failed:", created.detail);
       return jsonResponse({ ok: false, error: "dns_failed" }, 200, rlHeaders);
+    }
+    const reg = await registerPagesDomain(cfToken, hostname);
+    if (!reg.ok) {
+      console.error("[CONNECT-SUBDOMAIN] Pages domain register failed:", reg.detail);
+      return jsonResponse({ ok: false, error: "pages_failed" }, 200, rlHeaders);
     }
 
     // --- Persist (service role bypasses the protected-fields trigger) -----------
-    const previous = (row.subdomain ?? "").trim().toLowerCase();
     const { error: updErr } = await serviceClient
       .from("generated_sites")
       .update({ subdomain: label })
@@ -198,8 +239,11 @@ serve(async (req) => {
       return jsonResponse({ ok: false, error: code }, 200, rlHeaders);
     }
 
-    // Changed label → remove the old DNS record (best-effort; never blocks).
-    if (previous && previous !== label) await deleteCnameByName(cfToken, previous);
+    // Changed label → remove the old DNS record + Pages domain (best-effort).
+    if (previous && previous !== label) {
+      await deleteCnameByName(cfToken, previous);
+      await deletePagesDomain(cfToken, `${previous}.${ROOT_DOMAIN}`);
+    }
 
     console.log(JSON.stringify({
       level: "info", fn: "connect-subdomain", user_id: userId, site_id: siteId,

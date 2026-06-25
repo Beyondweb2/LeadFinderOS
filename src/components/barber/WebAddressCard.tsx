@@ -78,6 +78,7 @@ export function WebAddressCard({
           invalid_format: "Use lowercase letters, numbers and hyphens only.",
           invalid_length: "Use between 3 and 63 characters.",
           dns_failed: "Couldn't set that up just now — please try again.",
+          pages_failed: "Couldn't set that up just now — please try again.",
           save_failed: "Couldn't save — please try again.",
         };
         toast({ title: "Couldn't connect", description: map[res?.error ?? ""] ?? "Please try again.", variant: "destructive" });
