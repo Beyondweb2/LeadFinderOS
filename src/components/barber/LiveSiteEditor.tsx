@@ -146,7 +146,7 @@ export function LiveSiteEditor({
               desktop; no overflow scroll stub. */}
           <div className="flex items-center justify-center gap-2.5 sm:justify-start">
             <Palette className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden />
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2">
               {BARBER_ACCENTS.map((a) => {
                 const selected = a.hex.toLowerCase() === currentAccent;
                 return (
@@ -187,10 +187,11 @@ export function LiveSiteEditor({
               size="sm"
               onClick={onTogglePublish}
               disabled={savingStatus}
+              aria-label={published ? "Unpublish" : "Publish"}
               className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white"
             >
-              {savingStatus ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : published ? <EyeOff className="h-4 w-4 mr-1.5" /> : <Globe className="h-4 w-4 mr-1.5" />}
-              {published ? "Unpublish" : "Publish"}
+              {savingStatus ? <Loader2 className="h-4 w-4 animate-spin sm:mr-1.5" /> : published ? <EyeOff className="h-4 w-4 sm:mr-1.5" /> : <Globe className="h-4 w-4 sm:mr-1.5" />}
+              <span className="hidden sm:inline">{published ? "Unpublish" : "Publish"}</span>
             </Button>
             <Button
               type="button"
