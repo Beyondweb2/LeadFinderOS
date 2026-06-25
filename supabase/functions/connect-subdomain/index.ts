@@ -79,11 +79,14 @@ async function createCname(token: string, label: string): Promise<{ ok: boolean;
     }),
   });
   if (res.ok) return { ok: true };
-  const data = (await res.json().catch(() => ({}))) as CfResult;
+  const rawBody = await res.text().catch(() => "");
+  let data: CfResult = {};
+  try { data = JSON.parse(rawBody) as CfResult; } catch { /* non-JSON error body */ }
   // 81053 / 81057 = "record already exists" → idempotent success.
   const codes = (data.errors ?? []).map((e) => e.code);
   if (codes.includes(81053) || codes.includes(81057)) return { ok: true };
-  const detail = (data.errors ?? []).map((e) => `${e.code}:${e.message}`).join("; ") || `http_${res.status}`;
+  const mapped = (data.errors ?? []).map((e) => `${e.code}:${e.message}`).join("; ");
+  const detail = `http_${res.status} ${mapped || rawBody.slice(0, 300)}`.trim();
   return { ok: false, detail };
 }
 
@@ -118,7 +121,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
-    const cfToken = Deno.env.get("CLOUDFLARE_API_TOKEN") ?? "";
+    const cfToken = (Deno.env.get("CLOUDFLARE_API_TOKEN") ?? "").trim();
     if (!cfToken) {
       console.error("[CONNECT-SUBDOMAIN] CLOUDFLARE_API_TOKEN not set");
       return jsonResponse({ error: "server_misconfigured" }, 500, rlHeaders);
