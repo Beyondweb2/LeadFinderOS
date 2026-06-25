@@ -50,6 +50,8 @@ export function BarberSiteTemplate({
   editable = false,
   onEditElement,
   onAddImage,
+  onEditService,
+  onAddService,
 }: {
   content: BarberSiteContent;
   /**
@@ -98,6 +100,13 @@ export function BarberSiteTemplate({
    * remove and an "Add photo" tile. Absent on the public /p/ site.
    */
   onAddImage?: () => void;
+  /**
+   * Live editor (owner mode): edit / add a service. With `editable`, the services
+   * section renders tappable rows (→ onEditService(index)) and an "Add service"
+   * control (→ onAddService). Absent on the public /p/ site.
+   */
+  onEditService?: (index: number) => void;
+  onAddService?: () => void;
 }) {
   const {
     businessName,
@@ -204,7 +213,7 @@ export function BarberSiteTemplate({
             onEditElement={onEditElement}
           />
           <About about={about} aboutHeading={aboutHeading} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} onEditImage={onEditImage} editable={editable} onEditElement={onEditElement} />
-          <Services services={services} showExamplePrices={showExamplePrices} />
+          <Services services={services} showExamplePrices={showExamplePrices} editable={editable} onEditService={onEditService} onAddService={onAddService} />
           <Gallery
             images={gallery}
             businessName={businessName}
@@ -892,10 +901,22 @@ function GoogleReviewsLink({ url, className = "" }: { url?: string; className?: 
 function Services({
   services,
   showExamplePrices,
+  editable = false,
+  onEditService,
+  onAddService,
 }: {
   services: BarberSiteContent["services"];
   showExamplePrices?: boolean;
+  // Live editor (owner): tappable rows + add/remove. Public /p/ never sets this →
+  // the read-only menu below is unchanged.
+  editable?: boolean;
+  onEditService?: (index: number) => void;
+  onAddService?: () => void;
 }) {
+  if (editable) {
+    return <OwnerServices services={services} onEditService={onEditService} onAddService={onAddService} />;
+  }
+
   // Any service without a confirmed price shows an example only when the toggle
   // is on — which is also what triggers the bottom-of-section disclaimer.
   const anyExamples = !!showExamplePrices && services.some((s) => !s.price);
@@ -963,6 +984,81 @@ function Services({
             </svg>
             <p className="text-center text-sm">Example prices shown for illustration.</p>
           </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function PlusIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M12 5v14M5 12h14" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/**
+ * Live-editor services (owner mode). Each service is a tappable, obviously-editable
+ * row (dashed amber outline + pencil) opening the edit sheet via onEditService(i),
+ * plus an "Add service" control. Replace/remove/field edits happen in the sheet.
+ * Public /p/ uses the read-only menu in Services() above — untouched.
+ */
+function OwnerServices({
+  services,
+  onEditService,
+  onAddService,
+}: {
+  services: BarberSiteContent["services"];
+  onEditService?: (index: number) => void;
+  onAddService?: () => void;
+}) {
+  return (
+    <section id="services" className="border-y border-white/[0.06] bg-ink-soft/40 py-20 sm:py-28">
+      <div className="mx-auto max-w-5xl px-5 sm:px-8">
+        <div className="mb-10 text-center">
+          <div className="flex justify-center">
+            <Eyebrow>The menu</Eyebrow>
+          </div>
+          <h2 className="mt-5 font-display text-4xl uppercase tracking-wide text-white sm:text-5xl">
+            Services &amp; prices
+          </h2>
+          <p className="mt-3 text-sm text-zinc-400">Tap a service to edit it, or add a new one.</p>
+        </div>
+
+        <ul className="space-y-2.5">
+          {services.map((s, i) => (
+            <li key={i}>
+              <button
+                type="button"
+                onClick={() => onEditService?.(i)}
+                title="Tap to edit"
+                className="group flex w-full items-center gap-3 rounded-xl bg-amber/[0.06] px-4 py-4 text-left outline-dashed outline-2 outline-offset-2 outline-amber/45 transition-colors hover:bg-amber/15 hover:outline-amber focus-visible:bg-amber/15 focus-visible:outline-none focus-visible:outline-amber"
+              >
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-lg font-bold text-white">{s.name || "New service"}</h3>
+                  {s.description && <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-zinc-400">{s.description}</p>}
+                  {typeof s.durationMins === "number" && s.durationMins > 0 && (
+                    <p className="mt-1 text-xs uppercase tracking-wide text-zinc-500">{s.durationMins} min</p>
+                  )}
+                </div>
+                <span className="shrink-0 font-display text-2xl tracking-wide text-amber">{s.price || "—"}</span>
+                <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber text-ink">
+                  <PencilIcon className="h-4 w-4" />
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+
+        {onAddService && (
+          <button
+            type="button"
+            onClick={onAddService}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-white/[0.02] py-4 text-sm font-semibold text-zinc-300 transition-colors hover:border-amber/50 hover:bg-amber/5 hover:text-amber-soft"
+          >
+            <PlusIcon className="h-5 w-5" /> Add service
+          </button>
         )}
       </div>
     </section>

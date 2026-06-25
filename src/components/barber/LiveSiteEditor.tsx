@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, Check, Globe, EyeOff, X, PencilLine, Palette, Camera, Upload, Trash2 } from "lucide-react";
 import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
-import type { BarberSiteContent } from "@/templates/barber/types";
+import type { BarberSiteContent, BarberService } from "@/templates/barber/types";
 import { BARBER_ACCENTS } from "@/config/barberAccents";
 import type { OwnedSite } from "@/components/barber/BarberShell";
 import { useToast } from "@/hooks/use-toast";
@@ -41,6 +41,10 @@ type ImageTarget =
   | { kind: "gallery"; index: number }
   | { kind: "gallery-add" };
 
+// Shared dark-theme field styling for every control in the editor sheets.
+const INPUT_CLS =
+  "w-full rounded-lg border border-line bg-ink-soft px-3 py-2 text-white placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/60";
+
 function TextControl({
   value,
   onChange,
@@ -52,8 +56,7 @@ function TextControl({
   multiline?: boolean;
   placeholder?: string;
 }) {
-  const cls =
-    "w-full rounded-lg border border-line bg-ink-soft px-3 py-2 text-white placeholder:text-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber/60";
+  const cls = INPUT_CLS;
   return multiline ? (
     <textarea
       autoFocus
@@ -122,6 +125,7 @@ export function LiveSiteEditor({
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [imgTarget, setImgTarget] = useState<ImageTarget | null>(null);
   const [imgBusy, setImgBusy] = useState(false);
+  const [serviceTarget, setServiceTarget] = useState<number | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const firstRun = useRef(true);
   const imgInputRef = useRef<HTMLInputElement>(null);
@@ -156,6 +160,7 @@ export function LiveSiteEditor({
   // "hero" | "about" | "gallery-<i>". Clears any open text sheet.
   const handleEditImage = (slot: BarberImageSlot) => {
     setActiveKey(null);
+    setServiceTarget(null);
     if (slot === "hero") setImgTarget({ kind: "hero" });
     else if (slot === "about") setImgTarget({ kind: "about" });
     else if (slot.startsWith("gallery-")) {
@@ -170,6 +175,7 @@ export function LiveSiteEditor({
       return;
     }
     setActiveKey(null);
+    setServiceTarget(null);
     setImgTarget({ kind: "gallery-add" });
   };
 
@@ -222,6 +228,38 @@ export function LiveSiteEditor({
     setImgTarget(null);
   };
 
+  // ── Service editing (Phase 3) ───────────────────────────────────────────────
+  const handleEditService = (index: number) => {
+    setActiveKey(null);
+    setImgTarget(null);
+    setServiceTarget(index);
+  };
+
+  // Append a blank service and open its sheet to fill in.
+  const handleAddService = () => {
+    const newIndex = (liveContent.services ?? []).length;
+    setActiveKey(null);
+    setImgTarget(null);
+    setLiveContent((c) => ({ ...c, services: [...(c.services ?? []), { name: "" }] }));
+    setServiceTarget(newIndex);
+  };
+
+  const updateService = (index: number, fields: Partial<BarberService>) => {
+    setLiveContent((c) => {
+      const next = [...(c.services ?? [])];
+      if (!next[index]) return c;
+      next[index] = { ...next[index], ...fields };
+      return { ...c, services: next };
+    });
+  };
+
+  const removeServiceAt = (index: number) => {
+    setLiveContent((c) => ({ ...c, services: (c.services ?? []).filter((_, i) => i !== index) }));
+    setServiceTarget(null);
+  };
+
+  const activeService = serviceTarget != null ? (liveContent.services ?? [])[serviceTarget] : undefined;
+
   const currentImgUrl =
     imgTarget?.kind === "hero" ? liveContent.heroImageUrl
     : imgTarget?.kind === "about" ? liveContent.aboutImageUrl
@@ -246,9 +284,11 @@ export function LiveSiteEditor({
         content={liveContent}
         bookingEnabled={false}
         editable
-        onEditElement={(key) => { setImgTarget(null); setActiveKey(key); }}
+        onEditElement={(key) => { setImgTarget(null); setServiceTarget(null); setActiveKey(key); }}
         onEditImage={handleEditImage}
         onAddImage={handleAddImage}
+        onEditService={handleEditService}
+        onAddService={handleAddService}
       />
 
       {/* ── GLOBAL BAR (site-wide controls) ─────────────────────────────────── */}
@@ -413,6 +453,95 @@ export function LiveSiteEditor({
             )}
 
             <p className="mt-3 text-center text-[11px] text-zinc-500">JPEG, PNG or WebP · up to 5 MB</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── BOTTOM SHEET (service editor) ───────────────────────────────────── */}
+      {serviceTarget != null && activeService && (
+        <div className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl border-t-2 border-amber/30 bg-ink-card px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.85)]">
+          <div className="mx-auto max-h-[78vh] max-w-md overflow-y-auto">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="inline-flex items-center gap-2 text-sm font-semibold text-white">
+                <PencilLine className="h-4 w-4 text-amber" /> Edit service
+              </div>
+              <button
+                type="button"
+                onClick={() => setServiceTarget(null)}
+                aria-label="Close"
+                className="rounded-full p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <span className="text-xs font-medium text-zinc-400">Name</span>
+                <Input
+                  autoFocus
+                  value={activeService.name ?? ""}
+                  placeholder="Signature cut"
+                  onChange={(e) => updateService(serviceTarget, { name: e.target.value })}
+                  className={INPUT_CLS}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <span className="text-xs font-medium text-zinc-400">Price</span>
+                  <Input
+                    value={activeService.price ?? ""}
+                    placeholder="£25"
+                    onChange={(e) => updateService(serviceTarget, { price: e.target.value || undefined })}
+                    className={INPUT_CLS}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <span className="text-xs font-medium text-zinc-400">Duration (mins)</span>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={typeof activeService.durationMins === "number" ? activeService.durationMins : ""}
+                    placeholder="30"
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      const n = v === "" ? undefined : Math.max(0, Number.parseInt(v, 10) || 0);
+                      updateService(serviceTarget, { durationMins: n });
+                    }}
+                    className={INPUT_CLS}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="text-xs font-medium text-zinc-400">Description (optional)</span>
+                <textarea
+                  rows={3}
+                  value={activeService.description ?? ""}
+                  placeholder="e.g. Wash, cut & finish"
+                  onChange={(e) => updateService(serviceTarget, { description: e.target.value || undefined })}
+                  className={`${INPUT_CLS} resize-none leading-relaxed`}
+                />
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              onClick={() => setServiceTarget(null)}
+              className="mt-4 w-full rounded-full bg-amber font-bold text-ink hover:bg-amber-soft"
+            >
+              Done
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => removeServiceAt(serviceTarget)}
+              className="mt-2 w-full rounded-full border-line bg-transparent text-red-300 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-200"
+            >
+              <Trash2 className="mr-2 h-4 w-4" /> Remove service
+            </Button>
           </div>
         </div>
       )}
