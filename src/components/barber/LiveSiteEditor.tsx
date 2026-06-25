@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Check, Globe, EyeOff, X, PencilLine } from "lucide-react";
+import { Loader2, Check, Globe, EyeOff, X, PencilLine, Palette } from "lucide-react";
 import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
 import type { BarberSiteContent } from "@/templates/barber/types";
 import { BARBER_ACCENTS } from "@/config/barberAccents";
@@ -140,31 +140,36 @@ export function LiveSiteEditor({
 
       {/* ── GLOBAL BAR (site-wide controls) ─────────────────────────────────── */}
       <div className="fixed inset-x-0 bottom-0 z-[55] border-t-2 border-white/15 bg-ink/95 px-3 py-2.5 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-4xl items-center gap-3">
-          {/* Colour theme (palette reused from the pre-claim dock) */}
-          <div className="flex items-center gap-1.5 overflow-x-auto">
-            {BARBER_ACCENTS.map((a) => {
-              const selected = a.hex.toLowerCase() === currentAccent;
-              return (
-                <button
-                  key={a.hex}
-                  type="button"
-                  title={a.name}
-                  aria-label={a.name}
-                  aria-pressed={selected}
-                  onClick={() => patch({ accentColor: a.hex })}
-                  className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ring-2 ring-offset-2 ring-offset-ink transition-transform ${
-                    selected ? "scale-110 ring-white" : "ring-transparent hover:scale-105"
-                  }`}
-                  style={{ backgroundColor: a.hex }}
-                >
-                  {selected && <Check className="h-3.5 w-3.5 text-ink" />}
-                </button>
-              );
-            })}
+        <div className="mx-auto flex max-w-4xl flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
+          {/* Colour theme — palette icon + evenly spaced swatches (palette from the
+              pre-claim dock). Centres on its own row on mobile, left-aligns inline on
+              desktop; no overflow scroll stub. */}
+          <div className="flex items-center justify-center gap-2.5 sm:justify-start">
+            <Palette className="h-4 w-4 shrink-0 text-zinc-400" aria-hidden />
+            <div className="flex items-center gap-2">
+              {BARBER_ACCENTS.map((a) => {
+                const selected = a.hex.toLowerCase() === currentAccent;
+                return (
+                  <button
+                    key={a.hex}
+                    type="button"
+                    title={a.name}
+                    aria-label={a.name}
+                    aria-pressed={selected}
+                    onClick={() => patch({ accentColor: a.hex })}
+                    className={`grid h-7 w-7 shrink-0 place-items-center rounded-full ring-2 ring-offset-2 ring-offset-ink transition-transform ${
+                      selected ? "scale-110 ring-white" : "ring-white/15 hover:scale-105 hover:ring-white/40"
+                    }`}
+                    style={{ backgroundColor: a.hex }}
+                  >
+                    {selected && <Check className="h-3.5 w-3.5 text-ink" />}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2 sm:ml-auto">
             {/* Save status */}
             <span className="hidden text-xs text-zinc-400 sm:inline">
               {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
