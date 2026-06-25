@@ -12,6 +12,7 @@ import {
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SiteEditor } from "@/components/SiteEditor";
 import { StaffManager } from "@/components/StaffManager";
+import { WebAddressCard } from "@/components/barber/WebAddressCard";
 import { BookingsManager } from "@/components/BookingsManager";
 import { WeekCalendar } from "@/components/barber/WeekCalendar";
 import { BookingUpsell } from "@/components/barber/BookingUpsell";
@@ -29,7 +30,7 @@ import { recordSiteEvent } from "@/lib/siteTracking";
 import { useBarberCheckout } from "@/hooks/useBarberCheckout";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
-export type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent; is_paid?: boolean; share_token?: string; addon_interest_at?: string | null };
+export type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent; is_paid?: boolean; share_token?: string; addon_interest_at?: string | null; subdomain?: string | null };
 
 // Post-claim upsell visibility — split so the announcement bar and the Settings
 // BookingUpsell card are controlled independently. Both keep the `!site.is_paid`
@@ -383,6 +384,14 @@ export function BarberShell({
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Custom web address (<name>.yoursites.uk) — is_paid-gated like booking. */}
+              <WebAddressCard
+                site={site}
+                locked={!site.is_paid}
+                onUpgrade={handleGetAccess}
+                onConnected={(subdomain) => onSiteUpdate({ ...site, subdomain })}
+              />
 
               {/* Staff & working hours (moved here from Edit Site). */}
               <StaffManager siteId={site.id} locked={!site.is_paid} onUpgrade={handleGetAccess} />

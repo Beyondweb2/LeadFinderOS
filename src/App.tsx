@@ -16,6 +16,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
+import { getBarberSubdomainLabel } from "@/lib/subdomain";
 import { FirstTimeRedirect } from "./components/FirstTimeRedirect";
 import { Loader2 } from "lucide-react";
 
@@ -42,6 +43,7 @@ const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
 const PublicSite = lazy(() => import("./pages/PublicSite"));
+const SubdomainSite = lazy(() => import("./pages/SubdomainSite"));
 const SiteByToken = lazy(() => import("./pages/SiteByToken"));
 const OwnerDashboard = lazy(() => import("./pages/OwnerDashboard"));
 const Claim = lazy(() => import("./pages/Claim"));
@@ -157,7 +159,28 @@ function ScrollToTop() {
 
 const App = () => {
   useGlobalErrorGuard();
-  
+
+  // Barber custom subdomain (<label>.yoursites.uk) → render ONLY their site,
+  // bypassing the operator app + router. Apex / reserved labels / *.pages.dev /
+  // localhost return null here and fall through to the normal operator app below,
+  // so nothing existing is affected.
+  const subdomainLabel = getBarberSubdomainLabel(typeof window !== "undefined" ? window.location.hostname : "");
+  if (subdomainLabel) {
+    return (
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <Suspense fallback={<FullPageLoader />}>
+              <SubdomainSite label={subdomainLabel} />
+            </Suspense>
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    );
+  }
+
   return (
   <ErrorBoundary>
   <QueryClientProvider client={queryClient}>

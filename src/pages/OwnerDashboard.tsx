@@ -44,7 +44,7 @@ export default function OwnerDashboard() {
     if (!silent) setLoading(true);
     const { data } = await (supabase as unknown as import("@supabase/supabase-js").SupabaseClient)
       .from("generated_sites")
-      .select("id, site_name, status, content, is_paid, template, share_token, addon_interest_at")
+      .select("id, site_name, status, content, is_paid, template, share_token, addon_interest_at, subdomain")
       .eq("owner_id", user.id)
       .order("created_at", { ascending: false });
     setSites((data ?? []) as unknown as OwnedSiteT[]);
