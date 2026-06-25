@@ -26,7 +26,9 @@ import type { Json } from "@/integrations/supabase/types";
 const BUCKET = "barber-site-images";
 const MAX_BYTES = 5 * 1024 * 1024;
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
-const GALLERY_MAX = 10;
+export const GALLERY_MAX = 10;
+/** Accept attribute shared by every image picker in the app. */
+export const IMAGE_ACCEPT = "image/jpeg,image/png,image/webp";
 
 export interface SiteImageManagerHandle {
   /** Upload any pending files and return `base` merged with the new image fields. No DB write. */
@@ -34,14 +36,19 @@ export interface SiteImageManagerHandle {
   isDirty(): boolean;
 }
 
-function validate(f: File | null): string | null {
+export function validate(f: File | null): string | null {
   if (!f) return null;
   if (!ALLOWED.includes(f.type)) return `${f.name}: must be JPEG, PNG or WebP`;
   if (f.size > MAX_BYTES) return `${f.name}: must be under 5 MB`;
   return null;
 }
 
-async function uploadOne(file: File, slot: string, siteId: string): Promise<string> {
+/**
+ * Upload one image to the barber-site-images bucket under `<siteId>/<slot>-<ts>.<ext>`
+ * and return its public URL. The owner storage RLS authorises the write. Reused by
+ * the classic SiteImageManager AND the live tap-to-edit editor.
+ */
+export async function uploadOne(file: File, slot: string, siteId: string): Promise<string> {
   const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
   const path = `${siteId}/${slot}-${Date.now()}-${Math.floor(performance.now())}.${ext}`;
   const { error } = await supabase.storage

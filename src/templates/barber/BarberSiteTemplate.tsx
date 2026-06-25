@@ -49,6 +49,7 @@ export function BarberSiteTemplate({
   onEditImage,
   editable = false,
   onEditElement,
+  onAddImage,
 }: {
   content: BarberSiteContent;
   /**
@@ -91,6 +92,12 @@ export function BarberSiteTemplate({
    */
   editable?: boolean;
   onEditElement?: (key: string) => void;
+  /**
+   * Live editor (owner mode): append a new gallery photo. When set together with
+   * `editable`, the gallery renders the owner's real photos with tap-to-replace +
+   * remove and an "Add photo" tile. Absent on the public /p/ site.
+   */
+  onAddImage?: () => void;
 }) {
   const {
     businessName,
@@ -202,6 +209,9 @@ export function BarberSiteTemplate({
             businessName={businessName}
             onEditImage={onEditImage}
             editable={!!galleryImageUrls && galleryImageUrls.length > 0}
+            ownerEditable={editable}
+            ownerImages={galleryImageUrls ?? []}
+            onAddImage={onAddImage}
           />
           <Hours hours={hours} />
           <Contact
@@ -941,6 +951,9 @@ function Gallery({
   businessName,
   onEditImage,
   editable = false,
+  ownerEditable = false,
+  ownerImages = [],
+  onAddImage,
 }: {
   images: string[];
   businessName: string;
@@ -948,7 +961,19 @@ function Gallery({
   // Tap-to-swap is only offered when the gallery holds REAL photos (the index maps
   // to content.galleryImageUrls). Stock-fallback galleries aren't editable.
   editable?: boolean;
+  // Live editor (owner): manage the REAL gallery directly — tap to replace, remove,
+  // add, with an empty state. Bypasses the stock fallback so indices map to the
+  // saved array. Public /p/ never sets this → unchanged below.
+  ownerEditable?: boolean;
+  ownerImages?: string[];
+  onAddImage?: () => void;
 }) {
+  if (ownerEditable) {
+    return (
+      <OwnerGallery images={ownerImages} businessName={businessName} onEditImage={onEditImage} onAddImage={onAddImage} />
+    );
+  }
+
   // Render 1–10 images as a varied mosaic that adapts to the count (no gaps).
   const imgs = images.slice(0, 10);
   if (imgs.length === 0) return null;
@@ -1008,6 +1033,63 @@ function Gallery({
             {canEdit && <ImageEditOverlay onClick={() => onEditImage!(`gallery-${i}` as BarberImageSlot)} />}
           </Reveal>
         ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Live-editor gallery (owner mode). Renders the owner's REAL photos in a clean
+ * uniform grid, each with a tap-to-replace overlay, plus an "Add photo" tile and
+ * an empty state. Replace/remove/add are driven by the editor's bottom sheet via
+ * onEditImage(`gallery-i`) / onAddImage. Capped at 10 to match the classic editor.
+ */
+function OwnerGallery({
+  images,
+  businessName,
+  onEditImage,
+  onAddImage,
+}: {
+  images: string[];
+  businessName: string;
+  onEditImage?: (slot: BarberImageSlot) => void;
+  onAddImage?: () => void;
+}) {
+  const OWNER_GALLERY_MAX = 10;
+  return (
+    <section id="gallery" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
+      <div className="mb-8">
+        <Eyebrow>The gallery</Eyebrow>
+        <h2 className="mt-5 font-display text-4xl uppercase tracking-wide text-white sm:text-5xl">
+          Work off the chair
+        </h2>
+        <p className="mt-3 text-sm text-zinc-400">
+          {images.length === 0
+            ? "Add photos of your work — they appear here on your live site."
+            : "Tap a photo to replace or remove it, or add more."}
+        </p>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4">
+        {images.map((src, i) => (
+          <figure key={`${src}-${i}`} className="relative aspect-square">
+            <SmartImg
+              src={src}
+              alt={`${businessName} — gallery ${i + 1}`}
+              className="h-full w-full rounded-2xl border border-white/[0.06]"
+            />
+            {onEditImage && <ImageEditOverlay onClick={() => onEditImage(`gallery-${i}` as BarberImageSlot)} />}
+          </figure>
+        ))}
+        {onAddImage && images.length < OWNER_GALLERY_MAX && (
+          <button
+            type="button"
+            onClick={onAddImage}
+            className="flex aspect-square flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-white/20 bg-white/[0.02] text-zinc-400 transition-colors hover:border-amber/50 hover:bg-amber/5 hover:text-amber-soft"
+          >
+            <CameraIcon className="h-7 w-7" />
+            <span className="text-xs font-semibold">Add photo</span>
+          </button>
+        )}
       </div>
     </section>
   );
