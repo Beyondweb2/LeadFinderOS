@@ -22,7 +22,7 @@ import { LiveSiteEditor } from "@/components/barber/LiveSiteEditor";
 // never mounted — Edit Site always serves the proven classic SiteEditor form, so
 // nothing editor-related can crash the dashboard or Edit page. Flip to true to
 // re-enable once the root cause is fixed.
-const LIVE_EDITOR_ENABLED = false;
+const LIVE_EDITOR_ENABLED = true;
 import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
 import { londonInstant, londonYMD } from "@/components/barber/london";
 import { recordSiteEvent } from "@/lib/siteTracking";
