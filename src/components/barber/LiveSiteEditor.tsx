@@ -443,7 +443,7 @@ export function LiveSiteEditor({
       {/* ── BOTTOM SHEET (photo editor) ─────────────────────────────────────── */}
       {imgTarget && (
         <div className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl border-t-2 border-amber/30 bg-ink-card px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.85)]">
-          <div className="mx-auto max-w-md">
+          <div className="mx-auto max-h-[80vh] max-w-md overflow-y-auto">
             <div className="mb-3 flex items-center justify-between">
               <div className="inline-flex items-center gap-2 text-sm font-semibold text-white">
                 <Camera className="h-4 w-4 text-amber" /> {imgSheetTitle}
@@ -513,7 +513,7 @@ export function LiveSiteEditor({
       {/* ── BOTTOM SHEET (service editor) ───────────────────────────────────── */}
       {serviceTarget != null && activeService && (
         <div className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl border-t-2 border-amber/30 bg-ink-card px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.85)]">
-          <div className="mx-auto max-h-[78vh] max-w-md overflow-y-auto">
+          <div className="mx-auto max-h-[80vh] max-w-md overflow-y-auto">
             <div className="mb-3 flex items-center justify-between">
               <div className="inline-flex items-center gap-2 text-sm font-semibold text-white">
                 <PencilLine className="h-4 w-4 text-amber" /> Edit service
