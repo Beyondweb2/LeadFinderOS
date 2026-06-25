@@ -114,6 +114,12 @@ export interface SiteContent {
   phone: string;
   /** Postal address — also used to build the embedded map. */
   address: string;
+  /**
+   * Optional heading for the Contact / Visit section. Unset → the barber template's
+   * styled default ("Come and visit"); set → rendered verbatim. Editor-customisable;
+   * existing payloads (unset) are unchanged.
+   */
+  contactHeading?: string;
   /** Optional Google rating, 0–5 (e.g. 4.8). Renders as stars when present. */
   googleRating?: number;
   /** Optional number of reviews backing the rating. */

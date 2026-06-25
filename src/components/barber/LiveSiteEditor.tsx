@@ -101,6 +101,59 @@ const ELEMENTS: Record<string, ElementDef> = {
     label: "About — your story",
     render: (c, patch) => <TextControl multiline value={c.about ?? ""} onChange={(v) => patch({ about: v })} />,
   },
+  contactHeading: {
+    label: "Visit heading",
+    render: (c, patch) => (
+      <TextControl value={c.contactHeading ?? ""} placeholder="Come and visit" onChange={(v) => patch({ contactHeading: v })} />
+    ),
+  },
+  hours: {
+    label: "Opening hours",
+    render: (c, patch) => (
+      <div className="space-y-3">
+        {/* Option A note: displayed hours ≠ bookable availability (staff_working_hours). */}
+        <p className="rounded-lg border border-amber/30 bg-amber/[0.08] px-3 py-2 text-xs leading-relaxed text-amber-soft">
+          This is the opening hours shown on your site. To change when customers can book online, go to Settings → bookings.
+        </p>
+        <div className="space-y-1.5">
+          {(c.hours ?? []).map((h, i) => (
+            <div key={`${h.day}-${i}`} className="flex items-center gap-2">
+              <span className="w-20 shrink-0 text-xs font-medium text-zinc-400">{h.day}</span>
+              <Input
+                value={h.open}
+                placeholder="9:00 – 18:00 or Closed"
+                onChange={(e) =>
+                  patch({ hours: (c.hours ?? []).map((row, idx) => (idx === i ? { ...row, open: e.target.value } : row)) })
+                }
+                className={INPUT_CLS}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    ),
+  },
+  contact: {
+    label: "Contact details",
+    render: (c, patch) => (
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-zinc-400">Phone</span>
+          <Input value={c.phone ?? ""} placeholder="020 7946 0123" onChange={(e) => patch({ phone: e.target.value })} className={INPUT_CLS} />
+        </div>
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-zinc-400">Address</span>
+          <textarea
+            rows={2}
+            value={c.address ?? ""}
+            placeholder="123 High Street, Town, AB1 2CD"
+            onChange={(e) => patch({ address: e.target.value })}
+            className={`${INPUT_CLS} resize-none leading-relaxed`}
+          />
+        </div>
+      </div>
+    ),
+  },
 };
 
 export function LiveSiteEditor({
@@ -361,7 +414,7 @@ export function LiveSiteEditor({
       {/* ── BOTTOM SHEET (per-element editor) ───────────────────────────────── */}
       {active && (
         <div className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl border-t-2 border-amber/30 bg-ink-card px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.85)]">
-          <div className="mx-auto max-w-md">
+          <div className="mx-auto max-h-[80vh] max-w-md overflow-y-auto">
             <div className="mb-3 flex items-center justify-between">
               <div className="inline-flex items-center gap-2 text-sm font-semibold text-white">
                 <PencilLine className="h-4 w-4 text-amber" /> {active.label}

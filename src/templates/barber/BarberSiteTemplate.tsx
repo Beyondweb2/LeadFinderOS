@@ -119,6 +119,7 @@ export function BarberSiteTemplate({
     hours,
     phone,
     address,
+    contactHeading,
     googleRating,
     reviewCount,
     heroImageUrl,
@@ -223,18 +224,21 @@ export function BarberSiteTemplate({
             ownerImages={galleryImageUrls ?? []}
             onAddImage={onAddImage}
           />
-          <Hours hours={hours} />
+          <Hours hours={hours} editable={editable} onEditElement={onEditElement} />
           <Contact
             businessName={businessName}
             phone={phone}
             telHref={telHref}
             address={address}
+            contactHeading={contactHeading}
             mapSrc={mapSrc}
             googleRating={googleRating}
             reviewCount={reviewCount}
             googleReviewsUrl={googleReviewsUrl}
             onBook={openBooking}
             bookingEnabled={bookingEnabled}
+            editable={editable}
+            onEditElement={onEditElement}
           />
         </main>
 
@@ -470,6 +474,26 @@ function ImageEditOverlay({ onClick, radiusClass = "rounded-2xl" }: { onClick: (
     >
       <span className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/65 px-3.5 py-2 text-xs font-semibold text-white shadow-lg backdrop-blur-sm transition-transform group-hover/edit:-translate-y-0.5 sm:text-sm">
         <CameraIcon className="h-4 w-4" /> Change photo
+      </span>
+    </button>
+  );
+}
+
+/**
+ * Tap-to-edit overlay for a whole block (live editor): hours table, contact details.
+ * Sits over the block (parent must be `relative`) with a dashed amber outline and an
+ * "Edit …" pill; captures the tap so inner links (e.g. tel:) don't fire. Editor-only.
+ */
+function EditBlockOverlay({ onClick, label, radiusClass = "rounded-2xl" }: { onClick: () => void; label: string; radiusClass?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      title={label}
+      className={`group/edit absolute inset-0 z-20 flex items-start justify-end ${radiusClass} bg-amber/5 p-3 outline-dashed outline-2 outline-offset-2 outline-amber/55 transition-colors hover:bg-amber/15 hover:outline-amber focus-visible:bg-amber/15 focus-visible:outline-none focus-visible:outline-amber`}
+    >
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-amber/40 bg-black/70 px-3 py-1.5 text-xs font-semibold text-amber-soft shadow-lg backdrop-blur-sm transition-transform group-hover/edit:-translate-y-0.5">
+        <PencilIcon className="h-3.5 w-3.5" /> {label}
       </span>
     </button>
   );
@@ -1218,7 +1242,7 @@ function OwnerGallery({
 
 /* ---------------------------------- hours --------------------------------- */
 
-function Hours({ hours }: { hours: BarberSiteContent["hours"] }) {
+function Hours({ hours, editable, onEditElement }: { hours: BarberSiteContent["hours"]; editable?: boolean; onEditElement?: (key: string) => void }) {
   const isClosed = (open: string) => /closed/i.test(open);
   return (
     <section id="hours" className="border-t border-white/[0.06] bg-ink-soft/40 py-20 sm:py-28">
@@ -1234,7 +1258,8 @@ function Hours({ hours }: { hours: BarberSiteContent["hours"] }) {
         </Reveal>
 
         <Reveal delay={0.08}>
-          <div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-b from-white/[0.03] to-transparent shadow-card">
+          <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-b from-white/[0.03] to-transparent shadow-card">
+            {editable && onEditElement && <EditBlockOverlay onClick={() => onEditElement("hours")} label="Edit hours" />}
             <ul>
               {hours.map((h, i) => (
                 <li
@@ -1266,23 +1291,29 @@ function Contact({
   phone,
   telHref,
   address,
+  contactHeading,
   mapSrc,
   googleRating,
   reviewCount,
   googleReviewsUrl,
   onBook,
   bookingEnabled,
+  editable,
+  onEditElement,
 }: {
   businessName: string;
   phone: string;
   telHref: string;
   address: string;
+  contactHeading?: string;
   mapSrc: string;
   googleRating?: number;
   reviewCount?: number;
   googleReviewsUrl?: string;
   onBook: () => void;
   bookingEnabled?: boolean;
+  editable?: boolean;
+  onEditElement?: (key: string) => void;
 }) {
   return (
     <section id="visit" className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
@@ -1290,7 +1321,9 @@ function Contact({
         <Reveal>
           <Eyebrow>Find us</Eyebrow>
           <h2 className="mt-5 font-display text-4xl uppercase tracking-wide text-white sm:text-5xl">
-            Come and visit
+            <EditableText editable={editable} onEdit={() => onEditElement?.("contactHeading")}>
+              {contactHeading || "Come and visit"}
+            </EditableText>
           </h2>
           <p className="mt-4 max-w-md text-lg leading-relaxed text-zinc-400">
             Walk in or call ahead — we&apos;ll have the chair ready.
@@ -1307,7 +1340,8 @@ function Contact({
             </button>
           )}
 
-          <div className="mt-8 space-y-3">
+          <div className="relative mt-8 space-y-3">
+            {editable && onEditElement && <EditBlockOverlay onClick={() => onEditElement("contact")} label="Edit contact details" />}
             <a
               href={telHref}
               className="group flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 transition-all hover:-translate-y-0.5 hover:border-amber/40"
