@@ -81,7 +81,6 @@ export function BarberShell({
   const [showAddonConfirm, setShowAddonConfirm] = useState(false);
   const [showWelcome, setShowWelcome] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [useClassicEditor, setUseClassicEditor] = useState(false);
 
   const shopName = site.content?.businessName || site.site_name;
   // Sidebar avatar = the site's hero photo (square crop), so it feels like theirs;
@@ -295,20 +294,14 @@ export function BarberShell({
 
           {page === "calendar" && <WeekCalendar siteId={site.id} />}
 
-          {page === "edit" && (!LIVE_EDITOR_ENABLED || useClassicEditor) && (
+          {/* Kill-switch fallback ONLY: when LIVE_EDITOR_ENABLED is false the live
+              editor never mounts, so Edit Site serves the classic SiteEditor (still
+              used by admin + salon). In normal operation (flag true) the live editor
+              below is the one and only barber editor — no toggle. */}
+          {page === "edit" && !LIVE_EDITOR_ENABLED && (
             <div className="space-y-6">
               <div className="flex flex-wrap items-center justify-between gap-3">
-                {LIVE_EDITOR_ENABLED ? (
-                  <button
-                    type="button"
-                    onClick={() => setUseClassicEditor(false)}
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-soft hover:text-amber"
-                  >
-                    <Sparkles className="h-4 w-4" /> Live editor
-                  </button>
-                ) : (
-                  <p className="text-sm text-muted-foreground">Your site's content, photos and services. Changes save in place.</p>
-                )}
+                <p className="text-sm text-muted-foreground">Your site's content, photos and services. Changes save in place.</p>
                 <Button size="sm" onClick={togglePublish} disabled={savingStatus} className="rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">
                   {savingStatus ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : published ? <EyeOff className="h-4 w-4 mr-2" /> : <Globe className="h-4 w-4 mr-2" />}
                   {published ? "Unpublish" : "Publish"}
@@ -406,9 +399,10 @@ export function BarberShell({
         </footer>
       </div>
 
-      {/* Live tap-to-edit editor (full-screen overlay). Default for "Edit Site";
-          the classic SiteEditor form is the one-click fallback above. */}
-      {LIVE_EDITOR_ENABLED && page === "edit" && !useClassicEditor && (
+      {/* Live tap-to-edit editor (full-screen overlay) — the one and only barber
+          editor for "Edit Site". Only mounts when LIVE_EDITOR_ENABLED; when the
+          kill-switch is off the classic SiteEditor fallback above renders instead. */}
+      {LIVE_EDITOR_ENABLED && page === "edit" && (
         <LiveSiteEditor
           site={site}
           onContentSaved={(content) => {
@@ -419,7 +413,6 @@ export function BarberShell({
           published={published}
           onTogglePublish={togglePublish}
           savingStatus={savingStatus}
-          onUseClassic={() => setUseClassicEditor(true)}
         />
       )}
 

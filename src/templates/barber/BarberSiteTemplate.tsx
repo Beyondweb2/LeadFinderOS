@@ -196,6 +196,9 @@ export function BarberSiteTemplate({
           logoUrl={logoUrl}
           facebookUrl={facebookUrl}
           instagramUrl={instagramUrl}
+          editable={editable}
+          onEditImage={onEditImage}
+          onEditElement={onEditElement}
         />
 
         <main>
@@ -599,6 +602,9 @@ function Header({
   logoUrl,
   facebookUrl,
   instagramUrl,
+  editable,
+  onEditImage,
+  onEditElement,
 }: {
   businessName: string;
   telHref: string;
@@ -607,13 +613,32 @@ function Header({
   logoUrl?: string;
   facebookUrl?: string;
   instagramUrl?: string;
+  editable?: boolean;
+  onEditImage?: (slot: BarberImageSlot) => void;
+  onEditElement?: (key: string) => void;
 }) {
+  const canEditLogo = editable && onEditImage;
+  const canEditSocials = editable && onEditElement;
   return (
     <header className="sticky top-0 z-40 border-b border-white/[0.06] bg-ink/70 backdrop-blur-xl supports-[backdrop-filter]:bg-ink/55">
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3.5 sm:px-8">
-        <a href="#top" className="min-w-0" aria-label={`${businessName} — home`}>
-          <Wordmark businessName={businessName} logoUrl={logoUrl} />
-        </a>
+        {canEditLogo ? (
+          <button
+            type="button"
+            onClick={() => onEditImage!("logo")}
+            title="Edit logo"
+            className="group relative min-w-0 rounded-md bg-amber/10 px-1.5 py-1 outline-dashed outline-2 outline-offset-2 outline-amber/60 transition-colors hover:bg-amber/20 hover:outline-amber focus-visible:outline-none focus-visible:outline-amber"
+          >
+            <Wordmark businessName={businessName} logoUrl={logoUrl} />
+            <span className="pointer-events-none absolute -right-2 -top-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber text-ink shadow">
+              <PencilIcon className="h-3 w-3" />
+            </span>
+          </button>
+        ) : (
+          <a href="#top" className="min-w-0" aria-label={`${businessName} — home`}>
+            <Wordmark businessName={businessName} logoUrl={logoUrl} />
+          </a>
+        )}
 
         <nav className="hidden items-center gap-8 text-sm font-medium text-zinc-400 md:flex">
           <a href="#services" className="transition-colors hover:text-white">
@@ -631,8 +656,25 @@ function Header({
         </nav>
 
         <div className="flex shrink-0 items-center gap-2">
-          {/* Real socials (verified) — renders nothing when none present. */}
-          <SocialLinks variant="header" facebookUrl={facebookUrl} instagramUrl={instagramUrl} className="mr-1 text-zinc-300" />
+          {/* Real socials (verified) — renders nothing when none present. In the live
+              editor it's a tap target (even with none set) to edit the social URLs. */}
+          {canEditSocials ? (
+            <button
+              type="button"
+              onClick={() => onEditElement!("socials")}
+              title="Edit social links"
+              className="mr-1 inline-flex items-center gap-1.5 rounded-full bg-amber/10 px-2.5 py-1.5 text-xs font-semibold text-amber-soft outline-dashed outline-2 outline-offset-2 outline-amber/60 transition-colors hover:bg-amber/20 hover:outline-amber focus-visible:outline-none focus-visible:outline-amber"
+            >
+              {facebookUrl || instagramUrl ? (
+                <SocialLinks variant="header" facebookUrl={facebookUrl} instagramUrl={instagramUrl} className="text-zinc-200" />
+              ) : (
+                <span>Socials</span>
+              )}
+              <PencilIcon className="h-3 w-3" />
+            </button>
+          ) : (
+            <SocialLinks variant="header" facebookUrl={facebookUrl} instagramUrl={instagramUrl} className="mr-1 text-zinc-300" />
+          )}
           {/* Secondary: call */}
           <a
             href={telHref}
@@ -1395,11 +1437,24 @@ function Contact({
             )}
           </div>
 
-          {googleReviewsUrl && (
+          {editable && onEditElement ? (
+            <div className="mt-5">
+              <button
+                type="button"
+                onClick={() => onEditElement("googleReviews")}
+                title="Edit Google reviews link"
+                className="inline-flex items-center gap-2.5 rounded-full border border-amber/45 bg-amber/10 px-4 py-2 text-sm font-semibold text-amber-soft outline-dashed outline-2 outline-offset-2 outline-amber/60 transition-colors hover:bg-amber/20 hover:outline-amber focus-visible:outline-none focus-visible:outline-amber"
+              >
+                <GoogleG className="h-4 w-4" />
+                {googleReviewsUrl ? "Edit Google reviews link" : "Add Google reviews link"}
+                <PencilIcon className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : googleReviewsUrl ? (
             <div className="mt-5">
               <GoogleReviewsLink url={googleReviewsUrl} />
             </div>
-          )}
+          ) : null}
         </Reveal>
 
         {mapSrc && (

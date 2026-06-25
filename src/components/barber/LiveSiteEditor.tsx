@@ -4,7 +4,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Check, Globe, EyeOff, X, PencilLine, Palette, Camera, Upload, Trash2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Loader2, Check, Globe, EyeOff, X, PencilLine, Palette, Camera, Upload, Trash2, Settings, Plus } from "lucide-react";
 import { BarberSiteTemplate } from "@/templates/barber/BarberSiteTemplate";
 import type { BarberSiteContent, BarberService } from "@/templates/barber/types";
 import { BARBER_ACCENTS } from "@/config/barberAccents";
@@ -38,8 +39,17 @@ type ElementDef = {
 type ImageTarget =
   | { kind: "hero" }
   | { kind: "about" }
+  | { kind: "logo" }
   | { kind: "gallery"; index: number }
   | { kind: "gallery-add" };
+
+/** Trim + auto-prepend https://; empty → undefined (drops the key → icon hidden).
+ *  Matches the classic SiteEditor so saved social URLs are always valid links. */
+function normalizeSocialUrl(v: string): string | undefined {
+  const t = v.trim();
+  if (!t) return undefined;
+  return /^https?:\/\//i.test(t) ? t : `https://${t}`;
+}
 
 // Shared dark-theme field styling for every control in the editor sheets.
 const INPUT_CLS =
@@ -109,29 +119,51 @@ const ELEMENTS: Record<string, ElementDef> = {
   },
   hours: {
     label: "Opening hours",
-    render: (c, patch) => (
-      <div className="space-y-3">
-        {/* Option A note: displayed hours ≠ bookable availability (staff_working_hours). */}
-        <p className="rounded-lg border border-amber/30 bg-amber/[0.08] px-3 py-2 text-xs leading-relaxed text-amber-soft">
-          This is the opening hours shown on your site. To change when customers can book online, go to Settings → bookings.
-        </p>
-        <div className="space-y-1.5">
-          {(c.hours ?? []).map((h, i) => (
-            <div key={`${h.day}-${i}`} className="flex items-center gap-2">
-              <span className="w-20 shrink-0 text-xs font-medium text-zinc-400">{h.day}</span>
-              <Input
-                value={h.open}
-                placeholder="9:00 – 18:00 or Closed"
-                onChange={(e) =>
-                  patch({ hours: (c.hours ?? []).map((row, idx) => (idx === i ? { ...row, open: e.target.value } : row)) })
-                }
-                className={INPUT_CLS}
-              />
-            </div>
-          ))}
+    render: (c, patch) => {
+      const rows = c.hours ?? [];
+      const setRows = (next: BarberSiteContent["hours"]) => patch({ hours: next });
+      return (
+        <div className="space-y-3">
+          {/* Option A note: displayed hours ≠ bookable availability (staff_working_hours). */}
+          <p className="rounded-lg border border-amber/30 bg-amber/[0.08] px-3 py-2 text-xs leading-relaxed text-amber-soft">
+            This is the opening hours shown on your site. To change when customers can book online, go to Settings → bookings.
+          </p>
+          <div className="space-y-1.5">
+            {rows.map((h, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Input
+                  value={h.day}
+                  placeholder="Day"
+                  onChange={(e) => setRows(rows.map((row, idx) => (idx === i ? { ...row, day: e.target.value } : row)))}
+                  className={`${INPUT_CLS} w-24 shrink-0`}
+                />
+                <Input
+                  value={h.open}
+                  placeholder="9:00 – 18:00 or Closed"
+                  onChange={(e) => setRows(rows.map((row, idx) => (idx === i ? { ...row, open: e.target.value } : row)))}
+                  className={INPUT_CLS}
+                />
+                <button
+                  type="button"
+                  onClick={() => setRows(rows.filter((_, idx) => idx !== i))}
+                  aria-label="Remove day"
+                  className="shrink-0 rounded-full p-1.5 text-zinc-400 hover:bg-white/10 hover:text-red-300"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => setRows([...rows, { day: "", open: "" }])}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-white/20 px-3 py-1.5 text-xs font-semibold text-zinc-300 transition-colors hover:border-amber/50 hover:text-amber-soft"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add day
+          </button>
         </div>
-      </div>
-    ),
+      );
+    },
   },
   contact: {
     label: "Contact details",
@@ -154,6 +186,48 @@ const ELEMENTS: Record<string, ElementDef> = {
       </div>
     ),
   },
+  socials: {
+    label: "Social links",
+    render: (c, patch) => (
+      <div className="space-y-3">
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-zinc-400">Facebook URL</span>
+          <Input
+            value={c.facebookUrl ?? ""}
+            placeholder="https://facebook.com/yourpage"
+            onChange={(e) => patch({ facebookUrl: e.target.value })}
+            onBlur={(e) => patch({ facebookUrl: normalizeSocialUrl(e.target.value) })}
+            className={INPUT_CLS}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-zinc-400">Instagram URL</span>
+          <Input
+            value={c.instagramUrl ?? ""}
+            placeholder="https://instagram.com/yourhandle"
+            onChange={(e) => patch({ instagramUrl: e.target.value })}
+            onBlur={(e) => patch({ instagramUrl: normalizeSocialUrl(e.target.value) })}
+            className={INPUT_CLS}
+          />
+        </div>
+        <p className="text-[11px] text-zinc-500">Shown as icons in your header &amp; footer. Leave blank to hide.</p>
+      </div>
+    ),
+  },
+  googleReviews: {
+    label: "Google reviews link",
+    render: (c, patch) => (
+      <div className="space-y-2">
+        <Input
+          value={c.googleReviewsUrl ?? ""}
+          placeholder="https://maps.google.com/…"
+          onChange={(e) => patch({ googleReviewsUrl: e.target.value || undefined })}
+          className={INPUT_CLS}
+        />
+        <p className="text-[11px] text-zinc-500">Adds a "Read our Google reviews" link by your rating. Leave blank to hide it.</p>
+      </div>
+    ),
+  },
 };
 
 export function LiveSiteEditor({
@@ -163,7 +237,6 @@ export function LiveSiteEditor({
   published,
   onTogglePublish,
   savingStatus,
-  onUseClassic,
 }: {
   site: OwnedSite;
   onContentSaved?: (content: BarberSiteContent) => void;
@@ -171,7 +244,6 @@ export function LiveSiteEditor({
   published: boolean;
   onTogglePublish: () => void;
   savingStatus: boolean;
-  onUseClassic: () => void;
 }) {
   const { toast } = useToast();
   const [liveContent, setLiveContent] = useState<BarberSiteContent>(site.content);
@@ -179,6 +251,7 @@ export function LiveSiteEditor({
   const [imgTarget, setImgTarget] = useState<ImageTarget | null>(null);
   const [imgBusy, setImgBusy] = useState(false);
   const [serviceTarget, setServiceTarget] = useState<number | null>(null);
+  const [showSettings, setShowSettings] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const firstRun = useRef(true);
   const imgInputRef = useRef<HTMLInputElement>(null);
@@ -214,8 +287,10 @@ export function LiveSiteEditor({
   const handleEditImage = (slot: BarberImageSlot) => {
     setActiveKey(null);
     setServiceTarget(null);
+    setShowSettings(false);
     if (slot === "hero") setImgTarget({ kind: "hero" });
     else if (slot === "about") setImgTarget({ kind: "about" });
+    else if (slot === "logo") setImgTarget({ kind: "logo" });
     else if (slot.startsWith("gallery-")) {
       const index = Number.parseInt(slot.slice("gallery-".length), 10);
       if (!Number.isNaN(index)) setImgTarget({ kind: "gallery", index });
@@ -248,11 +323,13 @@ export function LiveSiteEditor({
       const slotLabel =
         target.kind === "hero" ? "hero"
         : target.kind === "about" ? "about"
+        : target.kind === "logo" ? "logo"
         : target.kind === "gallery" ? `gallery-${target.index}`
         : `gallery-${len}`;
       const url = await uploadOne(file, slotLabel, site.id);
       if (target.kind === "hero") patch({ heroImageUrl: url });
       else if (target.kind === "about") patch({ aboutImageUrl: url });
+      else if (target.kind === "logo") patch({ logoUrl: url });
       else if (target.kind === "gallery") {
         setLiveContent((c) => {
           const next = [...(c.galleryImageUrls ?? [])];
@@ -281,10 +358,17 @@ export function LiveSiteEditor({
     setImgTarget(null);
   };
 
+  // Drop the uploaded logo → header/footer fall back to the text wordmark.
+  const removeLogo = () => {
+    patch({ logoUrl: undefined });
+    setImgTarget(null);
+  };
+
   // ── Service editing (Phase 3) ───────────────────────────────────────────────
   const handleEditService = (index: number) => {
     setActiveKey(null);
     setImgTarget(null);
+    setShowSettings(false);
     setServiceTarget(index);
   };
 
@@ -293,6 +377,7 @@ export function LiveSiteEditor({
     const newIndex = (liveContent.services ?? []).length;
     setActiveKey(null);
     setImgTarget(null);
+    setShowSettings(false);
     setLiveContent((c) => ({ ...c, services: [...(c.services ?? []), { name: "" }] }));
     setServiceTarget(newIndex);
   };
@@ -316,12 +401,14 @@ export function LiveSiteEditor({
   const currentImgUrl =
     imgTarget?.kind === "hero" ? liveContent.heroImageUrl
     : imgTarget?.kind === "about" ? liveContent.aboutImageUrl
+    : imgTarget?.kind === "logo" ? liveContent.logoUrl
     : imgTarget?.kind === "gallery" ? (liveContent.galleryImageUrls ?? [])[imgTarget.index]
     : undefined;
 
   const imgSheetTitle =
     imgTarget?.kind === "hero" ? "Hero photo"
     : imgTarget?.kind === "about" ? "About photo"
+    : imgTarget?.kind === "logo" ? "Logo"
     : imgTarget?.kind === "gallery" ? "Gallery photo"
     : "Add a photo";
 
@@ -337,7 +424,7 @@ export function LiveSiteEditor({
         content={liveContent}
         bookingEnabled={false}
         editable
-        onEditElement={(key) => { setImgTarget(null); setServiceTarget(null); setActiveKey(key); }}
+        onEditElement={(key) => { setImgTarget(null); setServiceTarget(null); setShowSettings(false); setActiveKey(key); }}
         onEditImage={handleEditImage}
         onAddImage={handleAddImage}
         onEditService={handleEditService}
@@ -382,10 +469,12 @@ export function LiveSiteEditor({
             </span>
             <button
               type="button"
-              onClick={onUseClassic}
-              className="hidden text-xs text-zinc-400 underline-offset-2 hover:text-zinc-200 hover:underline sm:inline"
+              onClick={() => { setActiveKey(null); setImgTarget(null); setServiceTarget(null); setShowSettings(true); }}
+              aria-label="Site settings"
+              title="Site settings"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line bg-white/[0.03] text-zinc-300 transition-colors hover:border-amber/50 hover:text-white"
             >
-              Classic editor
+              <Settings className="h-4 w-4" />
             </button>
             <Button
               type="button"
@@ -458,14 +547,22 @@ export function LiveSiteEditor({
               </button>
             </div>
 
-            {/* Current photo preview (or a note when the site is on a stock photo). */}
+            {/* Current preview (or a note when the slot is on a stock photo / wordmark). */}
             {currentImgUrl ? (
               <div className="overflow-hidden rounded-lg border border-line">
-                <img src={currentImgUrl} alt="Current" className="aspect-video w-full object-cover" />
+                <img
+                  src={currentImgUrl}
+                  alt="Current"
+                  className={imgTarget.kind === "logo" ? "aspect-video w-full bg-ink-soft object-contain p-4" : "aspect-video w-full object-cover"}
+                />
               </div>
             ) : (
               <p className="rounded-lg border border-dashed border-line bg-ink-soft px-3 py-4 text-center text-sm text-zinc-400">
-                {imgTarget.kind === "gallery-add" ? "Choose a photo to add to your gallery." : "Currently showing a stock photo — upload your own to replace it."}
+                {imgTarget.kind === "gallery-add"
+                  ? "Choose a photo to add to your gallery."
+                  : imgTarget.kind === "logo"
+                  ? "Using your business name as the wordmark — upload a logo to replace it."
+                  : "Currently showing a stock photo — upload your own to replace it."}
               </p>
             )}
 
@@ -492,7 +589,7 @@ export function LiveSiteEditor({
               {imgBusy ? "Uploading…" : currentImgUrl ? "Replace photo" : "Upload a photo"}
             </Button>
 
-            {/* Remove (existing gallery photos only). */}
+            {/* Remove — gallery photo, or revert the logo to the text wordmark. */}
             {imgTarget.kind === "gallery" && (
               <Button
                 type="button"
@@ -502,6 +599,17 @@ export function LiveSiteEditor({
                 className="mt-2 w-full rounded-full border-line bg-transparent text-red-300 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-200"
               >
                 <Trash2 className="mr-2 h-4 w-4" /> Remove photo
+              </Button>
+            )}
+            {imgTarget.kind === "logo" && currentImgUrl && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={imgBusy}
+                onClick={removeLogo}
+                className="mt-2 w-full rounded-full border-line bg-transparent text-red-300 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-200"
+              >
+                <Trash2 className="mr-2 h-4 w-4" /> Remove logo
               </Button>
             )}
 
@@ -594,6 +702,49 @@ export function LiveSiteEditor({
               className="mt-2 w-full rounded-full border-line bg-transparent text-red-300 hover:border-red-500/50 hover:bg-red-500/10 hover:text-red-200"
             >
               <Trash2 className="mr-2 h-4 w-4" /> Remove service
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {/* ── BOTTOM SHEET (site settings) ────────────────────────────────────── */}
+      {showSettings && (
+        <div className="fixed inset-x-0 bottom-0 z-[60] rounded-t-2xl border-t-2 border-amber/30 bg-ink-card px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.85)]">
+          <div className="mx-auto max-h-[80vh] max-w-md overflow-y-auto">
+            <div className="mb-3 flex items-center justify-between">
+              <div className="inline-flex items-center gap-2 text-sm font-semibold text-white">
+                <Settings className="h-4 w-4 text-amber" /> Site settings
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSettings(false)}
+                aria-label="Close"
+                className="rounded-full p-1.5 text-zinc-400 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex items-start justify-between gap-4 rounded-lg border border-line bg-ink-soft px-3 py-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-white">Show example prices</div>
+                <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                  Services without a price show an illustrative <span className="font-medium">example</span> price (clearly
+                  labelled) instead of "Price on request". Confirmed prices are never relabelled.
+                </p>
+              </div>
+              <Switch
+                checked={liveContent.showExamplePrices !== false}
+                onCheckedChange={(v) => patch({ showExamplePrices: v })}
+              />
+            </div>
+
+            <Button
+              type="button"
+              onClick={() => setShowSettings(false)}
+              className="mt-4 w-full rounded-full bg-amber font-bold text-ink hover:bg-amber-soft"
+            >
+              Done
             </Button>
           </div>
         </div>

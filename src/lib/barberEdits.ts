@@ -18,8 +18,9 @@ export interface PendingBarberEdit {
 /* --------------------------- pre-sign-in photos --------------------------- */
 
 // Slots a barber can swap pre-sign-in. `gallery-${n}` is the nth gallery tile
-// (index into content.galleryImageUrls). hero/about are single fields.
-export type BarberImageSlot = 'hero' | 'about' | `gallery-${number}`;
+// (index into content.galleryImageUrls). hero/about/logo are single fields.
+// ('logo' is used only by the live editor; the pre-sign-in dock never sets it.)
+export type BarberImageSlot = 'hero' | 'about' | 'logo' | `gallery-${number}`;
 
 const IMAGE_BUCKET = 'barber-site-images';
 const IMAGE_MAX_BYTES = 5 * 1024 * 1024;
