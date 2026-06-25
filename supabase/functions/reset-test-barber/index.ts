@@ -117,11 +117,16 @@ Deno.serve(async (req) => {
     );
     const { data: userData, error: userErr } = await userClient.auth.getUser();
     if (userErr || !userData?.user) return json({ ok: false, error: "unauthorized" }, 401);
+    const callerId = userData.user.id;
 
     // 2) HARD LOCK: the request must name the test lead, and even then we only ever
     //    operate on the hardcoded constants below — never on the request value.
     const body = await req.json().catch(() => ({}));
     const requestedLeadId = typeof body.lead_id === "string" ? body.lead_id : "";
+    // Opt-in: leave the fixture in a PAID + CLAIMED + PUBLISHED state (claimed to the
+    // caller) for testing paid-only features (booking, custom subdomains). Default
+    // (absent/false) keeps the historical clean "newly added" reset.
+    const paidMode = body.paid === true;
     if (requestedLeadId !== TEST_BARBER_LEAD_ID) {
       return json({ ok: false, error: "refused: this endpoint only resets the test barber" }, 403);
     }
@@ -156,6 +161,7 @@ Deno.serve(async (req) => {
         claimed_at: null,
         status: "draft",
         is_paid: false,
+        subdomain: null,
         addon_interest_at: null,
         open_count: 0,
         first_opened_at: null,
@@ -181,6 +187,34 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "lead_reset_failed" }, 500);
     }
 
+    // 5b) Optional paid test state — claim the fixture to the CALLER, publish it, and
+    //     mark it paid. service_role (this client) bypasses the protected-fields lock,
+    //     so this is the proper path to flip is_paid for testing (the SQL editor has
+    //     no JWT and is blocked by the lock). Subdomain stays null for a clean slate.
+    let paidState: Record<string, unknown> | null = null;
+    if (paidMode) {
+      const { error: paidErr } = await service
+        .from("generated_sites")
+        .update({
+          owner_id: callerId,
+          claimed_at: new Date().toISOString(),
+          status: "published",
+          is_paid: true,
+          subdomain: null,
+        })
+        .eq("id", TEST_BARBER_SITE_ID);
+      if (paidErr) {
+        console.error("[RESET-TEST-BARBER] paid setup failed:", paidErr.message);
+        return json({ ok: false, error: "paid_setup_failed" }, 500);
+      }
+      const { data: after } = await service
+        .from("generated_sites")
+        .select("owner_id, is_paid, status, subdomain")
+        .eq("id", TEST_BARBER_SITE_ID)
+        .maybeSingle();
+      paidState = (after as Record<string, unknown> | null) ?? null;
+    }
+
     // 6) Best-effort: delete any photos uploaded into the test site's folder.
     try {
       const { data: files } = await service.storage.from(IMAGE_BUCKET).list(TEST_BARBER_SITE_ID);
@@ -199,6 +233,7 @@ Deno.serve(async (req) => {
         bookings_cleared: true,
         staff_cleared: staffIds.length,
       },
+      paid: paidState,
     });
   } catch (e) {
     console.error("[RESET-TEST-BARBER] error:", e);
