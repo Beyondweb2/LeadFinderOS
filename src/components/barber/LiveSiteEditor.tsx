@@ -82,6 +82,18 @@ const ELEMENTS: Record<string, ElementDef> = {
     label: "Tagline",
     render: (c, patch) => <TextControl multiline value={c.tagline ?? ""} onChange={(v) => patch({ tagline: v })} />,
   },
+  aboutHeading: {
+    label: "About heading",
+    // Empty falls back to the styled default ("A proper cut, every time.") on the
+    // site, so leaving it blank keeps the original look; the placeholder shows it.
+    render: (c, patch) => (
+      <TextControl
+        value={c.aboutHeading ?? ""}
+        placeholder="A proper cut, every time."
+        onChange={(v) => patch({ aboutHeading: v })}
+      />
+    ),
+  },
   about: {
     label: "About — your story",
     render: (c, patch) => <TextControl multiline value={c.about ?? ""} onChange={(v) => patch({ about: v })} />,

@@ -100,6 +100,12 @@ export interface SiteContent {
   heroHeadline: string;
   /** 2–3 sentence "about" paragraph. */
   about: string;
+  /**
+   * Optional heading for the About section. When unset, the barber template shows
+   * its styled default ("A proper cut, every time."); when set, this string is
+   * rendered verbatim. Editor-customisable; existing payloads (unset) are unchanged.
+   */
+  aboutHeading?: string;
   /** Services offered, with optional descriptions and prices. */
   services: SiteService[];
   /** Weekly opening hours, one row per day. */

@@ -105,6 +105,7 @@ export function BarberSiteTemplate({
     tagline,
     heroHeadline,
     about,
+    aboutHeading,
     services,
     hours,
     phone,
@@ -202,7 +203,7 @@ export function BarberSiteTemplate({
             editable={editable}
             onEditElement={onEditElement}
           />
-          <About about={about} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} onEditImage={onEditImage} editable={editable} onEditElement={onEditElement} />
+          <About about={about} aboutHeading={aboutHeading} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} onEditImage={onEditImage} editable={editable} onEditElement={onEditElement} />
           <Services services={services} showExamplePrices={showExamplePrices} />
           <Gallery
             images={gallery}
@@ -473,6 +474,10 @@ function ImageEditOverlay({ onClick, radiusClass = "rounded-2xl" }: { onClick: (
  */
 function EditableText({ editable, onEdit, children }: { editable?: boolean; onEdit?: () => void; children: ReactNode }) {
   if (!editable || !onEdit) return <>{children}</>;
+  // Editor-only affordance — deliberately loud so barbers see what they can change:
+  // a clear amber dashed box, a persistent tint, and a pencil icon that scales with
+  // the text (em-sized). The public /p/ render returns the bare children above, so
+  // none of this appears there.
   return (
     <span
       role="button"
@@ -480,10 +485,20 @@ function EditableText({ editable, onEdit, children }: { editable?: boolean; onEd
       onClick={(e) => { e.stopPropagation(); onEdit(); }}
       onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onEdit(); } }}
       title="Tap to edit"
-      className="cursor-pointer rounded-[4px] outline-dashed outline-1 outline-offset-2 outline-amber/40 transition-colors hover:bg-amber/10 hover:outline-amber focus-visible:outline-amber"
+      className="cursor-pointer rounded-md bg-amber/10 px-1 outline-dashed outline-2 outline-offset-2 outline-amber/60 transition-colors hover:bg-amber/20 hover:outline-amber focus-visible:bg-amber/20 focus-visible:outline-amber"
     >
       {children}
+      <PencilIcon className="ml-[0.25em] inline-block h-[0.72em] w-[0.72em] -translate-y-[0.08em] align-middle text-amber" />
     </span>
+  );
+}
+
+function PencilIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} aria-hidden="true">
+      <path d="M4 20h4L18.5 9.5a2.12 2.12 0 0 0-3-3L5 17v3z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13.5 6.5l3 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -748,16 +763,26 @@ function Hero({
 
 /* ---------------------------------- about --------------------------------- */
 
-function About({ about, businessName, stats, aboutImageUrl, onEditImage, editable, onEditElement }: { about: string; businessName: string; stats?: BarberStat[]; aboutImageUrl?: string; onEditImage?: (slot: BarberImageSlot) => void; editable?: boolean; onEditElement?: (key: string) => void }) {
+function About({ about, aboutHeading, businessName, stats, aboutImageUrl, onEditImage, editable, onEditElement }: { about: string; aboutHeading?: string; businessName: string; stats?: BarberStat[]; aboutImageUrl?: string; onEditImage?: (slot: BarberImageSlot) => void; editable?: boolean; onEditElement?: (key: string) => void }) {
   return (
     <section className="mx-auto max-w-6xl px-5 py-20 sm:px-8 sm:py-28">
       <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
         <Reveal className="order-2 md:order-1">
           <Eyebrow>Our story</Eyebrow>
           <h2 className="mt-5 font-display text-4xl uppercase leading-[0.95] tracking-wide text-white sm:text-5xl">
-            A proper cut,
-            <br />
-            <span className="text-amber">every time.</span>
+            {/* Custom heading (verbatim) when set; otherwise the styled default —
+                byte-identical for existing sites. Editable as one tap target. */}
+            <EditableText editable={editable} onEdit={() => onEditElement?.("aboutHeading")}>
+              {aboutHeading ? (
+                aboutHeading
+              ) : (
+                <>
+                  A proper cut,
+                  <br />
+                  <span className="text-amber">every time.</span>
+                </>
+              )}
+            </EditableText>
           </h2>
           <p className="mt-6 text-lg leading-relaxed text-zinc-400">
             <EditableText editable={editable} onEdit={() => onEditElement?.("about")}>{about}</EditableText>
