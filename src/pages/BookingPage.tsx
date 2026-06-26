@@ -33,7 +33,8 @@ function mixChannels(hex: string, toward: 0 | 255, t: number): string {
 }
 
 export default function BookingPage({ slug }: { slug: string }) {
-  const [open, setOpen] = useState(true);
+  // Landing-first: show the branded page; the booking flow opens only on the CTA.
+  const [open, setOpen] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: ["booking-page", slug],
@@ -85,6 +86,9 @@ export default function BookingPage({ slug }: { slug: string }) {
     "--barber-accent-deep": mixChannels(accent, 0, 0.15),
   } as CSSProperties;
   const variant = data.template === "salon" ? "salon" : "barber";
+  const services = (content.services ?? []).filter((s) => (s.name ?? "").trim());
+  const hours = content.hours ?? [];
+  const telHref = content.phone ? `tel:${content.phone.replace(/[^\d+]/g, "")}` : "";
 
   return (
     <div className="min-h-screen bg-ink font-body text-zinc-200" style={accentStyle}>
@@ -112,6 +116,76 @@ export default function BookingPage({ slug }: { slug: string }) {
           Book appointment
         </button>
       </header>
+
+      {/* Lean, booking-focused detail — all from data already on the row. No about,
+          gallery, marketing copy or reviews list. */}
+      <main className="mx-auto max-w-2xl space-y-10 px-6 py-12">
+        {services.length > 0 && (
+          <section>
+            <h2 className="font-display text-2xl uppercase tracking-wide text-white">Services</h2>
+            <ul className="mt-4 divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+              {services.map((s, i) => (
+                <li key={`${s.name}-${i}`} className="flex items-baseline justify-between gap-3 px-4 py-3.5">
+                  <div className="min-w-0">
+                    <div className="font-semibold text-white">{s.name}</div>
+                    {typeof s.durationMins === "number" && s.durationMins > 0 && (
+                      <div className="text-xs uppercase tracking-wide text-zinc-500">{s.durationMins} min</div>
+                    )}
+                  </div>
+                  {s.price && (
+                    <span className="shrink-0 font-display text-xl tracking-wide" style={{ color: accent }}>{s.price}</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {hours.length > 0 && (
+          <section>
+            <h2 className="font-display text-2xl uppercase tracking-wide text-white">Opening hours</h2>
+            <ul className="mt-4 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+              {hours.map((h, i) => (
+                <li key={`${h.day}-${i}`} className="flex items-center justify-between gap-4 border-b border-white/[0.05] px-4 py-3 last:border-b-0">
+                  <span className="text-sm font-medium text-zinc-200">{h.day}</span>
+                  <span className={`text-sm tabular-nums ${/closed/i.test(h.open) ? "text-zinc-500" : "text-zinc-300"}`}>{h.open}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
+        {(content.phone || content.address || typeof content.googleRating === "number") && (
+          <section className="flex flex-col gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-1 text-sm">
+              {content.phone && (
+                <a href={telHref} className="block font-semibold text-white transition-colors hover:text-amber-soft">{content.phone}</a>
+              )}
+              {content.address && <div className="text-zinc-400">{content.address}</div>}
+            </div>
+            {typeof content.googleRating === "number" && (
+              <div className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-full border border-white/10 bg-black/30 px-3 py-1.5 sm:self-auto">
+                <span style={{ color: accent }}>★</span>
+                <span className="font-bold text-white">{content.googleRating.toFixed(1)}</span>
+                {typeof content.reviewCount === "number" && (
+                  <span className="text-xs text-zinc-400">({content.reviewCount} Google reviews)</span>
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        <div className="pt-2 text-center">
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-base font-bold text-ink shadow-lg transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+            style={{ backgroundColor: accent }}
+          >
+            Book appointment
+          </button>
+        </div>
+      </main>
 
       <BookingFlow open={open} onClose={() => setOpen(false)} slug={data.siteName} content={content} variant={variant} />
 
