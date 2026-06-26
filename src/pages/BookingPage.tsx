@@ -166,7 +166,7 @@ export default function BookingPage({ slug }: { slug: string }) {
                 <h2 className="font-display text-2xl uppercase tracking-wide text-white">Services</h2>
                 <span className="text-xs uppercase tracking-wide text-zinc-400">Tap to book</span>
               </div>
-              <ul className="mt-4 flex-1 divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/25 bg-black/60 shadow-xl backdrop-blur-sm">
+              <ul className="mt-4 flex-1 divide-y divide-white/10 overflow-hidden rounded-2xl bg-black/60 shadow-xl backdrop-blur-sm">
                 {services.map((s, i) => (
                   <li key={`${s.name}-${i}`}>
                     <button
@@ -196,9 +196,9 @@ export default function BookingPage({ slug }: { slug: string }) {
           {hours.length > 0 && (
             <section className="flex flex-col">
               <h2 className="font-display text-2xl uppercase tracking-wide text-white">Opening hours</h2>
-              <ul className="mt-4 flex-1 overflow-hidden rounded-2xl border border-white/20 bg-black/55 shadow-lg backdrop-blur-sm">
+              <ul className="mt-4 flex flex-1 flex-col overflow-hidden rounded-2xl bg-black/55 shadow-lg backdrop-blur-sm">
                 {hours.map((h, i) => (
-                  <li key={`${h.day}-${i}`} className="flex items-center justify-between gap-4 border-b border-white/[0.05] px-4 py-3 last:border-b-0">
+                  <li key={`${h.day}-${i}`} className="flex flex-1 items-center justify-between gap-4 border-b border-white/[0.05] px-4 py-3 last:border-b-0">
                     <span className="text-sm font-medium text-zinc-200">{h.day}</span>
                     <span className={`text-sm tabular-nums ${/closed/i.test(h.open) ? "text-zinc-500" : "text-zinc-300"}`}>{h.open}</span>
                   </li>
@@ -210,7 +210,7 @@ export default function BookingPage({ slug }: { slug: string }) {
 
         {/* Contact + Google reviews at the foot of the page. */}
         {(content.phone || content.address || typeof content.googleRating === "number") && (
-          <section className="mx-auto flex max-w-xl flex-col items-center gap-3 rounded-2xl border border-white/15 bg-black/55 p-4 text-center backdrop-blur-sm">
+          <section className="mx-auto flex max-w-xl flex-col items-center gap-3 rounded-2xl bg-black/55 p-4 text-center backdrop-blur-sm">
             {(content.phone || content.address) && (
               <div className="space-y-1">
                 {content.phone && (
