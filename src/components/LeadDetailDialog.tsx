@@ -32,7 +32,7 @@ import { SALE_TYPES, SALE_TYPE_LABELS, resolveSaleType, type SaleType } from '@/
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, ContactMethod, PipelineStatus } from '@/types/outreach';
 import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, isSentStatus, isRepliedStatus, isSiteSentStatus } from '@/types/outreach';
 import { PipelineStatusBadge } from '@/components/PipelineStatusBadge';
-import { WebsiteServicesScan } from '@/components/WebsiteServicesScan';
+import { BookingServicesEditor } from '@/components/BookingServicesEditor';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { cn } from '@/lib/utils';
 
@@ -781,8 +781,9 @@ function LeadDetailBody({
               );
             })()}
 
-            {/* Measurement-only website scan (Phase 3a) — read-only, never publishes. */}
-            {!isDemoLead(lead.id) && <WebsiteServicesScan lead={lead} />}
+            {/* Booking-page services (Phase 3b) — editable, scan + review-before-overwrite,
+                saves confirmed_services to the lead. Supersedes the 3a read-only scan. */}
+            {!isDemoLead(lead.id) && <BookingServicesEditor lead={lead} onUpdate={onUpdateLead} />}
           </div>
 
           {/* Right: Notes + Activity */}

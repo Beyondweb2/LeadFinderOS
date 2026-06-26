@@ -434,7 +434,7 @@ serve(async (req) => {
     const { data: lead, error: leadError } = await serviceClient
       .from("outreach_leads")
       .select(
-        "id, business_name, category, address, phone, place_id, services_included, facebook_url, instagram_url, website, facebook_confidence, image_url, google_maps_url",
+        "id, business_name, category, address, phone, place_id, services_included, confirmed_services, facebook_url, instagram_url, website, facebook_confidence, image_url, google_maps_url",
       )
       .eq("id", leadId)
       .maybeSingle();
@@ -592,6 +592,25 @@ serve(async (req) => {
     // (real lead values, then live Google values; nulls = unknown to the model).
     const realServices: string[] = Array.isArray(lead.services_included)
       ? lead.services_included.filter((s: unknown) => typeof s === "string" && s.trim()).map((s: string) => s.trim())
+      : [];
+    // Phase 3b: operator-CONFIRMED services (reviewed/edited before saving). Only
+    // consulted for booking-only pages (see the services build below) — this is the
+    // sole path that carries operator-approved PRICES onto a page. Sanitised
+    // defensively; malformed entries are dropped, not trusted.
+    const confirmedServices: BarberService[] = Array.isArray(lead.confirmed_services)
+      ? (lead.confirmed_services as unknown[])
+          .filter((s): s is Record<string, unknown> =>
+            !!s && typeof s === "object" && typeof (s as { name?: unknown }).name === "string" &&
+            (s as { name: string }).name.trim().length > 0)
+          .map((s) => {
+            const out: BarberService = { name: String((s as { name: string }).name).trim().slice(0, 120) };
+            const price = (s as { price?: unknown }).price;
+            if (typeof price === "string" && price.trim()) out.price = price.trim().slice(0, 40);
+            const dur = (s as { durationMins?: unknown }).durationMins;
+            if (typeof dur === "number" && Number.isFinite(dur) && dur > 0) out.durationMins = Math.round(dur);
+            return out;
+          })
+          .slice(0, 60)
       : [];
     const facebookHigh =
       typeof lead.facebook_confidence === "number" && lead.facebook_confidence >= 80 && !!lead.facebook_url;
@@ -762,6 +781,13 @@ serve(async (req) => {
     // --- Step 12: Server-side honesty enforcement (overrides the model) ---
     // Hard facts come from the lead, never the model. Unknown facts are dropped.
     const services: BarberService[] = (() => {
+      // Phase 3b: a booking-only page prefers operator-CONFIRMED services (with their
+      // reviewed prices + durations). Strictly gated on bookingOnly, so the full-site
+      // path below is byte-for-byte unchanged. Empty confirmed list → fall through to
+      // the existing Maps/defaults behaviour (no regression).
+      if (bookingOnly && confirmedServices.length) {
+        return confirmedServices;
+      }
       if (realServices.length) {
         // Real service names verbatim; keep only a generic description the model wrote.
         const descByName = new Map<string, string>();
