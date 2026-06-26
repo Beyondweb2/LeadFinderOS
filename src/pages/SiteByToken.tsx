@@ -20,10 +20,107 @@ import {
   type BarberImageSlot,
 } from "@/lib/barberEdits";
 import { recordSiteEvent } from "@/lib/siteTracking";
+import "@/templates/barber/fonts.css";
 
 // Untyped client: share_token + tracking columns aren't in the generated types
 // yet (added by the Phase 1 migration). RLS still applies. Mirrors PublicSite.
 const sb = supabase as unknown as SupabaseClient;
+
+const HEX_RE = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+/**
+ * Claim-preview for a BOOKING-ONLY row on /s/:token. Renders the same lean,
+ * branded booking layout the live page uses (header + services/hours/contact) so a
+ * barber claiming a booking-only page sees their actual product — NOT the bare,
+ * half-empty marketing template. The claim CTA stays the ColourEditDock below
+ * (unchanged); the hero stays photo-swappable via onEditImage. No live BookingFlow
+ * here (booking goes live once published) — the Book button is a visual preview.
+ */
+function BookingClaimPreview({
+  content,
+  onEditImage,
+}: {
+  content: SiteContent;
+  onEditImage?: (slot: BarberImageSlot) => void;
+}) {
+  const accent = content.accentColor && HEX_RE.test(content.accentColor) ? content.accentColor : "#E6A24B";
+  const businessName = content.businessName ?? "";
+  const services = (content.services ?? []).filter((s) => (s.name ?? "").trim());
+  const hours = content.hours ?? [];
+  const telHref = content.phone ? `tel:${content.phone.replace(/[^\d+]/g, "")}` : "";
+  return (
+    <div className="min-h-screen bg-ink font-body text-zinc-200">
+      <header className="relative isolate flex min-h-[34vh] flex-col items-center justify-center overflow-hidden px-6 py-12 text-center">
+        {content.heroImageUrl ? (
+          <img src={content.heroImageUrl} alt={businessName} className="absolute inset-0 -z-10 h-full w-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#1c1509] via-ink to-black" />
+        )}
+        <div className="absolute inset-0 -z-10 bg-gradient-to-t from-ink via-ink/80 to-ink/40" />
+        {onEditImage && (
+          <button
+            type="button"
+            onClick={() => onEditImage("hero")}
+            className="absolute right-4 top-4 z-10 inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-black/55 px-3.5 py-1.5 text-xs font-semibold text-white backdrop-blur-sm hover:bg-black/75"
+          >
+            Change photo
+          </button>
+        )}
+        {content.logoUrl && <img src={content.logoUrl} alt={businessName} className="mb-4 h-14 w-auto object-contain" />}
+        <h1 className="font-display text-4xl uppercase tracking-wide text-white drop-shadow-[0_2px_20px_rgba(0,0,0,0.5)] sm:text-5xl">{businessName}</h1>
+        <p className="mt-3 text-sm text-zinc-300">Book your appointment online</p>
+        <span
+          className="mt-7 inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-base font-bold text-ink shadow-lg"
+          style={{ backgroundColor: accent }}
+        >
+          Book appointment
+        </span>
+      </header>
+
+      <main className="mx-auto max-w-4xl space-y-8 px-6 py-12">
+        <div className="grid gap-8 md:grid-cols-2">
+          {services.length > 0 && (
+            <section className="flex flex-col">
+              <h2 className="font-display text-2xl uppercase tracking-wide text-white">Services</h2>
+              <ul className="mt-4 flex-1 divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+                {services.map((s, i) => (
+                  <li key={`${s.name}-${i}`} className="flex items-baseline justify-between gap-3 px-4 py-3.5">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-white">{s.name}</div>
+                      {typeof s.durationMins === "number" && s.durationMins > 0 && (
+                        <div className="text-xs uppercase tracking-wide text-zinc-500">{s.durationMins} min</div>
+                      )}
+                    </div>
+                    {s.price && <span className="shrink-0 font-display text-xl tracking-wide" style={{ color: accent }}>{s.price}</span>}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {hours.length > 0 && (
+            <section className="flex flex-col">
+              <h2 className="font-display text-2xl uppercase tracking-wide text-white">Opening hours</h2>
+              <ul className="mt-4 flex-1 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+                {hours.map((h, i) => (
+                  <li key={`${h.day}-${i}`} className="flex items-center justify-between gap-4 border-b border-white/[0.05] px-4 py-3 last:border-b-0">
+                    <span className="text-sm font-medium text-zinc-200">{h.day}</span>
+                    <span className={`text-sm tabular-nums ${/closed/i.test(h.open) ? "text-zinc-500" : "text-zinc-300"}`}>{h.open}</span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+        {(content.phone || content.address) && (
+          <section className="mx-auto flex max-w-xl flex-col items-center gap-1 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 text-center text-sm">
+            {content.phone && <a href={telHref} className="font-semibold text-white hover:text-amber-soft">{content.phone}</a>}
+            {content.address && <div className="text-zinc-400">{content.address}</div>}
+          </section>
+        )}
+      </main>
+    </div>
+  );
+}
 
 interface SiteRow {
   id: string;
@@ -32,6 +129,7 @@ interface SiteRow {
   template: string;
   claimed_at: string | null;
   addon_interest_at: string | null;
+  booking_only: boolean;
 }
 
 /**
@@ -156,11 +254,11 @@ export default function SiteByToken() {
     queryFn: async (): Promise<SiteRow | null> => {
       const { data, error } = await sb
         .from("generated_sites")
-        .select("id, site_name, content, template, claimed_at, addon_interest_at")
+        .select("id, site_name, content, template, claimed_at, addon_interest_at, booking_only")
         .eq("share_token", token)
         .maybeSingle();
       if (error || !data) return null;
-      const row = data as { id: string; site_name: string; content: unknown; template: unknown; claimed_at: string | null; addon_interest_at: string | null };
+      const row = data as { id: string; site_name: string; content: unknown; template: unknown; claimed_at: string | null; addon_interest_at: string | null; booking_only: boolean | null };
       return {
         id: row.id,
         site_name: row.site_name,
@@ -168,6 +266,7 @@ export default function SiteByToken() {
         template: normaliseTemplate(row.template),
         claimed_at: row.claimed_at,
         addon_interest_at: row.addon_interest_at,
+        booking_only: !!row.booking_only,
       };
     },
   });
@@ -253,13 +352,20 @@ export default function SiteByToken() {
       {/* On /s/ the template claim bar is replaced by the ColourEditDock below
           (edit + keep in one place). Preview mode shows the clean site, no dock
           and no photo-edit affordances. */}
-      <Template
-        content={liveContent}
-        bookingEnabled={false}
-        onClaim={handleClaim}
-        showClaimBar={false}
-        onEditImage={isPreview ? undefined : handleEditImage}
-      />
+      {data.booking_only ? (
+        <BookingClaimPreview
+          content={liveContent}
+          onEditImage={isPreview ? undefined : handleEditImage}
+        />
+      ) : (
+        <Template
+          content={liveContent}
+          bookingEnabled={false}
+          onClaim={handleClaim}
+          showClaimBar={false}
+          onEditImage={isPreview ? undefined : handleEditImage}
+        />
+      )}
       <input
         ref={fileInputRef}
         type="file"
