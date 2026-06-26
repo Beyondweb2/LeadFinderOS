@@ -20,7 +20,7 @@ import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { lookupLineType } from "../_shared/enrichment/whatsapp.ts";
 import { fetchFacebookContacts, fetchFacebookPhotos, fetchInstagramPhotos } from "../_shared/enrichment/socialImages.ts";
-import { isAggregatorUrl, isPlatformSocialUrl } from "../_shared/aggregators.ts";
+import { isAggregatorUrl, isPlatformSocialUrl, isSiteBuilderSocialUrl, socialHandle } from "../_shared/aggregators.ts";
 
 /** Last-resort social discovery: crawl the business website for FB + IG links via
  *  the extract-facebook function (one fetch returns both). Graceful — empty on
@@ -105,6 +105,36 @@ function locationMatch(candidateText: string, place: NormalizedPlace | null): st
     if (n.length > 2 && t.includes(n)) return n;
   }
   return null;
+}
+
+// Generic/industry words that carry no identifying signal — dropped before the
+// handle name-match so a handle like "thebarbershop" can't match just on "barber".
+const SOCIAL_NAME_STOP = new Set<string>([
+  "the", "and", "co", "ltd", "limited", "uk", "official", "page", "salon", "salons",
+  "barber", "barbers", "barbershop", "barbershops", "hair", "hairdresser", "hairdressers",
+  "hairdressing", "beauty", "studio", "spa", "nails", "grooming", "cuts", "gents", "mens", "men",
+]);
+
+/**
+ * Name-gate for socials found by CRAWLING the business's own website. Accept only
+ * if the handle shares a meaningful (non-generic) name token with the business —
+ * substring either way, so both "gfm_london" and run-together "gfmbarbers" match
+ * "GFM Barbers", while "wix" does not. No distinctive tokens → unconfirmed (false).
+ */
+function socialHandleMatchesName(handle: string, businessName: string): boolean {
+  const h = (handle || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (!h) return false;
+  const tokens = (businessName || "").toLowerCase().split(/[^a-z0-9]+/)
+    .filter((t) => t.length >= 3 && !SOCIAL_NAME_STOP.has(t));
+  if (tokens.length === 0) return false;
+  return tokens.some((t) => h.includes(t) || t.includes(h));
+}
+
+/** A website-crawled social is the business's own only if it's not a site-builder's
+ *  account (facebook.com/wix) AND its handle matches the business name. */
+function acceptWebsiteSocial(url: string, businessName: string): boolean {
+  if (isSiteBuilderSocialUrl(url)) return false;
+  return socialHandleMatchesName(socialHandle(url), businessName);
 }
 
 interface EnrichResult {
@@ -263,8 +293,18 @@ serve(async (req) => {
         const ownSite = [website, place?.website, webSite].find((u) => u && !isAggregatorUrl(u)) || "";
         if (ownSite && (!fbUrl || !igUrl)) {
           const socials = await discoverSocialsFromWebsite(ownSite, authHeader);
-          if (!fbUrl && socials.facebook && !isPlatformSocialUrl(socials.facebook)) { fbUrl = socials.facebook; fbMethod = "apify"; fbSource = "website-crawl"; fbLoc = "n/a"; }
-          if (!igUrl && socials.instagram && !isPlatformSocialUrl(socials.instagram)) { igUrl = socials.instagram; igMethod = "apify"; igSource = "website-crawl"; igLoc = "n/a"; }
+          // Name-gate (NEW): a site's template can link a BUILDER's social (Wix-built
+          // site → facebook.com/wix). Accept only when the handle matches the business
+          // name + isn't a builder account; otherwise downgrade to an unconfirmed
+          // suggestion so it's never saved as their social or used for image scraping.
+          if (!fbUrl && socials.facebook && !isPlatformSocialUrl(socials.facebook)) {
+            if (acceptWebsiteSocial(socials.facebook, businessName)) { fbUrl = socials.facebook; fbMethod = "apify"; fbSource = "website-crawl"; fbLoc = "name-match"; }
+            else { fbSuggestion = { url: socials.facebook, reason: "name_mismatch" }; fbSource = "website-crawl"; fbLoc = "unconfirmed"; }
+          }
+          if (!igUrl && socials.instagram && !isPlatformSocialUrl(socials.instagram)) {
+            if (acceptWebsiteSocial(socials.instagram, businessName)) { igUrl = socials.instagram; igMethod = "apify"; igSource = "website-crawl"; igLoc = "name-match"; }
+            else { igSuggestion = { url: socials.instagram, reason: "name_mismatch" }; igSource = "website-crawl"; igLoc = "unconfirmed"; }
+          }
         }
 
         // 2d) WEB-RESULTS socials — LAST RESORT, location-guarded (results mix
