@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
@@ -6,6 +7,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SiteContent } from "@/templates/shared/content";
 import { getTemplateDef, normaliseTemplate, DEFAULT_TEMPLATE_KEY } from "@/templates/registry";
 import { useSiteBranding } from "@/hooks/useSiteBranding";
+import { bookingUrl } from "@/lib/subdomain";
 
 // booking_staff isn't in the generated types yet (Phase 1 migration applied via
 // the SQL runner) — untyped view for the booking-ready probe. RLS still applies.
@@ -36,33 +38,40 @@ export default function PublicSite() {
   const { data, isLoading } = useQuery({
     queryKey: ["generated-site", slug],
     enabled: !!slug,
-    queryFn: async (): Promise<{ content: SiteContent | null; template: string }> => {
-      const res = await supabase
+    queryFn: async (): Promise<{ content: SiteContent | null; template: string; bookingOnly: boolean }> => {
+      const res = await sb
         .from("generated_sites")
-        .select("content, template")
+        .select("content, template, booking_only")
         .eq("site_name", slug!)
         .maybeSingle();
       if (res.error) {
-        // The `template` column may not exist yet — retry with content only and
-        // assume the historical barber template so live sites keep working.
-        const fallback = await supabase
+        // The `template`/`booking_only` columns may not exist yet — retry with
+        // content only and assume the historical barber template so live sites keep working.
+        const fallback = await sb
           .from("generated_sites")
           .select("content")
           .eq("site_name", slug!)
           .maybeSingle();
-        if (fallback.error) return { content: null, template: DEFAULT_TEMPLATE_KEY };
+        if (fallback.error) return { content: null, template: DEFAULT_TEMPLATE_KEY, bookingOnly: false };
         return {
           content: (fallback.data?.content as unknown as SiteContent) ?? null,
           template: DEFAULT_TEMPLATE_KEY,
+          bookingOnly: false,
         };
       }
-      const row = res.data as { content: unknown; template: unknown } | null;
+      const row = res.data as { content: unknown; template: unknown; booking_only?: boolean } | null;
       return {
         content: (row?.content as SiteContent) ?? null,
         template: normaliseTemplate(row?.template),
+        bookingOnly: !!row?.booking_only,
       };
     },
   });
+
+  // Booking-only rows have no marketing site → send them to their booking page.
+  useEffect(() => {
+    if (data?.bookingOnly && slug) window.location.replace(bookingUrl(slug));
+  }, [data?.bookingOnly, slug]);
 
   const content = data?.content ?? null;
   const template = data?.template ?? DEFAULT_TEMPLATE_KEY;

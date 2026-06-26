@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -5,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SiteContent } from "@/templates/shared/content";
 import { getTemplateDef, normaliseTemplate, DEFAULT_TEMPLATE_KEY } from "@/templates/registry";
 import { useSiteBranding } from "@/hooks/useSiteBranding";
+import { bookingUrl } from "@/lib/subdomain";
 
 const sb = supabase as unknown as SupabaseClient;
 
@@ -22,35 +24,42 @@ const sb = supabase as unknown as SupabaseClient;
 export default function SubdomainSite({ label }: { label: string }) {
   const { data, isLoading } = useQuery({
     queryKey: ["subdomain-site", label],
-    queryFn: async (): Promise<{ content: SiteContent | null; template: string; siteName: string | null }> => {
+    queryFn: async (): Promise<{ content: SiteContent | null; template: string; siteName: string | null; bookingOnly: boolean }> => {
       const res = await sb
         .from("generated_sites")
-        .select("site_name, content, template")
+        .select("site_name, content, template, booking_only")
         .eq("subdomain", label)
         .maybeSingle();
       if (res.error) {
-        // `template` column may not exist yet on an older deploy → retry minimal.
+        // `template`/`booking_only` columns may not exist yet on an older deploy → retry minimal.
         const fb = await sb
           .from("generated_sites")
           .select("site_name, content")
           .eq("subdomain", label)
           .maybeSingle();
-        if (fb.error) return { content: null, template: DEFAULT_TEMPLATE_KEY, siteName: null };
+        if (fb.error) return { content: null, template: DEFAULT_TEMPLATE_KEY, siteName: null, bookingOnly: false };
         const r = fb.data as { site_name?: string; content?: unknown } | null;
         return {
           content: (r?.content as SiteContent) ?? null,
           template: DEFAULT_TEMPLATE_KEY,
           siteName: r?.site_name ?? null,
+          bookingOnly: false,
         };
       }
-      const row = res.data as { site_name?: string; content?: unknown; template?: unknown } | null;
+      const row = res.data as { site_name?: string; content?: unknown; template?: unknown; booking_only?: boolean } | null;
       return {
         content: (row?.content as SiteContent) ?? null,
         template: normaliseTemplate(row?.template),
         siteName: row?.site_name ?? null,
+        bookingOnly: !!row?.booking_only,
       };
     },
   });
+
+  // Booking-only rows have no marketing site → send them to their booking page.
+  useEffect(() => {
+    if (data?.bookingOnly && data?.siteName) window.location.replace(bookingUrl(data.siteName));
+  }, [data?.bookingOnly, data?.siteName]);
 
   const content = data?.content ?? null;
   const template = data?.template ?? DEFAULT_TEMPLATE_KEY;
