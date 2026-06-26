@@ -846,8 +846,8 @@ serve(async (req) => {
       // so a brand-new site doesn't look empty; the editor can switch this off.
       showExamplePrices: true,
       // Pre-fill the real Google reviews link when we have one (verifiable, not invented).
-      // Marketing-only (the booking page doesn't show it) → omitted for booking-only.
-      ...(!bookingOnly && googleReviewsUrl ? { googleReviewsUrl } : {}),
+      // KEPT for booking-only too — the booking page's rating badge links to it.
+      ...(googleReviewsUrl ? { googleReviewsUrl } : {}),
       // Image slots start EMPTY (stock fallback). The collected pool is handed to
       // the editor's manual drag-and-drop board; nothing is auto-placed.
       ...(imagePool.length ? { imagePool } : {}),

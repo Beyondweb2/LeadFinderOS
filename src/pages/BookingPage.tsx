@@ -92,7 +92,7 @@ export default function BookingPage({ slug }: { slug: string }) {
 
   return (
     <div className="min-h-screen bg-ink font-body text-zinc-200" style={accentStyle}>
-      <header className="relative isolate flex min-h-[34vh] flex-col items-center justify-center overflow-hidden px-6 py-12 text-center">
+      <header className="relative isolate flex min-h-[46vh] flex-col items-center justify-center overflow-hidden px-6 py-14 text-center">
         {content.heroImageUrl ? (
           <img src={content.heroImageUrl} alt={businessName} className="absolute inset-0 -z-10 h-full w-full object-cover" />
         ) : (
@@ -168,13 +168,28 @@ export default function BookingPage({ slug }: { slug: string }) {
               {content.address && <div className="text-zinc-400">{content.address}</div>}
             </div>
             {typeof content.googleRating === "number" && (
-              <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-3 py-1.5">
-                <span style={{ color: accent }}>★</span>
-                <span className="font-bold text-white">{content.googleRating.toFixed(1)}</span>
-                {typeof content.reviewCount === "number" && (
-                  <span className="text-xs text-zinc-400">({content.reviewCount} Google reviews)</span>
-                )}
-              </div>
+              content.googleReviewsUrl ? (
+                <a
+                  href={content.googleReviewsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 transition-colors hover:border-amber/40"
+                >
+                  <span style={{ color: accent }}>★</span>
+                  <span className="font-bold text-white">{content.googleRating.toFixed(1)}</span>
+                  {typeof content.reviewCount === "number" && (
+                    <span className="text-xs text-zinc-400">({content.reviewCount} Google reviews)</span>
+                  )}
+                </a>
+              ) : (
+                <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-3 py-1.5">
+                  <span style={{ color: accent }}>★</span>
+                  <span className="font-bold text-white">{content.googleRating.toFixed(1)}</span>
+                  {typeof content.reviewCount === "number" && (
+                    <span className="text-xs text-zinc-400">({content.reviewCount} Google reviews)</span>
+                  )}
+                </div>
+              )
             )}
           </section>
         )}
