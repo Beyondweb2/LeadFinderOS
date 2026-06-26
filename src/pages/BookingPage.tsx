@@ -110,7 +110,27 @@ export default function BookingPage({ slug }: { slug: string }) {
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-ink/65" />
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink/50 via-ink/70 to-ink/95" />
 
-      <header className="relative z-10 flex min-h-[46vh] flex-col items-center justify-center px-6 py-14 text-center">
+      {/* Slim top bar — anchors the top over the hero (business name + Book). Light, not a nav. */}
+      <div className="relative z-20 flex items-center justify-between gap-3 px-5 py-3 sm:px-8">
+        <span className="min-w-0 truncate font-display text-sm uppercase tracking-wide text-white/90 drop-shadow-[0_1px_8px_rgba(0,0,0,0.6)]">
+          {businessName}
+        </span>
+        <div className="flex shrink-0 items-center gap-3">
+          {content.phone && (
+            <a href={telHref} className="hidden text-xs text-zinc-200 transition-colors hover:text-white sm:inline">{content.phone}</a>
+          )}
+          <button
+            type="button"
+            onClick={() => openFlow(null)}
+            className="rounded-full px-4 py-1.5 text-xs font-bold text-ink shadow transition-transform active:scale-[0.97]"
+            style={{ backgroundColor: accent }}
+          >
+            Book
+          </button>
+        </div>
+      </div>
+
+      <header className="relative z-10 flex min-h-[40vh] flex-col items-center justify-center px-6 pb-6 pt-8 text-center">
         {content.logoUrl && (
           <img src={content.logoUrl} alt={businessName} className="mb-4 h-14 w-auto object-contain" />
         )}
@@ -130,7 +150,7 @@ export default function BookingPage({ slug }: { slug: string }) {
 
       {/* Lean, booking-focused detail — all from data already on the row. No about,
           gallery, marketing copy or reviews list. */}
-      <main className="relative z-10 mx-auto max-w-4xl space-y-8 px-6 py-12">
+      <main className="relative z-10 mx-auto max-w-4xl space-y-8 px-6 pb-12 pt-4">
         {/* Services + hours: two columns on desktop, stacked on mobile. */}
         <div className="grid gap-8 md:grid-cols-2">
           {services.length > 0 && (
