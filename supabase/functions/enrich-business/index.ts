@@ -248,20 +248,27 @@ serve(async (req) => {
         //    location (Birmingham-vs-Swindon); else it's a suggestion to verify,
         //    never auto-attached. Manual paste stays the override.
         // Maps-listing socials, minus any that are a platform's OWN account
-        // (e.g. facebook.com/fresha) — those are never the business's.
-        const mapsFb = place?.facebook && !isPlatformSocialUrl(place.facebook) ? place.facebook : "";
-        const mapsIg = place?.instagram && !isPlatformSocialUrl(place.instagram) ? place.instagram : "";
+        // (e.g. facebook.com/fresha). NEW: also name-gate + builder-denylist them
+        // (same as website-crawl) — a Maps listing can carry a builder/wrong FB
+        // (e.g. facebook.com/wix). Fail → not attached, surfaced as a suggestion.
+        const mapsFbRaw = place?.facebook && !isPlatformSocialUrl(place.facebook) ? place.facebook : "";
+        const mapsIgRaw = place?.instagram && !isPlatformSocialUrl(place.instagram) ? place.instagram : "";
+        const mapsFb = mapsFbRaw && acceptWebsiteSocial(mapsFbRaw, businessName) ? mapsFbRaw : "";
+        const mapsIg = mapsIgRaw && acceptWebsiteSocial(mapsIgRaw, businessName) ? mapsIgRaw : "";
         let fbUrl = existingFacebook || mapsFb;
         let fbMethod: string | null = existingFacebook ? "manual" : mapsFb ? "apify" : null;
         let fbSource = existingFacebook ? "manual" : mapsFb ? "maps-listing" : "none";
         let fbLoc = "n/a";
         let fbSuggestion: { url: string; reason: string } | null = null;
+        // A Maps FB that failed the gate (builder / name-mismatch) → suggestion only.
+        if (!existingFacebook && mapsFbRaw && !mapsFb) { fbSuggestion = { url: mapsFbRaw, reason: "name_mismatch" }; fbSource = "maps-listing"; fbLoc = "unconfirmed"; }
 
         let igUrl = existingInstagram || mapsIg;
         let igMethod: string | null = existingInstagram ? "manual" : mapsIg ? "apify" : null;
         let igSource = existingInstagram ? "manual" : mapsIg ? "maps-listing" : "none";
         let igLoc = "n/a";
         let igSuggestion: { url: string; reason: string } | null = null;
+        if (!existingInstagram && mapsIgRaw && !mapsIg) { igSuggestion = { url: mapsIgRaw, reason: "name_mismatch" }; igSource = "maps-listing"; igLoc = "unconfirmed"; }
 
         // 2b) Resolve the business's OWN website. Web-results mix companies (same
         //     search term), so a web-results "website" is only trusted when its text

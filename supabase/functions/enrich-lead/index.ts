@@ -54,6 +54,11 @@ function leadUpdateFor(
     };
   }
   if (type === "facebook") {
+    // ⚠️ UNGATED PATH: this writes facebook_url with no name-gate. It's safe today
+    // ONLY because the Apify call is STUBBED (apify-stub returns found:false, never a
+    // URL). IF APIFY_MODE goes live, name-gate the discovered URL here first — the
+    // acceptWebsiteSocial pattern in enrich-business (site-builder denylist +
+    // business-name handle match) — or a Wix-built lead gets facebook.com/wix again.
     return {
       ...(found && value ? { facebook_url: value } : {}),
       facebook_status: found ? "found" : "none",
