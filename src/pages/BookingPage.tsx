@@ -146,34 +146,12 @@ export default function BookingPage({ slug }: { slug: string }) {
         </div>
       </header>
 
-      {/* Hero — name + tagline + reviews. No CTA here: the header "Book now" and the
-          tap-to-book services are the booking paths, so the hero just sets the scene. */}
-      <section className="relative z-10 flex flex-col items-center justify-center px-6 pb-12 pt-14 text-center">
+      {/* Hero — just the business name, kept tight so the tappable service boxes sit
+          high as the primary action. Booking paths: header "Book now" + the services. */}
+      <section className="relative z-10 px-6 pb-6 pt-10 text-center">
         <h1 className="font-display text-4xl uppercase leading-[1.05] tracking-wide text-white drop-shadow-[0_2px_24px_rgba(0,0,0,0.65)] sm:text-6xl">
           {businessName}
         </h1>
-        <p className="mt-4 text-sm text-zinc-300 sm:text-base">Book your appointment online</p>
-        {/* Google reviews up top so they're visible without scrolling. */}
-        {typeof content.googleRating === "number" && (() => {
-          const inner = (
-            <>
-              <span style={{ color: accent }}>★</span>
-              <span className="font-bold text-white">{content.googleRating!.toFixed(1)}</span>
-              {typeof content.reviewCount === "number" && (
-                <span className="text-xs text-zinc-300">· {content.reviewCount} Google reviews</span>
-              )}
-            </>
-          );
-          return content.googleReviewsUrl ? (
-            <a href={content.googleReviewsUrl} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 backdrop-blur-sm transition-colors hover:border-white/35">
-              {inner}
-            </a>
-          ) : (
-            <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 backdrop-blur-sm">
-              {inner}
-            </div>
-          );
-        })()}
       </section>
 
       {/* Lean, booking-focused detail — all from data already on the row. No about,
@@ -187,7 +165,7 @@ export default function BookingPage({ slug }: { slug: string }) {
                 <h2 className="font-display text-2xl uppercase tracking-wide text-white">Services</h2>
                 <span className="text-xs uppercase tracking-wide text-zinc-400">Tap to book</span>
               </div>
-              <ul className="mt-4 flex-1 divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/10 bg-black/40 backdrop-blur-sm">
+              <ul className="mt-4 flex-1 divide-y divide-white/10 overflow-hidden rounded-2xl border border-white/25 bg-black/60 shadow-xl backdrop-blur-sm">
                 {services.map((s, i) => (
                   <li key={`${s.name}-${i}`}>
                     <button
@@ -217,7 +195,7 @@ export default function BookingPage({ slug }: { slug: string }) {
           {hours.length > 0 && (
             <section className="flex flex-col">
               <h2 className="font-display text-2xl uppercase tracking-wide text-white">Opening hours</h2>
-              <ul className="mt-4 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-black/40 backdrop-blur-sm">
+              <ul className="mt-4 flex-1 overflow-hidden rounded-2xl border border-white/20 bg-black/55 shadow-lg backdrop-blur-sm">
                 {hours.map((h, i) => (
                   <li key={`${h.day}-${i}`} className="flex items-center justify-between gap-4 border-b border-white/[0.05] px-4 py-3 last:border-b-0">
                     <span className="text-sm font-medium text-zinc-200">{h.day}</span>
@@ -229,14 +207,37 @@ export default function BookingPage({ slug }: { slug: string }) {
           )}
         </div>
 
-        {/* Contact: phone + address. The Google reviews now sit up in the hero so
-            they're visible without scrolling. */}
-        {(content.phone || content.address) && (
-          <section className="mx-auto flex max-w-xl flex-col items-center gap-1 rounded-2xl border border-white/10 bg-black/40 p-4 text-center backdrop-blur-sm">
-            {content.phone && (
-              <a href={telHref} className="block font-semibold text-white transition-colors hover:text-amber-soft">{content.phone}</a>
+        {/* Contact + Google reviews at the foot of the page. */}
+        {(content.phone || content.address || typeof content.googleRating === "number") && (
+          <section className="mx-auto flex max-w-xl flex-col items-center gap-3 rounded-2xl border border-white/15 bg-black/55 p-4 text-center backdrop-blur-sm">
+            {(content.phone || content.address) && (
+              <div className="space-y-1">
+                {content.phone && (
+                  <a href={telHref} className="block font-semibold text-white transition-colors hover:text-amber-soft">{content.phone}</a>
+                )}
+                {content.address && <div className="text-sm text-zinc-400">{content.address}</div>}
+              </div>
             )}
-            {content.address && <div className="text-sm text-zinc-400">{content.address}</div>}
+            {typeof content.googleRating === "number" && (() => {
+              const inner = (
+                <>
+                  <span style={{ color: accent }}>★</span>
+                  <span className="font-bold text-white">{content.googleRating!.toFixed(1)}</span>
+                  {typeof content.reviewCount === "number" && (
+                    <span className="text-xs text-zinc-300">· {content.reviewCount} Google reviews</span>
+                  )}
+                </>
+              );
+              return content.googleReviewsUrl ? (
+                <a href={content.googleReviewsUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/30 px-3.5 py-1.5 transition-colors hover:border-white/35">
+                  {inner}
+                </a>
+              ) : (
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/30 px-3.5 py-1.5">
+                  {inner}
+                </div>
+              );
+            })()}
           </section>
         )}
 
