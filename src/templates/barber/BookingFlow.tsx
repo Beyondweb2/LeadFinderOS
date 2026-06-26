@@ -206,12 +206,15 @@ export function BookingFlow({
   slug,
   content,
   variant = "barber",
+  initialService = null,
 }: {
   open: boolean;
   onClose: () => void;
   slug: string;
   content: BarberSiteContent;
   variant?: BookingVariant;
+  /** When set (e.g. a tapped service row), preselect it and skip the service step. */
+  initialService?: BarberService | null;
 }) {
   const t = THEMES[variant];
   const [step, setStep] = useState<Step>("service");
@@ -236,11 +239,17 @@ export function BookingFlow({
   const services = useMemo(() => (content.services ?? []).filter((s) => (s.name ?? "").trim()), [content.services]);
   const duration = service?.durationMins ?? DEFAULT_DURATION;
 
-  // Reset to the start each time the flow is opened.
+  // Reset each time the flow is opened. If a service was tapped (initialService),
+  // preselect it and start on the staff step; otherwise start on service selection.
   useEffect(() => {
     if (!open) return;
-    setStep("service");
-    setService(null);
+    if (initialService) {
+      setService(initialService);
+      setStep("staff");
+    } else {
+      setService(null);
+      setStep("service");
+    }
     setChosenStaff(null);
     setDay(null);
     setSlotIso(null);
@@ -249,7 +258,7 @@ export function BookingFlow({
     setReminderOptIn(false);
     setError(null);
     setConfirmed(null);
-  }, [open]);
+  }, [open, initialService]);
 
   // Load active staff + their hours (anon-readable for published sites).
   useEffect(() => {

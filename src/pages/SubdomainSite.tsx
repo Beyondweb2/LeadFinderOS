@@ -82,7 +82,10 @@ export default function SubdomainSite({ label }: { label: string }) {
   const def = getTemplateDef(template);
   useSiteBranding(content?.businessName || def.brandFallbackLabel, template);
 
-  if (isLoading) {
+  // Render gate (kills the marketing flash): a booking-only row must NEVER paint the
+  // marketing template — show the loader until the redirect (useEffect above) sends
+  // the visitor to the booking page. Render-gate, not render-then-redirect.
+  if (isLoading || data?.bookingOnly) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${def.loadingBgClass}`}>
         <Loader2 className={`h-8 w-8 animate-spin ${def.loadingSpinnerClass}`} />

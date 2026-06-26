@@ -96,7 +96,10 @@ export default function PublicSite() {
   const businessName = content?.businessName ?? "";
   useSiteBranding(businessName || def.brandFallbackLabel, template);
 
-  if (isLoading) {
+  // Render gate (kills the marketing flash): a booking-only row must NEVER paint the
+  // marketing template. Show the loader until the redirect (useEffect above) sends
+  // the visitor to the booking page — render-gate, not render-then-redirect.
+  if (isLoading || data?.bookingOnly) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${def.loadingBgClass}`}>
         <Loader2 className={`h-8 w-8 animate-spin ${def.loadingSpinnerClass}`} />
