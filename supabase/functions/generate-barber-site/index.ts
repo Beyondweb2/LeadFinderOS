@@ -457,24 +457,37 @@ serve(async (req) => {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    // Decision: convert-in-place vs the duplicate-guard early return.
+    //  - A NORMAL / full-site re-generate (no booking_only) keeps the historical
+    //    behaviour: return the existing site untouched — never clobber it, never
+    //    create a duplicate.
+    //  - A BOOKING-ONLY generate on a lead that already has a site CONVERTS that
+    //    site in place: we don't return here and don't insert a duplicate — we fall
+    //    through, build the booking-only content (confirmed services + marketing
+    //    stripped), then UPDATE this row at the save step below (see convertSiteId).
+    let convertSiteId: string | null = null;
     if (existingSite) {
-      console.log("[GENERATE-BARBER-SITE] Existing site for lead, returning it:", existingSite.id);
-      return jsonResponse(
-        {
-          success: true,
-          existing: true,
-          site: {
-            id: existingSite.id,
-            lead_id: leadId,
-            slug: existingSite.site_name,
-            status: existingSite.status,
+      if (!bookingOnly) {
+        console.log("[GENERATE-BARBER-SITE] Existing site for lead, returning it:", existingSite.id);
+        return jsonResponse(
+          {
+            success: true,
+            existing: true,
+            site: {
+              id: existingSite.id,
+              lead_id: leadId,
+              slug: existingSite.site_name,
+              status: existingSite.status,
+            },
+            preview_path: `/p/${existingSite.site_name}`,
           },
-          preview_path: `/p/${existingSite.site_name}`,
-        },
-        200,
-        corsHeaders,
-        rlHeaders,
-      );
+          200,
+          corsHeaders,
+          rlHeaders,
+        );
+      }
+      console.log("[GENERATE-BARBER-SITE] Existing site + booking_only → converting in place:", existingSite.id);
+      convertSiteId = existingSite.id as string;
     }
 
     // --- Step 9a: Deep ENRICH (reviews + images + rating/hours/contacts) ---
@@ -924,21 +937,41 @@ serve(async (req) => {
     let insertError: { code?: string; message?: string } | null = null;
     let slug = baseSlug;
 
-    for (let attempt = 1; attempt <= 50; attempt++) {
-      slug = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
+    if (convertSiteId) {
+      // CONVERT IN PLACE: a booking-only generate on a lead that already has a site.
+      // UPDATE the existing row (keep its slug, status, owner, share_token, subdomain)
+      // and only swap content → booking-only, template, and booking_only=true. The
+      // service-role client bypasses the protected-fields lock, so booking_only (a
+      // protected column) can be set here. No duplicate row is created.
       const res = await serviceClient
         .from("generated_sites")
-        .insert({ lead_id: leadId, site_name: slug, content, status: "draft", template, booking_only: bookingOnly })
+        .update({ content, template, booking_only: true })
+        .eq("id", convertSiteId)
         .select("id, lead_id, site_name, status, created_at")
         .single();
       if (!res.error) {
         saved = res.data as unknown as SavedRow;
-        insertError = null;
-        break;
+        slug = saved.site_name; // keep the existing slug
+      } else {
+        insertError = res.error;
       }
-      insertError = res.error;
-      if (res.error.code === "23505") continue; // slug already taken — next suffix
-      break; // a different error — stop and report
+    } else {
+      for (let attempt = 1; attempt <= 50; attempt++) {
+        slug = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
+        const res = await serviceClient
+          .from("generated_sites")
+          .insert({ lead_id: leadId, site_name: slug, content, status: "draft", template, booking_only: bookingOnly })
+          .select("id, lead_id, site_name, status, created_at")
+          .single();
+        if (!res.error) {
+          saved = res.data as unknown as SavedRow;
+          insertError = null;
+          break;
+        }
+        insertError = res.error;
+        if (res.error.code === "23505") continue; // slug already taken — next suffix
+        break; // a different error — stop and report
+      }
     }
 
     if (insertError || !saved) {
