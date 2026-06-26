@@ -694,6 +694,9 @@ serve(async (req) => {
     // Booking-only skips OpenAI entirely (no tagline / heroHeadline / descriptions)
     // — cheaper + faster. The whole AI block below is gated; full-site is unchanged.
     let modelContent: Partial<BarberSiteContent> = {};
+    // Hoisted out of the AI block: the final usage log (openai_usd / total_usd) reads
+    // it unconditionally, so booking-only (which skips the block) must leave it 0.
+    let openAiCostUsd = 0;
     if (!bookingOnly) {
     let openAiRes: Response;
     try {
@@ -738,7 +741,7 @@ serve(async (req) => {
     // Estimate cost from the tokens OpenAI reports, log via the same pattern.
     const inTok = Number(completion?.usage?.prompt_tokens) || 0;
     const outTok = Number(completion?.usage?.completion_tokens) || 0;
-    const openAiCostUsd =
+    openAiCostUsd =
       (inTok / 1_000_000) * OPENAI_INPUT_USD_PER_M + (outTok / 1_000_000) * OPENAI_OUTPUT_USD_PER_M;
     console.log(
       `[GENERATE-BARBER-SITE] OpenAI tokens in=${inTok} out=${outTok} est_cost_usd=${openAiCostUsd.toFixed(6)}`,
