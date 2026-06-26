@@ -146,20 +146,13 @@ export default function BookingPage({ slug }: { slug: string }) {
         </div>
       </header>
 
-      {/* Compact hero — short so Services + reviews sit high on the first screen. */}
-      <section className="relative z-10 flex flex-col items-center justify-center px-6 pb-8 pt-10 text-center">
+      {/* Hero — name + tagline + reviews. No CTA here: the header "Book now" and the
+          tap-to-book services are the booking paths, so the hero just sets the scene. */}
+      <section className="relative z-10 flex flex-col items-center justify-center px-6 pb-12 pt-14 text-center">
         <h1 className="font-display text-3xl uppercase tracking-wide text-white drop-shadow-[0_2px_20px_rgba(0,0,0,0.6)] sm:text-4xl">
           {businessName}
         </h1>
-        <p className="mt-2 text-sm text-zinc-300">Book your appointment online</p>
-        <button
-          type="button"
-          onClick={() => openFlow(null)}
-          className="mt-5 inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-base font-bold text-ink shadow-lg transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
-          style={{ backgroundColor: accent }}
-        >
-          Book appointment
-        </button>
+        <p className="mt-3 text-sm text-zinc-300">Book your appointment online</p>
         {/* Google reviews up top so they're visible without scrolling. */}
         {typeof content.googleRating === "number" && (() => {
           const inner = (
@@ -172,11 +165,11 @@ export default function BookingPage({ slug }: { slug: string }) {
             </>
           );
           return content.googleReviewsUrl ? (
-            <a href={content.googleReviewsUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 backdrop-blur-sm transition-colors hover:border-white/35">
+            <a href={content.googleReviewsUrl} target="_blank" rel="noreferrer" className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 backdrop-blur-sm transition-colors hover:border-white/35">
               {inner}
             </a>
           ) : (
-            <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 backdrop-blur-sm">
+            <div className="mt-6 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 backdrop-blur-sm">
               {inner}
             </div>
           );
