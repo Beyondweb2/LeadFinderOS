@@ -137,6 +137,26 @@ Deno.serve(async (req) => {
       { auth: { persistSession: false } },
     );
 
+    // Targeted, NON-destructive flip of booking_only (service_role bypasses the
+    // protected-fields lock). Keeps the row published + preserves staff/content/
+    // owner — so booking can be tested end-to-end. Returns the end state.
+    if (typeof body.set_booking_only === "boolean") {
+      const { error: flipErr } = await service
+        .from("generated_sites")
+        .update({ booking_only: body.set_booking_only, status: "published" })
+        .eq("id", TEST_BARBER_SITE_ID);
+      if (flipErr) {
+        console.error("[RESET-TEST-BARBER] booking_only flip failed:", flipErr.message);
+        return json({ ok: false, error: "flip_failed" }, 500);
+      }
+      const { data: after } = await service
+        .from("generated_sites")
+        .select("site_name, owner_id, is_paid, status, subdomain, booking_only")
+        .eq("id", TEST_BARBER_SITE_ID)
+        .maybeSingle();
+      return json({ ok: true, set_booking_only: after });
+    }
+
     // 3) Wipe test child data scoped to the test SITE id only.
     // Staff hours hang off staff; delete them first, then staff, then the rest.
     const { data: staffRows } = await service
