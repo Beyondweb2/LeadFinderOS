@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { supabase } from '@/integrations/supabase/client';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { barberSitePreviewUrl, publicSiteUrl } from '@/config/publicSite';
+import { bookingUrl } from '@/lib/subdomain';
 import {
   Select,
   SelectContent,
@@ -195,6 +196,7 @@ interface LeadFunnel {
   replied_at: string | null;
   claimed_at: string | null;
   addon_interest_at: string | null;
+  booking_only: boolean | null;
 }
 
 /** Small coloured section header for visual hierarchy + fast scanning. */
@@ -327,7 +329,7 @@ function LeadDetailBody({
     (async () => {
       const { data } = await (supabase as unknown as SupabaseClient)
         .from('generated_sites')
-        .select('lead_id, site_name, share_token, sent_at, first_opened_at, replied_at, claimed_at, addon_interest_at')
+        .select('lead_id, site_name, share_token, sent_at, first_opened_at, replied_at, claimed_at, addon_interest_at, booking_only')
         .eq('lead_id', lead.id)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -427,12 +429,14 @@ function LeadDetailBody({
   };
 
   // Operator-facing site link for the popup (Preview button / URL / "Their site").
-  // Uses the ?preview=1 variant so OUR clicks never record an Opened event and the
-  // claim splash is hidden. The barber's actual /s/ link (sent elsewhere) is the
-  // plain barberSiteUrl and is unaffected. The /p/ fallback already records nothing.
-  const siteUrl = funnel?.share_token
-    ? barberSitePreviewUrl(funnel.share_token)
-    : (funnel?.site_name ? publicSiteUrl(funnel.site_name) : null);
+  // Booking-only sites live at bookmybarber.uk/<slug> — link straight there so there's
+  // no yoursites.uk → bookmybarber.uk redirect hop. For marketing sites, use the
+  // ?preview=1 /s/ variant (no Opened event, claim splash hidden); /p/ is the fallback.
+  const siteUrl = funnel?.booking_only && funnel?.site_name
+    ? bookingUrl(funnel.site_name)
+    : funnel?.share_token
+      ? barberSitePreviewUrl(funnel.share_token)
+      : (funnel?.site_name ? publicSiteUrl(funnel.site_name) : null);
 
   const handleAddCustomActionSubmit = () => {
     const trimmed = newCustomAction.trim();

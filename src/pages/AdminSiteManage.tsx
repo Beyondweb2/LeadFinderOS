@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, MessageCircle, MessageSquare, Phone, CalendarClock } from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
 import { publicSiteUrl, barberSiteUrl } from "@/config/publicSite";
+import { bookingUrl } from "@/lib/subdomain";
 import { useTemplates } from "@/hooks/useTemplates";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
@@ -129,7 +130,9 @@ export default function AdminSiteManage() {
   }
 
   const isPublished = site.status === "published";
-  const publicUrl = publicSiteUrl(site.site_name);
+  // Booking-only sites live at bookmybarber.uk/<slug> — point Preview/Copy straight
+  // there so there's no yoursites.uk → bookmybarber.uk redirect hop.
+  const publicUrl = isBookingOnly ? bookingUrl(site.site_name) : publicSiteUrl(site.site_name);
 
   const handleTogglePublish = async () => {
     setSavingStatus(true);
@@ -284,7 +287,7 @@ export default function AdminSiteManage() {
                   <CalendarClock className="h-3 w-3" /> Booking-only
                 </Badge>
               )}
-              <span className="font-mono text-xs">/p/{site.site_name}</span>
+              <span className="font-mono text-xs">{isBookingOnly ? `bookmybarber.uk/${site.site_name}` : `/p/${site.site_name}`}</span>
             </div>
           </div>
         </div>
