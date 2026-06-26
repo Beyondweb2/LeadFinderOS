@@ -1585,9 +1585,10 @@ export function OutreachTable({
                         </>
                       )}
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        {/* Wrap the action icons into a compact 2-row block instead of
-                            one long line (capped just under the 160px Actions column). */}
-                        <div className="mx-auto flex max-w-[150px] flex-wrap items-center justify-center gap-1.5">
+                        {/* Action icons in a fixed 5-per-row grid: every icon is an
+                            individual grid item (the enrich group and the SMS/WhatsApp
+                            pair are flattened), so 9 icons wrap as 5 + 4, not uneven rows. */}
+                        <div className="mx-auto grid w-fit [grid-template-columns:repeat(5,auto)] place-items-center gap-1">
                           {(lead.google_maps_url || ((lead as any).place_id ? `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}` : null)) && (
                             <a
                               href={lead.google_maps_url || `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}`}
@@ -1600,7 +1601,7 @@ export function OutreachTable({
                             </a>
                           )}
                           {onUpdateLead && !isDemoLead(lead.id) && (
-                            <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} />
+                            <LeadEnrichButtons lead={lead} onUpdate={onUpdateLead} className="contents" />
                           )}
                           {lead.phone ? (
                             <>
@@ -1634,22 +1635,21 @@ export function OutreachTable({
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
-                              <div className="flex items-center gap-0.5" data-walkthrough={lead.outreach_attempts === 0 && !walkthroughContactedIds.has(lead.id) ? 'contact' : undefined}>
-                                <button
-                                  onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'sms' } })); handleSMSClick(lead); }}
-                                  className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-colors"
-                                  title="Send SMS"
-                                >
-                                  <MessageCircle className="h-4 w-4" />
-                                </button>
-                                <button
-                                  onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'whatsapp' } })); handleWhatsAppClick(lead); }}
-                                  className="p-1.5 rounded-md hover:bg-green-500/10 text-green-500 hover:text-green-400 transition-colors"
-                                  title="Send WhatsApp message"
-                                >
-                                  <MessageSquare className="h-4 w-4" />
-                                </button>
-                              </div>
+                              <button
+                                onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'sms' } })); handleSMSClick(lead); }}
+                                className="p-1.5 rounded-md hover:bg-blue-500/10 text-blue-400 hover:text-blue-300 transition-colors"
+                                title="Send SMS"
+                                data-walkthrough={lead.outreach_attempts === 0 && !walkthroughContactedIds.has(lead.id) ? 'contact' : undefined}
+                              >
+                                <MessageCircle className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={() => { window.dispatchEvent(new CustomEvent('outreach-first-contact-click', { detail: { method: 'whatsapp' } })); handleWhatsAppClick(lead); }}
+                                className="p-1.5 rounded-md hover:bg-green-500/10 text-green-500 hover:text-green-400 transition-colors"
+                                title="Send WhatsApp message"
+                              >
+                                <MessageSquare className="h-4 w-4" />
+                              </button>
                             </>
                           ) : phoneFetchStatus[lead.id] === 'pending' ? (
                             <span className="text-muted-foreground text-xs flex items-center gap-1">

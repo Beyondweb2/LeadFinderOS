@@ -1,5 +1,6 @@
 import { Mail, Facebook, Instagram, Globe, Loader2, Ban, Sparkles, Smartphone, PhoneOff } from 'lucide-react';
 import { useEnrichBusiness } from '@/hooks/useEnrichBusiness';
+import { cn } from '@/lib/utils';
 import type { OutreachLead } from '@/types/outreach';
 
 interface LeadEnrichButtonsProps {
@@ -36,7 +37,7 @@ export function LeadEnrichButtons({ lead, onUpdate, className }: LeadEnrichButto
   ].filter(Boolean) as { key: string; Icon: typeof Mail; href: string; color: string; title: string; external: boolean }[];
 
   return (
-    <div className={`flex items-center gap-0.5 ${className ?? ''}`} onClick={(e) => e.stopPropagation()}>
+    <div className={cn('flex items-center gap-0.5', className)} onClick={(e) => e.stopPropagation()}>
       {/* Always visible: combined enrich (contacts + WhatsApp signal + image pool). */}
       <button
         type="button"

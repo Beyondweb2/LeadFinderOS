@@ -146,22 +146,9 @@ export function BookingServicesEditor({
 
   return (
     <section className="rounded-xl border border-border/60 bg-card/60 p-3.5 shadow-sm">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5">
-          <ListChecks className="h-3.5 w-3.5 text-violet-400" />
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">Booking page services</span>
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="h-7 gap-1.5 text-xs"
-          onClick={scan}
-          disabled={scanning || !hasWebsite}
-          title={hasWebsite ? 'Read their website and extract services + prices' : 'This lead has no website'}
-        >
-          {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanLine className="h-3.5 w-3.5" />}
-          {scanning ? 'Scanning…' : 'Scan website'}
-        </Button>
+      <div className="mb-2 flex items-center gap-1.5">
+        <ListChecks className="h-3.5 w-3.5 text-violet-400" />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">Booking page services</span>
       </div>
 
       <p className="mb-2.5 text-[11px] leading-relaxed text-muted-foreground/70">
@@ -176,7 +163,7 @@ export function BookingServicesEditor({
         <ul className="mb-2.5 space-y-1.5">
           {rows.map((r, i) => (
             <li key={i} className="flex items-center gap-1.5">
-              <Input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="Service" className="h-7 flex-1 text-xs" />
+              <Input value={r.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="Service" className="h-7 min-w-0 flex-1 text-xs" />
               <Input value={r.price ?? ''} onChange={(e) => setRow(i, { price: e.target.value })} placeholder="£" className="h-7 w-16 text-xs" />
               <Input
                 value={r.durationMins?.toString() ?? ''}
@@ -192,9 +179,22 @@ export function BookingServicesEditor({
       )}
 
       <div className="flex items-center justify-between gap-2">
-        <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs text-muted-foreground" onClick={addRow}>
-          <Plus className="h-3.5 w-3.5" /> Add service
-        </Button>
+        <div className="flex items-center gap-1.5">
+          <Button size="sm" variant="ghost" className="h-7 gap-1 text-xs text-muted-foreground" onClick={addRow}>
+            <Plus className="h-3.5 w-3.5" /> Add service
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 gap-1.5 text-xs"
+            onClick={scan}
+            disabled={scanning || !hasWebsite}
+            title={hasWebsite ? 'Read their website and extract services + prices' : 'This lead has no website'}
+          >
+            {scanning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanLine className="h-3.5 w-3.5" />}
+            {scanning ? 'Scanning…' : 'Scan website'}
+          </Button>
+        </div>
         <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={save} disabled={!dirty || saving}>
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : justSaved ? <Check className="h-3.5 w-3.5" /> : <Save className="h-3.5 w-3.5" />}
           {justSaved ? 'Saved' : 'Save'}
@@ -216,7 +216,7 @@ export function BookingServicesEditor({
           <div className="max-h-[46vh] space-y-1.5 overflow-y-auto thin-scrollbar pr-1">
             {scanned.map((r, i) => (
               <div key={i} className="flex items-center gap-1.5">
-                <Input value={r.name} onChange={(e) => setScannedRow(i, { name: e.target.value })} placeholder="Service" className="h-7 flex-1 text-xs" />
+                <Input value={r.name} onChange={(e) => setScannedRow(i, { name: e.target.value })} placeholder="Service" className="h-7 min-w-0 flex-1 text-xs" />
                 <Input value={r.price ?? ''} onChange={(e) => setScannedRow(i, { price: e.target.value })} placeholder="£" className="h-7 w-16 text-xs" />
                 <Input
                   value={r.durationMins?.toString() ?? ''}
