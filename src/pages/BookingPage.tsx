@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, Phone, CalendarClock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { SiteContent } from "@/templates/shared/content";
 import type { BarberService } from "@/templates/barber/types";
@@ -110,49 +110,84 @@ export default function BookingPage({ slug }: { slug: string }) {
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-ink/65" />
       <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink/50 via-ink/70 to-ink/95" />
 
-      {/* Slim top bar — anchors the top over the hero (business name + Book). Light, not a nav. */}
-      <div className="relative z-20 flex items-center justify-between gap-3 px-5 py-3 sm:px-8">
-        <span className="min-w-0 truncate font-display text-sm uppercase tracking-wide text-white/90 drop-shadow-[0_1px_8px_rgba(0,0,0,0.6)]">
-          {businessName}
-        </span>
-        <div className="flex shrink-0 items-center gap-3">
-          {content.phone && (
-            <a href={telHref} className="hidden text-xs text-zinc-200 transition-colors hover:text-white sm:inline">{content.phone}</a>
+      {/* Header — matches the full barber template's treatment: a sticky, blurred bar
+          with the bolder wordmark, a call button and a proper Book button. */}
+      <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-ink/70 backdrop-blur-xl supports-[backdrop-filter]:bg-ink/55">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3.5 sm:px-8">
+          {content.logoUrl ? (
+            <img src={content.logoUrl} alt={businessName} className="h-9 w-auto object-contain" />
+          ) : (
+            <span className="inline-flex min-w-0 items-baseline gap-1">
+              <span className="break-words font-display text-lg uppercase leading-tight tracking-[0.04em] text-white sm:text-2xl sm:tracking-[0.06em]">{businessName}</span>
+              <span className="mb-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: accent }} />
+            </span>
           )}
-          <button
-            type="button"
-            onClick={() => openFlow(null)}
-            className="rounded-full px-4 py-1.5 text-xs font-bold text-ink shadow transition-transform active:scale-[0.97]"
-            style={{ backgroundColor: accent }}
-          >
-            Book
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {content.phone && (
+              <a
+                href={telHref}
+                aria-label={`Call ${businessName}`}
+                className="grid h-10 w-10 place-items-center rounded-full border border-white/12 bg-white/[0.03] text-zinc-200 transition-all hover:-translate-y-0.5 hover:border-white/30 hover:text-white"
+              >
+                <Phone className="h-4 w-4" />
+              </a>
+            )}
+            <button
+              type="button"
+              onClick={() => openFlow(null)}
+              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-ink shadow-lg transition-all hover:-translate-y-0.5"
+              style={{ backgroundColor: accent }}
+            >
+              <CalendarClock className="h-4 w-4" />
+              <span className="hidden sm:inline">Book now</span>
+              <span className="sm:hidden">Book</span>
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
-      <header className="relative z-10 flex min-h-[40vh] flex-col items-center justify-center px-6 pb-6 pt-8 text-center">
-        {content.logoUrl && (
-          <img src={content.logoUrl} alt={businessName} className="mb-4 h-14 w-auto object-contain" />
-        )}
-        <h1 className="font-display text-4xl uppercase tracking-wide text-white drop-shadow-[0_2px_20px_rgba(0,0,0,0.6)] sm:text-5xl">
+      {/* Compact hero — short so Services + reviews sit high on the first screen. */}
+      <section className="relative z-10 flex flex-col items-center justify-center px-6 pb-8 pt-10 text-center">
+        <h1 className="font-display text-3xl uppercase tracking-wide text-white drop-shadow-[0_2px_20px_rgba(0,0,0,0.6)] sm:text-4xl">
           {businessName}
         </h1>
-        <p className="mt-3 text-sm text-zinc-300">Book your appointment online</p>
+        <p className="mt-2 text-sm text-zinc-300">Book your appointment online</p>
         <button
           type="button"
           onClick={() => openFlow(null)}
-          className="mt-7 inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-base font-bold text-ink shadow-lg transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+          className="mt-5 inline-flex items-center gap-2 rounded-full px-7 py-3.5 text-base font-bold text-ink shadow-lg transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
           style={{ backgroundColor: accent }}
         >
           Book appointment
         </button>
-      </header>
+        {/* Google reviews up top so they're visible without scrolling. */}
+        {typeof content.googleRating === "number" && (() => {
+          const inner = (
+            <>
+              <span style={{ color: accent }}>★</span>
+              <span className="font-bold text-white">{content.googleRating!.toFixed(1)}</span>
+              {typeof content.reviewCount === "number" && (
+                <span className="text-xs text-zinc-300">· {content.reviewCount} Google reviews</span>
+              )}
+            </>
+          );
+          return content.googleReviewsUrl ? (
+            <a href={content.googleReviewsUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 backdrop-blur-sm transition-colors hover:border-white/35">
+              {inner}
+            </a>
+          ) : (
+            <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-black/40 px-3.5 py-1.5 backdrop-blur-sm">
+              {inner}
+            </div>
+          );
+        })()}
+      </section>
 
       {/* Lean, booking-focused detail — all from data already on the row. No about,
           gallery, marketing copy or reviews list. */}
-      <main className="relative z-10 mx-auto max-w-4xl space-y-8 px-6 pb-12 pt-4">
+      <main className="relative z-10 mx-auto max-w-4xl space-y-6 px-6 pb-12 pt-2">
         {/* Services + hours: two columns on desktop, stacked on mobile. */}
-        <div className="grid gap-8 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2">
           {services.length > 0 && (
             <section className="flex flex-col">
               <div className="flex items-baseline justify-between gap-3">
@@ -201,39 +236,14 @@ export default function BookingPage({ slug }: { slug: string }) {
           )}
         </div>
 
-        {/* Contact + rating: centred, below the two columns. */}
-        {(content.phone || content.address || typeof content.googleRating === "number") && (
-          <section className="mx-auto flex max-w-xl flex-col items-center gap-3 rounded-2xl border border-white/10 bg-black/40 p-4 text-center backdrop-blur-sm sm:flex-row sm:justify-center sm:gap-6 sm:text-left">
-            <div className="space-y-1 text-sm">
-              {content.phone && (
-                <a href={telHref} className="block font-semibold text-white transition-colors hover:text-amber-soft">{content.phone}</a>
-              )}
-              {content.address && <div className="text-zinc-400">{content.address}</div>}
-            </div>
-            {typeof content.googleRating === "number" && (
-              content.googleReviewsUrl ? (
-                <a
-                  href={content.googleReviewsUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-3 py-1.5 transition-colors hover:border-amber/40"
-                >
-                  <span style={{ color: accent }}>★</span>
-                  <span className="font-bold text-white">{content.googleRating.toFixed(1)}</span>
-                  {typeof content.reviewCount === "number" && (
-                    <span className="text-xs text-zinc-400">({content.reviewCount} Google reviews)</span>
-                  )}
-                </a>
-              ) : (
-                <div className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-3 py-1.5">
-                  <span style={{ color: accent }}>★</span>
-                  <span className="font-bold text-white">{content.googleRating.toFixed(1)}</span>
-                  {typeof content.reviewCount === "number" && (
-                    <span className="text-xs text-zinc-400">({content.reviewCount} Google reviews)</span>
-                  )}
-                </div>
-              )
+        {/* Contact: phone + address. The Google reviews now sit up in the hero so
+            they're visible without scrolling. */}
+        {(content.phone || content.address) && (
+          <section className="mx-auto flex max-w-xl flex-col items-center gap-1 rounded-2xl border border-white/10 bg-black/40 p-4 text-center backdrop-blur-sm">
+            {content.phone && (
+              <a href={telHref} className="block font-semibold text-white transition-colors hover:text-amber-soft">{content.phone}</a>
             )}
+            {content.address && <div className="text-sm text-zinc-400">{content.address}</div>}
           </section>
         )}
 
