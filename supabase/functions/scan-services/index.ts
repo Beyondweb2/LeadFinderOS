@@ -34,6 +34,14 @@ const OPENAI_OUTPUT_USD_PER_M = 0.6;
 const EST_COST_USD = 0.005;
 // ~15-20k tokens of clean text. 1 token ≈ 4 chars → ~60k chars total budget.
 const MAX_TEXT_CHARS = 60_000;
+// Each appended subpage is capped so one noisy page (e.g. a Wix booking-calendar
+// app, 170k+ chars of cruft) can never drown the homepage menu in the truncation.
+const MAX_SUBPAGE_CHARS = 15_000;
+// Fetch at most this many candidate price/service subpages.
+const MAX_SUBPAGES = 3;
+// If the homepage already shows at least this many £ prices, the menu is on the
+// homepage — don't append ANY subpages (they only add noise / dilute the signal).
+const HOMEPAGE_PRICE_SUFFICIENT = 3;
 const FETCH_TIMEOUT_MS = 8000;
 const MAX_HTML_BYTES = 1024 * 1024; // 1MB, same as extract-facebook
 
@@ -96,27 +104,58 @@ async function fetchHtml(url: string): Promise<string | null> {
   }
 }
 
-/** Find ONE same-origin link whose text or href matches prices|services|menu|book. */
-function findServicesLink(html: string, base: URL): string | null {
+// Booking-WIDGET deep-links (Wix booking-calendar, "book now", booking apps) are
+// NOT price/menu pages — they're JS scheduling widgets that are huge and priceless.
+// Matching them via a bare "book" keyword is what made thebarberchop.com fail
+// (it grabbed /booking-calendar/haircut, 176k chars, 0 prices). Exclude them.
+const BOOKING_WIDGET_PATH = /(booking-calendar|book-now|book-online|book-a|\/booking\/|\/bookings\/|\/book\/|schedule|appointment|calendar|service-page\/)/i;
+
+/**
+ * Find same-origin candidate price/service subpages, RANKED best-first:
+ *   3 = href/text contains "price"  (most specific — the real menu)
+ *   2 = href/text contains "menu"
+ *   1 = href/text contains "service"
+ *   0 = bare "book" only            (last resort, and only if not a booking widget)
+ * Booking-widget deep-links are excluded entirely. Returns up to `limit` URLs.
+ */
+function findServiceLinks(html: string, base: URL, limit: number): string[] {
   const re = /<a\b[^>]*href\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
-  const want = /(prices?|services?|menu|book)/i;
+  const baseHref = base.href.replace(/#.*$/, "");
+  const scored = new Map<string, number>(); // url → best score seen
   let m: RegExpExecArray | null;
   while ((m = re.exec(html)) !== null) {
     const href = m[1];
     const text = m[2].replace(/<[^>]+>/g, " ");
-    if (!want.test(href) && !want.test(text)) continue;
+    const hay = `${href} ${text}`.toLowerCase();
+
+    let score = -1;
+    if (/price/.test(hay)) score = 3;
+    else if (/menu/.test(hay)) score = 2;
+    else if (/service/.test(hay)) score = 1;
+    else if (/\bbook/.test(hay)) score = 0;
+    if (score < 0) continue;
+
     try {
       const abs = new URL(href, base);
       if (abs.hostname !== base.hostname) continue; // same-origin only (SSRF + relevance)
       if (isPrivateHostname(abs.hostname)) continue;
       abs.hash = "";
-      if (abs.href.replace(/#.*$/, "") === base.href.replace(/#.*$/, "")) continue; // not the homepage itself
-      return abs.toString();
+      // Normalise trailing slash so /prices and /prices/ don't waste two slots.
+      const clean = abs.href.replace(/#.*$/, "").replace(/\/+$/, "") || abs.href;
+      if (clean === baseHref.replace(/\/+$/, "")) continue; // not the homepage itself
+      // Drop booking-widget deep-links — unless the link explicitly says price/menu,
+      // a path like /booking-calendar/ is a scheduling app, not a price list.
+      if (score <= 1 && BOOKING_WIDGET_PATH.test(abs.pathname)) continue;
+      const prev = scored.get(clean);
+      if (prev === undefined || score > prev) scored.set(clean, score);
     } catch {
       continue;
     }
   }
-  return null;
+  return [...scored.entries()]
+    .sort((a, b) => b[1] - a[1]) // highest score first; price > menu > service > book
+    .slice(0, limit)
+    .map(([url]) => url);
 }
 
 /** Strip scripts/styles/tags → readable text; collapse whitespace. */
@@ -220,15 +259,25 @@ Deno.serve(async (req) => {
           return { result: { services: [], source_urls: [], found: false }, costUsd: 0 };
         }
         sourceUrls.push(homepage.toString());
+        // Homepage ALWAYS comes first and in full — so a noisy subpage can never
+        // push the real menu out of the truncation window.
         let text = htmlToText(homeHtml);
 
-        // 2) One same-origin prices/services/menu/book page, if linked.
-        const servicesUrl = findServicesLink(homeHtml, homepage);
-        if (servicesUrl) {
-          const subHtml = await fetchHtml(servicesUrl);
-          if (subHtml) {
-            sourceUrls.push(servicesUrl);
-            text += `\n\n----- ${servicesUrl} -----\n\n` + htmlToText(subHtml);
+        // 2) Subpages — only if the homepage doesn't already carry the menu.
+        // Count £ prices on the homepage; many barber sites (incl. Wix shells that
+        // server-render their menu) list everything on the homepage itself.
+        const homepagePriceCount = (text.match(/£\s?\d/g) || []).length;
+        if (homepagePriceCount < HOMEPAGE_PRICE_SUFFICIENT) {
+          // Ranked best-first (price > menu > service > book); booking widgets excluded.
+          const candidates = findServiceLinks(homeHtml, homepage, MAX_SUBPAGES);
+          for (const url of candidates) {
+            const subHtml = await fetchHtml(url);
+            if (!subHtml) continue;
+            sourceUrls.push(url);
+            // Cap each subpage so one huge noisy page can't dominate the input.
+            const subText = htmlToText(subHtml).slice(0, MAX_SUBPAGE_CHARS);
+            text += `\n\n----- ${url} -----\n\n` + subText;
+            if (text.length >= MAX_TEXT_CHARS) break;
           }
         }
 
