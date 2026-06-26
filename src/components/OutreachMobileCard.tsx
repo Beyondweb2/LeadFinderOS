@@ -14,6 +14,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench } from 'lucide-react';
@@ -49,7 +51,7 @@ interface OutreachMobileCardProps {
   onRetryPhoneFetch?: () => void;
   isWalkthroughContacted?: boolean;
   onAiOpener?: () => void;
-  onGenerateSite?: (template: 'barber' | 'salon' | 'plumber') => void;
+  onGenerateSite?: (template: 'barber' | 'salon' | 'plumber', mode?: 'booking_only') => void;
   isGeneratingSite?: boolean;
   onManageSite?: () => void;
   onUpdateLead?: (leadId: string, data: Partial<OutreachLead>) => Promise<any>;
@@ -352,6 +354,7 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                       className="min-w-[160px]"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Full site</DropdownMenuLabel>
                       <DropdownMenuItem onSelect={() => onGenerateSite('barber')}>
                         <Scissors className="h-4 w-4 mr-2" />
                         Barber site
@@ -363,6 +366,16 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
                       <DropdownMenuItem onSelect={() => onGenerateSite('plumber')}>
                         <Wrench className="h-4 w-4 mr-2" />
                         Plumber site
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuLabel className="text-xs text-muted-foreground">Booking page (has a website)</DropdownMenuLabel>
+                      <DropdownMenuItem onSelect={() => onGenerateSite('barber', 'booking_only')}>
+                        <CalendarClock className="h-4 w-4 mr-2" />
+                        Barber booking page
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => onGenerateSite('salon', 'booking_only')}>
+                        <CalendarClock className="h-4 w-4 mr-2" />
+                        Salon booking page
                       </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
