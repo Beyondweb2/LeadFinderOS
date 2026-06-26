@@ -418,6 +418,10 @@ serve(async (req) => {
       body.template === "salon" || body.template === "plumber" ? body.template : "barber";
     const copy = TEMPLATE_COPY[template];
     const defaultServices = DEFAULT_SERVICES_BY_TEMPLATE[template];
+    // Booking-only mode (Phase 2): produce a BOOKING CONTAINER (services / hours /
+    // branding) with NO marketing copy — skips the OpenAI call and sets booking_only
+    // on the row. The full-site path (default) is completely unchanged.
+    const bookingOnly = body.mode === "booking_only";
 
     // --- Step 7: OpenAI key (from secret; never hardcoded) ---
     const openAiKey = Deno.env.get("OPENAI_API_KEY") ?? "";
@@ -687,6 +691,10 @@ serve(async (req) => {
       "The 'about' must be factual only — no subjective adjectives (welcoming, skilled, top-notch, friendly, professional, etc.). State only the name, town/city, real rating/reviews and real services.",
     ].join("\n");
 
+    // Booking-only skips OpenAI entirely (no tagline / heroHeadline / descriptions)
+    // — cheaper + faster. The whole AI block below is gated; full-site is unchanged.
+    let modelContent: Partial<BarberSiteContent> = {};
+    if (!bookingOnly) {
     let openAiRes: Response;
     try {
       openAiRes = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -737,7 +745,6 @@ serve(async (req) => {
     );
     logUsage(serviceClient, adminUserId, "openai_chat", openAiCostUsd);
 
-    let modelContent: Partial<BarberSiteContent>;
     try {
       const raw = completion?.choices?.[0]?.message?.content;
       if (typeof raw !== "string" || !raw.trim()) throw new Error("empty completion");
@@ -747,6 +754,7 @@ serve(async (req) => {
       console.error("[GENERATE-BARBER-SITE] AI parse failure (nothing written):", (e as Error).message);
       return jsonResponse({ error: "AI returned unparseable content; nothing was saved" }, 502, corsHeaders, rlHeaders);
     }
+    }  // end if (!bookingOnly) — booking-only leaves modelContent = {}
 
     // --- Step 12: Server-side honesty enforcement (overrides the model) ---
     // Hard facts come from the lead, never the model. Unknown facts are dropped.
@@ -820,9 +828,10 @@ serve(async (req) => {
 
     const content: BarberSiteContent = {
       businessName: lead.business_name || "", // real, verbatim
-      tagline: typeof modelContent.tagline === "string" ? modelContent.tagline : "",
-      heroHeadline: typeof modelContent.heroHeadline === "string" ? modelContent.heroHeadline : "",
-      about: aboutText,
+      // Booking-only carries NO marketing copy (the booking page never renders these).
+      tagline: bookingOnly ? "" : (typeof modelContent.tagline === "string" ? modelContent.tagline : ""),
+      heroHeadline: bookingOnly ? "" : (typeof modelContent.heroHeadline === "string" ? modelContent.heroHeadline : ""),
+      about: bookingOnly ? "" : aboutText,
       services,
       hours, // real Google hours if fetched, else [] (section omitted)
       phone, // real lead/Google value or "" (omitted)
@@ -834,14 +843,15 @@ serve(async (req) => {
       // so a brand-new site doesn't look empty; the editor can switch this off.
       showExamplePrices: true,
       // Pre-fill the real Google reviews link when we have one (verifiable, not invented).
-      ...(googleReviewsUrl ? { googleReviewsUrl } : {}),
+      // Marketing-only (the booking page doesn't show it) → omitted for booking-only.
+      ...(!bookingOnly && googleReviewsUrl ? { googleReviewsUrl } : {}),
       // Image slots start EMPTY (stock fallback). The collected pool is handed to
       // the editor's manual drag-and-drop board; nothing is auto-placed.
       ...(imagePool.length ? { imagePool } : {}),
       // Real Google reviews → testimonial cards, capped at the 3 BEST (highest
       // stars first; tie-break toward longer/substantial text). Site-output cap —
       // the enrich cache still holds the full set. Empty = no cards (never faked).
-      ...(mapsReviews.length
+      ...(!bookingOnly && mapsReviews.length
         ? {
             reviews: [...mapsReviews]
               .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.text?.length ?? 0) - (a.text?.length ?? 0))
@@ -855,7 +865,7 @@ serve(async (req) => {
       ...(lead.instagram_url ? { instagramUrl: lead.instagram_url as string } : {}),
       // Plumber-only sections: generic defaults (not business-factual), plus a
       // real service-area line from the verified town when we have it.
-      ...(template === "plumber"
+      ...(!bookingOnly && template === "plumber"
         ? {
             whyUsPoints: PLUMBER_WHY_US,
             processSteps: PLUMBER_PROCESS,
@@ -889,7 +899,7 @@ serve(async (req) => {
       slug = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
       const res = await serviceClient
         .from("generated_sites")
-        .insert({ lead_id: leadId, site_name: slug, content, status: "draft", template })
+        .insert({ lead_id: leadId, site_name: slug, content, status: "draft", template, booking_only: bookingOnly })
         .select("id, lead_id, site_name, status, created_at")
         .single();
       if (!res.error) {

@@ -51,6 +51,7 @@ import {
   Scissors,
   Flower2,
   Wrench,
+  CalendarClock,
   SlidersHorizontal,
 } from 'lucide-react';
 import {
@@ -523,13 +524,14 @@ export function OutreachTable({
   // Handle Call button click - direct open + count walkthrough contact
   // Admin-only: generate a barber site for this lead via the (admin-gated)
   // generate-barber-site edge function, then surface links to view / add images.
-  const handleGenerateSite = useCallback(async (lead: OutreachLead, template: 'barber' | 'salon' | 'plumber' = 'barber') => {
+  const handleGenerateSite = useCallback(async (lead: OutreachLead, template: 'barber' | 'salon' | 'plumber' = 'barber', mode?: 'booking_only') => {
+    const isBooking = mode === 'booking_only';
     setGeneratingSiteId(lead.id);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('Not authenticated');
       const { data, error } = await supabase.functions.invoke('generate-barber-site', {
-        body: { lead_id: lead.id, template },
+        body: { lead_id: lead.id, template, ...(mode ? { mode } : {}) },
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error) throw error;
@@ -550,15 +552,18 @@ export function OutreachTable({
         return;
       }
       toast({
-        title: `Site generated for ${lead.business_name}`,
+        title: `${isBooking ? 'Booking page' : 'Site'} generated for ${lead.business_name}`,
         description: (
-          <span className="flex gap-3 mt-1">
+          <span className="flex flex-col gap-1 mt-1">
             {newSiteId && (
               <a href={`/admin/sites/${newSiteId}`} className="underline font-medium">
-                Manage site
+                Manage
               </a>
             )}
-            {slug && (
+            {slug && isBooking && (
+              <span className="text-xs text-muted-foreground">Booking page: bookmybarber.uk/{slug} (live once published)</span>
+            )}
+            {slug && !isBooking && (
               <a href={`/p/${slug}`} target="_blank" rel="noreferrer" className="underline font-medium">
                 View site
               </a>
@@ -1373,7 +1378,7 @@ export function OutreachTable({
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
                   isWalkthroughContacted={walkthroughContactedIds.has(lead.id)}
                   onUpdateLead={onUpdateLead && !isDemoLead(lead.id) ? onUpdateLead : undefined}
-                  onGenerateSite={isAdmin && !sitesByLead[lead.id] ? (template) => handleGenerateSite(lead, template) : undefined}
+                  onGenerateSite={isAdmin && !sitesByLead[lead.id] ? (template, mode) => handleGenerateSite(lead, template, mode) : undefined}
                   isGeneratingSite={generatingSiteId === lead.id}
                   onManageSite={isAdmin && sitesByLead[lead.id] ? () => navigate(`/admin/sites/${sitesByLead[lead.id].id}`) : undefined}
                   
@@ -1693,6 +1698,7 @@ export function OutreachTable({
                                   className="min-w-[160px]"
                                   onClick={(e) => e.stopPropagation()}
                                 >
+                                  <DropdownMenuLabel className="text-xs text-muted-foreground">Full site</DropdownMenuLabel>
                                   <DropdownMenuItem onSelect={() => handleGenerateSite(lead, 'barber')}>
                                     <Scissors className="h-4 w-4 mr-2" />
                                     Barber site
@@ -1704,6 +1710,16 @@ export function OutreachTable({
                                   <DropdownMenuItem onSelect={() => handleGenerateSite(lead, 'plumber')}>
                                     <Wrench className="h-4 w-4 mr-2" />
                                     Plumber site
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuLabel className="text-xs text-muted-foreground">Booking page (has a website)</DropdownMenuLabel>
+                                  <DropdownMenuItem onSelect={() => handleGenerateSite(lead, 'barber', 'booking_only')}>
+                                    <CalendarClock className="h-4 w-4 mr-2" />
+                                    Barber booking page
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onSelect={() => handleGenerateSite(lead, 'salon', 'booking_only')}>
+                                    <CalendarClock className="h-4 w-4 mr-2" />
+                                    Salon booking page
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
