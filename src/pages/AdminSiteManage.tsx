@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, MessageCircle, MessageSquare, Phone } from "lucide-react";
+import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, MessageCircle, MessageSquare, Phone, CalendarClock } from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
 import { publicSiteUrl, barberSiteUrl } from "@/config/publicSite";
 import { useTemplates } from "@/hooks/useTemplates";
@@ -50,6 +50,8 @@ export default function AdminSiteManage() {
 
   const [savingStatus, setSavingStatus] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [isBookingOnly, setIsBookingOnly] = useState(false);
 
   // Launch pad: the barber's /s/ link + the linked lead (to target its Outreach row).
   const [shareToken, setShareToken] = useState<string | null>(null);
@@ -80,11 +82,12 @@ export default function AdminSiteManage() {
       // Share token (the /s/ link) + the linked lead — never block the page on these.
       const { data: tk } = await sb
         .from("generated_sites")
-        .select("share_token, lead_id")
+        .select("share_token, lead_id, booking_only")
         .eq("id", id)
         .maybeSingle();
-      const row = tk as { share_token?: string; lead_id?: string } | null;
+      const row = tk as { share_token?: string; lead_id?: string; booking_only?: boolean } | null;
       if (row?.share_token) setShareToken(row.share_token);
+      setIsBookingOnly(!!row?.booking_only);
       if (row?.lead_id) {
         const { data: lead } = await sb
           .from("outreach_leads")
@@ -168,6 +171,51 @@ export default function AdminSiteManage() {
     }
   };
 
+  // Convert an existing (full marketing) site to a BOOKING-ONLY page in place. Runs
+  // generate-barber-site in booking_only mode for the linked lead; the function
+  // updates THIS row (no duplicate) — swapping content to the booking page (using the
+  // lead's confirmed services), setting booking_only=true so /p/ and the subdomain
+  // redirect to bookmybarber.uk. The full-site marketing content is replaced.
+  const handleConvertToBookingOnly = async () => {
+    if (!leadInfo) {
+      toast({ title: "No lead linked", description: "This site isn't linked to an Outreach lead, so it can't be converted.", variant: "destructive" });
+      return;
+    }
+    if (!window.confirm(
+      `Convert "${site.content?.businessName || site.site_name}" to a booking-only page?\n\n` +
+      "This replaces the marketing site with the booking page (using the lead's confirmed services). " +
+      "Its /p/ and subdomain links will redirect to the bookmybarber.uk booking page. This can't be auto-undone.",
+    )) return;
+    setConverting(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      const tmpl = site.template === "salon" ? "salon" : "barber";
+      const { data, error } = await supabase.functions.invoke("generate-barber-site", {
+        body: { lead_id: leadInfo.id, template: tmpl, mode: "booking_only" },
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (error) throw error;
+      if ((data as { error?: string } | null)?.error) throw new Error((data as { error?: string }).error);
+      // Refetch the converted row so the editor + status reflect the booking content.
+      const { data: fresh } = await supabase
+        .from("generated_sites")
+        .select("id, site_name, status, content, owner_id, template")
+        .eq("id", site.id)
+        .maybeSingle();
+      if (fresh) setSite(fresh as unknown as SiteRow);
+      setIsBookingOnly(true);
+      toast({
+        title: "Converted to booking-only",
+        description: "This is now a booking page — its /p/ and subdomain links redirect to bookmybarber.uk.",
+      });
+    } catch (e) {
+      toast({ title: "Convert failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setConverting(false);
+    }
+  };
+
   const copyLink = async () => {
     try {
       await navigator.clipboard.writeText(publicUrl);
@@ -231,6 +279,11 @@ export default function AdminSiteManage() {
               <Badge variant={isPublished ? "default" : "secondary"}>
                 {isPublished ? "Published" : "Draft"}
               </Badge>
+              {isBookingOnly && (
+                <Badge variant="outline" className="gap-1 border-violet-500/40 text-violet-400">
+                  <CalendarClock className="h-3 w-3" /> Booking-only
+                </Badge>
+              )}
               <span className="font-mono text-xs">/p/{site.site_name}</span>
             </div>
           </div>
@@ -244,6 +297,12 @@ export default function AdminSiteManage() {
               <ExternalLink className="h-4 w-4 mr-2" /> Preview
             </Button>
           </a>
+          {!isBookingOnly && (
+            <Button variant="outline" size="sm" onClick={handleConvertToBookingOnly} disabled={converting || !leadInfo} title={leadInfo ? 'Convert this site to a booking-only page' : 'No linked lead to convert'}>
+              {converting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CalendarClock className="h-4 w-4 mr-2" />}
+              Convert to booking-only
+            </Button>
+          )}
           <Button size="sm" onClick={handleTogglePublish} disabled={savingStatus}>
             {savingStatus ? (
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
