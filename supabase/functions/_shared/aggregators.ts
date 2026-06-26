@@ -125,3 +125,40 @@ export function isPlatformSocialUrl(url: string): boolean {
     return false;
   }
 }
+
+/** First path-segment handle of a facebook.com / instagram.com URL, lowercased
+ *  (e.g. "facebook.com/GFM.Barbers" → "gfm.barbers"; "/pages/Name/123" → "name").
+ *  Empty when it isn't a FB/IG URL or has no handle. */
+export function socialHandle(url: string): string {
+  const d = domainOf(url);
+  if (!/(?:^|\.)(?:facebook|instagram)\.com$/.test(d)) return "";
+  try {
+    const segs = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).pathname
+      .split("/").filter(Boolean);
+    let h = segs[0]?.toLowerCase() ?? "";
+    if (h === "pages" && segs[1]) h = segs[1].toLowerCase(); // facebook.com/pages/Name/123
+    return h.replace(/^@/, "");
+  } catch {
+    return "";
+  }
+}
+
+// Website BUILDERS / hosts whose OWN social account gets linked in their site
+// TEMPLATE (a Wix-built barber site's footer links facebook.com/wix). These are
+// NEVER the business's real social, so a social DISCOVERED BY CRAWLING the site
+// must be rejected when its handle is one of these.
+const SITE_BUILDER_SOCIAL_HANDLES = new Set<string>([
+  "wix", "wixcom", "wixsite", "wixcommunity",
+  "squarespace", "godaddy", "shopify", "weebly",
+  "wordpress", "wordpressdotcom", "wordpresscom",
+  "site123", "jimdo", "webador", "strikingly", "carrd", "duda", "yola", "webflow",
+]);
+const SITE_BUILDER_TOKENS = ["wix", "squarespace", "godaddy", "shopify", "weebly", "wordpress", "webflow", "jimdo", "strikingly"];
+
+/** True when a FB/IG URL points at a website-builder's own account (facebook.com/wix). */
+export function isSiteBuilderSocialUrl(url: string): boolean {
+  const h = socialHandle(url);
+  if (!h) return false;
+  if (SITE_BUILDER_SOCIAL_HANDLES.has(h)) return true;
+  return SITE_BUILDER_TOKENS.some((t) => h.includes(t)); // catches wixsite / wix.salon etc.
+}

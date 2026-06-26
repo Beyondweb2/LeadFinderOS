@@ -52,6 +52,45 @@ function deepEmail(node: unknown, depth = 0): string | null {
   return null;
 }
 
+// ── Primary-image extraction helpers (Fix #1) ───────────────────────────────
+// Deep-scanning the whole Apify item scooped avatars, reaction thumbnails, and the
+// SAME photo at multiple crop sizes. These pick ONE primary image per photo/post.
+
+/** Largest pixel hint in a FB/IG CDN URL (e.g. s1080x1080 → 1080, w=1920 → 1920). */
+function imgWidth(url: string): number {
+  let max = 0;
+  for (const m of url.matchAll(/(?:[sp]|mx|cstp=mx)(\d{2,4})x(\d{2,4})/gi)) max = Math.max(max, parseInt(m[1], 10));
+  const w = url.match(/[?&]w=(\d{2,4})/);
+  if (w) max = Math.max(max, parseInt(w[1], 10));
+  return max;
+}
+
+/** Avatars / profile pics / tiny thumbnails — never gallery content. */
+function isNoiseImage(url: string): boolean {
+  return /s150x150/i.test(url)        // 150px square = profile pic / thumbnail
+    || /t51\.\d+-19\//i.test(url)     // Instagram profile-pic CDN path (-19); posts are -15
+    || /_a\.jpg/i.test(url);          // Instagram avatar filename suffix
+}
+
+/** Stable per-photo key (the long numeric media id in the filename) so multiple
+ *  crop sizes of the same photo collapse to one. Falls back to the path. */
+function mediaKey(url: string): string {
+  const m = url.match(/\/(\d{6,})_/);
+  return m ? m[1] : url.split("?")[0];
+}
+
+/** Keep one URL per media id — the largest crop. */
+function dedupeLargest(urls: string[]): string[] {
+  const best = new Map<string, string>();
+  for (const u of urls) {
+    if (!IMG_RE.test(u) || isNoiseImage(u)) continue;
+    const k = mediaKey(u);
+    const prev = best.get(k);
+    if (!prev || imgWidth(u) > imgWidth(prev)) best.set(k, u);
+  }
+  return [...best.values()];
+}
+
 /** Facebook page contacts (email + website) via facebook-pages-scraper. */
 export async function fetchFacebookContacts(
   pageUrl: string,
@@ -89,9 +128,17 @@ export async function fetchFacebookPhotos(
       { facebook_urls: [{ url: pageUrl }], photos_count: opts.max ?? 20 },
       { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
     );
-    const out = new Set<string>();
-    deepImageUrls(items, out);
-    return Array.from(out).slice(0, opts.max ?? 20);
+    // One PRIMARY image per photo item: scan the item, drop avatars/thumbnails, and
+    // keep its largest crop; dedupeLargest then collapses same-photo duplicates.
+    const primaries: string[] = [];
+    for (const item of items) {
+      const urls = new Set<string>();
+      deepImageUrls(item, urls);
+      const candidates = [...urls].filter((u) => !isNoiseImage(u));
+      if (!candidates.length) continue;
+      primaries.push(candidates.reduce((a, b) => (imgWidth(b) > imgWidth(a) ? b : a)));
+    }
+    return dedupeLargest(primaries).slice(0, opts.max ?? 20);
   } catch (e) {
     console.error(`[socialImages] FB photos error: ${(e as Error).message}`);
     return [];
@@ -110,9 +157,19 @@ export async function fetchInstagramPhotos(
       { directUrls: [profileUrl], resultsType: "posts", resultsLimit: opts.max ?? 20 },
       { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
     );
-    const out = new Set<string>();
-    deepImageUrls(items, out);
-    return Array.from(out).slice(0, opts.max ?? 20);
+    // Only the POST media (displayUrl / images[] / carousel childPosts) — NOT a deep
+    // scan, which used to scoop owner + commenter profile pics (the s150x150 avatars).
+    const collected: string[] = [];
+    for (const it of items as Record<string, unknown>[]) {
+      if (typeof it.displayUrl === "string") collected.push(it.displayUrl);
+      if (Array.isArray(it.images)) for (const u of it.images) if (typeof u === "string") collected.push(u);
+      if (Array.isArray(it.childPosts)) {
+        for (const c of it.childPosts as Record<string, unknown>[]) {
+          if (c && typeof c.displayUrl === "string") collected.push(c.displayUrl);
+        }
+      }
+    }
+    return dedupeLargest(collected).slice(0, opts.max ?? 20);
   } catch (e) {
     console.error(`[socialImages] IG error: ${(e as Error).message}`);
     return [];
