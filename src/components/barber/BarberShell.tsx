@@ -24,13 +24,13 @@ import { LiveSiteEditor } from "@/components/barber/LiveSiteEditor";
 // nothing editor-related can crash the dashboard or Edit page. Flip to true to
 // re-enable once the root cause is fixed.
 const LIVE_EDITOR_ENABLED = true;
-import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
+import { liveSiteUrl, liveSiteLabel } from "@/config/publicSite";
 import { londonInstant, londonYMD } from "@/components/barber/london";
 import { recordSiteEvent } from "@/lib/siteTracking";
 import { useBarberCheckout } from "@/hooks/useBarberCheckout";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
-export type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent; is_paid?: boolean; share_token?: string; addon_interest_at?: string | null; subdomain?: string | null };
+export type OwnedSite = { id: string; site_name: string; status: string; content: BarberSiteContent; is_paid?: boolean; share_token?: string; addon_interest_at?: string | null; subdomain?: string | null; booking_only?: boolean | null };
 
 // Post-claim upsell visibility — split so the announcement bar and the Settings
 // BookingUpsell card are controlled independently. Both keep the `!site.is_paid`
@@ -269,7 +269,7 @@ export function BarberShell({
             disabled={checkoutLoading}
             className="flex w-full items-center justify-center gap-2 bg-amber px-4 py-2 text-center text-sm font-semibold text-ink transition-colors hover:bg-amber-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/40 disabled:opacity-70"
           >
-            <span>Online booking &amp; SMS reminders - get more clients, stop the no-shows</span>
+            <span>{site.booking_only ? "Switch on bookings & SMS reminders - get more clients, stop the no-shows" : "Online booking & SMS reminders - get more clients, stop the no-shows"}</span>
             <span className="rounded-full bg-ink/15 px-2 py-0.5 text-xs font-bold">
               {checkoutLoading ? "Opening…" : interested ? "Requested ✓" : "Get access"}
             </span>
@@ -283,9 +283,9 @@ export function BarberShell({
             </button>
             <h1 className="font-display text-xl uppercase tracking-wide text-white">{PAGE_TITLE[page]}</h1>
           </div>
-          <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer">
+          <a href={liveSiteUrl(site.site_name, site.booking_only)} target="_blank" rel="noreferrer">
             <Button variant="outline" size="sm" className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white">
-              <ExternalLink className="h-4 w-4 mr-2" /> View site
+              <ExternalLink className="h-4 w-4 mr-2" /> {site.booking_only ? "View booking page" : "View site"}
             </Button>
           </a>
         </header>
@@ -373,9 +373,9 @@ export function BarberShell({
                       Plan: <span className="font-medium text-zinc-200">Pro - booking & reminders active</span>
                     </div>
                   )}
-                  <div className="text-sm text-muted-foreground">Your public site link:</div>
-                  <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-mono text-sm text-amber-soft hover:text-amber">
-                    {publicSiteLabel(site.site_name)} <ExternalLink className="h-4 w-4" />
+                  <div className="text-sm text-muted-foreground">{site.booking_only ? "Your booking page link:" : "Your public site link:"}</div>
+                  <a href={liveSiteUrl(site.site_name, site.booking_only)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-mono text-sm text-amber-soft hover:text-amber">
+                    {liveSiteLabel(site.site_name, site.booking_only)} <ExternalLink className="h-4 w-4" />
                   </a>
                   <div>
                     <Button variant="outline" size="sm" onClick={() => setShowLogoutConfirm(true)} className="rounded-full border-line bg-white/[0.03] text-zinc-200 hover:border-amber/50 hover:text-white">
@@ -572,23 +572,29 @@ function StatCard({ label, value }: { label: string; value: number | null }) {
  *  dashboard sections are, where to edit, the barber's real live address, and
  *  where to get the add-ons (the announcement bar). No pricing. Single dismiss. */
 function WelcomeOverlay({ site, onClose }: { site: OwnedSite; onClose: () => void }) {
+  // Booking-only sites ARE the online-booking product and have no marketing site,
+  // so the live link is bookmybarber.uk and the copy drops the marketing-site /
+  // "get online booking" framing.
+  const bookingOnly = !!site.booking_only;
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-ink/85 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <div role="dialog" aria-modal="true" className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl border border-amber/30 bg-ink-card p-6 shadow-accent-lg sm:p-8" style={{ backgroundImage: SHELL_BG }}>
         <div className="inline-flex items-center gap-2 rounded-full border border-amber/30 bg-amber/10 px-3 py-1 text-xs font-semibold uppercase tracking-wider text-amber-soft">
-          <Sparkles className="h-3.5 w-3.5" /> Your site is live
+          <Sparkles className="h-3.5 w-3.5" /> {bookingOnly ? "Your booking page is live" : "Your site is live"}
         </div>
         <h2 className="mt-4 font-display text-3xl uppercase tracking-wide text-white sm:text-4xl">Welcome — it's all yours</h2>
         <p className="mt-2 text-sm text-zinc-300">
-          This is your dashboard. Have a look around — everything here is yours to manage, any time.
+          {bookingOnly
+            ? "This is your dashboard for your online booking page. Have a look around — everything here is yours to manage, any time."
+            : "This is your dashboard. Have a look around — everything here is yours to manage, any time."}
         </p>
 
         {/* Quick orientation — what the main sections do. */}
         <ul className="mt-5 space-y-3 text-sm text-zinc-300">
           <li className="flex gap-3">
             <Pencil className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
-            <span><span className="font-semibold text-white">Edit Site</span> is where you change everything — your text, photos, services and colours.</span>
+            <span><span className="font-semibold text-white">Edit Site</span> is where you change {bookingOnly ? "your services, prices, opening hours and colours" : "everything — your text, photos, services and colours"}.</span>
           </li>
           <li className="flex gap-3">
             <LayoutDashboard className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
@@ -596,28 +602,33 @@ function WelcomeOverlay({ site, onClose }: { site: OwnedSite; onClose: () => voi
           </li>
           <li className="flex gap-3">
             <SettingsIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber" />
-            <span><span className="font-semibold text-white">Settings</span> has your site link, your account and how to install this as an app.</span>
+            <span><span className="font-semibold text-white">Settings</span> has your {bookingOnly ? "booking page link" : "site link"}, your account and how to install this as an app.</span>
           </li>
         </ul>
 
         {/* The barber's REAL live address, so they know it. */}
         <div className="mt-5 rounded-xl border border-line bg-white/[0.03] p-3.5">
-          <div className="text-xs uppercase tracking-wider text-zinc-500">Your live site address</div>
+          <div className="text-xs uppercase tracking-wider text-zinc-500">{bookingOnly ? "Your booking page address" : "Your live site address"}</div>
           <a
-            href={publicSiteUrl(site.site_name)}
+            href={liveSiteUrl(site.site_name, site.booking_only)}
             target="_blank"
             rel="noreferrer"
             className="mt-1 inline-flex items-center gap-2 break-all font-mono text-sm text-amber-soft hover:text-amber"
           >
-            {publicSiteLabel(site.site_name)} <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+            {liveSiteLabel(site.site_name, site.booking_only)} <ExternalLink className="h-3.5 w-3.5 shrink-0" />
           </a>
         </div>
 
-        {/* Where to get the add-ons — points to the announcement bar. No pricing. */}
+        {/* Where to get the add-ons — points to the announcement bar. No pricing.
+            Booking-only sites already HAVE online booking, so no "get booking" upsell. */}
         <p className="mt-4 text-sm text-zinc-300">
-          Want <span className="font-medium text-white">online booking</span>,{" "}
-          <span className="font-medium text-white">SMS reminders</span> or your{" "}
-          <span className="font-medium text-white">own domain</span>? Tap the orange bar at the top to get access.
+          {bookingOnly ? (
+            <>Want <span className="font-medium text-white">SMS reminders</span> for your customers? Tap the orange bar at the top to get access.</>
+          ) : (
+            <>Want <span className="font-medium text-white">online booking</span>,{" "}
+              <span className="font-medium text-white">SMS reminders</span> or your{" "}
+              <span className="font-medium text-white">own domain</span>? Tap the orange bar at the top to get access.</>
+          )}
         </p>
 
         <Button onClick={onClose} className="mt-6 w-full rounded-full bg-amber font-bold text-ink hover:bg-amber-soft">

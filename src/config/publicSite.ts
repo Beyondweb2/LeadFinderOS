@@ -7,6 +7,8 @@
  * `/p/:slug`); if you later move to bare `yoursites.uk/<slug>`, change only the
  * helpers below (+ a Worker rewrite).
  */
+import { bookingUrl, BOOKING_HOST } from "@/lib/subdomain";
+
 export const PUBLIC_SITE_ORIGIN = "https://yoursites.uk";
 
 /** Full public URL for a site by its slug (site_name) — e.g. for links/copy. */
@@ -30,3 +32,14 @@ export const barberSiteUrl = (shareToken: string) => `${PUBLIC_SITE_ORIGIN}/s/${
  * plain barberSiteUrl (no param) is what they get and is unchanged.
  */
 export const barberSitePreviewUrl = (shareToken: string) => `${barberSiteUrl(shareToken)}?preview=1`;
+
+/**
+ * Booking-aware live URL/label for a barber's OWN site link (dashboard, welcome,
+ * settings, pickers). A booking_only site has NO marketing page — it lives at
+ * bookmybarber.uk/<slug>, so every owner-facing "your site" link must point there,
+ * never yoursites.uk/p/<slug>.
+ */
+export const liveSiteUrl = (slug: string, bookingOnly?: boolean | null) =>
+  bookingOnly ? bookingUrl(slug) : publicSiteUrl(slug);
+export const liveSiteLabel = (slug: string, bookingOnly?: boolean | null) =>
+  bookingOnly ? `${BOOKING_HOST}/${slug}` : publicSiteLabel(slug);

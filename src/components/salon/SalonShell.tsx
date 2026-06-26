@@ -12,7 +12,7 @@ import { SiteEditor } from "@/components/SiteEditor";
 import { StaffManager } from "@/components/StaffManager";
 import { BookingsManager } from "@/components/BookingsManager";
 import { WeekCalendar } from "@/components/barber/WeekCalendar";
-import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
+import { liveSiteUrl, liveSiteLabel } from "@/config/publicSite";
 import { londonInstant, londonYMD } from "@/components/barber/london";
 import type { OwnedSite } from "@/components/barber/BarberShell";
 
@@ -183,9 +183,9 @@ export function SalonShell({
             </button>
             <h1 className="font-salon-display text-2xl tracking-tight text-salon-ink">{PAGE_TITLE[page]}</h1>
           </div>
-          <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer">
+          <a href={liveSiteUrl(site.site_name, site.booking_only)} target="_blank" rel="noreferrer">
             <button className={`${blackBtn} gap-2 rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em]`}>
-              <ExternalLink className="h-4 w-4" /> View site
+              <ExternalLink className="h-4 w-4" /> {site.booking_only ? "View booking page" : "View site"}
             </button>
           </a>
         </header>
@@ -225,9 +225,9 @@ export function SalonShell({
                   <div className="text-sm text-salon-muted">
                     Plan: <span className="font-medium text-salon-ink">{site.is_paid ? "Pro — booking & reminders active" : "Free"}</span>
                   </div>
-                  <div className="text-sm text-salon-muted">Your public site link:</div>
-                  <a href={publicSiteUrl(site.site_name)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-mono text-sm text-salon-rose-deep hover:text-salon-rose">
-                    {publicSiteLabel(site.site_name)} <ExternalLink className="h-4 w-4" />
+                  <div className="text-sm text-salon-muted">{site.booking_only ? "Your booking page link:" : "Your public site link:"}</div>
+                  <a href={liveSiteUrl(site.site_name, site.booking_only)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 font-mono text-sm text-salon-rose-deep hover:text-salon-rose">
+                    {liveSiteLabel(site.site_name, site.booking_only)} <ExternalLink className="h-4 w-4" />
                   </a>
                   <div>
                     <button onClick={onSignOut} className="inline-flex items-center gap-2 rounded-full border border-salon-line bg-white px-4 py-2 text-sm font-medium text-salon-ink transition-colors hover:border-salon-rose/40">

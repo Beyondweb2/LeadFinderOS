@@ -6,7 +6,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Loader2, ExternalLink, LogOut } from "lucide-react";
-import { publicSiteUrl, publicSiteLabel } from "@/config/publicSite";
+import { liveSiteUrl, liveSiteLabel } from "@/config/publicSite";
 import { BarberShell, type OwnedSite } from "@/components/barber/BarberShell";
 import { SalonShell } from "@/components/salon/SalonShell";
 import "@/templates/barber/fonts.css";
@@ -44,7 +44,7 @@ export default function OwnerDashboard() {
     if (!silent) setLoading(true);
     const { data } = await (supabase as unknown as import("@supabase/supabase-js").SupabaseClient)
       .from("generated_sites")
-      .select("id, site_name, status, content, is_paid, template, share_token, addon_interest_at, subdomain")
+      .select("id, site_name, status, content, is_paid, template, share_token, addon_interest_at, subdomain, booking_only")
       .eq("owner_id", user.id)
       .order("created_at", { ascending: false });
     setSites((data ?? []) as unknown as OwnedSiteT[]);
@@ -150,10 +150,10 @@ export default function OwnerDashboard() {
                 <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{s.status}</span>
                 <span className="rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{isSalon(s) ? "Salon" : "Barber"}</span>
               </div>
-              <span className="font-mono text-xs text-muted-foreground">{publicSiteLabel(s.site_name)}</span>
+              <span className="font-mono text-xs text-muted-foreground">{liveSiteLabel(s.site_name, s.booking_only)}</span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <a href={publicSiteUrl(s.site_name)} target="_blank" rel="noreferrer">
+              <a href={liveSiteUrl(s.site_name, s.booking_only)} target="_blank" rel="noreferrer">
                 <Button variant="ghost" size="icon" title="View your site" className="text-muted-foreground">
                   <ExternalLink className="h-4 w-4" />
                 </Button>
