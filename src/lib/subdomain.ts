@@ -50,3 +50,20 @@ export function getBarberSubdomainLabel(host: string): string | null {
 export function subdomainUrl(label: string): string {
   return `https://${label}.${ROOT_DOMAIN}`;
 }
+
+// ── Booking-only pages (bookmybarber.uk) ────────────────────────────────────
+// A separate domain attached to the same Pages project. bookmybarber.uk/<slug>
+// renders ONLY the booking flow (no marketing site). KEEP host string in sync
+// with functions/_middleware.ts.
+export const BOOKING_HOST = "bookmybarber.uk";
+
+/** True when the request host is the booking domain (apex or www). */
+export function isBookingHost(host: string): boolean {
+  const h = (host || "").toLowerCase().split(":")[0].trim();
+  return h === BOOKING_HOST || h === `www.${BOOKING_HOST}`;
+}
+
+/** The booking page URL for a slug. */
+export function bookingUrl(slug: string): string {
+  return `https://${BOOKING_HOST}/${slug}`;
+}

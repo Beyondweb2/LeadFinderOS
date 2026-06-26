@@ -14,6 +14,8 @@ const SUPABASE_URL = "https://ruusxpkkmwtljxxulhbq.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ1dXN4cGtrbXd0bGp4eHVsaGJxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExODgzMzUsImV4cCI6MjA5Njc2NDMzNX0.4PoMZXJS0RDEHyK6wa9k0Q8F0fo2u1e7PMVegJ6nNbw";
 const ROOT_DOMAIN = "yoursites.uk";
+// Booking-only domain (bookmybarber.uk/<slug>) — KEEP in sync with src/lib/subdomain.ts.
+const BOOKING_HOST = "bookmybarber.uk";
 
 // KEEP IN SYNC with src/lib/subdomain.ts + supabase/functions/connect-subdomain.
 const RESERVED = new Set<string>([
@@ -56,6 +58,52 @@ export const onRequest = async (context: {
 }) => {
   const { request, env, next } = context;
   const host = request.headers.get("host") || new URL(request.url).hostname;
+  const hostLc = host.toLowerCase().split(":")[0].trim();
+
+  // Booking-only domain (bookmybarber.uk): /<slug> → inject that barber's booking
+  // title/OG; bare root → a generic title. The client renders the booking page.
+  if (hostLc === BOOKING_HOST || hostLc === `www.${BOOKING_HOST}`) {
+    const accept = request.headers.get("accept") || "";
+    if (request.method !== "GET" || !accept.includes("text/html")) return next();
+    const slug = new URL(request.url).pathname.replace(/^\/+/, "").split("/")[0];
+    const shellRes = await env.ASSETS.fetch(new URL("/index.html", request.url));
+    let html = await shellRes.text();
+    if (!slug) {
+      html = html.replace(/<title>[^<]*<\/title>/i, `<title>Online booking</title>`);
+      return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=0, must-revalidate" } });
+    }
+    try {
+      const apiUrl = `${SUPABASE_URL}/rest/v1/generated_sites` +
+        `?site_name=eq.${encodeURIComponent(slug)}&select=site_name,content&limit=1`;
+      const r = await fetch(apiUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
+      if (r.ok) {
+        const rows = await r.json() as Array<{ site_name?: string; content?: Record<string, unknown> }>;
+        const row = Array.isArray(rows) ? rows[0] : null;
+        if (row) {
+          const content = (row.content ?? {}) as Record<string, unknown>;
+          const biz = (typeof content.businessName === "string" && content.businessName.trim())
+            ? content.businessName.trim() : (row.site_name || "Book an appointment");
+          const title = `Book — ${biz}`;
+          const rawImg = (typeof content.heroImageUrl === "string" && content.heroImageUrl.trim()) || "";
+          const OBJ_PATH = "/storage/v1/object/public/";
+          const img = rawImg
+            ? (rawImg.includes(OBJ_PATH) ? rawImg.replace(OBJ_PATH, "/storage/v1/render/image/public/") + "?width=1200&height=630&resize=cover&quality=70" : rawImg)
+            : "";
+          html = html.replace(/<title>[^<]*<\/title>/i, `<title>${escAttr(title)}</title>`);
+          html = setMeta(html, "og:title", title);
+          html = setMeta(html, "og:description", `Book an appointment with ${biz} online.`);
+          html = setMeta(html, "og:url", `https://${BOOKING_HOST}/${slug}`);
+          html = setMeta(html, "twitter:title", title);
+          html = setMeta(html, "og:image", img);
+          html = setMeta(html, "twitter:image", img);
+        }
+      }
+    } catch {
+      // fall through to the unmodified shell
+    }
+    return new Response(html, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=0, must-revalidate" } });
+  }
+
   const label = barberLabel(host);
 
   // Apex / reserved / pages.dev / localhost → operator app, unchanged.

@@ -16,7 +16,7 @@ import { AppLayout } from "@/components/AppLayout";
 import { AccentInitializer } from "@/components/AccentInitializer";
 
 import { LeadSearchProvider } from "./contexts/LeadSearchContext";
-import { getBarberSubdomainLabel } from "@/lib/subdomain";
+import { getBarberSubdomainLabel, isBookingHost } from "@/lib/subdomain";
 import { FirstTimeRedirect } from "./components/FirstTimeRedirect";
 import { Loader2 } from "lucide-react";
 
@@ -44,6 +44,8 @@ const Start = lazy(() => import("./pages/Start"));
 const CityLeads = lazy(() => import("./pages/CityLeads"));
 const PublicSite = lazy(() => import("./pages/PublicSite"));
 const SubdomainSite = lazy(() => import("./pages/SubdomainSite"));
+const BookingPage = lazy(() => import("./pages/BookingPage"));
+const BookingHome = lazy(() => import("./pages/BookingHome"));
 const SiteByToken = lazy(() => import("./pages/SiteByToken"));
 const OwnerDashboard = lazy(() => import("./pages/OwnerDashboard"));
 const Claim = lazy(() => import("./pages/Claim"));
@@ -174,6 +176,26 @@ const App = () => {
             <Sonner />
             <Suspense fallback={<FullPageLoader />}>
               <SubdomainSite label={subdomainLabel} />
+            </Suspense>
+          </TooltipProvider>
+        </QueryClientProvider>
+      </ErrorBoundary>
+    );
+  }
+
+  // Booking-only domain (bookmybarber.uk) → render ONLY the booking surface,
+  // bypassing the operator app. /<slug> → that barber's booking page; bare root →
+  // a minimal holding page. Any other host falls through to the operator app.
+  if (typeof window !== "undefined" && isBookingHost(window.location.hostname)) {
+    const bookingSlug = window.location.pathname.replace(/^\/+/, "").split("/")[0];
+    return (
+      <ErrorBoundary>
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <Suspense fallback={<FullPageLoader />}>
+              {bookingSlug ? <BookingPage slug={bookingSlug} /> : <BookingHome />}
             </Suspense>
           </TooltipProvider>
         </QueryClientProvider>
