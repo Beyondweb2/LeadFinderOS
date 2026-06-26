@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy } from 'lucide-react';
+import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone } from 'lucide-react';
 import { TeamNotes } from '@/components/TeamNotes';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
@@ -744,6 +744,42 @@ function LeadDetailBody({
                 </div>
               </div>
             </section>
+
+            {/* Socials & contact — read-only list of found enrichment fields. */}
+            {(() => {
+              const socials = [
+                lead.facebook_url ? { key: 'fb', Icon: Facebook, label: 'Facebook', value: lead.facebook_url, href: lead.facebook_url, color: 'text-blue-600', external: true } : null,
+                lead.instagram_url ? { key: 'ig', Icon: Instagram, label: 'Instagram', value: lead.instagram_url, href: lead.instagram_url, color: 'text-pink-500', external: true } : null,
+                lead.email ? { key: 'email', Icon: Mail, label: 'Email', value: lead.email, href: `mailto:${lead.email}`, color: 'text-violet-400', external: false } : null,
+                lead.website ? { key: 'web', Icon: Globe, label: 'Website', value: lead.website, href: lead.website, color: 'text-emerald-500', external: true } : null,
+                lead.phone ? { key: 'phone', Icon: Phone, label: 'Phone', value: lead.phone, href: `tel:${lead.phone}`, color: 'text-sky-400', external: false } : null,
+              ].filter(Boolean) as { key: string; Icon: typeof Mail; label: string; value: string; href: string; color: string; external: boolean }[];
+              return (
+                <section className={CARD}>
+                  <SectionLabel icon={Share2} color="text-blue-400">Socials &amp; contact</SectionLabel>
+                  {socials.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground/50">None found yet.</p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {socials.map(({ key, Icon, label, value, href, color, external }) => (
+                        <li key={key} className="flex items-center gap-2 text-xs">
+                          <Icon className={cn('h-3.5 w-3.5 shrink-0', color)} />
+                          <span className="w-16 shrink-0 text-muted-foreground/70">{label}</span>
+                          <a
+                            href={href}
+                            {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                            className="min-w-0 flex-1 truncate text-foreground/80 hover:text-primary hover:underline"
+                            title={value}
+                          >
+                            {external ? value.replace(/^https?:\/\//, '').replace(/\/$/, '') : value}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              );
+            })()}
 
             {/* Measurement-only website scan (Phase 3a) — read-only, never publishes. */}
             {!isDemoLead(lead.id) && <WebsiteServicesScan lead={lead} />}
