@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import type { SiteContent } from "@/templates/shared/content";
 import type { BarberService } from "@/templates/barber/types";
+import { STOCK_HERO } from "@/templates/barber/assets";
 import { normaliseTemplate, DEFAULT_TEMPLATE_KEY } from "@/templates/registry";
 import { useSiteBranding } from "@/hooks/useSiteBranding";
 import { BookingFlow } from "@/templates/barber/BookingFlow";
@@ -95,17 +96,16 @@ export default function BookingPage({ slug }: { slug: string }) {
   const telHref = content.phone ? `tel:${content.phone.replace(/[^\d+]/g, "")}` : "";
 
   return (
-    <div className="relative min-h-screen bg-ink font-body text-zinc-200" style={accentStyle}>
-      {/* Full-page background image behind the whole page + a strong dark scrim so
-          the services / hours / contact text stays clearly readable (legibility first). */}
-      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10">
-        {content.heroImageUrl ? (
-          <img src={content.heroImageUrl} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="h-full w-full bg-gradient-to-br from-[#1c1509] via-ink to-black" />
-        )}
-        <div className="absolute inset-0 bg-ink/85" />
-        <div className="absolute inset-0 bg-gradient-to-b from-ink/70 via-ink/85 to-ink/95" />
+    <div className="relative min-h-screen font-body text-zinc-200" style={accentStyle}>
+      {/* Full-page background image behind the whole page + a dark scrim so the
+          services / hours / contact text stays clearly readable (legibility first).
+          bg-ink lives HERE, not on the root div — a -z-10 layer sits behind its
+          parent's own background, so an opaque root bg would hide the image.
+          Always renders an image: the real hero, or the bundled stock barber hero. */}
+      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-ink">
+        <img src={content.heroImageUrl || STOCK_HERO} alt="" className="h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-ink/65" />
+        <div className="absolute inset-0 bg-gradient-to-b from-ink/50 via-ink/70 to-ink/95" />
       </div>
 
       <header className="relative flex min-h-[46vh] flex-col items-center justify-center px-6 py-14 text-center">
