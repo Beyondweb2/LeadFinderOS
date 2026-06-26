@@ -149,10 +149,10 @@ export default function BookingPage({ slug }: { slug: string }) {
       {/* Hero — name + tagline + reviews. No CTA here: the header "Book now" and the
           tap-to-book services are the booking paths, so the hero just sets the scene. */}
       <section className="relative z-10 flex flex-col items-center justify-center px-6 pb-12 pt-14 text-center">
-        <h1 className="font-display text-3xl uppercase tracking-wide text-white drop-shadow-[0_2px_20px_rgba(0,0,0,0.6)] sm:text-4xl">
+        <h1 className="font-display text-4xl uppercase leading-[1.05] tracking-wide text-white drop-shadow-[0_2px_24px_rgba(0,0,0,0.65)] sm:text-6xl">
           {businessName}
         </h1>
-        <p className="mt-3 text-sm text-zinc-300">Book your appointment online</p>
+        <p className="mt-4 text-sm text-zinc-300 sm:text-base">Book your appointment online</p>
         {/* Google reviews up top so they're visible without scrolling. */}
         {typeof content.googleRating === "number" && (() => {
           const inner = (
