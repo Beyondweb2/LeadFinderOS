@@ -96,19 +96,21 @@ export default function BookingPage({ slug }: { slug: string }) {
   const telHref = content.phone ? `tel:${content.phone.replace(/[^\d+]/g, "")}` : "";
 
   return (
-    <div className="relative min-h-screen font-body text-zinc-200" style={accentStyle}>
-      {/* Full-page background image behind the whole page + a dark scrim so the
-          services / hours / contact text stays clearly readable (legibility first).
-          bg-ink lives HERE, not on the root div — a -z-10 layer sits behind its
-          parent's own background, so an opaque root bg would hide the image.
-          Always renders an image: the real hero, or the bundled stock barber hero. */}
-      <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 bg-ink">
-        <img src={content.heroImageUrl || STOCK_HERO} alt="" className="h-full w-full object-cover" />
-        <div className="absolute inset-0 bg-ink/65" />
-        <div className="absolute inset-0 bg-gradient-to-b from-ink/50 via-ink/70 to-ink/95" />
-      </div>
+    <div className="relative min-h-screen bg-ink font-body text-zinc-200" style={accentStyle}>
+      {/* Full-page background. The image is a normal absolutely-positioned layer that
+          paints ABOVE the root's bg-ink and BELOW the content (content is relative z-10).
+          NOT a negative-z / fixed layer — that sat behind the opaque app background and
+          black-screened. Always shows an image: the real hero, or the stock barber one. */}
+      <img
+        src={content.heroImageUrl || STOCK_HERO}
+        alt=""
+        aria-hidden
+        className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+      />
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-ink/65" />
+      <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink/50 via-ink/70 to-ink/95" />
 
-      <header className="relative flex min-h-[46vh] flex-col items-center justify-center px-6 py-14 text-center">
+      <header className="relative z-10 flex min-h-[46vh] flex-col items-center justify-center px-6 py-14 text-center">
         {content.logoUrl && (
           <img src={content.logoUrl} alt={businessName} className="mb-4 h-14 w-auto object-contain" />
         )}
@@ -128,7 +130,7 @@ export default function BookingPage({ slug }: { slug: string }) {
 
       {/* Lean, booking-focused detail — all from data already on the row. No about,
           gallery, marketing copy or reviews list. */}
-      <main className="mx-auto max-w-4xl space-y-8 px-6 py-12">
+      <main className="relative z-10 mx-auto max-w-4xl space-y-8 px-6 py-12">
         {/* Services + hours: two columns on desktop, stacked on mobile. */}
         <div className="grid gap-8 md:grid-cols-2">
           {services.length > 0 && (
@@ -219,7 +221,7 @@ export default function BookingPage({ slug }: { slug: string }) {
 
       <BookingFlow open={open} onClose={() => setOpen(false)} slug={data.siteName} content={content} variant={variant} initialService={picked} />
 
-      <footer className="border-t border-white/[0.06] px-6 py-6 text-center text-xs text-zinc-600">
+      <footer className="relative z-10 border-t border-white/[0.06] px-6 py-6 text-center text-xs text-zinc-600">
         Online booking by bookmybarber.uk
       </footer>
     </div>
