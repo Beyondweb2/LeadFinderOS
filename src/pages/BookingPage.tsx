@@ -152,6 +152,7 @@ export default function BookingPage({ slug }: { slug: string }) {
         <h1 className="font-display text-4xl uppercase leading-[1.05] tracking-wide text-white drop-shadow-[0_2px_24px_rgba(0,0,0,0.65)] sm:text-6xl">
           {businessName}
         </h1>
+        <p className="mt-4 text-sm text-zinc-300 sm:text-base">Book your appointment online</p>
       </section>
 
       {/* Lean, booking-focused detail — all from data already on the row. No about,
