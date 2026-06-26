@@ -76,6 +76,13 @@ export const TEMPLATE_CATEGORY_OPTIONS: { value: TemplateCategory; label: string
   { value: 'other', label: 'Other' },
 ];
 
+/** Phase 3b: an operator-confirmed booking-page service (name + optional price/duration). */
+export interface ConfirmedService {
+  name: string;
+  price?: string;
+  durationMins?: number;
+}
+
 export interface OutreachLead {
   id: string;
   user_id: string;
@@ -134,6 +141,9 @@ export interface OutreachLead {
   contact_name?: string | null;
   website?: string | null;
   services_included?: string[] | null;
+  // Phase 3b: operator-confirmed services (reviewed/edited from a website scan or
+  // by hand) that pre-fill a booking-only page. null = fall back to Maps/defaults.
+  confirmed_services?: ConfirmedService[] | null;
   project_overview?: string | null;
   project_value?: number | null;
   project_status?: string | null;

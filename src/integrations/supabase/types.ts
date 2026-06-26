@@ -674,6 +674,7 @@ export type Database = {
           project_value: number | null
           sale_type: string | null
           services_included: string[] | null
+          confirmed_services: Json | null
           status: string
           updated_at: string
           user_id: string
@@ -730,6 +731,7 @@ export type Database = {
           project_value?: number | null
           sale_type?: string | null
           services_included?: string[] | null
+          confirmed_services?: Json | null
           status?: string
           updated_at?: string
           user_id: string
@@ -786,6 +788,7 @@ export type Database = {
           project_value?: number | null
           sale_type?: string | null
           services_included?: string[] | null
+          confirmed_services?: Json | null
           status?: string
           updated_at?: string
           user_id?: string
