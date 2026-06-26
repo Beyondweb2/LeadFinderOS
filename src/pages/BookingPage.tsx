@@ -92,7 +92,7 @@ export default function BookingPage({ slug }: { slug: string }) {
 
   return (
     <div className="min-h-screen bg-ink font-body text-zinc-200" style={accentStyle}>
-      <header className="relative isolate flex min-h-[44vh] flex-col items-center justify-center overflow-hidden px-6 py-16 text-center">
+      <header className="relative isolate flex min-h-[34vh] flex-col items-center justify-center overflow-hidden px-6 py-12 text-center">
         {content.heroImageUrl ? (
           <img src={content.heroImageUrl} alt={businessName} className="absolute inset-0 -z-10 h-full w-full object-cover" />
         ) : (
@@ -123,9 +123,9 @@ export default function BookingPage({ slug }: { slug: string }) {
         {/* Services + hours: two columns on desktop, stacked on mobile. */}
         <div className="grid gap-8 md:grid-cols-2">
           {services.length > 0 && (
-            <section>
+            <section className="flex flex-col">
               <h2 className="font-display text-2xl uppercase tracking-wide text-white">Services</h2>
-              <ul className="mt-4 divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+              <ul className="mt-4 flex-1 divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
                 {services.map((s, i) => (
                   <li key={`${s.name}-${i}`} className="flex items-baseline justify-between gap-3 px-4 py-3.5">
                     <div className="min-w-0">
@@ -144,9 +144,9 @@ export default function BookingPage({ slug }: { slug: string }) {
           )}
 
           {hours.length > 0 && (
-            <section>
+            <section className="flex flex-col">
               <h2 className="font-display text-2xl uppercase tracking-wide text-white">Opening hours</h2>
-              <ul className="mt-4 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+              <ul className="mt-4 flex-1 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
                 {hours.map((h, i) => (
                   <li key={`${h.day}-${i}`} className="flex items-center justify-between gap-4 border-b border-white/[0.05] px-4 py-3 last:border-b-0">
                     <span className="text-sm font-medium text-zinc-200">{h.day}</span>
