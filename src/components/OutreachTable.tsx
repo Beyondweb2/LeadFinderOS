@@ -1585,7 +1585,9 @@ export function OutreachTable({
                         </>
                       )}
                       <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-center gap-1.5">
+                        {/* Wrap the action icons into a compact 2-row block instead of
+                            one long line (capped just under the 160px Actions column). */}
+                        <div className="mx-auto flex max-w-[150px] flex-wrap items-center justify-center gap-1.5">
                           {(lead.google_maps_url || ((lead as any).place_id ? `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}` : null)) && (
                             <a
                               href={lead.google_maps_url || `https://www.google.com/maps/place/?q=place_id:${(lead as any).place_id}`}
