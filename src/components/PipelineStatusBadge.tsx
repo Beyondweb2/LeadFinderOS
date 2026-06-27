@@ -18,6 +18,16 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Queued',
     className: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent font-semibold',
   },
+  no_whatsapp: {
+    label: 'No WhatsApp',
+    shortLabel: 'No WA',
+    className: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))] border-transparent font-semibold',
+  },
+  whatsapp_failed: {
+    label: 'WhatsApp Failed',
+    shortLabel: 'WA Failed',
+    className: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))] border-transparent font-semibold',
+  },
   initial_contact: {
     label: 'Contacted',
     shortLabel: 'Contacted',

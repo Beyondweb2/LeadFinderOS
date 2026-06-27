@@ -17,6 +17,11 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Queued',
     className: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent font-semibold',
   },
+  whatsapp_failed: {
+    label: 'WhatsApp Failed',
+    shortLabel: 'WA Failed',
+    className: 'bg-[hsl(var(--badge-orange))] text-[hsl(var(--badge-orange-fg))] border-transparent font-semibold',
+  },
   sent_initial_text: {
     label: 'Sent Text / WhatsApp',
     shortLabel: 'Texted',

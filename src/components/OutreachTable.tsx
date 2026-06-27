@@ -740,14 +740,21 @@ export function OutreachTable({
     if (selectedIds.size === 0 || !onUpdateLead) return;
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
-    ids.forEach((id) => {
+    // Don't re-queue leads already flagged not-on-WhatsApp (permanent skip).
+    const queueable = ids.filter((id) => leads.find((l) => l.id === id)?.status !== 'no_whatsapp');
+    const skipped = ids.length - queueable.length;
+    queueable.forEach((id) => {
       const lead = leads.find((l) => l.id === id);
-      const patch: Partial<OutreachLead> = { status: 'queued', queued_at: now };
+      // Reset whatsapp_attempts so a re-queued (whatsapp_failed) lead gets fresh retries.
+      const patch: Partial<OutreachLead> = { status: 'queued', queued_at: now, whatsapp_attempts: 0 };
       if (!lead?.whatsapp_template) patch.whatsapp_template = 'booking_page_intro';
       onUpdateLead(id, patch);
     });
     setSelectedIds(new Set());
-    toast({ title: `Queued ${ids.length} for WhatsApp`, description: 'They send within the daily 7am–7pm UK window, capped at 10/day.' });
+    toast({
+      title: `Queued ${queueable.length} for WhatsApp`,
+      description: `${skipped ? `${skipped} skipped (not on WhatsApp). ` : ''}Sends within the daily 7am–7pm UK window, capped at 10/day.`,
+    });
   };
 
   // Mark selected leads as interested

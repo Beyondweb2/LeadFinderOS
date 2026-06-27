@@ -31,6 +31,7 @@ export function WhatsAppLeadControls({
           status: 'queued',
           queued_at: new Date().toISOString(),
           whatsapp_template: template || 'booking_page_intro',
+          whatsapp_attempts: 0, // fresh retries (e.g. re-queuing a whatsapp_failed lead)
         });
       }
     } finally {
@@ -45,7 +46,11 @@ export function WhatsAppLeadControls({
         <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground/70">WhatsApp outreach</span>
       </div>
 
-      {lead.whatsapp_sent_at ? (
+      {lead.status === 'no_whatsapp' ? (
+        <p className="text-xs leading-relaxed text-amber-500">
+          Not on WhatsApp — this number can't receive WhatsApp. Reach them by SMS, call or email instead.
+        </p>
+      ) : lead.whatsapp_sent_at ? (
         <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           <Check className="h-3.5 w-3.5 text-green-500" />
           Sent {new Date(lead.whatsapp_sent_at).toLocaleDateString()}
@@ -54,6 +59,11 @@ export function WhatsAppLeadControls({
         </p>
       ) : (
         <>
+          {lead.status === 'whatsapp_failed' && (
+            <p className="mb-2 text-[11px] leading-relaxed text-orange-400">
+              Previous WhatsApp send failed (temporary). You can re-queue to try again.
+            </p>
+          )}
           <label className="mb-1 block text-[11px] text-muted-foreground">Template</label>
           <Select value={template} onValueChange={(v) => onUpdate(lead.id, { whatsapp_template: v })}>
             <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Choose a template" /></SelectTrigger>
