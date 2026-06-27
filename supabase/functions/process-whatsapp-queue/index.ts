@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -41,22 +42,6 @@ const TEMPLATES: Record<string, { lang: string }> = {
   free_website_intro: { lang: "en" },
 };
 const DEFAULT_TEMPLATE = "booking_page_intro";
-
-// Failure handling. We can't pre-check if a number is on WhatsApp, so we react to
-// the delivery outcome and classify it:
-//   PERMANENT  → the number isn't a reachable WhatsApp user. Pull it OUT of the
-//                queue (status 'no_whatsapp') so we never waste another send on it.
-//   TEMPORARY  → rate limit / transient / config blip. Keep it queued and retry a
-//                few times (moved to the back of the line) before giving up.
-// 131026 ("Message undeliverable" — recipient not a valid WhatsApp user / hasn't
-// accepted terms) is THE not-on-WhatsApp signal. Everything else is treated as
-// temporary so a transient glitch never wrongly brands a real number "no WhatsApp".
-const PERMANENT_NO_WHATSAPP_CODES = new Set<number>([131026]);
-const MAX_WHATSAPP_ATTEMPTS = 3; // temporary-failure retries before giving up
-
-function classifyFailure(code: number | undefined): "permanent" | "temporary" {
-  return code !== undefined && PERMANENT_NO_WHATSAPP_CODES.has(code) ? "permanent" : "temporary";
-}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -297,31 +282,14 @@ Deno.serve(async (req) => {
         whatsapp_delivery_status: deliveryStatus,
         whatsapp_attempts: attempts,
       }).eq("id", lead.id);
-    } else if (outcome === "no_whatsapp") {
-      // PERMANENT: number isn't on WhatsApp → pull it OUT of the queue so it never
-      // wastes another send. Still contactable by SMS/call/email (not marked dead).
-      await service.from("outreach_leads").update({
-        status: "no_whatsapp",
-        whatsapp_delivery_status: "no_whatsapp",
-        whatsapp_attempts: attempts,
-      }).eq("id", lead.id);
     } else {
-      // TEMPORARY: retry a few times (moved to the back of the queue), then give up
-      // as 'whatsapp_failed' (distinct from no_whatsapp — could be re-queued later).
-      if (attempts >= MAX_WHATSAPP_ATTEMPTS) {
-        await service.from("outreach_leads").update({
-          status: "whatsapp_failed",
-          whatsapp_delivery_status: "failed",
-          whatsapp_attempts: attempts,
-        }).eq("id", lead.id);
-      } else {
-        await service.from("outreach_leads").update({
-          status: "queued",
-          queued_at: nowIso, // back of the line so it doesn't block other queued leads
-          whatsapp_delivery_status: "failed_temporary",
-          whatsapp_attempts: attempts,
-        }).eq("id", lead.id);
-      }
+      // Failure (permanent no_whatsapp OR temporary retry). Shared routing so the
+      // processor and the status webhook behave identically: 131026 → no_whatsapp
+      // (dequeued); otherwise retry to the back of the queue up to the cap, then
+      // 'whatsapp_failed'.
+      await service.from("outreach_leads")
+        .update(leadFailurePatch(failCode, (lead.whatsapp_attempts as number) ?? 0, nowIso))
+        .eq("id", lead.id);
     }
 
     // Pace the next send after ANY real/simulated attempt (spread quota + jitter).
