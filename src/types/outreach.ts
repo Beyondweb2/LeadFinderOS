@@ -227,6 +227,7 @@ export const CONTACT_METHOD_OPTIONS: { value: ContactMethod; label: string }[] =
 // "Initial Contact"; "Closed" becomes "Paid" (payment_received).
 export type PipelineStatus =
   | 'not_contacted'
+  | 'queued'
   | 'initial_contact'
   | 'replied'
   | 'site_sent'
@@ -236,6 +237,7 @@ export type PipelineStatus =
 
 export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [
   { value: 'not_contacted', label: 'New' },
+  { value: 'queued', label: 'Queued' },
   { value: 'initial_contact', label: 'Contacted' },
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },

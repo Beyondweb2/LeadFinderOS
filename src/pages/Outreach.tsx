@@ -161,7 +161,7 @@ const Outreach = () => {
       </div>
 
       {/* WhatsApp outreach queue (admin-only; self-hides otherwise). */}
-      <WhatsAppQueuePanel />
+      <WhatsAppQueuePanel leads={allLeads} onUpdateLead={updateLead} />
 
       <OutreachTable
         leads={allLeads}

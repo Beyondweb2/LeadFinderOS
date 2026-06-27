@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
-import { MessageSquare, Loader2, Play, RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { MessageSquare, Loader2, Play, RefreshCw, ChevronDown, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import type { OutreachLead } from '@/types/outreach';
 
 interface QueueStatus {
   testMode: boolean;
@@ -16,17 +17,32 @@ interface QueueStatus {
 }
 
 /**
- * Admin queue dashboard for WhatsApp outreach. Reads live status from
- * process-whatsapp-queue (mode:'status') and offers a "Run test tick" that forces
- * one processor pass for observation. In TEST_MODE the tick simulates (nothing real
- * sent); when live it behaves like the cron tick. Self-gating: if the caller isn't
- * an admin the status call fails and the panel renders nothing.
+ * Admin queue dashboard for WhatsApp outreach. Live counts/window come from
+ * process-whatsapp-queue (mode:'status'); the queued LIST comes from the loaded
+ * leads (status='queued', oldest queued_at first = send order). "Run test tick"
+ * forces one processor pass for observation (simulated while in TEST_MODE).
+ * Self-gating: if the caller isn't an admin the status call fails → renders nothing.
  */
-export function WhatsAppQueuePanel() {
+export function WhatsAppQueuePanel({
+  leads,
+  onUpdateLead,
+}: {
+  leads: OutreachLead[];
+  onUpdateLead: (leadId: string, data: Partial<OutreachLead>) => Promise<unknown> | void;
+}) {
   const { toast } = useToast();
   const [status, setStatus] = useState<QueueStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [ticking, setTicking] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  // Send order = oldest queued first (matches the processor's `order by queued_at`).
+  const queued = useMemo(
+    () => leads
+      .filter((l) => l.status === 'queued')
+      .sort((a, b) => (a.queued_at ?? '').localeCompare(b.queued_at ?? '')),
+    [leads],
+  );
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -64,6 +80,8 @@ export function WhatsAppQueuePanel() {
     }
   };
 
+  const removeFromQueue = (id: string) => onUpdateLead(id, { status: 'not_contacted', queued_at: null });
+
   if (!status) return null; // admin-only; hidden otherwise
 
   return (
@@ -87,12 +105,53 @@ export function WhatsAppQueuePanel() {
           </Button>
         </div>
       </div>
+
       <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-        <Stat label="Queued" value={String(status.queuedCount)} />
+        {/* Queued — click to expand the list (send order). */}
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center justify-between rounded-lg border border-border/40 bg-background/40 px-2.5 py-1.5 text-left transition-colors hover:border-border"
+        >
+          <span>
+            <span className="block text-[10px] uppercase tracking-wide text-muted-foreground/60">Queued</span>
+            <span className="font-semibold text-foreground/90">{queued.length}</span>
+          </span>
+          {queued.length > 0 && (expanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/60" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />)}
+        </button>
         <Stat label="Sent today" value={`${status.sentToday} / ${status.cap}`} />
         <Stat label="UK time" value={`${status.ukTime} ${status.windowOpen ? '· open' : '· closed'}`} />
         <Stat label="Next send" value={status.nextSendAt ? new Date(status.nextSendAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'} />
       </div>
+
+      {expanded && (
+        <div className="mt-2 rounded-lg border border-border/40 bg-background/40 p-2">
+          <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground/50">In send order (next first)</div>
+          {queued.length === 0 ? (
+            <p className="px-1 py-1 text-xs text-muted-foreground/60">Queue is empty.</p>
+          ) : (
+            <ol className="space-y-0.5">
+              {queued.map((l, i) => (
+                <li key={l.id} className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-white/[0.03]">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="w-5 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground/50">{i + 1}</span>
+                    <span className="truncate text-foreground/90">{l.business_name}</span>
+                    {l.whatsapp_template && <span className="shrink-0 text-[10px] text-muted-foreground/50">{l.whatsapp_template}</span>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeFromQueue(l.id)}
+                    title="Remove from queue"
+                    className="shrink-0 rounded p-1 text-muted-foreground/50 transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
     </div>
   );
 }
