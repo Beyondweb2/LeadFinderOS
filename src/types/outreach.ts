@@ -20,7 +20,8 @@ export type LeadStatus =
   | 'paid_for_draft'
   | 'payment_received'  // "Paid" — Outreach pipeline terminal (also Track Leads marker)
   | 'completed'
-  | 'no_whatsapp'
+  | 'no_whatsapp'        // number isn't on WhatsApp (permanent — reach via SMS/call/email)
+  | 'whatsapp_failed'    // WhatsApp send failed after retries (temporary — re-queueable)
   | 'sms'
   | 'whatsapp'
   | 'facebook_msg';
@@ -141,7 +142,8 @@ export interface OutreachLead {
   queued_at?: string | null;
   whatsapp_sent_at?: string | null;
   whatsapp_message_id?: string | null;
-  whatsapp_delivery_status?: string | null; // 'simulated' | 'sent' | 'failed' | ...
+  whatsapp_delivery_status?: string | null; // 'simulated' | 'sent' | 'no_whatsapp' | 'failed_temporary' | 'failed'
+  whatsapp_attempts?: number | null;
   outreach_attempts?: number;
   last_outreach_attempt_at?: string | null;
   // New fields
@@ -200,6 +202,8 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
+  { value: 'no_whatsapp', label: 'No WhatsApp' },
+  { value: 'whatsapp_failed', label: 'WhatsApp Failed' },
   { value: 'payment_received', label: 'Paid' },
 ];
 
@@ -233,6 +237,8 @@ export type PipelineStatus =
   | 'site_sent'
   | 'interested'
   | 'not_interested'
+  | 'no_whatsapp'
+  | 'whatsapp_failed'
   | 'payment_received';
 
 export const PIPELINE_STATUS_OPTIONS: { value: PipelineStatus; label: string }[] = [

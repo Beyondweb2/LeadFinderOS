@@ -42,6 +42,22 @@ const TEMPLATES: Record<string, { lang: string }> = {
 };
 const DEFAULT_TEMPLATE = "booking_page_intro";
 
+// Failure handling. We can't pre-check if a number is on WhatsApp, so we react to
+// the delivery outcome and classify it:
+//   PERMANENT  → the number isn't a reachable WhatsApp user. Pull it OUT of the
+//                queue (status 'no_whatsapp') so we never waste another send on it.
+//   TEMPORARY  → rate limit / transient / config blip. Keep it queued and retry a
+//                few times (moved to the back of the line) before giving up.
+// 131026 ("Message undeliverable" — recipient not a valid WhatsApp user / hasn't
+// accepted terms) is THE not-on-WhatsApp signal. Everything else is treated as
+// temporary so a transient glitch never wrongly brands a real number "no WhatsApp".
+const PERMANENT_NO_WHATSAPP_CODES = new Set<number>([131026]);
+const MAX_WHATSAPP_ATTEMPTS = 3; // temporary-failure retries before giving up
+
+function classifyFailure(code: number | undefined): "permanent" | "temporary" {
+  return code !== undefined && PERMANENT_NO_WHATSAPP_CODES.has(code) ? "permanent" : "temporary";
+}
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -179,7 +195,7 @@ Deno.serve(async (req) => {
     // Oldest queued lead with a phone.
     const { data: lead } = await service
       .from("outreach_leads")
-      .select("id, business_name, phone, country, whatsapp_template")
+      .select("id, business_name, phone, country, whatsapp_template, whatsapp_attempts")
       .eq("status", "queued")
       .not("phone", "is", null)
       .order("queued_at", { ascending: true })
@@ -217,8 +233,12 @@ Deno.serve(async (req) => {
     }
 
     // --- Send (or simulate) ---
+    // outcome drives lead routing: 'sent' (delivered to Meta), 'no_whatsapp'
+    // (permanent — not a WhatsApp number), 'temporary' (retryable failure).
     let messageId: string | null = null;
+    let outcome: "sent" | "no_whatsapp" | "temporary" = "sent"; // simulation = sent
     let deliveryStatus = "simulated";
+    let failCode: number | undefined;
     let sendError: string | null = null;
 
     if (live) {
@@ -236,48 +256,76 @@ Deno.serve(async (req) => {
         const data = await res.json().catch(() => ({}));
         if (res.ok && data?.messages?.[0]?.id) {
           messageId = data.messages[0].id;
+          outcome = "sent";
           deliveryStatus = "sent";
         } else {
-          deliveryStatus = "failed";
+          failCode = typeof data?.error?.code === "number" ? data.error.code : undefined;
           sendError = JSON.stringify(data?.error ?? data).slice(0, 500);
-          console.error("[whatsapp] send failed:", sendError);
+          outcome = classifyFailure(failCode) === "permanent" ? "no_whatsapp" : "temporary";
+          deliveryStatus = outcome === "no_whatsapp" ? "no_whatsapp" : "failed_temporary";
+          console.error(`[whatsapp] send failed (code ${failCode ?? "?"}, ${outcome}):`, sendError);
         }
       } catch (e) {
-        deliveryStatus = "failed";
+        // Network/throw → treat as temporary (retryable), never as not-on-WhatsApp.
+        outcome = "temporary";
+        deliveryStatus = "failed_temporary";
         sendError = (e as Error).message;
-        console.error("[whatsapp] send threw:", sendError);
+        console.error("[whatsapp] send threw (temporary):", sendError);
       }
     } else {
       console.log(`WOULD SEND: template ${templateName} to ${toNumber} for ${lead.business_name} (claim ${claimUrl})`);
     }
 
     const nowIso = new Date().toISOString();
-    const succeeded = live ? deliveryStatus === "sent" : true; // simulation always "succeeds"
+    const attempts = ((lead.whatsapp_attempts as number) ?? 0) + 1;
 
-    // Audit row (counts toward the daily cap — simulated sends included, by design).
+    // Audit row (an attempt was made → counts toward the daily cap).
     await service.from("whatsapp_sends").insert({
       lead_id: lead.id, user_id: null, template: templateName, phone: toNumber,
       business_name: lead.business_name, claim_url: claimUrl, test_mode: testMode,
       message_id: messageId, delivery_status: deliveryStatus, error: sendError,
     });
 
-    // Only advance the lead to Contacted when the send (or simulation) succeeded.
-    if (succeeded) {
+    // Route the lead by outcome:
+    if (outcome === "sent") {
+      // Delivered to Meta (or simulated) → Contacted, out of the queue.
       await service.from("outreach_leads").update({
         status: "initial_contact",
         whatsapp_sent_at: nowIso,
         whatsapp_template: templateName,
         whatsapp_message_id: messageId,
         whatsapp_delivery_status: deliveryStatus,
+        whatsapp_attempts: attempts,
+      }).eq("id", lead.id);
+    } else if (outcome === "no_whatsapp") {
+      // PERMANENT: number isn't on WhatsApp → pull it OUT of the queue so it never
+      // wastes another send. Still contactable by SMS/call/email (not marked dead).
+      await service.from("outreach_leads").update({
+        status: "no_whatsapp",
+        whatsapp_delivery_status: "no_whatsapp",
+        whatsapp_attempts: attempts,
       }).eq("id", lead.id);
     } else {
-      // Real send failed → leave it queued for the next tick, record the status.
-      await service.from("outreach_leads").update({ whatsapp_delivery_status: deliveryStatus }).eq("id", lead.id);
+      // TEMPORARY: retry a few times (moved to the back of the queue), then give up
+      // as 'whatsapp_failed' (distinct from no_whatsapp — could be re-queued later).
+      if (attempts >= MAX_WHATSAPP_ATTEMPTS) {
+        await service.from("outreach_leads").update({
+          status: "whatsapp_failed",
+          whatsapp_delivery_status: "failed",
+          whatsapp_attempts: attempts,
+        }).eq("id", lead.id);
+      } else {
+        await service.from("outreach_leads").update({
+          status: "queued",
+          queued_at: nowIso, // back of the line so it doesn't block other queued leads
+          whatsapp_delivery_status: "failed_temporary",
+          whatsapp_attempts: attempts,
+        }).eq("id", lead.id);
+      }
     }
 
-    // Schedule the next send: spread remaining quota across the rest of the window,
-    // with jitter so it's never clockwork.
-    if (succeeded) {
+    // Pace the next send after ANY real/simulated attempt (spread quota + jitter).
+    {
       const remaining = Math.max(1, DAILY_CAP - ((sentToday ?? 0) + 1));
       const minsLeft = minutesUntilWindowEnd();
       const baseGap = minsLeft / remaining;
@@ -288,8 +336,9 @@ Deno.serve(async (req) => {
 
     return json({
       ok: true,
-      sent: succeeded,
+      sent: outcome === "sent",
       simulated: !live,
+      outcome,
       lead_id: lead.id,
       business: lead.business_name,
       template: templateName,
@@ -297,9 +346,10 @@ Deno.serve(async (req) => {
       claim_url: claimUrl,
       message_id: messageId,
       delivery_status: deliveryStatus,
+      fail_code: failCode,
       error: sendError,
       ...statusPayload,
-      sentToday: (sentToday ?? 0) + (succeeded ? 1 : 0),
+      sentToday: (sentToday ?? 0) + 1,
     });
   } catch (e) {
     console.error("process-whatsapp-queue error:", e);

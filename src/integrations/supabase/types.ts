@@ -686,6 +686,7 @@ export type Database = {
           whatsapp_sent_at: string | null
           whatsapp_message_id: string | null
           whatsapp_delivery_status: string | null
+          whatsapp_attempts: number | null
         }
         Insert: {
           address?: string | null
@@ -748,6 +749,7 @@ export type Database = {
           whatsapp_sent_at?: string | null
           whatsapp_message_id?: string | null
           whatsapp_delivery_status?: string | null
+          whatsapp_attempts?: number | null
         }
         Update: {
           address?: string | null
@@ -810,6 +812,7 @@ export type Database = {
           whatsapp_sent_at?: string | null
           whatsapp_message_id?: string | null
           whatsapp_delivery_status?: string | null
+          whatsapp_attempts?: number | null
         }
         Relationships: [
           {
