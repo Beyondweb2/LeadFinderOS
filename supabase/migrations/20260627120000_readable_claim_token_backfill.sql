@@ -13,8 +13,23 @@
 -- NOTE: this invalidates any OLD /s/ link previously sent to an unclaimed site
 -- (its token changes). That's intended here (those barbers hadn't claimed).
 
+-- The slug prefix is the SLUGIFIED site_name (lowercase; spaces/apostrophes/punct
+-- → hyphens; collapse repeats; trim leading/trailing hyphens; cap 40 chars), so
+-- "Ted's Grooming Room" → "teds-grooming-room", not "Ted's Grooming Room". This
+-- mirrors generate-barber-site's slugify(); for already-clean site_names it is a
+-- no-op (idempotent). Empty result (e.g. all-punctuation name) falls back to "site".
 update public.generated_sites
-set share_token = site_name
-                  || '-'
-                  || translate(encode(gen_random_bytes(8), 'base64'), '+/=', '-_')
+set share_token =
+      coalesce(
+        nullif(
+          regexp_replace(
+            left(trim(both '-' from regexp_replace(lower(site_name), '[^a-z0-9]+', '-', 'g')), 40),
+            '-+$', ''
+          ),
+          ''
+        ),
+        'site'
+      )
+      || '-'
+      || translate(encode(gen_random_bytes(8), 'base64'), '+/=', '-_')
 where owner_id is null;
