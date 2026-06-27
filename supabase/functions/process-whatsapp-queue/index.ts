@@ -37,8 +37,8 @@ const TZ = "Europe/London";
 // VERIFY before the live cutover (TEST_MODE protects you until then). If a template
 // is later changed to put the claim URL in a URL BUTTON, adjust templateComponents.
 const TEMPLATES: Record<string, { lang: string }> = {
-  booking_page_intro: { lang: "en_GB" },
-  free_website_intro: { lang: "en_GB" },
+  booking_page_intro: { lang: "en" },
+  free_website_intro: { lang: "en" },
 };
 const DEFAULT_TEMPLATE = "booking_page_intro";
 
