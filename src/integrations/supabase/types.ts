@@ -681,6 +681,11 @@ export type Database = {
           website: string | null
           whatsapp_checked_at: string | null
           whatsapp_status: string | null
+          whatsapp_template: string | null
+          queued_at: string | null
+          whatsapp_sent_at: string | null
+          whatsapp_message_id: string | null
+          whatsapp_delivery_status: string | null
         }
         Insert: {
           address?: string | null
@@ -738,6 +743,11 @@ export type Database = {
           website?: string | null
           whatsapp_checked_at?: string | null
           whatsapp_status?: string | null
+          whatsapp_template?: string | null
+          queued_at?: string | null
+          whatsapp_sent_at?: string | null
+          whatsapp_message_id?: string | null
+          whatsapp_delivery_status?: string | null
         }
         Update: {
           address?: string | null
@@ -795,6 +805,11 @@ export type Database = {
           website?: string | null
           whatsapp_checked_at?: string | null
           whatsapp_status?: string | null
+          whatsapp_template?: string | null
+          queued_at?: string | null
+          whatsapp_sent_at?: string | null
+          whatsapp_message_id?: string | null
+          whatsapp_delivery_status?: string | null
         }
         Relationships: [
           {

@@ -12,6 +12,11 @@ const statusConfig: Record<LeadStatus, { label: string; shortLabel: string; clas
     shortLabel: 'Contact Method',
     className: 'bg-[hsl(var(--badge-new))] text-[hsl(var(--badge-new-fg))] border-transparent font-semibold',
   },
+  queued: {
+    label: 'Queued',
+    shortLabel: 'Queued',
+    className: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent font-semibold',
+  },
   sent_initial_text: {
     label: 'Sent Text / WhatsApp',
     shortLabel: 'Texted',

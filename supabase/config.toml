@@ -30,6 +30,9 @@ verify_jwt = false
 [functions.scan-services]
 verify_jwt = false
 
+[functions.process-whatsapp-queue]
+verify_jwt = false
+
 [functions.google-place-details]
 verify_jwt = false
 
