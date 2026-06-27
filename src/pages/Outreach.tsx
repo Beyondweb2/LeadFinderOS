@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { OutreachTable } from '@/components/OutreachTable';
+import { WhatsAppQueuePanel } from '@/components/WhatsAppQueuePanel';
 
 import { OutreachTipsDialog } from '@/components/OutreachTipsDialog';
 import { OutreachIntroModal } from '@/components/OutreachIntroModal';
@@ -158,6 +159,9 @@ const Outreach = () => {
           <CampaignPicker mode="filter" value={campaignFilter} onChange={changeCampaignFilter} />
         </div>
       </div>
+
+      {/* WhatsApp outreach queue (admin-only; self-hides otherwise). */}
+      <WhatsAppQueuePanel />
 
       <OutreachTable
         leads={allLeads}

@@ -34,6 +34,7 @@ import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Contac
 import { CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, isSentStatus, isRepliedStatus, isSiteSentStatus } from '@/types/outreach';
 import { PipelineStatusBadge } from '@/components/PipelineStatusBadge';
 import { BookingServicesEditor } from '@/components/BookingServicesEditor';
+import { WhatsAppLeadControls } from '@/components/WhatsAppLeadControls';
 import { useCustomNextActions, getLeadCustomAction, setLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { cn } from '@/lib/utils';
 
@@ -788,6 +789,9 @@ function LeadDetailBody({
             {/* Booking-page services (Phase 3b) — editable, scan + review-before-overwrite,
                 saves confirmed_services to the lead. Supersedes the 3a read-only scan. */}
             {!isDemoLead(lead.id) && <BookingServicesEditor lead={lead} onUpdate={onUpdateLead} />}
+
+            {/* WhatsApp outreach: per-lead template + add/remove from the daily queue. */}
+            {!isDemoLead(lead.id) && <WhatsAppLeadControls lead={lead} onUpdate={onUpdateLead} />}
           </div>
 
           {/* Right: Notes + Activity */}

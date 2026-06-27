@@ -734,6 +734,22 @@ export function OutreachTable({
     // Status updated — no toast
   };
 
+  // Add selected leads to the WhatsApp outreach queue (status='queued' + queued_at
+  // for FIFO order; default template only if the lead hasn't picked one).
+  const handleQueueForWhatsApp = () => {
+    if (selectedIds.size === 0 || !onUpdateLead) return;
+    const now = new Date().toISOString();
+    const ids = Array.from(selectedIds);
+    ids.forEach((id) => {
+      const lead = leads.find((l) => l.id === id);
+      const patch: Partial<OutreachLead> = { status: 'queued', queued_at: now };
+      if (!lead?.whatsapp_template) patch.whatsapp_template = 'booking_page_intro';
+      onUpdateLead(id, patch);
+    });
+    setSelectedIds(new Set());
+    toast({ title: `Queued ${ids.length} for WhatsApp`, description: 'They send within the daily 7am–7pm UK window, capped at 10/day.' });
+  };
+
   // Mark selected leads as interested
   const handleMarkAsInterested = () => {
     if (selectedIds.size === 0 || !onMarkAsInterested) return;
@@ -1049,6 +1065,12 @@ export function OutreachTable({
                   <Copy className="h-3.5 w-3.5 mr-1.5" />
                   Copy Numbers ({selectedIds.size})
                 </Button>
+                {!readOnly && onUpdateLead && (
+                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleQueueForWhatsApp}>
+                    <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                    Queue WhatsApp ({selectedIds.size})
+                  </Button>
+                )}
                 {!readOnly && (
                   <>
                     {/* Bulk Status Dropdown */}

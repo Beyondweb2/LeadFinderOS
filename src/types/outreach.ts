@@ -1,5 +1,6 @@
 export type LeadStatus =
   | 'not_contacted'
+  | 'queued'            // in the WhatsApp outreach queue, not yet sent
   | 'initial_contact'   // unified "I've reached out" (replaces contacted/waiting/delivered)
   | 'contacted'
   | 'call_back'
@@ -134,6 +135,13 @@ export interface OutreachLead {
   // 'mobile' = WhatsApp-capable proxy (legal; no WhatsApp probing).
   line_type?: string | null;
   line_type_checked_at?: string | null;
+  // WhatsApp outreach (queue + processor). whatsapp_template is the chosen approved
+  // template; the rest are written server-side by process-whatsapp-queue on send.
+  whatsapp_template?: string | null;
+  queued_at?: string | null;
+  whatsapp_sent_at?: string | null;
+  whatsapp_message_id?: string | null;
+  whatsapp_delivery_status?: string | null; // 'simulated' | 'sent' | 'failed' | ...
   outreach_attempts?: number;
   last_outreach_attempt_at?: string | null;
   // New fields
@@ -186,12 +194,21 @@ export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
 // the filter and the row/expanded dropdowns are one consistent list.
 export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'not_contacted', label: 'New' },
+  { value: 'queued', label: 'Queued' },
   { value: 'initial_contact', label: 'Contacted' },
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'payment_received', label: 'Paid' },
+];
+
+/** Approved WhatsApp outreach templates (Meta). value = template name; both carry
+ *  {{1}} business name + {{2}} claim URL. Keep in sync with the edge function's
+ *  TEMPLATES allowlist in process-whatsapp-queue. */
+export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
+  { value: 'booking_page_intro', label: 'Booking page intro' },
+  { value: 'free_website_intro', label: 'Free website intro' },
 ];
 
 // Contact method options (how the business was contacted)
