@@ -33,6 +33,9 @@ verify_jwt = false
 [functions.process-whatsapp-queue]
 verify_jwt = false
 
+[functions.whatsapp-status]
+verify_jwt = false
+
 [functions.google-place-details]
 verify_jwt = false
 
