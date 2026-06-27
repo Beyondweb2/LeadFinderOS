@@ -336,6 +336,19 @@ function slugify(name: string, fallback = "site"): string {
   );
 }
 
+/**
+ * Readable-but-secret claim/share token: the site slug for readability + a
+ * crypto-strong url-safe random suffix that is the actual secret (e.g.
+ * "mh-barber-Xk3p9Qz2a"). The slug is public (it's the /p/ + bookmybarber slug),
+ * so the unguessable suffix is what protects claiming — never drop it. ~64 bits.
+ */
+function readableShareToken(slug: string): string {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  const suffix = btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, (m) => (m === "+" ? "-" : m === "/" ? "_" : ""));
+  return `${slug}-${suffix}`;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -958,9 +971,12 @@ serve(async (req) => {
     } else {
       for (let attempt = 1; attempt <= 50; attempt++) {
         slug = attempt === 1 ? baseSlug : `${baseSlug}-${attempt}`;
+        // Readable-but-secret claim link: "<slug>-<random>". Built from the final
+        // slug so /s/<token> leads with the business name (begin-claim/claim-site
+        // resolve by exact share_token — unchanged; only the FORMAT differs).
         const res = await serviceClient
           .from("generated_sites")
-          .insert({ lead_id: leadId, site_name: slug, content, status: "draft", template, booking_only: bookingOnly })
+          .insert({ lead_id: leadId, site_name: slug, content, status: "draft", template, booking_only: bookingOnly, share_token: readableShareToken(slug) })
           .select("id, lead_id, site_name, status, created_at")
           .single();
         if (!res.error) {
