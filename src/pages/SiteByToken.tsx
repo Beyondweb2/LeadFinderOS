@@ -377,6 +377,7 @@ export default function SiteByToken() {
         open={popupOpen}
         onOpenChange={setPopupOpen}
         businessName={businessName || "your business"}
+        bookingOnly={!!data?.booking_only}
       />
       {!isPreview && !popupOpen && (
         <ColourEditDock value={accent} onChange={handleAccent} onKeep={handleClaim} keeping={claiming} />

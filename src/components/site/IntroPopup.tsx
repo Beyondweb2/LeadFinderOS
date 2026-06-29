@@ -6,6 +6,9 @@ interface IntroPopupProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   businessName: string;
+  /** Booking-only sites are the paid online-booking product (not a free website),
+   *  so the copy must adapt: "your booking page", no "it's free" claim. */
+  bookingOnly?: boolean;
 }
 
 const SHELL_BG =
@@ -24,7 +27,7 @@ const SHELL_BG =
  * "See my site" button are interactive; Escape also closes it. Copy is
  * intentionally human/understated - keep it.
  */
-export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps) {
+export function IntroPopup({ open, onOpenChange, businessName, bookingOnly = false }: IntroPopupProps) {
   const name = businessName?.trim() || 'your business';
 
   useEffect(() => {
@@ -60,17 +63,18 @@ export function IntroPopup({ open, onOpenChange, businessName }: IntroPopupProps
               Built for {name}
             </span>
             <h2 className="mt-2 font-display text-4xl uppercase leading-[1.0] tracking-wide text-white sm:text-5xl">
-              This is your website
+              {bookingOnly ? 'This is your booking page' : 'This is your website'}
             </h2>
             <p className="mt-3 text-base font-semibold text-white">
-              It's free — no card, no catch.
+              {bookingOnly ? 'Take bookings online, day and night.' : "It's free — no card, no catch."}
             </p>
           </div>
 
           {/* Left-aligned supporting copy + contact (editorial contrast) */}
           <p className="mt-5 text-sm leading-relaxed text-zinc-400">
-            Have a proper look around — it's yours to keep, and yours to make your own.
-            The photos, colours, text and services are all editable.
+            {bookingOnly
+              ? "Have a proper look around — it's yours to make your own. Your services, prices, opening hours and branding are all editable."
+              : "Have a proper look around — it's yours to keep, and yours to make your own. The photos, colours, text and services are all editable."}
           </p>
 
           <div className="mt-4 flex flex-col gap-2.5 rounded-xl border border-line bg-white/[0.03] p-3.5 sm:flex-row sm:items-center sm:gap-5">
