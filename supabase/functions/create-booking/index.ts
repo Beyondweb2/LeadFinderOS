@@ -120,14 +120,20 @@ serve(async (req) => {
       { auth: { persistSession: false } },
     );
 
-    // --- Resolve the site (by id or slug) and require it published ---
-    const siteSel = serviceClient.from("generated_sites").select("id, status, content");
+    // --- Resolve the site (by id or slug) and require it published + PAID ---
+    const siteSel = serviceClient.from("generated_sites").select("id, status, content, is_paid");
     const { data: site } = await (siteId ? siteSel.eq("id", siteId) : siteSel.eq("site_name", slug)).maybeSingle();
     if (!site) {
       return jsonResponse({ ok: false, error: "site_not_found" }, 404, rlHeaders);
     }
     if (site.status !== "published") {
       return jsonResponse({ ok: false, error: "not_published" }, 200, rlHeaders);
+    }
+    // Online booking is a paid feature (£29.99) for BOTH full-site and booking-only.
+    // Server-side gate so a hidden button can't be bypassed — same flag the public
+    // page reads. Unpaid → no booking, regardless of how the request was crafted.
+    if (!site.is_paid) {
+      return jsonResponse({ ok: false, error: "not_paid" }, 200, rlHeaders);
     }
 
     // --- Staff must belong to this site and be active ---

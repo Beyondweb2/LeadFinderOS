@@ -65,7 +65,8 @@ export default function SubdomainSite({ label }: { label: string }) {
   const template = data?.template ?? DEFAULT_TEMPLATE_KEY;
   const siteName = data?.siteName ?? null;
 
-  // Booking is enabled only when the shop has set up bookable staff (matches PublicSite).
+  // Booking is enabled only when the shop has PAID (online booking is a paid
+  // feature) AND set up bookable staff (matches PublicSite).
   const { data: bookingReady } = useQuery({
     queryKey: ["booking-ready-sub", siteName],
     enabled: !!siteName,
@@ -74,6 +75,7 @@ export default function SubdomainSite({ label }: { label: string }) {
         .from("booking_staff")
         .select("id, generated_sites!inner(site_name)", { count: "exact", head: true })
         .eq("generated_sites.site_name", siteName!)
+        .eq("generated_sites.is_paid", true)
         .eq("is_active", true);
       return (count ?? 0) > 0;
     },

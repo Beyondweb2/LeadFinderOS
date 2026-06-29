@@ -43,23 +43,25 @@ export default function BookingPage({ slug }: { slug: string }) {
 
   const { data, isLoading } = useQuery({
     queryKey: ["booking-page", slug],
-    queryFn: async (): Promise<{ siteName: string; content: SiteContent; template: string } | null> => {
+    queryFn: async (): Promise<{ siteName: string; content: SiteContent; template: string; isPaid: boolean } | null> => {
       const res = await supabase
         .from("generated_sites")
-        .select("site_name, content, template")
+        .select("site_name, content, template, is_paid")
         .eq("site_name", slug)
         .maybeSingle();
       if (res.error) {
+        // Fall back to the always-granted columns (older deploy / missing grant).
+        // is_paid unknown → treat as unpaid (fail closed: no free booking).
         const fb = await supabase
           .from("generated_sites")
           .select("site_name, content")
           .eq("site_name", slug)
           .maybeSingle();
         const r = fb.data as { site_name?: string; content?: unknown } | null;
-        return r?.content ? { siteName: r.site_name as string, content: r.content as SiteContent, template: DEFAULT_TEMPLATE_KEY } : null;
+        return r?.content ? { siteName: r.site_name as string, content: r.content as SiteContent, template: DEFAULT_TEMPLATE_KEY, isPaid: false } : null;
       }
-      const r = res.data as { site_name?: string; content?: unknown; template?: unknown } | null;
-      return r?.content ? { siteName: r.site_name as string, content: r.content as SiteContent, template: normaliseTemplate(r.template) } : null;
+      const r = res.data as { site_name?: string; content?: unknown; template?: unknown; is_paid?: boolean } | null;
+      return r?.content ? { siteName: r.site_name as string, content: r.content as SiteContent, template: normaliseTemplate(r.template), isPaid: !!r.is_paid } : null;
     },
   });
 
@@ -84,6 +86,10 @@ export default function BookingPage({ slug }: { slug: string }) {
     );
   }
 
+  // Online booking is a paid feature (£29.99). Unpaid → the page stays fully
+  // visible (hero/services/prices/hours/contact) but every booking affordance is
+  // removed. The create-booking edge function enforces the same gate server-side.
+  const bookingEnabled = !!data.isPaid;
   const accent = content.accentColor && HEX_RE.test(content.accentColor) ? content.accentColor : "#E6A24B";
   const accentStyle = {
     "--barber-accent": hexToChannels(accent),
@@ -132,16 +138,18 @@ export default function BookingPage({ slug }: { slug: string }) {
                 <Phone className="h-4 w-4" />
               </a>
             )}
-            <button
-              type="button"
-              onClick={() => openFlow(null)}
-              className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-ink shadow-lg transition-all hover:-translate-y-0.5"
-              style={{ backgroundColor: accent }}
-            >
-              <CalendarClock className="h-4 w-4" />
-              <span className="hidden sm:inline">Book now</span>
-              <span className="sm:hidden">Book</span>
-            </button>
+            {bookingEnabled && (
+              <button
+                type="button"
+                onClick={() => openFlow(null)}
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-bold text-ink shadow-lg transition-all hover:-translate-y-0.5"
+                style={{ backgroundColor: accent }}
+              >
+                <CalendarClock className="h-4 w-4" />
+                <span className="hidden sm:inline">Book now</span>
+                <span className="sm:hidden">Book</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -152,7 +160,9 @@ export default function BookingPage({ slug }: { slug: string }) {
         <h1 className="font-display text-4xl uppercase leading-[1.05] tracking-wide text-white drop-shadow-[0_2px_24px_rgba(0,0,0,0.65)] sm:text-6xl">
           {businessName}
         </h1>
-        <p className="mt-4 text-sm text-zinc-300 sm:text-base">Book your appointment online</p>
+        {bookingEnabled && (
+          <p className="mt-4 text-sm text-zinc-300 sm:text-base">Book your appointment online</p>
+        )}
       </section>
 
       {/* Lean, booking-focused detail — all from data already on the row. No about,
@@ -164,16 +174,16 @@ export default function BookingPage({ slug }: { slug: string }) {
             <section className="flex flex-col">
               <div className="flex items-baseline justify-between gap-3">
                 <h2 className="font-display text-2xl uppercase tracking-wide text-white">Services</h2>
-                <span className="text-xs uppercase tracking-wide text-zinc-400">Tap to book</span>
+                {bookingEnabled && (
+                  <span className="text-xs uppercase tracking-wide text-zinc-400">Tap to book</span>
+                )}
               </div>
               <ul className="mt-4 flex-1 divide-y divide-white/10 overflow-hidden rounded-2xl bg-black/60 shadow-xl backdrop-blur-sm">
-                {services.map((s, i) => (
-                  <li key={`${s.name}-${i}`}>
-                    <button
-                      type="button"
-                      onClick={() => openFlow(s)}
-                      className="flex w-full items-baseline justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.05] active:bg-white/[0.08]"
-                    >
+                {services.map((s, i) => {
+                  // Same row layout whether or not booking is enabled; only the
+                  // tap-to-book interaction + chevron appear when paid.
+                  const inner = (
+                    <>
                       <div className="min-w-0">
                         <div className="font-semibold text-white">{s.name}</div>
                         {typeof s.durationMins === "number" && s.durationMins > 0 && (
@@ -184,11 +194,30 @@ export default function BookingPage({ slug }: { slug: string }) {
                         {s.price && (
                           <span className="font-display text-xl tracking-wide" style={{ color: accent }}>{s.price}</span>
                         )}
-                        <span aria-hidden className="self-center text-lg leading-none" style={{ color: accent }}>›</span>
+                        {bookingEnabled && (
+                          <span aria-hidden className="self-center text-lg leading-none" style={{ color: accent }}>›</span>
+                        )}
                       </div>
-                    </button>
-                  </li>
-                ))}
+                    </>
+                  );
+                  return (
+                    <li key={`${s.name}-${i}`}>
+                      {bookingEnabled ? (
+                        <button
+                          type="button"
+                          onClick={() => openFlow(s)}
+                          className="flex w-full items-baseline justify-between gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.05] active:bg-white/[0.08]"
+                        >
+                          {inner}
+                        </button>
+                      ) : (
+                        <div className="flex w-full items-baseline justify-between gap-3 px-4 py-3.5 text-left">
+                          {inner}
+                        </div>
+                      )}
+                    </li>
+                  );
+                })}
               </ul>
             </section>
           )}
@@ -244,7 +273,9 @@ export default function BookingPage({ slug }: { slug: string }) {
 
       </main>
 
-      <BookingFlow open={open} onClose={() => setOpen(false)} slug={data.siteName} content={content} variant={variant} initialService={picked} />
+      {bookingEnabled && (
+        <BookingFlow open={open} onClose={() => setOpen(false)} slug={data.siteName} content={content} variant={variant} initialService={picked} />
+      )}
 
       <footer className="relative z-10 border-t border-white/[0.06] px-6 py-6 text-center text-xs text-zinc-600">
         Online booking by bookmybarber.uk
