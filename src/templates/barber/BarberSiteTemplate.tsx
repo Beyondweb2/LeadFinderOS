@@ -52,6 +52,7 @@ export function BarberSiteTemplate({
   onAddImage,
   onEditService,
   onAddService,
+  bookingOnly = false,
 }: {
   content: BarberSiteContent;
   /**
@@ -107,6 +108,14 @@ export function BarberSiteTemplate({
    */
   onEditService?: (index: number) => void;
   onAddService?: () => void;
+  /**
+   * Booking-only sites are the online-booking product, not a marketing website.
+   * When true, the marketing-only sections are hidden so the owner's editor (and
+   * any render) shows just the booking-relevant fields: Hero (branding/photo),
+   * Services + prices, Hours, and contact phone/address — NO About, Gallery or map.
+   * Defaults false → every existing render is byte-identical.
+   */
+  bookingOnly?: boolean;
 }) {
   const {
     businessName,
@@ -199,6 +208,7 @@ export function BarberSiteTemplate({
           editable={editable}
           onEditImage={onEditImage}
           onEditElement={onEditElement}
+          bookingOnly={bookingOnly}
         />
 
         <main>
@@ -216,17 +226,23 @@ export function BarberSiteTemplate({
             editable={editable}
             onEditElement={onEditElement}
           />
-          <About about={about} aboutHeading={aboutHeading} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} onEditImage={onEditImage} editable={editable} onEditElement={onEditElement} />
+          {/* Booking-only sites hide the marketing-only sections (About, Gallery)
+              so the owner edits just hero/services/hours/contact. */}
+          {!bookingOnly && (
+            <About about={about} aboutHeading={aboutHeading} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} onEditImage={onEditImage} editable={editable} onEditElement={onEditElement} />
+          )}
           <Services services={services} showExamplePrices={showExamplePrices} editable={editable} onEditService={onEditService} onAddService={onAddService} />
-          <Gallery
-            images={gallery}
-            businessName={businessName}
-            onEditImage={onEditImage}
-            editable={!!galleryImageUrls && galleryImageUrls.length > 0}
-            ownerEditable={editable}
-            ownerImages={galleryImageUrls ?? []}
-            onAddImage={onAddImage}
-          />
+          {!bookingOnly && (
+            <Gallery
+              images={gallery}
+              businessName={businessName}
+              onEditImage={onEditImage}
+              editable={!!galleryImageUrls && galleryImageUrls.length > 0}
+              ownerEditable={editable}
+              ownerImages={galleryImageUrls ?? []}
+              onAddImage={onAddImage}
+            />
+          )}
           <Hours hours={hours} editable={editable} onEditElement={onEditElement} />
           <Contact
             businessName={businessName}
@@ -234,7 +250,7 @@ export function BarberSiteTemplate({
             telHref={telHref}
             address={address}
             contactHeading={contactHeading}
-            mapSrc={mapSrc}
+            mapSrc={bookingOnly ? "" : mapSrc}
             googleRating={googleRating}
             reviewCount={reviewCount}
             googleReviewsUrl={googleReviewsUrl}
@@ -605,6 +621,7 @@ function Header({
   editable,
   onEditImage,
   onEditElement,
+  bookingOnly = false,
 }: {
   businessName: string;
   telHref: string;
@@ -613,6 +630,7 @@ function Header({
   logoUrl?: string;
   facebookUrl?: string;
   instagramUrl?: string;
+  bookingOnly?: boolean;
   editable?: boolean;
   onEditImage?: (slot: BarberImageSlot) => void;
   onEditElement?: (key: string) => void;
@@ -644,14 +662,16 @@ function Header({
           <a href="#services" className="transition-colors hover:text-white">
             Services
           </a>
-          <a href="#gallery" className="transition-colors hover:text-white">
-            Gallery
-          </a>
+          {!bookingOnly && (
+            <a href="#gallery" className="transition-colors hover:text-white">
+              Gallery
+            </a>
+          )}
           <a href="#hours" className="transition-colors hover:text-white">
             Hours
           </a>
           <a href="#visit" className="transition-colors hover:text-white">
-            Visit
+            {bookingOnly ? 'Contact' : 'Visit'}
           </a>
         </nav>
 

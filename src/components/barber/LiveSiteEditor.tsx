@@ -423,6 +423,7 @@ export function LiveSiteEditor({
       <BarberSiteTemplate
         content={liveContent}
         bookingEnabled={false}
+        bookingOnly={!!site.booking_only}
         editable
         onEditElement={(key) => { setImgTarget(null); setServiceTarget(null); setShowSettings(false); setActiveKey(key); }}
         onEditImage={handleEditImage}
