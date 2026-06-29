@@ -89,11 +89,16 @@ const Outreach = () => {
   // it still exists). Runs once. A launch intent on this visit takes precedence.
   useEffect(() => {
     if (restoredRef.current || campaignsLoading || !user?.id) return;
-    restoredRef.current = true;
-    if (hadInitialLaunchRef.current) return; // launch already set All; don't restore
+    if (hadInitialLaunchRef.current) { restoredRef.current = true; return; } // launch set All; don't restore
     const stored = readCampaignFilter(user.id);
-    if (stored && campaigns.some((c) => c.id === stored)) {
+    if (!stored) { restoredRef.current = true; return; } // nothing to restore
+    // Only consider the restore "done" once we've actually applied the saved
+    // campaign. If it isn't in the list yet (the page-level useCampaigns can be
+    // mid-load or momentarily stale), DON'T give up — leave restoredRef false so a
+    // later campaigns update restores it instead of silently snapping to "All".
+    if (campaigns.some((c) => c.id === stored)) {
       setCampaignFilter(stored); // restore-only — no re-persist
+      restoredRef.current = true;
     }
   }, [campaignsLoading, campaigns, user?.id]);
   const campaignDefaultSaleTypeByLead = useMemo(() => {
