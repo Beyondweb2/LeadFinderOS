@@ -18,6 +18,16 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Queued',
     className: 'bg-[hsl(var(--badge-sky))] text-[hsl(var(--badge-sky-fg))] border-transparent font-semibold',
   },
+  email_sent: {
+    label: 'Email Sent',
+    shortLabel: 'Email',
+    className: 'bg-sky-600 text-white border-transparent font-semibold',
+  },
+  bounced: {
+    label: 'Bounced',
+    shortLabel: 'Bounced',
+    className: 'bg-red-700 text-white border-transparent font-semibold',
+  },
   no_whatsapp: {
     label: 'No WhatsApp',
     shortLabel: 'No WA',

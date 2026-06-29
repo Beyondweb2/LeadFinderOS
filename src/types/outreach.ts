@@ -22,6 +22,8 @@ export type LeadStatus =
   | 'completed'
   | 'no_whatsapp'        // number isn't on WhatsApp (permanent — reach via SMS/call/email)
   | 'whatsapp_failed'    // WhatsApp send failed after retries (temporary — re-queueable)
+  | 'email_sent'         // pushed to an Instantly.ai email campaign
+  | 'bounced'            // Instantly reported the email bounced
   | 'sms'
   | 'whatsapp'
   | 'facebook_msg';
@@ -186,6 +188,8 @@ export const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'interested', label: 'Interested' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'no_whatsapp', label: 'No WhatsApp' },
+  { value: 'email_sent', label: 'Email Sent' },
+  { value: 'bounced', label: 'Bounced' },
   { value: 'waiting', label: 'Waiting' },
   { value: 'reviewing_draft', label: 'Reviewing Draft' },
   { value: 'paid_for_draft', label: 'Paid for Draft' },
@@ -198,12 +202,14 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: 'not_contacted', label: 'New' },
   { value: 'queued', label: 'Queued' },
   { value: 'initial_contact', label: 'Contacted' },
+  { value: 'email_sent', label: 'Email Sent' },
   { value: 'replied', label: 'Replied' },
   { value: 'site_sent', label: 'Site Sent' },
   { value: 'interested', label: 'Interested ⭐' },
   { value: 'not_interested', label: 'Not Interested' },
   { value: 'no_whatsapp', label: 'No WhatsApp' },
   { value: 'whatsapp_failed', label: 'WhatsApp Failed' },
+  { value: 'bounced', label: 'Bounced' },
   { value: 'payment_received', label: 'Paid' },
 ];
 
@@ -216,13 +222,14 @@ export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
 ];
 
 // Contact method options (how the business was contacted)
-export type ContactMethod = 'call' | 'sms' | 'whatsapp' | 'facebook_msg';
+export type ContactMethod = 'call' | 'sms' | 'whatsapp' | 'facebook_msg' | 'email';
 
 export const CONTACT_METHOD_OPTIONS: { value: ContactMethod; label: string }[] = [
   { value: 'call', label: 'Call' },
   { value: 'sms', label: 'SMS' },
   { value: 'whatsapp', label: 'WhatsApp' },
   { value: 'facebook_msg', label: 'Messenger' },
+  { value: 'email', label: 'Email' },
 ];
 
 // Pipeline status options (where the lead is in the pipeline). Simplified to a
