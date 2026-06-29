@@ -28,6 +28,7 @@ const Outreach = () => {
     updateBusinessName,
     fetchActivities,
     deleteMultiple,
+    resetMultiple,
     deleteAllLeads,
     archiveLead,
     archiveMultiple,
@@ -188,6 +189,7 @@ const Outreach = () => {
         }}
         onArchiveSelected={archiveMultiple}
         onDeleteSelected={deleteMultiple}
+        onResetSelected={resetMultiple}
         onMarkAsInterested={markMultipleAsInterested}
         onRefreshLeads={fetchLeads}
         onImportLeads={async (leadsToImport) => {
