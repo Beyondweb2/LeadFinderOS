@@ -349,6 +349,28 @@ function readableShareToken(slug: string): string {
   return `${slug}-${suffix}`;
 }
 
+/** Defensively map an array of {name, price?, durationMins?} (operator-confirmed OR
+ *  auto-scanned services) to BarberService[]. Preserves each item's own price +
+ *  duration (1:1 — the right price stays with the right service); drops malformed
+ *  entries; caps at 60. */
+function toBarberServices(arr: unknown): BarberService[] {
+  return Array.isArray(arr)
+    ? arr
+        .filter((s): s is Record<string, unknown> =>
+          !!s && typeof s === "object" && typeof (s as { name?: unknown }).name === "string" &&
+          (s as { name: string }).name.trim().length > 0)
+        .map((s) => {
+          const out: BarberService = { name: String((s as { name: string }).name).trim().slice(0, 120) };
+          const price = (s as { price?: unknown }).price;
+          if (typeof price === "string" && price.trim()) out.price = price.trim().slice(0, 40);
+          const dur = (s as { durationMins?: unknown }).durationMins;
+          if (typeof dur === "number" && Number.isFinite(dur) && dur > 0) out.durationMins = Math.round(dur);
+          return out;
+        })
+        .slice(0, 60)
+    : [];
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -623,21 +645,39 @@ serve(async (req) => {
     // consulted for booking-only pages (see the services build below) — this is the
     // sole path that carries operator-approved PRICES onto a page. Sanitised
     // defensively; malformed entries are dropped, not trusted.
-    const confirmedServices: BarberService[] = Array.isArray(lead.confirmed_services)
-      ? (lead.confirmed_services as unknown[])
-          .filter((s): s is Record<string, unknown> =>
-            !!s && typeof s === "object" && typeof (s as { name?: unknown }).name === "string" &&
-            (s as { name: string }).name.trim().length > 0)
-          .map((s) => {
-            const out: BarberService = { name: String((s as { name: string }).name).trim().slice(0, 120) };
-            const price = (s as { price?: unknown }).price;
-            if (typeof price === "string" && price.trim()) out.price = price.trim().slice(0, 40);
-            const dur = (s as { durationMins?: unknown }).durationMins;
-            if (typeof dur === "number" && Number.isFinite(dur) && dur > 0) out.durationMins = Math.round(dur);
-            return out;
-          })
-          .slice(0, 60)
-      : [];
+    const confirmedServices: BarberService[] = toBarberServices(lead.confirmed_services);
+
+    // Phase 3a auto-scan-on-generate: a BOOKING-ONLY site with NO operator-confirmed
+    // services scans the lead's OWN website for real services + prices (scan-services
+    // uses OpenAI, not Apify — works while Apify is down). Non-blocking: if it finds
+    // nothing / the site is a booking-platform / scan fails, autoScannedServices stays
+    // empty and the services build falls through to defaults (no regression). Each
+    // scanned {name, price?, durationMins?} keeps its own price (1:1 mapping).
+    let autoScannedServices: BarberService[] = [];
+    if (bookingOnly && confirmedServices.length === 0) {
+      const ownWebsite = typeof lead.website === "string" ? lead.website.trim() : "";
+      if (ownWebsite) {
+        try {
+          const scanRes = await fetch(`${supabaseUrl}/functions/v1/scan-services`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: authHeader, apikey: supabaseAnonKey },
+            body: JSON.stringify({
+              lead_id: leadId,
+              place_id: lead.place_id ?? null,
+              business_name: lead.business_name ?? null,
+              website: ownWebsite,
+            }),
+          });
+          const scanData = await scanRes.json().catch(() => ({}));
+          if (scanData?.success && Array.isArray(scanData.services)) {
+            autoScannedServices = toBarberServices(scanData.services);
+          }
+          console.log(`[GENERATE-BARBER-SITE] auto-scan services → ${autoScannedServices.length} found`);
+        } catch (e) {
+          console.error("[GENERATE-BARBER-SITE] auto-scan services failed (non-blocking):", (e as Error).message);
+        }
+      }
+    }
     const facebookHigh =
       typeof lead.facebook_confidence === "number" && lead.facebook_confidence >= 80 && !!lead.facebook_url;
 
@@ -813,6 +853,11 @@ serve(async (req) => {
       // the existing Maps/defaults behaviour (no regression).
       if (bookingOnly && confirmedServices.length) {
         return confirmedServices;
+      }
+      // Auto-scanned real services + prices for a fresh booking-only page (when no
+      // operator-confirmed list). Empty → falls through to the existing defaults.
+      if (bookingOnly && autoScannedServices.length) {
+        return autoScannedServices;
       }
       if (realServices.length) {
         // Real service names verbatim; keep only a generic description the model wrote.

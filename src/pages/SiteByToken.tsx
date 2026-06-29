@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SiteContent } from "@/templates/shared/content";
 import { getTemplateDef, normaliseTemplate, DEFAULT_TEMPLATE_KEY } from "@/templates/registry";
+import { STOCK_HERO } from "@/templates/barber/assets";
 import { useSiteBranding } from "@/hooks/useSiteBranding";
 import { useToast } from "@/hooks/use-toast";
 import { IntroPopup } from "@/components/site/IntroPopup";
@@ -51,11 +52,8 @@ function BookingClaimPreview({
   return (
     <div className="min-h-screen bg-ink font-body text-zinc-200">
       <header className="relative isolate flex min-h-[34vh] flex-col items-center justify-center overflow-hidden px-6 py-12 text-center">
-        {content.heroImageUrl ? (
-          <img src={content.heroImageUrl} alt={businessName} className="absolute inset-0 -z-10 h-full w-full object-cover" />
-        ) : (
-          <div className="absolute inset-0 -z-10 bg-gradient-to-br from-[#1c1509] via-ink to-black" />
-        )}
+        {/* Real hero, or the bundled stock barber image — never a black background. */}
+        <img src={content.heroImageUrl || STOCK_HERO} alt={businessName} className="absolute inset-0 -z-10 h-full w-full object-cover" />
         <div className="absolute inset-0 -z-10 bg-gradient-to-t from-ink via-ink/80 to-ink/40" />
         {onEditImage && (
           <button
