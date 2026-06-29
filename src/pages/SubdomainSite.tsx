@@ -67,7 +67,7 @@ export default function SubdomainSite({ label }: { label: string }) {
 
   // Booking is enabled only when the shop has PAID (online booking is a paid
   // feature) AND set up bookable staff (matches PublicSite).
-  const { data: bookingReady } = useQuery({
+  const { data: bookingReady, isPending: bookingPending } = useQuery({
     queryKey: ["booking-ready-sub", siteName],
     enabled: !!siteName,
     queryFn: async () => {
@@ -82,7 +82,9 @@ export default function SubdomainSite({ label }: { label: string }) {
   });
 
   const def = getTemplateDef(template);
-  useSiteBranding(content?.businessName || def.brandFallbackLabel, template);
+  // Null while loading → keep the per-barber title the subdomain middleware set in the
+  // served HTML; set the real title only once data is in (no fallback flash).
+  useSiteBranding(isLoading ? null : (content?.businessName || def.brandFallbackLabel), template);
 
   // Render gate (kills the marketing flash): a booking-only row must NEVER paint the
   // marketing template — show the loader until the redirect (useEffect above) sends
@@ -101,6 +103,16 @@ export default function SubdomainSite({ label }: { label: string }) {
       <div className={`min-h-screen flex flex-col items-center justify-center gap-2 px-6 text-center ${def.loadingBgClass}`}>
         <p className="text-lg font-semibold text-white">This site isn’t available yet.</p>
         <p className="text-sm text-zinc-400">Please check back soon.</p>
+      </div>
+    );
+  }
+
+  // Wait for the booking-state query too (siteName is now known so it's enabled), so
+  // the page paints ONCE with booking known — no "Book" button popping in afterwards.
+  if (bookingPending) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${def.loadingBgClass}`}>
+        <Loader2 className={`h-8 w-8 animate-spin ${def.loadingSpinnerClass}`} />
       </div>
     );
   }

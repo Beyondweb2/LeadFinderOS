@@ -67,7 +67,9 @@ export default function BookingPage({ slug }: { slug: string }) {
 
   const content = data?.content ?? null;
   const businessName = content?.businessName ?? "";
-  useSiteBranding(businessName || "Online booking", data?.template ?? DEFAULT_TEMPLATE_KEY);
+  // Null while loading → leave the correct per-barber title the edge function set in
+  // the served HTML; set the real title only once data is in (no fallback flash).
+  useSiteBranding(isLoading ? null : (businessName || "Online booking"), data?.template ?? DEFAULT_TEMPLATE_KEY);
 
   if (isLoading) {
     return (

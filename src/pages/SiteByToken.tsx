@@ -274,7 +274,9 @@ export default function SiteByToken() {
   const def = getTemplateDef(template);
   const businessName = content?.businessName ?? "";
 
-  useSiteBranding(businessName || def.brandFallbackLabel, template);
+  // Null while loading → keep the per-barber title the /s/ edge function set in the
+  // served HTML; set the real title only once data is in (no fallback flash).
+  useSiteBranding(isLoading ? null : (businessName || def.brandFallbackLabel), template);
 
   // Record exactly one `open` per page load, once the site resolves.
   // In preview mode we record NOTHING — operator views must not inflate Opened.

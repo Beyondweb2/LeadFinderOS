@@ -16,30 +16,33 @@ import { getTemplateDef } from "@/templates/registry";
  * each vertical is resolved from the template registry (one place to add more).
  */
 
-export function useSiteBranding(title: string, template: string) {
+export function useSiteBranding(title: string | null, template: string) {
   const favicon = getTemplateDef(template).favicon;
   useEffect(() => {
-    const prevTitle = document.title;
-
-    let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
-    const created = !link;
-    const prevHref = link?.getAttribute("href") ?? null;
+    // Favicon — set immediately (depends only on the template, not on loaded data).
     // index.html declares type="image/png"; our template favicons are SVG data-URIs.
     // Without updating the type some browsers keep the PNG and the swap silently
     // no-ops (the page then shows LeadFinder's icon). Set + restore it too.
+    let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+    const created = !link;
+    const prevHref = link?.getAttribute("href") ?? null;
     const prevType = link?.getAttribute("type") ?? null;
     if (!link) {
       link = document.createElement("link");
       link.rel = "icon";
       document.head.appendChild(link);
     }
-
-    document.title = title;
     link.setAttribute("type", "image/svg+xml");
     link.setAttribute("href", favicon);
 
+    // Title — only set once we actually HAVE one. While `title` is null (data still
+    // loading) we leave the document title untouched, so the correct per-barber title
+    // the edge function put in the served HTML never flashes to a fallback first.
+    const prevTitle = document.title;
+    if (title) document.title = title;
+
     return () => {
-      document.title = prevTitle;
+      if (title) document.title = prevTitle;
       if (created) {
         link?.remove();
       } else if (link) {

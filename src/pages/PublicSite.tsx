@@ -79,7 +79,7 @@ export default function PublicSite() {
   // Booking is enabled only when the shop has PAID (online booking is a paid
   // feature, £29.99) AND set up bookable staff. Counts active staff for this
   // published, paid site (no rows fetched, just the count).
-  const { data: bookingReady } = useQuery({
+  const { data: bookingReady, isPending: bookingPending } = useQuery({
     queryKey: ["booking-ready", slug],
     enabled: !!slug,
     queryFn: async () => {
@@ -96,7 +96,9 @@ export default function PublicSite() {
   // Tab title = the business name, template-appropriate favicon — not LeadFinder's.
   const def = getTemplateDef(template);
   const businessName = content?.businessName ?? "";
-  useSiteBranding(businessName || def.brandFallbackLabel, template);
+  // Null while loading → keep the per-barber title the /p/ edge function set in the
+  // served HTML; set the real title only once data is in (no fallback flash).
+  useSiteBranding(isLoading ? null : (businessName || def.brandFallbackLabel), template);
 
   // Render gate (kills the marketing flash): a booking-only row must NEVER paint the
   // marketing template. Show the loader until the redirect (useEffect above) sends
@@ -109,12 +111,33 @@ export default function PublicSite() {
     );
   }
 
+  // No content for this slug → a neutral "not available" page, NOT the template's
+  // demo content (which would render a fake barber site for a missing/unknown slug).
+  if (!content) {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center gap-2 px-6 text-center ${def.loadingBgClass}`}>
+        <p className="text-lg font-semibold text-white">This site isn’t available.</p>
+        <p className="text-sm text-zinc-400">Please check the link, or check back soon.</p>
+      </div>
+    );
+  }
+
+  // Wait for the booking-state query too, so the page paints ONCE with booking known
+  // (no "Book" button popping in a beat after the rest of the page).
+  if (bookingPending) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${def.loadingBgClass}`}>
+        <Loader2 className={`h-8 w-8 animate-spin ${def.loadingSpinnerClass}`} />
+      </div>
+    );
+  }
+
   const Template = def.Component;
   return (
     <Template
-      content={content ?? def.demoContent}
+      content={content}
       bookingEnabled={!!bookingReady}
-      bookingSlug={content ? slug : undefined}
+      bookingSlug={slug}
     />
   );
 }
