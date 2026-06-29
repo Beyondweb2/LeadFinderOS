@@ -42,7 +42,7 @@ export default function BarberLogin() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useBarberBranding("Log in to manage your website");
+  useBarberBranding("Log in to manage your bookings");
 
   // Already signed in → straight through (e.g. opened a claim link while logged in).
   if (!isLoading && user) {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useBarberBranding } from "@/hooks/useBarberBranding";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -37,7 +38,12 @@ export default function OwnerDashboard() {
   const [selected, setSelected] = useState<OwnedSiteT | null>(null);
   const checkoutHandled = useRef(false);
 
-  useEffect(() => { document.title = "Your website"; }, []);
+  // Per-barber tab branding: "<business name> — Bookings" + the barber favicon
+  // (was a generic "Your website" + LeadFinder's icon). Falls back before a site
+  // loads / if the business name is blank.
+  const brandSite = selected ?? sites[0] ?? null;
+  const brandName = brandSite?.content?.businessName?.trim();
+  useBarberBranding(brandName ? `${brandName} — Bookings` : "Barber dashboard");
 
   const loadSites = useCallback(async (silent = false) => {
     if (!user) return;

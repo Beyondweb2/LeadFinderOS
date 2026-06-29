@@ -89,8 +89,8 @@ export default function Claim() {
 
   useBarberBranding(
     businessName && businessName !== "your business"
-      ? `Your website - ${businessName}`
-      : "Your website",
+      ? businessName
+      : "Claim your site",
   );
 
   const mapError = (code: string): string => {
