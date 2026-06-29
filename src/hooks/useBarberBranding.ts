@@ -16,29 +16,30 @@ const FAVICON_HREF = `data:image/svg+xml,${encodeURIComponent(
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#0E0E10"/><g transform="translate(4 4)" fill="none" stroke="#E6A24B" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><path d="M8.12 8.12 12 12"/><path d="M20 4 8.12 15.88"/><circle cx="6" cy="18" r="3"/><path d="M14.8 14.8 20 20"/></g></svg>`,
 )}`;
 
-export function useBarberBranding(title: string) {
+export function useBarberBranding(title: string | null) {
   useEffect(() => {
-    const prevTitle = document.title;
-
+    // Favicon — set immediately (no data needed). index.html declares type="image/png";
+    // our favicon is an SVG data-URI. If we don't also update the type, some browsers
+    // keep the PNG and the swap silently no-ops (page then shows LeadFinder's icon).
     let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
     const created = !link;
     const prevHref = link?.getAttribute("href") ?? null;
-    // index.html declares type="image/png"; our favicon is an SVG data-URI. If we
-    // don't also update the type, some browsers keep the PNG and the swap silently
-    // no-ops (the page then shows LeadFinder's icon). Set + restore it too.
     const prevType = link?.getAttribute("type") ?? null;
     if (!link) {
       link = document.createElement("link");
       link.rel = "icon";
       document.head.appendChild(link);
     }
-
-    document.title = title;
     link.setAttribute("type", "image/svg+xml");
     link.setAttribute("href", FAVICON_HREF);
 
+    // Title — only set once we actually HAVE one; while `title` is null we leave the
+    // current title untouched (no flash of a fallback over a correct title).
+    const prevTitle = document.title;
+    if (title) document.title = title;
+
     return () => {
-      document.title = prevTitle;
+      if (title) document.title = prevTitle;
       if (created) {
         link?.remove();
       } else if (link) {
