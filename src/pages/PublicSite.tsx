@@ -76,8 +76,9 @@ export default function PublicSite() {
   const content = data?.content ?? null;
   const template = data?.template ?? DEFAULT_TEMPLATE_KEY;
 
-  // Booking is enabled only when the shop has set up bookable staff (Phase 2).
-  // Counts active staff for this published site (no rows fetched, just the count).
+  // Booking is enabled only when the shop has PAID (online booking is a paid
+  // feature, £29.99) AND set up bookable staff. Counts active staff for this
+  // published, paid site (no rows fetched, just the count).
   const { data: bookingReady } = useQuery({
     queryKey: ["booking-ready", slug],
     enabled: !!slug,
@@ -86,6 +87,7 @@ export default function PublicSite() {
         .from("booking_staff")
         .select("id, generated_sites!inner(site_name)", { count: "exact", head: true })
         .eq("generated_sites.site_name", slug!)
+        .eq("generated_sites.is_paid", true)
         .eq("is_active", true);
       return (count ?? 0) > 0;
     },
