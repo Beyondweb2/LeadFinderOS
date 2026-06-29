@@ -16,6 +16,8 @@ const SUPABASE_ANON_KEY =
 const ROOT_DOMAIN = "yoursites.uk";
 // Booking-only domain (bookmybarber.uk/<slug>) — KEEP in sync with src/lib/subdomain.ts.
 const BOOKING_HOST = "bookmybarber.uk";
+// Apex origin for absolute fallback assets (og-default-*.jpg live in public/).
+const SITE_ORIGIN = `https://${ROOT_DOMAIN}`;
 
 // KEEP IN SYNC with src/lib/subdomain.ts + supabase/functions/connect-subdomain.
 const RESERVED = new Set<string>([
@@ -58,6 +60,25 @@ function isAssetPath(pathname: string): boolean {
   return /\.[a-z0-9]+$/i.test(pathname);
 }
 
+// Resolve the OG preview image for a site: the barber's hero, else first gallery
+// photo, else a neutral template stock photo (og-default-barber/salon.jpg) — never
+// the LeadFinder logo, never empty. Supabase Storage objects (often multi-MB) are
+// routed through the render/image transform (1200x630, q70 ~60KB) so WhatsApp doesn't
+// drop them. Mirrors functions/s/[token].ts + functions/p/[slug].ts.
+function ogImage(content: Record<string, unknown>, isSalon: boolean): string {
+  const gallery = Array.isArray(content.galleryImageUrls) ? content.galleryImageUrls : [];
+  const fallbackImg = `${SITE_ORIGIN}/og-default-${isSalon ? "salon" : "barber"}.jpg`;
+  const rawImg = (typeof content.heroImageUrl === "string" && content.heroImageUrl.trim())
+    || (typeof gallery[0] === "string" && (gallery[0] as string).trim()) || "";
+  const abs = rawImg
+    ? (/^https?:\/\//i.test(rawImg) ? rawImg : `${SITE_ORIGIN}${rawImg.startsWith("/") ? "" : "/"}${rawImg}`)
+    : fallbackImg;
+  const OBJ_PATH = "/storage/v1/object/public/";
+  return abs.includes(OBJ_PATH)
+    ? abs.replace(OBJ_PATH, "/storage/v1/render/image/public/") + "?width=1200&height=630&resize=cover&quality=70"
+    : abs;
+}
+
 interface Env { ASSETS: { fetch: (req: Request | URL | string) => Promise<Response> } }
 
 export const onRequest = async (context: {
@@ -82,21 +103,18 @@ export const onRequest = async (context: {
     }
     try {
       const apiUrl = `${SUPABASE_URL}/rest/v1/generated_sites` +
-        `?site_name=eq.${encodeURIComponent(slug)}&select=site_name,content&limit=1`;
+        `?site_name=eq.${encodeURIComponent(slug)}&select=site_name,content,template&limit=1`;
       const r = await fetch(apiUrl, { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } });
       if (r.ok) {
-        const rows = await r.json() as Array<{ site_name?: string; content?: Record<string, unknown> }>;
+        const rows = await r.json() as Array<{ site_name?: string; content?: Record<string, unknown>; template?: string }>;
         const row = Array.isArray(rows) ? rows[0] : null;
         if (row) {
           const content = (row.content ?? {}) as Record<string, unknown>;
           const biz = (typeof content.businessName === "string" && content.businessName.trim())
             ? content.businessName.trim() : (row.site_name || "Book an appointment");
           const title = `Book — ${biz}`;
-          const rawImg = (typeof content.heroImageUrl === "string" && content.heroImageUrl.trim()) || "";
-          const OBJ_PATH = "/storage/v1/object/public/";
-          const img = rawImg
-            ? (rawImg.includes(OBJ_PATH) ? rawImg.replace(OBJ_PATH, "/storage/v1/render/image/public/") + "?width=1200&height=630&resize=cover&quality=70" : rawImg)
-            : "";
+          const isSalon = (typeof row.template === "string" ? row.template : "barber") === "salon";
+          const img = ogImage(content, isSalon);
           html = html.replace(/<title>[^<]*<\/title>/i, `<title>${escAttr(title)}</title>`);
           html = setMeta(html, "og:title", title);
           html = setMeta(html, "og:description", `Book an appointment with ${biz} online.`);
@@ -126,12 +144,12 @@ export const onRequest = async (context: {
 
   try {
     const apiUrl = `${SUPABASE_URL}/rest/v1/generated_sites` +
-      `?subdomain=eq.${encodeURIComponent(label)}&select=site_name,content&limit=1`;
+      `?subdomain=eq.${encodeURIComponent(label)}&select=site_name,content,template&limit=1`;
     const r = await fetch(apiUrl, {
       headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
     });
     if (r.ok) {
-      const rows = await r.json() as Array<{ site_name?: string; content?: Record<string, unknown> }>;
+      const rows = await r.json() as Array<{ site_name?: string; content?: Record<string, unknown>; template?: string }>;
       const row = Array.isArray(rows) ? rows[0] : null;
       if (row) {
         const content = (row.content ?? {}) as Record<string, unknown>;
@@ -140,16 +158,8 @@ export const onRequest = async (context: {
         const desc = (typeof content.tagline === "string" && content.tagline.trim())
           ? content.tagline.trim() : "Take a look.";
         const origin = `https://${label}.${ROOT_DOMAIN}`;
-        const gallery = Array.isArray(content.galleryImageUrls) ? content.galleryImageUrls : [];
-        const rawImg = (typeof content.heroImageUrl === "string" && content.heroImageUrl.trim())
-          || (typeof gallery[0] === "string" && (gallery[0] as string).trim()) || "";
-        // Supabase public objects can be multi-MB → use the render/image transform.
-        const OBJ_PATH = "/storage/v1/object/public/";
-        const img = rawImg
-          ? (rawImg.includes(OBJ_PATH)
-              ? rawImg.replace(OBJ_PATH, "/storage/v1/render/image/public/") + "?width=1200&height=630&resize=cover&quality=70"
-              : rawImg)
-          : "";
+        const isSalon = (typeof row.template === "string" ? row.template : "barber") === "salon";
+        const img = ogImage(content, isSalon);
 
         html = html.replace(/<title>[^<]*<\/title>/i, `<title>${escAttr(biz)}</title>`);
         html = setMeta(html, "og:title", biz);
