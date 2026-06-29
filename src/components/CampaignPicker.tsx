@@ -28,7 +28,7 @@ interface CampaignPickerProps {
  * Includes an inline "New campaign…" action that opens the shared create dialog.
  */
 export function CampaignPicker({ value, onChange, mode, className }: CampaignPickerProps) {
-  const { campaigns, createCampaign } = useCampaigns();
+  const { campaigns, createCampaign, refetch } = useCampaigns();
   const [dialogOpen, setDialogOpen] = useState(false);
 
   const sentinel = mode === 'filter' ? ALL_CAMPAIGNS : NO_CAMPAIGN;
@@ -54,7 +54,14 @@ export function CampaignPicker({ value, onChange, mode, className }: CampaignPic
 
   return (
     <>
-      <Select value={selectValue} onValueChange={handleSelect}>
+      <Select
+        value={selectValue}
+        onValueChange={handleSelect}
+        // Refetch on open so the list is always current — a campaign created in
+        // another picker/page/tab (useCampaigns has no shared store) shows up
+        // immediately, without a page reload.
+        onOpenChange={(open) => { if (open) refetch(); }}
+      >
         <SelectTrigger className={className ?? 'h-9 w-[200px]'}>
           <SelectValue />
         </SelectTrigger>
