@@ -27,6 +27,11 @@ const methodConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'FB',
     className: 'bg-[hsl(var(--badge-facebook))] text-[hsl(var(--badge-facebook-fg))] border-transparent font-semibold',
   },
+  email: {
+    label: 'Email',
+    shortLabel: 'Email',
+    className: 'bg-sky-600 text-white border-transparent font-semibold',
+  },
 };
 
 const defaultConfig = {

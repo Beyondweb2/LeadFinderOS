@@ -30,6 +30,7 @@ import {
   Download,
   Trash2,
   RotateCcw,
+  Send,
   Copy,
   CheckCheck,
   Star,
@@ -92,6 +93,7 @@ import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, 
 import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS } from '@/types/outreach';
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { SingleSMSDialog } from '@/components/SingleSMSDialog';
+import { PushToInstantlyDialog } from '@/components/PushToInstantlyDialog';
 import { AiOpenerModal } from '@/components/AiOpenerModal';
 import { useSubscription } from '@/hooks/useSubscription';
 
@@ -290,6 +292,8 @@ export function OutreachTable({
   const [sigWebsite, setSigWebsite] = useState(false);
   const [sigFacebook, setSigFacebook] = useState(false);
   const [sigInstagram, setSigInstagram] = useState(false);
+  // Push-to-Instantly dialog (campaign picker), opened from the bulk bar.
+  const [pushInstantlyOpen, setPushInstantlyOpen] = useState(false);
   // Lead-detail modal (Track Leads fold-in) — opened on row click.
   const [detailLead, setDetailLead] = useState<OutreachLead | null>(null);
   const [sortField, setSortField] = useState<SortField>('created_at');
@@ -1182,6 +1186,18 @@ export function OutreachTable({
                     Reset (re-addable)
                   </Button>
                 )}
+                {!readOnly && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPushInstantlyOpen(true)}
+                    className="bg-background text-xs h-8 text-sky-600 hover:text-sky-600"
+                    title="Push the selected leads (those with an email) into an Instantly.ai email campaign."
+                  >
+                    <Send className="h-3.5 w-3.5 mr-1.5" />
+                    Push to Instantly
+                  </Button>
+                )}
               </>
             )}
             {/* WhatsApp button - only show for single selection */}
@@ -1915,6 +1931,14 @@ export function OutreachTable({
         onAiOpener={isAdmin && smsDialogLead ? () => {
           setAiOpenerLead(smsDialogLead);
         } : undefined}
+      />
+
+      {/* Push selected leads into an Instantly.ai email campaign */}
+      <PushToInstantlyDialog
+        open={pushInstantlyOpen}
+        onOpenChange={setPushInstantlyOpen}
+        leadIds={Array.from(selectedIds)}
+        onPushed={() => { onRefreshLeads?.(); setSelectedIds(new Set()); }}
       />
 
       {/* Lead detail modal (Track Leads fold-in) — opened on row click */}

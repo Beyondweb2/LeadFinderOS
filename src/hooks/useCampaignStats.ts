@@ -29,7 +29,7 @@ interface SiteRow {
 }
 
 const emptyMethods = (): Record<ContactMethod, number> =>
-  ({ call: 0, sms: 0, whatsapp: 0, facebook_msg: 0 });
+  ({ call: 0, sms: 0, whatsapp: 0, facebook_msg: 0, email: 0 });
 
 const pct = (num: number, den: number): number | null =>
   den > 0 ? Math.round((num / den) * 100) : null;
