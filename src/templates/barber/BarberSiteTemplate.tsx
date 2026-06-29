@@ -231,7 +231,7 @@ export function BarberSiteTemplate({
           {!bookingOnly && (
             <About about={about} aboutHeading={aboutHeading} businessName={businessName} stats={stats} aboutImageUrl={aboutImageUrl} onEditImage={onEditImage} editable={editable} onEditElement={onEditElement} />
           )}
-          <Services services={services} showExamplePrices={showExamplePrices} editable={editable} onEditService={onEditService} onAddService={onAddService} />
+          <Services services={services} showExamplePrices={showExamplePrices} editable={editable} bookingOnly={bookingOnly} onEditService={onEditService} onAddService={onAddService} />
           {!bookingOnly && (
             <Gallery
               images={gallery}
@@ -988,6 +988,7 @@ function Services({
   services,
   showExamplePrices,
   editable = false,
+  bookingOnly = false,
   onEditService,
   onAddService,
 }: {
@@ -996,11 +997,12 @@ function Services({
   // Live editor (owner): tappable rows + add/remove. Public /p/ never sets this →
   // the read-only menu below is unchanged.
   editable?: boolean;
+  bookingOnly?: boolean;
   onEditService?: (index: number) => void;
   onAddService?: () => void;
 }) {
   if (editable) {
-    return <OwnerServices services={services} onEditService={onEditService} onAddService={onAddService} />;
+    return <OwnerServices services={services} bookingOnly={bookingOnly} onEditService={onEditService} onAddService={onAddService} />;
   }
 
   // Any service without a confirmed price shows an example only when the toggle
@@ -1092,10 +1094,12 @@ function PlusIcon({ className = "" }: { className?: string }) {
  */
 function OwnerServices({
   services,
+  bookingOnly = false,
   onEditService,
   onAddService,
 }: {
   services: BarberSiteContent["services"];
+  bookingOnly?: boolean;
   onEditService?: (index: number) => void;
   onAddService?: () => void;
 }) {
@@ -1109,7 +1113,13 @@ function OwnerServices({
           <h2 className="mt-5 font-display text-4xl uppercase tracking-wide text-white sm:text-5xl">
             Services &amp; prices
           </h2>
-          <p className="mt-3 text-sm text-zinc-400">Tap a service to edit it, or add a new one.</p>
+          {bookingOnly ? (
+            <p className="mx-auto mt-4 max-w-xl rounded-xl border border-amber/40 bg-amber/10 px-4 py-3 text-sm font-semibold text-amber-soft">
+              👇 These are your services &amp; prices. Tap any one to change its name, <span className="text-white">price</span> and duration — or add your own below. This is exactly what customers see and book.
+            </p>
+          ) : (
+            <p className="mt-3 text-sm text-zinc-400">Tap a service to edit it, or add a new one.</p>
+          )}
         </div>
 
         <ul className="space-y-2.5">
@@ -1143,7 +1153,7 @@ function OwnerServices({
             onClick={onAddService}
             className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-white/20 bg-white/[0.02] py-4 text-sm font-semibold text-zinc-300 transition-colors hover:border-amber/50 hover:bg-amber/5 hover:text-amber-soft"
           >
-            <PlusIcon className="h-5 w-5" /> Add service
+            <PlusIcon className="h-5 w-5" /> {bookingOnly ? "Add a service & set its price" : "Add service"}
           </button>
         )}
       </div>
