@@ -103,6 +103,16 @@ export default function BookingPage({ slug }: { slug: string }) {
 
   return (
     <div className="relative min-h-screen bg-ink font-body text-zinc-200" style={accentStyle}>
+      {/* Hero photo — a background layer pinned to the TOP and bounded to the template
+          hero height, so the crop matches the full-site template, but the photo does NOT
+          occupy layout space / push the content down. Content flows over it from the top,
+          exactly as before. Only the crop changed vs the old full-page background. */}
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-[80vh] overflow-hidden sm:h-[88vh]">
+        <img src={content.heroImageUrl || STOCK_HERO} alt="" className="h-full w-full object-cover" />
+        <div className="absolute inset-0 bg-ink/65" />
+        <div className="absolute inset-0 bg-gradient-to-b from-ink/50 via-ink/70 to-ink/95" />
+      </div>
+
       {/* Header — matches the full barber template's treatment: a sticky, blurred bar
           with the bolder wordmark, a call button and a proper Book button. */}
       <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-ink/70 backdrop-blur-xl supports-[backdrop-filter]:bg-ink/55">
@@ -141,19 +151,9 @@ export default function BookingPage({ slug }: { slug: string }) {
         </div>
       </header>
 
-      {/* Hero — matches the full-site barber template's Hero EXACTLY: a bounded
-          min-h-[80vh]/[88vh] isolate section, the photo object-cover with the same
-          ken-burns drift, and the same two legibility scrims (to-t + to-r). The image
-          is scoped to this section (not a full-page background), so the crop, height
-          and scrim read identically — fixes the photo sitting too high. */}
-      <section className="relative isolate flex min-h-[80vh] flex-col items-center justify-center overflow-hidden px-6 text-center sm:min-h-[88vh]">
-        <img
-          src={content.heroImageUrl || STOCK_HERO}
-          alt={`Inside ${businessName}`}
-          className="absolute inset-0 -z-10 h-full w-full object-cover animate-kenburns"
-        />
-        <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-ink via-ink/70 to-ink/20" />
-        <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-ink/90 via-ink/35 to-transparent" />
+      {/* Hero — just the business name, kept tight so the tappable service boxes sit
+          high as the primary action. Booking paths: header "Book now" + the services. */}
+      <section className="relative z-10 px-6 pb-6 pt-10 text-center">
         <h1 className="font-display text-4xl uppercase leading-[1.05] tracking-wide text-white drop-shadow-[0_2px_24px_rgba(0,0,0,0.65)] sm:text-6xl">
           {businessName}
         </h1>
