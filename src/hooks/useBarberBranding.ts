@@ -23,6 +23,10 @@ export function useBarberBranding(title: string) {
     let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
     const created = !link;
     const prevHref = link?.getAttribute("href") ?? null;
+    // index.html declares type="image/png"; our favicon is an SVG data-URI. If we
+    // don't also update the type, some browsers keep the PNG and the swap silently
+    // no-ops (the page then shows LeadFinder's icon). Set + restore it too.
+    const prevType = link?.getAttribute("type") ?? null;
     if (!link) {
       link = document.createElement("link");
       link.rel = "icon";
@@ -30,14 +34,16 @@ export function useBarberBranding(title: string) {
     }
 
     document.title = title;
+    link.setAttribute("type", "image/svg+xml");
     link.setAttribute("href", FAVICON_HREF);
 
     return () => {
       document.title = prevTitle;
       if (created) {
         link?.remove();
-      } else if (link && prevHref) {
-        link.setAttribute("href", prevHref);
+      } else if (link) {
+        if (prevHref) link.setAttribute("href", prevHref);
+        if (prevType) link.setAttribute("type", prevType); else link.removeAttribute("type");
       }
     };
   }, [title]);

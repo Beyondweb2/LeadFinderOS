@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useBarberBranding } from "@/hooks/useBarberBranding";
 import "@/templates/barber/fonts.css";
 
 /**
@@ -6,9 +6,8 @@ import "@/templates/barber/fonts.css";
  * live at /<slug>; this is just a clean placeholder until we build a real landing.
  */
 export default function BookingHome() {
-  useEffect(() => {
-    document.title = "Online booking";
-  }, []);
+  // Title + the barber favicon, so the bookmybarber.uk root never shows LeadFinder's.
+  useBarberBranding("Online booking");
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-3 bg-ink px-6 text-center text-zinc-200">
       <h1 className="font-display text-4xl uppercase tracking-wide text-white sm:text-5xl">Online booking</h1>
