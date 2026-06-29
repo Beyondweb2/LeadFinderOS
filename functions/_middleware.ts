@@ -49,6 +49,15 @@ function setMeta(html: string, key: string, value: string): string {
   return re.test(html) ? html.replace(re, `$1${escAttr(value)}$2`) : html;
 }
 
+// A request is for a static asset if its path has a file extension (.js, .css, .png,
+// .ico, .woff2, .webmanifest, …). Page navigations ("/", "/book", "/<slug>") have
+// none → they get the OG-rewritten shell. We gate on the PATH, not the Accept header:
+// WhatsApp/social crawlers send `Accept: */*`, so an Accept="text/html" check skipped
+// them and leaked the default LeadFinder OG (the reported preview bug).
+function isAssetPath(pathname: string): boolean {
+  return /\.[a-z0-9]+$/i.test(pathname);
+}
+
 interface Env { ASSETS: { fetch: (req: Request | URL | string) => Promise<Response> } }
 
 export const onRequest = async (context: {
@@ -63,8 +72,7 @@ export const onRequest = async (context: {
   // Booking-only domain (bookmybarber.uk): /<slug> → inject that barber's booking
   // title/OG; bare root → a generic title. The client renders the booking page.
   if (hostLc === BOOKING_HOST || hostLc === `www.${BOOKING_HOST}`) {
-    const accept = request.headers.get("accept") || "";
-    if (request.method !== "GET" || !accept.includes("text/html")) return next();
+    if (request.method !== "GET" || isAssetPath(new URL(request.url).pathname)) return next();
     const slug = new URL(request.url).pathname.replace(/^\/+/, "").split("/")[0];
     const shellRes = await env.ASSETS.fetch(new URL("/index.html", request.url));
     let html = await shellRes.text();
@@ -109,9 +117,9 @@ export const onRequest = async (context: {
   // Apex / reserved / pages.dev / localhost → operator app, unchanged.
   if (!label) return next();
 
-  // Only rewrite HTML navigations; assets (JS/CSS/img) pass straight through.
-  const accept = request.headers.get("accept") || "";
-  if (request.method !== "GET" || !accept.includes("text/html")) return next();
+  // Only rewrite page navigations; assets pass straight through. PATH-based (not the
+  // Accept header) so crawlers sending `Accept: */*` still get the per-barber OG.
+  if (request.method !== "GET" || isAssetPath(new URL(request.url).pathname)) return next();
 
   const shellRes = await env.ASSETS.fetch(new URL("/index.html", request.url));
   let html = await shellRes.text();
