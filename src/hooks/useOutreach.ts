@@ -833,11 +833,49 @@ export function useOutreach() {
 
     setLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
     setArchivedLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
-    
+
     // Leads removed — no toast
 
     return true;
   }, []);
+
+  // RESET: fully wipe selected leads so they're as if never added — deletes the
+  // outreach_leads rows AND clears their outreach_history ledger (by business_name
+  // AND google_maps_url, the same keys isInOutreach matches on), so they become
+  // re-addable on Find Leads. Generalises removeLeadNoPhone's history-clearing to
+  // multi-select. DELIBERATELY different from deleteMultiple (which keeps the ledger
+  // to prevent re-contacting).
+  const resetMultiple = useCallback(async (leadIds: string[]) => {
+    if (leadIds.length === 0) return false;
+    // Identity keys for the selected leads, captured from current state BEFORE delete.
+    const sel = [...leads, ...archivedLeads].filter((l) => leadIds.includes(l.id));
+    const names = [...new Set(sel.map((l) => l.business_name).filter(Boolean))];
+    const mapsUrls = [...new Set(sel.map((l) => l.google_maps_url).filter(Boolean) as string[])];
+
+    // (a) delete the outreach_leads rows
+    const { error } = await supabase.from('outreach_leads').delete().in('id', leadIds);
+    if (error) {
+      toast({ title: 'Error resetting leads', description: error.message, variant: 'destructive' });
+      return false;
+    }
+
+    // (b) clear the added-history ledger by BOTH keys → makes them re-addable
+    if (names.length) await supabase.from('outreach_history').delete().in('business_name', names);
+    if (mapsUrls.length) await supabase.from('outreach_history').delete().in('google_maps_url', mapsUrls);
+
+    // (c) local state
+    setLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
+    setArchivedLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
+    setOutreachHistory((prev) => prev.filter(
+      (h) => !names.includes(h.business_name) && !(h.google_maps_url && mapsUrls.includes(h.google_maps_url)),
+    ));
+
+    toast({
+      title: `Reset ${leadIds.length} lead${leadIds.length === 1 ? '' : 's'}`,
+      description: 'Fully cleared (including added-history) — they can be added again on Find Leads.',
+    });
+    return true;
+  }, [leads, archivedLeads]);
 
   // Unarchive multiple leads
   const unarchiveMultiple = useCallback(async (leadIds: string[]) => {
@@ -1166,6 +1204,7 @@ export function useOutreach() {
     updateClientDetails,
     deleteLead,
     deleteMultiple,
+    resetMultiple,
     deleteAllLeads,
     archiveLead,
     unarchiveLead,

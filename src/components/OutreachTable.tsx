@@ -29,6 +29,7 @@ import {
   ClipboardList,
   Download,
   Trash2,
+  RotateCcw,
   Copy,
   CheckCheck,
   Star,
@@ -106,6 +107,9 @@ interface OutreachTableProps {
   onArchiveSelected?: (leadIds: string[]) => void;
   onDelete?: (leadId: string) => void;
   onDeleteSelected?: (leadIds: string[]) => void;
+  /** Reset = fully wipe (outreach_leads + outreach_history) so the lead is re-addable.
+   *  Distinct from onDeleteSelected, which keeps the added-history ledger. */
+  onResetSelected?: (leadIds: string[]) => Promise<unknown> | void;
   onBulkStatusChange?: (leadIds: string[], status: LeadStatus) => void;
   onMarkAsInterested?: (leadIds: string[]) => void;
   onRefreshLeads?: () => void;
@@ -182,6 +186,7 @@ export function OutreachTable({
   onArchiveSelected,
   onDelete,
   onDeleteSelected,
+  onResetSelected,
   onBulkStatusChange,
   onMarkAsInterested,
   onRefreshLeads,
@@ -783,6 +788,20 @@ export function OutreachTable({
     }
   };
 
+  // Reset selected leads: fully wipe (outreach_leads + added-history) so they're
+  // re-addable. Deliberate, confirmed — different from Remove which keeps the ledger.
+  const handleResetSelected = () => {
+    if (selectedIds.size === 0 || !onResetSelected) return;
+    const n = selectedIds.size;
+    const ok = window.confirm(
+      `Reset ${n} lead${n === 1 ? '' : 's'}? This fully removes ${n === 1 ? 'it' : 'them'} and clears the ` +
+      `added-history, so they can be added again. Use this for test leads or to start over.`,
+    );
+    if (!ok) return;
+    onResetSelected(Array.from(selectedIds));
+    setSelectedIds(new Set());
+  };
+
   const exportToCsv = (mode: 'crm' | 'import' = 'crm') => {
     const leadsToExport = selectedIds.size > 0 
       ? filteredAndSortedLeads.filter(l => selectedIds.has(l.id))
@@ -1149,6 +1168,18 @@ export function OutreachTable({
                   >
                     <Trash2 className="h-3.5 w-3.5 mr-1.5" />
                     Remove
+                  </Button>
+                )}
+                {onResetSelected && !readOnly && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResetSelected}
+                    className="bg-background text-xs h-8 text-amber-600 hover:text-amber-600"
+                    title="Fully clears the lead — removes it AND its added-history — so it can be added again on Find Leads. For test leads or starting over. (Unlike Remove, which keeps the history so you don't re-contact.)"
+                  >
+                    <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+                    Reset (re-addable)
                   </Button>
                 )}
               </>
