@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
 import { BroadListBuilder } from '@/components/BroadListBuilder';
@@ -15,8 +15,9 @@ import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTeamClaims } from '@/hooks/useTeamClaims';
-import { Flame, Target, Zap, Search, MapPin, Info, Mail, Download, Loader2, X } from 'lucide-react';
+import { Flame, Target, Zap, Search, MapPin, Info, Mail, Download, Loader2, X, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 import type { Country, Lead } from '@/types/lead';
 
 const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
@@ -26,6 +27,7 @@ const Index = () => {
   const { addLead: addToOutreach, isInOutreach } = useOutreach();
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
+  const { toast } = useToast();
 
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   // Find Leads mode: 'targeted' (curated) | 'list' (broad list-builder).
@@ -87,6 +89,36 @@ const Index = () => {
     }
     return { added, skipped };
   }, [addToOutreach, lastSearchCountry, activeCampaign, getEnrichment]);
+
+  // Bulk "Add all with emails": the Targeted results that have a found email AND
+  // aren't already in Outreach. Recomputes as emails are found / leads are added, so
+  // the button count is always live and excludes anything already added.
+  const [addingEmails, setAddingEmails] = useState(false);
+  const leadsWithEmail = useMemo(
+    () =>
+      leads.filter(
+        (l) =>
+          (((searchEnrichment[l.id]?.email as string | undefined) ?? '').trim().length > 0) &&
+          !isInOutreach(l.name, l.googleMapsUrl),
+      ),
+    [leads, searchEnrichment, isInOutreach],
+  );
+
+  // Adds every with-email candidate into the CURRENT campaign via the exact single-add
+  // path (reuses handleBulkAdd → addToOutreach: same status/fields, deduped, silent).
+  const handleAddAllWithEmails = useCallback(async () => {
+    if (!leadsWithEmail.length || addingEmails) return;
+    setAddingEmails(true);
+    try {
+      const { added } = await handleBulkAdd(leadsWithEmail);
+      toast({
+        title: `Added ${added} lead${added === 1 ? '' : 's'} with emails`,
+        description: activeCampaign ? 'to the current campaign.' : 'to outreach.',
+      });
+    } finally {
+      setAddingEmails(false);
+    }
+  }, [leadsWithEmail, addingEmails, handleBulkAdd, activeCampaign, toast]);
 
   // Bulk ENRICH: add each selected lead to Outreach (silent), then run the full
   // enrich-business pipeline on it — SEQUENTIALLY so the $2/day cap is respected
@@ -303,6 +335,20 @@ const Index = () => {
                   >
                     <Mail className="h-3.5 w-3.5 mr-1.5" />
                     Find emails ({withWebsiteCount} with a website)
+                  </Button>
+                )}
+                {/* After a Find-emails scan: bulk-add every result that has an email
+                    into the current campaign (skips any already in Outreach). */}
+                {emailResult && leadsWithEmail.length > 0 && (
+                  <Button
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={handleAddAllWithEmails}
+                    disabled={addingEmails}
+                    title="Add every result that has an email into your current campaign"
+                  >
+                    {addingEmails ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5 mr-1.5" />}
+                    Add all with emails ({leadsWithEmail.length})
                   </Button>
                 )}
                 <Button
