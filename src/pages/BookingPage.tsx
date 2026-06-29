@@ -103,19 +103,6 @@ export default function BookingPage({ slug }: { slug: string }) {
 
   return (
     <div className="relative min-h-screen bg-ink font-body text-zinc-200" style={accentStyle}>
-      {/* Full-page background. The image is a normal absolutely-positioned layer that
-          paints ABOVE the root's bg-ink and BELOW the content (content is relative z-10).
-          NOT a negative-z / fixed layer — that sat behind the opaque app background and
-          black-screened. Always shows an image: the real hero, or the stock barber one. */}
-      <img
-        src={content.heroImageUrl || STOCK_HERO}
-        alt=""
-        aria-hidden
-        className="pointer-events-none absolute inset-0 h-full w-full object-cover"
-      />
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-ink/65" />
-      <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-b from-ink/50 via-ink/70 to-ink/95" />
-
       {/* Header — matches the full barber template's treatment: a sticky, blurred bar
           with the bolder wordmark, a call button and a proper Book button. */}
       <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-ink/70 backdrop-blur-xl supports-[backdrop-filter]:bg-ink/55">
@@ -154,9 +141,19 @@ export default function BookingPage({ slug }: { slug: string }) {
         </div>
       </header>
 
-      {/* Hero — just the business name, kept tight so the tappable service boxes sit
-          high as the primary action. Booking paths: header "Book now" + the services. */}
-      <section className="relative z-10 px-6 pb-6 pt-10 text-center">
+      {/* Hero — matches the full-site barber template's Hero EXACTLY: a bounded
+          min-h-[80vh]/[88vh] isolate section, the photo object-cover with the same
+          ken-burns drift, and the same two legibility scrims (to-t + to-r). The image
+          is scoped to this section (not a full-page background), so the crop, height
+          and scrim read identically — fixes the photo sitting too high. */}
+      <section className="relative isolate flex min-h-[80vh] flex-col items-center justify-center overflow-hidden px-6 text-center sm:min-h-[88vh]">
+        <img
+          src={content.heroImageUrl || STOCK_HERO}
+          alt={`Inside ${businessName}`}
+          className="absolute inset-0 -z-10 h-full w-full object-cover animate-kenburns"
+        />
+        <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-ink via-ink/70 to-ink/20" />
+        <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-r from-ink/90 via-ink/35 to-transparent" />
         <h1 className="font-display text-4xl uppercase leading-[1.05] tracking-wide text-white drop-shadow-[0_2px_24px_rgba(0,0,0,0.65)] sm:text-6xl">
           {businessName}
         </h1>
