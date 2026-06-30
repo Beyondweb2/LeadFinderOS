@@ -143,6 +143,41 @@ export function socialHandle(url: string): string {
   }
 }
 
+/** Reduce a facebook.com / instagram.com URL to its PAGE ROOT so deep links don't
+ *  break the page/photo scrapers (which expect a page, not a /reels/ or /posts/ view):
+ *    facebook.com/MrMGCB/reels/         → https://www.facebook.com/MrMGCB
+ *    facebook.com/MrMGCB/posts/123      → https://www.facebook.com/MrMGCB
+ *    facebook.com/pages/Magic/123/about → https://www.facebook.com/pages/Magic/123
+ *    facebook.com/profile.php?id=99/x   → https://www.facebook.com/profile.php?id=99
+ *  Handle CASE is preserved (FB handles are case-insensitive but nicer kept as-is).
+ *  Non-FB/IG URLs, and handle-less (bare-domain) URLs, are returned unchanged. */
+export function canonicalSocialUrl(url: string): string {
+  if (!url) return url;
+  const d = domainOf(url);
+  const isFb = /(?:^|\.)facebook\.com$/.test(d);
+  const isIg = /(?:^|\.)instagram\.com$/.test(d);
+  if (!isFb && !isIg) return url;
+  try {
+    const u = new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`);
+    const segs = u.pathname.split("/").filter(Boolean);
+    const host = isFb ? "www.facebook.com" : "www.instagram.com";
+    const first = segs[0]?.toLowerCase() ?? "";
+    if (!first) return url; // bare domain, no handle → leave as-is
+    // Numeric profile links: the ?id=… IS the identity, so keep it.
+    if (isFb && first === "profile.php") {
+      const id = u.searchParams.get("id");
+      return id ? `https://${host}/profile.php?id=${id}` : url;
+    }
+    // facebook.com/pages/Name/123 → keep both the Name and the numeric id.
+    if (isFb && first === "pages" && segs[1] && segs[2]) {
+      return `https://${host}/pages/${segs[1]}/${segs[2]}`;
+    }
+    return `https://${host}/${segs[0].replace(/^@/, "")}`;
+  } catch {
+    return url;
+  }
+}
+
 // Website BUILDERS / hosts whose OWN social account gets linked in their site
 // TEMPLATE (a Wix-built barber site's footer links facebook.com/wix). These are
 // NEVER the business's real social, so a social DISCOVERED BY CRAWLING the site
@@ -161,4 +196,17 @@ export function isSiteBuilderSocialUrl(url: string): boolean {
   if (!h) return false;
   if (SITE_BUILDER_SOCIAL_HANDLES.has(h)) return true;
   return SITE_BUILDER_TOKENS.some((t) => h.includes(t)); // catches wixsite / wix.salon etc.
+}
+
+/** A FB/IG URL that came from a Google Maps LISTING is the business's own social —
+ *  TRUSTED WITHOUT a name-match, because Google already tied it to THIS business pin
+ *  (so opaque handles like facebook.com/MrMGCB for "Magic Hands Barber" are fine). We
+ *  still reject a PLATFORM's own account (facebook.com/fresha) and a website-BUILDER's
+ *  account (facebook.com/wix) — those get linked but are never the business's. The
+ *  strict name-gate still applies to website-crawl + web-results, which mix companies. */
+export function isUsableMapsListingSocial(url: string): boolean {
+  if (!url) return false;
+  const d = domainOf(url);
+  if (!/(?:^|\.)(?:facebook|instagram)\.com$/.test(d)) return false;
+  return !isPlatformSocialUrl(url) && !isSiteBuilderSocialUrl(url);
 }

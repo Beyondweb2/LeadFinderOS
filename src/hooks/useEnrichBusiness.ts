@@ -59,18 +59,22 @@ export function useEnrichBusiness(
       }
       if (Object.keys(patch).length) await onUpdate(lead.id, patch);
 
-      // Web-results found a possible FB/IG whose location didn't match — surface it
-      // for the operator to verify + paste via 🔗 (never auto-attached).
+      // A possible FB/IG that wasn't auto-attached — surface it for the operator to
+      // verify + paste via 🔗. Reason tells them WHY (name vs location mismatch).
+      const suggestionWhy = (reason?: string) =>
+        reason === 'name_mismatch'
+          ? "its name doesn't clearly match this business"
+          : "its location doesn't match this lead";
       if (data.facebookSuggestion?.url) {
         toast({
-          title: '⚠ Possible Facebook — verify (location mismatch)',
-          description: `Found ${data.facebookSuggestion.url} but its location doesn't match this lead. Check it, then paste via the 🔗 button if it's right.`,
+          title: '⚠ Possible Facebook — verify',
+          description: `Found ${data.facebookSuggestion.url} but ${suggestionWhy(data.facebookSuggestion.reason)}. Check it, then paste via the 🔗 button if it's right.`,
         });
       }
       if (data.instagramSuggestion?.url) {
         toast({
-          title: '⚠ Possible Instagram — verify (location mismatch)',
-          description: `Found ${data.instagramSuggestion.url} but its location doesn't match this lead. Check it, then paste via the 🔗 button if it's right.`,
+          title: '⚠ Possible Instagram — verify',
+          description: `Found ${data.instagramSuggestion.url} but ${suggestionWhy(data.instagramSuggestion.reason)}. Check it, then paste via the 🔗 button if it's right.`,
         });
       }
 

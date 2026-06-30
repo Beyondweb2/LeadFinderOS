@@ -20,7 +20,7 @@ import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 import { lookupLineType } from "../_shared/enrichment/whatsapp.ts";
 import { fetchFacebookContacts, fetchFacebookPhotos, fetchInstagramPhotos } from "../_shared/enrichment/socialImages.ts";
-import { isAggregatorUrl, isPlatformSocialUrl, isSiteBuilderSocialUrl, socialHandle } from "../_shared/aggregators.ts";
+import { isAggregatorUrl, isPlatformSocialUrl, isSiteBuilderSocialUrl, socialHandle, canonicalSocialUrl, isUsableMapsListingSocial } from "../_shared/aggregators.ts";
 
 /** Last-resort social discovery: crawl the business website for FB + IG links via
  *  the extract-facebook function (one fetch returns both). Graceful — empty on
@@ -251,24 +251,26 @@ serve(async (req) => {
         // (e.g. facebook.com/fresha). NEW: also name-gate + builder-denylist them
         // (same as website-crawl) — a Maps listing can carry a builder/wrong FB
         // (e.g. facebook.com/wix). Fail → not attached, surfaced as a suggestion.
-        const mapsFbRaw = place?.facebook && !isPlatformSocialUrl(place.facebook) ? place.facebook : "";
-        const mapsIgRaw = place?.instagram && !isPlatformSocialUrl(place.instagram) ? place.instagram : "";
-        const mapsFb = mapsFbRaw && acceptWebsiteSocial(mapsFbRaw, businessName) ? mapsFbRaw : "";
-        const mapsIg = mapsIgRaw && acceptWebsiteSocial(mapsIgRaw, businessName) ? mapsIgRaw : "";
+        // Maps-listing socials are TRUSTED without a name-match — Google already tied
+        // them to THIS business pin, so opaque handles (facebook.com/MrMGCB for "Magic
+        // Hands Barber") are accepted. We still drop a platform's own account
+        // (facebook.com/fresha) and a builder's account (facebook.com/wix) via
+        // isUsableMapsListingSocial. The strict name-gate stays on website-crawl +
+        // web-results below (those mix companies). Deep links are reduced to the page
+        // root in a single pass after the cascade so /reels/ etc. don't break scrapers.
+        const mapsFb = place?.facebook && isUsableMapsListingSocial(place.facebook) ? place.facebook : "";
+        const mapsIg = place?.instagram && isUsableMapsListingSocial(place.instagram) ? place.instagram : "";
         let fbUrl = existingFacebook || mapsFb;
         let fbMethod: string | null = existingFacebook ? "manual" : mapsFb ? "apify" : null;
         let fbSource = existingFacebook ? "manual" : mapsFb ? "maps-listing" : "none";
         let fbLoc = "n/a";
         let fbSuggestion: { url: string; reason: string } | null = null;
-        // A Maps FB that failed the gate (builder / name-mismatch) → suggestion only.
-        if (!existingFacebook && mapsFbRaw && !mapsFb) { fbSuggestion = { url: mapsFbRaw, reason: "name_mismatch" }; fbSource = "maps-listing"; fbLoc = "unconfirmed"; }
 
         let igUrl = existingInstagram || mapsIg;
         let igMethod: string | null = existingInstagram ? "manual" : mapsIg ? "apify" : null;
         let igSource = existingInstagram ? "manual" : mapsIg ? "maps-listing" : "none";
         let igLoc = "n/a";
         let igSuggestion: { url: string; reason: string } | null = null;
-        if (!existingInstagram && mapsIgRaw && !mapsIg) { igSuggestion = { url: mapsIgRaw, reason: "name_mismatch" }; igSource = "maps-listing"; igLoc = "unconfirmed"; }
 
         // 2b) Resolve the business's OWN website. Web-results mix companies (same
         //     search term), so a web-results "website" is only trusted when its text
@@ -345,6 +347,14 @@ serve(async (req) => {
         const wsHit = websiteCandidates.find(([u]) => u && !isAggregatorUrl(u));
         const discoveredWebsite = wsHit?.[0] ?? "";
         const webSource = wsHit?.[1] ?? "none";
+
+        // Reduce every resolved/suggested FB/IG URL to its page root (idempotent),
+        // covering all sources (manual, Maps, website-crawl, web-results) so /reels/,
+        // /posts/, /about deep links don't break the FB/IG scrapers or get stored raw.
+        if (fbUrl) fbUrl = canonicalSocialUrl(fbUrl);
+        if (igUrl) igUrl = canonicalSocialUrl(igUrl);
+        if (fbSuggestion) fbSuggestion = { ...fbSuggestion, url: canonicalSocialUrl(fbSuggestion.url) };
+        if (igSuggestion) igSuggestion = { ...igSuggestion, url: canonicalSocialUrl(igSuggestion.url) };
 
         // Permanent provenance one-liners (one line per channel; not per-image).
         console.log(`[enrich] FB  via ${fbSource} (${fbLoc}): ${fbUrl || (fbSuggestion ? `${fbSuggestion.url} [suggestion]` : "none")}`);
