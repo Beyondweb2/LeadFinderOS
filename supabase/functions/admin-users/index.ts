@@ -103,32 +103,26 @@ serve(async (req) => {
       const emailFilter: string | undefined = typeof body.email === 'string' ? body.email.trim().toLowerCase() : undefined;
       const activeDays: number | undefined = typeof body.active_days === 'number' ? body.active_days : undefined;
 
-      const { data: authData, error: authError } = await serviceClient.auth.admin.listUsers({
-        page,
-        perPage,
-      });
-
-      if (authError) {
-        console.error('[ADMIN-USERS] listUsers error:', authError.message);
-        return jsonResponse({ error: 'Failed to fetch users', details: authError.message }, 500, corsHeaders, rlHeaders);
+      // Fetch ALL auth accounts (loop) so we can drop BARBERS and paginate the
+      // remaining OPERATORS — otherwise barber pages would crowd out operators and
+      // the total would be wrong. Cap at 50k as a runaway guard.
+      const allAuthUsers: any[] = [];
+      for (let p = 1; p <= 50; p++) {
+        const { data: authData, error: authError } = await serviceClient.auth.admin.listUsers({ page: p, perPage: 1000 });
+        if (authError) {
+          console.error('[ADMIN-USERS] listUsers error:', authError.message);
+          return jsonResponse({ error: 'Failed to fetch users', details: authError.message }, 500, corsHeaders, rlHeaders);
+        }
+        const batch = authData?.users || [];
+        allAuthUsers.push(...batch);
+        if (batch.length < 1000) break;
       }
+      console.log('[ADMIN-USERS] Total auth accounts:', allAuthUsers.length);
 
-      let authUsers = authData?.users || [];
-      console.log('[ADMIN-USERS] Auth users fetched:', authUsers.length);
-
-      if (emailFilter) {
-        authUsers = authUsers.filter(u => (u.email || '').toLowerCase().includes(emailFilter));
-      }
-
-      const userIds = authUsers.map(u => u.id);
-
-      // Single source of truth: pull every lead (id, owner, status) once and
-      // DERIVE Added / Messages (contacted) / Replies from status — never from a
-      // drift-prone user_metrics counter (that was the bug). Also yields the
-      // contacted-lead set used for the per-site "sent" signal.
-      const leadsRes = userIds.length > 0
-        ? await serviceClient.from('outreach_leads').select('id, user_id, status').in('user_id', userIds)
-        : { data: [] };
+      // Single source of truth: every lead → DERIVE Added / Messages / Replies from
+      // status (service role sees all; barbers simply have no rows). Also the
+      // contacted-lead set for the per-site "sent" signal.
+      const leadsRes = await serviceClient.from('outreach_leads').select('id, user_id, status');
       const leadOwner = new Map<string, string>();          // lead_id -> user_id
       const addedCountMap = new Map<string, number>();       // total leads (Added)
       const contactedCountMap = new Map<string, number>();   // status past New (Messages)
@@ -145,25 +139,22 @@ serve(async (req) => {
         if (REPLIED.has(l.status)) repliesCountMap.set(l.user_id, (repliesCountMap.get(l.user_id) || 0) + 1);
       }
 
-      // Only activity timestamps + search count still come from user_metrics.
-      const metricsRes = userIds.length > 0
-        ? await serviceClient.from('user_metrics').select('user_id, search_count, last_active_at, last_search_at').in('user_id', userIds)
-        : { data: [] };
-      const metricsData = (metricsRes as any).data || [];
-      const metricsMap = new Map(metricsData.map((m: any) => [m.user_id, m]));
+      // Activity timestamps + search count from user_metrics (barbers have none).
+      const metricsRes = await serviceClient.from('user_metrics').select('user_id, search_count, last_active_at, last_search_at');
+      const metricsMap = new Map(((metricsRes as any).data || []).map((m: any) => [m.user_id, m]));
 
-      // Per-user site funnel (generated_sites attributed via lead_id -> owner).
-      // "Sent" has no per-site timestamp, so it = sites whose lead was contacted
-      // (the link goes out when you contact the lead). Opened/Claimed/Upsell are
-      // the real automatic site-event columns.
-      const leadIds = [...leadOwner.keys()];
-      const sitesRes = leadIds.length > 0
-        ? await serviceClient.from('generated_sites').select('lead_id, first_opened_at, claimed_at, addon_interest_at').in('lead_id', leadIds)
-        : { data: [] };
-
+      // ALL generated_sites, used for TWO things:
+      //   (a) the BARBER set — any account that OWNS a site (claim_generated_site set
+      //       owner_id = that user) is a barber claimant, never an operator.
+      //   (b) the per-OPERATOR site funnel — attributed via lead_id -> the lead's owner.
+      const sitesRes = await serviceClient
+        .from('generated_sites')
+        .select('lead_id, owner_id, first_opened_at, claimed_at, addon_interest_at');
+      const barberOwnerIds = new Set<string>();
       const siteAgg = new Map<string, { sent: number; opened: number; claimed: number; upsell: number }>();
       for (const s of ((sitesRes as any).data || [])) {
-        const ownerId = leadOwner.get(s.lead_id);
+        if (s.owner_id) barberOwnerIds.add(s.owner_id);
+        const ownerId = s.lead_id ? leadOwner.get(s.lead_id) : undefined;
         if (!ownerId) continue;
         const a = siteAgg.get(ownerId) || { sent: 0, opened: 0, claimed: 0, upsell: 0 };
         if (contactedLeadIds.has(s.lead_id)) a.sent++;
@@ -173,10 +164,35 @@ serve(async (req) => {
         siteAgg.set(ownerId, a);
       }
 
-      let users = authUsers.map(u => {
+      // ── Keep OPERATORS only. A barber = owns a generated site AND has no CRM
+      // footprint (no leads added, no searches). An operator who once test-claimed a
+      // site but uses the CRM is kept. ──
+      let operators = allAuthUsers.filter(u => {
+        if (!barberOwnerIds.has(u.id)) return true; // never owned a site → operator
+        const hasFootprint =
+          (addedCountMap.get(u.id) || 0) > 0 ||
+          (((metricsMap.get(u.id) as any)?.search_count) || 0) > 0;
+        return hasFootprint;
+      });
+
+      if (emailFilter) {
+        operators = operators.filter(u => (u.email || '').toLowerCase().includes(emailFilter));
+      }
+      if (activeDays && activeDays > 0) {
+        const cutoff = Date.now() - activeDays * 24 * 60 * 60 * 1000;
+        operators = operators.filter(u => {
+          const la = (metricsMap.get(u.id) as any)?.last_active_at;
+          return la && new Date(la).getTime() >= cutoff;
+        });
+      }
+
+      const total = operators.length; // operators only (after filters)
+      const start = (page - 1) * perPage;
+      const pageUsers = operators.slice(start, start + perPage);
+
+      const users = pageUsers.map(u => {
         const metrics = metricsMap.get(u.id) as any;
         const sites = siteAgg.get(u.id) || { sent: 0, opened: 0, claimed: 0, upsell: 0 };
-
         return {
           id: u.id,
           email: u.email || 'N/A',
@@ -194,17 +210,7 @@ serve(async (req) => {
         };
       });
 
-      if (activeDays && activeDays > 0) {
-        const cutoff = Date.now() - activeDays * 24 * 60 * 60 * 1000;
-        users = users.filter(u => u.last_active_at && new Date(u.last_active_at).getTime() >= cutoff);
-      }
-
-      return jsonResponse({
-        users,
-        page,
-        per_page: perPage,
-        total: authData?.users?.length ?? 0,
-      }, 200, corsHeaders, rlHeaders);
+      return jsonResponse({ users, page, per_page: perPage, total }, 200, corsHeaders, rlHeaders);
     }
 
     // ===================== USER EVENTS =====================
