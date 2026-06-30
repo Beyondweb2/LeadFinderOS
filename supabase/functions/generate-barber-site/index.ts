@@ -428,17 +428,22 @@ serve(async (req) => {
       { auth: { persistSession: false } },
     );
 
-    // --- Step 5: Verify admin role (user_roles, mirrors admin-users) ---
-    const { data: roleData } = await serviceClient
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", adminUserId)
-      .eq("role", "admin")
-      .maybeSingle();
-
-    if (!roleData) {
-      console.error("[GENERATE-BARBER-SITE] Admin role check FAILED for", adminUserId);
-      return jsonResponse({ error: "Not authorized - no admin role" }, 403, corsHeaders, rlHeaders);
+    // --- Step 5: Per-operator generation cap (replaces the old admin-only gate).
+    // Site generation is open to ANY authenticated operator (admin or rep); to
+    // contain Google Maps + OpenAI cost we cap each operator at 20 generations per
+    // rolling 24h. Count this operator's own generations (their leads' sites) in the
+    // last 24h via the lead_id → outreach_leads FK. The 10/min rate-limit above still
+    // applies. (adminUserId here is just the authenticated user id — name kept for a
+    // minimal diff.) ---
+    const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { count: genCount } = await serviceClient
+      .from("generated_sites")
+      .select("id, outreach_leads!inner(user_id)", { count: "exact", head: true })
+      .eq("outreach_leads.user_id", adminUserId)
+      .gte("created_at", since24h);
+    if ((genCount ?? 0) >= 20) {
+      console.warn("[GENERATE-BARBER-SITE] 24h generation cap reached for", adminUserId);
+      return jsonResponse({ error: "Daily generation limit reached (20 per 24h)." }, 403, corsHeaders, rlHeaders);
     }
 
     // --- Step 6: Parse body ---
