@@ -113,5 +113,23 @@ export function useCampaigns() {
     return updated;
   }, [toast]);
 
-  return { campaigns, isLoading, createCampaign, updateCampaign, refetch: fetchCampaigns };
+  /**
+   * Delete a campaign. The outreach_leads.campaign_id FK is ON DELETE SET NULL, so
+   * its leads are simply UNASSIGNED (moved to "No campaign") — never deleted. The
+   * per-campaign lead_claims (teammate assignments) are removed (ON DELETE CASCADE).
+   * Emits 'campaign-deleted' so the leads view can refetch and show "No campaign"
+   * immediately. RLS allows this only for the campaign's creator.
+   */
+  const deleteCampaign = useCallback(async (id: string): Promise<boolean> => {
+    const { error } = await db.from('campaigns').delete().eq('id', id);
+    if (error) {
+      toast({ title: 'Could not delete campaign', description: error.message, variant: 'destructive' });
+      return false;
+    }
+    setCampaigns((prev) => prev.filter((c) => c.id !== id));
+    window.dispatchEvent(new CustomEvent('campaign-deleted', { detail: { id } }));
+    return true;
+  }, [toast]);
+
+  return { campaigns, isLoading, createCampaign, updateCampaign, deleteCampaign, refetch: fetchCampaigns };
 }
