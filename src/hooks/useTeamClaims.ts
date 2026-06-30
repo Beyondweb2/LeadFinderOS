@@ -12,10 +12,11 @@ export interface TeamClaim {
 
 /**
  * For the currently shown search results, find which businesses a TEAMMATE has
- * already claimed in the ACTIVE campaign, and resolve the claimant's profile
+ * already claimed in ANY campaign, and resolve the claimant's profile
  * (name + avatar). Matches by place_id, falling back to google_maps_url.
  *
- * - Scoped to the active campaign only (null campaign = its own bucket).
+ * - GLOBAL scope: any teammate claim on the business counts (any campaign), so
+ *   reps never double-contact a barber anyone has already added.
  * - Excludes the current user's own claims (no self-warnings).
  * - Reads only the team-readable lead_claims + profiles tables.
  */
@@ -35,7 +36,10 @@ export function useTeamClaims(leads: Lead[], campaignId: string | null) {
         .from('lead_claims')
         .select('place_id, google_maps_url, user_id, contacted')
         .neq('user_id', user.id);
-      query = campaignId ? query.eq('campaign_id', campaignId) : query.is('campaign_id', null);
+      // GLOBAL scope: show a teammate's avatar if they have this business in ANY
+      // campaign (not just the active one), so reps never double-contact a barber
+      // anyone has already added. campaignId stays in the signature/deps for
+      // call-site compatibility but no longer filters the lookup.
 
       const { data: claims, error } = await query;
       if (cancelled || error || !claims) {
