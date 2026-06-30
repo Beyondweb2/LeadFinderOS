@@ -123,6 +123,14 @@ const Outreach = () => {
     return () => window.removeEventListener('whatsapp-status-updated', handler);
   }, [updateLead]);
 
+  // A deleted campaign unassigns its leads in the DB (FK ON DELETE SET NULL) — refetch
+  // so those leads show "No campaign" immediately, without a manual refresh.
+  useEffect(() => {
+    const handler = () => { fetchLeads(); };
+    window.addEventListener('campaign-deleted', handler);
+    return () => window.removeEventListener('campaign-deleted', handler);
+  }, [fetchLeads]);
+
   const handleContactMethodChange = useCallback(async (leadId: string, method: ContactMethod) => {
     if (isDemoLead(leadId)) return;
     await updateLead(leadId, { contact_method: method });

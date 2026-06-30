@@ -7,10 +7,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus } from 'lucide-react';
+import { Plus, Settings2 } from 'lucide-react';
 import { CampaignFormDialog } from '@/components/CampaignFormDialog';
+import { CampaignManagerDialog } from '@/components/CampaignManagerDialog';
 
 const NEW_CAMPAIGN = '__new__';
+const MANAGE_CAMPAIGNS = '__manage__';
 const ALL_CAMPAIGNS = '__all__';
 const NO_CAMPAIGN = '__none__';
 
@@ -30,6 +32,7 @@ interface CampaignPickerProps {
 export function CampaignPicker({ value, onChange, mode, className }: CampaignPickerProps) {
   const { campaigns, createCampaign, refetch } = useCampaigns();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [managerOpen, setManagerOpen] = useState(false);
 
   const sentinel = mode === 'filter' ? ALL_CAMPAIGNS : NO_CAMPAIGN;
   const selectValue = value ?? sentinel;
@@ -37,6 +40,10 @@ export function CampaignPicker({ value, onChange, mode, className }: CampaignPic
   const handleSelect = (v: string) => {
     if (v === NEW_CAMPAIGN) {
       setDialogOpen(true);
+      return;
+    }
+    if (v === MANAGE_CAMPAIGNS) {
+      setManagerOpen(true);
       return;
     }
     if (v === ALL_CAMPAIGNS || v === NO_CAMPAIGN) {
@@ -80,6 +87,14 @@ export function CampaignPicker({ value, onChange, mode, className }: CampaignPic
               New campaign…
             </span>
           </SelectItem>
+          {campaigns.length > 0 && (
+            <SelectItem value={MANAGE_CAMPAIGNS}>
+              <span className="flex items-center gap-1.5 text-muted-foreground">
+                <Settings2 className="h-3.5 w-3.5" />
+                Manage campaigns…
+              </span>
+            </SelectItem>
+          )}
         </SelectContent>
       </Select>
 
@@ -88,6 +103,8 @@ export function CampaignPicker({ value, onChange, mode, className }: CampaignPic
         onOpenChange={setDialogOpen}
         onSubmit={handleCreate}
       />
+
+      <CampaignManagerDialog open={managerOpen} onOpenChange={setManagerOpen} />
     </>
   );
 }
