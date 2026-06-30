@@ -248,11 +248,11 @@ export function OutreachTable({
     }
   }, [resettingTestBarber, toast, onRefreshLeads]);
 
-  // Admin-only: map lead_id -> existing generated site (most recent) so each row
-  // shows "Manage Site" instead of "Generate Site". Purely additive — only runs
-  // for admins; never affects normal users or leads without a site.
+  // Map lead_id -> existing generated site (most recent) so each row shows "Manage
+  // Site" instead of "Generate Site". RLS scopes the result: admins see all sites,
+  // reps see only sites for their own leads (lead-owner policy). Additive — never
+  // affects leads without a site.
   useEffect(() => {
-    if (!isAdmin) return;
     let cancelled = false;
     (async () => {
       // Untyped client: tracking columns aren't in the generated types yet.
@@ -557,7 +557,7 @@ export function OutreachTable({
           title: `${lead.business_name} already has a site`,
           description: 'Opening its Manage page — no duplicate was created.',
         });
-        navigate(`/admin/sites/${newSiteId}`);
+        navigate(isAdmin ? `/admin/sites/${newSiteId}` : `/sites/${newSiteId}`);
         return;
       }
       toast({
@@ -1454,9 +1454,9 @@ export function OutreachTable({
                   onRetryPhoneFetch={() => onRetryPhoneFetch?.(lead.id)}
                   isWalkthroughContacted={walkthroughContactedIds.has(lead.id)}
                   onUpdateLead={onUpdateLead && !isDemoLead(lead.id) ? onUpdateLead : undefined}
-                  onGenerateSite={isAdmin && !sitesByLead[lead.id] ? (template, mode) => handleGenerateSite(lead, template, mode) : undefined}
+                  onGenerateSite={!sitesByLead[lead.id] ? (template, mode) => handleGenerateSite(lead, template, mode) : undefined}
                   isGeneratingSite={generatingSiteId === lead.id}
-                  onManageSite={isAdmin && sitesByLead[lead.id] ? () => navigate(`/admin/sites/${sitesByLead[lead.id].id}`) : undefined}
+                  onManageSite={sitesByLead[lead.id] ? () => navigate(isAdmin ? `/admin/sites/${sitesByLead[lead.id].id}` : `/sites/${sitesByLead[lead.id].id}`) : undefined}
                   
                 />
               ))
@@ -1742,15 +1742,15 @@ export function OutreachTable({
                               Retry
                             </Button>
                           ) : null}
-                          {isAdmin && (
+                          {(
                             sitesByLead[lead.id] ? (
                               <button
                                 className="p-1.5 rounded-md text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300 transition-colors"
-                                title="Manage site (admin)"
+                                title="Manage site"
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
-                                  navigate(`/admin/sites/${sitesByLead[lead.id].id}`);
+                                  navigate(isAdmin ? `/admin/sites/${sitesByLead[lead.id].id}` : `/sites/${sitesByLead[lead.id].id}`);
                                 }}
                               >
                                 <Settings2 className="h-4 w-4" />
@@ -1760,7 +1760,7 @@ export function OutreachTable({
                                 <DropdownMenuTrigger asChild>
                                   <button
                                     className="p-1.5 rounded-md text-violet-400 hover:bg-violet-500/10 hover:text-violet-300 transition-colors disabled:opacity-50"
-                                    title="Generate site (admin)"
+                                    title="Generate site"
                                     disabled={generatingSiteId === lead.id}
                                     onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}
                                   >

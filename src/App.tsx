@@ -35,6 +35,7 @@ const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
 const AdminSiteImages = lazy(() => import("./pages/AdminSiteImages"));
 const AdminSitesList = lazy(() => import("./pages/AdminSitesList"));
 const AdminSiteManage = lazy(() => import("./pages/AdminSiteManage"));
+const SiteManage = lazy(() => import("./pages/SiteManage"));
 const Landing = lazy(() => import("./pages/Landing"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Feedback = lazy(() => import("./pages/Feedback"));
@@ -283,8 +284,18 @@ const App = () => {
                 </ProtectedRoute>
               } 
             />
-            <Route 
-              path="/outreach" 
+            {/* Rep-facing site editor (any authenticated operator; RLS scopes it to
+                the lead-owner). Distinct from the admin-only /admin/sites/:id. */}
+            <Route
+              path="/sites/:id"
+              element={
+                <ProtectedRoute>
+                  <SiteManage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/outreach"
               element={
                 <ProtectedRoute>
                    <SubscriptionGate>
@@ -293,7 +304,7 @@ const App = () => {
                      </AppLayout>
                    </SubscriptionGate>
                 </ProtectedRoute>
-              } 
+              }
             />
             {/* Archive route removed - merged into Outreach */}
             {/* Track Leads route removed - folded into Outreach (row-click detail modal) */}
