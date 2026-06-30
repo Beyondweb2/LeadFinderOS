@@ -6,6 +6,7 @@ const CHANNELS: { key: keyof ChannelPerformance; label: string; dot: string; alw
   { key: 'whatsapp', label: 'WhatsApp', dot: 'bg-[hsl(var(--badge-whatsapp))]', alwaysShow: true },
   { key: 'sms', label: 'SMS', dot: 'bg-[hsl(var(--badge-sms))]', alwaysShow: true },
   { key: 'call', label: 'Call', dot: 'bg-[hsl(var(--badge-call))]', alwaysShow: true },
+  { key: 'email', label: 'Email', dot: 'bg-sky-600', alwaysShow: true },
   { key: 'facebook_msg', label: 'Messenger', dot: 'bg-[hsl(var(--badge-facebook))]' },
 ];
 

@@ -7,6 +7,8 @@ interface SiteFunnelCardProps {
   opened: number;
   claimed: number;
   addonRequested: number;
+  /** Compact = 2×2 stat grid so it fits a third-width dashboard column. */
+  compact?: boolean;
 }
 
 function Stat({ icon: Icon, value, label, color }: { icon: LucideIcon; value: number; label: string; color: string }) {
@@ -26,7 +28,7 @@ function Stat({ icon: Icon, value, label, color }: { icon: LucideIcon; value: nu
  * claimed, and had the booking/SMS add-on requested. Built from the same
  * generated_sites tracking columns the Outreach row badges use.
  */
-export function SiteFunnelCard({ sent, opened, claimed, addonRequested }: SiteFunnelCardProps) {
+export function SiteFunnelCard({ sent, opened, claimed, addonRequested, compact = false }: SiteFunnelCardProps) {
   return (
     <Card className="bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border-amber-500/20">
       <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
@@ -36,7 +38,7 @@ export function SiteFunnelCard({ sent, opened, claimed, addonRequested }: SiteFu
         </CardTitle>
       </CardHeader>
       <CardContent className="p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
-        <div className="grid grid-cols-4 gap-2 sm:gap-4">
+        <div className={`grid gap-2 sm:gap-4 ${compact ? 'grid-cols-2' : 'grid-cols-4'}`}>
           <Stat icon={Send} value={sent} label="Sent" color="text-blue-500" />
           <Stat icon={Eye} value={opened} label="Opened" color="text-purple-500" />
           <Stat icon={CheckCircle2} value={claimed} label="Claimed" color="text-green-500" />

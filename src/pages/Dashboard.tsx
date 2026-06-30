@@ -39,8 +39,8 @@ import {
 import { TipBar } from '@/components/TipBar';
 
 const Dashboard = () => {
-  const { metrics, isLoading, refetch } = useDashboardMetrics();
   const { isLoading: isSubscriptionLoading, isAdmin } = useSubscription();
+  const { metrics, isLoading, refetch } = useDashboardMetrics(isAdmin);
   const { user } = useAuth();
   const { toast } = useToast();
   const [isFullResetting, setIsFullResetting] = useState(false);
@@ -104,7 +104,9 @@ const Dashboard = () => {
       {/* Activity pulse + next steps */}
       <section>
         <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Activity &amp; next steps</h2>
-        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
+        {/* Three equal boxes: contacted | next actions | site funnel. The funnel is
+            scoped per-rep for non-admins (admins see the global funnel). */}
+        <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           <OutreachCard
             contactedTotal={metrics.contactedTotal}
             contactedToday={metrics.contactedToday}
@@ -113,21 +115,15 @@ const Dashboard = () => {
             loggedLeads={metrics.loggedLeads}
           />
           <NextActionsCard trackedLeads={metrics.trackedLeads} />
-        </div>
-      </section>
-
-      {/* Site funnel — operator-level barber-site tracking; admins only */}
-      {isAdmin && (
-        <section>
-          <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Sites</h2>
           <SiteFunnelCard
             sent={metrics.siteFunnel.sent}
             opened={metrics.siteFunnel.opened}
             claimed={metrics.siteFunnel.claimed}
             addonRequested={metrics.siteFunnel.addonRequested}
+            compact
           />
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* Per-campaign monitoring — operator-level; admins only (same gate as Sites) */}
       {isAdmin && (

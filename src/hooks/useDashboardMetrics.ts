@@ -9,6 +9,7 @@ export interface ChannelPerformance {
   sms: ChannelStat;
   call: ChannelStat;
   facebook_msg: ChannelStat;
+  email: ChannelStat;
   /** Leads that count as sent (past New) but have no contact-method pill set —
    *  shown honestly as a residual rather than mis-assigned to a channel. */
   noMethodSent: number;
@@ -112,7 +113,7 @@ const getDateRanges = () => {
   };
 };
 
-export function useDashboardMetrics() {
+export function useDashboardMetrics(isAdmin = false) {
   const [allLeads, setAllLeads] = useState<OutreachLead[]>([]);
   const [totalNoWebsiteFound, setTotalNoWebsiteFound] = useState(0);
   const [activityData, setActivityData] = useState<ActivityMetrics>({
@@ -175,9 +176,15 @@ export function useDashboardMetrics() {
     // stays the source of truth for "# contacted" and is unaffected by this.
     // Untyped client (tracking cols aren't in the generated types). RLS scopes it.
     try {
-      const { data: sites } = await (supabase as unknown as import('@supabase/supabase-js').SupabaseClient)
-        .from('generated_sites')
-        .select('lead_id, first_opened_at, claimed_at, addon_interest_at');
+      // Admins see the GLOBAL funnel (all operators' sites). Non-admins are scoped
+      // to their OWN leads' sites — otherwise the "published sites" RLS policy
+      // (TO authenticated) would inflate a rep's funnel with every published site.
+      const sb = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
+      const { data: sites } = isAdmin
+        ? await sb.from('generated_sites').select('lead_id, first_opened_at, claimed_at, addon_interest_at')
+        : await sb.from('generated_sites')
+            .select('lead_id, first_opened_at, claimed_at, addon_interest_at, outreach_leads!inner(user_id)')
+            .eq('outreach_leads.user_id', uid ?? '');
       const rows = (sites || []) as Array<{ lead_id: string | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>;
       const distinctLeads = (pred: (r: typeof rows[number]) => boolean) =>
         new Set(rows.filter(r => r.lead_id && pred(r)).map(r => r.lead_id as string)).size;
@@ -216,7 +223,7 @@ export function useDashboardMetrics() {
       totalPhonesCopied: copiedPhones.length,
       totalLeadsContacted: contacts.length,
     });
-  }, []);
+  }, [isAdmin]);
 
   // Only refetch when user ID changes (login/logout), not on token refresh
   useEffect(() => {
@@ -350,6 +357,7 @@ export function useDashboardMetrics() {
       sms: emptyChannelStat(),
       call: emptyChannelStat(),
       facebook_msg: emptyChannelStat(),
+      email: emptyChannelStat(),
       noMethodSent: 0,
     };
     // Include archived — a contacted-then-archived lead still counts as contacted via
@@ -374,7 +382,7 @@ export function useDashboardMetrics() {
         (channelPerf[m] as ChannelStat).claimed += 1;
       }
     }
-    for (const key of ['whatsapp', 'sms', 'call', 'facebook_msg'] as const) {
+    for (const key of ['whatsapp', 'sms', 'call', 'facebook_msg', 'email'] as const) {
       const stat = channelPerf[key];
       stat.replyRate = stat.sent > 0 ? Math.round((stat.replied / stat.sent) * 100) : null;
     }
