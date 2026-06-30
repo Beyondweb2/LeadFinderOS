@@ -56,7 +56,7 @@ const Outreach = () => {
   // Launch-pad intent carried from the Manage page via router state. Consumed once
   // (cleared from history so a refresh/back won't reopen the composer).
   const location = useLocation();
-  type LaunchIntent = { leadId: string; channel: 'sms' | 'whatsapp' | 'call'; templateContent?: string | null; shareLink?: string | null };
+  type LaunchIntent = { leadId: string; channel: 'sms' | 'whatsapp' | 'call' | 'open'; templateContent?: string | null; shareLink?: string | null };
   const [launchIntent, setLaunchIntent] = useState<LaunchIntent | null>(
     ((location.state as { launch?: LaunchIntent } | null)?.launch) ?? null,
   );

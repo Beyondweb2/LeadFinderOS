@@ -137,7 +137,9 @@ interface OutreachTableProps {
    *  fresh with a chosen template + that barber's /s/ link. */
   launchIntent?: {
     leadId: string;
-    channel: 'sms' | 'whatsapp' | 'call';
+    /** 'open' just opens the lead's detail modal (for non-messaging next actions, or
+     *  email/messenger leads that have no per-lead composer). */
+    channel: 'sms' | 'whatsapp' | 'call' | 'open';
     templateContent?: string | null;
     shareLink?: string | null;
   } | null;
@@ -621,6 +623,7 @@ export function OutreachTable({
     if (launchIntent.channel === 'sms') setSmsDialogLead(lead);
     else if (launchIntent.channel === 'whatsapp') setWhatsappDialogLead(lead);
     else if (launchIntent.channel === 'call') handleCallClick(lead);
+    else if (launchIntent.channel === 'open') setDetailLead(lead);
     onLaunchConsumed?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [launchIntent, leads]);
