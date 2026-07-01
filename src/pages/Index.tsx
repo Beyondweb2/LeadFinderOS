@@ -15,15 +15,16 @@ import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTeamClaims } from '@/hooks/useTeamClaims';
-import { Flame, Target, Zap, Search, MapPin, Info, Mail, Download, Loader2, X, UserPlus } from 'lucide-react';
+import { Flame, Target, Zap, Search, MapPin, Info, Mail, Download, Loader2, X, UserPlus, Globe2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { Country, Lead } from '@/types/lead';
+import type { Country, Lead, RegionDensity } from '@/types/lead';
 
 const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 
 const Index = () => {
-  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, expanded, setWebsiteOverride } = useLeadSearchContext();
+  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, expanded, setWebsiteOverride, regionMeta, regionDowngraded } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach } = useOutreach();
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
@@ -33,7 +34,9 @@ const Index = () => {
   // Find Leads mode: 'targeted' (curated) | 'list' (broad list-builder).
   // (Email sourcing is no longer a separate mode — it's a "Find emails" action on
   // the Targeted results below.)
-  const [mode, setMode] = useState<'targeted' | 'list'>('targeted');
+  const [mode, setMode] = useState<'targeted' | 'list' | 'region'>('targeted');
+  // Region tiling density (only used in region mode). Medium = 8km tiles.
+  const [density, setDensity] = useState<RegionDensity>('medium');
 
   // Active campaign — new leads added from search are tagged with it.
   // Persisted so it survives navigation/reload.
@@ -75,9 +78,19 @@ const Index = () => {
 
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
-    // List-builder mode asks search-leads for the full discovered pool.
-    search({ ...filters, broad: mode === 'list' }, false, false);
-  }, [search, mode]);
+    // List-builder mode asks for the full pool; region mode tiles the whole area.
+    search({ ...filters, broad: mode === 'list', region: mode === 'region', density }, false, false);
+  }, [search, mode, density]);
+
+  // Notify when a region search was downgraded to a single area (daily budget).
+  useEffect(() => {
+    if (regionDowngraded) {
+      toast({
+        title: 'Daily search budget reached',
+        description: `Ran a single-area search instead (today's spend ~$${regionDowngraded.spentUsd.toFixed(2)}). Region search resumes tomorrow.`,
+      });
+    }
+  }, [regionDowngraded, toast]);
 
   // Bulk add (list-builder): add each selected lead, deduped + silent (one summary
   // toast from the component). addToOutreach returns null on dupe/failure.
@@ -224,7 +237,31 @@ const Index = () => {
             >
               <Search className="h-3.5 w-3.5 mr-1.5" /> List builder
             </Button>
+            <Button
+              variant={mode === 'region' ? 'default' : 'ghost'}
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => setMode('region')}
+              title="Region: tile the whole area (multiple searches) for far more coverage"
+            >
+              <Globe2 className="h-3.5 w-3.5 mr-1.5" /> Region
+            </Button>
           </div>
+          {/* Region density — only when Region mode is active. Finer = more tiles,
+              more coverage, more cost/time. */}
+          {mode === 'region' && (
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] sm:text-xs text-muted-foreground">Tile density</span>
+              <Select value={density} onValueChange={(v) => setDensity(v as RegionDensity)}>
+                <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fine">Fine (5km · most)</SelectItem>
+                  <SelectItem value="medium">Medium (8km)</SelectItem>
+                  <SelectItem value="coarse">Coarse (12km · fastest)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
             <div className="flex items-center gap-1 sm:gap-2">
               <Flame className="h-3 w-3 sm:h-4 sm:w-4 text-status-hot" />
@@ -246,6 +283,16 @@ const Index = () => {
           isPaidSubscriber={true}
         />
       </section>
+
+      {/* Region scanning — informative spinner for the (slower) tiled search */}
+      {isLoading && mode === 'region' && (
+        <div className="flex items-center gap-3 py-3 px-4 bg-primary/5 border border-primary/20 rounded-lg">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+          <span className="text-xs sm:text-sm text-muted-foreground">
+            Scanning the whole region — searching multiple areas and merging results. This can take ~15–30s.
+          </span>
+        </div>
+      )}
 
       {/* Search Error + Retry */}
       {searchError && !isLoading && (
@@ -310,6 +357,19 @@ const Index = () => {
             />
           ) : (
             <div className="space-y-3">
+              {/* Region search banner — the grid actually used (echoed from the server). */}
+              {regionMeta && (
+                <div className="flex items-start gap-2 py-2 px-3 sm:px-4 bg-primary/5 border border-primary/20 rounded-lg">
+                  <Globe2 className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" />
+                  <span className="text-xs sm:text-sm text-muted-foreground">
+                    Region <span className="font-medium text-foreground">{regionMeta.area}</span>: searched{' '}
+                    <span className="font-medium text-foreground">{regionMeta.tilesSucceeded}/{regionMeta.tilesTotal}</span> areas
+                    ({regionMeta.cols}×{regionMeta.rows} grid at {regionMeta.effectiveSpacingKm}km)
+                    {regionMeta.coarsened && ' — region large, coarsened to fit; search a sub-area for finer coverage'}
+                    {regionMeta.cappedAt && ` — capped at ${regionMeta.cappedAt} results`}.
+                  </span>
+                </div>
+              )}
               {/* In-place email scan: crawl the current results for emails, annotate
                   the rows (Mail icon via LeadEnrichButtons), and export with emails.
                   No table rebuild — found emails land in searchEnrichment. */}
