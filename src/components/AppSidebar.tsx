@@ -12,11 +12,10 @@ import { useAvatar } from '@/hooks/useAvatar';
 import { useAuth } from '@/hooks/useAuth';
 import { 
   LayoutDashboard, Search, ClipboardList, FileText,
-  DollarSign, HelpCircle, Users, MessageSquare, Lightbulb, StickyNote
+  DollarSign, HelpCircle, Users, MessageSquare
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useDemoChecklist } from '@/contexts/DemoChecklistContext';
-import { NotepadModal } from '@/components/NotepadModal';
 import appLogo from '@/assets/logo.png';
 
 export function AppSidebar() {
@@ -24,7 +23,6 @@ export function AppSidebar() {
   const location = useLocation();
   const { avatarUrl } = useAvatar();
   const { user } = useAuth();
-  const [notepadOpen, setNotepadOpen] = useState(false);
 
   const navItems = [
     { title: t('nav.dashboard'), url: '/', icon: LayoutDashboard, description: t('nav.dashboardDesc') },
@@ -32,10 +30,8 @@ export function AppSidebar() {
     { title: t('nav.outreachCRM'), url: '/outreach', icon: ClipboardList, description: t('nav.outreachCRMDesc') },
     { title: t('nav.paidClients'), url: '/paid-clients', icon: DollarSign, description: t('nav.paidClientsDesc') },
     { title: t('nav.templates'), url: '/templates', icon: FileText, description: t('nav.templatesDesc') },
-    { title: 'Playbook', url: '/playbook', icon: Lightbulb, description: 'Closing tips & tactics' },
     { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle, description: t('nav.howToUseDesc') },
     { title: t('nav.feedback'), url: '/feedback', icon: MessageSquare, description: t('nav.feedbackDesc') },
-    { title: 'Notepad', url: '#notepad', icon: StickyNote, description: 'Personal actions & notes' },
   ];
 
   let searchPulse = false;
@@ -80,7 +76,7 @@ export function AppSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navItems.map((item) => {
-                const isActive = item.url !== '#notepad' && location.pathname === item.url;
+                const isActive = location.pathname === item.url;
                 const isFlashing =
                   (item.url === '/outreach' && flashCRM) ||
                   (item.url === '/find-leads' && flashSearch);
@@ -88,14 +84,8 @@ export function AppSidebar() {
                 return (
                   <SidebarMenuItem key={item.url}>
                     <SidebarMenuButton asChild isActive={isActive}>
-                    <Link 
-                        to={item.url === '#notepad' ? '#' : item.url}
-                        onClick={(e) => {
-                          if (item.url === '#notepad') {
-                            e.preventDefault();
-                            setNotepadOpen(true);
-                          }
-                        }}
+                    <Link
+                        to={item.url}
                         data-walkthrough-step={item.url === '/outreach' ? 'outreach-crm' : undefined}
                         data-walkthrough={item.url === '/find-leads' ? 'search-nav' : item.url === '/outreach' ? 'crm-nav' : undefined}
                         className={cn(
@@ -140,7 +130,6 @@ export function AppSidebar() {
           <AccentColorPicker />
         </div>
       </SidebarFooter>
-      <NotepadModal open={notepadOpen} onOpenChange={setNotepadOpen} />
     </Sidebar>
   );
 }

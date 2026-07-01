@@ -39,7 +39,6 @@ const SiteManage = lazy(() => import("./pages/SiteManage"));
 const Landing = lazy(() => import("./pages/Landing"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Feedback = lazy(() => import("./pages/Feedback"));
-const Playbook = lazy(() => import("./pages/Playbook"));
 const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
@@ -332,20 +331,8 @@ const App = () => {
                 </ProtectedRoute>
               } 
             />
-            <Route 
-              path="/playbook" 
-              element={
-                <ProtectedRoute>
-                   <SubscriptionGate>
-                     <AppLayout>
-                       <Playbook />
-                     </AppLayout>
-                   </SubscriptionGate>
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/how-to-use" 
+            <Route
+              path="/how-to-use"
               element={
                 <ProtectedRoute>
                    <SubscriptionGate>
