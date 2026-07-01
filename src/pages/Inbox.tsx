@@ -17,6 +17,13 @@ function relTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+// Fallback label for legacy template rows sent before the body was stored (body null).
+function templateLabel(name: string | null): string {
+  if (!name) return '';
+  const t = WA_REPLY_TEMPLATES.find((x) => x.name === name);
+  return `📄 ${t ? t.label : name}`;
+}
+
 const Inbox = () => {
   const { user, conversations, messagesForKey, leads, isLoading, send } = useInbox();
   const { toast } = useToast();
@@ -153,7 +160,7 @@ const Inbox = () => {
               {c.lastMessage && (
                 <span className="truncate text-xs text-muted-foreground">
                   {c.lastMessage.direction === 'outbound' ? 'You: ' : ''}
-                  {c.lastMessage.body || (c.lastMessage.message_type === 'template' ? '[template]' : '')}
+                  {c.lastMessage.body || templateLabel(c.lastMessage.template_name)}
                 </span>
               )}
             </button>
@@ -195,11 +202,12 @@ const Inbox = () => {
                     <div className={cn('max-w-[78%] rounded-2xl px-3 py-2 text-sm',
                       m.direction === 'outbound' ? 'bg-primary/90 text-primary-foreground' : 'bg-muted')}>
                       <p className="whitespace-pre-wrap break-words">
-                        {m.body || (m.message_type === 'template' ? `[template: ${m.template_name}]` : '')}
+                        {m.body || templateLabel(m.template_name)}
                       </p>
                       <div className={cn('mt-0.5 flex items-center gap-1 text-[10px]',
                         m.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
                         <span>{relTime(m.created_at)}</span>
+                        {m.message_type === 'template' && <span>· template</span>}
                         {m.direction === 'outbound' && (
                           <span>· {m.status === 'simulated' ? 'simulated' : m.status === 'failed' ? '⚠ failed' : m.status}</span>
                         )}

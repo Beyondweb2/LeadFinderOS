@@ -39,6 +39,42 @@ export const WA_TEMPLATES: Record<string, { lang: string }> = {
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
+// Human-readable copies of the Meta-registered template BODIES, purely so the Inbox
+// can show what the barber actually receives (the real wording lives in Meta and is
+// never returned by the API). These are DISPLAY-ONLY — the actual send still uses the
+// approved template + {{1}}/{{2}} variables. ⚠️ Keep these in sync with the exact Meta
+// template text; drift affects only the preview, never what is sent.
+const bookingPageIntroBody = (b: string, u: string) =>
+  `Hi, I came across ${b || "your business"} and built you an online booking page so customers can book appointments directly
+
+Here it is: ${u}
+
+You can edit it yourself - services, prices, hours
+
+Have a look and let me know what you think`;
+
+const noWebsiteBody = (b: string, u: string) =>
+  `Hi, I noticed ${b || "your business"} doesn't have a website, so I built you one - it's live and free. You can edit it yourself: photos, text, services, colours.
+
+Here it is: ${u}
+
+It's yours to keep, free - let me know what you think.`;
+
+export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string) => string> = {
+  booking_page_intro: bookingPageIntroBody,
+  // The "no website / free website" template. The send code uses free_website_intro;
+  // no_website_barbers is aliased to the SAME body so the preview renders whichever
+  // name is actually sent. ⚠️ the SEND name must match Meta — see the whatsapp-send note.
+  free_website_intro: noWebsiteBody,
+  no_website_barbers: noWebsiteBody,
+};
+
+/** Render the display copy of a template body with its variables filled. */
+export function renderTemplateBody(templateName: string, businessName: string, claimUrl: string): string {
+  const fn = WA_TEMPLATE_BODIES[templateName];
+  return fn ? fn(businessName, claimUrl) : `[${templateName}]`;
+}
+
 /** Body params for a claim template: {{1}} business name, {{2}} claim URL. */
 export function claimTemplateComponents(businessName: string, claimUrl: string) {
   return [{
