@@ -286,7 +286,7 @@ const Inbox = () => {
                             <MessageSquarePlus className="h-3.5 w-3.5" /> Quick reply
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="max-h-72 w-80 overflow-y-auto">
+                        <DropdownMenuContent align="start" className="max-h-72 w-80 overflow-y-auto thin-scrollbar">
                           {textTemplates.map((t, i) => (
                             <DropdownMenuItem key={`${t.title}-${i}`} onClick={() => insertTemplate(t.content)} className="flex flex-col items-start gap-0.5">
                               <span className="text-xs font-medium">{t.title}</span>
