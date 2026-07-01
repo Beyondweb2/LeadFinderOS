@@ -25,10 +25,16 @@ export function WhatsAppLeadControls({
     setBusy(true);
     try {
       if (queued) {
-        await onUpdate(lead.id, { status: 'not_contacted', queued_at: null });
+        // Restore the status the lead had BEFORE queueing (fallback not_contacted).
+        await onUpdate(lead.id, {
+          status: lead.previous_status ?? 'not_contacted',
+          previous_status: null,
+          queued_at: null,
+        });
       } else {
         await onUpdate(lead.id, {
           status: 'queued',
+          previous_status: lead.status, // capture pre-queue status for restore-on-cancel
           queued_at: new Date().toISOString(),
           whatsapp_template: template || 'booking_page_intro',
           whatsapp_attempts: 0, // fresh retries (e.g. re-queuing a whatsapp_failed lead)

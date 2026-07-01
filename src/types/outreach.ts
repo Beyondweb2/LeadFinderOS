@@ -142,6 +142,9 @@ export interface OutreachLead {
   // template; the rest are written server-side by process-whatsapp-queue on send.
   whatsapp_template?: string | null;
   queued_at?: string | null;
+  /** The lead's status immediately BEFORE it was queued for WhatsApp, so cancelling
+   *  the queue can restore it (instead of wiping to not_contacted). Null when not queued. */
+  previous_status?: LeadStatus | null;
   whatsapp_sent_at?: string | null;
   whatsapp_message_id?: string | null;
   whatsapp_delivery_status?: string | null; // 'simulated' | 'sent' | 'no_whatsapp' | 'failed_temporary' | 'failed'

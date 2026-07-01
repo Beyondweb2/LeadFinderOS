@@ -80,7 +80,11 @@ export function WhatsAppQueuePanel({
     }
   };
 
-  const removeFromQueue = (id: string) => onUpdateLead(id, { status: 'not_contacted', queued_at: null });
+  const removeFromQueue = (id: string) => {
+    // Restore the pre-queue status (fallback not_contacted); clear the capture + queued_at.
+    const prev = leads.find((l) => l.id === id)?.previous_status;
+    onUpdateLead(id, { status: prev ?? 'not_contacted', previous_status: null, queued_at: null });
+  };
 
   if (!status) return null; // admin-only; hidden otherwise
 
