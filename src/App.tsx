@@ -39,6 +39,7 @@ const SiteManage = lazy(() => import("./pages/SiteManage"));
 const Landing = lazy(() => import("./pages/Landing"));
 const Terms = lazy(() => import("./pages/Terms"));
 const Feedback = lazy(() => import("./pages/Feedback"));
+const Inbox = lazy(() => import("./pages/Inbox"));
 const Start = lazy(() => import("./pages/Start"));
 
 const CityLeads = lazy(() => import("./pages/CityLeads"));
@@ -337,6 +338,19 @@ const App = () => {
                    <SubscriptionGate>
                      <AppLayout>
                        <HowToUse />
+                     </AppLayout>
+                   </SubscriptionGate>
+                </ProtectedRoute>
+              }
+            />
+            {/* WhatsApp Inbox — operator-gated + in-app (each operator sees only their own) */}
+            <Route
+              path="/inbox"
+              element={
+                <ProtectedRoute>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <Inbox />
                      </AppLayout>
                    </SubscriptionGate>
                 </ProtectedRoute>
