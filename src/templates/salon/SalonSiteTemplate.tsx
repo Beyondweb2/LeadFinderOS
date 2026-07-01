@@ -725,9 +725,12 @@ function Services({
           </h2>
         </Reveal>
 
-        <ul className="grid gap-x-12 gap-y-1 sm:grid-cols-2">
+        {/* Multi-column menu flow: 1 col on mobile → 2 (sm) → 3 (lg), so a long menu
+            stays ~a third the height instead of one endless column. All items stay
+            visible (no cap/hide) — break-inside-avoid keeps each row intact. */}
+        <ul className="columns-1 gap-x-12 sm:columns-2 lg:columns-3">
           {services.map((s, i) => (
-            <Reveal as="li" key={`${s.name}-${i}`} delay={Math.min(i * 0.05, 0.3)}>
+            <Reveal as="li" className="break-inside-avoid" key={`${s.name}-${i}`} delay={Math.min(i * 0.05, 0.3)}>
               <div className="group flex items-baseline gap-3 border-b border-salon-line py-5">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-baseline gap-2">
