@@ -13,6 +13,7 @@ import { SiteImageManager, type SiteImageManagerHandle } from "@/components/Site
 import { SiteImagePicker, type SiteImagePickerHandle } from "@/components/SiteImagePicker";
 import type { BarberSiteContent, BarberService, BarberOpeningHours } from "@/templates/barber/types";
 import type { Json } from "@/integrations/supabase/types";
+import { ServiceScanButton, type ServiceScanContext } from "@/components/ServiceScanButton";
 import { BARBER_ACCENTS, BARBER_ACCENT_DEFAULT_HEX } from "@/config/barberAccents";
 
 export type EditableSite = {
@@ -64,10 +65,15 @@ export function SiteEditor({
   site,
   onSaved,
   children,
+  scanContext,
 }: {
   site: EditableSite;
   onSaved?: (content: BarberSiteContent) => void;
   children?: ReactNode;
+  /** When provided (a lead's website lives behind this site), the Services section
+   *  offers a one-time "Scan website" button until the operator confirms services.
+   *  Absent (e.g. the barber/salon owner dashboard) → no scan button. */
+  scanContext?: ServiceScanContext;
 }) {
   const { toast } = useToast();
   const imageRef = useRef<SiteImageManagerHandle>(null);
@@ -78,6 +84,10 @@ export function SiteEditor({
   const [tagline, setTagline] = useState("");
   const [about, setAbout] = useState("");
   const [services, setServices] = useState<BarberService[]>([]);
+  // True once the operator edits/adds/removes a service or applies a scan THIS
+  // session. Only then does Save stamp content.servicesConfirmed — so saving an
+  // unrelated field (e.g. the tagline) never hides the one-time scan helper.
+  const servicesTouched = useRef(false);
   const [showExamplePrices, setShowExamplePrices] = useState(false);
   const [googleReviewsUrl, setGoogleReviewsUrl] = useState("");
   const [phone, setPhone] = useState("");
@@ -115,6 +125,7 @@ export function SiteEditor({
     setTextDirty(false);
     setImageDirty(false);
     setPickerDirty(false);
+    servicesTouched.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [site.id]);
 
@@ -131,19 +142,23 @@ export function SiteEditor({
 
   const updateService = (i: number, field: keyof BarberService, value: string) => {
     setServices((prev) => prev.map((s, idx) => (idx === i ? { ...s, [field]: value } : s)));
+    servicesTouched.current = true;
     setTextDirty(true);
   };
   const updateServiceDuration = (i: number, mins: number) => {
     setServices((prev) => prev.map((s, idx) => (idx === i ? { ...s, durationMins: mins } : s)));
+    servicesTouched.current = true;
     setTextDirty(true);
   };
   const addService = () => {
     // New services default to a 30-minute appointment length.
     setServices((prev) => [...prev, { name: "", durationMins: DEFAULT_DURATION }]);
+    servicesTouched.current = true;
     setTextDirty(true);
   };
   const removeService = (i: number) => {
     setServices((prev) => prev.filter((_, idx) => idx !== i));
+    servicesTouched.current = true;
     setTextDirty(true);
   };
 
@@ -188,6 +203,10 @@ export function SiteEditor({
         tagline: tagline.trim(),
         about: about.trim(),
         services: cleanedServices,
+        // Stamp servicesConfirmed once the operator has set their own services
+        // (this session, or already true) — drives the one-time scan helper's gate.
+        // Stays true once set; an unrelated save never sets it.
+        servicesConfirmed: site.content?.servicesConfirmed || servicesTouched.current ? true : undefined,
         showExamplePrices,
         googleReviewsUrl: googleReviewsUrl.trim() || undefined,
         phone: phone.trim(),
@@ -213,6 +232,7 @@ export function SiteEditor({
 
       setServices(cleanedServices.map((s) => ({ ...s })));
       setHours(cleanedHours.map((h) => ({ ...h })));
+      servicesTouched.current = false;
       setTextDirty(false);
       setImageDirty(false);
       setPickerDirty(false);
@@ -248,6 +268,27 @@ export function SiteEditor({
 
           <div className="space-y-3">
             <Label>Services &amp; prices</Label>
+            {/* One-time "Scan website" helper: only while the site still has the
+                generated default services (servicesConfirmed not yet stamped), a
+                lead website is available, and the site isn't live/claimed. */}
+            {scanContext?.website
+              && !site.content?.servicesConfirmed
+              && site.status !== "claimed"
+              && site.status !== "published" && (
+              <div className="flex flex-col gap-2 rounded-lg border border-violet-500/20 bg-violet-500/5 p-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-muted-foreground">
+                  These are starter examples. Scan the shop's website to pull in their real services &amp; prices — you review before anything replaces the list.
+                </p>
+                <ServiceScanButton
+                  context={scanContext}
+                  onApply={(svcs) => {
+                    setServices(svcs.map((s) => ({ name: s.name, price: s.price, durationMins: s.durationMins })));
+                    servicesTouched.current = true;
+                    setTextDirty(true);
+                  }}
+                />
+              </div>
+            )}
             {services.length === 0 && (
               <p className="text-sm text-muted-foreground">No services yet — add the shop's real menu below.</p>
             )}

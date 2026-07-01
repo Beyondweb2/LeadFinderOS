@@ -138,6 +138,14 @@ export interface SiteContent {
    */
   showExamplePrices?: boolean;
   /**
+   * True once the operator has saved their OWN services for this site (manually
+   * edited them or applied a website scan in the editor). Generated sites start
+   * with default/example services and no flag; this distinguishes "still defaults"
+   * from "operator-confirmed", so the site editor can hide the one-time "Scan
+   * website" helper after the services have been set. JSON-only — no DB migration.
+   */
+  servicesConfirmed?: boolean;
+  /**
    * Optional Google Maps / Google Business reviews URL. When set, the site shows
    * a "Read our Google reviews" link to the real reviews at the source. Hidden
    * entirely when empty. We never republish review text — only link out.

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Loader2, ExternalLink } from "lucide-react";
 import { SiteEditor, type EditableSite } from "@/components/SiteEditor";
+import type { ServiceScanContext } from "@/components/ServiceScanButton";
 import { publicSiteUrl } from "@/config/publicSite";
 
 /**
@@ -17,6 +18,7 @@ export default function SiteManage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const [site, setSite] = useState<EditableSite | null>(null);
+  const [scanContext, setScanContext] = useState<ServiceScanContext | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [noAccess, setNoAccess] = useState(false);
 
@@ -25,14 +27,29 @@ export default function SiteManage() {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      // Embed the linked lead's website (+ place_id/business_name) so the editor's
+      // one-time "Scan website" helper has something to scan. RLS: the rep can only
+      // read a site whose lead they own, and the same policy covers the lead embed.
       const { data, error } = await supabase
         .from("generated_sites")
-        .select("id, site_name, status, content, template")
+        .select("id, site_name, status, content, template, lead_id, lead:outreach_leads(website, place_id, business_name)")
         .eq("id", id)
         .maybeSingle();
       if (cancelled) return;
       if (error || !data) { setNoAccess(true); setLoading(false); return; }
-      setSite(data as unknown as EditableSite);
+      const row = data as unknown as EditableSite & {
+        lead_id?: string | null;
+        lead?: { website?: string | null; place_id?: string | null; business_name?: string | null } | null;
+      };
+      setSite(row);
+      if (row.lead?.website) {
+        setScanContext({
+          website: row.lead.website,
+          placeId: row.lead.place_id ?? null,
+          businessName: row.lead.business_name ?? null,
+          leadId: row.lead_id ?? null,
+        });
+      }
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -84,7 +101,7 @@ export default function SiteManage() {
           <p className="text-sm text-muted-foreground">{site.content?.businessName || site.site_name}</p>
         </div>
 
-        <SiteEditor site={site} onSaved={(content) => setSite({ ...site, content })} />
+        <SiteEditor site={site} scanContext={scanContext} onSaved={(content) => setSite({ ...site, content })} />
       </div>
     </div>
   );
