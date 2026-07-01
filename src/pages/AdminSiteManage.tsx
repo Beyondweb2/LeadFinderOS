@@ -37,7 +37,7 @@ type SiteRow = {
   template?: string | null;
 };
 
-type LeadInfo = { id: string; phone: string | null; business_name: string };
+type LeadInfo = { id: string; phone: string | null; business_name: string; website: string | null; place_id: string | null };
 
 export default function AdminSiteManage() {
   const { id } = useParams();
@@ -92,7 +92,7 @@ export default function AdminSiteManage() {
       if (row?.lead_id) {
         const { data: lead } = await sb
           .from("outreach_leads")
-          .select("id, phone, business_name")
+          .select("id, phone, business_name, website, place_id")
           .eq("id", row.lead_id)
           .maybeSingle();
         if (lead) setLeadInfo(lead as unknown as LeadInfo);
@@ -324,7 +324,16 @@ export default function AdminSiteManage() {
 
       {/* Editable form + images + save bar (shared with the barber dashboard).
           The admin-only "Barber access" card is slotted between images and save. */}
-      <SiteEditor site={site} onSaved={(content) => setSite({ ...site, content })}>
+      <SiteEditor
+        site={site}
+        scanContext={leadInfo?.website ? {
+          website: leadInfo.website,
+          placeId: leadInfo.place_id ?? null,
+          businessName: leadInfo.business_name ?? null,
+          leadId: leadInfo.id,
+        } : undefined}
+        onSaved={(content) => setSite({ ...site, content })}
+      >
         {/* Launch pad — send this barber's link via the Outreach page (the single
             source of truth for all tracking). No duplicate stats live here. */}
         <Card>
