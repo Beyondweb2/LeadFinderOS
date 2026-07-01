@@ -763,8 +763,13 @@ export function OutreachTable({
     const queueable = ids.filter((id) => leads.find((l) => l.id === id)?.status !== 'no_whatsapp');
     const skipped = ids.length - queueable.length;
     queueable.forEach((id) => {
+      const lead = leads.find((l) => l.id === id);
       // Reset whatsapp_attempts so a re-queued (whatsapp_failed) lead gets fresh retries.
-      const patch: Partial<OutreachLead> = { status: 'queued', queued_at: now, whatsapp_attempts: 0, whatsapp_template: template };
+      // Capture the pre-queue status so cancelling restores it (not a wipe to not_contacted).
+      const patch: Partial<OutreachLead> = {
+        status: 'queued', queued_at: now, whatsapp_attempts: 0, whatsapp_template: template,
+        previous_status: lead?.status ?? null,
+      };
       onUpdateLead(id, patch);
     });
     setSelectedIds(new Set());
