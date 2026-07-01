@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, WA_REPLY_TEMPLATES, type WaConversation, type LeadLite } from '@/hooks/useInbox';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
-import { Loader2, Send, MessageSquare, Clock, AlertTriangle, Plus, ShieldAlert, Info } from 'lucide-react';
+import { Loader2, Send, MessageSquare, Clock, AlertTriangle, Plus, ShieldAlert, Info, ExternalLink } from 'lucide-react';
 
 function relTime(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -68,6 +69,20 @@ const Inbox = () => {
     setNewOpen(false);
     setText('');
   };
+
+  // Launch from the Outreach WhatsApp button / dashboard jump: open that lead's thread.
+  const location = useLocation();
+  const launchConsumed = useRef(false);
+  useEffect(() => {
+    const launch = (location.state as { launch?: { leadId?: string } } | null)?.launch;
+    if (!launch?.leadId || launchConsumed.current || isLoading) return;
+    launchConsumed.current = true;
+    window.history.replaceState({}, document.title); // consume once (refresh/back won't relaunch)
+    const lead = leads.find((l) => l.id === launch.leadId);
+    if (lead) startFromLead(lead);
+    else toast({ title: 'No WhatsApp number', description: 'That lead has no phone to message.', variant: 'destructive' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.state, leads, isLoading]);
 
   const doSend = async () => {
     if (!active) return;
@@ -182,15 +197,27 @@ const Inbox = () => {
                   <p className="truncate text-sm font-semibold">{active.unassigned ? `Unassigned · +${active.phone}` : active.label}</p>
                   <p className="text-[11px] text-muted-foreground">+{active.phone}</p>
                 </div>
-                {win.open ? (
-                  <span className="flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-600 dark:text-green-400">
-                    <Clock className="h-3 w-3" /> Window open · ~{win.hoursLeft}h left
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                    <AlertTriangle className="h-3 w-3" /> Window closed · template only
-                  </span>
-                )}
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Secondary fallback: open the chat in the WhatsApp app (wa.me). */}
+                  <a
+                    href={`https://wa.me/${active.phone}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    title="Open this chat in the WhatsApp app"
+                  >
+                    <ExternalLink className="h-3 w-3" /> Open in WhatsApp app
+                  </a>
+                  {win.open ? (
+                    <span className="flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-600 dark:text-green-400">
+                      <Clock className="h-3 w-3" /> Window open · ~{win.hoursLeft}h left
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="h-3 w-3" /> Window closed · template only
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Messages */}

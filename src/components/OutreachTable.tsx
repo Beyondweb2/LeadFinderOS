@@ -511,8 +511,10 @@ export function OutreachTable({
       next.add(lead.id);
       return next;
     });
-    setWhatsappDialogLead(lead);
-  }, [toast, onContactGated, onContactMethodChange]);
+    // Primary WhatsApp path now = the in-app Inbox (real API send + conversation).
+    // The wa.me "Open in WhatsApp app" fallback lives in the Inbox thread header.
+    navigate('/inbox', { state: { launch: { leadId: lead.id } } });
+  }, [toast, onContactGated, onContactMethodChange, navigate]);
 
   // Handle SMS button click - open template dialog + count walkthrough contact
   const handleSMSClick = useCallback((lead: OutreachLead) => {

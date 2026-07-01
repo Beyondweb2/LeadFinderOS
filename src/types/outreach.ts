@@ -218,7 +218,7 @@ export const OUTREACH_STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
  *  TEMPLATES allowlist in process-whatsapp-queue. */
 export const WHATSAPP_TEMPLATES: { value: string; label: string }[] = [
   { value: 'booking_page_intro', label: 'Booking page intro' },
-  { value: 'free_website_intro', label: 'Free website intro' },
+  { value: 'no_website_barbers', label: 'Free website intro' },
 ];
 
 // Contact method options (how the business was contacted)

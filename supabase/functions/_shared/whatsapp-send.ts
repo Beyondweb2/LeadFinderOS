@@ -35,7 +35,7 @@ export function resolveWhatsAppEnv() {
  *  {{1}}=business name, {{2}}=claim URL in the BODY. */
 export const WA_TEMPLATES: Record<string, { lang: string }> = {
   booking_page_intro: { lang: "en" },
-  free_website_intro: { lang: "en" },
+  no_website_barbers: { lang: "en" },
 };
 export const WA_DEFAULT_TEMPLATE = "booking_page_intro";
 
@@ -62,10 +62,7 @@ It's yours to keep, free - let me know what you think.`;
 
 export const WA_TEMPLATE_BODIES: Record<string, (businessName: string, claimUrl: string) => string> = {
   booking_page_intro: bookingPageIntroBody,
-  // The "no website / free website" template. The send code uses free_website_intro;
-  // no_website_barbers is aliased to the SAME body so the preview renders whichever
-  // name is actually sent. ⚠️ the SEND name must match Meta — see the whatsapp-send note.
-  free_website_intro: noWebsiteBody,
+  // The "no website" template — registered in Meta as no_website_barbers (the SEND name).
   no_website_barbers: noWebsiteBody,
 };
 

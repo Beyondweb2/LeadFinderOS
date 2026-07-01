@@ -11,7 +11,7 @@ const WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Out-of-window reply templates (mirror the edge allowlist). */
 export const WA_REPLY_TEMPLATES = [
   { name: 'booking_page_intro', label: 'Booking page intro (claim link)' },
-  { name: 'free_website_intro', label: 'Free website intro (claim link)' },
+  { name: 'no_website_barbers', label: 'Free website intro (claim link)' },
 ];
 
 export interface WaMessage {

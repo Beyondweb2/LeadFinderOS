@@ -84,7 +84,13 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
   };
 
   const handleJump = (lead: OutreachLead) => {
-    navigate('/outreach', { state: { launch: { leadId: lead.id, channel: jumpChannel(lead) } } });
+    const channel = jumpChannel(lead);
+    // WhatsApp now routes through the in-app Inbox; everything else opens Outreach.
+    if (channel === 'whatsapp') {
+      navigate('/inbox', { state: { launch: { leadId: lead.id } } });
+      return;
+    }
+    navigate('/outreach', { state: { launch: { leadId: lead.id, channel } } });
   };
 
   return (
