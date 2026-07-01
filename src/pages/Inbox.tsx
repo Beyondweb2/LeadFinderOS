@@ -2,12 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, WA_REPLY_TEMPLATES, type WaConversation, type LeadLite } from '@/hooks/useInbox';
 import { useToast } from '@/hooks/use-toast';
+import { useTemplates } from '@/hooks/useTemplates';
+import { fillTemplate } from '@/lib/leadUtils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { Loader2, Send, MessageSquare, Clock, AlertTriangle, Plus, ShieldAlert, Info, ExternalLink } from 'lucide-react';
+import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, Info, ExternalLink } from 'lucide-react';
 
 function relTime(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -28,6 +31,7 @@ function templateLabel(name: string | null): string {
 const Inbox = () => {
   const { user, conversations, messagesForKey, leads, isLoading, send } = useInbox();
   const { toast } = useToast();
+  const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [synthetic, setSynthetic] = useState<WaConversation | null>(null);
@@ -50,6 +54,13 @@ const Inbox = () => {
 
   const thread = active ? messagesForKey(active.key) : [];
   const win = active ? windowFor(active.lastInboundAt) : { open: false, hoursLeft: 0 };
+
+  // Quick-reply scripts = the saved TEXT templates (not voice). Placeholders are filled
+  // from the conversation's lead where possible, then inserted (editable, not auto-sent).
+  const textTemplates = useMemo(() => templates.filter((t) => t.template_type === 'text'), [templates]);
+  const activeLead = active?.leadId ? leads.find((l) => l.id === active.leadId) : undefined;
+  const activeBusinessName = activeLead?.business_name;
+  const insertTemplate = (content: string) => setText(fillTemplate(content, { businessName: activeBusinessName }));
 
   const startFromLead = (lead: LeadLite) => {
     const norm = normalizeWaNumber(lead.phone, lead.country);
@@ -247,13 +258,35 @@ const Inbox = () => {
               {/* Reply box */}
               <div className="border-t border-border p-2.5">
                 {win.open ? (
-                  <div className="flex items-end gap-2">
-                    <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a reply…"
-                      className="min-h-[44px] max-h-32 flex-1 resize-none" maxLength={4000}
-                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } }} disabled={sending} />
-                    <Button onClick={doSend} disabled={sending || !text.trim()} size="icon" className="h-11 w-11 shrink-0">
-                      {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                    </Button>
+                  <div className="space-y-2">
+                    {/* Quick-reply: insert a saved TEXT script (editable before send). */}
+                    {textTemplates.length > 0 && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" disabled={sending}>
+                            <MessageSquarePlus className="h-3.5 w-3.5" /> Quick reply
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="max-h-72 w-80 overflow-y-auto">
+                          {textTemplates.map((t, i) => (
+                            <DropdownMenuItem key={`${t.title}-${i}`} onClick={() => insertTemplate(t.content)} className="flex flex-col items-start gap-0.5">
+                              <span className="text-xs font-medium">{t.title}</span>
+                              <span className="line-clamp-2 whitespace-normal text-[11px] text-muted-foreground">
+                                {fillTemplate(t.content, { businessName: activeBusinessName })}
+                              </span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                    <div className="flex items-end gap-2">
+                      <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a reply…"
+                        className="min-h-[44px] max-h-32 flex-1 resize-none" maxLength={4000}
+                        onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } }} disabled={sending} />
+                      <Button onClick={doSend} disabled={sending || !text.trim()} size="icon" className="h-11 w-11 shrink-0">
+                        {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="space-y-2">
