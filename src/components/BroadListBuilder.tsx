@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Globe, Instagram, Facebook, Loader2, Plus, ExternalLink, Sparkles, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { socialKindOf } from '@/lib/socialUrl';
 import type { Lead } from '@/types/lead';
 
 /**
@@ -14,27 +15,6 @@ import type { Lead } from '@/types/lead';
  * instagram/facebook link, and "Has website" = a real own site. These are LISTING
  * SIGNALS, not guarantees — labelled as such. Real socials come from Enrich.
  */
-
-function domainOf(url?: string | null): string {
-  if (!url) return '';
-  try {
-    return new URL(/^https?:\/\//i.test(url) ? url : `https://${url}`).hostname.toLowerCase().replace(/^www\./, '');
-  } catch {
-    return '';
-  }
-}
-
-/** Which social network a listing "website" URL actually points at — robust to
- *  subdomains (m.facebook.com) and short domains (fb.com, instagr.am). null = a
- *  real website / other. Drives the per-row icon so a social link never shows the
- *  website (Globe) icon, even if the listing was misclassified HAS_OWN_WEBSITE. */
-function socialKindOf(url?: string | null): 'facebook' | 'instagram' | null {
-  const d = domainOf(url);
-  if (!d) return null;
-  if (d === 'facebook.com' || d.endsWith('.facebook.com') || d === 'fb.com' || d === 'fb.me' || d === 'fb.watch' || d === 'm.me') return 'facebook';
-  if (d === 'instagram.com' || d.endsWith('.instagram.com') || d === 'instagr.am') return 'instagram';
-  return null;
-}
 
 interface BroadListBuilderProps {
   leads: Lead[];

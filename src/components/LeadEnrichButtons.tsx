@@ -1,6 +1,7 @@
 import { Mail, Facebook, Instagram, Globe, Loader2, Ban, Sparkles, Smartphone, PhoneOff } from 'lucide-react';
 import { useEnrichBusiness } from '@/hooks/useEnrichBusiness';
 import { cn } from '@/lib/utils';
+import { socialKindOf } from '@/lib/socialUrl';
 import type { OutreachLead } from '@/types/outreach';
 
 interface LeadEnrichButtonsProps {
@@ -28,12 +29,25 @@ export function LeadEnrichButtons({ lead, onUpdate, className }: LeadEnrichButto
   const { enrich: enrichAll, enriching, limitReached } = useEnrichBusiness(lead, onUpdate);
   const lt = lead.line_type; // HLR line-type: WhatsApp-capability proxy
 
+  // The "website" field is often actually a social link (a Maps listing whose only
+  // "website" is the business's Facebook/Instagram). Show it with the matching social
+  // icon — never the generic Globe — and skip it when we already have that social
+  // from enrichment (no duplicate icon). Globe renders only for a real website.
+  const websiteSocial = socialKindOf(lead.website);
+  const websiteItem = !lead.website
+    ? null
+    : websiteSocial === 'facebook'
+      ? (lead.facebook_url ? null : { key: 'website', Icon: Facebook, href: lead.website, color: 'text-blue-600 hover:text-blue-500', title: `Facebook: ${lead.website}`, external: true })
+      : websiteSocial === 'instagram'
+        ? (lead.instagram_url ? null : { key: 'website', Icon: Instagram, href: lead.website, color: 'text-pink-500 hover:text-pink-400', title: `Instagram: ${lead.website}`, external: true })
+        : { key: 'website', Icon: Globe, href: lead.website, color: 'text-emerald-500 hover:text-emerald-400', title: `Website: ${lead.website}`, external: true };
+
   // Real, stored contacts only — no constructed URLs.
   const contacts = [
     lead.email ? { key: 'email', Icon: Mail, href: `mailto:${lead.email}`, color: 'text-blue-500 hover:text-blue-400', title: `Email: ${lead.email}`, external: false } : null,
     lead.facebook_url ? { key: 'facebook', Icon: Facebook, href: lead.facebook_url, color: 'text-blue-600 hover:text-blue-500', title: `Facebook: ${lead.facebook_url}`, external: true } : null,
     lead.instagram_url ? { key: 'instagram', Icon: Instagram, href: lead.instagram_url, color: 'text-pink-500 hover:text-pink-400', title: `Instagram: ${lead.instagram_url}`, external: true } : null,
-    lead.website ? { key: 'website', Icon: Globe, href: lead.website, color: 'text-emerald-500 hover:text-emerald-400', title: `Website: ${lead.website}`, external: true } : null,
+    websiteItem,
   ].filter(Boolean) as { key: string; Icon: typeof Mail; href: string; color: string; title: string; external: boolean }[];
 
   return (
