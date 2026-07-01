@@ -50,6 +50,10 @@ const SearchRequestSchema = z.object({
 // ═══════════════════════════════════════════════
 const DIRECTORY_BLACKLIST = new Set([
   'facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'twitter.com',
+  // Short/alt social domains (fb.com, fb.me, fb.watch, m.me, instagr.am) — a
+  // listing whose only "website" is one of these is a social link, NOT an own
+  // website, so the lead stays NO_WEBSITE and remains in no-website targeting.
+  'fb.com', 'fb.me', 'fb.watch', 'm.me', 'instagr.am',
   'linkedin.com', 'youtube.com', 'pinterest.com', 'snapchat.com',
   'yell.com', 'thomsonlocal.com', 'yelp.com', 'yelp.co.uk', 'checkatrade.com',
   'mybuilder.com', 'bark.com', 'trustatrader.com', 'ratedpeople.com',
