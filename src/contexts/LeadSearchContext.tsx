@@ -5,7 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { reportClientError } from '@/lib/errorReporting';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { Lead, SearchFilters, SearchResponse, WebsiteStatus } from '@/types/lead';
+import type { Lead, SearchFilters, SearchResponse, WebsiteStatus, RegionMeta } from '@/types/lead';
 
 // Manual website-status overrides table isn't in the generated types yet, so its
 // reads/writes go through an untyped client (same pattern as other new tables).
@@ -37,6 +37,8 @@ interface LeadSearchContextType {
   searchError: { message: string; errorId: string } | null;
   expanded: boolean;
   gated: boolean;
+  regionMeta: RegionMeta | null;
+  regionDowngraded: { reason: string; spentUsd: number } | null;
 }
 
 const LeadSearchContext = createContext<LeadSearchContextType | null>(null);
@@ -57,6 +59,9 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [searchError, setSearchError] = useState<{ message: string; errorId: string } | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [gated, setGated] = useState(false);
+  // Region tiling: the grid the last region search used + a downgrade notice.
+  const [regionMeta, setRegionMeta] = useState<RegionMeta | null>(null);
+  const [regionDowngraded, setRegionDowngraded] = useState<{ reason: string; spentUsd: number } | null>(null);
   // Manual website-status overrides, keyed by normalized googleMapsUrl. Applied
   // over auto-detected results so a hand-correction always wins, even after a
   // re-search of the same query.
@@ -271,6 +276,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     setFreeSearchExhausted(false);
     setSearchError(null);
     setExpanded(false);
+    setRegionMeta(null);
+    setRegionDowngraded(null);
     // Only clear gated flag if user has pro access; free users stay gated until checkout
     if (hasProAccess) setGated(false);
 
@@ -284,7 +291,9 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     };
 
     const MAX_RETRIES = 2;
-    const TIMEOUT_MS = 30_000; // 30s timeout
+    // Region tiling fans out many tile searches server-side (~15–30s), so give it
+    // a longer client timeout than a normal single-centre search.
+    const TIMEOUT_MS = filters.region ? 60_000 : 30_000;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       // Check if aborted between retries
@@ -415,6 +424,8 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
           setLeads(filteredLeads);
           setSearchError(null);
           setExpanded(!!data.expanded);
+          setRegionMeta(data.region ?? null);
+          setRegionDowngraded(data.downgraded ?? null);
           setGated(!!data.gated);
 
           // Persist gated flag so it survives refresh
@@ -559,7 +570,9 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     searchError,
     expanded,
     gated,
-  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded, gated]);
+    regionMeta,
+    regionDowngraded,
+  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded, gated, regionMeta, regionDowngraded]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>

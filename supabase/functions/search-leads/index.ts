@@ -23,6 +23,16 @@ const MIN_NO_WEBSITE_TARGET = 1; // Only expand if ZERO no-website leads found
 const MAX_EXPANSION_ATTEMPTS = 2; // Down from 6 — max 2 expansion centres
 const MAX_TEXT_SEARCH_CALLS = 4; // Hard cap: total text search API calls per user search
 
+// ─── Region tiling (Phase 1: fixed grid) ───────────────────────────────────
+const REGION_MAX = 500;          // region-mode result cap (normal caps unchanged)
+const MAX_TILES = 25;            // hard ceiling; grid auto-coarsens to fit
+const TILE_CONCURRENCY = 6;      // bounded parallel tile fetches
+const TILE_MAX_PAGES = 2;        // pages per tile → up to 40 results/tile
+const DAILY_BUDGET_USD = 10;     // region downgrades to a single search above this
+const DENSITY_KM: Record<'fine' | 'medium' | 'coarse', number> = { fine: 5, medium: 8, coarse: 12 };
+const KM_PER_DEG_LAT = 110.574;  // mean km per degree latitude
+const KM_PER_DEG_LNG = 111.320;  // km per degree longitude at the equator (× cos lat)
+
 // ═══════════════════════════════════════════════
 // INPUT VALIDATION
 // ═══════════════════════════════════════════════
@@ -37,6 +47,10 @@ const SearchRequestSchema = z.object({
   // List-builder "cast wide" mode: return the FULL discovered pool (with + without
   // websites), no no-website-first culling, no expansion. Default off = curated.
   broad: z.boolean().default(false),
+  // Region tiling mode: tile the geocoded area's bbox into a grid of search
+  // centres, merge + dedupe, no-website-first. Separate from broad/curated.
+  region: z.boolean().default(false),
+  density: z.enum(['fine', 'medium', 'coarse']).default('medium'),
   // Legacy fields — accepted but ignored
   minRating: z.number().optional(),
   minReviews: z.number().optional(),
@@ -179,12 +193,26 @@ function normalizeLocationKey(location: string): string {
   return location.toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
+// Area bounding box (from Google geocoding geometry.bounds ?? geometry.viewport).
+interface Viewport { latMin: number; latMax: number; lngMin: number; lngMax: number }
+
+/** Pull a bbox from a geocode result's geometry (prefer bounds — the true area
+ *  extent — over viewport, the padded display box). null if neither is present. */
+function extractViewport(geometry: any): Viewport | null {
+  const box = geometry?.bounds ?? geometry?.viewport;
+  const ne = box?.northeast, sw = box?.southwest;
+  if (typeof ne?.lat !== 'number' || typeof sw?.lat !== 'number') return null;
+  return { latMin: sw.lat, latMax: ne.lat, lngMin: sw.lng, lngMax: ne.lng };
+}
+
 async function geocodeLocation(
   location: string,
   apiKey: string,
   debug: DebugMeta,
-  serviceClient?: ReturnType<typeof createClient>
-): Promise<{ lat: number; lng: number }> {
+  // deno-lint-ignore no-explicit-any -- loose-typed to avoid supabase-js generic 'never' friction
+  serviceClient?: any,
+  needViewport = false,
+): Promise<{ lat: number; lng: number; viewport: Viewport | null }> {
   const locationKey = normalizeLocationKey(location);
 
   // ─── GEOCODE CACHE CHECK ─────────────────────
@@ -193,14 +221,16 @@ async function geocodeLocation(
       const cutoff = new Date(Date.now() - GEOCODE_CACHE_TTL_MS).toISOString();
       const { data: cached } = await serviceClient
         .from('geocode_cache')
-        .select('lat, lng')
+        .select('lat, lng, viewport')
         .eq('location_key', locationKey)
         .gte('created_at', cutoff)
         .maybeSingle();
 
-      if (cached) {
+      // Use the cached row only if it has the viewport we now need (region mode);
+      // an older row predating the viewport column falls through to a re-geocode.
+      if (cached && (!needViewport || cached.viewport)) {
         console.log(`[GEOCODE-CACHE] HIT for "${locationKey}" — lat: ${cached.lat}, lng: ${cached.lng}`);
-        return { lat: cached.lat, lng: cached.lng };
+        return { lat: cached.lat, lng: cached.lng, viewport: (cached.viewport as Viewport | null) ?? null };
       }
     } catch (e) {
       console.error('[GEOCODE-CACHE] Check failed (non-blocking):', e);
@@ -226,13 +256,14 @@ async function geocodeLocation(
   }
   
   const coords = data.results[0].geometry.location;
-  console.log(`[DIAG-GEOCODE] SUCCESS — lat: ${coords.lat}, lng: ${coords.lng}`);
+  const viewport = extractViewport(data.results[0].geometry);
+  console.log(`[DIAG-GEOCODE] SUCCESS — lat: ${coords.lat}, lng: ${coords.lng}, viewport: ${viewport ? 'yes' : 'none'}`);
 
   // ─── GEOCODE CACHE STORE ─────────────────────
   if (serviceClient) {
     try {
       await serviceClient.from('geocode_cache').upsert(
-        { location_key: locationKey, lat: coords.lat, lng: coords.lng, raw_location: location, created_at: new Date().toISOString() },
+        { location_key: locationKey, lat: coords.lat, lng: coords.lng, viewport, raw_location: location, created_at: new Date().toISOString() },
         { onConflict: 'location_key' }
       );
     } catch (e) {
@@ -240,7 +271,7 @@ async function geocodeLocation(
     }
   }
 
-  return coords;
+  return { lat: coords.lat, lng: coords.lng, viewport };
 }
 
 interface SearchLead {
@@ -693,6 +724,202 @@ async function performSearchApify(
   return { leads: finalLeads, selectionDebug, expanded: false };
 }
 
+// ═══════════════════════════════════════════════
+// REGION TILING (Phase 1: fixed grid) — source: Google Text Search
+// ═══════════════════════════════════════════════
+interface RegionMeta {
+  area: string;
+  tilesTotal: number;
+  tilesSucceeded: number;
+  cols: number;
+  rows: number;
+  spacingKm: number;          // requested (from density)
+  effectiveSpacingKm: number; // after auto-coarsen to fit MAX_TILES
+  coarsened: boolean;
+  totalResults: number;
+  cappedAt: number | null;    // REGION_MAX when the pool was truncated, else null
+}
+
+/** Lay a grid of search centres across a bbox at ~spacingKm, auto-coarsening the
+ *  spacing until the tile count fits MAX_TILES (cover the whole region, never
+ *  truncate). Per-tile radius = spacing/√2 so each circle covers its square's
+ *  corners (slight overlap, no gaps). Pure + deterministic. */
+function buildTileGrid(vp: Viewport, spacingKm: number): {
+  centres: { lat: number; lng: number }[];
+  cols: number; rows: number; effectiveSpacingKm: number; coarsened: boolean; tileRadiusM: number;
+} {
+  const latMid = (vp.latMin + vp.latMax) / 2;
+  const hKm = Math.max(0.001, (vp.latMax - vp.latMin) * KM_PER_DEG_LAT);
+  const wKm = Math.max(0.001, (vp.lngMax - vp.lngMin) * KM_PER_DEG_LNG * Math.cos((latMid * Math.PI) / 180));
+
+  let s = spacingKm;
+  let cols = Math.max(1, Math.ceil(wKm / s));
+  let rows = Math.max(1, Math.ceil(hKm / s));
+  // Auto-coarsen: grow spacing 15% at a time until the grid fits the cap.
+  while (cols * rows > MAX_TILES) {
+    s *= 1.15;
+    cols = Math.max(1, Math.ceil(wKm / s));
+    rows = Math.max(1, Math.ceil(hKm / s));
+  }
+
+  const centres: { lat: number; lng: number }[] = [];
+  for (let j = 0; j < rows; j++) {
+    for (let i = 0; i < cols; i++) {
+      centres.push({
+        lat: vp.latMin + ((j + 0.5) * (vp.latMax - vp.latMin)) / rows,
+        lng: vp.lngMin + ((i + 0.5) * (vp.lngMax - vp.lngMin)) / cols,
+      });
+    }
+  }
+  const tileRadiusM = Math.min(50000, Math.round((s / Math.SQRT2) * 1000));
+  return { centres, cols, rows, effectiveSpacingKm: Math.round(s * 10) / 10, coarsened: s > spacingKm + 0.01, tileRadiusM };
+}
+
+/** Bounded-concurrency map — runs `fn` over items with at most `limit` in flight. */
+async function mapPool<T, R>(items: T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (true) {
+      const idx = next++;
+      if (idx >= items.length) break;
+      results[idx] = await fn(items[idx], idx);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+/** Fetch ONE tile (up to TILE_MAX_PAGES pages). Returns raw classified leads (all
+ *  statuses); dedupe happens in the caller across all tiles. Throws on hard failure
+ *  so the caller can count it as a failed tile without aborting the region. */
+async function fetchTile(
+  keyword: string, lat: number, lng: number, radiusM: number, apiKey: string, debug: DebugMeta,
+): Promise<SearchLead[]> {
+  const ENDPOINT = 'https://places.googleapis.com/v1/places:searchText';
+  const FIELD_MASK = 'places.id,places.displayName,places.googleMapsUri,places.websiteUri,nextPageToken';
+  const out: SearchLead[] = [];
+  let pageToken: string | undefined;
+
+  for (let page = 0; page < TILE_MAX_PAGES; page++) {
+    const body: Record<string, unknown> = {
+      textQuery: keyword,
+      locationBias: { circle: { center: { latitude: lat, longitude: lng }, radius: radiusM } },
+      pageSize: 20,
+    };
+    if (pageToken) body.pageToken = pageToken;
+
+    const res = await fetch(ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': FIELD_MASK },
+      body: JSON.stringify(body),
+    });
+    debug.googleCallsMade.textSearchPages++;
+    if (!res.ok) {
+      if (page === 0) throw new Error(`tile search ${res.status}`); // fail the tile only if page 1 failed
+      break;
+    }
+    const data = await res.json();
+    for (const place of (data.places || [])) {
+      const placeId = (place.id || '').replace(/^places\//, '');
+      if (!placeId) continue;
+      const { status, confidence, reason } = classifyWebsite(place.websiteUri);
+      out.push({
+        id: placeId,
+        name: place.displayName?.text || 'Unknown',
+        googleMapsUrl: place.googleMapsUri || `https://www.google.com/maps/place/?q=place_id:${placeId}`,
+        websiteUrl: place.websiteUri || null,
+        websiteStatus: status,
+        confidence,
+        reason,
+      });
+    }
+    pageToken = data.nextPageToken;
+    if (!pageToken) break;
+  }
+  return out;
+}
+
+/** Region search: geocode the area → grid of tile centres → parallel tile fetches
+ *  (per-tile failures tolerated) → merge + dedupe by placeId → no-website-first,
+ *  capped at REGION_MAX. Auto-expansion is intentionally NOT run (tiling replaces
+ *  it). Returns the leads + a RegionMeta describing the grid actually used. */
+async function tiledRegionSearch(
+  keyword: string, location: string, densityKm: number, apiKey: string, debug: DebugMeta,
+  // deno-lint-ignore no-explicit-any -- loose-typed to avoid supabase-js generic 'never' friction
+  serviceClient?: any,
+): Promise<{ leads: SearchLead[]; region: RegionMeta }> {
+  const geo = await geocodeLocation(location, apiKey, debug, serviceClient, true);
+  // Fall back to a ~±16km box around the centre when Google gives no bbox (e.g. a
+  // pin-point place name) so region mode still tiles a sensible area.
+  const vp: Viewport = geo.viewport ?? {
+    latMin: geo.lat - 0.15, latMax: geo.lat + 0.15, lngMin: geo.lng - 0.15, lngMax: geo.lng + 0.15,
+  };
+
+  const grid = buildTileGrid(vp, densityKm);
+  console.log(`[REGION] "${location}" → ${grid.cols}x${grid.rows}=${grid.centres.length} tiles @ ${grid.effectiveSpacingKm}km (r=${grid.tileRadiusM}m), coarsened=${grid.coarsened}`);
+
+  let tilesSucceeded = 0;
+  const tileResults = await mapPool(grid.centres, TILE_CONCURRENCY, async (c) => {
+    try {
+      const leads = await fetchTile(keyword, c.lat, c.lng, grid.tileRadiusM, apiKey, debug);
+      tilesSucceeded++;
+      return leads;
+    } catch (e) {
+      console.warn(`[REGION] tile (${c.lat.toFixed(3)},${c.lng.toFixed(3)}) failed: ${(e as Error).message}`);
+      return [] as SearchLead[];
+    }
+  });
+
+  // Merge + dedupe by placeId (first-seen wins), then no-website-first order.
+  const seen = new Set<string>();
+  const pool: SearchLead[] = [];
+  for (const tile of tileResults) {
+    for (const lead of tile) {
+      if (seen.has(lead.id)) continue;
+      seen.add(lead.id);
+      pool.push(lead);
+    }
+  }
+  const noWeb = pool.filter((l) => l.websiteStatus === 'NO_WEBSITE');
+  const hasWeb = pool.filter((l) => l.websiteStatus === 'HAS_OWN_WEBSITE');
+  const ordered = [...noWeb, ...hasWeb];
+  const capped = ordered.length > REGION_MAX;
+  const leads = ordered.slice(0, REGION_MAX);
+
+  const region: RegionMeta = {
+    area: location,
+    tilesTotal: grid.centres.length,
+    tilesSucceeded,
+    cols: grid.cols,
+    rows: grid.rows,
+    spacingKm: densityKm,
+    effectiveSpacingKm: grid.effectiveSpacingKm,
+    coarsened: grid.coarsened,
+    totalResults: leads.length,
+    cappedAt: capped ? REGION_MAX : null,
+  };
+  return { leads, region };
+}
+
+/** Sum today's (UTC) estimated Google spend from api_usage_log — the region-mode
+ *  daily budget guard. Best-effort: on any error returns 0 (never blocks search). */
+// deno-lint-ignore no-explicit-any -- loose-typed to avoid supabase-js generic 'never' friction
+async function todaysSpendUsd(serviceClient?: any): Promise<number> {
+  if (!serviceClient) return 0;
+  try {
+    const since = new Date();
+    since.setUTCHours(0, 0, 0, 0);
+    const { data } = await serviceClient
+      .from('api_usage_log')
+      .select('estimated_cost_usd')
+      .gte('created_at', since.toISOString());
+    return (data ?? []).reduce((sum: number, r: { estimated_cost_usd: number | null }) => sum + (Number(r.estimated_cost_usd) || 0), 0);
+  } catch {
+    return 0;
+  }
+}
+
 // Dispatcher: use Apify when APIFY_TOKEN is set (unless DISCOVERY_SOURCE=google),
 // else the Google path. Apify failures fall back to Google so a bad run / missing
 // token never takes search down.
@@ -838,7 +1065,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Invalid search parameters. Please check your input.', _debug: debug }, 400);
     }
 
-    const { keyword, location, radius, broad } = validationResult.data;
+    const { keyword, location, radius, broad, region, density } = validationResult.data;
 
     if (!GOOGLE_MAPS_API_KEY) {
       console.error('GOOGLE_MAPS_API_KEY not configured');
@@ -846,7 +1073,11 @@ Deno.serve(async (req) => {
     }
 
     // ─── CACHE CHECK ─────────────────────────────
-    const cacheKey = await generateCacheKey(keyword, location, radius);
+    // Region searches cache under a distinct key (density-scoped, radius-agnostic)
+    // so they never collide with normal/curated results for the same area.
+    const cacheKey = region
+      ? await generateCacheKey(keyword, `##region:${density}##${location}`, 0)
+      : await generateCacheKey(keyword, location, radius);
     const cutoff = new Date(Date.now() - CACHE_TTL_MS).toISOString();
 
     const { data: cached } = await serviceClient
@@ -858,8 +1089,12 @@ Deno.serve(async (req) => {
 
     if (cached?.results) {
       debug.cached = true;
-      const cachedLeads = cached.results as SearchLead[];
-      console.log(`Cache HIT for "${keyword}" in "${location}" (${cachedLeads.length} results)`);
+      // Region blobs are stored as { leads, region }; normal as a bare leads array.
+      const raw = cached.results as unknown;
+      const isRegionBlob = !!raw && !Array.isArray(raw) && Array.isArray((raw as { leads?: unknown }).leads);
+      const cachedLeads = (isRegionBlob ? (raw as { leads: SearchLead[] }).leads : raw) as SearchLead[];
+      const cachedRegion = isRegionBlob ? (raw as { region?: RegionMeta }).region : undefined;
+      console.log(`Cache HIT for "${keyword}" in "${location}" (${cachedLeads.length} results, region=${!!cachedRegion})`);
 
       const hasExpanded = cachedLeads.some(l => l.isExpanded);
 
@@ -878,20 +1113,57 @@ Deno.serve(async (req) => {
         source: 'google',
         cached: true,
         expanded: hasExpanded,
+        region: cachedRegion,
         gated: isGated,
         _debug: debug,
       });
     }
 
-    // ─── SEARCH WITH EXPANSION ───────────────────
-    console.log(`[DIAG-HANDLER] Starting search for "${keyword}" in "${location}" within ${radius}m`);
-    const { leads, selectionDebug, expanded } = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient, broad);
-    console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb, expanded: ${expanded})`);
+    // ─── RUN SEARCH (region tiling OR normal, with expansion) ───
+    let leads: SearchLead[];
+    let selectionDebug: SelectionDebug;
+    let expanded = false;
+    let regionMeta: RegionMeta | undefined;
+    let downgraded: { reason: string; spentUsd: number } | undefined;
+
+    // Region daily budget guard: if today's Google spend is over the cap, downgrade
+    // region → a normal single-centre search so a big region can't blow the budget.
+    let runRegion = region;
+    if (region) {
+      const spent = await todaysSpendUsd(serviceClient);
+      if (spent >= DAILY_BUDGET_USD) {
+        runRegion = false;
+        downgraded = { reason: 'daily_budget', spentUsd: Math.round(spent * 100) / 100 };
+        console.warn(`[REGION] today's spend $${spent.toFixed(2)} >= $${DAILY_BUDGET_USD} — downgrading to single search`);
+      }
+    }
+
+    if (runRegion) {
+      console.log(`[DIAG-HANDLER] Region search for "${keyword}" in "${location}" (density=${density})`);
+      const r = await tiledRegionSearch(keyword, location, DENSITY_KM[density], GOOGLE_MAPS_API_KEY, debug, serviceClient);
+      leads = r.leads;
+      regionMeta = r.region;
+      selectionDebug = {
+        pagesFetched: debug.googleCallsMade.textSearchPages,
+        totalPoolCount: r.leads.length,
+        noWebsiteCount: r.leads.filter(l => l.websiteStatus === 'NO_WEBSITE').length,
+        returnedNoWebsite: r.leads.filter(l => l.websiteStatus !== 'HAS_OWN_WEBSITE').length,
+        returnedHasWebsite: r.leads.filter(l => l.websiteStatus === 'HAS_OWN_WEBSITE').length,
+        expanded: false,
+      };
+      console.log(`[DIAG-HANDLER] Region: ${leads.length} leads from ${regionMeta.tilesSucceeded}/${regionMeta.tilesTotal} tiles`);
+    } else {
+      console.log(`[DIAG-HANDLER] Starting search for "${keyword}" in "${location}" within ${radius}m`);
+      const res = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient, broad);
+      leads = res.leads; selectionDebug = res.selectionDebug; expanded = res.expanded;
+      console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb, expanded: ${expanded})`);
+    }
 
     // ─── CACHE STORE ─────────────────────────────
+    // Region: store { leads, region } so a cached re-run keeps the grid banner.
     try {
       await serviceClient.from('search_cache').upsert(
-        { cache_key: cacheKey, results: leads, created_at: new Date().toISOString() },
+        { cache_key: cacheKey, results: regionMeta ? { leads, region: regionMeta } : leads, created_at: new Date().toISOString() },
         { onConflict: 'cache_key' }
       );
     } catch (cacheErr) {
@@ -951,6 +1223,8 @@ Deno.serve(async (req) => {
       source: 'google',
       cached: false,
       expanded,
+      region: regionMeta,
+      downgraded,
       gated: isGated,
       _debug: { ...debug, ...selectionDebug },
     });
