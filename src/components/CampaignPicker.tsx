@@ -55,7 +55,15 @@ export function CampaignPicker({ value, onChange, mode, className }: CampaignPic
 
   const handleCreate = async (values: CampaignInput) => {
     const created = await createCampaign(values);
-    if (created) onChange(created.id);
+    if (created) {
+      // Auto-select the new campaign. createCampaign already added it to the list,
+      // so defer the selection by a tick: this lets the new <SelectItem> mount and
+      // register in Radix's item collection BEFORE it becomes the value. Selecting
+      // it in the same commit it's added leaves the trigger blank until the user
+      // re-opens and picks it manually (Radix resolves the label from the collection,
+      // which only registers after the commit).
+      setTimeout(() => onChange(created.id), 0);
+    }
     return created;
   };
 
