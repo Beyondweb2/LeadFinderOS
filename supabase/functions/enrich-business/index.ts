@@ -13,7 +13,6 @@
 // phone) is always safe to store. The image pool is returned + cached, not forced
 // onto the lead. Re-hosting of CHOSEN images happens later (2B/2C).
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { NormalizedPlace } from "../_shared/enrichment/apify.ts";
 import { mapsEnrich } from "../_shared/enrichment/sources.ts";
@@ -158,7 +157,7 @@ interface EnrichResult {
   match: { title: string | null; address: string | null; similarity: number; lowConfidence: boolean };
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
     const authHeader = req.headers.get("Authorization");
