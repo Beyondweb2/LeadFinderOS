@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -90,7 +91,7 @@ import { isTestBarberLead, TEST_BARBER_LEAD_ID } from '@/config/testBarber';
 import { clearPendingBarberEdit } from '@/lib/barberEdits';
 import { cn } from '@/lib/utils';
 import type { OutreachLead, LeadStatus, NextActionType, Country, ContactMethod, PipelineStatus } from '@/types/outreach';
-import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS } from '@/types/outreach';
+import { STATUS_OPTIONS, NEXT_ACTION_OPTIONS, OUTREACH_STATUS_OPTIONS, CONTACT_METHOD_OPTIONS, PIPELINE_STATUS_OPTIONS, WHATSAPP_TEMPLATES } from '@/types/outreach';
 import { SingleWhatsAppDialog } from '@/components/SingleWhatsAppDialog';
 import { SingleSMSDialog } from '@/components/SingleSMSDialog';
 import { PushToInstantlyDialog } from '@/components/PushToInstantlyDialog';
@@ -306,6 +307,9 @@ export function OutreachTable({
   const [recoveryProgress, setRecoveryProgress] = useState<{ current: number; total: number } | null>(null);
   const { logAttempt } = useOutreachAttempt();
   const [showImportDialog, setShowImportDialog] = useState(false);
+  // Bulk WhatsApp-queue template picker (chosen at queue-time).
+  const [queueDialogOpen, setQueueDialogOpen] = useState(false);
+  const [queueTemplate, setQueueTemplate] = useState<string>(WHATSAPP_TEMPLATES[0].value);
   const [lastContactedLeadId, setLastContactedLeadId] = useState<string | null>(null);
   // Dialog state for WhatsApp/SMS template pages
   const [whatsappDialogLead, setWhatsappDialogLead] = useState<OutreachLead | null>(null);
@@ -749,8 +753,9 @@ export function OutreachTable({
   };
 
   // Add selected leads to the WhatsApp outreach queue (status='queued' + queued_at
-  // for FIFO order; default template only if the lead hasn't picked one).
-  const handleQueueForWhatsApp = () => {
+  // for FIFO order). The template is chosen at queue-time and applied to every
+  // selected lead (overrides any per-lead template).
+  const handleQueueForWhatsApp = (template: string) => {
     if (selectedIds.size === 0 || !onUpdateLead) return;
     const now = new Date().toISOString();
     const ids = Array.from(selectedIds);
@@ -758,16 +763,16 @@ export function OutreachTable({
     const queueable = ids.filter((id) => leads.find((l) => l.id === id)?.status !== 'no_whatsapp');
     const skipped = ids.length - queueable.length;
     queueable.forEach((id) => {
-      const lead = leads.find((l) => l.id === id);
       // Reset whatsapp_attempts so a re-queued (whatsapp_failed) lead gets fresh retries.
-      const patch: Partial<OutreachLead> = { status: 'queued', queued_at: now, whatsapp_attempts: 0 };
-      if (!lead?.whatsapp_template) patch.whatsapp_template = 'booking_page_intro';
+      const patch: Partial<OutreachLead> = { status: 'queued', queued_at: now, whatsapp_attempts: 0, whatsapp_template: template };
       onUpdateLead(id, patch);
     });
     setSelectedIds(new Set());
+    setQueueDialogOpen(false);
+    const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === template)?.label ?? template;
     toast({
       title: `Queued ${queueable.length} for WhatsApp`,
-      description: `${skipped ? `${skipped} skipped (not on WhatsApp). ` : ''}Sends within the daily 7am–7pm UK window, capped at 10/day.`,
+      description: `Template: ${tmplLabel}. ${skipped ? `${skipped} skipped (not on WhatsApp). ` : ''}Sends within the daily 7am–7pm UK window, capped at 10/day.`,
     });
   };
 
@@ -1101,7 +1106,7 @@ export function OutreachTable({
                   Copy Numbers ({selectedIds.size})
                 </Button>
                 {!readOnly && onUpdateLead && (
-                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={handleQueueForWhatsApp}>
+                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setQueueDialogOpen(true)}>
                     <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
                     Queue WhatsApp ({selectedIds.size})
                   </Button>
@@ -1897,6 +1902,36 @@ export function OutreachTable({
           existingLeads={leads}
         />
       )}
+
+      {/* Bulk "Queue WhatsApp" template picker — choose the template at queue-time. */}
+      <Dialog open={queueDialogOpen} onOpenChange={setQueueDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Queue {selectedIds.size} for WhatsApp</DialogTitle>
+            <DialogDescription className="text-xs">
+              Choose the approved template to send. It’s applied to all selected leads.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Template</label>
+            <Select value={queueTemplate} onValueChange={setQueueTemplate}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {WHATSAPP_TEMPLATES.map((t) => (
+                  <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" size="sm" onClick={() => setQueueDialogOpen(false)}>Cancel</Button>
+            <Button size="sm" onClick={() => handleQueueForWhatsApp(queueTemplate)}>
+              <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+              Queue {selectedIds.size}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* WhatsApp Template Dialog */}
       <SingleWhatsAppDialog
