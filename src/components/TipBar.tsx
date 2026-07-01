@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { X, Lightbulb, ChevronRight } from 'lucide-react';
+import { X, Lightbulb } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const TIPS = [
@@ -48,12 +47,6 @@ export function TipBar() {
       <span className="flex-1 text-muted-foreground">
         <span className="font-medium text-foreground">Quick Tip:</span> {tip}
       </span>
-      <Link
-        to="/playbook"
-        className="hidden sm:flex items-center gap-1 text-xs font-medium text-primary hover:underline shrink-0"
-      >
-        All Tips <ChevronRight className="h-3 w-3" />
-      </Link>
       <Button
         variant="ghost"
         size="icon"
