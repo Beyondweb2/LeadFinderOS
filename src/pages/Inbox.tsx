@@ -28,6 +28,25 @@ function templateLabel(name: string | null): string {
   return `📄 ${t ? t.label : name}`;
 }
 
+// Clean display names for templates (incl. the legacy pre-rename name). Unknown → "Template".
+const TEMPLATE_DISPLAY: Record<string, string> = {
+  booking_page_intro: 'Booking page intro',
+  no_website_barbers: 'Free website intro',
+  free_website_intro: 'Free website intro', // legacy name (pre-rename)
+};
+function friendlyTemplate(name: string | null | undefined): string {
+  return (name && TEMPLATE_DISPLAY[name]) || 'Template';
+}
+
+/** Conversation-list preview only: never surface a raw template name. If the body is
+ *  empty or itself looks like a raw snake_case template name, show a friendly label. */
+function listPreview(m: { body: string | null; template_name: string | null }): string {
+  const body = (m.body ?? '').trim();
+  const looksRaw = !body || /^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(body);
+  if (!looksRaw) return body;
+  return `📄 ${friendlyTemplate(m.template_name ?? (body || null))}`;
+}
+
 const Inbox = () => {
   const { user, conversations, messagesForKey, leads, isLoading, send } = useInbox();
   const { toast } = useToast();
@@ -186,7 +205,7 @@ const Inbox = () => {
               {c.lastMessage && (
                 <span className="truncate text-xs text-muted-foreground">
                   {c.lastMessage.direction === 'outbound' ? 'You: ' : ''}
-                  {c.lastMessage.body || templateLabel(c.lastMessage.template_name)}
+                  {listPreview(c.lastMessage)}
                 </span>
               )}
             </button>
