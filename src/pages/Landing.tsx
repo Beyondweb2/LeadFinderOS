@@ -1162,9 +1162,6 @@ const Landing = () => {
               <Link to="/auth?mode=signup" className="hover:text-foreground transition-colors duration-200">
                 Get started
               </Link>
-              <Link to="/feedback" className="hover:text-foreground transition-colors duration-200">
-                Feedback
-              </Link>
               <Link to="/terms" className="hover:text-foreground transition-colors duration-200">
                 Terms & Conditions
               </Link>

@@ -1,453 +1,139 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from '@/hooks/useAuth';
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { ArrowLeft, Star, Send, MessageSquare, Lightbulb, HelpCircle, Loader2, MessageCircle } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTeamFeedback } from "@/hooks/useTeamFeedback";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import appLogo from "@/assets/logo.png";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { MessageSquare, Send, Loader2, Trash2 } from "lucide-react";
 
-// Validation schemas
-const baseSchema = z.object({
-  name: z.string().trim().min(2, "Name must be at least 2 characters").max(100, "Name must be less than 100 characters"),
-  email: z.string().trim().email("Please enter a valid email address").max(255, "Email must be less than 255 characters"),
-  message: z.string().trim().min(10, "Message must be at least 10 characters").max(2000, "Message must be less than 2000 characters"),
-});
+/** Compact relative time ("just now", "3h ago", "2d ago"), falling back to a date. */
+function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
-const reviewSchema = baseSchema.extend({
-  rating: z.number().min(1, "Please select a rating").max(5),
-});
-
-type ReviewFormData = z.infer<typeof reviewSchema>;
-type GeneralFormData = z.infer<typeof baseSchema>;
-
-// Star Rating Component
-const StarRating = ({ 
-  value, 
-  onChange, 
-  disabled = false 
-}: { 
-  value: number; 
-  onChange: (rating: number) => void; 
-  disabled?: boolean;
-}) => {
-  const [hovered, setHovered] = useState(0);
-
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map((star) => (
-        <button
-          key={star}
-          type="button"
-          disabled={disabled}
-          className={`transition-all duration-150 ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:scale-110"}`}
-          onMouseEnter={() => !disabled && setHovered(star)}
-          onMouseLeave={() => setHovered(0)}
-          onClick={() => !disabled && onChange(star)}
-        >
-          <Star
-            className={`h-8 w-8 transition-colors ${
-              star <= (hovered || value)
-                ? "fill-yellow-400 text-yellow-400"
-                : "text-muted-foreground/30"
-            }`}
-          />
-        </button>
-      ))}
-    </div>
-  );
-};
-
-// Review Form
-const ReviewForm = () => {
-  const [rating, setRating] = useState(0);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const { toast } = useToast();
-
-  const form = useForm<ReviewFormData>({
-    resolver: zodResolver(reviewSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      message: "",
-      rating: 0,
-    },
-  });
-
-  const onSubmit = async (data: ReviewFormData) => {
-    setIsSubmitting(true);
-    try {
-      const { data: responseData, error } = await supabase.functions.invoke("send-feedback", {
-        body: {
-          name: data.name,
-          email: data.email,
-          feedbackType: "review",
-          message: data.message,
-          rating: data.rating,
-        },
-      });
-
-      if (error) throw error;
-
-      setIsSuccess(true);
-      toast({
-        title: "Thank you! 🌟",
-        description: "Your review has been submitted successfully.",
-      });
-      form.reset();
-      setRating(0);
-    } catch (error: any) {
-      console.error("Error submitting review:", error);
-      toast({
-        title: "Submission failed",
-        description: error.message || "Please try again later.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  if (isSuccess) {
-    return (
-      <div className="text-center py-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-500/10 mb-4">
-          <Star className="h-8 w-8 text-green-500" style={{ fill: "currentColor" }} />
-        </div>
-        <h3 className="text-xl font-semibold mb-2">Thank you for your review!</h3>
-        <p className="text-muted-foreground mb-4">We really appreciate your feedback.</p>
-        <Button variant="outline" onClick={() => setIsSuccess(false)}>
-          Submit Another Review
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-      <div className="space-y-2">
-        <Label>Your Rating</Label>
-        <StarRating
-          value={rating}
-          onChange={(r) => {
-            setRating(r);
-            form.setValue("rating", r);
-          }}
-          disabled={isSubmitting}
-        />
-        {form.formState.errors.rating && (
-          <p className="text-sm text-destructive">{form.formState.errors.rating.message}</p>
-        )}
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="review-name">Name</Label>
-          <Input
-            id="review-name"
-            placeholder="John Doe"
-            {...form.register("name")}
-            disabled={isSubmitting}
-          />
-          {form.formState.errors.name && (
-            <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="review-email">Email</Label>
-          <Input
-            id="review-email"
-            type="email"
-            placeholder="john@example.com"
-            {...form.register("email")}
-            disabled={isSubmitting}
-          />
-          {form.formState.errors.email && (
-            <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="review-message">Your Review</Label>
-        <Textarea
-          id="review-message"
-          placeholder="Tell us about your experience with LeadFinder Pro..."
-          className="min-h-[120px] resize-none"
-          {...form.register("message")}
-          disabled={isSubmitting}
-        />
-        {form.formState.errors.message && (
-          <p className="text-sm text-destructive">{form.formState.errors.message.message}</p>
-        )}
-      </div>
-
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Submitting...
-          </>
-        ) : (
-          <>
-            <Send className="mr-2 h-4 w-4" />
-            Submit Review
-          </>
-        )}
-      </Button>
-    </form>
-  );
-};
-
-// General Feedback Form (reused for feature requests and general feedback)
-const GeneralFeedbackForm = ({ 
-  type, 
-  placeholder 
-}: { 
-  type: "feature_request" | "general";
-  placeholder: string;
-}) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSuccess, setIsSuccess] = useState(false);
-  const { toast } = useToast();
-
-  const form = useForm<GeneralFormData>({
-    resolver: zodResolver(baseSchema),
-    defaultValues: {
-      name: "",
-      email: "",
-      message: "",
-    },
-  });
-
-  const onSubmit = async (data: GeneralFormData) => {
-    setIsSubmitting(true);
-    try {
-      const { data: responseData, error } = await supabase.functions.invoke("send-feedback", {
-        body: {
-          name: data.name,
-          email: data.email,
-          feedbackType: type,
-          message: data.message,
-        },
-      });
-
-      if (error) throw error;
-
-      setIsSuccess(true);
-      toast({
-        title: "Thank you! 🎉",
-        description: type === "feature_request" 
-          ? "Your feature request has been submitted." 
-          : "Your feedback has been submitted.",
-      });
-      form.reset();
-    } catch (error: any) {
-      console.error("Error submitting feedback:", error);
-      toast({
-        title: "Submission failed",
-        description: error.message || "Please try again later.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const successIcon = type === "feature_request" ? Lightbulb : MessageSquare;
-  const SuccessIcon = successIcon;
-
-  if (isSuccess) {
-    return (
-      <div className="text-center py-8">
-        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-          <SuccessIcon className="h-8 w-8 text-primary" />
-        </div>
-        <h3 className="text-xl font-semibold mb-2">
-          {type === "feature_request" ? "Feature request received!" : "Feedback received!"}
-        </h3>
-        <p className="text-muted-foreground mb-4">We'll review your submission soon.</p>
-        <Button variant="outline" onClick={() => setIsSuccess(false)}>
-          Submit Another
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor={`${type}-name`}>Name</Label>
-          <Input
-            id={`${type}-name`}
-            placeholder="John Doe"
-            {...form.register("name")}
-            disabled={isSubmitting}
-          />
-          {form.formState.errors.name && (
-            <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
-          )}
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor={`${type}-email`}>Email</Label>
-          <Input
-            id={`${type}-email`}
-            type="email"
-            placeholder="john@example.com"
-            {...form.register("email")}
-            disabled={isSubmitting}
-          />
-          {form.formState.errors.email && (
-            <p className="text-sm text-destructive">{form.formState.errors.email.message}</p>
-          )}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor={`${type}-message`}>
-          {type === "feature_request" ? "Describe your idea" : "Your message"}
-        </Label>
-        <Textarea
-          id={`${type}-message`}
-          placeholder={placeholder}
-          className="min-h-[120px] resize-none"
-          {...form.register("message")}
-          disabled={isSubmitting}
-        />
-        {form.formState.errors.message && (
-          <p className="text-sm text-destructive">{form.formState.errors.message.message}</p>
-        )}
-      </div>
-
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Submitting...
-          </>
-        ) : (
-          <>
-            <Send className="mr-2 h-4 w-4" />
-            Submit {type === "feature_request" ? "Request" : "Feedback"}
-          </>
-        )}
-      </Button>
-    </form>
-  );
-};
-
+/**
+ * Team feedback board. Any operator can post a suggestion; every operator sees the
+ * whole team's feedback (RLS excludes barbers). Only admin sees the per-item delete.
+ * Rendered inside the in-app AppLayout (route is operator-gated in App.tsx).
+ */
 const Feedback = () => {
-  const { user } = useAuth();
-  const isInApp = !!user;
-  const backTo = isInApp ? '/dashboard' : '/landing';
+  const { items, isLoading, submit, remove } = useTeamFeedback();
+  const { isAdmin } = useSubscription();
+  const { toast } = useToast();
+  const [message, setMessage] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async () => {
+    if (!message.trim()) return;
+    setSubmitting(true);
+    const res = await submit(message);
+    setSubmitting(false);
+    if (res.error) {
+      toast({
+        title: "Couldn't post",
+        description: res.error === "empty" ? "Write a message first." : res.error,
+        variant: "destructive",
+      });
+      return;
+    }
+    setMessage("");
+    toast({ title: "Posted", description: "Your feedback is now visible to the team." });
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm("Delete this feedback item? This can't be undone.")) return;
+    const res = await remove(id);
+    if (res.error) {
+      toast({ title: "Delete failed", description: res.error, variant: "destructive" });
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Link to={backTo} className="flex items-center gap-2">
-            <img src={appLogo} alt="LeadFinder Pro" className="h-8 w-8" />
-            <span className="font-semibold tracking-tight">
-              Lead<span className="text-primary">Finder</span> Pro
-            </span>
-          </Link>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to={backTo}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
-            </Link>
-          </Button>
-        </div>
-      </header>
+    <div className="space-y-5 sm:space-y-7">
+      <div className="text-center sm:text-left">
+        <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Team Feedback</h1>
+        <p className="text-sm text-muted-foreground">
+          Suggestions, ideas and issues from the whole team. Anyone can post — everyone sees them.
+        </p>
+      </div>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8 sm:py-12">
-        <div className="max-w-2xl mx-auto">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl sm:text-4xl font-bold mb-3">We'd Love Your Feedback</h1>
-            <p className="text-muted-foreground text-lg">
-              Help us make LeadFinder Pro even better for you.
-            </p>
-          </div>
-
-          <Card>
-            <CardHeader className="pb-4">
-              <Tabs defaultValue="review" className="w-full">
-                <TabsList className="grid w-full grid-cols-3">
-                  <TabsTrigger value="review" className="text-xs sm:text-sm">
-                    <Star className="h-4 w-4 mr-1.5 hidden sm:inline" />
-                    Review
-                  </TabsTrigger>
-                  <TabsTrigger value="feature" className="text-xs sm:text-sm">
-                    <Lightbulb className="h-4 w-4 mr-1.5 hidden sm:inline" />
-                    Feature Request
-                  </TabsTrigger>
-                  <TabsTrigger value="general" className="text-xs sm:text-sm">
-                    <HelpCircle className="h-4 w-4 mr-1.5 hidden sm:inline" />
-                    General
-                  </TabsTrigger>
-                </TabsList>
-
-                <CardContent className="pt-6 px-0">
-                  <TabsContent value="review" className="mt-0">
-                    <ReviewForm />
-                  </TabsContent>
-                  <TabsContent value="feature" className="mt-0">
-                    <GeneralFeedbackForm
-                      type="feature_request"
-                      placeholder="What feature would make LeadFinder Pro more useful for you? Describe your idea in detail..."
-                    />
-                  </TabsContent>
-                  <TabsContent value="general" className="mt-0">
-                    <GeneralFeedbackForm
-                      type="general"
-                      placeholder="Have a question, found a bug, or just want to say hi? We're all ears..."
-                    />
-                  </TabsContent>
-                </CardContent>
-              </Tabs>
-            </CardHeader>
-          </Card>
-
-          {/* WhatsApp Quick Contact */}
-          <div className="mt-6 p-4 rounded-lg border bg-card/50 text-center">
-            <p className="text-sm text-muted-foreground mb-3">
-              Prefer a quick chat? Message us directly on WhatsApp
-            </p>
-            <Button
-              variant="outline"
-              className="bg-[#25D366]/10 border-[#25D366]/30 hover:bg-[#25D366]/20 text-[#25D366]"
-              asChild
-            >
-              <a
-                href="https://wa.me/66645468692?text=Hi%2C%20I%20have%20feedback%20about%20LeadFinder%20Pro"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <MessageCircle className="mr-2 h-4 w-4" />
-                Chat on WhatsApp
-              </a>
+      {/* Submit box */}
+      <Card>
+        <CardContent className="p-4 space-y-3">
+          <Textarea
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Share a suggestion, idea, or issue with the team…"
+            className="min-h-[90px] resize-none"
+            maxLength={4000}
+            disabled={submitting}
+          />
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] text-muted-foreground">{message.length}/4000</span>
+            <Button onClick={handleSubmit} disabled={submitting || !message.trim()}>
+              {submitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+              Post feedback
             </Button>
           </div>
+        </CardContent>
+      </Card>
 
-          <p className="text-center text-sm text-muted-foreground mt-6">
-            Your feedback helps us improve. We read every submission!
-          </p>
+      {/* List */}
+      {isLoading ? (
+        <div className="flex justify-center py-10">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
-      </main>
+      ) : items.length === 0 ? (
+        <div className="py-10 text-center text-muted-foreground">
+          <MessageSquare className="mx-auto mb-2 h-6 w-6 opacity-40" />
+          <p className="text-sm">No feedback yet — be the first to post.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {items.map((f) => (
+            <Card key={f.id}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Avatar className="h-7 w-7">
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                        {(f.author_name || f.author_email || "?").charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">{f.author_name || f.author_email || "Team member"}</p>
+                      <p className="text-[11px] text-muted-foreground">{timeAgo(f.created_at)}</p>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDelete(f.id)}
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <p className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground/90">{f.message}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };

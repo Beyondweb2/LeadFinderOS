@@ -228,7 +228,6 @@ const App = () => {
               } 
              />
              <Route path="/terms" element={<Terms />} />
-             <Route path="/feedback" element={<Feedback />} />
               <Route path="/start" element={<Start />} />
               <Route path="/find-clients/:city" element={<CityLeads />} />
               <Route path="/p/:slug" element={<PublicSite />} />
@@ -341,7 +340,20 @@ const App = () => {
                      </AppLayout>
                    </SubscriptionGate>
                 </ProtectedRoute>
-              } 
+              }
+            />
+            {/* Team feedback board — operator-gated + in-app (barbers excluded by RLS) */}
+            <Route
+              path="/feedback"
+              element={
+                <ProtectedRoute>
+                   <SubscriptionGate>
+                     <AppLayout>
+                       <Feedback />
+                     </AppLayout>
+                   </SubscriptionGate>
+                </ProtectedRoute>
+              }
             />
             {/* Admin routes — the standalone admin hub is now a zone on /dashboard */}
             <Route path="/admin" element={<Navigate to="/dashboard" replace />} />
