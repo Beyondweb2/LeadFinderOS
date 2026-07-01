@@ -381,6 +381,29 @@ serve(async (req) => {
       console.error("[CLAIM-SITE] tracking write failed (non-blocking):", (e as Error).message);
     }
 
+    // Move the linked CRM lead to 'interested' — a claim is a strong positive
+    // signal (funnel: … → Site Sent → Interested → Paid). Runs for EVERY claim
+    // (including phone/synthetic claims). Forward-only: never downgrade a lead
+    // that's already 'payment_received' (paid) or 'not_interested' (a decision).
+    // Best-effort — its own try, never blocks the claim.
+    try {
+      const { data: linkedSite } = await serviceClient
+        .from("generated_sites")
+        .select("lead_id")
+        .eq("id", claimedSiteId)
+        .maybeSingle();
+      const statusLeadId = (linkedSite as { lead_id: string | null } | null)?.lead_id;
+      if (statusLeadId) {
+        await serviceClient
+          .from("outreach_leads")
+          .update({ status: "interested" })
+          .eq("id", statusLeadId)
+          .not("status", "in", "(payment_received,not_interested)");
+      }
+    } catch (e) {
+      console.error("[CLAIM-SITE] lead status→interested failed (non-blocking):", (e as Error).message);
+    }
+
     // Resolve who claimed: a new phone account is the synthetic email; the rare
     // existing/logged-in claim has no signup value in the body, so look it up.
     let barberEmail = syntheticEmail;

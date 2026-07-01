@@ -216,6 +216,20 @@ Deno.serve(async (req) => {
     // First upgrade only → notify admin + barber (best-effort; never throws).
     if (paid && !wasPaid && siteRow) {
       await notifyOfPayment(service, siteRow);
+      // Move the linked CRM lead to 'payment_received' (pipeline terminal "Paid").
+      // Only on the real false→true upgrade (this block) — renewals/re-deliveries
+      // don't re-fire it. Payment is terminal, so overwrite unconditionally.
+      // Best-effort — its own try, never breaks the webhook.
+      if (siteRow.lead_id) {
+        try {
+          await service
+            .from("outreach_leads")
+            .update({ status: "payment_received" })
+            .eq("id", siteRow.lead_id);
+        } catch (e) {
+          console.error(`[stripe-webhook] lead status→payment_received failed (${siteRow.lead_id}):`, (e as Error).message);
+        }
+      }
     }
   };
 
