@@ -76,7 +76,8 @@ function esc(s: string): string {
  *  sender — NEVER from yoursites.uk, which isn't verified in Resend. Any failure
  *  is logged and swallowed so it can never affect the claim itself. */
 async function notifyAdminOfClaim(opts: {
-  serviceClient: ReturnType<typeof createClient>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  serviceClient: any; // injected service client — loose-typed to avoid supabase-js generic friction
   siteId: string;
   accountEmail: string;
   newAccount: boolean;
@@ -146,7 +147,8 @@ async function notifyAdminOfClaim(opts: {
  *  replies reach a real inbox. Any failure is logged + swallowed — never blocks
  *  or fails the claim. */
 async function notifyBarberOfClaim(opts: {
-  serviceClient: ReturnType<typeof createClient>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  serviceClient: any; // injected service client — loose-typed to avoid supabase-js generic friction
   siteId: string;
   toEmail: string;
 }): Promise<void> {
@@ -162,7 +164,7 @@ async function notifyBarberOfClaim(opts: {
   try {
     const { data: site } = await opts.serviceClient
       .from("generated_sites")
-      .select("site_name, content")
+      .select("site_name, content, booking_only")
       .eq("id", opts.siteId)
       .maybeSingle();
 
@@ -172,7 +174,15 @@ async function notifyBarberOfClaim(opts: {
       typeof content.businessName === "string" && content.businessName.trim()
         ? content.businessName.trim()
         : (slug || "your business");
-    const publicUrl = `https://yoursites.uk/p/${slug}`;
+    // Booking-only sites live at bookmybarber.uk/<slug> and ARE booking pages, not
+    // marketing websites — the email wording + link branch on this.
+    const bookingOnly = (site as { booking_only?: boolean } | null)?.booking_only === true;
+    const productNoun = bookingOnly ? "online booking page" : "website";
+    const publicUrl = bookingOnly ? `https://bookmybarber.uk/${slug}` : `https://yoursites.uk/p/${slug}`;
+    const liveLabel = bookingOnly ? "Your booking page" : "Your live site";
+    const makeItYoursText = bookingOnly
+      ? `You can edit everything yourself from the dashboard - your services, prices and opening hours, and manage your staff and bookings. No tech skills needed.`
+      : `You can edit everything yourself from the dashboard - change your text, prices and services, and swap in your own photos (hero image and gallery). No tech skills needed.`;
     const dashUrl = "https://yoursites.uk/barber";
 
     const res = await fetch("https://api.resend.com/emails", {
@@ -185,15 +195,15 @@ async function notifyBarberOfClaim(opts: {
         from: "Paul <noreply@lead-finder-app.com>",
         reply_to: "paul@move37.fun",
         to: [opts.toEmail],
-        subject: "Your new website is live",
+        subject: bookingOnly ? "Your online booking page is live" : "Your new website is live",
         text:
           `Hi ${shopName},\n\n` +
-          `Great news - your new website is live and yours to keep.\n\n` +
-          `Your live site:\n${publicUrl}\n\n` +
+          `Great news - your new ${productNoun} is live and yours to keep.\n\n` +
+          `${liveLabel}:\n${publicUrl}\n\n` +
           `Log in any time to manage it:\n${dashUrl}\n` +
           `Just use this email address to log in.\n\n` +
           `Make it yours:\n` +
-          `You can edit everything yourself from the dashboard - change your text, prices and services, and swap in your own photos (hero image and gallery). No tech skills needed.\n\n` +
+          `${makeItYoursText}\n\n` +
           `Install it as an app (optional, but handy):\n` +
           `- iPhone (Safari): open ${dashUrl}, tap the Share button, scroll down, then "Add to Home Screen."\n` +
           `- Android (Chrome): open ${dashUrl}, tap the menu (three dots, top-right), then "Install app" (or "Add to Home screen").\n` +
@@ -204,13 +214,13 @@ async function notifyBarberOfClaim(opts: {
         html:
           `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:15px;line-height:1.6;color:#1e293b;max-width:560px">` +
           `<p style="margin:0 0 12px">Hi ${esc(shopName)},</p>` +
-          `<p style="margin:0 0 16px">Great news — your new website is live and yours to keep.</p>` +
-          `<p style="margin:0 0 2px"><strong>Your live site</strong></p>` +
+          `<p style="margin:0 0 16px">Great news — your new ${esc(productNoun)} is live and yours to keep.</p>` +
+          `<p style="margin:0 0 2px"><strong>${esc(liveLabel)}</strong></p>` +
           `<p style="margin:0 0 16px"><a href="${esc(publicUrl)}">${esc(publicUrl)}</a></p>` +
           `<p style="margin:0 0 2px"><strong>Log in any time to manage it</strong></p>` +
           `<p style="margin:0 0 16px"><a href="${dashUrl}">${dashUrl}</a><br>Just use this email address to log in.</p>` +
           `<p style="margin:0 0 2px"><strong>Make it yours</strong></p>` +
-          `<p style="margin:0 0 16px">You can edit everything yourself from the dashboard — change your text, prices and services, and swap in your own photos (hero image and gallery). No tech skills needed.</p>` +
+          `<p style="margin:0 0 16px">${esc(makeItYoursText)}</p>` +
           `<p style="margin:0 0 4px"><strong>Install it as an app</strong> (optional, but handy)</p>` +
           `<ul style="margin:0 0 8px;padding-left:18px">` +
           `<li style="margin:0 0 6px"><strong>iPhone (Safari):</strong> open <a href="${dashUrl}">yoursites.uk/barber</a>, tap the Share button, scroll down, then "Add to Home Screen."</li>` +
