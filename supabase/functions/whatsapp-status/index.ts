@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { leadFailurePatch } from "../_shared/whatsapp-failure.ts";
+import { handleInboundMessages } from "../_shared/whatsapp-inbound.ts";
 
 // whatsapp-status — Meta WhatsApp delivery STATUS webhook.
 //
@@ -11,7 +12,11 @@ import { leadFailurePatch } from "../_shared/whatsapp-failure.ts";
 // operator can see what actually landed.
 //
 // GET  = Meta's subscription handshake (hub.verify_token must match the secret).
-// POST = status events; verified with the app-secret X-Hub-Signature-256 when set.
+// POST = status events AND inbound barber replies — Cloud API has ONE callback URL,
+//        so both arrive here under the same `messages` field: value.statuses[] for
+//        delivery receipts, value.messages[] for inbound. Statuses are handled below;
+//        inbound is delegated to handleInboundMessages (_shared/whatsapp-inbound.ts).
+//        Verified with the app-secret X-Hub-Signature-256 when set (one gate covers both).
 // verify_jwt = false (this is a public webhook; auth is the verify token + signature).
 
 const VERIFY_TOKEN_SECRET = "WHATSAPP_WEBHOOK_VERIFY_TOKEN";
@@ -76,11 +81,20 @@ Deno.serve(async (req) => {
     );
     const nowIso = new Date().toISOString();
 
-    // entry[].changes[].value.statuses[]
+    // entry[].changes[].value — value.statuses[] (delivery) OR value.messages[] (inbound)
     const entries = Array.isArray(body?.entry) ? body.entry : [];
     let handled = 0;
     for (const entry of entries) {
       for (const change of (entry?.changes ?? [])) {
+        // Inbound barber replies → write into whatsapp_messages (own error handling).
+        if (Array.isArray(change?.value?.messages) && change.value.messages.length) {
+          try {
+            handled += await handleInboundMessages(service, change.value);
+          } catch (e) {
+            console.error("[whatsapp-status] inbound handling error:", (e as Error).message);
+          }
+        }
+
         const statuses = change?.value?.statuses ?? [];
         for (const st of statuses) {
           const wamid: string = st?.id ?? "";
