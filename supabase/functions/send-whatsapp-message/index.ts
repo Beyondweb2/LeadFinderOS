@@ -1,0 +1,185 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  resolveWhatsAppEnv,
+  toWhatsAppNumber,
+  sendViaGraph,
+  textPayload,
+  claimTemplatePayload,
+  WA_TEMPLATES,
+} from "../_shared/whatsapp-send.ts";
+
+// send-whatsapp-message — the Inbox reply sender (Phase A).
+//
+// Per-operator. Reuses the SAME proven send mechanism as process-whatsapp-queue
+// (env + test-mode gate + Graph POST, all from _shared/whatsapp-send.ts). It sends
+// ONE message to ONE number: a free-form TEXT inside the 24h window, or a claim
+// TEMPLATE outside it. TEST_MODE is respected identically — nothing hits Meta unless
+// WHATSAPP_TEST_MODE === "off" and both secrets exist. Every attempt is logged to
+// whatsapp_messages as an outbound row owned by the sending operator.
+//
+// It does NOT enforce the 10/day outreach cap (in-window replies are exempt by
+// design; the cap lives in process-whatsapp-queue for the outreach campaign).
+
+const CLAIM_ORIGIN = "https://yoursites.uk";
+const WINDOW_MS = 24 * 60 * 60 * 1000;
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+
+    // --- Auth the operator ---
+    const authHeader = req.headers.get("Authorization") ?? "";
+    const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+    if (!token) return json({ ok: false, error: "unauthorized" }, 401);
+    const userClient = createClient(supabaseUrl, anonKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
+    const { data: u } = await userClient.auth.getUser();
+    const operatorId = u?.user?.id;
+    if (!operatorId) return json({ ok: false, error: "unauthorized" }, 401);
+
+    const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+
+    // --- Parse ---
+    const body = await req.json().catch(() => ({}));
+    const rawPhone: string = typeof body.phone === "string" ? body.phone : "";
+    const leadId: string | null = typeof body.lead_id === "string" && body.lead_id ? body.lead_id : null;
+    const text: string = typeof body.body === "string" ? body.body.trim() : "";
+    const templateName: string | null = typeof body.template_name === "string" && body.template_name ? body.template_name : null;
+    const country: string | null = typeof body.country === "string" ? body.country : null;
+
+    const to = toWhatsAppNumber(rawPhone, country);
+    if (!to) return json({ ok: false, error: "invalid_phone" }, 400);
+    if (!text && !templateName) return json({ ok: false, error: "empty_message" }, 400);
+
+    // --- Ownership check: the operator must own this conversation ---
+    // Either they already have a message thread with this number, OR they own a lead
+    // whose number normalises to it (new conversation started from a lead).
+    let ownsConversation = false;
+    let resolvedLeadId = leadId;
+    let businessName = "";
+
+    const { data: existing } = await service
+      .from("whatsapp_messages")
+      .select("id, lead_id")
+      .eq("user_id", operatorId)
+      .eq("phone", to)
+      .limit(1);
+    if (existing && existing.length) {
+      ownsConversation = true;
+      if (!resolvedLeadId) resolvedLeadId = (existing[0] as { lead_id: string | null }).lead_id;
+    }
+
+    if (resolvedLeadId) {
+      const { data: lead } = await service
+        .from("outreach_leads")
+        .select("id, user_id, business_name, phone, country")
+        .eq("id", resolvedLeadId)
+        .maybeSingle();
+      const l = lead as { user_id: string; business_name: string; phone: string; country: string | null } | null;
+      if (l && l.user_id === operatorId && toWhatsAppNumber(l.phone, l.country) === to) {
+        ownsConversation = true;
+        businessName = l.business_name ?? "";
+      }
+    }
+    if (!ownsConversation) return json({ ok: false, error: "forbidden" }, 403);
+
+    // --- 24h customer-service window (from the operator's own inbound rows) ---
+    const { data: lastIn } = await service
+      .from("whatsapp_messages")
+      .select("created_at")
+      .eq("user_id", operatorId)
+      .eq("phone", to)
+      .eq("direction", "inbound")
+      .order("created_at", { ascending: false })
+      .limit(1);
+    const lastInboundAt = lastIn && lastIn.length ? new Date((lastIn[0] as { created_at: string }).created_at).getTime() : null;
+    const windowOpen = lastInboundAt != null && Date.now() - lastInboundAt < WINDOW_MS;
+
+    const env = resolveWhatsAppEnv();
+
+    // --- Decide payload: template (out-of-window) vs text (in-window) ---
+    let payload: Record<string, unknown>;
+    let messageType: "text" | "template";
+    let usedTemplate: string | null = null;
+
+    if (templateName) {
+      // Out-of-window claim template. Requires the lead's claim link.
+      if (!WA_TEMPLATES[templateName]) return json({ ok: false, error: "unknown_template" }, 400);
+      if (!resolvedLeadId) return json({ ok: false, error: "template_needs_lead" }, 400);
+      const { data: site } = await service
+        .from("generated_sites")
+        .select("share_token")
+        .eq("lead_id", resolvedLeadId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const shareToken = (site as { share_token: string | null } | null)?.share_token ?? null;
+      if (!shareToken) return json({ ok: false, error: "no_claim_link" }, 400);
+      const claimUrl = `${CLAIM_ORIGIN}/s/${shareToken}`;
+      payload = claimTemplatePayload(templateName, WA_TEMPLATES[templateName].lang, businessName, claimUrl);
+      messageType = "template";
+      usedTemplate = templateName;
+    } else {
+      // Free-form text — only deliverable inside the 24h window when LIVE. In test
+      // mode we allow it (simulated) so the UI can be exercised before the webhook.
+      if (env.live && !windowOpen) return json({ ok: false, error: "window_closed" }, 200);
+      payload = textPayload(text);
+      messageType = "text";
+    }
+
+    // --- Send (or simulate in test mode) ---
+    let status = "simulated";
+    let messageId: string | null = null;
+    let sendError: string | null = null;
+
+    if (env.live) {
+      const r = await sendViaGraph(env.accessToken, env.phoneNumberId, to, payload);
+      if (r.ok) { status = "sent"; messageId = r.messageId; }
+      else { status = "failed"; sendError = r.error; }
+    } else {
+      console.log(`WOULD SEND (${messageType}) to ${to}${usedTemplate ? ` [${usedTemplate}]` : ""}: ${text || "(template)"}`);
+    }
+
+    // --- Log the outbound row (owned by the operator) ---
+    const { data: inserted, error: insErr } = await service.from("whatsapp_messages").insert({
+      direction: "outbound",
+      user_id: operatorId,
+      lead_id: resolvedLeadId,
+      phone: to,
+      body: messageType === "text" ? text : null,
+      message_type: messageType,
+      template_name: usedTemplate,
+      wa_message_id: messageId,
+      status,
+      test_mode: env.testMode,
+      error: sendError,
+    }).select("id, created_at").maybeSingle();
+    if (insErr) console.error("[send-whatsapp-message] log insert failed:", insErr.message);
+
+    return json({
+      ok: status !== "failed",
+      status,
+      simulated: !env.live,
+      windowOpen,
+      messageId,
+      message: inserted ?? null,
+      error: sendError,
+    });
+  } catch (e) {
+    console.error("[send-whatsapp-message] error:", (e as Error).message);
+    return json({ ok: false, error: "internal" }, 500);
+  }
+});

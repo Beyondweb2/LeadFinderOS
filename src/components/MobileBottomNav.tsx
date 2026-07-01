@@ -64,6 +64,7 @@ export function MobileBottomNav() {
   ];
 
   const moreNavItems = [
+    { title: 'Inbox', url: '/inbox', icon: MessageSquare },
     { title: t('nav.templates'), url: '/templates', icon: FileText },
     { title: t('nav.paidClients'), url: '/paid-clients', icon: DollarSign },
     { title: t('nav.howToUse'), url: '/how-to-use', icon: HelpCircle },

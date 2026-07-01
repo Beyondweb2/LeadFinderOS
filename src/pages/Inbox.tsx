@@ -1,0 +1,251 @@
+import { useMemo, useRef, useState } from 'react';
+import { useInbox, windowFor, normalizeWaNumber, WA_REPLY_TEMPLATES, type WaConversation, type LeadLite } from '@/hooks/useInbox';
+import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Card } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
+import { Loader2, Send, MessageSquare, Clock, AlertTriangle, Plus, ShieldAlert, Info } from 'lucide-react';
+
+function relTime(iso: string): string {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return 'now';
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  if (s < 604800) return `${Math.floor(s / 86400)}d`;
+  return new Date(iso).toLocaleDateString();
+}
+
+const Inbox = () => {
+  const { user, conversations, messagesForKey, leads, isLoading, send } = useInbox();
+  const { toast } = useToast();
+
+  const [activeKey, setActiveKey] = useState<string | null>(null);
+  const [synthetic, setSynthetic] = useState<WaConversation | null>(null);
+  const [text, setText] = useState('');
+  const [template, setTemplate] = useState(WA_REPLY_TEMPLATES[0].name);
+  const [sending, setSending] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
+  const threadRef = useRef<HTMLDivElement>(null);
+
+  // The list shows fetched conversations; a just-started (synthetic) one is merged in
+  // until its first message lands (after which the real row shares its key).
+  const list = useMemo(() => {
+    if (synthetic && !conversations.some((c) => c.key === synthetic.key)) return [synthetic, ...conversations];
+    return conversations;
+  }, [conversations, synthetic]);
+
+  const active: WaConversation | null =
+    (activeKey && conversations.find((c) => c.key === activeKey)) ||
+    (activeKey && synthetic?.key === activeKey ? synthetic : null) || null;
+
+  const thread = active ? messagesForKey(active.key) : [];
+  const win = active ? windowFor(active.lastInboundAt) : { open: false, hoursLeft: 0 };
+
+  const startFromLead = (lead: LeadLite) => {
+    const norm = normalizeWaNumber(lead.phone, lead.country);
+    if (!norm || !user) { toast({ title: 'No usable number', variant: 'destructive' }); return; }
+    const key = `${user.id}::${norm}`;
+    const existing = conversations.find((c) => c.key === key);
+    if (existing) { setActiveKey(existing.key); setSynthetic(null); }
+    else {
+      const synth: WaConversation = {
+        key, phone: norm, userId: user.id, leadId: lead.id,
+        label: lead.business_name || `+${norm}`, unassigned: false,
+        lastMessage: undefined as never, lastMessageAt: new Date(0).toISOString(), lastInboundAt: null,
+      };
+      setSynthetic(synth);
+      setActiveKey(key);
+    }
+    setNewOpen(false);
+    setText('');
+  };
+
+  const doSend = async () => {
+    if (!active) return;
+    const useTemplate = !win.open;
+    if (useTemplate && !active.leadId) {
+      toast({ title: 'Template needs a lead', description: 'This conversation has no linked lead, so a claim template can’t be sent.', variant: 'destructive' });
+      return;
+    }
+    if (!useTemplate && !text.trim()) return;
+    setSending(true);
+    const res = await send({
+      phone: active.phone,
+      leadId: active.leadId,
+      body: useTemplate ? undefined : text.trim(),
+      templateName: useTemplate ? template : undefined,
+    });
+    setSending(false);
+    if (!res.ok) {
+      const map: Record<string, string> = {
+        window_closed: 'The 24h reply window is closed — send an approved template instead.',
+        no_claim_link: 'That lead has no generated site yet, so there’s no claim link to send.',
+        forbidden: 'You can only message your own conversations.',
+        template_needs_lead: 'A template needs a linked lead.',
+      };
+      toast({ title: 'Not sent', description: map[res.error ?? ''] ?? res.error ?? 'Send failed.', variant: 'destructive' });
+      return;
+    }
+    setText('');
+    setSynthetic(null); // the real conversation now exists under the same key
+    toast({ title: res.simulated ? 'Sent (simulated — test mode)' : 'Sent ✓' });
+    setTimeout(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight }), 50);
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Inbox</h1>
+          <p className="text-sm text-muted-foreground">Manage WhatsApp conversations without leaving LeadFinder.</p>
+        </div>
+        <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
+      </div>
+
+      {/* Inbound-blocked banner */}
+      <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+        <Info className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>Incoming messages aren’t live yet — the WhatsApp webhook is still blocked, so nothing inbound will appear until it’s enabled. You can send now (respecting TEST MODE and the 24h window).</span>
+      </div>
+
+      {/* New-conversation lead picker */}
+      {newOpen && (
+        <Card className="p-3">
+          <p className="mb-2 text-xs font-medium text-muted-foreground">Start a conversation with one of your leads (must have a phone):</p>
+          <div className="max-h-56 space-y-1 overflow-y-auto">
+            {leads.length === 0 ? (
+              <p className="text-xs text-muted-foreground/60">No leads with a phone number.</p>
+            ) : leads.map((l) => (
+              <button key={l.id} onClick={() => startFromLead(l)}
+                className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted/50">
+                <span className="truncate">{l.business_name || '(no name)'}</span>
+                <span className="ml-2 shrink-0 text-xs text-muted-foreground">{l.phone}</span>
+              </button>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      <div className="grid gap-3 md:grid-cols-[300px_1fr]">
+        {/* Conversation list */}
+        <Card className="h-[60vh] overflow-y-auto p-1.5">
+          {isLoading ? (
+            <div className="flex h-full items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+          ) : list.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center px-4 text-center text-muted-foreground">
+              <MessageSquare className="mb-2 h-6 w-6 opacity-40" />
+              <p className="text-sm">No conversations yet.</p>
+              <p className="mt-1 text-xs opacity-70">Start one with “New”, or (once the webhook is live) inbound messages will appear here.</p>
+            </div>
+          ) : list.map((c) => (
+            <button key={c.key} onClick={() => setActiveKey(c.key)}
+              className={cn('flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors',
+                activeKey === c.key ? 'bg-muted' : 'hover:bg-muted/50')}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5 truncate text-sm font-medium">
+                  {c.unassigned && <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-amber-500" />}
+                  <span className="truncate">{c.unassigned ? `Unassigned · +${c.phone}` : c.label}</span>
+                </span>
+                {c.lastMessage && <span className="shrink-0 text-[10px] text-muted-foreground">{relTime(c.lastMessageAt)}</span>}
+              </div>
+              {c.lastMessage && (
+                <span className="truncate text-xs text-muted-foreground">
+                  {c.lastMessage.direction === 'outbound' ? 'You: ' : ''}
+                  {c.lastMessage.body || (c.lastMessage.message_type === 'template' ? '[template]' : '')}
+                </span>
+              )}
+            </button>
+          ))}
+        </Card>
+
+        {/* Thread + reply */}
+        <Card className="flex h-[60vh] flex-col">
+          {!active ? (
+            <div className="flex flex-1 flex-col items-center justify-center text-muted-foreground">
+              <MessageSquare className="mb-2 h-7 w-7 opacity-30" />
+              <p className="text-sm">Select a conversation</p>
+            </div>
+          ) : (
+            <>
+              {/* Thread header */}
+              <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{active.unassigned ? `Unassigned · +${active.phone}` : active.label}</p>
+                  <p className="text-[11px] text-muted-foreground">+{active.phone}</p>
+                </div>
+                {win.open ? (
+                  <span className="flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-600 dark:text-green-400">
+                    <Clock className="h-3 w-3" /> Window open · ~{win.hoursLeft}h left
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                    <AlertTriangle className="h-3 w-3" /> Window closed · template only
+                  </span>
+                )}
+              </div>
+
+              {/* Messages */}
+              <div ref={threadRef} className="flex-1 space-y-2 overflow-y-auto p-3">
+                {thread.length === 0 ? (
+                  <p className="py-8 text-center text-xs text-muted-foreground/60">No messages yet — send the first below.</p>
+                ) : thread.map((m) => (
+                  <div key={m.id} className={cn('flex', m.direction === 'outbound' ? 'justify-end' : 'justify-start')}>
+                    <div className={cn('max-w-[78%] rounded-2xl px-3 py-2 text-sm',
+                      m.direction === 'outbound' ? 'bg-primary/90 text-primary-foreground' : 'bg-muted')}>
+                      <p className="whitespace-pre-wrap break-words">
+                        {m.body || (m.message_type === 'template' ? `[template: ${m.template_name}]` : '')}
+                      </p>
+                      <div className={cn('mt-0.5 flex items-center gap-1 text-[10px]',
+                        m.direction === 'outbound' ? 'text-primary-foreground/70' : 'text-muted-foreground')}>
+                        <span>{relTime(m.created_at)}</span>
+                        {m.direction === 'outbound' && (
+                          <span>· {m.status === 'simulated' ? 'simulated' : m.status === 'failed' ? '⚠ failed' : m.status}</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Reply box */}
+              <div className="border-t border-border p-2.5">
+                {win.open ? (
+                  <div className="flex items-end gap-2">
+                    <Textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type a reply…"
+                      className="min-h-[44px] max-h-32 flex-1 resize-none" maxLength={4000}
+                      onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); } }} disabled={sending} />
+                    <Button onClick={doSend} disabled={sending || !text.trim()} size="icon" className="h-11 w-11 shrink-0">
+                      {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-muted-foreground">
+                      Outside the 24h window — free text isn’t allowed. Send an approved template{active.leadId ? '' : ' (needs a linked lead)'}:
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Select value={template} onValueChange={setTemplate}>
+                        <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {WA_REPLY_TEMPLATES.map((t) => <SelectItem key={t.name} value={t.name}>{t.label}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Button onClick={doSend} disabled={sending || !active.leadId} className="shrink-0">
+                        {sending ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Send className="mr-1.5 h-4 w-4" />}
+                        Send template
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default Inbox;
