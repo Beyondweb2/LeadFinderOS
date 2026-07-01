@@ -24,6 +24,18 @@ function domainOf(url?: string | null): string {
   }
 }
 
+/** Which social network a listing "website" URL actually points at — robust to
+ *  subdomains (m.facebook.com) and short domains (fb.com, instagr.am). null = a
+ *  real website / other. Drives the per-row icon so a social link never shows the
+ *  website (Globe) icon, even if the listing was misclassified HAS_OWN_WEBSITE. */
+function socialKindOf(url?: string | null): 'facebook' | 'instagram' | null {
+  const d = domainOf(url);
+  if (!d) return null;
+  if (d === 'facebook.com' || d.endsWith('.facebook.com') || d === 'fb.com' || d === 'fb.me' || d === 'fb.watch' || d === 'm.me') return 'facebook';
+  if (d === 'instagram.com' || d.endsWith('.instagram.com') || d === 'instagr.am') return 'instagram';
+  return null;
+}
+
 interface BroadListBuilderProps {
   leads: Lead[];
   isLoading: boolean;
@@ -54,12 +66,14 @@ export function BroadListBuilder({ leads, isLoading, isInOutreach, onBulkAdd, on
 
   // Derive the cheap listing signals once per lead.
   const rows = useMemo(() => leads.map((l) => {
-    const d = domainOf(l.websiteUrl);
+    const social = socialKindOf(l.websiteUrl);
     return {
       lead: l,
-      hasWebsite: l.websiteStatus === 'HAS_OWN_WEBSITE',
-      ig: d === 'instagram.com',
-      fb: d === 'facebook.com',
+      // A social link is never a "real website" icon — even if the listing was
+      // misclassified HAS_OWN_WEBSITE (e.g. a bare fb.com the backend didn't catch).
+      hasWebsite: l.websiteStatus === 'HAS_OWN_WEBSITE' && !social,
+      ig: social === 'instagram',
+      fb: social === 'facebook',
       inOutreach: isInOutreach(l) || processedIds.has(l.id),
     };
   }), [leads, isInOutreach, processedIds]);
@@ -205,9 +219,21 @@ export function BroadListBuilder({ leads, isLoading, isInOutreach, onBulkAdd, on
               {r.lead.address && <span className="block truncate text-xs text-muted-foreground">{r.lead.address}</span>}
             </div>
             <div className="flex shrink-0 items-center gap-2 text-muted-foreground">
-              {r.hasWebsite && <Globe className="h-3.5 w-3.5 text-emerald-500" aria-label="Has website (listing)" />}
-              {r.ig && <Instagram className="h-3.5 w-3.5 text-pink-500" aria-label="Instagram signal (listing)" />}
-              {r.fb && <Facebook className="h-3.5 w-3.5 text-blue-600" aria-label="Facebook signal (listing)" />}
+              {r.hasWebsite && (
+                <span title={r.lead.websiteUrl || 'Has website (listing)'} className="inline-flex">
+                  <Globe className="h-3.5 w-3.5 text-emerald-500" aria-label="Has website (listing)" />
+                </span>
+              )}
+              {r.ig && (
+                <span title={r.lead.websiteUrl || 'Instagram link (listing)'} className="inline-flex">
+                  <Instagram className="h-3.5 w-3.5 text-pink-500" aria-label="Instagram link (listing)" />
+                </span>
+              )}
+              {r.fb && (
+                <span title={r.lead.websiteUrl || 'Facebook link (listing)'} className="inline-flex">
+                  <Facebook className="h-3.5 w-3.5 text-blue-600" aria-label="Facebook link (listing)" />
+                </span>
+              )}
               {r.lead.googleMapsUrl && (
                 <a href={r.lead.googleMapsUrl} target="_blank" rel="noopener noreferrer" title="Open in Google Maps" className="hover:text-foreground">
                   <ExternalLink className="h-3.5 w-3.5" />
