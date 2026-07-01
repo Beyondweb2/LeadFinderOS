@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, Info, ExternalLink } from 'lucide-react';
+import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink } from 'lucide-react';
 
 function relTime(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -156,12 +156,6 @@ const Inbox = () => {
         <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
       </div>
 
-      {/* Inbound-blocked banner */}
-      <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-        <Info className="mt-0.5 h-4 w-4 shrink-0" />
-        <span>Incoming messages aren’t live yet — the WhatsApp webhook is still blocked, so nothing inbound will appear until it’s enabled. You can send now (respecting TEST MODE and the 24h window).</span>
-      </div>
-
       {/* New-conversation lead picker */}
       {newOpen && (
         <Card className="p-3">
@@ -189,7 +183,7 @@ const Inbox = () => {
             <div className="flex h-full flex-col items-center justify-center px-4 text-center text-muted-foreground">
               <MessageSquare className="mb-2 h-6 w-6 opacity-40" />
               <p className="text-sm">No conversations yet.</p>
-              <p className="mt-1 text-xs opacity-70">Start one with “New”, or (once the webhook is live) inbound messages will appear here.</p>
+              <p className="mt-1 text-xs opacity-70">Start one with “New”, or inbound replies will appear here as they arrive.</p>
             </div>
           ) : list.map((c) => (
             <button key={c.key} onClick={() => setActiveKey(c.key)}
