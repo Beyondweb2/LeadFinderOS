@@ -5,6 +5,7 @@ import {
   sendViaGraph,
   textPayload,
   claimTemplatePayload,
+  renderTemplateBody,
   WA_TEMPLATES,
 } from "../_shared/whatsapp-send.ts";
 
@@ -114,6 +115,10 @@ Deno.serve(async (req) => {
     let payload: Record<string, unknown>;
     let messageType: "text" | "template";
     let usedTemplate: string | null = null;
+    // What we STORE as the message body: the text for free-form, or the rendered
+    // template copy (real wording + business name + claim URL) so the Inbox shows
+    // what the barber actually receives — not the internal template name.
+    let storedBody: string | null = null;
 
     if (templateName) {
       // Out-of-window claim template. Requires the lead's claim link.
@@ -132,12 +137,14 @@ Deno.serve(async (req) => {
       payload = claimTemplatePayload(templateName, WA_TEMPLATES[templateName].lang, businessName, claimUrl);
       messageType = "template";
       usedTemplate = templateName;
+      storedBody = renderTemplateBody(templateName, businessName, claimUrl);
     } else {
       // Free-form text — only deliverable inside the 24h window when LIVE. In test
       // mode we allow it (simulated) so the UI can be exercised before the webhook.
       if (env.live && !windowOpen) return json({ ok: false, error: "window_closed" }, 200);
       payload = textPayload(text);
       messageType = "text";
+      storedBody = text;
     }
 
     // --- Send (or simulate in test mode) ---
@@ -159,7 +166,7 @@ Deno.serve(async (req) => {
       user_id: operatorId,
       lead_id: resolvedLeadId,
       phone: to,
-      body: messageType === "text" ? text : null,
+      body: storedBody,
       message_type: messageType,
       template_name: usedTemplate,
       wa_message_id: messageId,

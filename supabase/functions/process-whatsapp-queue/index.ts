@@ -39,7 +39,7 @@ const TZ = "Europe/London";
 // is later changed to put the claim URL in a URL BUTTON, adjust templateComponents.
 const TEMPLATES: Record<string, { lang: string }> = {
   booking_page_intro: { lang: "en" },
-  free_website_intro: { lang: "en" },
+  no_website_barbers: { lang: "en" }, // renamed from free_website_intro to match Meta
 };
 const DEFAULT_TEMPLATE = "booking_page_intro";
 
