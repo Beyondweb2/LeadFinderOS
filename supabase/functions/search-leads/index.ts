@@ -1,6 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { z } from 'https://deno.land/x/zod@v3.22.4/mod.ts';
+import { z } from 'https://esm.sh/zod@3.22.4';
 import { mapsDiscover } from '../_shared/enrichment/sources.ts';
 import { BOOKING_PLATFORM_DOMAINS, DIRECTORY_AND_RECORD_DOMAINS } from '../_shared/aggregators.ts';
 
@@ -50,6 +49,10 @@ const SearchRequestSchema = z.object({
 // ═══════════════════════════════════════════════
 const DIRECTORY_BLACKLIST = new Set([
   'facebook.com', 'instagram.com', 'tiktok.com', 'x.com', 'twitter.com',
+  // Short/alt social domains (fb.com, fb.me, fb.watch, m.me, instagr.am) — a
+  // listing whose only "website" is one of these is a social link, NOT an own
+  // website, so the lead stays NO_WEBSITE and remains in no-website targeting.
+  'fb.com', 'fb.me', 'fb.watch', 'm.me', 'instagr.am',
   'linkedin.com', 'youtube.com', 'pinterest.com', 'snapchat.com',
   'yell.com', 'thomsonlocal.com', 'yelp.com', 'yelp.co.uk', 'checkatrade.com',
   'mybuilder.com', 'bark.com', 'trustatrader.com', 'ratedpeople.com',
@@ -722,7 +725,7 @@ async function performSearchWithExpansion(
 // ═══════════════════════════════════════════════
 // MAIN HANDLER
 // ═══════════════════════════════════════════════
-serve(async (req) => {
+Deno.serve(async (req) => {
   console.log(`[DIAG-HANDLER] Request received: ${req.method} ${req.url}`);
 
   if (req.method === 'OPTIONS') {

@@ -31,6 +31,9 @@ export const BOOKING_PLATFORM_DOMAINS = new Set<string>([
 /** Social + common directories that are also "not an own website". */
 const SOCIAL_AND_DIRECTORY_DOMAINS = new Set<string>([
   "facebook.com", "instagram.com", "tiktok.com", "x.com", "twitter.com",
+  // Short/alt social domains — a listing "website" of one of these is a social
+  // link, NOT an own website (so the lead stays no-website for targeting).
+  "fb.com", "fb.me", "fb.watch", "m.me", "instagr.am",
   "linkedin.com", "youtube.com", "pinterest.com", "snapchat.com",
   "yell.com", "yell.co.uk", "yelp.com", "yelp.co.uk", "tripadvisor.com",
   "tripadvisor.co.uk", "google.com", "maps.google.com", "business.google.com",
