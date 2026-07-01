@@ -49,6 +49,9 @@ const Outreach = () => {
 
   // Wrap setter so every user-initiated change is persisted immediately.
   const changeCampaignFilter = useCallback((next: string | null) => {
+    // An explicit choice (incl. a just-created campaign) is authoritative — mark
+    // restore done so the async "restore saved filter" effect can never snap it back.
+    restoredRef.current = true;
     setCampaignFilter(next);
     writeCampaignFilter(user?.id, next);
   }, [user?.id]);
