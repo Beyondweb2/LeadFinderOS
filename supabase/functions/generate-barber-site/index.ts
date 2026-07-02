@@ -387,38 +387,59 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
     const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
-    // --- Step 2: User client (ANON key + caller's auth header) ---
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
-    // --- Step 3: Verify token (getClaims, getUser fallback) ---
+    // Internal-call branch (bulk-jobs runner): exact service-role key + the
+    // x-internal-job header. Purely additive — external callers can never hold the
+    // service key, so the normal user path below is unchanged. Authorization
+    // happened at job-enqueue time; the acting user comes from the body (parsed
+    // early — req.json() can only be read once, so Step 6 reuses it). The per-user
+    // rate limit is skipped for internal calls (a chunk of sequential items would
+    // throttle itself); the 20/24h generation cap below still applies.
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+    const internalServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const isInternal = !!internalServiceKey && token === internalServiceKey && !!req.headers.get("x-internal-job");
+    // deno-lint-ignore no-explicit-any
+    let earlyBody: any = null;
 
     let adminUserId: string;
-    if (claimsError || !claimsData?.claims) {
-      const { data: userData, error: userError } = await userClient.auth.getUser();
-      if (userError || !userData?.user) {
-        console.error("[GENERATE-BARBER-SITE] Token verification failed:", userError?.message || claimsError?.message);
-        return jsonResponse(
-          { error: "Invalid token", details: userError?.message || claimsError?.message },
-          401,
-          corsHeaders,
-        );
-      }
-      adminUserId = userData.user.id;
-      console.log("[GENERATE-BARBER-SITE] Auth via getUser fallback, userId:", adminUserId);
+    let rlHeaders: Record<string, string> = {};
+    if (isInternal) {
+      earlyBody = await req.json().catch(() => ({}));
+      const acting = (earlyBody?.acting_user_id as string) ?? "";
+      if (!acting) return jsonResponse({ error: "acting_user_id required for internal calls" }, 400, corsHeaders);
+      adminUserId = acting;
+      console.log("[GENERATE-BARBER-SITE] Internal call (bulk job) for user:", adminUserId);
     } else {
-      adminUserId = claimsData.claims.sub as string;
-      console.log("[GENERATE-BARBER-SITE] Auth via getClaims, userId:", adminUserId);
-    }
+      // --- Step 2: User client (ANON key + caller's auth header) ---
+      const userClient = createClient(supabaseUrl, supabaseAnonKey, {
+        global: { headers: { Authorization: authHeader } },
+      });
 
-    // --- Rate limit (10 req/min per admin) ---
-    const rl = checkRateLimit(`generate-barber-site:${adminUserId}`, 10, 60000);
-    const rlHeaders = rateLimitHeaders(rl, 10);
-    if (!rl.allowed) {
-      return jsonResponse({ error: "Rate limit exceeded" }, 429, corsHeaders, rlHeaders);
+      // --- Step 3: Verify token (getClaims, getUser fallback) ---
+      const { data: claimsData, error: claimsError } = await userClient.auth.getClaims(token);
+
+      if (claimsError || !claimsData?.claims) {
+        const { data: userData, error: userError } = await userClient.auth.getUser();
+        if (userError || !userData?.user) {
+          console.error("[GENERATE-BARBER-SITE] Token verification failed:", userError?.message || claimsError?.message);
+          return jsonResponse(
+            { error: "Invalid token", details: userError?.message || claimsError?.message },
+            401,
+            corsHeaders,
+          );
+        }
+        adminUserId = userData.user.id;
+        console.log("[GENERATE-BARBER-SITE] Auth via getUser fallback, userId:", adminUserId);
+      } else {
+        adminUserId = claimsData.claims.sub as string;
+        console.log("[GENERATE-BARBER-SITE] Auth via getClaims, userId:", adminUserId);
+      }
+
+      // --- Rate limit (10 req/min per admin) ---
+      const rl = checkRateLimit(`generate-barber-site:${adminUserId}`, 10, 60000);
+      rlHeaders = rateLimitHeaders(rl, 10);
+      if (!rl.allowed) {
+        return jsonResponse({ error: "Rate limit exceeded" }, 429, corsHeaders, rlHeaders);
+      }
     }
 
     // --- Step 4: Service-role client (only after token verified) ---
@@ -446,8 +467,8 @@ serve(async (req) => {
       return jsonResponse({ error: "Daily generation limit reached (20 per 24h)." }, 403, corsHeaders, rlHeaders);
     }
 
-    // --- Step 6: Parse body ---
-    const body = await req.json().catch(() => ({}));
+    // --- Step 6: Parse body (already parsed for internal calls) ---
+    const body = earlyBody ?? await req.json().catch(() => ({}));
     const leadId = typeof body.lead_id === "string" ? body.lead_id.trim() : "";
     if (!leadId) {
       return jsonResponse({ error: "lead_id required" }, 400, corsHeaders, rlHeaders);
