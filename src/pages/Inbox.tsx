@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/card';
 import { CampaignPicker } from '@/components/CampaignPicker';
 import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
 import { updateLeadStatus } from '@/lib/leadStatus';
-import type { PipelineStatus } from '@/types/outreach';
+import { PIPELINE_STATUS_OPTIONS, type PipelineStatus } from '@/types/outreach';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -62,6 +62,9 @@ const Inbox = () => {
   // when a specific campaign is selected — that's where mis-routed / unknown-sender
   // replies land and must never be hidden.
   const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+  // Status filter (null = all statuses). Composes with the campaign filter (AND).
+  // Unassigned stays visible regardless (never hidden by a filter).
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
   // Not-interested conversations are hidden by default (dead prospects); a toggle
   // reveals them. A new inbound reply flips the lead back to 'replied' server-side
   // (whatsapp-inbound), so re-engaging conversations reappear on their own.
@@ -79,16 +82,19 @@ const Inbox = () => {
     const base = synthetic && !conversations.some((c) => c.key === synthetic.key)
       ? [synthetic, ...conversations]
       : conversations;
+    // Campaign + status filters both keep Unassigned ALWAYS visible (never hide the
+    // mis-routed/unknown-sender bucket), and compose as AND for assigned convos.
     const byCampaign = !campaignFilter
       ? base
-      // Filtered to a campaign: that campaign's conversations PLUS Unassigned
-      // (always visible, never hidden by the campaign filter).
       : base.filter((c) => c.campaignId === campaignFilter || c.unassigned);
-    // Hide not_interested (dead prospects) unless "Show hidden" is on. Unassigned
-    // has no lead (leadStatus null) so it's never hidden by this.
-    if (showHidden) return byCampaign;
-    return byCampaign.filter((c) => c.leadStatus !== 'not_interested');
-  }, [conversations, synthetic, campaignFilter, showHidden]);
+    const byStatus = !statusFilter
+      ? byCampaign
+      : byCampaign.filter((c) => c.leadStatus === statusFilter || c.unassigned);
+    // Hide not_interested (dead prospects) unless "Show hidden" is on OR the user
+    // has explicitly filtered TO not_interested (then they clearly want to see them).
+    if (showHidden || statusFilter === 'not_interested') return byStatus;
+    return byStatus.filter((c) => c.leadStatus !== 'not_interested');
+  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden]);
 
   // How many not_interested conversations the current view is hiding (for the toggle).
   const hiddenCount = useMemo(() => {
@@ -204,8 +210,17 @@ const Inbox = () => {
           <p className="text-sm text-muted-foreground">Manage WhatsApp conversations without leaving LeadFinder.</p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Filter conversations by campaign. Unassigned always stays visible. */}
+          {/* Filter conversations by campaign + status. Both keep Unassigned visible. */}
           <CampaignPicker mode="filter" hideCreate value={campaignFilter} onChange={setCampaignFilter} className="h-9 w-[180px]" />
+          <Select value={statusFilter ?? '__all__'} onValueChange={(v) => setStatusFilter(v === '__all__' ? null : v)}>
+            <SelectTrigger className="h-9 w-[160px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">All statuses</SelectItem>
+              {PIPELINE_STATUS_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
         </div>
       </div>
