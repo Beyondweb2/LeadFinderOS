@@ -36,6 +36,9 @@ export interface WaConversation {
   leadId: string | null;
   /** Campaign of the matched lead (null = no lead / lead in no campaign). */
   campaignId: string | null;
+  /** Current outreach status of the matched lead (null = no lead). Drives the
+   *  editable status pill + the hide-not_interested behaviour. */
+  leadStatus: string | null;
   label: string;
   unassigned: boolean;
   lastMessage: WaMessage;
@@ -43,7 +46,7 @@ export interface WaConversation {
   lastInboundAt: string | null;
 }
 
-export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null }
+export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null }
 
 const convKey = (userId: string | null, phone: string) => `${userId ?? 'unassigned'}::${phone}`;
 
@@ -79,7 +82,7 @@ export function useInbox() {
     setIsLoading(true);
     const [msgRes, leadRes] = await Promise.all([
       sb.from('whatsapp_messages').select('*').order('created_at', { ascending: true }),
-      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id').not('phone', 'is', null),
+      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status').not('phone', 'is', null),
     ]);
     setMessages(((msgRes.data ?? []) as WaMessage[]));
     setLeads(((leadRes.data ?? []) as LeadLite[]).filter((l) => (l.phone ?? '').trim()));
@@ -97,6 +100,12 @@ export function useInbox() {
   const campaignByLeadId = useMemo(() => {
     const m: Record<string, string | null> = {};
     for (const l of leads) m[l.id] = l.campaign_id ?? null;
+    return m;
+  }, [leads]);
+
+  const statusByLeadId = useMemo(() => {
+    const m: Record<string, string | null> = {};
+    for (const l of leads) m[l.id] = l.status ?? null;
     return m;
   }, [leads]);
 
@@ -118,6 +127,7 @@ export function useInbox() {
         userId: last.user_id,
         leadId,
         campaignId: leadId ? (campaignByLeadId[leadId] ?? null) : null,
+        leadStatus: leadId ? (statusByLeadId[leadId] ?? null) : null,
         label: (leadId && leadNameById[leadId]) || `+${last.phone}`,
         unassigned: last.user_id == null,
         lastMessage: last,
@@ -126,7 +136,7 @@ export function useInbox() {
       });
     }
     return out.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-  }, [messages, leadNameById, campaignByLeadId]);
+  }, [messages, leadNameById, campaignByLeadId, statusByLeadId]);
 
   const messagesForKey = useCallback(
     (key: string) => messages.filter((m) => convKey(m.user_id, m.phone) === key),

@@ -12,7 +12,11 @@ import { toWhatsAppNumber } from "./whatsapp-send.ts";
 // avoid supabase-js generic friction, matching the rest of the codebase.
 
 // Statuses we must never overwrite when a reply comes in (forward-only, no thrash).
-const NO_DOWNGRADE = "(payment_received,not_interested,replied)";
+// A new inbound reply flips the matched lead to 'replied' UNLESS it's already at a
+// protected status. not_interested is deliberately NOT protected: a reply means the
+// prospect is re-engaging, so it should flip to 'replied' (which also un-hides the
+// conversation in the Inbox, where not_interested is hidden by default).
+const NO_DOWNGRADE = "(payment_received,replied)";
 
 /** Best text/body for an inbound message. Text → the text body; anything else
  *  (image/audio/document/interactive/button/reaction/…) → a "[type]" placeholder

@@ -8,6 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { CampaignPicker } from '@/components/CampaignPicker';
+import { PipelineStatusSelect } from '@/components/PipelineStatusSelect';
+import { updateLeadStatus } from '@/lib/leadStatus';
+import type { PipelineStatus } from '@/types/outreach';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -49,7 +52,7 @@ function listPreview(m: { body: string | null; template_name: string | null }): 
 }
 
 const Inbox = () => {
-  const { user, conversations, messagesForKey, leads, isLoading, send } = useInbox();
+  const { user, conversations, messagesForKey, leads, isLoading, send, refetch } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
 
@@ -59,6 +62,11 @@ const Inbox = () => {
   // when a specific campaign is selected — that's where mis-routed / unknown-sender
   // replies land and must never be hidden.
   const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+  // Not-interested conversations are hidden by default (dead prospects); a toggle
+  // reveals them. A new inbound reply flips the lead back to 'replied' server-side
+  // (whatsapp-inbound), so re-engaging conversations reappear on their own.
+  const [showHidden, setShowHidden] = useState(false);
+  const [savingStatusKey, setSavingStatusKey] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [template, setTemplate] = useState(WA_REPLY_TEMPLATES[0].name);
   const [sending, setSending] = useState(false);
@@ -71,11 +79,41 @@ const Inbox = () => {
     const base = synthetic && !conversations.some((c) => c.key === synthetic.key)
       ? [synthetic, ...conversations]
       : conversations;
-    if (!campaignFilter) return base;
-    // Filtered to a campaign: that campaign's conversations PLUS Unassigned
-    // (always visible, never hidden by the campaign filter).
-    return base.filter((c) => c.campaignId === campaignFilter || c.unassigned);
-  }, [conversations, synthetic, campaignFilter]);
+    const byCampaign = !campaignFilter
+      ? base
+      // Filtered to a campaign: that campaign's conversations PLUS Unassigned
+      // (always visible, never hidden by the campaign filter).
+      : base.filter((c) => c.campaignId === campaignFilter || c.unassigned);
+    // Hide not_interested (dead prospects) unless "Show hidden" is on. Unassigned
+    // has no lead (leadStatus null) so it's never hidden by this.
+    if (showHidden) return byCampaign;
+    return byCampaign.filter((c) => c.leadStatus !== 'not_interested');
+  }, [conversations, synthetic, campaignFilter, showHidden]);
+
+  // How many not_interested conversations the current view is hiding (for the toggle).
+  const hiddenCount = useMemo(() => {
+    const base = campaignFilter ? conversations.filter((c) => c.campaignId === campaignFilter || c.unassigned) : conversations;
+    return base.filter((c) => c.leadStatus === 'not_interested').length;
+  }, [conversations, campaignFilter]);
+
+  // Set a conversation's lead status from the Inbox (two-way sync with Outreach).
+  // Manual override — no forward-only guard — EXCEPT a confirm when moving a paying
+  // customer AWAY from payment_received (mis-click protection).
+  const handleSetStatus = async (c: WaConversation, status: PipelineStatus) => {
+    if (!c.leadId || status === c.leadStatus) return;
+    if (c.leadStatus === 'payment_received' && status !== 'payment_received') {
+      if (!window.confirm(`${c.label} is marked Paid. Change it to "${status.replace(/_/g, ' ')}"? This removes it from the paid state.`)) return;
+    }
+    setSavingStatusKey(c.key);
+    try {
+      const { error } = await updateLeadStatus(c.leadId, status);
+      if (error) { toast({ title: 'Could not update status', description: error, variant: 'destructive' }); return; }
+      await refetch();
+      if (status === 'not_interested') toast({ title: 'Marked not interested', description: 'Hidden from the list — reappears if they reply.' });
+    } finally {
+      setSavingStatusKey(null);
+    }
+  };
 
   const active: WaConversation | null =
     (activeKey && conversations.find((c) => c.key === activeKey)) ||
@@ -101,6 +139,7 @@ const Inbox = () => {
       const synth: WaConversation = {
         key, phone: norm, userId: user.id, leadId: lead.id,
         campaignId: lead.campaign_id ?? null,
+        leadStatus: lead.status ?? null,
         label: lead.business_name || `+${norm}`, unassigned: false,
         lastMessage: undefined as never, lastMessageAt: new Date(0).toISOString(), lastInboundAt: null,
       };
@@ -192,6 +231,15 @@ const Inbox = () => {
       <div className="grid gap-3 md:grid-cols-[300px_1fr]">
         {/* Conversation list */}
         <Card className="h-[60vh] overflow-y-auto p-1.5">
+          {/* Show-hidden toggle — only when there are hidden (not_interested) convos. */}
+          {(hiddenCount > 0 || showHidden) && (
+            <button
+              onClick={() => setShowHidden((v) => !v)}
+              className="mb-1 w-full rounded-md px-2.5 py-1.5 text-left text-[11px] text-muted-foreground hover:bg-muted/50"
+            >
+              {showHidden ? '← Hide not-interested' : `Show hidden (${hiddenCount} not interested)`}
+            </button>
+          )}
           {isLoading ? (
             <div className="flex h-full items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
           ) : list.length === 0 ? (
@@ -201,8 +249,13 @@ const Inbox = () => {
               <p className="mt-1 text-xs opacity-70">Start one with “New”, or inbound replies will appear here as they arrive.</p>
             </div>
           ) : list.map((c) => (
-            <button key={c.key} onClick={() => setActiveKey(c.key)}
-              className={cn('flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors',
+            <div
+              key={c.key}
+              role="button"
+              tabIndex={0}
+              onClick={() => setActiveKey(c.key)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setActiveKey(c.key); } }}
+              className={cn('flex w-full cursor-pointer flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors',
                 activeKey === c.key ? 'bg-muted' : 'hover:bg-muted/50')}>
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5 truncate text-sm font-medium">
@@ -217,7 +270,16 @@ const Inbox = () => {
                   {listPreview(c.lastMessage)}
                 </span>
               )}
-            </button>
+              {/* Editable status pill — only for conversations linked to a lead
+                  (Unassigned has none). Two-way synced with Outreach. */}
+              {c.leadId && (
+                <div className="mt-0.5">
+                  {savingStatusKey === c.key
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                    : <PipelineStatusSelect value={c.leadStatus} onValueChange={(status) => handleSetStatus(c, status)} />}
+                </div>
+              )}
+            </div>
           ))}
         </Card>
 

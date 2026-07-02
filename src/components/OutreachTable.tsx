@@ -82,6 +82,7 @@ import { OutreachStatusBadge } from './OutreachStatusBadge';
 import { WhatsAppStatusBadge } from './WhatsAppStatusBadge';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
+import { PipelineStatusSelect } from './PipelineStatusSelect';
 import { NextActionEditor } from './NextActionEditor';
 import { CSVImportDialog } from './CSVImportDialog';
 import { OutreachMobileCard } from './OutreachMobileCard';
@@ -1728,10 +1729,10 @@ export function OutreachTable({
                           {/* Pipeline Status column */}
                           <TableCell onClick={(e) => e.stopPropagation()}>
                             {onPipelineStatusChange ? (
-                              <Select
+                              <PipelineStatusSelect
                                 value={lead.status}
-                                onValueChange={(v) => {
-                                  const status = v as PipelineStatus;
+                                triggerProps={lastContactedLeadId === lead.id ? { 'data-walkthrough-step': 'pipeline-status', 'data-walkthrough': 'pipeline-status' } : undefined}
+                                onValueChange={(status) => {
                                   // Clear optimistic override so manual change isn't blocked
                                   setOptimisticUpdates(prev => { const next = new Map(prev); next.delete(lead.id); return next; });
                                   onPipelineStatusChange(lead.id, status);
@@ -1739,18 +1740,7 @@ export function OutreachTable({
                                     onMarkAsInterested([lead.id]);
                                   }
                                 }}
-                              >
-                                <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent focus:ring-0" {...(lastContactedLeadId === lead.id ? { 'data-walkthrough-step': 'pipeline-status', 'data-walkthrough': 'pipeline-status' } : {})}>
-                                  <PipelineStatusBadge status={lead.status as PipelineStatus} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {PIPELINE_STATUS_OPTIONS.map((opt) => (
-                                    <SelectItem key={opt.value} value={opt.value}>
-                                      {opt.label}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                              />
                             ) : (
                               <PipelineStatusBadge status={lead.status as PipelineStatus} />
                             )}
