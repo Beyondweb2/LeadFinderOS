@@ -27,6 +27,8 @@ export interface BulkJob {
   error: string | null;
   created_at: string;
   updated_at: string;
+  /** Per-item state (drives per-row spinners). 'running' = currently generating. */
+  items?: { lead_id: string; status: string }[];
 }
 
 const RECENT_WINDOW_MS = 10 * 60 * 1000;
@@ -48,7 +50,7 @@ export function useBulkJobs(onJobComplete?: (job: BulkJob) => void) {
     if (!user) return;
     const { data } = await sb
       .from('bulk_jobs')
-      .select('id, job_type, status, total, done_count, failed_count, skipped_count, error, created_at, updated_at')
+      .select('id, job_type, status, total, done_count, failed_count, skipped_count, error, created_at, updated_at, items')
       .order('created_at', { ascending: false })
       .limit(5);
     const jobs = (data ?? []) as BulkJob[];

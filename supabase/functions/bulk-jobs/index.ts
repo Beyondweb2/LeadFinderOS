@@ -27,9 +27,11 @@ const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
 const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50 };
-const TIME_BUDGET_MS = 90_000;   // stop starting new items after this
-const ITEM_HEADROOM_MS = 45_000; // ...minus headroom so a slow item still fits the wall clock
-const LOCK_MS = 2 * 60_000;      // claim window (refreshed per item)
+const TIME_BUDGET_MS = 90_000;   // stop starting new WAVES once elapsed passes this…
+const WAVE_HEADROOM_MS = 55_000; // …minus headroom, so one full parallel wave + persist still fits under the 150s limit
+const WAVE_SIZE = 5;             // site_gen bounded concurrency (enrich stays 1-at-a-time)
+const SITEGEN_PER_ITEM_EST_USD = 0.03; // used to SIZE a wave to the remaining daily budget → a batch can't overshoot the cap by >~1 item
+const LOCK_MS = 2 * 60_000;      // claim window (refreshed on every persist)
 const STALE_MS = 3 * 60_000;     // sweep re-kicks active jobs idle longer than this
 const SITEGEN_DAILY_BUDGET_USD = 10;
 
@@ -48,7 +50,7 @@ function json(body: unknown, status = 200): Response {
 
 interface JobItem {
   lead_id: string;
-  status: "pending" | "done" | "cached" | "failed" | "skipped_cap" | "skipped_existing";
+  status: "pending" | "running" | "done" | "cached" | "failed" | "skipped_cap" | "skipped_existing";
   error?: string;
 }
 
@@ -172,13 +174,22 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
   return { status: "failed", error: String(data?.error ?? `HTTP ${res.status}`).slice(0, 200) };
 }
 
-/** Process pending items under the time budget; persist after EVERY item. */
+/** Process pending items in WAVES of bounded concurrency under the time budget,
+ *  persisting after every wave (and before it, to mark the wave in-flight). */
 // deno-lint-ignore no-explicit-any
 async function processChunk(service: any, job: JobRow): Promise<void> {
   const started = Date.now();
   const items = job.items;
   let done = job.done_count, failed = job.failed_count, skipped = job.skipped_count;
   let capHit = false;
+  // site_gen runs up to WAVE_SIZE concurrently; enrich stays 1-at-a-time (its $2/day
+  // cap lives inside enrich-business and isn't budget-sized here).
+  const concurrency = job.job_type === "site_gen" ? WAVE_SIZE : 1;
+
+  // Recover orphaned in-flight items from a prior chunk that crashed/timed-out mid-wave
+  // (a clean chunk boundary never leaves "running"). Re-running is safe — generate-
+  // barber-site's duplicate guard returns existing:true → skipped_existing.
+  for (const it of items) if (it.status === "running") it.status = "pending";
 
   const persist = async (extra: Record<string, unknown> = {}) => {
     await service.from("bulk_jobs").update({
@@ -192,46 +203,64 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
     }).eq("id", job.id);
   };
 
-  for (const item of items) {
-    if (item.status !== "pending") continue;
+  // Mark every still-pending item skipped_cap (when the daily cap is reached).
+  const capRemaining = () => {
+    for (const it of items) if (it.status === "pending") { it.status = "skipped_cap"; skipped++; }
+  };
 
-    // Out of budget → persist, re-kick self for the next chunk, exit running.
-    if (Date.now() - started > TIME_BUDGET_MS - ITEM_HEADROOM_MS) {
+  while (true) {
+    const pending = items.filter((it) => it.status === "pending");
+    if (pending.length === 0) break;
+
+    // Out of budget → persist, re-kick self for the next chunk, exit running. Checked
+    // BEFORE a wave, so a clean boundary never leaves items "running".
+    if (Date.now() - started > TIME_BUDGET_MS - WAVE_HEADROOM_MS) {
       await persist();
       await kickRun(job.id);
       return;
     }
 
-    // Cancelled while running? (checked between items — an in-flight item completes)
+    // Cancelled while running? (checked between waves — an in-flight wave completes.)
     const { data: fresh } = await service.from("bulk_jobs").select("status").eq("id", job.id).maybeSingle();
     if (fresh?.status === "cancelled") return;
 
-    // Site-gen $10/day global spend cap (enrich's $2/day lives inside enrich-business).
-    if (job.job_type === "site_gen" && !capHit) {
+    // Wave size = concurrency, but for site_gen also clamp to the remaining $10/day
+    // budget so a parallel batch can't overshoot the cap by more than ~1 item.
+    let waveSize = Math.min(concurrency, pending.length);
+    if (job.job_type === "site_gen") {
       const spent = await sitegenSpendTodayUsd(service);
-      if (spent >= SITEGEN_DAILY_BUDGET_USD) capHit = true;
+      const budgetRoom = Math.floor((SITEGEN_DAILY_BUDGET_USD - spent) / SITEGEN_PER_ITEM_EST_USD);
+      if (budgetRoom <= 0) { capHit = true; capRemaining(); break; }
+      waveSize = Math.min(waveSize, budgetRoom);
     }
+    const wave = pending.slice(0, waveSize);
 
-    if (capHit) {
-      item.status = "skipped_cap";
-      skipped++;
-      continue; // fall through fast — mark ALL remaining pending as capped
-    }
-
-    try {
-      const r = await runItem(service, job, item);
-      item.status = r.status;
-      if (r.error) item.error = r.error;
-      if (r.status === "done" || r.status === "cached") done++;
-      else if (r.status === "failed") failed++;
-      else skipped++;
-      if (r.capHit) capHit = true; // remaining pending items get skipped_cap above
-    } catch (e) {
-      item.status = "failed";
-      item.error = (e as Error).message.slice(0, 200);
-      failed++;
-    }
+    // Mark the wave in-flight (drives the per-row spinner) and persist before launching.
+    for (const it of wave) it.status = "running";
     await persist();
+
+    // Run the wave concurrently. allSettled + per-item mapping → one item failing
+    // (or throwing) never kills the others.
+    const results = await Promise.allSettled(wave.map((it) => runItem(service, job, it)));
+    results.forEach((res, i) => {
+      const it = wave[i];
+      if (res.status === "fulfilled") {
+        const r = res.value;
+        it.status = r.status;
+        if (r.error) it.error = r.error;
+        if (r.status === "done" || r.status === "cached") done++;
+        else if (r.status === "failed") failed++;
+        else skipped++; // skipped_cap / skipped_existing
+        if (r.capHit) capHit = true; // per-operator 20/24h 403 → cap the rest
+      } else {
+        it.status = "failed";
+        it.error = String((res.reason as Error)?.message ?? res.reason).slice(0, 200);
+        failed++;
+      }
+    });
+    await persist();
+
+    if (capHit) { capRemaining(); break; }
   }
 
   // No pending items left → finished.
