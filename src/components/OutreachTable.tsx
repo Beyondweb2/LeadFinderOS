@@ -1667,11 +1667,13 @@ export function OutreachTable({
                         />
                       </TableCell>
                       <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
                           {lead.country === 'Australia' && (
                             <span className="text-xs" title="Australia">🇦🇺</span>
                           )}
-                          <span className="truncate max-w-[200px]">{lead.business_name}</span>
+                          {/* Wrap a long name within a bounded width so the row grows
+                              but the columns to its right stay aligned (matches LeadsTable). */}
+                          <span className="min-w-0 break-words max-w-[200px]">{lead.business_name}</span>
                           {lead.is_potential_work && (
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
                           )}
