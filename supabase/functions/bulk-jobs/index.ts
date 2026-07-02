@@ -290,14 +290,22 @@ Deno.serve(async (req) => {
     if (action === "sweep") {
       if (!isInternal) return json({ error: "forbidden" }, 403);
       const staleCutoff = new Date(Date.now() - STALE_MS).toISOString();
-      const { data: stale } = await service
-        .from("bulk_jobs")
-        .select("id")
-        .in("status", ["queued", "running"])
-        .lt("updated_at", staleCutoff)
-        .limit(5);
-      for (const j of (stale ?? []) as { id: string }[]) await kickRun(j.id);
-      return json({ ok: true, kicked: stale?.length ?? 0 });
+      // Kick every job that needs a runner: ANY 'queued' job (its create-time kick
+      // never landed — pick it up within ~1 min) PLUS any 'running' job whose chain
+      // has gone stale (> STALE_MS since its last persist = the self-re-invoke broke).
+      // The atomic claim (status in [queued,running] + locked_until null/expired)
+      // makes a sweeper kick racing the create-time kick — or a healthy live chain
+      // (which keeps locked_until in the future) — a harmless no-op.
+      const [queuedRes, staleRunningRes] = await Promise.all([
+        service.from("bulk_jobs").select("id").eq("status", "queued").limit(10),
+        service.from("bulk_jobs").select("id").eq("status", "running").lt("updated_at", staleCutoff).limit(10),
+      ]);
+      const ids = [...new Set([
+        ...((queuedRes.data ?? []) as { id: string }[]),
+        ...((staleRunningRes.data ?? []) as { id: string }[]),
+      ].map((j) => j.id))];
+      for (const id of ids) await kickRun(id);
+      return json({ ok: true, kicked: ids.length });
     }
 
     if (action === "run") {
