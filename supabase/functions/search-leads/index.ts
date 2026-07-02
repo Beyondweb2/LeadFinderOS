@@ -2,6 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.22.4';
 import { mapsDiscover } from '../_shared/enrichment/sources.ts';
 import { BOOKING_PLATFORM_DOMAINS, DIRECTORY_AND_RECORD_DOMAINS } from '../_shared/aggregators.ts';
+import { qualifierInfo, resolveGeoBias } from '../_shared/geobias.ts';
 
 // ═══════════════════════════════════════════════
 // CORS
@@ -209,39 +210,19 @@ class GeocodeServiceError extends Error {
   constructor(detail: string) { super(`Geocode service error: ${detail}`); this.name = 'GeocodeServiceError'; }
 }
 
-// Common country names/codes → ISO-3166-1 alpha-2 (Google's components=country:).
-// Only what we plausibly serve; anything unmapped falls through to the raw 2-letter
-// check, else no bias.
-const COUNTRY_ALIASES: Record<string, string> = {
-  UK: 'GB', GB: 'GB', GREATBRITAIN: 'GB', UNITEDKINGDOM: 'GB', ENGLAND: 'GB', SCOTLAND: 'GB', WALES: 'GB',
-  US: 'US', USA: 'US', UNITEDSTATES: 'US', AMERICA: 'US',
-  AU: 'AU', AUS: 'AU', AUSTRALIA: 'AU',
-  CA: 'CA', CANADA: 'CA', IE: 'IE', IRELAND: 'IE', NZ: 'NZ', NEWZEALAND: 'NZ',
-};
+// Country-bias resolution (qualifierInfo / resolveGeoBias) lives in ../_shared/geobias.ts
+// so it's pure + unit-tested (geobias.test.ts) without importing this module's server.
 
-/** Normalise an explicit `country` field to an ISO alpha-2 code, or null. */
-function normCountry(country?: string): string | null {
-  const c = (country ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
-  if (!c) return null;
-  if (COUNTRY_ALIASES[c]) return COUNTRY_ALIASES[c];
-  return /^[A-Z]{2}$/.test(c) ? c : null;
-}
-
-// If the location already carries a qualifier — ANY comma ("Reading, PA",
-// "Reading, Berkshire", "Reading, UK") or a trailing country/region word — the user
-// has disambiguated it themselves, so we must NOT force a default country bias.
-const LOCATION_QUALIFIER_RE = /,|\b(uk|u\.k\.|g\.?b\.?|england|scotland|wales|northern ireland|ireland|eire|usa?|u\.s\.a?\.?|united states|america|canada|australia|aus|nz|new zealand)\b/i;
-
-/**
- * Decide the geocode country bias for a location, worldwide-safe:
- *   1. Location already qualified (comma or country/region word) → no bias (trust it).
- *   2. Explicit `country` field on the request → that country.
- *   3. Otherwise → default GB (bare UK town names like "Reading" resolve correctly).
- * Returns an ISO alpha-2 code, or null for "no bias".
- */
-function resolveGeoBias(location: string, country?: string): string | null {
-  if (LOCATION_QUALIFIER_RE.test(location)) return null;
-  return normCountry(country) ?? 'GB';
+/** Country ISO2 from a geocode result's address_components (short_name), else null. */
+function countryOfResult(result: any): string | null {
+  const comps = result?.address_components;
+  if (!Array.isArray(comps)) return null;
+  for (const c of comps) {
+    if (Array.isArray(c.types) && c.types.includes('country')) {
+      return (c.short_name ?? '').toString().toUpperCase() || null;
+    }
+  }
+  return null;
 }
 
 /** Pull a bbox from a geocode result's geometry (prefer bounds — the true area
@@ -264,11 +245,17 @@ async function geocodeLocation(
   needViewport = false,
   country?: string,
 ): Promise<GeoHit> {
-  // Worldwide-safe country bias: bare "Reading" → GB by default; "Reading, PA" or an
-  // explicit country field → that country; a qualified location → no forced bias.
-  const bias = resolveGeoBias(location, country);
-  // Bias is part of the cache identity — otherwise a GB-resolved "reading" would
-  // wrongly satisfy a later US-biased "reading" (cross-country cache poisoning).
+  // Worldwide-safe country bias (SOFT region hint): bare "Reading" → region=gb so it
+  // resolves to the UK; any qualifier ("Reading, PA", "Reading PA", a country word) →
+  // no forced bias + (for a foreign state without a country word) the country appended
+  // so Google resolves it unambiguously. Pure logic lives in _shared/geobias.ts.
+  const q = qualifierInfo(location);
+  const bias = resolveGeoBias(location, country);          // ISO2 region hint, or null
+  const expected = bias ?? q.country;                      // country we expect back, if any
+  const primaryAddress = q.appendCountry ? `${location}, ${q.appendCountry}` : location;
+  // Bias is part of the cache identity — a GB-biased "reading" must not satisfy a
+  // later US-biased "reading" (cross-country cache poisoning). Qualified inputs carry
+  // no bias suffix, so they never collide with a stale "@GB" row.
   const locationKey = normalizeLocationKey(location) + (bias ? `@${bias}` : '');
 
   // ─── GEOCODE CACHE CHECK ─────────────────────
@@ -294,13 +281,14 @@ async function geocodeLocation(
   }
 
   // ─── GOOGLE GEOCODING API ────────────────────
-  // One attempt against Google. Returns a hit, or null for ZERO_RESULTS (so the
-  // caller can retry un-biased). Throws GeocodeServiceError for a genuine service
-  // problem (HTTP error, quota, denied, non-JSON) — never a raw 5xx upstream.
-  const attempt = async (useBias: boolean): Promise<GeoHit | null> => {
-    let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`;
-    if (useBias && bias) url += `&region=${bias.toLowerCase()}&components=country:${bias}`;
-    console.log(`[DIAG-GEOCODE] Request URL: ${url.replace(apiKey, '[REDACTED]')} (bias=${useBias ? bias : 'none'})`);
+  // One attempt for a given address + optional SOFT region bias. Returns a hit (with
+  // the resolved country) or null for ZERO_RESULTS. Throws GeocodeServiceError for a
+  // genuine service problem (HTTP error, quota, denied, non-JSON) — never a raw 5xx.
+  type GeoAttempt = GeoHit & { resultCountry: string | null };
+  const attempt = async (address: string, regionBias: string | null): Promise<GeoAttempt | null> => {
+    let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
+    if (regionBias) url += `&region=${regionBias.toLowerCase()}`;   // SOFT tiebreak, NOT a hard components=country filter
+    console.log(`[DIAG-GEOCODE] Request URL: ${url.replace(apiKey, '[REDACTED]')} (address="${address}", region=${regionBias ?? 'none'})`);
 
     let res: Response;
     try {
@@ -322,12 +310,12 @@ async function geocodeLocation(
     }
 
     if (data.status === 'OK' && data.results?.[0]) {
-      const coords = data.results[0].geometry.location;
-      return { lat: coords.lat, lng: coords.lng, viewport: extractViewport(data.results[0].geometry) };
+      const r = data.results[0];
+      return { lat: r.geometry.location.lat, lng: r.geometry.location.lng, viewport: extractViewport(r.geometry), resultCountry: countryOfResult(r) };
     }
-    // Expected "no such place" — let the caller decide whether to retry un-biased.
+    // Expected "no such place".
     if (data.status === 'ZERO_RESULTS' || !data.results?.[0]) {
-      console.warn(`[DIAG-GEOCODE] ZERO_RESULTS (bias=${useBias ? bias : 'none'})`);
+      console.warn(`[DIAG-GEOCODE] ZERO_RESULTS (address="${address}", region=${regionBias ?? 'none'})`);
       return null;
     }
     // Anything else (OVER_QUERY_LIMIT, REQUEST_DENIED, OVER_DAILY_LIMIT, …) is a
@@ -336,17 +324,21 @@ async function geocodeLocation(
     throw new GeocodeServiceError(String(data.status));
   };
 
-  // Primary attempt (biased if a bias applies). If it ZERO_RESULTS *and* a bias was
-  // applied, retry ONCE un-biased so nothing gets permanently stuck on the wrong
-  // country. The retry is the only extra geocode call, and only on a miss.
-  let hit = await attempt(!!bias);
-  if (!hit && bias) {
-    console.log('[DIAG-GEOCODE] Biased attempt empty — retrying without country bias');
-    hit = await attempt(false);
+  // Primary attempt: the (country-appended) address + soft region bias. Retry ONCE,
+  // plain (raw location, no bias, no append), when the primary MISSED (ZERO_RESULTS)
+  // OR came back with the WRONG country (a same-named place the soft bias favoured) —
+  // so a wrong-country hit can still fail over. Retry only fires on miss/mismatch; the
+  // happy path is a single geocode call.
+  let hit = await attempt(primaryAddress, bias);
+  const wrongCountry = !!(hit && expected && hit.resultCountry && hit.resultCountry !== expected);
+  if ((!hit || wrongCountry) && (bias || q.appendCountry)) {
+    console.log(`[DIAG-GEOCODE] Primary ${hit ? `wrong country (${hit.resultCountry}≠${expected})` : 'empty'} — retrying plain "${location}"`);
+    const plain = await attempt(location, null);
+    if (plain) hit = plain;   // keep the biased hit only if the plain retry also fails
   }
   if (!hit) throw new LocationNotFoundError(location);
 
-  console.log(`[DIAG-GEOCODE] SUCCESS — lat: ${hit.lat}, lng: ${hit.lng}, viewport: ${hit.viewport ? 'yes' : 'none'}`);
+  console.log(`[DIAG-GEOCODE] SUCCESS — lat: ${hit.lat}, lng: ${hit.lng}, country: ${hit.resultCountry ?? '?'}, viewport: ${hit.viewport ? 'yes' : 'none'}`);
 
   // ─── GEOCODE CACHE STORE ─────────────────────
   if (serviceClient) {
