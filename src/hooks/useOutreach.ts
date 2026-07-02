@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { OutreachLead, OutreachActivity, LeadStatus, NextActionType, Country, ListType } from '@/types/outreach';
 import type { Lead } from '@/types/lead';
 import { recordClaimOnAdd, markClaimContacted } from '@/lib/claims';
+import { statusUpdatePatch } from '@/lib/leadStatus';
 
 // Statuses that represent an outreach attempt (message/call sent)
 const OUTREACH_STATUSES: LeadStatus[] = [
@@ -517,37 +518,12 @@ export function useOutreach() {
     
     // Capture previous status BEFORE the update for outreach tracking
     const previousStatus = targetLead?.status;
-    
-    // If new status is an outreach/contact method, persist it as contact_method
-    const CONTACT_METHOD_STATUSES: LeadStatus[] = ['whatsapp', 'sms', 'facebook_msg', 'sent_initial_text', 'sent_voice_note'];
-    const updates: Partial<OutreachLead> = { status };
-    if (CONTACT_METHOD_STATUSES.includes(status)) {
-      updates.contact_method = status;
-    }
-    // Marking a lead "Replied" ALWAYS queues a same-day "Send Draft" next action,
-    // overwriting any existing one — so a reply never sits without a follow-up step.
-    if (status === 'replied') {
-      const now = new Date();
-      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      updates.next_action = 'send_draft';
-      updates.next_action_date = today;
-    }
-    // Marking a lead "Site Sent" ALWAYS queues a Follow-up the NEXT DAY, overwriting
-    // any existing next action — so a sent site always gets a timely chase.
-    if (status === 'site_sent') {
-      const due = new Date();
-      due.setDate(due.getDate() + 1);
-      const dueStr = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, '0')}-${String(due.getDate()).padStart(2, '0')}`;
-      updates.next_action = 'follow_up';
-      updates.next_action_date = dueStr;
-    }
-    // Not Interested = a dead prospect → untrack it so the Tracked filter stays
-    // clean (only live prospects). Status stays 'not_interested', so the dashboard
-    // Sent/Replied reconciliation is unchanged. Covers already-archived leads too,
-    // since updateLead routes local state by is_archived.
-    if (status === 'not_interested') {
-      updates.is_potential_work = false;
-    }
+
+    // The column changes for this status come from the shared patch (single source
+    // of truth — the Inbox status pill writes the identical patch via updateLeadStatus):
+    //   contact_method mapping · replied→same-day Send Draft · site_sent→next-day
+    //   Follow-up · not_interested→untrack (is_potential_work=false).
+    const updates: Partial<OutreachLead> = statusUpdatePatch(status);
 
     const result = await updateLead(leadId, updates);
     
