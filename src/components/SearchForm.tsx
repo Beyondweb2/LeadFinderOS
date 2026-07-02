@@ -116,10 +116,9 @@ export function SearchForm({
                 />
               </div>
               {/* Region cost note — only past 50km, where a search tiles the whole
-                  area (multiple paid searches) instead of one centre point. Mirrors
-                  buildTileGrid in search-leads EXACTLY (8km medium spacing, ×1.15
-                  auto-coarsen until ≤25 tiles) so the live estimate matches the
-                  grid the server will actually run for this radius. */}
+                  area (multiple paid searches). Tile count mirrors buildTileGrid in
+                  search-leads EXACTLY (8km medium spacing, ×1.15 auto-coarsen until
+                  ≤25 tiles) so the estimate matches what the server will run. */}
               {radius > 50 && (() => {
                 const sizeKm = radius * 2;             // bbox side = centre ± radius
                 let s = 8;                             // DENSITY_KM.medium (server default)
@@ -128,15 +127,9 @@ export function SearchForm({
                   s *= 1.15;
                   cols = Math.max(1, Math.ceil(sizeKm / s));
                 }
-                const tiles = cols * cols;
-                const spacing = Math.round(s * 10) / 10;
-                const cost = (tiles * 2 * 0.032).toFixed(2); // TILE_MAX_PAGES × $0.032/page
+                const cost = (cols * cols * 2 * 0.032).toFixed(2); // TILE_MAX_PAGES × $0.032/page
                 return (
-                  <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    <span className="font-medium text-foreground/80">This search:</span> ~{tiles} areas
-                    scanned ({cols}×{cols} grid, ~{spacing} km apart) · est. ~${cost} · ~15–30s ·
-                    free to re-run for 72h · $10/day auto-cap.
-                  </p>
+                  <p className="text-[11px] text-muted-foreground">Est. cost: ~${cost}</p>
                 );
               })()}
             </div>
