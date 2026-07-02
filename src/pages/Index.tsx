@@ -30,9 +30,7 @@ const Index = () => {
 
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
   // One page, one search. The radius slider is the single control: ≤50km = a
-  // normal single-centre search; >50km = region tiling (bbox = centre ± radius).
-  // Tracks whether the LAST search was a region scan, for the slow-search spinner.
-  const [lastWasRegion, setLastWasRegion] = useState(false);
+  // normal single-centre search only — region tiling is capped out of the UI.
 
   // Active campaign — new leads added from search are tagged with it.
   // Persisted so it survives navigation/reload.
@@ -74,11 +72,10 @@ const Index = () => {
 
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
-    // Slider past 50km = region tiling (bbox = centre ± radius); otherwise a
-    // normal single-centre search. Density defaults server-side (medium 8km).
-    const isRegion = (filters.radius ?? 0) > 50_000;
-    setLastWasRegion(isRegion);
-    search({ ...filters, region: isRegion }, false, false);
+    // Region tiling is capped out of the UI (slider max = 50km) — always a normal
+    // single-centre search. The backend tiledRegionSearch stays in place but
+    // dormant: the frontend never sends region:true.
+    search(filters, false, false);
   }, [search]);
 
   // Notify when a region search was downgraded to a single area (daily budget).
@@ -251,16 +248,6 @@ const Index = () => {
           isPaidSubscriber={true}
         />
       </section>
-
-      {/* Region scanning — informative spinner for the (slower) tiled search */}
-      {isLoading && lastWasRegion && (
-        <div className="flex items-center gap-3 py-3 px-4 bg-primary/5 border border-primary/20 rounded-lg">
-          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
-          <span className="text-xs sm:text-sm text-muted-foreground">
-            Scanning the whole region — searching multiple areas and merging results. This can take ~15–30s.
-          </span>
-        </div>
-      )}
 
       {/* Search Error + Retry */}
       {searchError && !isLoading && (
