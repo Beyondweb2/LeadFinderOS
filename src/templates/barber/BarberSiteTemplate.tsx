@@ -1023,44 +1023,48 @@ function Services({
           </h2>
         </Reveal>
 
-        {/* Multi-column menu flow: 1 col on mobile → 2 (sm) → 3 (lg), so a long menu
-            stays ~a third the height instead of one endless column. All items stay
-            visible (no cap/hide) — break-inside-avoid keeps each row intact. */}
-        <ul className="columns-1 gap-x-12 sm:columns-2 lg:columns-3">
+        {/* Multi-column menu flow: 1 col on mobile → 2 (sm+). Two columns on desktop
+            (not three) gives each service item enough width for its title to sit on one
+            line. All items stay visible (no cap/hide) — break-inside-avoid keeps each
+            row intact. */}
+        <ul className="columns-1 gap-x-12 sm:columns-2">
           {services.map((s, i) => (
             <Reveal as="li" className="break-inside-avoid" key={`${s.name}-${i}`} delay={Math.min(i * 0.05, 0.3)}>
-              <div className="group flex items-baseline gap-3 border-b border-white/[0.06] py-5">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <h3 className="text-lg font-bold text-white transition-colors group-hover:text-amber-soft">
-                      {s.name}
-                    </h3>
-                  </div>
-                  {s.description && (
-                    <p className="mt-1 text-sm leading-relaxed text-zinc-400">
-                      {s.description}
-                    </p>
+              <div className="group border-b border-white/[0.06] py-5">
+                <div className="flex items-baseline gap-2">
+                  {/* Title takes its natural width (NOT flex-1), so the dotted leader
+                      fills only the leftover slack instead of splitting the row 50/50
+                      and squeezing the title. Wraps only if genuinely too long. */}
+                  <h3 className="min-w-0 text-lg font-bold text-white transition-colors group-hover:text-amber-soft">
+                    {s.name}
+                  </h3>
+                  {/* dotted leader */}
+                  <span className="mx-1 hidden flex-1 translate-y-[-3px] border-b border-dotted border-white/15 sm:block" />
+                  {s.price ? (
+                    <span className="shrink-0 font-display text-2xl tracking-wide text-amber">
+                      {s.price}
+                    </span>
+                  ) : showExamplePrices ? (
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className="rounded bg-amber/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-soft">
+                        Example
+                      </span>
+                      <span className="font-display text-xl tracking-wide text-amber/55">
+                        {examplePrice(s.name)}
+                      </span>
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-sm font-medium uppercase tracking-wide text-zinc-500">
+                      Price on request
+                    </span>
                   )}
                 </div>
-                {/* dotted leader */}
-                <span className="mx-1 hidden flex-1 translate-y-[-3px] border-b border-dotted border-white/15 sm:block" />
-                {s.price ? (
-                  <span className="shrink-0 font-display text-2xl tracking-wide text-amber">
-                    {s.price}
-                  </span>
-                ) : showExamplePrices ? (
-                  <span className="flex shrink-0 items-center gap-2">
-                    <span className="rounded bg-amber/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-soft">
-                      Example
-                    </span>
-                    <span className="font-display text-xl tracking-wide text-amber/55">
-                      {examplePrice(s.name)}
-                    </span>
-                  </span>
-                ) : (
-                  <span className="shrink-0 text-sm font-medium uppercase tracking-wide text-zinc-500">
-                    Price on request
-                  </span>
+                {/* Description on its own full-width line (was squeezed inside the
+                    half-width title column before). */}
+                {s.description && (
+                  <p className="mt-1 text-sm leading-relaxed text-zinc-400">
+                    {s.description}
+                  </p>
                 )}
               </div>
             </Reveal>
