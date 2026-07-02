@@ -116,14 +116,26 @@ export function SearchForm({
                 />
               </div>
               {/* Region cost note — only past 50km, where a search tiles the whole
-                  area (multiple paid searches) instead of one centre point. */}
+                  area (multiple paid searches) instead of one centre point. Mirrors
+                  buildTileGrid in search-leads EXACTLY (8km medium spacing, ×1.15
+                  auto-coarsen until ≤25 tiles) so the live estimate matches the
+                  grid the server will actually run for this radius. */}
               {radius > 50 && (() => {
-                const tiles = Math.min(25, Math.ceil((2 * radius) / 8) ** 2);
-                const cost = (tiles * 2 * 0.032).toFixed(2);
+                const sizeKm = radius * 2;             // bbox side = centre ± radius
+                let s = 8;                             // DENSITY_KM.medium (server default)
+                let cols = Math.max(1, Math.ceil(sizeKm / s));
+                while (cols * cols > 25) {             // MAX_TILES auto-coarsen (×1.15 steps)
+                  s *= 1.15;
+                  cols = Math.max(1, Math.ceil(sizeKm / s));
+                }
+                const tiles = cols * cols;
+                const spacing = Math.round(s * 10) / 10;
+                const cost = (tiles * 2 * 0.032).toFixed(2); // TILE_MAX_PAGES × $0.032/page
                 return (
                   <p className="text-[11px] leading-relaxed text-muted-foreground">
-                    Region scan: tiles a ~±{radius} km area into ~{tiles} searches · est. ~${cost} · takes ~15–30s ·
-                    re-runs free for 72h · auto-capped at $10/day.
+                    <span className="font-medium text-foreground/80">This search:</span> ~{tiles} areas
+                    scanned ({cols}×{cols} grid, ~{spacing} km apart) · est. ~${cost} · ~15–30s ·
+                    free to re-run for 72h · $10/day auto-cap.
                   </p>
                 );
               })()}

@@ -57,6 +57,23 @@ export function useCampaigns() {
     fetchCampaigns();
   }, [fetchCampaigns]);
 
+  // Cross-instance sync: useCampaigns has NO shared store — every caller (page,
+  // picker, dialog) holds its own list. When ONE instance creates a campaign, the
+  // others stay stale until their next fetch, so anything validating an id against
+  // its own list (e.g. Find Leads' self-heal effect) treats the brand-new campaign
+  // as unknown and resets the selection to "No campaign". Mirror the existing
+  // 'campaign-deleted' event pattern: creation broadcasts the row and every
+  // instance appends it (deduped), so all lists agree immediately.
+  useEffect(() => {
+    const onCreated = (e: Event) => {
+      const created = (e as CustomEvent).detail?.campaign as Campaign | undefined;
+      if (!created?.id) return;
+      setCampaigns((prev) => (prev.some((c) => c.id === created.id) ? prev : [...prev, created]));
+    };
+    window.addEventListener('campaign-created', onCreated);
+    return () => window.removeEventListener('campaign-created', onCreated);
+  }, []);
+
   const createCampaign = useCallback(async (input: CampaignInput): Promise<Campaign | null> => {
     const trimmed = input.name.trim();
     if (!trimmed) return null;
@@ -84,6 +101,9 @@ export function useCampaigns() {
 
     const created = data as Campaign;
     setCampaigns((prev) => [...prev, created]);
+    // Sync every other useCampaigns instance BEFORE the picker's deferred
+    // onChange sets the new id as selected — see the listener above.
+    window.dispatchEvent(new CustomEvent('campaign-created', { detail: { campaign: created } }));
     return created;
   }, [user, toast]);
 
