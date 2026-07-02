@@ -23,8 +23,6 @@ export interface Lead {
 
 export type Country = 'UK' | 'Australia' | 'USA' | 'Canada' | 'Germany' | 'France' | 'Spain' | 'Italy' | 'Netherlands' | 'Belgium' | 'Ireland' | 'NewZealand' | 'SouthAfrica' | 'India' | 'Singapore' | 'UAE' | 'Brazil' | 'Mexico' | 'Japan' | 'Sweden';
 
-export type RegionDensity = 'fine' | 'medium' | 'coarse';
-
 export interface SearchFilters {
   keyword: string;
   location: string;
@@ -33,12 +31,9 @@ export interface SearchFilters {
   minReviews?: number;
   requirePhone?: boolean;
   country?: Country;
-  /** List-builder "cast wide" mode → search-leads returns the full discovered pool. */
-  broad?: boolean;
-  /** Region tiling mode → tile the area's bbox into a grid, merge + dedupe. */
+  /** Region tiling mode (radius slider past 50km) → tile a bbox of centre ± radius,
+   *  merge + dedupe. Density defaults server-side (medium 8km, auto-coarsened). */
   region?: boolean;
-  /** Tile density for region mode (finer = more tiles = more coverage/cost). */
-  density?: RegionDensity;
 }
 
 /** Grid the region search actually used (echoed back for the results banner). */
