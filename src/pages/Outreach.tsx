@@ -9,8 +9,10 @@ import { PostContactModal } from '@/components/PostContactModal';
 import { useOutreach } from '@/hooks/useOutreach';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { useAuth } from '@/hooks/useAuth';
+import { useBulkJobs } from '@/hooks/useBulkJobs';
 import { CampaignPicker } from '@/components/CampaignPicker';
-import { Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Loader2, CheckCircle2, X } from 'lucide-react';
 import { isDemoLead } from '@/lib/demoLeads';
 import { readCampaignFilter, writeCampaignFilter } from '@/lib/outreachPrefs';
 import type { ContactMethod, PipelineStatus } from '@/types/outreach';
@@ -41,6 +43,15 @@ const Outreach = () => {
   } = useOutreach();
 
   const { user } = useAuth();
+
+  // Server-side bulk jobs (enrich / site-gen): survive leaving the page. On a
+  // watched job finishing, refetch leads (enrich results) and bump the sites
+  // token (site-gen results) so OutreachTable re-reads generated_sites.
+  const [sitesRefreshToken, setSitesRefreshToken] = useState(0);
+  const { activeJob, recentJob, createJob, creating: creatingJob, cancelJob, dismissRecent } = useBulkJobs((job) => {
+    fetchLeads();
+    if (job.job_type === 'site_gen') setSitesRefreshToken((t) => t + 1);
+  });
 
   // Campaign filter (null = all campaigns). Persisted per-user so it survives
   // navigation + reload + re-login (restored in an effect once campaigns load).
@@ -180,6 +191,43 @@ const Outreach = () => {
       {/* WhatsApp outreach queue (admin-only; self-hides otherwise). */}
       <WhatsAppQueuePanel leads={allLeads} onUpdateLead={updateLead} />
 
+      {/* Server-side bulk job progress — lives in bulk_jobs, so it survives
+          leaving the page/browser. Shows a live job, or a finished-while-away
+          summary (last 10 min) on return. */}
+      {activeJob && (
+        <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
+          <span className="text-muted-foreground">
+            Bulk {activeJob.job_type === 'enrich' ? 'enrich' : 'site generation'} running server-side:{' '}
+            <span className="font-medium text-foreground">
+              {activeJob.done_count + activeJob.failed_count + activeJob.skipped_count}/{activeJob.total}
+            </span>{' '}
+            processed
+            {activeJob.failed_count > 0 && <> · {activeJob.failed_count} failed</>}
+            {' '}— you can leave this page, it keeps running.
+          </span>
+          <Button variant="ghost" size="sm" className="ml-auto h-7 shrink-0 text-xs" onClick={() => cancelJob(activeJob.id)}>
+            Cancel
+          </Button>
+        </div>
+      )}
+      {!activeJob && recentJob && (
+        <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm">
+          <CheckCircle2 className={`h-4 w-4 shrink-0 ${recentJob.status === 'done' ? 'text-green-500' : 'text-muted-foreground'}`} />
+          <span className="text-muted-foreground">
+            Bulk {recentJob.job_type === 'enrich' ? 'enrich' : 'site generation'}{' '}
+            {recentJob.status === 'done' ? 'finished' : recentJob.status}:{' '}
+            <span className="font-medium text-foreground">{recentJob.done_count} done</span>
+            {recentJob.failed_count > 0 && <> · {recentJob.failed_count} failed</>}
+            {recentJob.skipped_count > 0 && <> · {recentJob.skipped_count} skipped</>}
+            {recentJob.error && <> · {recentJob.error}</>}
+          </span>
+          <Button variant="ghost" size="sm" className="ml-auto h-7 shrink-0 text-xs" onClick={dismissRecent}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      )}
+
       <OutreachTable
         leads={allLeads}
         onLeadClick={() => {}}
@@ -232,6 +280,9 @@ const Outreach = () => {
         campaignDefaultSaleTypeByLead={campaignDefaultSaleTypeByLead}
         launchIntent={launchIntent}
         onLaunchConsumed={() => setLaunchIntent(null)}
+        onBulkJob={createJob}
+        bulkJobActive={!!activeJob || creatingJob}
+        sitesRefreshToken={sitesRefreshToken}
       />
 
       {/* First-time outreach tips */}

@@ -56,6 +56,7 @@ import {
   Wrench,
   CalendarClock,
   SlidersHorizontal,
+  Sparkles,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -146,6 +147,13 @@ interface OutreachTableProps {
   } | null;
   /** Called once a launchIntent has been acted on, so the parent can clear it. */
   onLaunchConsumed?: () => void;
+  /** Create a server-side bulk job (enrich / site_gen) for the given lead ids.
+   *  Runs in the bulk-jobs edge function — survives leaving the page. */
+  onBulkJob?: (type: 'enrich' | 'site_gen', leadIds: string[], params?: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>;
+  /** True while a bulk job is queued/running (or being created) — disables new ones. */
+  bulkJobActive?: boolean;
+  /** Bumped when a site-gen bulk job completes → re-read generated_sites. */
+  sitesRefreshToken?: number;
 }
 
 const ITEMS_PER_PAGE_DESKTOP = 15;
@@ -211,6 +219,9 @@ export function OutreachTable({
   campaignDefaultSaleTypeByLead,
   launchIntent,
   onLaunchConsumed,
+  onBulkJob,
+  bulkJobActive = false,
+  sitesRefreshToken = 0,
 }: OutreachTableProps) {
   const { toast } = useToast();
   const { isPhoneCopied, markMultipleAsCopied } = useCopiedPhones();
@@ -279,7 +290,7 @@ export function OutreachTable({
       setSitesByLead(map);
     })();
     return () => { cancelled = true; };
-  }, [isAdmin]);
+  }, [isAdmin, sitesRefreshToken]);
   const [searchQuery, setSearchQuery] = useState('');
   const [locationFilter, setLocationFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<LeadStatus | 'all'>('all');
@@ -742,6 +753,59 @@ export function OutreachTable({
     // Copied — no toast
   };
 
+  // ── Server-side bulk jobs (enrich / site-gen): confirm-before-spend, hand the
+  // ids to the bulk-jobs edge function, clear the selection. The job runs
+  // server-side (leave-safe); progress renders in the page-level banner.
+  const handleBulkEnrichJob = async () => {
+    if (!onBulkJob || bulkJobActive) return;
+    const ids = Array.from(selectedIds).filter((id) => !isDemoLead(id));
+    if (!ids.length) return;
+    const est = (ids.length * 0.035).toFixed(2);
+    if (!window.confirm(
+      `Enrich ${ids.length} selected lead${ids.length === 1 ? '' : 's'} — finds email, Facebook, Instagram & WhatsApp signal?
+
+` +
+      `~$0.035 each · up to ~$${est} (already-cached leads are free). Respects the $2/day enrichment cap — remaining leads are skipped if it's reached.
+
+` +
+      `Runs server-side: you can leave this page or close the browser. Progress shows in the banner; results save to your leads.`,
+    )) return;
+    const res = await onBulkJob('enrich', ids);
+    if (res.ok) {
+      toast({ title: `Bulk enrich started (${ids.length} leads)`, description: 'Running server-side — safe to leave this page.' });
+      setSelectedIds(new Set());
+    } else {
+      toast({ title: 'Could not start bulk enrich', description: res.error, variant: 'destructive' });
+    }
+  };
+
+  const handleBulkSiteGenJob = async () => {
+    if (!onBulkJob || bulkJobActive) return;
+    const ids = Array.from(selectedIds).filter((id) => !isDemoLead(id) && !sitesByLead[id]);
+    const skippedExisting = selectedIds.size - ids.length;
+    if (!ids.length) {
+      toast({ title: 'Nothing to generate', description: 'All selected leads already have a site.' });
+      return;
+    }
+    const est = (ids.length * 0.03).toFixed(2);
+    if (!window.confirm(
+      `Generate websites for ${ids.length} selected lead${ids.length === 1 ? '' : 's'}?
+
+` +
+      `~$0.03 each (Google + AI) · ~$${est} total${skippedExisting ? ` · ${skippedExisting} skipped (already have a site)` : ''}. Capped at 20 sites/24h + $10/day — remaining leads are skipped at the cap.
+
+` +
+      `Runs server-side: you can leave this page or close the browser. Progress shows in the banner.`,
+    )) return;
+    const res = await onBulkJob('site_gen', ids, { template: 'barber' });
+    if (res.ok) {
+      toast({ title: `Bulk site generation started (${ids.length} leads)`, description: 'Running server-side — safe to leave this page.' });
+      setSelectedIds(new Set());
+    } else {
+      toast({ title: 'Could not start bulk site generation', description: res.error, variant: 'destructive' });
+    }
+  };
+
   // Mark selected leads as contacted (Initial Contact)
   const handleMarkAsContacted = () => {
     if (selectedIds.size === 0) return;
@@ -1114,6 +1178,32 @@ export function OutreachTable({
                   <Button variant="outline" size="sm" className="h-8 text-xs" onClick={() => setQueueDialogOpen(true)}>
                     <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
                     Queue WhatsApp ({selectedIds.size})
+                  </Button>
+                )}
+                {!readOnly && onBulkJob && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    disabled={bulkJobActive}
+                    title={bulkJobActive ? 'A bulk job is already running' : 'Find email / Facebook / Instagram / WhatsApp signal for the selected leads — runs server-side, safe to leave the page'}
+                    onClick={handleBulkEnrichJob}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5 text-violet-500" />
+                    Enrich selected ({selectedIds.size})
+                  </Button>
+                )}
+                {!readOnly && onBulkJob && isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    disabled={bulkJobActive}
+                    title={bulkJobActive ? 'A bulk job is already running' : 'Generate a website for each selected lead — runs server-side, safe to leave the page'}
+                    onClick={handleBulkSiteGenJob}
+                  >
+                    <Globe className="h-3.5 w-3.5 mr-1.5 text-emerald-500" />
+                    Generate sites ({selectedIds.size})
                   </Button>
                 )}
                 {!readOnly && (

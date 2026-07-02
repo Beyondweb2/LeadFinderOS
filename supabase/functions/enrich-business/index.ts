@@ -162,25 +162,37 @@ Deno.serve(async (req) => {
   try {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) return json({ error: "Auth required" }, 401);
-
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
     const token = authHeader.replace("Bearer ", "");
-    let userId: string | null = null;
-    try {
-      const { data } = await userClient.auth.getClaims(token);
-      userId = (data?.claims?.sub as string) ?? null;
-    } catch { /* fall through */ }
-    if (!userId) {
-      const { data, error } = await userClient.auth.getUser(token);
-      if (error || !data?.user) return json({ error: "Auth required" }, 401);
-      userId = data.user.id;
-    }
+
+    // Internal-call branch (bulk-jobs runner): exact service-role key + the
+    // x-internal-job header. Purely additive — external/single-item callers can
+    // never hold the service key, so the normal user path below is unchanged.
+    // Authorization happened at job-enqueue time; the acting user (for usage
+    // attribution) comes from the body.
+    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const isInternal = !!serviceRoleKey && token === serviceRoleKey && !!req.headers.get("x-internal-job");
 
     const body = await req.json().catch(() => ({}));
+
+    let userId: string | null = null;
+    if (isInternal) {
+      userId = (body.acting_user_id as string) ?? null;
+    } else {
+      const userClient = createClient(
+        Deno.env.get("SUPABASE_URL")!,
+        Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      try {
+        const { data } = await userClient.auth.getClaims(token);
+        userId = (data?.claims?.sub as string) ?? null;
+      } catch { /* fall through */ }
+      if (!userId) {
+        const { data, error } = await userClient.auth.getUser(token);
+        if (error || !data?.user) return json({ error: "Auth required" }, 401);
+        userId = data.user.id;
+      }
+    }
     const leadId: string = body.lead_id ?? "";
     const placeId: string = body.place_id ?? "";
     const googleMapsUrl: string = body.google_maps_url ?? "";
