@@ -112,16 +112,40 @@ async function sitegenSpendTodayUsd(service: any): Promise<number> {
   }
 }
 
+// The edge functions' AUTO-INJECTED SUPABASE_* keys are stale here (a past key/JWT
+// rotation), so the API gateway 401s a function-to-function call that presents them —
+// before the target's handler ever runs. The REAL keys live in the vault; fetch them
+// via the edge_internal_keys() RPC and present THOSE on internal calls. Cached for the
+// isolate's life (keys are static; a redeploy refreshes). Falls back to the injected
+// keys if the RPC is unavailable.
+let cachedInternalKeys: { service_key: string; anon_key: string } | null = null;
+// deno-lint-ignore no-explicit-any
+async function getInternalKeys(service: any): Promise<{ service_key: string; anon_key: string }> {
+  if (cachedInternalKeys) return cachedInternalKeys;
+  try {
+    const { data } = await service.rpc("edge_internal_keys");
+    const row = Array.isArray(data) ? data[0] : data;
+    cachedInternalKeys = {
+      service_key: (row?.service_key as string) || SERVICE_KEY,
+      anon_key: (row?.anon_key as string) || ANON_KEY,
+    };
+  } catch {
+    cachedInternalKeys = { service_key: SERVICE_KEY, anon_key: ANON_KEY };
+  }
+  return cachedInternalKeys;
+}
+
 /** Run ONE item through the existing edge function (internal-call branch). */
 // deno-lint-ignore no-explicit-any
 async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ status: JobItem["status"]; error?: string; capHit?: boolean }> {
+  // Real vault keys for the gateway (the injected ones are stale) + x-cron-secret for
+  // the target handler's isInternal check + x-internal-job.
+  const keys = await getInternalKeys(service);
   const internalHeaders = {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${SERVICE_KEY}`,
-    "apikey": ANON_KEY,
+    "Authorization": `Bearer ${keys.service_key}`,
+    "apikey": keys.anon_key,
     "x-internal-job": "1",
-    // CRON_SECRET decouples this internal call from the service-key comparison (which
-    // drifts in this project) — enrich-business / generate-barber-site accept it.
     "x-cron-secret": CRON_SECRET,
   };
 
