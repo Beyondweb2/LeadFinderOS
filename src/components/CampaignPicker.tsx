@@ -23,13 +23,16 @@ interface CampaignPickerProps {
   /** filter mode adds an "All campaigns" option; assign mode adds a "No campaign" option. */
   mode: 'filter' | 'assign';
   className?: string;
+  /** Hide the inline "New campaign…" / "Manage campaigns…" actions — for places
+   *  that only filter and never create (e.g. the Inbox). */
+  hideCreate?: boolean;
 }
 
 /**
  * Thin campaign dropdown shared by Outreach (filter) and Find Leads (assign).
  * Includes an inline "New campaign…" action that opens the shared create dialog.
  */
-export function CampaignPicker({ value, onChange, mode, className }: CampaignPickerProps) {
+export function CampaignPicker({ value, onChange, mode, className, hideCreate = false }: CampaignPickerProps) {
   const { campaigns, createCampaign, refetch } = useCampaigns();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [managerOpen, setManagerOpen] = useState(false);
@@ -89,13 +92,15 @@ export function CampaignPicker({ value, onChange, mode, className }: CampaignPic
               {c.name}
             </SelectItem>
           ))}
-          <SelectItem value={NEW_CAMPAIGN}>
-            <span className="flex items-center gap-1.5 text-primary">
-              <Plus className="h-3.5 w-3.5" />
-              New campaign…
-            </span>
-          </SelectItem>
-          {campaigns.length > 0 && (
+          {!hideCreate && (
+            <SelectItem value={NEW_CAMPAIGN}>
+              <span className="flex items-center gap-1.5 text-primary">
+                <Plus className="h-3.5 w-3.5" />
+                New campaign…
+              </span>
+            </SelectItem>
+          )}
+          {!hideCreate && campaigns.length > 0 && (
             <SelectItem value={MANAGE_CAMPAIGNS}>
               <span className="flex items-center gap-1.5 text-muted-foreground">
                 <Settings2 className="h-3.5 w-3.5" />

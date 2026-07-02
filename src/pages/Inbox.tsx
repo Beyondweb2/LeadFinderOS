@@ -7,6 +7,7 @@ import { fillTemplate } from '@/lib/leadUtils';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
+import { CampaignPicker } from '@/components/CampaignPicker';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
@@ -54,6 +55,10 @@ const Inbox = () => {
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [synthetic, setSynthetic] = useState<WaConversation | null>(null);
+  // Campaign filter (null = all). Unassigned conversations are ALWAYS shown, even
+  // when a specific campaign is selected — that's where mis-routed / unknown-sender
+  // replies land and must never be hidden.
+  const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
   const [text, setText] = useState('');
   const [template, setTemplate] = useState(WA_REPLY_TEMPLATES[0].name);
   const [sending, setSending] = useState(false);
@@ -63,9 +68,14 @@ const Inbox = () => {
   // The list shows fetched conversations; a just-started (synthetic) one is merged in
   // until its first message lands (after which the real row shares its key).
   const list = useMemo(() => {
-    if (synthetic && !conversations.some((c) => c.key === synthetic.key)) return [synthetic, ...conversations];
-    return conversations;
-  }, [conversations, synthetic]);
+    const base = synthetic && !conversations.some((c) => c.key === synthetic.key)
+      ? [synthetic, ...conversations]
+      : conversations;
+    if (!campaignFilter) return base;
+    // Filtered to a campaign: that campaign's conversations PLUS Unassigned
+    // (always visible, never hidden by the campaign filter).
+    return base.filter((c) => c.campaignId === campaignFilter || c.unassigned);
+  }, [conversations, synthetic, campaignFilter]);
 
   const active: WaConversation | null =
     (activeKey && conversations.find((c) => c.key === activeKey)) ||
@@ -90,6 +100,7 @@ const Inbox = () => {
     else {
       const synth: WaConversation = {
         key, phone: norm, userId: user.id, leadId: lead.id,
+        campaignId: lead.campaign_id ?? null,
         label: lead.business_name || `+${norm}`, unassigned: false,
         lastMessage: undefined as never, lastMessageAt: new Date(0).toISOString(), lastInboundAt: null,
       };
@@ -153,7 +164,11 @@ const Inbox = () => {
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Inbox</h1>
           <p className="text-sm text-muted-foreground">Manage WhatsApp conversations without leaving LeadFinder.</p>
         </div>
-        <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
+        <div className="flex items-center gap-2">
+          {/* Filter conversations by campaign. Unassigned always stays visible. */}
+          <CampaignPicker mode="filter" hideCreate value={campaignFilter} onChange={setCampaignFilter} className="h-9 w-[180px]" />
+          <Button size="sm" onClick={() => setNewOpen((v) => !v)}><Plus className="mr-1.5 h-4 w-4" /> New</Button>
+        </div>
       </div>
 
       {/* New-conversation lead picker */}
