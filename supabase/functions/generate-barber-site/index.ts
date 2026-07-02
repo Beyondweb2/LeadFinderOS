@@ -23,7 +23,7 @@ import { runEnrichSource } from "../_shared/enrichment/runner.ts";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+    "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -396,7 +396,14 @@ serve(async (req) => {
     // throttle itself); the 20/24h generation cap below still applies.
     const token = authHeader.replace("Bearer ", "");
     const internalServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const isInternal = !!internalServiceKey && token === internalServiceKey && !!req.headers.get("x-internal-job");
+    const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+    // Internal call (bulk-jobs runner): a matching CRON_SECRET header (robust —
+    // decoupled from the service-key comparison, which drifts here) OR the legacy
+    // service-key + x-internal-job match. Either way it's the internal path; the
+    // external user path below is unchanged.
+    const isInternal =
+      (!!cronSecret && req.headers.get("x-cron-secret") === cronSecret && !!req.headers.get("x-internal-job")) ||
+      (!!internalServiceKey && token === internalServiceKey && !!req.headers.get("x-internal-job"));
     // deno-lint-ignore no-explicit-any
     let earlyBody: any = null;
 

@@ -1,15 +1,17 @@
 -- ============================================================================
--- bulk-jobs-sweep — pg_cron heal for the bulk job runner's self-invoke chain.
+-- bulk-jobs-sweep — pg_cron backstop for the bulk job runner.
 --
 -- RUN MANUALLY in the Supabase SQL editor (db push is desynced); this file keeps
 -- the repo a true source of truth. Idempotent (create or replace + unschedule→
 -- schedule). Mirrors invoke_whatsapp_queue()'s vault pattern exactly.
 --
--- Every 2 minutes, ask the bulk-jobs function to re-kick any queued/running job
--- whose updated_at has gone stale (> ~3 min) — i.e. whose self-re-invoke chain
--- broke (killed isolate, dropped kick). A healthy chain touches updated_at after
--- every item, so live jobs are never re-kicked; the locked_until claim makes a
--- sweeper kick racing a live chain harmless.
+-- Every 1 minute, ask the bulk-jobs function's `sweep` action to kick jobs that
+-- need a runner: ANY 'queued' job (its create-time self-invoke never landed) plus
+-- any 'running' job whose updated_at has gone stale (> ~3 min = its self-re-invoke
+-- chain broke: killed isolate / dropped kick). A healthy running chain touches
+-- updated_at after every wave, so it's never swept; the locked_until claim makes a
+-- sweeper kick racing the create-time kick (or a live chain) harmless. This is the
+-- GUARANTEED trigger — the create-time kickRun is just the fast path.
 -- ============================================================================
 
 create or replace function public.invoke_bulk_jobs_sweep()
@@ -38,4 +40,4 @@ end;
 $$;
 
 select cron.unschedule(jobid) from cron.job where jobname = 'bulk-jobs-sweep';
-select cron.schedule('bulk-jobs-sweep', '*/2 * * * *', $$select public.invoke_bulk_jobs_sweep()$$);
+select cron.schedule('bulk-jobs-sweep', '* * * * *', $$select public.invoke_bulk_jobs_sweep()$$);

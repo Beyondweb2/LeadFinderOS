@@ -23,7 +23,7 @@ const INSTANTLY_BASE = "https://api.instantly.ai/api/v2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -45,9 +45,14 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     if (!apiKey) return json({ ok: false, error: "INSTANTLY_API_KEY not configured" }, 503);
 
-    // --- Auth: service-role bearer only (cron) ---
+    // --- Auth: internal cron — a matching CRON_SECRET header (robust) OR the legacy
+    //     service-role bearer. ---
+    const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
     const authHeader = req.headers.get("Authorization") ?? "";
-    if (!serviceKey || authHeader !== `Bearer ${serviceKey}`) {
+    const authed =
+      (!!cronSecret && req.headers.get("x-cron-secret") === cronSecret) ||
+      (!!serviceKey && authHeader === `Bearer ${serviceKey}`);
+    if (!authed) {
       return json({ ok: false, error: "Unauthorized" }, 401);
     }
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });

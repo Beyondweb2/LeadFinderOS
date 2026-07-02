@@ -22,7 +22,7 @@ import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.t
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -119,9 +119,12 @@ Deno.serve(async (req) => {
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
-    // --- Auth: service-role bearer (cron) OR an admin JWT (manual tick) ---
+    // --- Auth: internal cron (CRON_SECRET header, or legacy service-role bearer) OR an admin JWT (manual tick) ---
+    const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
     const authHeader = req.headers.get("Authorization") ?? "";
-    const isCron = !!serviceKey && authHeader === `Bearer ${serviceKey}`;
+    const isCron =
+      (!!cronSecret && req.headers.get("x-cron-secret") === cronSecret) ||
+      (!!serviceKey && authHeader === `Bearer ${serviceKey}`);
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
     let isAdmin = false;

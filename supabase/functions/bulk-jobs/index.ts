@@ -25,11 +25,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+// Shared secret for internal (cron sweep + self-invoke) auth — decoupled from the
+// service-role key, which the pg_cron vault copy can drift from. Same value must be
+// set as a function secret (read here) AND in the vault (sent by the cron SQL).
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 
 const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50 };
 const TIME_BUDGET_MS = 90_000;   // stop starting new WAVES once elapsed passes this…
 const WAVE_HEADROOM_MS = 55_000; // …minus headroom, so one full parallel wave + persist still fits under the 150s limit
 const WAVE_SIZE = 5;             // site_gen bounded concurrency (enrich stays 1-at-a-time)
+const SWEEP_BUDGET_MS = 60_000; // sweep stops CLAIMING new jobs past this, so one invocation (claim + a chunk) stays well under 150s
 const SITEGEN_PER_ITEM_EST_USD = 0.03; // used to SIZE a wave to the remaining daily budget → a batch can't overshoot the cap by >~1 item
 const LOCK_MS = 2 * 60_000;      // claim window (refreshed on every persist)
 const STALE_MS = 3 * 60_000;     // sweep re-kicks active jobs idle longer than this
@@ -37,7 +42,7 @@ const SITEGEN_DAILY_BUDGET_USD = 10;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -67,27 +72,26 @@ interface JobRow {
   params: Record<string, unknown> | null;
 }
 
-/** Fire-and-forget-ish self invoke: send the request, wait max ~2.5s for it to get
- *  on the wire, then abort OUR side (the platform still processes it). A dropped
- *  kick is healed by the sweep cron within ~2–4 min, so this never needs to be
- *  perfectly reliable — just usually-fast. */
-async function kickRun(jobId: string): Promise<void> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 2_500);
-  try {
-    await fetch(`${SUPABASE_URL}/functions/v1/bulk-jobs`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${SERVICE_KEY}`,
-        "apikey": ANON_KEY,
-        "x-internal-job": "run",
-      },
-      body: JSON.stringify({ action: "run", job_id: jobId }),
-      signal: ctrl.signal,
-    });
-  } catch { /* aborted (expected) or failed — sweep heals */ }
-  clearTimeout(timer);
+/** Atomically claim a job and process ONE chunk INLINE, in the caller's invocation.
+ *  Replaces the old fire-and-forget self-invoke (`kickRun`), whose 2.5s abort meant
+ *  the `run` isolate never received the request on a cold start, so jobs were never
+ *  claimed. The claim (status in [queued,running] + locked_until null/expired) is
+ *  atomic, so two overlapping sweeps can't double-process: the loser matches 0 rows.
+ *  Returns true if we claimed (and processed a chunk of) the job. */
+// deno-lint-ignore no-explicit-any
+async function claimAndProcess(service: any, jobId: string): Promise<boolean> {
+  const nowIso = new Date().toISOString();
+  const { data: claimed } = await service
+    .from("bulk_jobs")
+    .update({ status: "running", locked_until: new Date(Date.now() + LOCK_MS).toISOString(), updated_at: nowIso })
+    .eq("id", jobId)
+    .in("status", ["queued", "running"])
+    .or(`locked_until.is.null,locked_until.lt.${nowIso}`)
+    .select()
+    .maybeSingle();
+  if (!claimed) return false; // not claimable (done/cancelled, or locked by another runner)
+  await processChunk(service, claimed as JobRow);
+  return true;
 }
 
 /** Today's (UTC) site-gen spend from api_usage_log — the $10/day budget guard.
@@ -108,14 +112,41 @@ async function sitegenSpendTodayUsd(service: any): Promise<number> {
   }
 }
 
+// The edge functions' AUTO-INJECTED SUPABASE_* keys are stale here (a past key/JWT
+// rotation), so the API gateway 401s a function-to-function call that presents them —
+// before the target's handler ever runs. The REAL keys live in the vault; fetch them
+// via the edge_internal_keys() RPC and present THOSE on internal calls. Cached for the
+// isolate's life (keys are static; a redeploy refreshes). Falls back to the injected
+// keys if the RPC is unavailable.
+let cachedInternalKeys: { service_key: string; anon_key: string } | null = null;
+// deno-lint-ignore no-explicit-any
+async function getInternalKeys(service: any): Promise<{ service_key: string; anon_key: string }> {
+  if (cachedInternalKeys) return cachedInternalKeys;
+  try {
+    const { data } = await service.rpc("edge_internal_keys");
+    const row = Array.isArray(data) ? data[0] : data;
+    cachedInternalKeys = {
+      service_key: (row?.service_key as string) || SERVICE_KEY,
+      anon_key: (row?.anon_key as string) || ANON_KEY,
+    };
+  } catch {
+    cachedInternalKeys = { service_key: SERVICE_KEY, anon_key: ANON_KEY };
+  }
+  return cachedInternalKeys;
+}
+
 /** Run ONE item through the existing edge function (internal-call branch). */
 // deno-lint-ignore no-explicit-any
 async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ status: JobItem["status"]; error?: string; capHit?: boolean }> {
+  // Real vault keys for the gateway (the injected ones are stale) + x-cron-secret for
+  // the target handler's isInternal check + x-internal-job.
+  const keys = await getInternalKeys(service);
   const internalHeaders = {
     "Content-Type": "application/json",
-    "Authorization": `Bearer ${SERVICE_KEY}`,
-    "apikey": ANON_KEY,
+    "Authorization": `Bearer ${keys.service_key}`,
+    "apikey": keys.anon_key,
     "x-internal-job": "1",
+    "x-cron-secret": CRON_SECRET,
   };
 
   if (job.job_type === "enrich") {
@@ -212,11 +243,11 @@ async function processChunk(service: any, job: JobRow): Promise<void> {
     const pending = items.filter((it) => it.status === "pending");
     if (pending.length === 0) break;
 
-    // Out of budget → persist, re-kick self for the next chunk, exit running. Checked
-    // BEFORE a wave, so a clean boundary never leaves items "running".
+    // Out of time for THIS invocation → release the claim back to 'queued' so the next
+    // sweep (≤1 min later) claims and continues it. No reliance on a self-invoke.
+    // Checked BEFORE a wave, so a clean boundary never leaves items "running".
     if (Date.now() - started > TIME_BUDGET_MS - WAVE_HEADROOM_MS) {
-      await persist();
-      await kickRun(job.id);
+      await persist({ status: "queued", locked_until: null });
       return;
     }
 
@@ -282,41 +313,52 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader.startsWith("Bearer ")) return json({ error: "Auth required" }, 401);
     const token = authHeader.replace("Bearer ", "");
-    const isInternal = !!SERVICE_KEY && token === SERVICE_KEY && !!req.headers.get("x-internal-job");
+    // Internal (cron sweep / self-invoke): accept EITHER a matching CRON_SECRET header
+    // (robust, key-rotation-proof) OR the legacy service-key + x-internal-job match.
+    const isInternal =
+      (!!CRON_SECRET && req.headers.get("x-cron-secret") === CRON_SECRET) ||
+      (!!SERVICE_KEY && token === SERVICE_KEY && !!req.headers.get("x-internal-job"));
 
     const service = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
     // ── Internal actions (cron / self-chain only) ──
     if (action === "sweep") {
       if (!isInternal) return json({ error: "forbidden" }, 403);
+      const sweepStart = Date.now();
       const staleCutoff = new Date(Date.now() - STALE_MS).toISOString();
-      const { data: stale } = await service
-        .from("bulk_jobs")
-        .select("id")
-        .in("status", ["queued", "running"])
-        .lt("updated_at", staleCutoff)
-        .limit(5);
-      for (const j of (stale ?? []) as { id: string }[]) await kickRun(j.id);
-      return json({ ok: true, kicked: stale?.length ?? 0 });
+      // Jobs that need a runner: ANY 'queued' job (oldest first — its create wasn't
+      // processed) PLUS any 'running' job whose chain went stale (> STALE_MS since its
+      // last persist = its runner died mid-job).
+      const [queuedRes, staleRunningRes] = await Promise.all([
+        service.from("bulk_jobs").select("id").eq("status", "queued").order("created_at", { ascending: true }).limit(10),
+        service.from("bulk_jobs").select("id").eq("status", "running").lt("updated_at", staleCutoff).order("updated_at", { ascending: true }).limit(10),
+      ]);
+      const ids = [...new Set([
+        ...((queuedRes.data ?? []) as { id: string }[]),
+        ...((staleRunningRes.data ?? []) as { id: string }[]),
+      ].map((j) => j.id))];
+      // Process INLINE, in THIS invocation (the fire-and-forget self-invoke was
+      // unreliable). Claim + run one chunk per job; the atomic claim makes two
+      // overlapping sweeps a no-op for the loser. Stop CLAIMING new jobs once we're low
+      // on wall-clock so the invocation stays < 150s; anything not reached is claimed
+      // next minute. A job needing more than one chunk is released back to 'queued'
+      // by processChunk and continued by the next sweep.
+      let processed = 0;
+      for (const id of ids) {
+        if (Date.now() - sweepStart > SWEEP_BUDGET_MS) break;
+        if (await claimAndProcess(service, id)) processed++;
+      }
+      return json({ ok: true, found: ids.length, processed });
     }
 
     if (action === "run") {
       if (!isInternal) return json({ error: "forbidden" }, 403);
       const jobId: string = body.job_id ?? "";
       if (!jobId) return json({ error: "job_id required" }, 400);
-      // Atomic claim: only one runner (chain or sweeper kick) may hold the lock.
-      const nowIso = new Date().toISOString();
-      const { data: claimed } = await service
-        .from("bulk_jobs")
-        .update({ status: "running", locked_until: new Date(Date.now() + LOCK_MS).toISOString(), updated_at: nowIso })
-        .eq("id", jobId)
-        .in("status", ["queued", "running"])
-        .or(`locked_until.is.null,locked_until.lt.${nowIso}`)
-        .select()
-        .maybeSingle();
-      if (!claimed) return json({ ok: true, note: "not claimable (done/cancelled/locked)" });
-      await processChunk(service, claimed as JobRow);
-      return json({ ok: true });
+      // Same atomic-claim + inline processing the sweep uses (kept as a manual/debug
+      // trigger; the sweep is now the reliable path).
+      const claimed = await claimAndProcess(service, jobId);
+      return json({ ok: true, claimed });
     }
 
     // ── User actions (create / cancel) ──
@@ -390,7 +432,8 @@ Deno.serve(async (req) => {
         .single();
       if (insErr || !jobRow) return json({ error: insErr?.message ?? "insert failed" }, 500);
 
-      await kickRun((jobRow as { id: string }).id);
+      // No self-invoke kick — the every-minute sweep claims + processes the job inline
+      // (reliable). Create returns immediately; the job starts within ~1 min.
       return json({ ok: true, job_id: (jobRow as { id: string }).id, total: items.length });
     }
 

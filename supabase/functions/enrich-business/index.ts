@@ -53,7 +53,7 @@ async function discoverSocialsFromWebsite(
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -164,13 +164,16 @@ Deno.serve(async (req) => {
     if (!authHeader?.startsWith("Bearer ")) return json({ error: "Auth required" }, 401);
     const token = authHeader.replace("Bearer ", "");
 
-    // Internal-call branch (bulk-jobs runner): exact service-role key + the
-    // x-internal-job header. Purely additive — external/single-item callers can
-    // never hold the service key, so the normal user path below is unchanged.
-    // Authorization happened at job-enqueue time; the acting user (for usage
-    // attribution) comes from the body.
+    // Internal-call branch (bulk-jobs runner): a matching CRON_SECRET header (robust —
+    // decoupled from the service-key comparison, which drifts here) OR the legacy
+    // service-key + x-internal-job match. Purely additive — external/single-item
+    // callers can never hold either, so the normal user path below is unchanged. The
+    // acting user (for usage attribution) comes from the body.
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const isInternal = !!serviceRoleKey && token === serviceRoleKey && !!req.headers.get("x-internal-job");
+    const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+    const isInternal =
+      (!!cronSecret && req.headers.get("x-cron-secret") === cronSecret && !!req.headers.get("x-internal-job")) ||
+      (!!serviceRoleKey && token === serviceRoleKey && !!req.headers.get("x-internal-job"));
 
     const body = await req.json().catch(() => ({}));
 
