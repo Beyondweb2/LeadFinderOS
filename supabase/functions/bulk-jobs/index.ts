@@ -25,6 +25,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+// Shared secret for internal (cron sweep + self-invoke) auth — decoupled from the
+// service-role key, which the pg_cron vault copy can drift from. Same value must be
+// set as a function secret (read here) AND in the vault (sent by the cron SQL).
+const CRON_SECRET = Deno.env.get("CRON_SECRET") ?? "";
 
 const JOB_CAPS: Record<string, number> = { enrich: 200, site_gen: 50 };
 const TIME_BUDGET_MS = 90_000;   // stop starting new WAVES once elapsed passes this…
@@ -37,7 +41,7 @@ const SITEGEN_DAILY_BUDGET_USD = 10;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-internal-job, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -82,6 +86,7 @@ async function kickRun(jobId: string): Promise<void> {
         "Authorization": `Bearer ${SERVICE_KEY}`,
         "apikey": ANON_KEY,
         "x-internal-job": "run",
+        "x-cron-secret": CRON_SECRET,
       },
       body: JSON.stringify({ action: "run", job_id: jobId }),
       signal: ctrl.signal,
@@ -282,7 +287,11 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization") ?? "";
     if (!authHeader.startsWith("Bearer ")) return json({ error: "Auth required" }, 401);
     const token = authHeader.replace("Bearer ", "");
-    const isInternal = !!SERVICE_KEY && token === SERVICE_KEY && !!req.headers.get("x-internal-job");
+    // Internal (cron sweep / self-invoke): accept EITHER a matching CRON_SECRET header
+    // (robust, key-rotation-proof) OR the legacy service-key + x-internal-job match.
+    const isInternal =
+      (!!CRON_SECRET && req.headers.get("x-cron-secret") === CRON_SECRET) ||
+      (!!SERVICE_KEY && token === SERVICE_KEY && !!req.headers.get("x-internal-job"));
 
     const service = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
