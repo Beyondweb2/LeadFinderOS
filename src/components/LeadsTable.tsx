@@ -8,9 +8,12 @@ import { StatusBadge } from './StatusBadge';
 import { WebsiteStatusToggle } from './WebsiteStatusToggle';
 import {
   Download, Filter, ChevronLeft, ChevronRight, ClipboardList, Check, Eye, Lock, MapPin, ExternalLink, Globe, Loader2,
+  Instagram, Facebook, Sparkles,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { socialKindOf } from '@/lib/socialUrl';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -86,9 +89,19 @@ interface LeadsTableProps {
   onEnrichPatch?: (placeId: string, patch: Partial<OutreachLead>) => Promise<any>;
   /** Manually correct a result's website status (persists + wins over auto-detection). */
   onSetWebsiteStatus?: (lead: Lead, status: WebsiteStatus) => void;
+  /** Bulk-add the given leads to Outreach (silent per-lead, deduped). */
+  onBulkAdd?: (leads: Lead[]) => Promise<{ added: number; skipped: number }>;
+  /** Bulk in-place enrich (writes to searchEnrichment; does NOT add to CRM). */
+  onBulkEnrich?: (
+    leads: Lead[],
+    onProgress: (done: number) => void,
+    shouldCancel: () => boolean,
+  ) => Promise<{ enriched: number; cached: number; skipped: number; failed: number; stoppedAtCap: boolean; cancelled: boolean }>;
+  /** Whether a lead was already enriched this session (skipped = free). */
+  isLeadEnriched?: (placeId: string) => boolean;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch, onSetWebsiteStatus }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
@@ -115,14 +128,24 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     const restored = (savedView?.filters ?? []).filter((s): s is WebsiteStatus => (ALL_STATUSES as string[]).includes(s));
     return restored.length ? restored : ALL_STATUSES;
   });
+  // Free listing-social filters: the listing "website" IS an Instagram/Facebook
+  // link (socialKindOf — no enrichment needed). Empty = no social filtering.
+  const [socialFilters, setSocialFilters] = useState<('instagram' | 'facebook')[]>(() =>
+    (savedView?.socials ?? []).filter((s): s is 'instagram' | 'facebook' => s === 'instagram' || s === 'facebook'),
+  );
   const [currentPage, setCurrentPage] = useState<number>(() => Math.max(1, savedView?.page ?? 1));
 
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
       const effectiveStatus = lead.websiteStatus === 'DIRECTORY_ONLY' ? 'NO_WEBSITE' : lead.websiteStatus;
-      return statusFilters.includes(effectiveStatus);
+      if (!statusFilters.includes(effectiveStatus)) return false;
+      if (socialFilters.length) {
+        const kind = socialKindOf(lead.websiteUrl);
+        if (!kind || !socialFilters.includes(kind)) return false;
+      }
+      return true;
     });
-  }, [leads, statusFilters]);
+  }, [leads, statusFilters, socialFilters]);
 
   const totalPages = Math.ceil(filteredLeads.length / ITEMS_PER_PAGE);
   // Render against a CLAMPED page so a page beyond the current set (restored from
@@ -141,6 +164,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
   useEffect(() => {
     if (!didMountRef.current) { didMountRef.current = true; return; }
     setCurrentPage(1);
+    setSelectedIds(new Set()); // new search → stale selection would act on gone rows
   }, [leads]);
 
   // Reconcile state to the clamped page so persistence + pagination buttons stay
@@ -151,8 +175,34 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
 
   // Persist page + filters (per-user, survives nav / reload / re-login).
   useEffect(() => {
-    writeSearchResultsView(user?.id, { filters: statusFilters, page: safePage });
-  }, [user?.id, statusFilters, safePage]);
+    writeSearchResultsView(user?.id, { filters: statusFilters, page: safePage, socials: socialFilters });
+  }, [user?.id, statusFilters, safePage, socialFilters]);
+
+  // ── Multi-select (mirrors OutreachTable's pattern: Set-based ids, header
+  // select-all across ALL filtered rows, per-row checkboxes, cleared after acting).
+  // Rows already in Outreach are unselectable (can't be re-added).
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selectableLeads = useMemo(
+    () => filteredLeads.filter((l) => !checkIsInOutreach(l.name, l.googleMapsUrl)),
+    [filteredLeads, checkIsInOutreach],
+  );
+  // Resolve the selection against the CURRENT filtered set, so a filter change
+  // after selecting can never bulk-act on rows that are no longer shown.
+  const selectedLeads = useMemo(
+    () => selectableLeads.filter((l) => selectedIds.has(l.id)),
+    [selectableLeads, selectedIds],
+  );
+  const allSelected = selectableLeads.length > 0 && selectableLeads.every((l) => selectedIds.has(l.id));
+  const handleSelectAll = useCallback(() => {
+    setSelectedIds(allSelected ? new Set() : new Set(selectableLeads.map((l) => l.id)));
+  }, [allSelected, selectableLeads]);
+  const handleSelectOne = useCallback((id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
 
   // ── On-demand "Check for website" (Apify web-results, ~$0.02/lead, daily-capped) ──
   const { toast } = useToast();
@@ -231,7 +281,76 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
     setStatusFilters(prev => checked ? [...prev, status] : prev.filter(s => s !== status));
   }, []);
 
+  const toggleSocialFilter = useCallback((kind: 'instagram' | 'facebook', checked: boolean) => {
+    setSocialFilters(prev => checked ? [...prev, kind] : prev.filter(k => k !== kind));
+  }, []);
+
   const statusFilterOptions: WebsiteStatus[] = useMemo(() => ['NO_WEBSITE', 'HAS_OWN_WEBSITE', 'UNCERTAIN'], []);
+
+  // ── Bulk ADD to CRM: the selected rows, or (with nothing selected) every
+  // filtered row not already in Outreach. Silent per-lead adds; one summary toast.
+  const [bulkAdding, setBulkAdding] = useState(false);
+  const runBulkAdd = useCallback(async (targets: Lead[]) => {
+    if (!targets.length || !onBulkAdd || bulkAdding) return;
+    setBulkAdding(true);
+    try {
+      const { added, skipped } = await onBulkAdd(targets);
+      toast({
+        title: `Added ${added} lead${added === 1 ? '' : 's'} to your CRM`,
+        description: skipped ? `${skipped} skipped (already in your list).` : undefined,
+      });
+      setSelectedIds(new Set());
+    } finally {
+      setBulkAdding(false);
+    }
+  }, [onBulkAdd, bulkAdding, toast]);
+
+  // ── Bulk ENRICH (in place): confirm-before-spend (mirrors the Check-website
+  // pattern), skips already-enriched (free), respects the server $2/day cap, and
+  // writes into searchEnrichment — nothing is added to the CRM.
+  const [bulkEnriching, setBulkEnriching] = useState(false);
+  const [enrichProgress, setEnrichProgress] = useState<{ done: number; total: number } | null>(null);
+  const enrichCancelRef = useRef(false);
+  const handleBulkEnrichClick = useCallback(async () => {
+    if (!onBulkEnrich) return;
+    if (bulkEnriching) { enrichCancelRef.current = true; return; } // click again = cancel
+    const targets = selectedLeads;
+    if (!targets.length) return;
+    const fresh = targets.filter((t) => !(isLeadEnriched?.(t.id)));
+    const already = targets.length - fresh.length;
+    if (!fresh.length) {
+      toast({ title: 'Already enriched', description: 'All selected leads were enriched this session — nothing to spend.' });
+      return;
+    }
+    const est = (fresh.length * 0.035).toFixed(2);
+    if (!window.confirm(
+      `Enrich ${fresh.length} selected ${fresh.length === 1 ? 'business' : 'businesses'} — finds email, Facebook, Instagram & WhatsApp signal?\n\n` +
+      `~$0.035 each · ~$${est} total${already ? ` · ${already} already enriched (skipped, free)` : ''}. ` +
+      `Respects the $2/day enrichment cap (stops early if reached). Results attach to the rows — nothing is added to your CRM. ` +
+      `Click the button again to cancel partway.`,
+    )) return;
+    enrichCancelRef.current = false;
+    setBulkEnriching(true);
+    setEnrichProgress({ done: 0, total: targets.length });
+    try {
+      const res = await onBulkEnrich(
+        targets,
+        (done) => setEnrichProgress({ done, total: targets.length }),
+        () => enrichCancelRef.current,
+      );
+      toast({
+        title: res.stoppedAtCap ? 'Stopped at the daily enrichment cap' : res.cancelled ? 'Enrich cancelled' : 'Enrich complete',
+        description: `${res.enriched} enriched · ${res.cached} from cache (free) · ${res.skipped} skipped · ${res.failed} failed.`,
+      });
+      setSelectedIds(new Set());
+    } finally {
+      setBulkEnriching(false);
+      setEnrichProgress(null);
+    }
+  }, [onBulkEnrich, bulkEnriching, selectedLeads, isLeadEnriched, toast]);
+
+  // Bulk buttons never bypass the single-add gate: hidden whenever saving is gated.
+  const bulkAllowed = !isLocked && !(gated && !canSave);
 
   const renderFilterMenu = useCallback((align: 'start' | 'end' = 'start') => (
     <DropdownMenu>
@@ -250,9 +369,59 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <StatusBadge status={status} />
           </DropdownMenuCheckboxItem>
         ))}
+        {/* Free listing-social signals — the listing's "website" IS a social link
+            (socialKindOf), no enrichment spend needed. */}
+        <DropdownMenuCheckboxItem
+          checked={socialFilters.includes('instagram')}
+          onCheckedChange={(checked) => toggleSocialFilter('instagram', !!checked)}
+          onSelect={(e) => e.preventDefault()}
+        >
+          <span className="flex items-center gap-1.5 text-sm"><Instagram className="h-3.5 w-3.5 text-pink-500" /> Listing = Instagram</span>
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={socialFilters.includes('facebook')}
+          onCheckedChange={(checked) => toggleSocialFilter('facebook', !!checked)}
+          onSelect={(e) => e.preventDefault()}
+        >
+          <span className="flex items-center gap-1.5 text-sm"><Facebook className="h-3.5 w-3.5 text-blue-600" /> Listing = Facebook</span>
+        </DropdownMenuCheckboxItem>
       </DropdownMenuContent>
     </DropdownMenu>
-  ), [statusFilters, toggleFilter, statusFilterOptions]);
+  ), [statusFilters, toggleFilter, statusFilterOptions, socialFilters, toggleSocialFilter]);
+
+  // Bulk action buttons (shared by the mobile + desktop headers), mirroring the
+  // Outreach pattern: appear with a selection; "Add all shown" when none selected.
+  const renderBulkButtons = useCallback(() => {
+    if (!bulkAllowed) return null;
+    return (
+      <>
+        {onBulkAdd && (selectedLeads.length > 0 ? (
+          <Button size="sm" onClick={() => runBulkAdd(selectedLeads)} disabled={bulkAdding} className="h-8 px-2.5 text-xs">
+            {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
+            Add to CRM ({selectedLeads.length})
+          </Button>
+        ) : selectableLeads.length > 0 ? (
+          <Button size="sm" variant="outline" onClick={() => runBulkAdd(selectableLeads)} disabled={bulkAdding} className="h-8 px-2.5 text-xs border-border" title="Add every filtered result not already in your list">
+            {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
+            Add all shown ({selectableLeads.length})
+          </Button>
+        ) : null)}
+        {onBulkEnrich && selectedLeads.length > 0 && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleBulkEnrichClick}
+            className="h-8 px-2.5 text-xs border-border"
+            title={bulkEnriching ? 'Click to cancel' : 'Find email / Facebook / Instagram / WhatsApp signal for the selected leads (~$0.035 each, $2/day cap) — attaches to the rows, does not add to CRM'}
+          >
+            {bulkEnriching
+              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />{enrichProgress ? `Enriching ${enrichProgress.done}/${enrichProgress.total}` : 'Enriching…'}</>
+              : <><Sparkles className="h-3.5 w-3.5 mr-1.5 text-violet-500" />Enrich selected ({selectedLeads.length})</>}
+          </Button>
+        )}
+      </>
+    );
+  }, [bulkAllowed, onBulkAdd, onBulkEnrich, selectedLeads, selectableLeads, bulkAdding, bulkEnriching, enrichProgress, runBulkAdd, handleBulkEnrichClick]);
 
   // View Details is always accessible — paywall only triggers on save/contact actions
 
@@ -262,7 +431,10 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         {/* Mobile Header */}
         <div className="md:hidden space-y-3">
           <div>
-            <CardTitle className="text-lg font-semibold">Search Results</CardTitle>
+            <CardTitle className="text-lg font-semibold">
+              Search Results
+              {selectedIds.size > 0 && <span className="ml-2 text-xs font-normal text-primary">{selectedIds.size} sel</span>}
+            </CardTitle>
             <p className="text-xs text-muted-foreground mt-1">
               {leads.length} found • <span className="text-status-hot font-medium">{noWebsiteCount} hot leads</span>
             </p>
@@ -272,6 +444,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {renderFilterMenu('start')}
+            {renderBulkButtons()}
             {!isLocked && onSetWebsiteStatus && noWebsiteFiltered.length > 0 && (
               <Button onClick={handleCheckBulk} disabled={bulkChecking} size="sm" variant="outline" className="h-8 px-2.5 text-xs border-border" title="Web-search the no-website leads for a real own-site (~$0.02 each, daily-capped)">
                 {bulkChecking ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Globe className="h-3.5 w-3.5 mr-1.5" />}
@@ -287,15 +460,19 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
         {/* Desktop Header */}
         <div className="hidden md:flex md:flex-row md:items-center md:justify-between">
           <div className="space-y-1">
-            <CardTitle className="text-xl font-semibold">Search Results</CardTitle>
+            <CardTitle className="text-xl font-semibold">
+              Search Results
+              {selectedIds.size > 0 && <span className="ml-2 text-sm font-normal text-primary">{selectedIds.size} sel</span>}
+            </CardTitle>
             <p className="text-sm text-muted-foreground">
               Found {leads.length} businesses •
                <span className="text-status-hot font-semibold ml-1">{noWebsiteCount} without websites</span>
                <span className="text-muted-foreground/70 ml-2">— Click 👁 to view details, 📋 to save to your list</span>
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             {renderFilterMenu('end')}
+            {renderBulkButtons()}
             {!isLocked && onSetWebsiteStatus && noWebsiteFiltered.length > 0 && (
               <Button onClick={handleCheckBulk} disabled={bulkChecking} variant="outline" className="border-border" title="Web-search the no-website leads for a real own-site (~$0.02 each, daily-capped)">
                 {bulkChecking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
@@ -325,6 +502,15 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                 key={lead.id}
                 className={`flex items-center justify-between py-2.5 px-3 rounded-md border border-border ${inOutreach ? 'bg-muted/30 opacity-70' : 'bg-background/80'}`}
               >
+                {bulkAllowed && (
+                  <Checkbox
+                    checked={selectedIds.has(lead.id)}
+                    onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
+                    disabled={inOutreach}
+                    aria-label={`Select ${lead.name}`}
+                    className="mr-2.5 shrink-0"
+                  />
+                )}
                 <div className="flex-1 min-w-0 mr-2">
                   <div className="flex items-center gap-1.5">
                     {(() => { const tc = getTeamClaim?.(lead); return tc ? <TeamClaimBadge claim={tc} small /> : null; })()}
@@ -435,7 +621,17 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           <Table>
             <TableHeader>
               <TableRow className="border-border hover:bg-transparent">
-                <TableHead className="w-[30%] pl-5">Business Name</TableHead>
+                {bulkAllowed && (
+                  <TableHead className="w-[36px] pl-3">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={handleSelectAll}
+                      aria-label="Select all"
+                      disabled={selectableLeads.length === 0}
+                    />
+                  </TableHead>
+                )}
+                <TableHead className="w-[28%] pl-2">Business Name</TableHead>
                 <TableHead className="w-[20%]">Website Status</TableHead>
                 <TableHead className="w-[30%]">More Details</TableHead>
                 <TableHead className="w-[20%]" data-walkthrough="actions-column-header">Actions</TableHead>
@@ -444,7 +640,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
             <TableBody>
               {paginatedLeads.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                  <TableCell colSpan={bulkAllowed ? 5 : 4} className="h-24 text-center text-muted-foreground">
                     No leads match your current filters.
                   </TableCell>
                 </TableRow>
@@ -455,7 +651,17 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   key={lead.id}
                   className={`border-border hover:bg-muted/30 ${inOutreach ? 'bg-muted/20 opacity-70' : ''}`}
                 >
-                  <TableCell className="font-medium pl-5">
+                  {bulkAllowed && (
+                    <TableCell className="pl-3">
+                      <Checkbox
+                        checked={selectedIds.has(lead.id)}
+                        onCheckedChange={(checked) => handleSelectOne(lead.id, checked as boolean)}
+                        disabled={inOutreach}
+                        aria-label={`Select ${lead.name}`}
+                      />
+                    </TableCell>
+                  )}
+                  <TableCell className="font-medium pl-2">
                     <div className="flex items-center gap-2">
                       {(() => { const tc = getTeamClaim?.(lead); return tc ? <TeamClaimBadge claim={tc} /> : null; })()}
                       <span className="truncate block">{lead.name}</span>

@@ -843,18 +843,32 @@ async function fetchTile(
 /** Region search: geocode the area → grid of tile centres → parallel tile fetches
  *  (per-tile failures tolerated) → merge + dedupe by placeId → no-website-first,
  *  capped at REGION_MAX. Auto-expansion is intentionally NOT run (tiling replaces
- *  it). Returns the leads + a RegionMeta describing the grid actually used. */
+ *  it). Returns the leads + a RegionMeta describing the grid actually used.
+ *
+ *  Region EXTENT: when radiusKm is passed (the Find Leads slider past 50km), the
+ *  bbox is centre ± radiusKm — the slider is the single control of how wide the
+ *  region is. The geocoded viewport bbox is only a fallback when no radius came. */
 async function tiledRegionSearch(
   keyword: string, location: string, densityKm: number, apiKey: string, debug: DebugMeta,
   // deno-lint-ignore no-explicit-any -- loose-typed to avoid supabase-js generic 'never' friction
   serviceClient?: any,
+  radiusKm?: number,
 ): Promise<{ leads: SearchLead[]; region: RegionMeta }> {
-  const geo = await geocodeLocation(location, apiKey, debug, serviceClient, true);
-  // Fall back to a ~±16km box around the centre when Google gives no bbox (e.g. a
-  // pin-point place name) so region mode still tiles a sensible area.
-  const vp: Viewport = geo.viewport ?? {
-    latMin: geo.lat - 0.15, latMax: geo.lat + 0.15, lngMin: geo.lng - 0.15, lngMax: geo.lng + 0.15,
-  };
+  const useRadiusBox = !!radiusKm && radiusKm > 0;
+  const geo = await geocodeLocation(location, apiKey, debug, serviceClient, !useRadiusBox);
+  let vp: Viewport;
+  if (useRadiusBox) {
+    // Slider-driven extent: a square box of centre ± radiusKm.
+    const dLat = radiusKm! / KM_PER_DEG_LAT;
+    const dLng = radiusKm! / (KM_PER_DEG_LNG * Math.cos((geo.lat * Math.PI) / 180));
+    vp = { latMin: geo.lat - dLat, latMax: geo.lat + dLat, lngMin: geo.lng - dLng, lngMax: geo.lng + dLng };
+  } else {
+    // Fall back to the geocoded viewport, else a ~±16km box around the centre
+    // (e.g. a pin-point place name) so region mode still tiles a sensible area.
+    vp = geo.viewport ?? {
+      latMin: geo.lat - 0.15, latMax: geo.lat + 0.15, lngMin: geo.lng - 0.15, lngMax: geo.lng + 0.15,
+    };
+  }
 
   const grid = buildTileGrid(vp, densityKm);
   console.log(`[REGION] "${location}" → ${grid.cols}x${grid.rows}=${grid.centres.length} tiles @ ${grid.effectiveSpacingKm}km (r=${grid.tileRadiusM}m), coarsened=${grid.coarsened}`);
@@ -1076,7 +1090,7 @@ Deno.serve(async (req) => {
     // Region searches cache under a distinct key (density-scoped, radius-agnostic)
     // so they never collide with normal/curated results for the same area.
     const cacheKey = region
-      ? await generateCacheKey(keyword, `##region:${density}##${location}`, 0)
+      ? await generateCacheKey(keyword, `##region:${density}##${location}`, radius)
       : await generateCacheKey(keyword, location, radius);
     const cutoff = new Date(Date.now() - CACHE_TTL_MS).toISOString();
 
@@ -1140,7 +1154,8 @@ Deno.serve(async (req) => {
 
     if (runRegion) {
       console.log(`[DIAG-HANDLER] Region search for "${keyword}" in "${location}" (density=${density})`);
-      const r = await tiledRegionSearch(keyword, location, DENSITY_KM[density], GOOGLE_MAPS_API_KEY, debug, serviceClient);
+      // The slider (metres) defines the region extent: bbox = centre ± radius.
+      const r = await tiledRegionSearch(keyword, location, DENSITY_KM[density], GOOGLE_MAPS_API_KEY, debug, serviceClient, radius / 1000);
       leads = r.leads;
       regionMeta = r.region;
       selectionDebug = {

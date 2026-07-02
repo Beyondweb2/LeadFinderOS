@@ -1,9 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { SearchForm } from '@/components/SearchForm';
 import { LeadsTable } from '@/components/LeadsTable';
-import { BroadListBuilder } from '@/components/BroadListBuilder';
 // EmailListBuilder kept in the repo for the future bulk-add flow; no longer rendered
-// here (email finding is now an in-place scan on the Targeted results).
+// here (email finding is now an in-place scan on the results).
 import { CampaignPicker } from '@/components/CampaignPicker';
 
 import { supabase } from '@/integrations/supabase/client';
@@ -15,11 +14,10 @@ import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTeamClaims } from '@/hooks/useTeamClaims';
-import { Flame, Target, Zap, Search, MapPin, Info, Mail, Download, Loader2, X, UserPlus, Globe2 } from 'lucide-react';
+import { Flame, Zap, Search, MapPin, Info, Mail, Download, Loader2, X, UserPlus, Globe2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import type { Country, Lead, RegionDensity } from '@/types/lead';
+import type { Country, Lead } from '@/types/lead';
 
 const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 
@@ -31,12 +29,10 @@ const Index = () => {
   const { toast } = useToast();
 
   const [lastSearchCountry, setLastSearchCountry] = useState<Country>('UK');
-  // Find Leads mode: 'targeted' (curated) | 'list' (broad list-builder).
-  // (Email sourcing is no longer a separate mode — it's a "Find emails" action on
-  // the Targeted results below.)
-  const [mode, setMode] = useState<'targeted' | 'list' | 'region'>('targeted');
-  // Region tiling density (only used in region mode). Medium = 8km tiles.
-  const [density, setDensity] = useState<RegionDensity>('medium');
+  // One page, one search. The radius slider is the single control: ≤50km = a
+  // normal single-centre search; >50km = region tiling (bbox = centre ± radius).
+  // Tracks whether the LAST search was a region scan, for the slow-search spinner.
+  const [lastWasRegion, setLastWasRegion] = useState(false);
 
   // Active campaign — new leads added from search are tagged with it.
   // Persisted so it survives navigation/reload.
@@ -78,9 +74,12 @@ const Index = () => {
 
   const handleSearch = useCallback((filters: any) => {
     setLastSearchCountry(filters.country || 'UK');
-    // List-builder mode asks for the full pool; region mode tiles the whole area.
-    search({ ...filters, broad: mode === 'list', region: mode === 'region', density }, false, false);
-  }, [search, mode, density]);
+    // Slider past 50km = region tiling (bbox = centre ± radius); otherwise a
+    // normal single-centre search. Density defaults server-side (medium 8km).
+    const isRegion = (filters.radius ?? 0) > 50_000;
+    setLastWasRegion(isRegion);
+    search({ ...filters, region: isRegion }, false, false);
+  }, [search]);
 
   // Notify when a region search was downgraded to a single area (daily budget).
   useEffect(() => {
@@ -134,45 +133,59 @@ const Index = () => {
   }, [leadsWithEmail, addingEmails, handleBulkAdd, activeCampaign, toast]);
 
   // Bulk ENRICH: add each selected lead to Outreach (silent), then run the full
-  // enrich-business pipeline on it — SEQUENTIALLY so the $2/day cap is respected
-  // exactly (no concurrent overshoot) and progress is clean. Stops on cap or cancel.
+  // enrich-business pipeline on it IN PLACE — no CRM add. Mirrors the per-lead ✨
+  // pattern (SearchLeadContact): a synthetic lead_id (matches no outreach row) +
+  // place_id, results written into searchEnrichment so the row icons light up and
+  // the data carries over for free when the lead is later added. SEQUENTIAL so the
+  // $2/day cap is respected exactly. Stops on cap or cancel.
+  const [enrichedIds, setEnrichedIds] = useState<Set<string>>(new Set());
+  const isLeadEnriched = useCallback((placeId: string) => enrichedIds.has(placeId), [enrichedIds]);
   const handleBulkEnrich = useCallback(async (
     sel: Lead[],
     onProgress: (done: number) => void,
     shouldCancel: () => boolean,
-  ): Promise<{ added: number; enriched: number; cached: number; failed: number; stoppedAtCap: boolean; cancelled: boolean }> => {
-    let added = 0, enriched = 0, cached = 0, failed = 0, stoppedAtCap = false, cancelled = false;
+  ): Promise<{ enriched: number; cached: number; skipped: number; failed: number; stoppedAtCap: boolean; cancelled: boolean }> => {
+    let enriched = 0, cached = 0, skipped = 0, failed = 0, stoppedAtCap = false, cancelled = false;
     for (let i = 0; i < sel.length; i++) {
       if (shouldCancel()) { cancelled = true; break; }
       const lead = sel[i];
-      // 1) Ensure the lead is stored in Outreach (enrich works on a stored row).
-      const row = await addToOutreach(lead, lastSearchCountry, 'no_website', activeCampaign, getEnrichment(lead.id), true);
-      if (!row) { failed++; onProgress(i + 1); continue; }
-      added++;
-      // 2) Full enrich on the stored row (reuses enrich-business + its cache/cap).
+      if (enrichedIds.has(lead.id)) { skipped++; onProgress(i + 1); continue; } // already done this session
       try {
+        const prior = getEnrichment(lead.id) ?? {};
         const { data, error } = await supabase.functions.invoke('enrich-business', {
           body: {
-            lead_id: row.id,
-            place_id: row.place_id ?? null,
-            google_maps_url: row.google_maps_url ?? null,
-            phone: row.phone ?? null,
-            country: row.country ?? null,
-            business_name: row.business_name ?? null,
-            facebook_url: row.facebook_url ?? null,
-            instagram_url: row.instagram_url ?? null,
-            website: row.website ?? null,
+            lead_id: crypto.randomUUID(), // synthetic — matches no outreach row (clean no-op server-side)
+            place_id: lead.id,
+            google_maps_url: lead.googleMapsUrl ?? null,
+            phone: lead.phone ?? null,
+            country: lastSearchCountry ?? null,
+            business_name: lead.name ?? null,
+            facebook_url: (prior.facebook_url as string | undefined) ?? null,
+            instagram_url: (prior.instagram_url as string | undefined) ?? null,
+            website: lead.websiteUrl ?? null,
           },
         });
-        if (error) failed++;
+        if (error) { failed++; }
         else if (data?.limit_reached) { stoppedAtCap = true; onProgress(i + 1); break; }
-        else if (data?.success) { data.cached ? cached++ : enriched++; }
-        else failed++;
+        else if (data?.success) {
+          // Apply the same patch shape as the per-lead hook (useEnrichBusiness).
+          const patch: Record<string, unknown> = {};
+          if (data.lineType) patch.line_type = data.lineType;
+          if (data.website && !lead.websiteUrl) patch.website = data.website;
+          if (data.applied) {
+            if (data.email) Object.assign(patch, { email: data.email, email_status: 'found', email_method: 'apify', enrichment_source: 'apify' });
+            if (data.facebook) Object.assign(patch, { facebook_url: data.facebook, facebook_status: 'found', facebook_method: data.facebookMethod ?? 'apify' });
+            if (data.instagram) Object.assign(patch, { instagram_url: data.instagram, instagram_status: 'found', instagram_method: data.instagramMethod ?? 'apify' });
+          }
+          if (Object.keys(patch).length) await patchEnrichment(lead.id, patch);
+          setEnrichedIds((prev) => new Set(prev).add(lead.id));
+          data.cached ? cached++ : enriched++;
+        } else failed++;
       } catch { failed++; }
       onProgress(i + 1);
     }
-    return { added, enriched, cached, failed, stoppedAtCap, cancelled };
-  }, [addToOutreach, lastSearchCountry, activeCampaign, getEnrichment]);
+    return { enriched, cached, skipped, failed, stoppedAtCap, cancelled };
+  }, [enrichedIds, getEnrichment, patchEnrichment, lastSearchCountry]);
 
   // In-place email scan for the Targeted results (writes into searchEnrichment →
   // Mail icon appears on rows via LeadEnrichButtons → carries over on add).
@@ -217,51 +230,6 @@ const Index = () => {
             <span className="text-[10px] sm:text-xs text-muted-foreground">Adding to</span>
             <CampaignPicker mode="assign" value={activeCampaign} onChange={handleCampaignChange} className="h-8 w-[180px]" />
           </div>
-          {/* Mode: Targeted (curated, no-website-first) vs List builder (cast wide). */}
-          <div className="inline-flex rounded-md border border-border p-0.5">
-            <Button
-              variant={mode === 'targeted' ? 'default' : 'ghost'}
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setMode('targeted')}
-              title="Curated: no-website leads first"
-            >
-              <Target className="h-3.5 w-3.5 mr-1.5" /> Targeted
-            </Button>
-            <Button
-              variant={mode === 'list' ? 'default' : 'ghost'}
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setMode('list')}
-              title="Cast wide: full list, filter by signal, bulk-add"
-            >
-              <Search className="h-3.5 w-3.5 mr-1.5" /> List builder
-            </Button>
-            <Button
-              variant={mode === 'region' ? 'default' : 'ghost'}
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setMode('region')}
-              title="Region: tile the whole area (multiple searches) for far more coverage"
-            >
-              <Globe2 className="h-3.5 w-3.5 mr-1.5" /> Region
-            </Button>
-          </div>
-          {/* Region density — only when Region mode is active. Finer = more tiles,
-              more coverage, more cost/time. */}
-          {mode === 'region' && (
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] sm:text-xs text-muted-foreground">Tile density</span>
-              <Select value={density} onValueChange={(v) => setDensity(v as RegionDensity)}>
-                <SelectTrigger className="h-7 w-[150px] text-xs"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="fine">Fine (5km · most)</SelectItem>
-                  <SelectItem value="medium">Medium (8km)</SelectItem>
-                  <SelectItem value="coarse">Coarse (12km · fastest)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
           <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2 sm:gap-4 text-[10px] sm:text-sm text-muted-foreground">
             <div className="flex items-center gap-1 sm:gap-2">
               <Flame className="h-3 w-3 sm:h-4 sm:w-4 text-status-hot" />
@@ -285,7 +253,7 @@ const Index = () => {
       </section>
 
       {/* Region scanning — informative spinner for the (slower) tiled search */}
-      {isLoading && mode === 'region' && (
+      {isLoading && lastWasRegion && (
         <div className="flex items-center gap-3 py-3 px-4 bg-primary/5 border border-primary/20 rounded-lg">
           <Loader2 className="h-4 w-4 shrink-0 animate-spin text-primary" />
           <span className="text-xs sm:text-sm text-muted-foreground">
@@ -347,15 +315,7 @@ const Index = () => {
       {/* Results Section */}
       {leads.length > 0 && (
         <section data-walkthrough="results-header">
-          {mode === 'list' ? (
-            <BroadListBuilder
-              leads={leads}
-              isLoading={isLoading}
-              isInOutreach={isInOutreach}
-              onBulkAdd={handleBulkAdd}
-              onBulkEnrich={handleBulkEnrich}
-            />
-          ) : (
+          {(
             <div className="space-y-3">
               {/* Region search banner — the grid actually used (echoed from the server). */}
               {regionMeta && (
@@ -435,6 +395,9 @@ const Index = () => {
                 isChecked={isChecked}
                 getTeamClaim={getTeamClaim}
                 onSetWebsiteStatus={setWebsiteOverride}
+                onBulkAdd={handleBulkAdd}
+                onBulkEnrich={handleBulkEnrich}
+                isLeadEnriched={isLeadEnriched}
               />
             </div>
           )}

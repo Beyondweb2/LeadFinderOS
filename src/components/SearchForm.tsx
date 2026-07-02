@@ -102,7 +102,7 @@ export function SearchForm({
 
             <div className="space-y-1.5 sm:space-y-2 sm:col-span-2 lg:col-span-1">
               <Label className="text-xs font-medium text-foreground/80">
-                Radius: {radius} km
+                {radius > 50 ? <>Region: ±{radius} km <span className="text-primary font-semibold">(area scan)</span></> : <>Radius: {radius} km</>}
               </Label>
               <div className="relative flex items-center gap-2 sm:gap-3 pt-0.5">
                 <Radius className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
@@ -110,11 +110,23 @@ export function SearchForm({
                   value={[radius]}
                   onValueChange={(value) => setRadius(value[0])}
                   min={1}
-                  max={50}
+                  max={100}
                   step={1}
                   className="flex-1"
                 />
               </div>
+              {/* Region cost note — only past 50km, where a search tiles the whole
+                  area (multiple paid searches) instead of one centre point. */}
+              {radius > 50 && (() => {
+                const tiles = Math.min(25, Math.ceil((2 * radius) / 8) ** 2);
+                const cost = (tiles * 2 * 0.032).toFixed(2);
+                return (
+                  <p className="text-[11px] leading-relaxed text-muted-foreground">
+                    Region scan: tiles a ~±{radius} km area into ~{tiles} searches · est. ~${cost} · takes ~15–30s ·
+                    re-runs free for 72h · auto-capped at $10/day.
+                  </p>
+                );
+              })()}
             </div>
           </div>
 
