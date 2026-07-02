@@ -1,5 +1,8 @@
 project_id = "ruusxpkkmwtljxxulhbq"
 
+[functions.bulk-jobs]
+verify_jwt = false
+
 [functions.connect-subdomain]
 verify_jwt = false
 
