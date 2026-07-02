@@ -303,6 +303,9 @@ export function OutreachTable({
   const [hasInstagram, setHasInstagram] = useState(false);
   const [hasFacebook, setHasFacebook] = useState(false);
   const [hasWhatsApp, setHasWhatsApp] = useState(false);
+  // Hide leads confirmed NOT on WhatsApp (status='no_whatsapp'). A durable hygiene
+  // preference, so it's persisted with the rest of the table state (below).
+  const [hideNoWhatsApp, setHideNoWhatsApp] = useState(false);
   // Listing-level signal filters — free (derived from stored website), not verified.
   const [sigWebsite, setSigWebsite] = useState(false);
   const [sigFacebook, setSigFacebook] = useState(false);
@@ -464,6 +467,7 @@ export function OutreachTable({
     if (typeof parsed.searchQuery === 'string') setSearchQuery(parsed.searchQuery);
     if (parsed.statusFilter) setStatusFilter(parsed.statusFilter);
     if (parsed.countryFilter) setCountryFilter(parsed.countryFilter);
+    if (typeof parsed.hideNoWhatsApp === 'boolean') setHideNoWhatsApp(parsed.hideNoWhatsApp);
     if (parsed.sortField) setSortField(parsed.sortField);
     if (parsed.sortDirection) setSortDirection(parsed.sortDirection);
     if (shouldForcePage1) {
@@ -489,11 +493,12 @@ export function OutreachTable({
       searchQuery,
       statusFilter,
       countryFilter,
+      hideNoWhatsApp,
       sortField,
       sortDirection,
       currentPage,
     });
-  }, [tableStateKey, searchQuery, statusFilter, countryFilter, sortField, sortDirection, currentPage]);
+  }, [tableStateKey, searchQuery, statusFilter, countryFilter, hideNoWhatsApp, sortField, sortDirection, currentPage]);
 
   // Apply optimistic updates to leads for rendering
   const leadsWithOptimistic = useMemo(() => {
@@ -1049,6 +1054,9 @@ export function OutreachTable({
     if (hasFacebook) result = result.filter((lead) => !!lead.facebook_url);
     if (hasWhatsApp) result = result.filter((lead) => lead.line_type === 'mobile');
 
+    // Hide leads confirmed not on WhatsApp (permanent 131026 → status='no_whatsapp').
+    if (hideNoWhatsApp) result = result.filter((lead) => lead.status !== 'no_whatsapp');
+
     // Listing-level signal filters (free, derived from stored website; AND).
     if (sigWebsite) result = result.filter((lead) => isOwnWebsite(lead.website));
     if (sigFacebook) result = result.filter((lead) => isFacebookListing(lead.website));
@@ -1083,7 +1091,7 @@ export function OutreachTable({
     });
 
     return result;
-  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
+  }, [leadsWithOptimistic, searchQuery, locationFilter, statusFilter, countryFilter, trackedOnly, hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, sigWebsite, sigFacebook, sigInstagram, sortField, sortDirection]);
 
   const newestLeadId = useMemo(() => {
     if (leads.length === 0) return null;
@@ -1427,13 +1435,14 @@ export function OutreachTable({
                 (unchanged); the trigger shows the active count. */}
             {(() => {
               const activeFilterCount =
-                [hasEmail, hasInstagram, hasFacebook, hasWhatsApp, sigWebsite, sigFacebook, sigInstagram].filter(Boolean).length;
+                [hasEmail, hasInstagram, hasFacebook, hasWhatsApp, hideNoWhatsApp, sigWebsite, sigFacebook, sigInstagram].filter(Boolean).length;
               const toggle = (setter: (updater: (prev: boolean) => boolean) => void) => () => {
                 setter((v) => !v);
                 setCurrentPage(1);
               };
               const clearAll = () => {
                 setHasEmail(false); setHasInstagram(false); setHasFacebook(false); setHasWhatsApp(false);
+                setHideNoWhatsApp(false);
                 setSigWebsite(false); setSigFacebook(false); setSigInstagram(false);
                 setCurrentPage(1);
               };
@@ -1465,6 +1474,11 @@ export function OutreachTable({
                       <Smartphone className="h-3.5 w-3.5 mr-2" /> WhatsApp-capable
                     </DropdownMenuCheckboxItem>
                     <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Hide</DropdownMenuLabel>
+                    <DropdownMenuCheckboxItem checked={hideNoWhatsApp} onCheckedChange={toggle(setHideNoWhatsApp)} onSelect={(e) => e.preventDefault()}>
+                      <PhoneOff className="h-3.5 w-3.5 mr-2" /> Hide no-WhatsApp
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuSeparator />
                     <DropdownMenuLabel>Listing signal (not verified)</DropdownMenuLabel>
                     <DropdownMenuCheckboxItem checked={sigWebsite} onCheckedChange={toggle(setSigWebsite)} onSelect={(e) => e.preventDefault()}>
                       <Globe className="h-3.5 w-3.5 mr-2" /> Has own website
@@ -1487,7 +1501,7 @@ export function OutreachTable({
                 </DropdownMenu>
               );
             })()}
-            {(hasEmail || hasInstagram || hasFacebook || hasWhatsApp || sigWebsite || sigFacebook || sigInstagram) && (
+            {(hasEmail || hasInstagram || hasFacebook || hasWhatsApp || hideNoWhatsApp || sigWebsite || sigFacebook || sigInstagram) && (
               <span className="self-center text-xs text-muted-foreground whitespace-nowrap" title="Leads matching all active filters">
                 {filteredAndSortedLeads.length} match
               </span>
