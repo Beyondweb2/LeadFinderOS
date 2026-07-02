@@ -4,7 +4,6 @@ import { Link } from 'react-router-dom';
 import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
-import { RevenueCard } from '@/components/dashboard/RevenueCard';
 import { PipelineCard } from '@/components/dashboard/PipelineCard';
 import { OutreachCard } from '@/components/dashboard/OutreachCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
@@ -132,23 +131,6 @@ const Dashboard = () => {
           <CampaignStatsSection />
         </section>
       )}
-
-      {/* Revenue — kept for when Stripe is live; de-emphasised at the bottom */}
-      <section>
-        <h2 className="text-xs sm:text-sm font-medium text-muted-foreground mb-2 sm:mb-3">Revenue</h2>
-        <div className="sm:max-w-md">
-          <RevenueCard
-            revenueThisMonth={metrics.revenueThisMonth}
-            revenueLastMonth={metrics.revenueLastMonth}
-            totalRevenue={metrics.totalRevenue}
-            fullyPaidClients={metrics.fullyPaidClients}
-            activeProposals={metrics.activeProposals}
-            pipelineDeals={metrics.pipeline.interested + metrics.pipeline.proposalSent}
-            totalPotentialRevenue={metrics.totalPotentialRevenue}
-            closedRevenue={metrics.closedRevenue}
-          />
-        </div>
-      </section>
 
       {/* Admin zone — rendered ONLY for admins (role-based useSubscription().isAdmin) */}
       {isAdmin && (
