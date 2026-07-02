@@ -104,8 +104,17 @@ export function WhatsAppQueuePanel({
           <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={refresh} disabled={loading}>
             <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
           </Button>
-          <Button size="sm" className="h-8 gap-1.5 text-xs" onClick={runTick} disabled={ticking}>
-            {ticking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />} Run test tick
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 text-xs"
+            onClick={runTick}
+            disabled={ticking}
+            title={status.testMode
+              ? 'Force one simulated processor pass (TEST_MODE — nothing is sent)'
+              : 'Run one processor pass now — a REAL send, subject to the 7am–7pm window, daily cap and pacing'}
+          >
+            {ticking ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+            {status.testMode ? 'Run test tick' : 'Run tick'}
           </Button>
         </div>
       </div>
