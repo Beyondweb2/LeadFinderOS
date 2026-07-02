@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { OutreachTable } from '@/components/OutreachTable';
 import { WhatsAppQueuePanel } from '@/components/WhatsAppQueuePanel';
@@ -52,6 +52,17 @@ const Outreach = () => {
     fetchLeads();
     if (job.job_type === 'site_gen') setSitesRefreshToken((t) => t + 1);
   });
+
+  // Lead ids of the site-gen items currently in flight → per-row spinner (matches
+  // single site-gen). Only 'running' items so we don't spin every queued row.
+  const bulkGeneratingIds = useMemo(
+    () => new Set(
+      (activeJob?.job_type === 'site_gen' ? activeJob.items ?? [] : [])
+        .filter((i) => i.status === 'running')
+        .map((i) => i.lead_id),
+    ),
+    [activeJob],
+  );
 
   // Campaign filter (null = all campaigns). Persisted per-user so it survives
   // navigation + reload + re-login (restored in an effect once campaigns load).
@@ -283,6 +294,7 @@ const Outreach = () => {
         onBulkJob={createJob}
         bulkJobActive={!!activeJob || creatingJob}
         sitesRefreshToken={sitesRefreshToken}
+        bulkGeneratingIds={bulkGeneratingIds}
       />
 
       {/* First-time outreach tips */}
