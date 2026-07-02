@@ -196,6 +196,54 @@ function normalizeLocationKey(location: string): string {
 // Area bounding box (from Google geocoding geometry.bounds ?? geometry.viewport).
 interface Viewport { latMin: number; latMax: number; lngMin: number; lngMax: number }
 
+// ─── Geocode outcome errors (handled at the top level as clean 2xx, never 5xx) ──
+/** The place genuinely doesn't resolve (Google ZERO_RESULTS / no results) even
+ *  after the un-biased retry. Carries the raw location so the notice can name it. */
+class LocationNotFoundError extends Error {
+  location: string;
+  constructor(location: string) { super('Location not found'); this.name = 'LocationNotFoundError'; this.location = location; }
+}
+/** Google geocoding itself hiccuped (quota, denied, network, non-JSON) — distinct
+ *  from "no such place" so the user gets a "try again" notice, not "not found". */
+class GeocodeServiceError extends Error {
+  constructor(detail: string) { super(`Geocode service error: ${detail}`); this.name = 'GeocodeServiceError'; }
+}
+
+// Common country names/codes → ISO-3166-1 alpha-2 (Google's components=country:).
+// Only what we plausibly serve; anything unmapped falls through to the raw 2-letter
+// check, else no bias.
+const COUNTRY_ALIASES: Record<string, string> = {
+  UK: 'GB', GB: 'GB', GREATBRITAIN: 'GB', UNITEDKINGDOM: 'GB', ENGLAND: 'GB', SCOTLAND: 'GB', WALES: 'GB',
+  US: 'US', USA: 'US', UNITEDSTATES: 'US', AMERICA: 'US',
+  AU: 'AU', AUS: 'AU', AUSTRALIA: 'AU',
+  CA: 'CA', CANADA: 'CA', IE: 'IE', IRELAND: 'IE', NZ: 'NZ', NEWZEALAND: 'NZ',
+};
+
+/** Normalise an explicit `country` field to an ISO alpha-2 code, or null. */
+function normCountry(country?: string): string | null {
+  const c = (country ?? '').trim().toUpperCase().replace(/[^A-Z]/g, '');
+  if (!c) return null;
+  if (COUNTRY_ALIASES[c]) return COUNTRY_ALIASES[c];
+  return /^[A-Z]{2}$/.test(c) ? c : null;
+}
+
+// If the location already carries a qualifier — ANY comma ("Reading, PA",
+// "Reading, Berkshire", "Reading, UK") or a trailing country/region word — the user
+// has disambiguated it themselves, so we must NOT force a default country bias.
+const LOCATION_QUALIFIER_RE = /,|\b(uk|u\.k\.|g\.?b\.?|england|scotland|wales|northern ireland|ireland|eire|usa?|u\.s\.a?\.?|united states|america|canada|australia|aus|nz|new zealand)\b/i;
+
+/**
+ * Decide the geocode country bias for a location, worldwide-safe:
+ *   1. Location already qualified (comma or country/region word) → no bias (trust it).
+ *   2. Explicit `country` field on the request → that country.
+ *   3. Otherwise → default GB (bare UK town names like "Reading" resolve correctly).
+ * Returns an ISO alpha-2 code, or null for "no bias".
+ */
+function resolveGeoBias(location: string, country?: string): string | null {
+  if (LOCATION_QUALIFIER_RE.test(location)) return null;
+  return normCountry(country) ?? 'GB';
+}
+
 /** Pull a bbox from a geocode result's geometry (prefer bounds — the true area
  *  extent — over viewport, the padded display box). null if neither is present. */
 function extractViewport(geometry: any): Viewport | null {
@@ -205,6 +253,8 @@ function extractViewport(geometry: any): Viewport | null {
   return { latMin: sw.lat, latMax: ne.lat, lngMin: sw.lng, lngMax: ne.lng };
 }
 
+type GeoHit = { lat: number; lng: number; viewport: Viewport | null };
+
 async function geocodeLocation(
   location: string,
   apiKey: string,
@@ -212,8 +262,14 @@ async function geocodeLocation(
   // deno-lint-ignore no-explicit-any -- loose-typed to avoid supabase-js generic 'never' friction
   serviceClient?: any,
   needViewport = false,
-): Promise<{ lat: number; lng: number; viewport: Viewport | null }> {
-  const locationKey = normalizeLocationKey(location);
+  country?: string,
+): Promise<GeoHit> {
+  // Worldwide-safe country bias: bare "Reading" → GB by default; "Reading, PA" or an
+  // explicit country field → that country; a qualified location → no forced bias.
+  const bias = resolveGeoBias(location, country);
+  // Bias is part of the cache identity — otherwise a GB-resolved "reading" would
+  // wrongly satisfy a later US-biased "reading" (cross-country cache poisoning).
+  const locationKey = normalizeLocationKey(location) + (bias ? `@${bias}` : '');
 
   // ─── GEOCODE CACHE CHECK ─────────────────────
   if (serviceClient) {
@@ -238,32 +294,65 @@ async function geocodeLocation(
   }
 
   // ─── GOOGLE GEOCODING API ────────────────────
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`;
-  console.log(`[DIAG-GEOCODE] Request URL: ${url.replace(apiKey, '[REDACTED]')}`);
-  
-  const res = await fetch(url);
-  debug.googleCallsMade.geocode++;
-  
-  const rawText = await res.text();
-  console.log(`[DIAG-GEOCODE] Response status: ${res.status}`);
-  console.log(`[DIAG-GEOCODE] Response body (first 1000 chars): ${rawText.substring(0, 1000)}`);
-  
-  const data = JSON.parse(rawText);
-  
-  if (data.status !== 'OK' || !data.results?.[0]) {
-    console.error(`[DIAG-GEOCODE] FAILED — Google status: ${data.status}, error_message: ${data.error_message || 'none'}`);
-    throw new Error('Location not found');
+  // One attempt against Google. Returns a hit, or null for ZERO_RESULTS (so the
+  // caller can retry un-biased). Throws GeocodeServiceError for a genuine service
+  // problem (HTTP error, quota, denied, non-JSON) — never a raw 5xx upstream.
+  const attempt = async (useBias: boolean): Promise<GeoHit | null> => {
+    let url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(location)}&key=${apiKey}`;
+    if (useBias && bias) url += `&region=${bias.toLowerCase()}&components=country:${bias}`;
+    console.log(`[DIAG-GEOCODE] Request URL: ${url.replace(apiKey, '[REDACTED]')} (bias=${useBias ? bias : 'none'})`);
+
+    let res: Response;
+    try {
+      res = await fetch(url);
+    } catch (e) {
+      throw new GeocodeServiceError(`fetch failed: ${(e as Error).message}`);
+    }
+    debug.googleCallsMade.geocode++;
+
+    const rawText = await res.text();
+    console.log(`[DIAG-GEOCODE] Response HTTP: ${res.status}, body (first 500): ${rawText.substring(0, 500)}`);
+    if (!res.ok) throw new GeocodeServiceError(`http ${res.status}`);
+
+    let data: any;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      throw new GeocodeServiceError('non-JSON response');
+    }
+
+    if (data.status === 'OK' && data.results?.[0]) {
+      const coords = data.results[0].geometry.location;
+      return { lat: coords.lat, lng: coords.lng, viewport: extractViewport(data.results[0].geometry) };
+    }
+    // Expected "no such place" — let the caller decide whether to retry un-biased.
+    if (data.status === 'ZERO_RESULTS' || !data.results?.[0]) {
+      console.warn(`[DIAG-GEOCODE] ZERO_RESULTS (bias=${useBias ? bias : 'none'})`);
+      return null;
+    }
+    // Anything else (OVER_QUERY_LIMIT, REQUEST_DENIED, OVER_DAILY_LIMIT, …) is a
+    // service condition, not "not found".
+    console.error(`[DIAG-GEOCODE] Google status: ${data.status}, error_message: ${data.error_message || 'none'}`);
+    throw new GeocodeServiceError(String(data.status));
+  };
+
+  // Primary attempt (biased if a bias applies). If it ZERO_RESULTS *and* a bias was
+  // applied, retry ONCE un-biased so nothing gets permanently stuck on the wrong
+  // country. The retry is the only extra geocode call, and only on a miss.
+  let hit = await attempt(!!bias);
+  if (!hit && bias) {
+    console.log('[DIAG-GEOCODE] Biased attempt empty — retrying without country bias');
+    hit = await attempt(false);
   }
-  
-  const coords = data.results[0].geometry.location;
-  const viewport = extractViewport(data.results[0].geometry);
-  console.log(`[DIAG-GEOCODE] SUCCESS — lat: ${coords.lat}, lng: ${coords.lng}, viewport: ${viewport ? 'yes' : 'none'}`);
+  if (!hit) throw new LocationNotFoundError(location);
+
+  console.log(`[DIAG-GEOCODE] SUCCESS — lat: ${hit.lat}, lng: ${hit.lng}, viewport: ${hit.viewport ? 'yes' : 'none'}`);
 
   // ─── GEOCODE CACHE STORE ─────────────────────
   if (serviceClient) {
     try {
       await serviceClient.from('geocode_cache').upsert(
-        { location_key: locationKey, lat: coords.lat, lng: coords.lng, viewport, raw_location: location, created_at: new Date().toISOString() },
+        { location_key: locationKey, lat: hit.lat, lng: hit.lng, viewport: hit.viewport, raw_location: location, created_at: new Date().toISOString() },
         { onConflict: 'location_key' }
       );
     } catch (e) {
@@ -271,7 +360,7 @@ async function geocodeLocation(
     }
   }
 
-  return { lat: coords.lat, lng: coords.lng, viewport };
+  return hit;
 }
 
 interface SearchLead {
@@ -362,15 +451,22 @@ async function textSearchPlaces(
 
     console.log(`[DIAG-SEARCH] Page ${page} request body: ${JSON.stringify(requestBody)}`);
 
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': FIELD_MASK,
-      },
-      body: JSON.stringify(requestBody),
-    });
+    let res: Response;
+    try {
+      res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': apiKey,
+          'X-Goog-FieldMask': FIELD_MASK,
+        },
+        body: JSON.stringify(requestBody),
+      });
+    } catch (e) {
+      // Network failure — degrade to whatever we already collected, don't crash.
+      console.error(`[DIAG-SEARCH] Page ${page} fetch failed (using results so far): ${(e as Error).message}`);
+      break;
+    }
 
     debug.googleCallsMade.textSearchPages++;
     pagesFetched++;
@@ -384,7 +480,14 @@ async function textSearchPlaces(
       break;
     }
 
-    const data = JSON.parse(rawText);
+    let data: any;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      // Non-JSON 200 (e.g. an HTML error page) — degrade to results so far.
+      console.error(`[DIAG-SEARCH] Page ${page} non-JSON body (using results so far)`);
+      break;
+    }
     const placesOnPage = data.places || [];
     console.log(`[DIAG-SEARCH] Page ${page} places returned by Google: ${placesOnPage.length}`);
 
@@ -624,8 +727,9 @@ async function performSearchGoogle(
   debug: DebugMeta,
   serviceClient?: ReturnType<typeof createClient>,
   broad = false,
+  country?: string,
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
-  const { lat, lng } = await geocodeLocation(location, apiKey, debug, serviceClient);
+  const { lat, lng } = await geocodeLocation(location, apiKey, debug, serviceClient, false, country);
   const { leads, selectionDebug } = await textSearchPlaces(keyword, lat, lng, radius, apiKey, debug, broad);
 
   // List-builder mode casts wide — never expand (expansion chases no-website leads).
@@ -853,9 +957,10 @@ async function tiledRegionSearch(
   // deno-lint-ignore no-explicit-any -- loose-typed to avoid supabase-js generic 'never' friction
   serviceClient?: any,
   radiusKm?: number,
+  country?: string,
 ): Promise<{ leads: SearchLead[]; region: RegionMeta }> {
   const useRadiusBox = !!radiusKm && radiusKm > 0;
-  const geo = await geocodeLocation(location, apiKey, debug, serviceClient, !useRadiusBox);
+  const geo = await geocodeLocation(location, apiKey, debug, serviceClient, !useRadiusBox, country);
   let vp: Viewport;
   if (useRadiusBox) {
     // Slider-driven extent: a square box of centre ± radiusKm.
@@ -945,6 +1050,7 @@ async function performSearchWithExpansion(
   debug: DebugMeta,
   serviceClient?: ReturnType<typeof createClient>,
   broad = false,
+  country?: string,
 ): Promise<{ leads: SearchLead[]; selectionDebug: SelectionDebug; expanded: boolean }> {
   const apifyToken = Deno.env.get('APIFY_TOKEN');
   // DISCOVERY default = Google (fast: ~3s cold, instant cached). Apify discovery
@@ -960,7 +1066,7 @@ async function performSearchWithExpansion(
       // fall through to Google below
     }
   }
-  return await performSearchGoogle(keyword, location, radius, apiKey, debug, serviceClient, broad);
+  return await performSearchGoogle(keyword, location, radius, apiKey, debug, serviceClient, broad, country);
 }
 
 // ═══════════════════════════════════════════════
@@ -982,7 +1088,12 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Request too large' }, 413);
     }
 
-    const body = await req.json();
+    let body: unknown;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonResponse({ error: 'Invalid request body.', _debug: debug }, 400);
+    }
 
     const GOOGLE_MAPS_API_KEY = Deno.env.get('GOOGLE_MAPS_API_KEY');
     debug.apiKeyPresent = !!GOOGLE_MAPS_API_KEY;
@@ -1079,7 +1190,7 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: 'Invalid search parameters. Please check your input.', _debug: debug }, 400);
     }
 
-    const { keyword, location, radius, broad, region, density } = validationResult.data;
+    const { keyword, location, radius, broad, region, density, country } = validationResult.data;
 
     if (!GOOGLE_MAPS_API_KEY) {
       console.error('GOOGLE_MAPS_API_KEY not configured');
@@ -1155,7 +1266,7 @@ Deno.serve(async (req) => {
     if (runRegion) {
       console.log(`[DIAG-HANDLER] Region search for "${keyword}" in "${location}" (density=${density})`);
       // The slider (metres) defines the region extent: bbox = centre ± radius.
-      const r = await tiledRegionSearch(keyword, location, DENSITY_KM[density], GOOGLE_MAPS_API_KEY, debug, serviceClient, radius / 1000);
+      const r = await tiledRegionSearch(keyword, location, DENSITY_KM[density], GOOGLE_MAPS_API_KEY, debug, serviceClient, radius / 1000, country);
       leads = r.leads;
       regionMeta = r.region;
       selectionDebug = {
@@ -1169,7 +1280,7 @@ Deno.serve(async (req) => {
       console.log(`[DIAG-HANDLER] Region: ${leads.length} leads from ${regionMeta.tilesSucceeded}/${regionMeta.tilesTotal} tiles`);
     } else {
       console.log(`[DIAG-HANDLER] Starting search for "${keyword}" in "${location}" within ${radius}m`);
-      const res = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient, broad);
+      const res = await performSearchWithExpansion(keyword, location, radius, GOOGLE_MAPS_API_KEY, debug, serviceClient, broad, country);
       leads = res.leads; selectionDebug = res.selectionDebug; expanded = res.expanded;
       console.log(`[DIAG-HANDLER] Found ${leads.length} leads (${selectionDebug.returnedNoWebsite} noWeb, ${selectionDebug.returnedHasWebsite} hasWeb, expanded: ${expanded})`);
     }
@@ -1245,6 +1356,37 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
+    // ─── HANDLED, NON-CRASH OUTCOMES → clean 2xx (never a broken "non-2xx") ───
+    // The place doesn't resolve even un-biased: return an empty result + friendly
+    // notice so the client shows a tidy empty state, not a failed search.
+    if (error instanceof LocationNotFoundError) {
+      console.warn(`[DIAG-HANDLER] Location not found: "${error.location}"`);
+      return jsonResponse({
+        leads: [],
+        totalFound: 0,
+        searchId: crypto.randomUUID(),
+        source: 'google',
+        cached: false,
+        notFound: true,
+        notice: `Couldn't find "${error.location}" — try adding a country or county, e.g. "Reading, UK".`,
+        _debug: debug,
+      });
+    }
+    // Google geocoding itself hiccuped (quota / denied / network / non-JSON): a
+    // distinct "try again" notice, still a clean 2xx (no raw 5xx to the client).
+    if (error instanceof GeocodeServiceError) {
+      console.error(`[DIAG-HANDLER] Geocode service issue: ${error.message}`);
+      return jsonResponse({
+        leads: [],
+        totalFound: 0,
+        searchId: crypto.randomUUID(),
+        source: 'google',
+        cached: false,
+        serviceIssue: true,
+        notice: 'Map lookup is temporarily unavailable — please try again in a moment.',
+        _debug: debug,
+      });
+    }
     console.error(`[DIAG-HANDLER] TOP-LEVEL CRASH:`, error);
     console.error(`[DIAG-HANDLER] Error type: ${typeof error}, constructor: ${error?.constructor?.name}`);
     console.error(`[DIAG-HANDLER] Error message: ${error instanceof Error ? error.message : String(error)}`);

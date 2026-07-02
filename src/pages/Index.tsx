@@ -22,7 +22,7 @@ import type { Country, Lead } from '@/types/lead';
 const ACTIVE_CAMPAIGN_KEY = 'leadfinder_active_campaign';
 
 const Index = () => {
-  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, expanded, setWebsiteOverride, regionMeta, regionDowngraded } = useLeadSearchContext();
+  const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded } = useLeadSearchContext();
   const { addLead: addToOutreach, isInOutreach } = useOutreach();
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
@@ -248,6 +248,18 @@ const Index = () => {
           isPaidSubscriber={true}
         />
       </section>
+
+      {/* Handled notice (location not found / map lookup unavailable) — a calm
+          empty-state with a retry, NOT the destructive "Search failed" card. */}
+      {searchNotice && !searchError && !isLoading && (
+        <div className="flex flex-col items-center gap-3 p-5 bg-muted/40 border border-border rounded-lg text-center">
+          <MapPin className="h-5 w-5 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground max-w-md">{searchNotice}</p>
+          <Button size="sm" variant="outline" onClick={retryLastSearch} className="gap-2">
+            Try again
+          </Button>
+        </div>
+      )}
 
       {/* Search Error + Retry */}
       {searchError && !isLoading && (

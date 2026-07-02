@@ -35,6 +35,9 @@ interface LeadSearchContextType {
   postAbandonExhausted: boolean;
   freeSearchExhausted: boolean;
   searchError: { message: string; errorId: string } | null;
+  /** Friendly handled message (location not found / map lookup unavailable) — a
+   *  soft empty-state, distinct from the hard searchError card. */
+  searchNotice: string | null;
   expanded: boolean;
   gated: boolean;
   regionMeta: RegionMeta | null;
@@ -57,6 +60,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
   const [postAbandonExhausted, setPostAbandonExhausted] = useState(false);
   const [freeSearchExhausted, setFreeSearchExhausted] = useState(false);
   const [searchError, setSearchError] = useState<{ message: string; errorId: string } | null>(null);
+  const [searchNotice, setSearchNotice] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [gated, setGated] = useState(false);
   // Region tiling: the grid the last region search used + a downgrade notice.
@@ -275,6 +279,7 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     setPostAbandonExhausted(false);
     setFreeSearchExhausted(false);
     setSearchError(null);
+    setSearchNotice(null);
     setExpanded(false);
     setRegionMeta(null);
     setRegionDowngraded(null);
@@ -388,8 +393,21 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
             return;
           }
           
-          // Non-retryable error — report diagnostics and show to user
-          const errMsg = error.message || 'Search failed. Tap retry to try again.';
+          // If the body carries a handled "not found" (older fn / non-2xx path),
+          // treat it as a soft notice, not a scary error card.
+          if (body?.notFound) {
+            setLeads([]);
+            setSearchError(null);
+            setSearchNotice(body.notice ?? body.error ?? "Couldn't find that location — try adding a country or county.");
+            setIsLoading(false);
+            return;
+          }
+
+          // Non-retryable error — prefer the function's own friendly message
+          // (body.notice / body.error) over the generic "non-2xx status code".
+          const errMsg = body?.notice || body?.error
+            || (error.message && !/non-2xx/i.test(error.message) ? error.message : null)
+            || 'Search failed. Tap retry to try again.';
           const errorId = await reportClientError({
             functionName: 'search-leads',
             payload: { keyword: filters.keyword, location: filters.location, radius: filters.radius },
@@ -409,6 +427,20 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
         }
 
         if (data) {
+          // Handled non-result outcomes (clean 2xx): the location couldn't be
+          // resolved, or the map lookup hiccuped. Show the friendly notice as a soft
+          // empty-state — NOT the generic "non-2xx" error card.
+          if (data.notFound || data.serviceIssue) {
+            setLeads([]);
+            setSearchError(null);
+            setSearchNotice(data.notice ?? "Couldn't find that location — try adding a country or county.");
+            setExpanded(false);
+            setRegionMeta(null);
+            setRegionDowngraded(null);
+            setIsLoading(false);
+            return;
+          }
+
           // Filter out excluded businesses
           const filteredLeads = data.leads.filter(lead => !isExcluded(lead));
 
@@ -568,11 +600,12 @@ export function LeadSearchProvider({ children }: { children: React.ReactNode }) 
     postAbandonExhausted,
     freeSearchExhausted,
     searchError,
+    searchNotice,
     expanded,
     gated,
     regionMeta,
     regionDowngraded,
-  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, expanded, gated, regionMeta, regionDowngraded]);
+  }), [displayedLeads, isLoading, search, setWebsiteOverride, retryLastSearch, exportToCsv, trialLimitError, clearTrialLimitError, postAbandonExhausted, freeSearchExhausted, searchError, searchNotice, expanded, gated, regionMeta, regionDowngraded]);
 
   return (
     <LeadSearchContext.Provider value={contextValue}>
