@@ -8,14 +8,14 @@ import { StatusBadge } from './StatusBadge';
 import { WebsiteStatusToggle } from './WebsiteStatusToggle';
 import {
   Download, Filter, ChevronLeft, ChevronRight, ClipboardList, Check, Eye, Lock, MapPin, ExternalLink, Globe, Loader2,
-  Instagram, Facebook, Sparkles,
+  Instagram, Facebook, Sparkles, Mail, UserPlus, ChevronDown, MoreHorizontal, X,
 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { socialKindOf } from '@/lib/socialUrl';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuTrigger, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import {
   Tooltip, TooltipContent, TooltipTrigger,
@@ -99,9 +99,24 @@ interface LeadsTableProps {
   ) => Promise<{ enriched: number; cached: number; skipped: number; failed: number; stoppedAtCap: boolean; cancelled: boolean }>;
   /** Whether a lead was already enriched this session (skipped = free). */
   isLeadEnriched?: (placeId: string) => boolean;
+  // ── Email-scan actions (unified toolbar; handlers live in Index, behaviour unchanged) ──
+  /** Free website-crawl email scan across the results. */
+  onFindEmails?: () => void;
+  onCancelFindEmails?: () => void;
+  findingEmails?: boolean;
+  emailProgress?: { done: number; total: number } | null;
+  emailResult?: { found: number; scanned: number } | null;
+  /** How many results have a website (crawlable for an email). */
+  withWebsiteCount?: number;
+  /** Bulk-add every result that has a found email. */
+  onAddAllWithEmails?: () => void;
+  addingEmails?: boolean;
+  addAllWithEmailsCount?: number;
+  /** Export CSV including any emails found this session. */
+  onExportWithEmails?: () => void;
 }
 
-export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched }: LeadsTableProps) {
+export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onMapLinkClick, isChecked, blurred = false, gated = false, onGatedAction, savedLeadCount = 0, maxFreeSaves = 3, onViewDetailsGated, viewDetailsExhausted = false, getTeamClaim, searchEnrichment, onEnrichPatch, onSetWebsiteStatus, onBulkAdd, onBulkEnrich, isLeadEnriched, onFindEmails, onCancelFindEmails, findingEmails = false, emailProgress, emailResult, withWebsiteCount = 0, onAddAllWithEmails, addingEmails = false, addAllWithEmailsCount = 0, onExportWithEmails }: LeadsTableProps) {
   const isLocked = blurred || gated;
   const handleExport = isLocked ? undefined : onExport;
   const { state, isDemoUser } = useDemoChecklist();
@@ -391,37 +406,115 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
 
   // Bulk action buttons (shared by the mobile + desktop headers), mirroring the
   // Outreach pattern: appear with a selection; "Add all shown" when none selected.
-  const renderBulkButtons = useCallback(() => {
-    if (!bulkAllowed) return null;
+  // Primary bulk action — always visible: "Add to CRM (N)" with a selection, else
+  // "Add all shown (M)". The money action stays prominent.
+  const renderPrimaryAdd = useCallback(() => {
+    if (!bulkAllowed || !onBulkAdd) return null;
+    if (selectedLeads.length > 0) {
+      return (
+        <Button size="sm" onClick={() => runBulkAdd(selectedLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs">
+          {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
+          Add to CRM ({selectedLeads.length})
+        </Button>
+      );
+    }
+    if (selectableLeads.length > 0) {
+      return (
+        <Button size="sm" variant="outline" onClick={() => runBulkAdd(selectableLeads)} disabled={bulkAdding} className="h-9 px-3 text-xs border-border" title="Add every filtered result not already in your list">
+          {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
+          Add all shown ({selectableLeads.length})
+        </Button>
+      );
+    }
+    return null;
+  }, [bulkAllowed, onBulkAdd, selectedLeads, selectableLeads, bulkAdding, runBulkAdd]);
+
+  // Secondary bulk/scan actions, grouped under one "Bulk ▾" menu:
+  //   Enrich selected · Check for websites · Find emails · Add all with emails.
+  // Behaviour/cost of each is unchanged — this is purely grouping + labelling.
+  const renderBulkMenu = useCallback(() => {
+    if (isLocked) return null;
+    const canEnrich = !!onBulkEnrich;
+    const canCheck = !!onSetWebsiteStatus && noWebsiteFiltered.length > 0;
+    const canFindEmails = !!onFindEmails;
+    const canExportEmails = !!onAddAllWithEmails; // add-all only shown after a scan (count>0)
+    if (!canEnrich && !canCheck && !canFindEmails && !canExportEmails) return null;
+    const busyLabel = bulkEnriching
+      ? (enrichProgress ? `Enriching ${enrichProgress.done}/${enrichProgress.total}…` : 'Enriching…')
+      : bulkChecking
+        ? (bulkProgress ? `Checking ${bulkProgress.done}/${bulkProgress.total}…` : 'Checking…')
+        : findingEmails
+          ? (emailProgress ? `Finding emails ${emailProgress.done}/${emailProgress.total}…` : 'Finding emails…')
+          : null;
     return (
-      <>
-        {onBulkAdd && (selectedLeads.length > 0 ? (
-          <Button size="sm" onClick={() => runBulkAdd(selectedLeads)} disabled={bulkAdding} className="h-8 px-2.5 text-xs">
-            {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
-            Add to CRM ({selectedLeads.length})
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="outline" size="sm" className="h-9 border-border">
+            {busyLabel ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5 mr-1.5 text-violet-500" />}
+            {busyLabel ?? 'Bulk'}
+            <ChevronDown className="h-3.5 w-3.5 ml-1" />
           </Button>
-        ) : selectableLeads.length > 0 ? (
-          <Button size="sm" variant="outline" onClick={() => runBulkAdd(selectableLeads)} disabled={bulkAdding} className="h-8 px-2.5 text-xs border-border" title="Add every filtered result not already in your list">
-            {bulkAdding ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ClipboardList className="h-3.5 w-3.5 mr-1.5" />}
-            Add all shown ({selectableLeads.length})
-          </Button>
-        ) : null)}
-        {onBulkEnrich && selectedLeads.length > 0 && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleBulkEnrichClick}
-            className="h-8 px-2.5 text-xs border-border"
-            title={bulkEnriching ? 'Click to cancel' : 'Find email / Facebook / Instagram / WhatsApp signal for the selected leads (~$0.035 each, $2/day cap) — attaches to the rows, does not add to CRM'}
-          >
-            {bulkEnriching
-              ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />{enrichProgress ? `Enriching ${enrichProgress.done}/${enrichProgress.total}` : 'Enriching…'}</>
-              : <><Sparkles className="h-3.5 w-3.5 mr-1.5 text-violet-500" />Enrich selected ({selectedLeads.length})</>}
-          </Button>
-        )}
-      </>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-72">
+          <DropdownMenuLabel>Bulk actions</DropdownMenuLabel>
+          {canEnrich && (
+            <DropdownMenuItem
+              disabled={selectedLeads.length === 0 && !bulkEnriching}
+              onSelect={(e) => { e.preventDefault(); handleBulkEnrichClick(); }}
+            >
+              <Sparkles className="mr-2 h-3.5 w-3.5 text-violet-500" />
+              {bulkEnriching ? 'Cancel enrich' : `Enrich selected (${selectedLeads.length}) · ~$0.035 each`}
+            </DropdownMenuItem>
+          )}
+          {canCheck && (
+            <DropdownMenuItem disabled={bulkChecking} onSelect={(e) => { e.preventDefault(); handleCheckBulk(); }}>
+              <Globe className="mr-2 h-3.5 w-3.5" />
+              Check for websites ({noWebsiteFiltered.length}) · ~$0.02 each
+            </DropdownMenuItem>
+          )}
+          {(canFindEmails || canExportEmails) && <DropdownMenuSeparator />}
+          {canFindEmails && (
+            findingEmails ? (
+              <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onCancelFindEmails?.(); }}>
+                <X className="mr-2 h-3.5 w-3.5" /> Cancel find emails
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem disabled={!withWebsiteCount} onSelect={(e) => { e.preventDefault(); onFindEmails?.(); }}>
+                <Mail className="mr-2 h-3.5 w-3.5" /> Find emails ({withWebsiteCount} with a website) · free
+              </DropdownMenuItem>
+            )
+          )}
+          {canExportEmails && addAllWithEmailsCount > 0 && (
+            <DropdownMenuItem disabled={addingEmails} onSelect={(e) => { e.preventDefault(); onAddAllWithEmails?.(); }}>
+              <UserPlus className="mr-2 h-3.5 w-3.5" /> Add all with emails ({addAllWithEmailsCount})
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
     );
-  }, [bulkAllowed, onBulkAdd, onBulkEnrich, selectedLeads, selectableLeads, bulkAdding, bulkEnriching, enrichProgress, runBulkAdd, handleBulkEnrichClick]);
+  }, [isLocked, onBulkEnrich, onSetWebsiteStatus, noWebsiteFiltered.length, onFindEmails, onAddAllWithEmails, bulkEnriching, enrichProgress, bulkChecking, bulkProgress, findingEmails, emailProgress, selectedLeads.length, handleBulkEnrichClick, handleCheckBulk, onCancelFindEmails, withWebsiteCount, addAllWithEmailsCount, addingEmails]);
+
+  // Exports grouped under one "Export ▾": plain CSV + CSV with found emails.
+  const renderExportMenu = useCallback(() => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" className="h-9 bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
+          {gated ? <Lock className="h-3.5 w-3.5 mr-1.5" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}
+          Export <ChevronDown className="h-3.5 w-3.5 ml-1" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={(e) => { e.preventDefault(); isLocked ? onGatedAction?.() : handleExport?.(); }}>
+          <Download className="mr-2 h-3.5 w-3.5" /> Export CSV
+        </DropdownMenuItem>
+        {onExportWithEmails && (
+          <DropdownMenuItem disabled={!leads.length} onSelect={(e) => { e.preventDefault(); onExportWithEmails(); }}>
+            <Mail className="mr-2 h-3.5 w-3.5" /> Export with emails
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  ), [blurred, gated, isLocked, onGatedAction, handleExport, onExportWithEmails, leads.length]);
 
   // View Details is always accessible — paywall only triggers on save/contact actions
 
@@ -444,16 +537,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {renderFilterMenu('start')}
-            {renderBulkButtons()}
-            {!isLocked && onSetWebsiteStatus && noWebsiteFiltered.length > 0 && (
-              <Button onClick={handleCheckBulk} disabled={bulkChecking} size="sm" variant="outline" className="h-8 px-2.5 text-xs border-border" title="Web-search the no-website leads for a real own-site (~$0.02 each, daily-capped)">
-                {bulkChecking ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Globe className="h-3.5 w-3.5 mr-1.5" />}
-                {bulkChecking && bulkProgress ? `Checking ${bulkProgress.done}/${bulkProgress.total}` : `Check website (${noWebsiteFiltered.length})`}
-              </Button>
-            )}
-            <Button onClick={isLocked ? () => onGatedAction?.() : handleExport} size="sm" className="h-8 px-2.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
-              {gated ? <Lock className="h-3.5 w-3.5 mr-1.5" /> : <Download className="h-3.5 w-3.5 mr-1.5" />}Export
-            </Button>
+            {renderPrimaryAdd()}
+            {renderBulkMenu()}
+            {renderExportMenu()}
           </div>
         </div>
 
@@ -472,16 +558,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
           </div>
           <div className="flex items-center gap-2 flex-wrap justify-end">
             {renderFilterMenu('end')}
-            {renderBulkButtons()}
-            {!isLocked && onSetWebsiteStatus && noWebsiteFiltered.length > 0 && (
-              <Button onClick={handleCheckBulk} disabled={bulkChecking} variant="outline" className="border-border" title="Web-search the no-website leads for a real own-site (~$0.02 each, daily-capped)">
-                {bulkChecking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Globe className="mr-2 h-4 w-4" />}
-                {bulkChecking && bulkProgress ? `Checking ${bulkProgress.done}/${bulkProgress.total}` : `Check website (${noWebsiteFiltered.length})`}
-              </Button>
-            )}
-            <Button onClick={isLocked ? () => onGatedAction?.() : handleExport} className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={blurred}>
-              {gated ? <Lock className="mr-2 h-4 w-4" /> : <Download className="mr-2 h-4 w-4" />}Export CSV
-            </Button>
+            {renderPrimaryAdd()}
+            {renderBulkMenu()}
+            {renderExportMenu()}
           </div>
         </div>
       </CardHeader>
@@ -521,15 +600,18 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   </div>
                   <div className="mt-1 flex items-center gap-1.5">
                     <WebsiteStatusToggle lead={lead} onSet={onSetWebsiteStatus} compact />
-                    {!isLocked && onSetWebsiteStatus && (lead.websiteStatus === 'NO_WEBSITE' || lead.websiteStatus === 'DIRECTORY_ONLY') && (
-                      <Button onClick={() => handleCheckOne(lead)} disabled={checkingId === lead.id} size="sm" variant="ghost" className="h-6 px-1.5 text-[11px] text-muted-foreground" title="Web-search for a real own-website (~$0.02, daily-capped)">
-                        {checkingId === lead.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Globe className="h-3 w-3 mr-1" />Check</>}
-                      </Button>
-                    )}
                   </div>
                   {onEnrichPatch && (
                     <div className="mt-1.5">
-                      <SearchLeadContact lead={lead} enrichment={searchEnrichment?.[lead.id]} onPatch={onEnrichPatch} />
+                      <SearchLeadContact
+                        lead={lead}
+                        enrichment={searchEnrichment?.[lead.id]}
+                        onPatch={onEnrichPatch}
+                        overflowMenu
+                        onCheckWebsite={() => handleCheckOne(lead)}
+                        checkWebsiteAvailable={!isLocked && !!onSetWebsiteStatus && (lead.websiteStatus === 'NO_WEBSITE' || lead.websiteStatus === 'DIRECTORY_ONLY')}
+                        checkingWebsite={checkingId === lead.id}
+                      />
                     </div>
                   )}
                 </div>
@@ -680,11 +762,6 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                           <p className="text-sm">{lead.reason}</p>
                         </TooltipContent>
                       </Tooltip>
-                      {!isLocked && onSetWebsiteStatus && (lead.websiteStatus === 'NO_WEBSITE' || lead.websiteStatus === 'DIRECTORY_ONLY') && (
-                        <Button onClick={() => handleCheckOne(lead)} disabled={checkingId === lead.id} size="sm" variant="ghost" className="h-7 px-1.5 text-[11px] text-muted-foreground hover:text-foreground" title="Web-search for a real own-website (~$0.02, daily-capped)">
-                          {checkingId === lead.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <><Globe className="h-3 w-3 mr-1" />Check</>}
-                        </Button>
-                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -694,7 +771,7 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                         <button
                           onClick={(e) => { e.preventDefault(); onViewDetailsGated?.(); }}
                           className="p-1.5 rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
-                          title="Open Google Maps"
+                          title="Open in Google Maps"
                         >
                           <Lock className="h-4 w-4" />
                         </button>
@@ -705,14 +782,22 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                           rel="noopener noreferrer"
                           onClick={() => onMapLinkClick?.(lead.name, lead.googleMapsUrl)}
                           className="p-1.5 rounded-md text-blue-500 hover:bg-blue-500/10 hover:text-blue-400 transition-colors"
-                          title="Open Google Maps"
+                          title="Open in Google Maps"
                         >
                           <ExternalLink className="h-4 w-4" />
                         </a>
                       )
                     )}
                     {onEnrichPatch && (
-                      <SearchLeadContact lead={lead} enrichment={searchEnrichment?.[lead.id]} onPatch={onEnrichPatch} />
+                      <SearchLeadContact
+                        lead={lead}
+                        enrichment={searchEnrichment?.[lead.id]}
+                        onPatch={onEnrichPatch}
+                        overflowMenu
+                        onCheckWebsite={() => handleCheckOne(lead)}
+                        checkWebsiteAvailable={!isLocked && !!onSetWebsiteStatus && (lead.websiteStatus === 'NO_WEBSITE' || lead.websiteStatus === 'DIRECTORY_ONLY')}
+                        checkingWebsite={checkingId === lead.id}
+                      />
                     )}
                     </div>
                   </TableCell>

@@ -14,7 +14,7 @@ import { useSearchEnrichment } from '@/hooks/useSearchEnrichment';
 import { useFindEmails } from '@/hooks/useFindEmails';
 import { useCheckedBusinesses } from '@/hooks/useCheckedBusinesses';
 import { useTeamClaims } from '@/hooks/useTeamClaims';
-import { Flame, Zap, Search, MapPin, Info, Mail, Download, Loader2, X, UserPlus, Globe2 } from 'lucide-react';
+import { Flame, Zap, Search, MapPin, Info, Globe2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import type { Country, Lead } from '@/types/lead';
@@ -317,58 +317,10 @@ const Index = () => {
                   </span>
                 </div>
               )}
-              {/* In-place email scan: crawl the current results for emails, annotate
-                  the rows (Mail icon via LeadEnrichButtons), and export with emails.
-                  No table rebuild — found emails land in searchEnrichment. */}
-              <div className="flex flex-wrap items-center justify-end gap-2">
-                {emailResult && !finding && (
-                  <span className="text-xs text-muted-foreground">Found emails for {emailResult.found} of {emailResult.scanned}</span>
-                )}
-                {finding && emailProgress && (
-                  <span className="text-xs text-muted-foreground">Finding emails {emailProgress.done} of {emailProgress.total}…</span>
-                )}
-                {finding ? (
-                  <Button variant="outline" size="sm" className="h-8 text-xs" onClick={cancelFindEmails}>
-                    <X className="h-3.5 w-3.5 mr-1.5" /> Cancel
-                  </Button>
-                ) : (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={findEmails}
-                    disabled={!withWebsiteCount}
-                    title="Find emails across these results (free website crawl)"
-                  >
-                    <Mail className="h-3.5 w-3.5 mr-1.5" />
-                    Find emails ({withWebsiteCount} with a website)
-                  </Button>
-                )}
-                {/* After a Find-emails scan: bulk-add every result that has an email
-                    into the current campaign (skips any already in Outreach). */}
-                {emailResult && leadsWithEmail.length > 0 && (
-                  <Button
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={handleAddAllWithEmails}
-                    disabled={addingEmails}
-                    title="Add every result that has an email into your current campaign"
-                  >
-                    {addingEmails ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <UserPlus className="h-3.5 w-3.5 mr-1.5" />}
-                    Add all with emails ({leadsWithEmail.length})
-                  </Button>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 text-xs"
-                  onClick={handleExportWithEmails}
-                  disabled={!leads.length}
-                  title="Export the results as CSV including any emails found"
-                >
-                  <Download className="h-3.5 w-3.5 mr-1.5" /> Export with emails
-                </Button>
-              </div>
+              {/* In-place email scan (crawl results for emails, annotate rows, export
+                  with emails) is now folded into the LeadsTable toolbar's Bulk ▾ /
+                  Export ▾ menus — the handlers/state are threaded in below. Behaviour,
+                  cost (find-emails free) and gating are unchanged. */}
               <LeadsTable
                 leads={leads}
                 onExport={exportToCsv}
@@ -385,6 +337,16 @@ const Index = () => {
                 onBulkAdd={handleBulkAdd}
                 onBulkEnrich={handleBulkEnrich}
                 isLeadEnriched={isLeadEnriched}
+                onFindEmails={findEmails}
+                onCancelFindEmails={cancelFindEmails}
+                findingEmails={finding}
+                emailProgress={emailProgress}
+                emailResult={emailResult}
+                withWebsiteCount={withWebsiteCount}
+                onAddAllWithEmails={handleAddAllWithEmails}
+                addingEmails={addingEmails}
+                addAllWithEmailsCount={leadsWithEmail.length}
+                onExportWithEmails={handleExportWithEmails}
               />
             </div>
           )}

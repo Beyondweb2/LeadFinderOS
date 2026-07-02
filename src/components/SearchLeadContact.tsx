@@ -9,6 +9,11 @@ interface SearchLeadContactProps {
   enrichment: Partial<OutreachLead> | undefined;
   /** Patch search-enrichment state, keyed by place_id. */
   onPatch: (placeId: string, patch: Partial<OutreachLead>) => Promise<any>;
+  /** Find Leads declutter: fold Enrich (+ Check-for-website) into a ⋯ menu. */
+  overflowMenu?: boolean;
+  onCheckWebsite?: () => void;
+  checkWebsiteAvailable?: boolean;
+  checkingWebsite?: boolean;
 }
 
 /**
@@ -18,7 +23,7 @@ interface SearchLeadContactProps {
  * engine) by wrapping the search Lead in a lightweight pseudo OutreachLead.
  * Whether the lead has a website is already shown in the Website Status column.
  */
-export function SearchLeadContact({ lead, enrichment, onPatch }: SearchLeadContactProps) {
+export function SearchLeadContact({ lead, enrichment, onPatch, overflowMenu, onCheckWebsite, checkWebsiteAvailable, checkingWebsite }: SearchLeadContactProps) {
   // A throwaway, valid UUID as lead_id. enrich-lead requires a lead_id and updates
   // outreach_leads by it; this matches no row (clean no-op) while the cache + the
   // returned value key off place_id. Stable for this row's lifetime.
@@ -37,5 +42,14 @@ export function SearchLeadContact({ lead, enrichment, onPatch }: SearchLeadConta
     [onPatch, lead.id],
   );
 
-  return <LeadEnrichButtons lead={pseudoLead} onUpdate={handleUpdate} />;
+  return (
+    <LeadEnrichButtons
+      lead={pseudoLead}
+      onUpdate={handleUpdate}
+      overflowMenu={overflowMenu}
+      onCheckWebsite={onCheckWebsite}
+      checkWebsiteAvailable={checkWebsiteAvailable}
+      checkingWebsite={checkingWebsite}
+    />
+  );
 }
