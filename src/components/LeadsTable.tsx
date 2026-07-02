@@ -591,9 +591,9 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                   />
                 )}
                 <div className="flex-1 min-w-0 mr-2">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 min-w-0">
                     {(() => { const tc = getTeamClaim?.(lead); return tc ? <TeamClaimBadge claim={tc} small /> : null; })()}
-                    <p className="font-medium text-sm truncate leading-tight">{lead.name}</p>
+                    <p className="font-medium text-sm truncate leading-tight min-w-0">{lead.name}</p>
                     {lead.isExpanded && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
                     )}
@@ -744,9 +744,11 @@ export function LeadsTable({ leads, onExport, onAddToOutreach, isInOutreach, onM
                     </TableCell>
                   )}
                   <TableCell className="font-medium pl-2">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
                       {(() => { const tc = getTeamClaim?.(lead); return tc ? <TeamClaimBadge claim={tc} /> : null; })()}
-                      <span className="truncate block">{lead.name}</span>
+                      {/* Wrap (not truncate) a long name within a bounded width so the
+                          row height grows but the columns to its right stay aligned. */}
+                      <span className="min-w-0 break-words max-w-[220px]">{lead.name}</span>
                       {lead.isExpanded && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium shrink-0">Nearby</span>
                       )}

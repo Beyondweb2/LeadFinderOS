@@ -43,6 +43,9 @@ export function useOutreach() {
   const isProcessingQueueRef = useRef(false);
   const queuedPlaceIdsRef = useRef<Set<string>>(new Set()); // Dedup: prevent same place_id being queued twice per session
   const CONCURRENCY = 3;
+  // Names of leads dropped for having no phone, collected across one queue drain so
+  // a bulk add surfaces ONE "N skipped — no phone" toast instead of one per lead.
+  const removedNoPhoneRef = useRef<string[]>([]);
 
   const removeLeadNoPhone = useCallback(async (outreachLeadId: string, businessName: string) => {
     // Delete the lead from the database
@@ -53,12 +56,9 @@ export function useOutreach() {
     // Clean up outreach_history so business can be re-added later
     await supabase.from('outreach_history').delete().eq('business_name', businessName);
     setOutreachHistory(prev => prev.filter(h => h.business_name !== businessName));
-    // Notify user
-    toast({
-      title: `${businessName}`,
-      description: 'No phone number found — not added.',
-      variant: 'destructive',
-    });
+    // Collect the name — the aggregated toast fires once, when the queue drains,
+    // so a bulk add doesn't spray one toast per no-phone lead.
+    removedNoPhoneRef.current.push(businessName);
     // Notify walkthrough to decrement CRM add count
     window.dispatchEvent(new CustomEvent('crm-lead-purged'));
   }, []);
@@ -78,23 +78,12 @@ export function useOutreach() {
       }
 
       if (!details.phone) {
-        // Enrichment succeeded but Google has no phone for this business.
-        // Do NOT delete the lead — deleting forces re-enrichment next time the
-        // same business appears in a search. Leave it; user can act on it.
-        const updates: Record<string, string | null> = {};
-        if (details.website) updates.website = details.website;
-        if (Object.keys(updates).length > 0) {
-          const { data: updated } = await supabase
-            .from('outreach_leads')
-            .update(updates)
-            .eq('id', item.outreachLeadId)
-            .select()
-            .single();
-          if (updated) {
-            setLeads(prev => prev.map(l => l.id === item.outreachLeadId ? (updated as OutreachLead) : l));
-          }
-        }
+        // Enrichment succeeded but Google has no phone for this business. A lead
+        // with no phone can't be worked (outreach is phone/WhatsApp-based), so drop
+        // it rather than keeping a dead row. removeLeadNoPhone collects the name for
+        // the aggregated "N skipped — no phone" toast fired when the queue drains.
         setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'no_phone' }));
+        await removeLeadNoPhone(item.outreachLeadId, item.businessName);
         return;
       }
 
@@ -116,7 +105,7 @@ export function useOutreach() {
       console.error('Phone enrichment failed (non-blocking):', e);
       setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'failed' }));
     }
-  }, []);
+  }, [removeLeadNoPhone]);
 
   const processPhoneQueue = useCallback(async () => {
     if (isProcessingQueueRef.current) return;
@@ -128,7 +117,21 @@ export function useOutreach() {
     }
 
     isProcessingQueueRef.current = false;
-  }, [fetchOnePhone]);
+
+    // Queue drained — fire ONE toast for everything dropped as no-phone this pass.
+    // Single add → "<Name> — No phone number found"; bulk → "N skipped — no phone".
+    const dropped = removedNoPhoneRef.current;
+    if (dropped.length > 0) {
+      removedNoPhoneRef.current = [];
+      toast({
+        title: dropped.length === 1 ? dropped[0] : `${dropped.length} skipped — no phone`,
+        description: dropped.length === 1
+          ? 'No phone number found — not added.'
+          : `No phone number found — not added: ${dropped.join(', ')}.`,
+        variant: 'destructive',
+      });
+    }
+  }, [fetchOnePhone, toast]);
 
   const enqueuePhoneFetch = useCallback((outreachLeadId: string, placeId: string, businessName: string) => {
     // Dedup: skip if this place_id has already been queued this session
