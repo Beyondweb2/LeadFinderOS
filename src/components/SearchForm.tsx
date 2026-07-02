@@ -102,7 +102,7 @@ export function SearchForm({
 
             <div className="space-y-1.5 sm:space-y-2 sm:col-span-2 lg:col-span-1">
               <Label className="text-xs font-medium text-foreground/80">
-                {radius > 50 ? <>Region: ±{radius} km <span className="text-primary font-semibold">(area scan)</span></> : <>Radius: {radius} km</>}
+                Radius: {radius} km
               </Label>
               <div className="relative flex items-center gap-2 sm:gap-3 pt-0.5">
                 <Radius className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground flex-shrink-0" />
@@ -110,28 +110,11 @@ export function SearchForm({
                   value={[radius]}
                   onValueChange={(value) => setRadius(value[0])}
                   min={1}
-                  max={100}
+                  max={50}
                   step={1}
                   className="flex-1"
                 />
               </div>
-              {/* Region cost note — only past 50km, where a search tiles the whole
-                  area (multiple paid searches). Tile count mirrors buildTileGrid in
-                  search-leads EXACTLY (8km medium spacing, ×1.15 auto-coarsen until
-                  ≤25 tiles) so the estimate matches what the server will run. */}
-              {radius > 50 && (() => {
-                const sizeKm = radius * 2;             // bbox side = centre ± radius
-                let s = 8;                             // DENSITY_KM.medium (server default)
-                let cols = Math.max(1, Math.ceil(sizeKm / s));
-                while (cols * cols > 25) {             // MAX_TILES auto-coarsen (×1.15 steps)
-                  s *= 1.15;
-                  cols = Math.max(1, Math.ceil(sizeKm / s));
-                }
-                const cost = (cols * cols * 2 * 0.032).toFixed(2); // TILE_MAX_PAGES × $0.032/page
-                return (
-                  <p className="text-[11px] text-muted-foreground">Est. cost: ~${cost}</p>
-                );
-              })()}
             </div>
           </div>
 
