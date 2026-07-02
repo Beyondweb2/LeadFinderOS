@@ -120,6 +120,9 @@ async function runItem(service: any, job: JobRow, item: JobItem): Promise<{ stat
     "Authorization": `Bearer ${SERVICE_KEY}`,
     "apikey": ANON_KEY,
     "x-internal-job": "1",
+    // CRON_SECRET decouples this internal call from the service-key comparison (which
+    // drifts in this project) — enrich-business / generate-barber-site accept it.
+    "x-cron-secret": CRON_SECRET,
   };
 
   if (job.job_type === "enrich") {
