@@ -62,4 +62,11 @@ export interface SearchResponse {
   region?: RegionMeta;
   /** Present when region mode was downgraded to a single search (daily budget). */
   downgraded?: { reason: string; spentUsd: number };
+  /** Handled "couldn't resolve that location" — empty leads + a friendly notice
+   *  (a clean 2xx, not an error). */
+  notFound?: boolean;
+  /** Handled "map lookup temporarily unavailable" — empty leads + a try-again notice. */
+  serviceIssue?: boolean;
+  /** Friendly message to show for notFound / serviceIssue (in place of results). */
+  notice?: string;
 }

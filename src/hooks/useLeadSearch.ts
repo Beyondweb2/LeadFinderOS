@@ -104,11 +104,12 @@ export function useLeadSearch() {
               });
               return;
             }
-            // Handle location not found — show friendly message without error ID
-            if (parsedBody?.error?.toLowerCase().includes('location not found')) {
+            // Handle location not found / handled notice — show the friendly
+            // message (no error ID), never the generic "non-2xx status code".
+            if (parsedBody?.notFound || parsedBody?.error?.toLowerCase().includes('location not found')) {
               setSearchError({
                 errorId: '',
-                message: 'Location not found. Please check the address or try a different location.',
+                message: parsedBody?.notice ?? parsedBody?.error ?? 'Location not found. Please check the address or try a different location.',
               });
               return;
             }
@@ -147,6 +148,16 @@ export function useLeadSearch() {
       }
 
       if (data) {
+        // Handled non-result outcomes (clean 2xx): show the friendly notice instead
+        // of results, never a generic error.
+        if (data.notFound || data.serviceIssue) {
+          setLeads([]);
+          setSearchError({
+            errorId: '',
+            message: data.notice ?? "Couldn't find that location — try adding a country or county.",
+          });
+          return;
+        }
         setLeads(data.leads);
         await saveSearch(filters, data.leads.length);
       }
