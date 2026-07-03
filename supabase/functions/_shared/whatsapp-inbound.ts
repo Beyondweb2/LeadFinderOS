@@ -150,9 +150,13 @@ export async function handleInboundMessages(
       // affects the message insert above.
       if (leadId) {
         try {
+          // Reply → 'replied' AND queue the operator to respond: next_action
+          // 'send_draft' due today (YYYY-MM-DD, matching record-site-event's
+          // toISOString().slice(0,10) date style).
+          const today = new Date().toISOString().slice(0, 10);
           await service
             .from("outreach_leads")
-            .update({ status: "replied" })
+            .update({ status: "replied", next_action: "send_draft", next_action_date: today })
             .eq("id", leadId)
             .not("status", "in", NO_DOWNGRADE);
         } catch (e) {

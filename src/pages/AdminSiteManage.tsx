@@ -14,6 +14,7 @@ import { SiteEditor } from "@/components/SiteEditor";
 import { publicSiteUrl, barberSiteUrl } from "@/config/publicSite";
 import { bookingUrl } from "@/lib/subdomain";
 import { useTemplates } from "@/hooks/useTemplates";
+import { WHATSAPP_TEMPLATES } from "@/types/outreach";
 import type { BarberSiteContent } from "@/templates/barber/types";
 
 /**
@@ -37,7 +38,7 @@ type SiteRow = {
   template?: string | null;
 };
 
-type LeadInfo = { id: string; phone: string | null; business_name: string; website: string | null; place_id: string | null };
+type LeadInfo = { id: string; phone: string | null; business_name: string; website: string | null; place_id: string | null; status: string | null };
 
 export default function AdminSiteManage() {
   const { id } = useParams();
@@ -59,6 +60,10 @@ export default function AdminSiteManage() {
   const [leadInfo, setLeadInfo] = useState<LeadInfo | null>(null);
   const { templates } = useTemplates();
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>("");
+  // Approved WhatsApp template (Meta) used when queueing this barber — distinct
+  // from the free-text saved templates above (those drive the SMS/Call composer).
+  const [waTemplate, setWaTemplate] = useState<string>(WHATSAPP_TEMPLATES[0].value);
+  const [queuingWhatsApp, setQueuingWhatsApp] = useState(false);
 
   // Only the user's saved text templates (voice scripts aren't sent as messages).
   const textTemplates = templates.filter((t) => t.template_type === "text");
@@ -92,7 +97,7 @@ export default function AdminSiteManage() {
       if (row?.lead_id) {
         const { data: lead } = await sb
           .from("outreach_leads")
-          .select("id, phone, business_name, website, place_id")
+          .select("id, phone, business_name, website, place_id, status")
           .eq("id", row.lead_id)
           .maybeSingle();
         if (lead) setLeadInfo(lead as unknown as LeadInfo);
@@ -242,6 +247,46 @@ export default function AdminSiteManage() {
     }
   };
 
+  // Add THIS barber's lead to the LIVE WhatsApp outreach queue — the same write the
+  // Outreach table / per-lead control make (process-whatsapp-queue sends within the
+  // daily window). Capture previous_status so cancelling restores it, reset attempts
+  // for fresh retries, and use an APPROVED template. We deliberately pass NO URL:
+  // the queue processor builds the claim link server-side from the lead's own site.
+  const queueForWhatsApp = async () => {
+    if (!leadInfo) {
+      toast({ title: "No lead linked", description: "This site isn't linked to an Outreach lead.", variant: "destructive" });
+      return;
+    }
+    if (leadInfo.status === "no_whatsapp") {
+      toast({ title: "Not on WhatsApp", description: "This number can't receive WhatsApp — try SMS or Call.", variant: "destructive" });
+      return;
+    }
+    setQueuingWhatsApp(true);
+    try {
+      const { error } = await sb
+        .from("outreach_leads")
+        .update({
+          status: "queued",
+          previous_status: leadInfo.status ?? null, // restore-on-cancel
+          queued_at: new Date().toISOString(),
+          whatsapp_template: waTemplate,
+          whatsapp_attempts: 0, // fresh retries (e.g. re-queuing a whatsapp_failed lead)
+        })
+        .eq("id", leadInfo.id);
+      if (error) throw error;
+      setLeadInfo({ ...leadInfo, status: "queued" });
+      const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === waTemplate)?.label ?? waTemplate;
+      toast({
+        title: "Added to WhatsApp queue",
+        description: `Template: ${tmplLabel}. Sends within the daily 7am–7pm UK window (max 10/day).`,
+      });
+    } catch (e) {
+      toast({ title: "Couldn't queue", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setQueuingWhatsApp(false);
+    }
+  };
+
   // Jump to the Outreach page (single source of truth) with THIS barber's row +
   // composer open, the chosen template pre-filled, and the /s/ link carried in.
   const launchOutreach = (channel: "sms" | "whatsapp" | "call") => {
@@ -373,6 +418,23 @@ export default function AdminSiteManage() {
               </p>
             </div>
 
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">WhatsApp template <span className="font-normal text-muted-foreground">(approved)</span></p>
+              <Select value={waTemplate} onValueChange={setWaTemplate}>
+                <SelectTrigger className="text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {WHATSAPP_TEMPLATES.map((t) => (
+                    <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">
+                Adds this barber to the live WhatsApp queue with the chosen approved template. The queue builds the claim link from the barber's own site server-side — no link is attached here.
+              </p>
+            </div>
+
             {!leadInfo && (
               <p className="text-sm text-muted-foreground">This site isn't linked to an Outreach lead, so it can't launch a composer.</p>
             )}
@@ -381,8 +443,14 @@ export default function AdminSiteManage() {
               <Button size="sm" onClick={() => launchOutreach("sms")} disabled={!leadInfo}>
                 <MessageCircle className="h-4 w-4 mr-2" /> SMS
               </Button>
-              <Button size="sm" onClick={() => launchOutreach("whatsapp")} disabled={!leadInfo}>
-                <MessageSquare className="h-4 w-4 mr-2" /> WhatsApp
+              <Button
+                size="sm"
+                onClick={queueForWhatsApp}
+                disabled={!leadInfo || queuingWhatsApp || leadInfo.status === "no_whatsapp"}
+                title={leadInfo?.status === "no_whatsapp" ? "This number isn't on WhatsApp" : "Add to the live WhatsApp queue"}
+              >
+                {queuingWhatsApp ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MessageSquare className="h-4 w-4 mr-2" />}
+                {leadInfo?.status === "queued" ? "Queued" : "Queue WhatsApp"}
               </Button>
               <Button size="sm" variant="outline" onClick={() => launchOutreach("call")} disabled={!leadInfo}>
                 <Phone className="h-4 w-4 mr-2" /> Call
