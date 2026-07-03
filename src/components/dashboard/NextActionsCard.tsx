@@ -1,8 +1,9 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CalendarClock, AlertTriangle, Clock, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { OutreachLead, NextActionType } from '@/types/outreach';
+import { NEXT_ACTION_OPTIONS, type OutreachLead, type NextActionType } from '@/types/outreach';
 import { getLeadCustomAction } from '@/hooks/useCustomNextActions';
 import { useCampaigns } from '@/hooks/useCampaigns';
 import { cn } from '@/lib/utils';
@@ -11,18 +12,11 @@ interface NextActionsCardProps {
   trackedLeads: OutreachLead[];
 }
 
-const ACTION_LABELS: Record<string, string> = {
-  call: 'Call',
-  follow_up: 'Follow Up',
-  send_draft: 'Send Draft',
-  remove_if_no_reply: 'Remove if No Reply',
-  send_initial_text: 'Send Text',
-  send_voice_note: 'Voice Note',
-  send_follow_up: 'Follow Up',
-  '2nd_follow_up': '2nd Follow Up',
-  check_3_day_removal: '3-Day Check',
-  none: 'None',
-};
+// Action labels sourced from NEXT_ACTION_OPTIONS so the wording matches the Outreach
+// page exactly (e.g. send_draft → "Respond"). getLeadCustomAction still overrides.
+const ACTION_LABELS: Record<string, string> = Object.fromEntries(
+  NEXT_ACTION_OPTIONS.map((o) => [o.value, o.label]),
+);
 
 // Actions that mean "send the prospect a message" → jump to that lead's contact
 // composer at the template step (when the channel supports a per-lead composer).
@@ -47,6 +41,7 @@ function jumpChannel(lead: OutreachLead): 'sms' | 'whatsapp' | 'call' | 'open' {
 export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
   const { campaigns } = useCampaigns();
   const navigate = useNavigate();
+  const [sortBy, setSortBy] = useState<'due' | 'name' | 'action'>('due');
 
   const campaignById = useMemo(
     () => Object.fromEntries(campaigns.map((c) => [c.id, c.name])) as Record<string, string>,
@@ -65,14 +60,23 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
     return d.getTime() === today.getTime();
   });
 
-  // Soonest due first (overdue → today → upcoming); undated leads last.
+  // Sortable list. Default 'due' = soonest first (overdue → today → upcoming; undated
+  // last). 'name' = business A–Z. 'action' = grouped by action label, then due date.
+  const dueTime = (l: OutreachLead) => (l.next_action_date ? new Date(l.next_action_date).getTime() : Infinity);
+  const actionLabelOf = (l: OutreachLead) =>
+    getLeadCustomAction(l.id) || ACTION_LABELS[l.next_action || 'none'] || '';
   const sorted = useMemo(() => {
-    return [...withActions].sort((a, b) => {
-      const da = a.next_action_date ? new Date(a.next_action_date).getTime() : Infinity;
-      const db = b.next_action_date ? new Date(b.next_action_date).getTime() : Infinity;
-      return da - db;
-    });
-  }, [withActions]);
+    const arr = [...withActions];
+    if (sortBy === 'name') {
+      arr.sort((a, b) => (a.business_name || '').localeCompare(b.business_name || ''));
+    } else if (sortBy === 'action') {
+      arr.sort((a, b) => actionLabelOf(a).localeCompare(actionLabelOf(b)) || dueTime(a) - dueTime(b));
+    } else {
+      arr.sort((a, b) => dueTime(a) - dueTime(b));
+    }
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [withActions, sortBy]);
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -96,10 +100,20 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
   return (
     <Card className="bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border-amber-500/20">
       <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
-        <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
-          <CalendarClock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500" />
-          <span className="truncate">Next Actions</span>
-        </CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+            <CalendarClock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-500" />
+            <span className="truncate">Next Actions</span>
+          </CardTitle>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as 'due' | 'name' | 'action')}>
+            <SelectTrigger className="ml-auto h-8 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="due">Due date</SelectItem>
+              <SelectItem value="name">Business A–Z</SelectItem>
+              <SelectItem value="action">Action type</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </CardHeader>
       <CardContent className="space-y-2 p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
         {/* Compact count summary */}
@@ -115,39 +129,43 @@ export function NextActionsCard({ trackedLeads }: NextActionsCardProps) {
 
         {/* Ordered, scrollable list — soonest due first; click to jump */}
         {sorted.length > 0 ? (
-          <div className="max-h-[260px] overflow-y-auto pr-0.5 space-y-0.5 border-t border-border/50 pt-1.5">
+          <div className="thin-scrollbar max-h-[220px] overflow-y-auto pr-0.5 space-y-0.5 border-t border-border/50 pt-1.5">
             {sorted.map((lead) => {
               const isOver = !!lead.next_action_date && new Date(lead.next_action_date) < today;
               const actionLabel = getLeadCustomAction(lead.id) || ACTION_LABELS[lead.next_action || 'none'] || '—';
+              const dueLabel = lead.next_action_date ? formatDate(lead.next_action_date) : null;
               const campaignName = lead.campaign_id ? campaignById[lead.campaign_id] : undefined;
               return (
                 <button
                   key={lead.id}
                   type="button"
                   onClick={() => handleJump(lead)}
-                  className="w-full rounded-md p-2 text-left transition-colors hover:bg-muted/50"
+                  className="w-full rounded-md p-1.5 text-left transition-colors hover:bg-muted/50"
                 >
+                  {/* Single compact line: business name (main) + action · due (right). */}
                   <div className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-1.5 truncate text-sm font-medium">
+                    <span className="flex min-w-0 items-center gap-1.5">
                       {isOver ? (
-                        <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-red-500" />
+                        <AlertTriangle className="h-3 w-3 shrink-0 text-red-500" />
                       ) : (
-                        <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                        <Clock className="h-3 w-3 shrink-0 text-amber-500" />
                       )}
-                      <span className="truncate">{actionLabel}</span>
+                      <span className="truncate text-sm font-medium">{lead.business_name}</span>
+                      {campaignName && (
+                        <span className="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] text-muted-foreground/70">{campaignName}</span>
+                      )}
                     </span>
-                    <span className={cn('shrink-0 text-[11px] font-medium', isOver ? 'text-red-500' : 'text-amber-500')}>
-                      {lead.next_action_date ? formatDate(lead.next_action_date) : '—'}
+                    <span className="shrink-0 text-[11px]">
+                      <span className="text-muted-foreground">{actionLabel}</span>
+                      {dueLabel && (
+                        <>
+                          {' · '}
+                          <span className={cn('font-medium', isOver ? 'text-red-500' : dueLabel === 'Today' ? 'text-amber-500' : 'text-muted-foreground')}>
+                            {dueLabel}
+                          </span>
+                        </>
+                      )}
                     </span>
-                  </div>
-                  <div className="ml-5 mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-                    <span className="truncate">{lead.business_name}</span>
-                    {campaignName && (
-                      <>
-                        <span className="opacity-40">·</span>
-                        <span className="truncate text-[11px] opacity-80">{campaignName}</span>
-                      </>
-                    )}
                   </div>
                 </button>
               );
