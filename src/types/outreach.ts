@@ -298,7 +298,7 @@ export const NEXT_ACTION_OPTIONS: { value: NextActionType; label: string }[] = [
   { value: 'check_3_day_removal', label: 'Check 3-Day Removal' },
   { value: 'call', label: 'Call' },
   { value: 'follow_up', label: 'Follow-up' },
-  { value: 'send_draft', label: 'Send Draft' },
+  { value: 'send_draft', label: 'Respond' },
   { value: 'remove_if_no_reply', label: 'Remove if no reply' },
   { value: 'none', label: 'Set Action' },
 ];
