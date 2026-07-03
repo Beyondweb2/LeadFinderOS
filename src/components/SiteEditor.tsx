@@ -9,7 +9,6 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus, X } from "lucide-react";
-import { SiteImageManager, type SiteImageManagerHandle } from "@/components/SiteImageManager";
 import { SiteImagePicker, type SiteImagePickerHandle } from "@/components/SiteImagePicker";
 import type { BarberSiteContent, BarberService, BarberOpeningHours } from "@/templates/barber/types";
 import type { Json } from "@/integrations/supabase/types";
@@ -76,7 +75,6 @@ export function SiteEditor({
   scanContext?: ServiceScanContext;
 }) {
   const { toast } = useToast();
-  const imageRef = useRef<SiteImageManagerHandle>(null);
   const pickerRef = useRef<SiteImagePickerHandle>(null);
   const [pickerDirty, setPickerDirty] = useState(false);
 
@@ -100,10 +98,9 @@ export function SiteEditor({
   const [instagramUrl, setInstagramUrl] = useState("");
 
   const [textDirty, setTextDirty] = useState(false);
-  const [imageDirty, setImageDirty] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const anyDirty = textDirty || imageDirty || pickerDirty;
+  const anyDirty = textDirty || pickerDirty;
 
   // Seed local edit state from the loaded site (once per site id).
   useEffect(() => {
@@ -123,7 +120,6 @@ export function SiteEditor({
     setFacebookUrl(c.facebookUrl ?? "");
     setInstagramUrl(c.instagramUrl ?? "");
     setTextDirty(false);
-    setImageDirty(false);
     setPickerDirty(false);
     servicesTouched.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -219,10 +215,9 @@ export function SiteEditor({
         instagramUrl: normalizeSocialUrl(instagramUrl),
       };
 
-      // Upload any pending file images, then re-host + merge the board's placed
-      // pool images — one combined content write.
-      let finalContent = imageRef.current ? await imageRef.current.uploadPendingInto(base) : base;
-      finalContent = pickerRef.current ? await pickerRef.current.applyInto(finalContent) : finalContent;
+      // Re-host placed pool images + upload any picked files (singles, logo,
+      // gallery) and merge them in — one combined content write.
+      const finalContent = pickerRef.current ? await pickerRef.current.applyInto(base) : base;
 
       const { error } = await supabase
         .from("generated_sites")
@@ -234,7 +229,6 @@ export function SiteEditor({
       setHours(cleanedHours.map((h) => ({ ...h })));
       servicesTouched.current = false;
       setTextDirty(false);
-      setImageDirty(false);
       setPickerDirty(false);
       onSaved?.(finalContent);
       toast({ title: "Saved", description: "All changes saved." });
@@ -469,10 +463,11 @@ export function SiteEditor({
         </CardContent>
       </Card>
 
-      {/* Place enriched photos — drag-and-drop board */}
+      {/* Photos & logo — drag pool photos or upload your own, plus the logo. One
+          merged section (replaces the old separate "Upload images & logo" card). */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Place photos</CardTitle>
+          <CardTitle className="text-lg">Photos &amp; logo</CardTitle>
         </CardHeader>
         <CardContent>
           <SiteImagePicker
@@ -482,23 +477,6 @@ export function SiteEditor({
             template={site.template}
             content={site.content}
             onDirtyChange={() => setPickerDirty(true)}
-          />
-        </CardContent>
-      </Card>
-
-      {/* Images + logo (file uploads) */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Upload images &amp; logo</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SiteImageManager
-            ref={imageRef}
-            controlled
-            key={site.id}
-            siteId={site.id}
-            content={site.content}
-            onDirtyChange={setImageDirty}
           />
         </CardContent>
       </Card>
