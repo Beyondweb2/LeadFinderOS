@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useInbox, windowFor, normalizeWaNumber, WA_REPLY_TEMPLATES, type WaConversation, type LeadLite } from '@/hooks/useInbox';
 import { useToast } from '@/hooks/use-toast';
 import { useTemplates } from '@/hooks/useTemplates';
 import { fillTemplate } from '@/lib/leadUtils';
+import { barberSitePreviewUrl } from '@/config/publicSite';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
@@ -14,7 +15,10 @@ import { PIPELINE_STATUS_OPTIONS, type PipelineStatus } from '@/types/outreach';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink } from 'lucide-react';
+import { Loader2, Send, MessageSquare, MessageSquarePlus, Clock, AlertTriangle, Plus, ShieldAlert, ExternalLink, MapPin, Globe, Mail, MessageCircle, Trash2, ListChecks } from 'lucide-react';
+
+// Shared style for the compact thread-header quick-action icon buttons/links.
+const HEADER_ICON_BTN = 'inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:pointer-events-none disabled:opacity-40';
 
 function relTime(iso: string): string {
   const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
@@ -52,9 +56,10 @@ function listPreview(m: { body: string | null; template_name: string | null }): 
 }
 
 const Inbox = () => {
-  const { user, conversations, messagesForKey, leads, isLoading, send, refetch } = useInbox();
+  const { user, conversations, messagesForKey, leads, sitesByLeadId, isLoading, send, refetch } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
+  const navigate = useNavigate();
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [synthetic, setSynthetic] = useState<WaConversation | null>(null);
@@ -70,6 +75,9 @@ const Inbox = () => {
   // (whatsapp-inbound), so re-engaging conversations reappear on their own.
   const [showHidden, setShowHidden] = useState(false);
   const [savingStatusKey, setSavingStatusKey] = useState<string | null>(null);
+  // Remove-from-inbox (status → 'closed'): in-flight spinner + optimistic hide keys.
+  const [removingKey, setRemovingKey] = useState<string | null>(null);
+  const [removedKeys, setRemovedKeys] = useState<Set<string>>(new Set());
   const [text, setText] = useState('');
   const [template, setTemplate] = useState(WA_REPLY_TEMPLATES[0].name);
   const [sending, setSending] = useState(false);
@@ -90,16 +98,20 @@ const Inbox = () => {
     const byStatus = !statusFilter
       ? byCampaign
       : byCampaign.filter((c) => c.leadStatus === statusFilter || c.unassigned);
-    // Hide not_interested (dead prospects) unless "Show hidden" is on OR the user
-    // has explicitly filtered TO not_interested (then they clearly want to see them).
-    if (showHidden || statusFilter === 'not_interested') return byStatus;
-    return byStatus.filter((c) => c.leadStatus !== 'not_interested');
-  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden]);
+    // Hide dead-state convos (not_interested / closed) unless "Show hidden" is on OR
+    // the user has explicitly filtered TO that status. `removedKeys` gives an instant
+    // optimistic drop right after "Remove from inbox" (before the refetch lands).
+    const revealHidden = showHidden || statusFilter === 'not_interested' || statusFilter === 'closed';
+    const visible = revealHidden
+      ? byStatus
+      : byStatus.filter((c) => c.leadStatus !== 'not_interested' && c.leadStatus !== 'closed');
+    return visible.filter((c) => !removedKeys.has(c.key));
+  }, [conversations, synthetic, campaignFilter, statusFilter, showHidden, removedKeys]);
 
   // How many not_interested conversations the current view is hiding (for the toggle).
   const hiddenCount = useMemo(() => {
     const base = campaignFilter ? conversations.filter((c) => c.campaignId === campaignFilter || c.unassigned) : conversations;
-    return base.filter((c) => c.leadStatus === 'not_interested').length;
+    return base.filter((c) => c.leadStatus === 'not_interested' || c.leadStatus === 'closed').length;
   }, [conversations, campaignFilter]);
 
   // Set a conversation's lead status from the Inbox (two-way sync with Outreach).
@@ -121,6 +133,29 @@ const Inbox = () => {
     }
   };
 
+  // Remove a conversation from the Inbox: set its lead to 'closed' (a real status
+  // change, so confirm first), optimistically drop it now, then hand ownership to the
+  // default hide filter once the refetch lands. It stays in Outreach and reappears
+  // here if the prospect replies (whatsapp-inbound flips it back to 'replied').
+  const handleRemoveFromInbox = async (c: WaConversation) => {
+    if (!c.leadId) return;
+    if (!window.confirm(`Remove ${c.label} from the inbox? This marks the lead Closed. It stays in Outreach and reappears here if they reply.`)) return;
+    setRemovingKey(c.key);
+    try {
+      const { error } = await updateLeadStatus(c.leadId, 'closed');
+      if (error) { toast({ title: 'Could not remove', description: error, variant: 'destructive' }); return; }
+      setRemovedKeys((prev) => new Set(prev).add(c.key)); // optimistic hide
+      if (activeKey === c.key) setActiveKey(null);
+      toast({ title: 'Removed from inbox', description: 'Marked Closed — reappears if they reply.' });
+      await refetch();
+      // Refetch now reports leadStatus='closed', so the hide filter owns it (still
+      // visible under "Show hidden"); release the manual key so it isn't double-hidden.
+      setRemovedKeys((prev) => { const n = new Set(prev); n.delete(c.key); return n; });
+    } finally {
+      setRemovingKey(null);
+    }
+  };
+
   const active: WaConversation | null =
     (activeKey && conversations.find((c) => c.key === activeKey)) ||
     (activeKey && synthetic?.key === activeKey ? synthetic : null) || null;
@@ -134,6 +169,15 @@ const Inbox = () => {
   const activeLead = active?.leadId ? leads.find((l) => l.id === active.leadId) : undefined;
   const activeBusinessName = activeLead?.business_name;
   const insertTemplate = (content: string) => setText(fillTemplate(content, { businessName: activeBusinessName }));
+
+  // Thread-header quick-action data — each button/link renders only when present.
+  const activeSite = active?.leadId ? sitesByLeadId[active.leadId] : undefined;
+  const sitePreviewUrl = activeSite?.shareToken ? barberSitePreviewUrl(activeSite.shareToken) : null;
+  const mapsUrl = activeLead?.google_maps_url
+    || (activeLead?.place_id ? `https://www.google.com/maps/place/?q=place_id:${activeLead.place_id}` : null);
+  const websiteUrl = activeLead?.website
+    ? (/^https?:\/\//i.test(activeLead.website) ? activeLead.website : `https://${activeLead.website}`)
+    : null;
 
   const startFromLead = (lead: LeadLite) => {
     const norm = normalizeWaNumber(lead.phone, lead.country);
@@ -252,7 +296,7 @@ const Inbox = () => {
               onClick={() => setShowHidden((v) => !v)}
               className="mb-1 w-full rounded-md px-2.5 py-1.5 text-left text-[11px] text-muted-foreground hover:bg-muted/50"
             >
-              {showHidden ? '← Hide not-interested' : `Show hidden (${hiddenCount} not interested)`}
+              {showHidden ? '← Hide closed / not-interested' : `Show hidden (${hiddenCount})`}
             </button>
           )}
           {isLoading ? (
@@ -313,23 +357,51 @@ const Inbox = () => {
                   <p className="truncate text-sm font-semibold">{active.unassigned ? `Unassigned · +${active.phone}` : active.label}</p>
                   <p className="text-[11px] text-muted-foreground">+{active.phone}</p>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1 shrink-0">
+                  {/* View their site — PREVIEW link (does NOT count as an "opened" event). */}
+                  {sitePreviewUrl && (
+                    <a href={sitePreviewUrl} target="_blank" rel="noreferrer" title="View their site (preview — doesn't count as opened)" aria-label="View site preview" className={HEADER_ICON_BTN}>
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
+                  {/* Jump to this lead's row on the Outreach page (reuses the launch pattern). */}
+                  {active.leadId && (
+                    <button type="button" onClick={() => navigate('/outreach', { state: { launch: { leadId: active.leadId, channel: 'open' } } })} title="Open this lead on the Outreach page" aria-label="Jump to Outreach" className={HEADER_ICON_BTN}>
+                      <ListChecks className="h-4 w-4" />
+                    </button>
+                  )}
+                  {/* Google Maps — stored URL preferred, else built from place_id. */}
+                  {mapsUrl && (
+                    <a href={mapsUrl} target="_blank" rel="noreferrer" title="Open in Google Maps" aria-label="Open in Google Maps" className={HEADER_ICON_BTN}>
+                      <MapPin className="h-4 w-4" />
+                    </a>
+                  )}
+                  {websiteUrl && (
+                    <a href={websiteUrl} target="_blank" rel="noreferrer" title="Open the business website" aria-label="Open website" className={HEADER_ICON_BTN}>
+                      <Globe className="h-4 w-4" />
+                    </a>
+                  )}
+                  {activeLead?.email && (
+                    <a href={`mailto:${activeLead.email}`} title={`Email ${activeLead.email}`} aria-label="Email the business" className={HEADER_ICON_BTN}>
+                      <Mail className="h-4 w-4" />
+                    </a>
+                  )}
                   {/* Secondary fallback: open the chat in the WhatsApp app (wa.me). */}
-                  <a
-                    href={`https://wa.me/${active.phone}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center gap-1 text-[11px] text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                    title="Open this chat in the WhatsApp app"
-                  >
-                    <ExternalLink className="h-3 w-3" /> Open in WhatsApp app
+                  <a href={`https://wa.me/${active.phone}`} target="_blank" rel="noreferrer" title="Open this chat in the WhatsApp app" aria-label="Open in WhatsApp app" className={HEADER_ICON_BTN}>
+                    <MessageCircle className="h-4 w-4" />
                   </a>
+                  {/* Remove from inbox → sets the lead to Closed (hidden here; stays in Outreach). */}
+                  {active.leadId && (
+                    <button type="button" onClick={() => handleRemoveFromInbox(active)} disabled={removingKey === active.key} title="Remove from inbox (mark Closed)" aria-label="Remove from inbox" className={cn(HEADER_ICON_BTN, 'hover:text-destructive')}>
+                      {removingKey === active.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    </button>
+                  )}
                   {win.open ? (
-                    <span className="flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-600 dark:text-green-400">
+                    <span className="ml-1 flex items-center gap-1 rounded-full bg-green-500/15 px-2 py-0.5 text-[11px] font-semibold text-green-600 dark:text-green-400">
                       <Clock className="h-3 w-3" /> Window open · ~{win.hoursLeft}h left
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                    <span className="ml-1 flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">
                       <AlertTriangle className="h-3 w-3" /> Window closed · template only
                     </span>
                   )}
