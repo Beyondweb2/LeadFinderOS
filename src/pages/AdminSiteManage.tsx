@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, MessageCircle, MessageSquare, Phone, CalendarClock, Check, X } from "lucide-react";
+import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, MessageCircle, MessageSquare, Phone, CalendarClock, Check, X, Send } from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
+import { PushToInstantlyDialog } from "@/components/PushToInstantlyDialog";
 import { publicSiteUrl, barberSiteUrl } from "@/config/publicSite";
 import { bookingUrl } from "@/lib/subdomain";
 import { useTemplates } from "@/hooks/useTemplates";
@@ -64,6 +65,8 @@ export default function AdminSiteManage() {
   // from the free-text saved templates above (those drive the SMS/Call composer).
   const [waTemplate, setWaTemplate] = useState<string>(WHATSAPP_TEMPLATES[0].value);
   const [queuingWhatsApp, setQueuingWhatsApp] = useState(false);
+  // Push-to-Instantly dialog (campaign picker) — mirrors the Outreach feature.
+  const [pushInstantlyOpen, setPushInstantlyOpen] = useState(false);
 
   // Only the user's saved text templates (voice scripts aren't sent as messages).
   const textTemplates = templates.filter((t) => t.template_type === "text");
@@ -417,23 +420,6 @@ export default function AdminSiteManage() {
             </div>
 
             <div className="space-y-1.5">
-              <p className="text-sm font-medium">Template</p>
-              <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
-                <SelectTrigger className="text-sm">
-                  <SelectValue placeholder={textTemplates.length ? "Choose a saved template" : "No saved templates"} />
-                </SelectTrigger>
-                <SelectContent>
-                  {textTemplates.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>{t.title}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-[11px] text-muted-foreground">
-                Opens the Outreach composer with this template, the business name and the link above auto-filled.
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
               <p className="text-sm font-medium">WhatsApp template <span className="font-normal text-muted-foreground">(approved)</span></p>
               <Select value={waTemplate} onValueChange={setWaTemplate}>
                 <SelectTrigger className="text-sm">
@@ -482,10 +468,37 @@ export default function AdminSiteManage() {
               <Button size="sm" variant="outline" onClick={copyBarberLink} disabled={!barberLink}>
                 <Copy className="h-4 w-4 mr-2" /> Copy link
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPushInstantlyOpen(true)}
+                disabled={!leadInfo}
+                className="text-sky-600 hover:text-sky-600"
+                title="Push this lead (if it has an email) into an Instantly.ai email campaign."
+              >
+                <Send className="h-4 w-4 mr-2" /> Instantly
+              </Button>
             </div>
           </CardContent>
         </Card>
       </SiteEditor>
+
+      {/* Push this barber's lead into an Instantly.ai email campaign (mirrors Outreach).
+          The dialog + edge function handle no-email / already-pushed / admin scoping. */}
+      <PushToInstantlyDialog
+        open={pushInstantlyOpen}
+        onOpenChange={setPushInstantlyOpen}
+        leadIds={leadInfo ? [leadInfo.id] : []}
+        onPushed={async () => {
+          if (!leadInfo) return;
+          const { data: lead } = await sb
+            .from("outreach_leads")
+            .select("id, phone, business_name, website, place_id, status, previous_status, whatsapp_sent_at")
+            .eq("id", leadInfo.id)
+            .maybeSingle();
+          if (lead) setLeadInfo(lead as unknown as LeadInfo);
+        }}
+      />
     </div>
   );
 }
