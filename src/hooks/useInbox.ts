@@ -191,5 +191,11 @@ export function useInbox() {
     return { ok: true, simulated: data.simulated };
   }, [fetchAll]);
 
-  return { user, messages, leads, conversations, messagesForKey, sitesByLeadId, isLoading, refetch: fetchAll, send };
+  // Optimistic single-lead status patch — updates local `leads` state so the derived
+  // `conversations`/`list` recompute (leadStatus + hide filters) WITHOUT a full
+  // re-query. Mirrors Outreach's single-row setLeads; avoids the isLoading spinner.
+  const patchLeadStatus = useCallback((leadId: string, status: string) =>
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status } : l)), []);
+
+  return { user, messages, leads, conversations, messagesForKey, sitesByLeadId, isLoading, refetch: fetchAll, send, patchLeadStatus };
 }

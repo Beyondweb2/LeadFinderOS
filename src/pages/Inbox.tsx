@@ -56,7 +56,7 @@ function listPreview(m: { body: string | null; template_name: string | null }): 
 }
 
 const Inbox = () => {
-  const { user, conversations, messagesForKey, leads, sitesByLeadId, isLoading, send, refetch } = useInbox();
+  const { user, conversations, messagesForKey, leads, sitesByLeadId, isLoading, send, refetch, patchLeadStatus } = useInbox();
   const { toast } = useToast();
   const { templates } = useTemplates(); // same source as the Templates page ("Texts" tab)
   const navigate = useNavigate();
@@ -126,7 +126,7 @@ const Inbox = () => {
     try {
       const { error } = await updateLeadStatus(c.leadId, status);
       if (error) { toast({ title: 'Could not update status', description: error, variant: 'destructive' }); return; }
-      await refetch();
+      patchLeadStatus(c.leadId, status); // optimistic local update — no full re-query/spinner
       if (status === 'not_interested') toast({ title: 'Marked not interested', description: 'Hidden from the list — reappears if they reply.' });
     } finally {
       setSavingStatusKey(null);
@@ -335,7 +335,7 @@ const Inbox = () => {
                 <div className="mt-0.5">
                   {savingStatusKey === c.key
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                    : <PipelineStatusSelect value={c.leadStatus} onValueChange={(status) => handleSetStatus(c, status)} triggerClassName="h-9 w-auto gap-2 px-2.5" />}
+                    : <PipelineStatusSelect value={c.leadStatus} onValueChange={(status) => handleSetStatus(c, status)} />}
                 </div>
               )}
             </div>
