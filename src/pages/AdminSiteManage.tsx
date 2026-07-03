@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, MessageCircle, MessageSquare, Phone, CalendarClock } from "lucide-react";
+import { ArrowLeft, Loader2, ExternalLink, Copy, Globe, EyeOff, Trash2, MessageCircle, MessageSquare, Phone, CalendarClock, Check, X } from "lucide-react";
 import { SiteEditor } from "@/components/SiteEditor";
 import { publicSiteUrl, barberSiteUrl } from "@/config/publicSite";
 import { bookingUrl } from "@/lib/subdomain";
@@ -38,7 +38,7 @@ type SiteRow = {
   template?: string | null;
 };
 
-type LeadInfo = { id: string; phone: string | null; business_name: string; website: string | null; place_id: string | null; status: string | null };
+type LeadInfo = { id: string; phone: string | null; business_name: string; website: string | null; place_id: string | null; status: string | null; previous_status: string | null; whatsapp_sent_at: string | null };
 
 export default function AdminSiteManage() {
   const { id } = useParams();
@@ -97,7 +97,7 @@ export default function AdminSiteManage() {
       if (row?.lead_id) {
         const { data: lead } = await sb
           .from("outreach_leads")
-          .select("id, phone, business_name, website, place_id, status")
+          .select("id, phone, business_name, website, place_id, status, previous_status, whatsapp_sent_at")
           .eq("id", row.lead_id)
           .maybeSingle();
         if (lead) setLeadInfo(lead as unknown as LeadInfo);
@@ -247,12 +247,14 @@ export default function AdminSiteManage() {
     }
   };
 
-  // Add THIS barber's lead to the LIVE WhatsApp outreach queue — the same write the
-  // Outreach table / per-lead control make (process-whatsapp-queue sends within the
-  // daily window). Capture previous_status so cancelling restores it, reset attempts
-  // for fresh retries, and use an APPROVED template. We deliberately pass NO URL:
-  // the queue processor builds the claim link server-side from the lead's own site.
-  const queueForWhatsApp = async () => {
+  // Add/remove THIS barber's lead from the LIVE WhatsApp outreach queue — mirrors
+  // WhatsAppLeadControls.toggleQueue exactly. Already queued → RESTORE the pre-queue
+  // status (toggle off; never re-queue, so queued_at/attempts aren't churned). Not
+  // queued → write the queue shape (process-whatsapp-queue sends within the daily
+  // window): capture previous_status for restore-on-cancel, reset attempts for fresh
+  // retries, use an APPROVED template. We deliberately pass NO URL — the queue
+  // processor builds the claim link server-side from the lead's own site.
+  const toggleWhatsAppQueue = async () => {
     if (!leadInfo) {
       toast({ title: "No lead linked", description: "This site isn't linked to an Outreach lead.", variant: "destructive" });
       return;
@@ -261,27 +263,40 @@ export default function AdminSiteManage() {
       toast({ title: "Not on WhatsApp", description: "This number can't receive WhatsApp — try SMS or Call.", variant: "destructive" });
       return;
     }
+    const queued = leadInfo.status === "queued";
     setQueuingWhatsApp(true);
     try {
-      const { error } = await sb
-        .from("outreach_leads")
-        .update({
-          status: "queued",
-          previous_status: leadInfo.status ?? null, // restore-on-cancel
-          queued_at: new Date().toISOString(),
-          whatsapp_template: waTemplate,
-          whatsapp_attempts: 0, // fresh retries (e.g. re-queuing a whatsapp_failed lead)
-        })
-        .eq("id", leadInfo.id);
-      if (error) throw error;
-      setLeadInfo({ ...leadInfo, status: "queued" });
-      const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === waTemplate)?.label ?? waTemplate;
-      toast({
-        title: "Added to WhatsApp queue",
-        description: `Template: ${tmplLabel}. Sends within the daily 7am–7pm UK window (max 10/day).`,
-      });
+      if (queued) {
+        // Restore the status the lead had BEFORE queueing (fallback not_contacted).
+        const restored = leadInfo.previous_status ?? "not_contacted";
+        const { error } = await sb
+          .from("outreach_leads")
+          .update({ status: restored, previous_status: null, queued_at: null })
+          .eq("id", leadInfo.id);
+        if (error) throw error;
+        setLeadInfo({ ...leadInfo, status: restored, previous_status: null });
+        toast({ title: "Removed from WhatsApp queue" });
+      } else {
+        const { error } = await sb
+          .from("outreach_leads")
+          .update({
+            status: "queued",
+            previous_status: leadInfo.status ?? null, // capture pre-queue status for restore-on-cancel
+            queued_at: new Date().toISOString(),
+            whatsapp_template: waTemplate,
+            whatsapp_attempts: 0, // fresh retries (e.g. re-queuing a whatsapp_failed lead)
+          })
+          .eq("id", leadInfo.id);
+        if (error) throw error;
+        setLeadInfo({ ...leadInfo, status: "queued", previous_status: leadInfo.status ?? null });
+        const tmplLabel = WHATSAPP_TEMPLATES.find((t) => t.value === waTemplate)?.label ?? waTemplate;
+        toast({
+          title: "Added to WhatsApp queue",
+          description: `Template: ${tmplLabel}. Sends within the daily 7am–7pm UK window (max 10/day).`,
+        });
+      }
     } catch (e) {
-      toast({ title: "Couldn't queue", description: (e as Error).message, variant: "destructive" });
+      toast({ title: "Couldn't update queue", description: (e as Error).message, variant: "destructive" });
     } finally {
       setQueuingWhatsApp(false);
     }
@@ -443,15 +458,24 @@ export default function AdminSiteManage() {
               <Button size="sm" onClick={() => launchOutreach("sms")} disabled={!leadInfo}>
                 <MessageCircle className="h-4 w-4 mr-2" /> SMS
               </Button>
-              <Button
-                size="sm"
-                onClick={queueForWhatsApp}
-                disabled={!leadInfo || queuingWhatsApp || leadInfo.status === "no_whatsapp"}
-                title={leadInfo?.status === "no_whatsapp" ? "This number isn't on WhatsApp" : "Add to the live WhatsApp queue"}
-              >
-                {queuingWhatsApp ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <MessageSquare className="h-4 w-4 mr-2" />}
-                {leadInfo?.status === "queued" ? "Queued" : "Queue WhatsApp"}
-              </Button>
+              {leadInfo?.whatsapp_sent_at ? (
+                // Already sent → read-only line, no queue button (mirrors WhatsAppLeadControls).
+                <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Check className="h-3.5 w-3.5 text-green-500" />
+                  Sent {new Date(leadInfo.whatsapp_sent_at).toLocaleDateString()}
+                </span>
+              ) : (
+                <Button
+                  size="sm"
+                  variant={leadInfo?.status === "queued" ? "outline" : "default"}
+                  onClick={toggleWhatsAppQueue}
+                  disabled={!leadInfo || queuingWhatsApp || leadInfo.status === "no_whatsapp"}
+                  title={leadInfo?.status === "no_whatsapp" ? "This number isn't on WhatsApp" : leadInfo?.status === "queued" ? "Remove from the WhatsApp queue" : "Add to the live WhatsApp queue"}
+                >
+                  {queuingWhatsApp ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : leadInfo?.status === "queued" ? <X className="h-4 w-4 mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
+                  {leadInfo?.status === "queued" ? "Remove from queue" : "Queue WhatsApp"}
+                </Button>
+              )}
               <Button size="sm" variant="outline" onClick={() => launchOutreach("call")} disabled={!leadInfo}>
                 <Phone className="h-4 w-4 mr-2" /> Call
               </Button>
