@@ -38,13 +38,16 @@ export function useOutreach() {
   // Stable user ID ref to prevent refetches on auth token refreshes
   const userIdRef = useRef<string | null>(null);
 
-  // Parallel phone fetch queue — processes up to 3 leads concurrently for speed
-  const phoneQueueRef = useRef<Array<{ outreachLeadId: string; placeId: string; businessName: string }>>([]);
+  // Parallel phone fetch queue — processes up to 3 leads concurrently for speed.
+  // `email` (if the lead already has one) rides along so a no-phone lead is only
+  // dropped when it ALSO has no email — email-only leads are workable.
+  const phoneQueueRef = useRef<Array<{ outreachLeadId: string; placeId: string; businessName: string; email?: string | null }>>([]);
   const isProcessingQueueRef = useRef(false);
   const queuedPlaceIdsRef = useRef<Set<string>>(new Set()); // Dedup: prevent same place_id being queued twice per session
   const CONCURRENCY = 3;
-  // Names of leads dropped for having no phone, collected across one queue drain so
-  // a bulk add surfaces ONE "N skipped — no phone" toast instead of one per lead.
+  // Names of leads dropped for having NO phone AND no email, collected across one
+  // queue drain so a bulk add surfaces ONE "N skipped — no contact method" toast
+  // instead of one per lead.
   const removedNoPhoneRef = useRef<string[]>([]);
 
   const removeLeadNoPhone = useCallback(async (outreachLeadId: string, businessName: string) => {
@@ -63,7 +66,7 @@ export function useOutreach() {
     window.dispatchEvent(new CustomEvent('crm-lead-purged'));
   }, []);
 
-  const fetchOnePhone = useCallback(async (item: { outreachLeadId: string; placeId: string; businessName: string }) => {
+  const fetchOnePhone = useCallback(async (item: { outreachLeadId: string; placeId: string; businessName: string; email?: string | null }) => {
     setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'pending' }));
     try {
       const { data: details, error: detailsError } = await supabase.functions.invoke('google-place-details', {
@@ -78,12 +81,17 @@ export function useOutreach() {
       }
 
       if (!details.phone) {
-        // Enrichment succeeded but Google has no phone for this business. A lead
-        // with no phone can't be worked (outreach is phone/WhatsApp-based), so drop
-        // it rather than keeping a dead row. removeLeadNoPhone collects the name for
-        // the aggregated "N skipped — no phone" toast fired when the queue drains.
+        // Enrichment succeeded but Google has no phone for this business. Keep the
+        // lead if it still has an email (email-only outreach is workable); drop it
+        // ONLY when it has NEITHER phone nor email — a dead row with no contact
+        // method. Email may already be on the lead (carried enrichment, threaded via
+        // item.email) or come back from the lookup. removeLeadNoPhone collects the
+        // name for the aggregated "N skipped — no contact method" toast on drain.
         setPhoneFetchStatus(prev => ({ ...prev, [item.outreachLeadId]: 'no_phone' }));
-        await removeLeadNoPhone(item.outreachLeadId, item.businessName);
+        const email = String(details.email ?? item.email ?? '').trim();
+        if (!email) {
+          await removeLeadNoPhone(item.outreachLeadId, item.businessName);
+        }
         return;
       }
 
@@ -118,22 +126,22 @@ export function useOutreach() {
 
     isProcessingQueueRef.current = false;
 
-    // Queue drained — fire ONE toast for everything dropped as no-phone this pass.
-    // Single add → "<Name> — No phone number found"; bulk → "N skipped — no phone".
+    // Queue drained — fire ONE toast for everything dropped this pass (no phone AND
+    // no email). Leads kept because they had an email are NOT counted or named here.
     const dropped = removedNoPhoneRef.current;
     if (dropped.length > 0) {
       removedNoPhoneRef.current = [];
       toast({
-        title: dropped.length === 1 ? dropped[0] : `${dropped.length} skipped — no phone`,
+        title: dropped.length === 1 ? dropped[0] : `${dropped.length} skipped — no contact method`,
         description: dropped.length === 1
-          ? 'No phone number found — not added.'
-          : `No phone number found — not added: ${dropped.join(', ')}.`,
+          ? 'No phone or email found — not added.'
+          : `No phone or email found — not added: ${dropped.join(', ')}.`,
         variant: 'destructive',
       });
     }
   }, [fetchOnePhone, toast]);
 
-  const enqueuePhoneFetch = useCallback((outreachLeadId: string, placeId: string, businessName: string) => {
+  const enqueuePhoneFetch = useCallback((outreachLeadId: string, placeId: string, businessName: string, email?: string | null) => {
     // Dedup: skip if this place_id has already been queued this session
     if (queuedPlaceIdsRef.current.has(placeId)) {
       console.log(`Skipping duplicate phone fetch for place_id ${placeId} (${businessName})`);
@@ -141,7 +149,7 @@ export function useOutreach() {
     }
     queuedPlaceIdsRef.current.add(placeId);
     setPhoneFetchStatus(prev => ({ ...prev, [outreachLeadId]: 'pending' }));
-    phoneQueueRef.current.push({ outreachLeadId, placeId, businessName });
+    phoneQueueRef.current.push({ outreachLeadId, placeId, businessName, email });
     processPhoneQueue();
   }, [processPhoneQueue]);
 
@@ -447,7 +455,9 @@ export function useOutreach() {
     // Skip enrichment entirely when the search result already gave us a phone.
     // Otherwise enqueue a single Place Details lookup (server-side cache + single-flight).
     if (lead.id && !lead.phone) {
-      enqueuePhoneFetch(newLead.id, lead.id, lead.name);
+      // Pass the lead's email (carried enrichment lands on newLead.email) so a
+      // no-phone lead with an email is KEPT, not dropped.
+      enqueuePhoneFetch(newLead.id, lead.id, lead.name, newLead.email);
     } else if (lead.id && lead.phone) {
       console.log(`Skipping enrichment for ${lead.name}: phone already present from search result`);
     }
