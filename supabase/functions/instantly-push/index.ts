@@ -88,13 +88,26 @@ Deno.serve(async (req) => {
 
     const service = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
 
-    // Only the caller's selected leads (note: outreach_leads has no `city` column —
-    // city is sent empty for now; see the flag in the PR notes).
-    const { data: rows, error: lErr } = await service
+    // Admin check (service-role, mirrors the bulk-jobs pattern). Admins may push
+    // leads they don't own; non-admins stay strictly owner-scoped. userId comes
+    // ONLY from the verified JWT claims above — never from the request body.
+    const { data: adminRow } = await service
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .maybeSingle();
+    const isAdmin = !!adminRow;
+
+    // Selected leads (note: outreach_leads has no `city` column — city is sent
+    // empty for now; see the flag in the PR notes). Non-admins are restricted to
+    // their own rows; admins get no owner filter so they can push any lead by id.
+    let leadQuery = service
       .from("outreach_leads")
       .select("id, business_name, email, category, instantly_pushed_at")
-      .eq("user_id", userId)
       .in("id", leadIds);
+    if (!isAdmin) leadQuery = leadQuery.eq("user_id", userId);
+    const { data: rows, error: lErr } = await leadQuery;
     if (lErr) return json({ success: false, error: lErr.message }, 500);
 
     const all = rows ?? [];
