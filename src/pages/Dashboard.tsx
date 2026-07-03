@@ -5,7 +5,7 @@ import { useDashboardMetrics } from '@/hooks/useDashboardMetrics';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useAuth } from '@/hooks/useAuth';
 import { PipelineCard } from '@/components/dashboard/PipelineCard';
-import { OutreachCard } from '@/components/dashboard/OutreachCard';
+import { AlertsCard } from '@/components/dashboard/AlertsCard';
 import { NextActionsCard } from '@/components/dashboard/NextActionsCard';
 import { ChannelPerformanceCard } from '@/components/dashboard/ChannelPerformanceCard';
 import { SiteFunnelCard } from '@/components/dashboard/SiteFunnelCard';
@@ -96,7 +96,7 @@ const Dashboard = () => {
           <div className="lg:col-span-2">
             <ChannelPerformanceCard data={metrics.channelPerf} />
           </div>
-          <PipelineCard pipeline={metrics.pipeline} />
+          <PipelineCard allLeads={metrics.allLeads} />
         </div>
       </section>
 
@@ -106,14 +106,8 @@ const Dashboard = () => {
         {/* Three equal boxes: contacted | next actions | site funnel. The funnel is
             scoped per-rep for non-admins (admins see the global funnel). */}
         <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-          <OutreachCard
-            contactedTotal={metrics.contactedTotal}
-            contactedToday={metrics.contactedToday}
-            contactedYesterday={metrics.contactedYesterday}
-            avg7Day={metrics.avg7Day}
-            loggedLeads={metrics.loggedLeads}
-          />
-          <NextActionsCard trackedLeads={metrics.trackedLeads} />
+          <AlertsCard alerts={metrics.recentAlerts} />
+          <NextActionsCard trackedLeads={metrics.nextActionLeads} />
           <SiteFunnelCard
             sent={metrics.siteFunnel.sent}
             opened={metrics.siteFunnel.opened}
