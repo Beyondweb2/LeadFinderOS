@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { GitBranch } from 'lucide-react';
 import { CampaignPicker } from '@/components/CampaignPicker';
-import { OUTREACH_STATUS_OPTIONS, type OutreachLead } from '@/types/outreach';
+import { PipelineStatusBadge } from '@/components/PipelineStatusBadge';
+import { OUTREACH_STATUS_OPTIONS, type OutreachLead, type PipelineStatus } from '@/types/outreach';
 
 interface PipelineCardProps {
   allLeads: OutreachLead[];
@@ -41,21 +42,23 @@ export function PipelineCard({ allLeads }: PipelineCardProps) {
   return (
     <Card className="bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-transparent border-blue-500/20">
       <CardHeader className="pb-1 sm:pb-2 p-3 sm:p-4 md:p-6">
-        <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
-          <GitBranch className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
-          <span className="truncate">Pipeline</span>
-        </CardTitle>
+        <div className="flex items-center gap-2">
+          <CardTitle className="text-xs sm:text-sm font-medium text-muted-foreground flex items-center gap-1.5 sm:gap-2">
+            <GitBranch className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
+            <span className="truncate">Pipeline</span>
+          </CardTitle>
+          {/* Campaign filter (default All) — right-aligned in the header so it
+              doesn't take a full row (keeps the card height near ChannelPerformanceCard). */}
+          <CampaignPicker
+            mode="filter"
+            hideCreate
+            value={campaignFilter}
+            onChange={setCampaignFilter}
+            className="ml-auto h-8 w-[150px] text-xs"
+          />
+        </div>
       </CardHeader>
       <CardContent className="space-y-2 sm:space-y-3 p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
-        {/* Campaign filter — default All */}
-        <CampaignPicker
-          mode="filter"
-          hideCreate
-          value={campaignFilter}
-          onChange={setCampaignFilter}
-          className="h-8 w-full text-xs"
-        />
-
         {/* Headline — active/open leads in the selected campaign */}
         <div>
           <div className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-500">{activeTotal}</div>
@@ -67,8 +70,9 @@ export function PipelineCard({ allLeads }: PipelineCardProps) {
           {OUTREACH_STATUS_OPTIONS.map(opt => {
             const n = countByStatus[opt.value] ?? 0;
             return (
-              <div key={opt.value} className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate text-[10px] sm:text-xs text-muted-foreground">{opt.label}</span>
+              <div key={opt.value} className={`flex items-center justify-between gap-2 ${n === 0 ? 'opacity-50' : ''}`}>
+                {/* Coloured status pill (same badge + label as the Outreach page). */}
+                <PipelineStatusBadge status={opt.value as PipelineStatus} compact />
                 <span className={`shrink-0 text-xs sm:text-sm font-semibold ${n > 0 ? 'text-foreground' : 'text-muted-foreground/40'}`}>
                   {n}
                 </span>
