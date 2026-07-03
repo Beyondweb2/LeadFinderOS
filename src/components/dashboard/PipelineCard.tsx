@@ -1,32 +1,42 @@
+import { useMemo, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { GitBranch } from 'lucide-react';
-
-interface PipelineCounts {
-  new: number;
-  contacted: number;
-  followUp: number;
-  siteSent: number;
-  interested: number;
-  proposalSent: number;
-  closedWon: number;
-}
+import { CampaignPicker } from '@/components/CampaignPicker';
+import { OUTREACH_STATUS_OPTIONS, type OutreachLead } from '@/types/outreach';
 
 interface PipelineCardProps {
-  pipeline: PipelineCounts;
+  allLeads: OutreachLead[];
 }
 
-const stages: { key: keyof PipelineCounts; label: string; color: string; activeColor: string }[] = [
-  { key: 'new', label: 'New', color: 'text-muted-foreground/70', activeColor: 'text-muted-foreground' },
-  { key: 'contacted', label: 'Contacted', color: 'text-blue-500/70', activeColor: 'text-blue-500' },
-  { key: 'followUp', label: 'Follow-up', color: 'text-amber-500/70', activeColor: 'text-amber-500' },
-  { key: 'siteSent', label: 'Site sent', color: 'text-cyan-500/70', activeColor: 'text-cyan-500' },
-  { key: 'interested', label: 'Interested', color: 'text-green-500/80', activeColor: 'text-green-500 font-bold' },
-  { key: 'proposalSent', label: 'Proposal', color: 'text-purple-500/80', activeColor: 'text-purple-500 font-bold' },
-  { key: 'closedWon', label: 'Closed', color: 'text-emerald-500/80', activeColor: 'text-emerald-500 font-bold' },
-];
+// Terminal / non-open statuses — excluded from the "Active leads" headline, but
+// still shown as their own rows in the per-status breakdown below.
+const HEADLINE_EXCLUDED = new Set<string>(['not_interested', 'bounced', 'payment_received']);
 
-export function PipelineCard({ pipeline }: PipelineCardProps) {
-  const total = Object.values(pipeline).reduce((s, v) => s + v, 0);
+/**
+ * Pipeline card — per-status counts matching the Outreach status filter list
+ * (OUTREACH_STATUS_OPTIONS, same order + labels), with a campaign filter (default
+ * All). Counts are computed client-side from the RLS-scoped `allLeads` so switching
+ * campaigns is instant. Headline = active/open leads in the selected campaign.
+ */
+export function PipelineCard({ allLeads }: PipelineCardProps) {
+  const [campaignFilter, setCampaignFilter] = useState<string | null>(null);
+
+  const leads = useMemo(
+    () => allLeads.filter(l => !l.is_archived && (!campaignFilter || l.campaign_id === campaignFilter)),
+    [allLeads, campaignFilter],
+  );
+
+  const countByStatus = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const l of leads) m[l.status] = (m[l.status] ?? 0) + 1;
+    return m;
+  }, [leads]);
+
+  // Headline — active/open leads only (drop not_interested / bounced / paid).
+  const activeTotal = useMemo(
+    () => leads.reduce((n, l) => (HEADLINE_EXCLUDED.has(l.status) ? n : n + 1), 0),
+    [leads],
+  );
 
   return (
     <Card className="bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-transparent border-blue-500/20">
@@ -37,24 +47,34 @@ export function PipelineCard({ pipeline }: PipelineCardProps) {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-2 sm:space-y-3 p-3 pt-0 sm:p-4 sm:pt-0 md:p-6 md:pt-0">
-        {/* Total active */}
+        {/* Campaign filter — default All */}
+        <CampaignPicker
+          mode="filter"
+          hideCreate
+          value={campaignFilter}
+          onChange={setCampaignFilter}
+          className="h-8 w-full text-xs"
+        />
+
+        {/* Headline — active/open leads in the selected campaign */}
         <div>
-          <div className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-500">
-            {total}
-          </div>
+          <div className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-500">{activeTotal}</div>
           <p className="text-[10px] sm:text-xs text-muted-foreground">Active leads</p>
         </div>
 
-        {/* Two-column stat grid */}
+        {/* Per-status breakdown — matches the Outreach status filter list (order + labels) */}
         <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 sm:gap-y-2 pt-2 border-t border-border/50">
-          {stages.map(stage => (
-            <div key={stage.key} className="flex items-center justify-between">
-              <span className="text-[10px] sm:text-xs text-muted-foreground">{stage.label}</span>
-              <span className={`text-xs sm:text-sm font-semibold ${pipeline[stage.key] > 0 ? stage.activeColor : stage.color}`}>
-                {pipeline[stage.key]}
-              </span>
-            </div>
-          ))}
+          {OUTREACH_STATUS_OPTIONS.map(opt => {
+            const n = countByStatus[opt.value] ?? 0;
+            return (
+              <div key={opt.value} className="flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-[10px] sm:text-xs text-muted-foreground">{opt.label}</span>
+                <span className={`shrink-0 text-xs sm:text-sm font-semibold ${n > 0 ? 'text-foreground' : 'text-muted-foreground/40'}`}>
+                  {n}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </CardContent>
     </Card>

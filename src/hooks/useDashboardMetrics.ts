@@ -34,14 +34,12 @@ interface ActivityMetrics {
   totalLeadsContacted: number;
 }
 
-interface PipelineCounts {
-  new: number;
-  contacted: number;
-  followUp: number;
-  siteSent: number;
-  interested: number;
-  proposalSent: number;
-  closedWon: number;
+/** A dashboard "Alert" — a site claim or add-on/upsell request, newest-first. */
+export interface SiteAlert {
+  type: 'claim' | 'addon_interest';
+  at: string;
+  businessName: string;
+  leadId: string | null;
 }
 
 
@@ -58,8 +56,12 @@ interface DashboardMetrics {
   totalPotentialRevenue: number;
   closedRevenue: number;
 
-  // Pipeline
-  pipeline: PipelineCounts;
+  // Alerts — recent site claims + add-on requests (newest first, capped)
+  recentAlerts: SiteAlert[];
+  // All non-archived leads with a next action — feeds the Next Actions card.
+  nextActionLeads: OutreachLead[];
+  // Raw leads (RLS-scoped) — feeds the campaign-aware Pipeline card.
+  allLeads: OutreachLead[];
 
   // Outreach
   totalBusinessesAdded: number;
@@ -124,6 +126,8 @@ export function useDashboardMetrics(isAdmin = false) {
   });
   const [outreachEvents7d, setOutreachEvents7d] = useState<{ lead_id: string; created_at: string }[]>([]);
   const [siteFunnel, setSiteFunnel] = useState({ sent: 0, opened: 0, claimed: 0, addonRequested: 0 });
+  // Recent site claims + add-on requests (newest first, capped) — the Alerts card.
+  const [recentAlerts, setRecentAlerts] = useState<SiteAlert[]>([]);
   // lead_ids of generated_sites that the barber has CLAIMED — used to attribute
   // site-claims to the lead's contact channel for the per-channel card.
   const [claimedLeadIds, setClaimedLeadIds] = useState<string[]>([]);
@@ -181,11 +185,19 @@ export function useDashboardMetrics(isAdmin = false) {
       // (TO authenticated) would inflate a rep's funnel with every published site.
       const sb = supabase as unknown as import('@supabase/supabase-js').SupabaseClient;
       const { data: sites } = isAdmin
-        ? await sb.from('generated_sites').select('lead_id, first_opened_at, claimed_at, addon_interest_at')
+        ? await sb.from('generated_sites').select('lead_id, site_name, first_opened_at, claimed_at, addon_interest_at, outreach_leads(business_name)')
         : await sb.from('generated_sites')
-            .select('lead_id, first_opened_at, claimed_at, addon_interest_at, outreach_leads!inner(user_id)')
+            .select('lead_id, site_name, first_opened_at, claimed_at, addon_interest_at, outreach_leads!inner(user_id, business_name)')
             .eq('outreach_leads.user_id', uid ?? '');
-      const rows = (sites || []) as Array<{ lead_id: string | null; first_opened_at: string | null; claimed_at: string | null; addon_interest_at: string | null }>;
+      const rows = (sites || []) as Array<{
+        lead_id: string | null;
+        site_name: string | null;
+        first_opened_at: string | null;
+        claimed_at: string | null;
+        addon_interest_at: string | null;
+        // to-one embed → object; typed loosely (untyped client) — normalise below.
+        outreach_leads?: { business_name: string | null } | { business_name: string | null }[] | null;
+      }>;
       const distinctLeads = (pred: (r: typeof rows[number]) => boolean) =>
         new Set(rows.filter(r => r.lead_id && pred(r)).map(r => r.lead_id as string)).size;
       setSiteFunnel({
@@ -195,6 +207,21 @@ export function useDashboardMetrics(isAdmin = false) {
         addonRequested: distinctLeads(r => !!r.addon_interest_at),
       });
       setClaimedLeadIds(rows.filter(r => r.claimed_at && r.lead_id).map(r => r.lead_id as string));
+
+      // Recent alerts: one row per non-null claim/add-on timestamp, newest first, cap 15.
+      // Business name from the joined lead; fall back to the site slug when absent.
+      const nameOf = (r: typeof rows[number]): string => {
+        const ol = Array.isArray(r.outreach_leads) ? r.outreach_leads[0] : r.outreach_leads;
+        return (ol?.business_name || r.site_name || 'Unknown site').toString();
+      };
+      const alerts: SiteAlert[] = [];
+      for (const r of rows) {
+        const businessName = nameOf(r);
+        if (r.claimed_at) alerts.push({ type: 'claim', at: r.claimed_at, businessName, leadId: r.lead_id });
+        if (r.addon_interest_at) alerts.push({ type: 'addon_interest', at: r.addon_interest_at, businessName, leadId: r.lead_id });
+      }
+      alerts.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+      setRecentAlerts(alerts.slice(0, 15));
     } catch (e) {
       // No status-based fallback — that mismatched-units fallback was the original
       // bug. Leave the funnel at its previous value on a transient fetch failure.
@@ -285,16 +312,10 @@ export function useDashboardMetrics(isAdmin = false) {
     const paidForDraftCount = 0;
     const activeProposals = allLeads.filter(l => ['wants_draft', 'reviewing_draft', 'awaiting_decision'].includes(l.status)).length;
 
-    // Pipeline counts
-    const pipeline: PipelineCounts = {
-      new: allLeads.filter(l => l.status === 'not_contacted' && !l.is_archived).length,
-      contacted: allLeads.filter(l => ['initial_contact', 'contacted', 'waiting', 'delivered', 'sent_initial_text', 'sent_voice_note', 'sms', 'whatsapp', 'facebook_msg', 'no_whatsapp', 'not_answered', 'on_hold'].includes(l.status) && !l.is_archived).length,
-      followUp: allLeads.filter(l => ['call_back', 'replied'].includes(l.status) && !l.is_archived).length,
-      siteSent: allLeads.filter(l => l.status === 'site_sent' && !l.is_archived).length,
-      interested: allLeads.filter(l => l.status === 'interested' && !l.is_archived).length,
-      proposalSent: allLeads.filter(l => ['wants_draft', 'reviewing_draft', 'awaiting_decision'].includes(l.status) && !l.is_archived).length,
-      closedWon: allLeads.filter(l => ['payment_received', 'paid_for_draft', 'completed'].includes(l.status) && !l.is_archived).length,
-    };
+    // Leads with a next action (non-archived) — feeds the Next Actions card. (The
+    // old collapsed pipeline counts were removed; the Pipeline card now computes its
+    // own per-status counts from allLeads with a campaign filter.)
+    const nextActionLeads = allLeads.filter(l => !l.is_archived && l.next_action && l.next_action !== 'none');
 
     // HERO — businesses contacted = leads past "New" (status, source of truth).
     // INCLUDES archived: a lead you contacted then archived was still contacted, and
@@ -391,7 +412,7 @@ export function useDashboardMetrics(isAdmin = false) {
       totalRevenue, revenueThisMonth, revenueLastMonth,
       draftRevenue, completionRevenue, fullyPaidClients, paidForDraftCount, activeProposals,
       totalPotentialRevenue, closedRevenue,
-      pipeline,
+      recentAlerts, nextActionLeads, allLeads,
       totalBusinessesAdded, noWebsiteBusinesses, addedToday, addedYesterday,
       contactedTotal, contactedToday, contactedYesterday, avg7Day, loggedLeads,
       recordDay, avgPerDayAllTime, avgPerDayLast7Days,
@@ -400,7 +421,7 @@ export function useDashboardMetrics(isAdmin = false) {
       siteFunnel,
       channelPerf,
     };
-  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, siteFunnel, claimedLeadIds]);
+  }, [allLeads, activityData, totalNoWebsiteFound, outreachEvents7d, siteFunnel, claimedLeadIds, recentAlerts]);
 
   return { metrics, isLoading, refetch: fetchAllData };
 }
