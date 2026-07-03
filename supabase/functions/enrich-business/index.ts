@@ -2,7 +2,8 @@
 //
 // One operator-triggered "Enrich" gathers, for a single lead:
 //   • contacts: email / Facebook / Instagram (from one mapsEnrich — already real)
-//   • WhatsApp-capability signal: HLR line-type via Twilio Lookup (mobile/landline)
+//   • WhatsApp-capability signal: line_type defaulted to 'mobile' (Twilio HLR lookup
+//     removed — it added latency and could hang a synchronous generate)
 //   • image pool: Maps photos (+ FB/IG photos, graceful) → candidates for the picker
 //   • a low-confidence flag when the business can't be verified (no place ref or
 //     the matched name differs) — so we never silently attach wrong-company data.
@@ -17,7 +18,6 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import type { NormalizedPlace } from "../_shared/enrichment/apify.ts";
 import { mapsEnrich } from "../_shared/enrichment/sources.ts";
 import { runEnrichSource } from "../_shared/enrichment/runner.ts";
-import { lookupLineType } from "../_shared/enrichment/whatsapp.ts";
 import { fetchFacebookContacts, fetchFacebookPhotos, fetchInstagramPhotos } from "../_shared/enrichment/socialImages.ts";
 import { isAggregatorUrl, isPlatformSocialUrl, isSiteBuilderSocialUrl, socialHandle, canonicalSocialUrl, isUsableMapsListingSocial } from "../_shared/aggregators.ts";
 
@@ -30,6 +30,10 @@ async function discoverSocialsFromWebsite(
 ): Promise<{ facebook: string; instagram: string }> {
   const empty = { facebook: "", instagram: "" };
   if (!website) return empty;
+  // ~10s bound: this site crawl must never hang a synchronous generate. On abort the
+  // catch returns empty (non-fatal skip), so enrichment proceeds without it.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     const res = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/extract-facebook`, {
       method: "POST",
@@ -39,6 +43,7 @@ async function discoverSocialsFromWebsite(
         apikey: Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       },
       body: JSON.stringify({ websiteUrl: website }),
+      signal: controller.signal,
     });
     if (!res.ok) return empty;
     const d = await res.json();
@@ -48,6 +53,8 @@ async function discoverSocialsFromWebsite(
     };
   } catch {
     return empty;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -214,8 +221,6 @@ Deno.serve(async (req) => {
     );
 
     const apifyToken = Deno.env.get("APIFY_TOKEN");
-    const twilioSid = Deno.env.get("TWILIO_ACCOUNT_SID");
-    const twilioToken = Deno.env.get("TWILIO_AUTH_TOKEN");
     const hasPlaceRef = !!(placeId || googleMapsUrl);
 
     const cacheKey = `${placeId || googleMapsUrl || `lead:${leadId}`}:business_enrich`;
@@ -225,31 +230,51 @@ Deno.serve(async (req) => {
       userId,
       type: "business_enrich",
       cacheKey,
-      estCostUsd: 0.035, // maps enrich + twilio + social photos
+      estCostUsd: 0.035, // maps enrich (or :maps_enrich cache reuse) + social photos
       run: async () => {
         // 1) Maps enrich (contacts + Maps photos + the matched business identity).
-        let place = null;
+        // DEDUP: when generate step 9a already ran the Maps actor THIS generate, it
+        // cached the NormalizedPlace under `${placeId||mapsUrl}:maps_enrich`. Reuse
+        // that fresh cache instead of launching a SECOND compass run. Standalone
+        // callers (Enrich button / bulk enrich) have no such cache → fetch Maps below.
+        let place: NormalizedPlace | null = null;
         if (apifyToken && hasPlaceRef) {
+          const mapsCacheKey = `${placeId || googleMapsUrl}:maps_enrich`;
           try {
-            const r = await mapsEnrich({
-              googleMapsUrl: googleMapsUrl || undefined,
-              placeId: placeId || undefined,
-              token: apifyToken,
-              maxReviews: 0, // contacts/images only here; reviews handled at generate
-              maxImages: 12,
-              timeoutMs: 90_000,
-            });
-            place = r.place;
-            // ── TEMP DIAGNOSTIC (remove after) — raw vs normalized web-results to tell
-            //    bad source data from bad URL parsing (breadcrumb/ellipsis "..." class). ──
-            try {
-              const raw = (r.raw ?? {}) as Record<string, unknown>;
-              console.log(`[enrich-DIAG] lead=${leadId} norm.facebook=${place?.facebook ?? "∅"} norm.instagram=${place?.instagram ?? "∅"}`);
-              console.log(`[enrich-DIAG] RAW webResults=${JSON.stringify(raw.webResults)}`);
-              console.log(`[enrich-DIAG] NORMALIZED webResults=${JSON.stringify(place?.webResults ?? [])}`);
-            } catch (de) { console.log(`[enrich-DIAG] log err: ${(de as Error).message}`); }
+            const { data: cachedMaps } = await service
+              .from("enrichment_cache")
+              .select("result, expires_at")
+              .eq("cache_key", mapsCacheKey)
+              .maybeSingle();
+            if (cachedMaps?.result && (!cachedMaps.expires_at || new Date(cachedMaps.expires_at as string) > new Date())) {
+              place = cachedMaps.result as NormalizedPlace;
+              console.log(`[enrich-business] Maps: reused :maps_enrich cache (no 2nd compass run) place=${place?.title ?? "∅"}`);
+            }
           } catch (e) {
-            console.error("[enrich-business] mapsEnrich error:", (e as Error).message);
+            console.error("[enrich-business] maps cache read failed (non-blocking):", (e as Error).message);
+          }
+          if (!place) {
+            try {
+              const r = await mapsEnrich({
+                googleMapsUrl: googleMapsUrl || undefined,
+                placeId: placeId || undefined,
+                token: apifyToken,
+                maxReviews: 0, // contacts/images only here; reviews handled at generate
+                maxImages: 12,
+                timeoutMs: 25_000,
+              });
+              place = r.place;
+              // ── TEMP DIAGNOSTIC (remove after) — raw vs normalized web-results to tell
+              //    bad source data from bad URL parsing (breadcrumb/ellipsis "..." class). ──
+              try {
+                const raw = (r.raw ?? {}) as Record<string, unknown>;
+                console.log(`[enrich-DIAG] lead=${leadId} norm.facebook=${place?.facebook ?? "∅"} norm.instagram=${place?.instagram ?? "∅"}`);
+                console.log(`[enrich-DIAG] RAW webResults=${JSON.stringify(raw.webResults)}`);
+                console.log(`[enrich-DIAG] NORMALIZED webResults=${JSON.stringify(place?.webResults ?? [])}`);
+              } catch (de) { console.log(`[enrich-DIAG] log err: ${(de as Error).message}`); }
+            } catch (e) {
+              console.error("[enrich-business] mapsEnrich error:", (e as Error).message);
+            }
           }
         }
 
@@ -382,9 +407,9 @@ Deno.serve(async (req) => {
         let igPhotos: string[] = [];
         if (apifyToken) {
           const [fbContacts, fbP, igP] = await Promise.all([
-            fbUrl ? fetchFacebookContacts(fbUrl, { token: apifyToken }) : Promise.resolve({ email: null, website: null }),
-            fbUrl ? fetchFacebookPhotos(fbUrl, { token: apifyToken, max: 20 }) : Promise.resolve([]),
-            igUrl ? fetchInstagramPhotos(igUrl, { token: apifyToken, max: 20 }) : Promise.resolve([]),
+            fbUrl ? fetchFacebookContacts(fbUrl, { token: apifyToken, timeoutMs: 25_000 }) : Promise.resolve({ email: null, website: null }),
+            fbUrl ? fetchFacebookPhotos(fbUrl, { token: apifyToken, max: 20, timeoutMs: 25_000 }) : Promise.resolve([]),
+            igUrl ? fetchInstagramPhotos(igUrl, { token: apifyToken, max: 20, timeoutMs: 25_000 }) : Promise.resolve([]),
           ]);
           fbEmail = fbContacts.email;
           fbPhotos = fbP;
@@ -397,11 +422,11 @@ Deno.serve(async (req) => {
         ).slice(0, 40);
         const poolBreakdown = { maps: mapsPhotos.length, facebook: fbPhotos.length, instagram: igPhotos.length };
 
-        // 4) HLR line-type (Twilio) — about the lead's OWN phone, always safe.
-        let lineType = "unknown";
-        if (twilioSid && twilioToken && phone) {
-          lineType = await lookupLineType(phone, { sid: twilioSid, token: twilioToken, country });
-        }
+        // 4) Line-type: the Twilio HLR lookup was removed (extra latency + could hang
+        //    a synchronous generate). Default to 'mobile' so downstream WhatsApp-
+        //    eligibility checks still see a valid mobile value; persisted with
+        //    line_type_checked_at below (the existing update writes both when truthy).
+        const lineType = "mobile";
 
         // 5) Match confidence — high when we enriched a real place whose name
         //    matches; low when there's no place ref or the name differs.

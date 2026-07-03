@@ -579,9 +579,9 @@ serve(async (req) => {
               googleMapsUrl: leadMapsUrlForEnrich || undefined,
               placeId: (lead.place_id as string) || undefined,
               token: apifyToken,
-              maxReviews: 8,
+              maxReviews: 4,
               maxImages: 10,
-              timeoutMs: 90_000,
+              timeoutMs: 30_000,
             });
             return { result: place, costUsd: 0.02 };
           },
