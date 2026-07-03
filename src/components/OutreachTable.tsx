@@ -880,14 +880,6 @@ export function OutreachTable({
     });
   };
 
-  // Mark selected leads as interested
-  const handleMarkAsInterested = () => {
-    if (selectedIds.size === 0 || !onMarkAsInterested) return;
-    const ids = Array.from(selectedIds);
-    onMarkAsInterested(ids);
-    setSelectedIds(new Set());
-  };
-
   // Archive selected leads
   const handleArchiveSelected = () => {
     if (selectedIds.size === 0) return;
@@ -1072,9 +1064,9 @@ export function OutreachTable({
       result = result.filter((lead) => lead.country === countryFilter);
     }
 
-    // Filter: tracked-only (is_potential_work) toggle
+    // Filter: interested-only toggle (status = 'interested')
     if (trackedOnly) {
-      result = result.filter((lead) => lead.is_potential_work);
+      result = result.filter((lead) => lead.status === 'interested');
     }
 
     // Contactability filters (AND) — only REAL stored values, matching the row icons.
@@ -1292,18 +1284,6 @@ export function OutreachTable({
                         ))}
                       </SelectContent>
                     </Select>
-
-                    {onMarkAsInterested && (
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={handleMarkAsInterested}
-                        className="text-xs h-8"
-                      >
-                        <Star className="h-3.5 w-3.5 mr-1.5" />
-                        Track
-                      </Button>
-                    )}
                   </>
                 )}
                 {onDeleteSelected && !readOnly && (
@@ -1449,16 +1429,16 @@ export function OutreachTable({
                 <SelectItem value="AUS">🇦🇺 AUS</SelectItem>
               </SelectContent>
             </Select>
-            {/* Tracked filter toggle — show only tracked (is_potential_work) leads */}
+            {/* Interested filter toggle — show only leads with status 'interested' */}
             <Button
               variant={trackedOnly ? 'default' : 'outline'}
               size="sm"
               onClick={() => { setTrackedOnly((v) => !v); setCurrentPage(1); }}
               className={cn('h-8 text-xs', !trackedOnly && 'bg-background')}
-              title="Show only tracked leads"
+              title="Show only interested leads"
             >
               <Star className={cn('h-3.5 w-3.5 mr-1.5', trackedOnly && 'fill-current')} />
-              Tracked
+              Interested
             </Button>
             {/* Contact / signal filters — collapsed into one dropdown. All AND-combined
                 (unchanged); the trigger shows the active count. */}
@@ -1634,15 +1614,12 @@ export function OutreachTable({
                     </>
                   )}
                   <TableHead className="w-[160px] text-center">Actions</TableHead>
-                   {!readOnly && onMarkAsInterested && (
-                    <TableHead className="w-[80px] text-center">Track</TableHead>
-                  )}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {paginatedLeads.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={readOnly ? 4 : (onMarkAsInterested ? 8 : 7)} className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
+                    <TableCell colSpan={readOnly ? 4 : 7} className="text-center py-6 sm:py-8 text-muted-foreground text-sm">
                       {leads.length === 0
                         ? isArchiveView 
                           ? 'No archived leads yet.'
@@ -1655,7 +1632,7 @@ export function OutreachTable({
                     <TableRow
                       key={lead.id}
                       className={`border-border/50 cursor-pointer hover:bg-muted/30 ${
-                        lead.is_potential_work ? 'bg-primary/5' : ''
+                        lead.status === 'interested' ? 'bg-primary/5' : ''
                       } ${lastContactedLeadId === lead.id ? 'ring-1 ring-primary/30 ring-inset bg-primary/5' : ''}`}
                       onClick={() => { onLeadClick(lead); setDetailLead(lead); }}
                     >
@@ -1674,7 +1651,7 @@ export function OutreachTable({
                           {/* Wrap a long name within a bounded width so the row grows
                               but the columns to its right stay aligned (matches LeadsTable). */}
                           <span className="min-w-0 break-words max-w-[200px]">{lead.business_name}</span>
-                          {lead.is_potential_work && (
+                          {lead.status === 'interested' && (
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
                           )}
                           {isTestBarberLead(lead.id) && (
@@ -1945,26 +1922,6 @@ export function OutreachTable({
                           )}
                         </div>
                       </TableCell>
-                      {!readOnly && onMarkAsInterested && (
-                        <TableCell onClick={(e) => e.stopPropagation()}>
-                          <div className="flex justify-center">
-                            {lead.is_potential_work ? (
-                              <span className="text-xs text-yellow-500 font-medium">Tracked</span>
-                            ) : (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 px-2 text-xs hover:bg-primary/10 hover:text-primary"
-                                onClick={() => onMarkAsInterested([lead.id])}
-                                {...(walkthroughTrackLeadId === lead.id ? { 'data-walkthrough-step': 'track-star', 'data-walkthrough': 'track' } : {})}
-                              >
-                                <Star className="h-3.5 w-3.5 mr-1" />
-                                Track
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      )}
                     </TableRow>
                   ))
                 )}
