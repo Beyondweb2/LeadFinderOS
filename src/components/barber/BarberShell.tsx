@@ -267,7 +267,7 @@ export function BarberShell({
             type="button"
             onClick={handleGetAccess}
             disabled={checkoutLoading}
-            className="flex w-full items-center justify-center gap-2 bg-amber px-4 py-2 text-center text-sm font-semibold text-ink transition-colors hover:bg-amber-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/40 disabled:opacity-70"
+            className="hidden md:flex w-full items-center justify-center gap-2 bg-amber px-4 py-2 text-center text-sm font-semibold text-ink transition-colors hover:bg-amber-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ink/40 disabled:opacity-70"
           >
             <span>{site.booking_only ? "Switch on bookings & SMS reminders - get more clients, stop the no-shows" : "Online booking & SMS reminders - get more clients, stop the no-shows"}</span>
             <span className="rounded-full bg-ink/15 px-2 py-0.5 text-xs font-bold">

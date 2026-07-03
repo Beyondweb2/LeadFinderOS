@@ -335,7 +335,7 @@ const Inbox = () => {
                 <div className="mt-0.5">
                   {savingStatusKey === c.key
                     ? <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
-                    : <PipelineStatusSelect value={c.leadStatus} onValueChange={(status) => handleSetStatus(c, status)} />}
+                    : <PipelineStatusSelect value={c.leadStatus} onValueChange={(status) => handleSetStatus(c, status)} triggerClassName="h-9 w-auto gap-2 px-2.5" />}
                 </div>
               )}
             </div>

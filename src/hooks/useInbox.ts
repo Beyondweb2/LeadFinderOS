@@ -118,6 +118,11 @@ export function useInbox() {
     return m;
   }, [leads]);
 
+  // Own-lead ids. `leads` is fetched with the user-session client, so RLS ("Users
+  // can view their own leads") already scopes it to the current user's leads —
+  // this set is the ownership source of truth used to keep the Inbox to OWN leads.
+  const ownLeadIds = useMemo(() => new Set(leads.map((l) => l.id)), [leads]);
+
   // Most-recent generated site per lead (sites are ordered newest-first, so the
   // first row seen for a lead_id wins). Drives the thread's "View site" preview link.
   const sitesByLeadId = useMemo(() => {
@@ -142,6 +147,10 @@ export function useInbox() {
       const last = msgs[msgs.length - 1];
       const lastInbound = [...msgs].reverse().find((m) => m.direction === 'inbound');
       const leadId = msgs.find((m) => m.lead_id)?.lead_id ?? null;
+      // Scope to the current user's OWN leads only: skip a thread with no linked
+      // lead (Unassigned) or one whose lead this user doesn't own. This keeps the
+      // Inbox to leads you own and stops no-op status writes on other reps' leads.
+      if (!leadId || !ownLeadIds.has(leadId)) continue;
       out.push({
         key,
         phone: last.phone,
@@ -157,7 +166,7 @@ export function useInbox() {
       });
     }
     return out.sort((a, b) => new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime());
-  }, [messages, leadNameById, campaignByLeadId, statusByLeadId]);
+  }, [messages, leadNameById, campaignByLeadId, statusByLeadId, ownLeadIds]);
 
   const messagesForKey = useCallback(
     (key: string) => messages.filter((m) => convKey(m.user_id, m.phone) === key),
