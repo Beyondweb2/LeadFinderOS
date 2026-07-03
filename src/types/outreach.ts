@@ -26,7 +26,8 @@ export type LeadStatus =
   | 'bounced'            // Instantly reported the email bounced
   | 'sms'
   | 'whatsapp'
-  | 'facebook_msg';
+  | 'facebook_msg'
+  | 'closed';            // removed from the Inbox (set via a button, not manually picked)
 
 export type NextActionType = 
   | 'call'

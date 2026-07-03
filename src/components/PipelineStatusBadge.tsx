@@ -91,6 +91,13 @@ const statusConfig: Record<string, { label: string; shortLabel: string; classNam
     shortLabel: 'Paid',
     className: 'bg-green-500/20 text-green-400 border-transparent font-semibold',
   },
+  // Inbox "Remove from inbox" terminal — hidden from the Inbox by default; label so a
+  // revealed (Show hidden) row reads "Closed" instead of falling back to "New".
+  closed: {
+    label: 'Closed',
+    shortLabel: 'Closed',
+    className: 'bg-[hsl(var(--badge-gray))] text-[hsl(var(--badge-gray-fg))] border-transparent font-semibold',
+  },
 };
 
 const defaultConfig = {

@@ -46,7 +46,10 @@ export interface WaConversation {
   lastInboundAt: string | null;
 }
 
-export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null }
+export interface LeadLite { id: string; business_name: string; phone: string; country: string | null; campaign_id: string | null; status: string | null; google_maps_url: string | null; website: string | null; email: string | null; place_id: string | null }
+
+/** Most-recent generated site for a lead — powers the thread's "View site" link. */
+export interface SiteLite { id: string; siteName: string; shareToken: string | null; bookingOnly: boolean }
 
 const convKey = (userId: string | null, phone: string) => `${userId ?? 'unassigned'}::${phone}`;
 
@@ -76,16 +79,22 @@ export function useInbox() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<WaMessage[]>([]);
   const [leads, setLeads] = useState<LeadLite[]>([]);
+  const [sites, setSites] = useState<Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null }>>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
     setIsLoading(true);
-    const [msgRes, leadRes] = await Promise.all([
+    const [msgRes, leadRes, siteRes] = await Promise.all([
       sb.from('whatsapp_messages').select('*').order('created_at', { ascending: true }),
-      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status').not('phone', 'is', null),
+      sb.from('outreach_leads').select('id, business_name, phone, country, campaign_id, status, google_maps_url, website, email, place_id').not('phone', 'is', null),
+      // share_token / booking_only aren't in the generated types yet — untyped sb. RLS
+      // scopes rows to the operator's own sites (admins see all). Ordered newest-first
+      // so the per-lead pick below takes the most recent site.
+      sb.from('generated_sites').select('id, site_name, lead_id, share_token, booking_only').order('created_at', { ascending: false }),
     ]);
     setMessages(((msgRes.data ?? []) as WaMessage[]));
     setLeads(((leadRes.data ?? []) as LeadLite[]).filter((l) => (l.phone ?? '').trim()));
+    setSites((siteRes.data ?? []) as Array<{ id: string; site_name: string; lead_id: string | null; share_token: string | null; booking_only: boolean | null }>);
     setIsLoading(false);
   }, []);
 
@@ -108,6 +117,18 @@ export function useInbox() {
     for (const l of leads) m[l.id] = l.status ?? null;
     return m;
   }, [leads]);
+
+  // Most-recent generated site per lead (sites are ordered newest-first, so the
+  // first row seen for a lead_id wins). Drives the thread's "View site" preview link.
+  const sitesByLeadId = useMemo(() => {
+    const m: Record<string, SiteLite> = {};
+    for (const s of sites) {
+      if (s.lead_id && !m[s.lead_id]) {
+        m[s.lead_id] = { id: s.id, siteName: s.site_name, shareToken: s.share_token ?? null, bookingOnly: !!s.booking_only };
+      }
+    }
+    return m;
+  }, [sites]);
 
   // Derive conversations from the message log, grouped by (user_id, phone).
   const conversations = useMemo<WaConversation[]>(() => {
@@ -161,5 +182,5 @@ export function useInbox() {
     return { ok: true, simulated: data.simulated };
   }, [fetchAll]);
 
-  return { user, messages, leads, conversations, messagesForKey, isLoading, refetch: fetchAll, send };
+  return { user, messages, leads, conversations, messagesForKey, sitesByLeadId, isLoading, refetch: fetchAll, send };
 }
