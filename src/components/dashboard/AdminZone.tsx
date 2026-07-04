@@ -53,6 +53,7 @@ import {
   Building2,
   RefreshCw,
   Trash2,
+  Users,
 } from 'lucide-react';
 
 interface AdminUser {
@@ -318,6 +319,10 @@ export function AdminZone() {
           <Button variant="outline" size="sm" onClick={() => navigate('/admin/api-usage')}>
             <Activity className="h-4 w-4 mr-2" />
             API Usage
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => navigate('/admin/clients')}>
+            <Users className="h-4 w-4 mr-2" />
+            Clients
           </Button>
           <Button variant="outline" size="sm" onClick={() => navigate('/admin/sites')}>
             <Globe className="h-4 w-4 mr-2" />

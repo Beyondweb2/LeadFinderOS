@@ -32,6 +32,7 @@ const Templates = lazy(() => import("./pages/Templates"));
 const PaidClientsPage = lazy(() => import("./pages/PaidClients"));
 const HowToUse = lazy(() => import("./pages/HowToUse"));
 const AdminApiUsage = lazy(() => import("./pages/AdminApiUsage"));
+const AdminClients = lazy(() => import("./pages/AdminClients"));
 const AdminSiteImages = lazy(() => import("./pages/AdminSiteImages"));
 const AdminSitesList = lazy(() => import("./pages/AdminSitesList"));
 const AdminSiteManage = lazy(() => import("./pages/AdminSiteManage"));
@@ -377,6 +378,16 @@ const App = () => {
                 <ProtectedRoute>
                   <RequireAdmin>
                     <AdminApiUsage />
+                  </RequireAdmin>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/clients"
+              element={
+                <ProtectedRoute>
+                  <RequireAdmin>
+                    <AdminClients />
                   </RequireAdmin>
                 </ProtectedRoute>
               }
