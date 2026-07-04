@@ -26,6 +26,12 @@ export interface RunEnrichArgs<T> {
   /** The actual source call; returns the result payload + its real cost. */
   run: () => Promise<{ result: T; costUsd: number }>;
   capUsd?: number;
+  /** Optional: detect an "empty" result (e.g. no images) so it caches only briefly
+   *  (emptyTtlMs) instead of the full 30 days — a miss then re-enriches soon rather
+   *  than staying empty. Must be null-safe. When omitted, behaviour is unchanged. */
+  isEmpty?: (result: T) => boolean;
+  /** TTL for an empty result (default 24h). Ignored unless isEmpty returns true. */
+  emptyTtlMs?: number;
 }
 
 export interface RunEnrichOutcome<T> {
@@ -75,7 +81,11 @@ export async function runEnrichSource<T>(args: RunEnrichArgs<T>): Promise<RunEnr
   const { result, costUsd } = await run();
 
   // 4) Persist cache + usage + audit (best-effort; never block the result).
-  const expires = new Date(Date.now() + CACHE_TTL_MS).toISOString();
+  // Empty results (e.g. no images) get a SHORT TTL so a miss re-enriches soon
+  // instead of caching empty for 30 days; full results keep the 30-day TTL.
+  const empty = args.isEmpty ? args.isEmpty(result) : false;
+  const ttlMs = empty ? (args.emptyTtlMs ?? 24 * 60 * 60 * 1000) : CACHE_TTL_MS;
+  const expires = new Date(Date.now() + ttlMs).toISOString();
   try {
     await service.from("enrichment_cache").upsert(
       { cache_key: cacheKey, enrichment_type: type, result, expires_at: expires },

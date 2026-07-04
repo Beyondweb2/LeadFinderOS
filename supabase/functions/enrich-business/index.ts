@@ -231,6 +231,10 @@ Deno.serve(async (req) => {
       type: "business_enrich",
       cacheKey,
       estCostUsd: 0.035, // maps enrich (or :maps_enrich cache reuse) + social photos
+      // Empty pool (no maps/FB/IG photos) → short 24h TTL so a miss re-enriches soon
+      // rather than caching an empty pool for 30 days. Null-safe.
+      isEmpty: (r) => !r || !Array.isArray(r.imagePool) || r.imagePool.length === 0,
+      emptyTtlMs: 24 * 60 * 60 * 1000,
       run: async () => {
         // 1) Maps enrich (contacts + Maps photos + the matched business identity).
         // DEDUP: when generate step 9a already ran the Maps actor THIS generate, it
@@ -262,6 +266,10 @@ Deno.serve(async (req) => {
                 maxReviews: 0, // contacts/images only here; reviews handled at generate
                 maxImages: 12,
                 timeoutMs: 25_000,
+                // Off the synchronous critical path → safe to retry a timeout too.
+                // NO photosOnly here: 9b needs the full add-ons (contacts / FB+IG
+                // social profiles / web results) for social discovery.
+                retry: { on429: true, onAbort: true },
               });
               place = r.place;
               // ── TEMP DIAGNOSTIC (remove after) — raw vs normalized web-results to tell
