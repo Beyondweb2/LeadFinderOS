@@ -116,6 +116,13 @@ export interface MapsEnrichInput {
   maxReviews?: number;
   maxImages?: number;
   timeoutMs?: number;
+  /** Photos-focused variant for the SYNCHRONOUS generate (9a): keep the detail-page
+   *  scrape + images (+ whatever maxReviews the caller passes) but DROP the heavier
+   *  add-ons (contacts / social profiles / web results) so the run finishes inside
+   *  the tight timeout more often. 9b keeps them ON for FB/IG/contacts discovery. */
+  photosOnly?: boolean;
+  /** Opt-in bounded retry (passed straight to runApifyActor). Default: no retry. */
+  retry?: { on429?: boolean; onAbort?: boolean };
 }
 
 /** Deep ENRICH for ONE picked place: reviews + images + contacts. */
@@ -127,24 +134,33 @@ export async function mapsEnrich(
   const target = input.googleMapsUrl
     ? { startUrls: [{ url: input.googleMapsUrl }] }
     : { placeIds: [input.placeId] };
+  // photosOnly (9a): lean add-ons so the detail-page scrape isn't also doing
+  // contacts+socials+webResults (the slow part that pushes photo-heavy places past
+  // the timeout). Full add-ons (9b default) surface FB/IG/contacts/webResults.
+  const addOns = input.photosOnly
+    ? { scrapeContacts: false, includeWebResults: false }
+    : {
+        scrapeContacts: true,
+        scrapeSocialMediaProfiles: { facebooks: true, instagrams: true },
+        // Web-results discovery: surfaces FB/website that the bare listing lacks (e.g.
+        // no-website businesses). $0 extra — billed under the "additional place
+        // details" flat fee we already incur by scraping reviews+images. DEEP-ENRICH
+        // ONLY (mapsDiscover keeps these off to stay fast/cheap).
+        includeWebResults: true,
+      };
   const body = {
     ...target,
     language: "en",
     maxReviews: input.maxReviews ?? 8,
     reviewsSort: "newest",
     maxImages: input.maxImages ?? 10,
-    scrapeContacts: true,
-    scrapeSocialMediaProfiles: { facebooks: true, instagrams: true },
-    // Web-results discovery: surfaces FB/website that the bare listing lacks (e.g.
-    // no-website businesses). $0 extra — billed under the "additional place
-    // details" flat fee we already incur by scraping reviews+images. DEEP-ENRICH
-    // ONLY (mapsDiscover keeps these off to stay fast/cheap).
     scrapePlaceDetailPage: true,
-    includeWebResults: true,
+    ...addOns,
   };
   const { items, ms } = await runApifyActor(MAPS_ACTOR_ID, body, {
     token: input.token,
     timeoutMs: input.timeoutMs,
+    retry: input.retry,
   });
   const place = items.length ? mapCompassPlace(items[0]) : null;
   return { place, ms, raw: items[0] ?? null };

@@ -55,31 +55,63 @@ export interface NormalizedPlace {
 export async function runApifyActor(
   actorId: string,
   input: Record<string, unknown>,
-  opts: { token: string; timeoutMs?: number },
+  opts: {
+    token: string;
+    timeoutMs?: number;
+    /** Opt-in bounded retry (AT MOST one extra attempt). Default: no retry.
+     *  on429: retry on HTTP 429 or 5xx (fast failures — safe on any path).
+     *  onAbort: retry on timeout — only safe OFF the synchronous critical path
+     *  (a second full-timeout attempt would stack toward the original 504). */
+    retry?: { on429?: boolean; onAbort?: boolean };
+  },
 ): Promise<{ items: unknown[]; ms: number }> {
   const url = `https://api.apify.com/v2/acts/${actorId}/run-sync-get-dataset-items`;
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 90_000);
-  const startedAt = Date.now();
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${opts.token}`,
-      },
-      body: JSON.stringify(input),
-      signal: controller.signal,
-    });
-    const ms = Date.now() - startedAt;
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      throw new Error(`Apify ${actorId} HTTP ${res.status}: ${txt.slice(0, 300)}`);
+
+  // A single attempt. Throws { retryable } markers so the outer loop can decide.
+  const attempt = async (): Promise<{ items: unknown[]; ms: number }> => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? 90_000);
+    const startedAt = Date.now();
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${opts.token}`,
+        },
+        body: JSON.stringify(input),
+        signal: controller.signal,
+      });
+      const ms = Date.now() - startedAt;
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        const err = new Error(`Apify ${actorId} HTTP ${res.status}: ${txt.slice(0, 300)}`);
+        // Mark 429 / 5xx as retryable-on-429 for the outer loop.
+        (err as { retryableHttp?: boolean }).retryableHttp = res.status === 429 || res.status >= 500;
+        throw err;
+      }
+      const data = await res.json();
+      return { items: Array.isArray(data) ? data : [], ms };
+    } finally {
+      clearTimeout(timeout);
     }
-    const data = await res.json();
-    return { items: Array.isArray(data) ? data : [], ms };
-  } finally {
-    clearTimeout(timeout);
+  };
+
+  const RETRY_DELAY_MS = 1500;
+  try {
+    return await attempt();
+  } catch (e) {
+    const isAbort = (e as Error)?.name === "AbortError";
+    const isRetryableHttp = !!(e as { retryableHttp?: boolean })?.retryableHttp;
+    const shouldRetry =
+      (isAbort && opts.retry?.onAbort) || (isRetryableHttp && opts.retry?.on429);
+    if (!shouldRetry) throw e;
+    // Bounded: exactly ONE extra attempt after a short pause.
+    console.warn(
+      `[apify] ${actorId} ${isAbort ? "timed out" : "failed (retryable HTTP)"} — retrying once in ${RETRY_DELAY_MS}ms`,
+    );
+    await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+    return await attempt();
   }
 }
 

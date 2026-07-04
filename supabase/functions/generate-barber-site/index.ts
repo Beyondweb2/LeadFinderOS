@@ -574,6 +574,10 @@ serve(async (req) => {
           type: "maps_enrich",
           cacheKey: `${(lead.place_id as string) || leadMapsUrlForEnrich}:maps_enrich`,
           estCostUsd: 0.02,
+          // Empty (no images) → short 24h TTL so a photo-heavy miss re-enriches soon
+          // rather than caching empty for 30 days. Null-safe.
+          isEmpty: (p) => !p || !Array.isArray(p.imageUrls) || p.imageUrls.length === 0,
+          emptyTtlMs: 24 * 60 * 60 * 1000,
           run: async () => {
             const { place } = await mapsEnrich({
               googleMapsUrl: leadMapsUrlForEnrich || undefined,
@@ -582,6 +586,11 @@ serve(async (req) => {
               maxReviews: 4,
               maxImages: 10,
               timeoutMs: 30_000,
+              // Synchronous path: photos-focused (drop heavy add-ons) + retry on
+              // 429/5xx only. onAbort MUST stay false here — a second 30s attempt
+              // would stack toward the original 504.
+              photosOnly: true,
+              retry: { on429: true, onAbort: false },
             });
             return { result: place, costUsd: 0.02 };
           },
