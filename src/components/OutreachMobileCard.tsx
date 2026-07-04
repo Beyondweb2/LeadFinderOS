@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { ExternalLink, MessageSquare, MessageCircle, Star, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench } from 'lucide-react';
+import { ExternalLink, MessageSquare, MessageCircle, Star, StickyNote, Phone, PhoneCall, Loader2, RefreshCw, CalendarClock, Wand2, PenLine, Settings2, Scissors, Flower2, Wrench } from 'lucide-react';
 import { formatPhoneForWhatsApp } from '@/lib/leadUtils';
 import { ContactMethodBadge } from './ContactMethodBadge';
 import { PipelineStatusBadge } from './PipelineStatusBadge';
@@ -131,6 +131,9 @@ export const OutreachMobileCard = memo(function OutreachMobileCard({
             <span className="font-bold text-[15px] leading-tight">{lead.business_name}</span>
             {lead.is_potential_work && (
               <Star className="h-3 w-3 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+            )}
+            {!!lead.notes && lead.notes.trim().length > 0 && (
+              <StickyNote className="h-3 w-3 text-muted-foreground/60 flex-shrink-0" title="Has a note" />
             )}
             <WhatsAppStatusBadge status={lead.whatsapp_status} compact />
           </div>
