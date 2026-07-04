@@ -868,6 +868,7 @@ export function OutreachTable({
       const patch: Partial<OutreachLead> = {
         status: 'queued', queued_at: now, whatsapp_attempts: 0, whatsapp_template: template,
         previous_status: lead?.status ?? null,
+        contact_method: 'whatsapp', // attribute to WhatsApp immediately (cleared on cancel / permanent fail)
       };
       onUpdateLead(id, patch);
     });
