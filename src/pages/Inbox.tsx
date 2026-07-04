@@ -289,7 +289,7 @@ const Inbox = () => {
 
       <div className="grid gap-3 md:grid-cols-[300px_1fr]">
         {/* Conversation list */}
-        <Card className="h-[60vh] overflow-y-auto p-1.5">
+        <Card className="max-h-[60vh] overflow-y-auto p-1.5">
           {/* Show-hidden toggle — only when there are hidden (not_interested) convos. */}
           {(hiddenCount > 0 || showHidden) && (
             <button
