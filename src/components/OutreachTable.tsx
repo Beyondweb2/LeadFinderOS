@@ -35,6 +35,7 @@ import {
   Copy,
   CheckCheck,
   Star,
+  StickyNote,
   Mail,
   Instagram,
   Facebook,
@@ -1654,6 +1655,9 @@ export function OutreachTable({
                           <span className="min-w-0 break-words max-w-[200px]">{lead.business_name}</span>
                           {lead.status === 'interested' && (
                             <Star className="h-3.5 w-3.5 text-yellow-500 fill-yellow-500 flex-shrink-0" />
+                          )}
+                          {!!lead.notes && lead.notes.trim().length > 0 && (
+                            <StickyNote className="h-3.5 w-3.5 text-muted-foreground/60 flex-shrink-0" title="Has a note" />
                           )}
                           {isTestBarberLead(lead.id) && (
                             <button

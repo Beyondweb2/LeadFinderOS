@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { isDemoLead } from '@/lib/demoLeads';
-import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone } from 'lucide-react';
+import { Clock, ExternalLink, StickyNote, Save, Check, X, Tag, Pencil, Calendar as CalendarIconLucide, Route, Briefcase, PoundSterling, Mail, Copy, Share2, Facebook, Instagram, Globe, Phone, MapPin } from 'lucide-react';
 import { TeamNotes } from '@/components/TeamNotes';
 import { Badge } from '@/components/ui/badge';
 import { ContactMethodBadge } from '@/components/ContactMethodBadge';
@@ -310,6 +310,10 @@ function LeadDetailBody({
   const [editingName, setEditingName] = useState(false);
   const [editedName, setEditedName] = useState(lead.business_name);
   const [emailCopied, setEmailCopied] = useState(false);
+  // Inline edit for the contact fields (phone/email/website/address) — mirrors the
+  // name-edit UX (Pencil → input + Check/X). One field editable at a time.
+  const [editingField, setEditingField] = useState<null | 'phone' | 'email' | 'website' | 'address'>(null);
+  const [editValue, setEditValue] = useState('');
   const { customActions, addAction } = useCustomNextActions();
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const [showAddCustomAction, setShowAddCustomAction] = useState(false);
@@ -356,6 +360,34 @@ function LeadDetailBody({
       else await onUpdateLead(lead.id, { business_name: editedName.trim() });
     }
     setEditingName(false);
+  };
+
+  type ContactField = 'phone' | 'email' | 'website' | 'address';
+  const startEditField = (field: ContactField, current: string | null) => {
+    setEditingField(field);
+    setEditValue(current ?? '');
+  };
+  const cancelEditField = () => setEditingField(null);
+  const saveField = async (field: ContactField) => {
+    // Store raw-trimmed for ALL fields (no normalisation / E.164 / URL reformat) —
+    // existing leads store raw-trimmed and the send-time helpers expect that.
+    const trimmed = editValue.trim() || null;
+    const current = ((lead[field] as string | null) ?? null);
+    if (trimmed !== current) {
+      // Phone-change guard: only on a queued or already-messaged lead. The next send
+      // reads phone from the lead row, and replies from a new number start a new thread.
+      if (
+        field === 'phone' &&
+        (lead.status === 'queued' || !!lead.whatsapp_sent_at) &&
+        !window.confirm(
+          'Changing the number will message the new number on the next send and future replies start a new conversation thread. Continue?'
+        )
+      ) {
+        return;
+      }
+      await onUpdateLead(lead.id, { [field]: trimmed } as Partial<OutreachLead>);
+    }
+    setEditingField(null);
   };
 
   const handleSaveNotes = async () => {
@@ -750,38 +782,96 @@ function LeadDetailBody({
               </div>
             </section>
 
-            {/* Socials & contact — read-only list of found enrichment fields. */}
+            {/* Socials & contact — found socials (FB/IG) are read-only links; the
+                contact fields (email / website / phone / address) are inline-editable
+                (Pencil → input + Check/X), mirroring the name-edit UX. */}
             {(() => {
               const socials = [
                 lead.facebook_url ? { key: 'fb', Icon: Facebook, label: 'Facebook', value: lead.facebook_url, href: lead.facebook_url, color: 'text-blue-600', external: true } : null,
                 lead.instagram_url ? { key: 'ig', Icon: Instagram, label: 'Instagram', value: lead.instagram_url, href: lead.instagram_url, color: 'text-pink-500', external: true } : null,
-                lead.email ? { key: 'email', Icon: Mail, label: 'Email', value: lead.email, href: `mailto:${lead.email}`, color: 'text-violet-400', external: false } : null,
-                lead.website ? { key: 'web', Icon: Globe, label: 'Website', value: lead.website, href: lead.website, color: 'text-emerald-500', external: true } : null,
-                lead.phone ? { key: 'phone', Icon: Phone, label: 'Phone', value: lead.phone, href: `tel:${lead.phone}`, color: 'text-sky-400', external: false } : null,
               ].filter(Boolean) as { key: string; Icon: typeof Mail; label: string; value: string; href: string; color: string; external: boolean }[];
+              // Editable contact fields — rendered even when empty so a missing value
+              // can be added. `hrefFor` keeps the mailto/tel/open affordance in view mode.
+              const editableFields = [
+                { field: 'email' as const, Icon: Mail, label: 'Email', value: lead.email, color: 'text-violet-400', external: false, hrefFor: (v: string) => `mailto:${v}` },
+                { field: 'website' as const, Icon: Globe, label: 'Website', value: lead.website, color: 'text-emerald-500', external: true, hrefFor: (v: string) => v },
+                { field: 'phone' as const, Icon: Phone, label: 'Phone', value: lead.phone, color: 'text-sky-400', external: false, hrefFor: (v: string) => `tel:${v}` },
+                { field: 'address' as const, Icon: MapPin, label: 'Address', value: lead.address, color: 'text-amber-500', external: false, hrefFor: null },
+              ];
               return (
                 <section className={CARD}>
                   <SectionLabel icon={Share2} color="text-blue-400">Socials &amp; contact</SectionLabel>
-                  {socials.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground/50">None found yet.</p>
-                  ) : (
-                    <ul className="space-y-1.5">
-                      {socials.map(({ key, Icon, label, value, href, color, external }) => (
-                        <li key={key} className="flex items-center gap-2 text-xs">
+                  <ul className="space-y-1.5">
+                    {socials.map(({ key, Icon, label, value, href, color, external }) => (
+                      <li key={key} className="flex items-center gap-2 text-xs">
+                        <Icon className={cn('h-3.5 w-3.5 shrink-0', color)} />
+                        <span className="w-16 shrink-0 text-muted-foreground/70">{label}</span>
+                        <a
+                          href={href}
+                          {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                          className="min-w-0 flex-1 truncate text-foreground/80 hover:text-primary hover:underline"
+                          title={value}
+                        >
+                          {external ? value.replace(/^https?:\/\//, '').replace(/\/$/, '') : value}
+                        </a>
+                      </li>
+                    ))}
+                    {editableFields.map(({ field, Icon, label, value, color, external, hrefFor }) => {
+                      const isEditing = editingField === field;
+                      return (
+                        <li key={field} className="flex items-center gap-2 text-xs">
                           <Icon className={cn('h-3.5 w-3.5 shrink-0', color)} />
                           <span className="w-16 shrink-0 text-muted-foreground/70">{label}</span>
-                          <a
-                            href={href}
-                            {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                            className="min-w-0 flex-1 truncate text-foreground/80 hover:text-primary hover:underline"
-                            title={value}
-                          >
-                            {external ? value.replace(/^https?:\/\//, '').replace(/\/$/, '') : value}
-                          </a>
+                          {isEditing ? (
+                            <>
+                              <Input
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                autoFocus
+                                className="h-7 flex-1 min-w-0 px-2 text-xs"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveField(field);
+                                  if (e.key === 'Escape') cancelEditField();
+                                }}
+                              />
+                              <button onClick={() => saveField(field)} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-green-500 hover:bg-green-500/10" title="Save">
+                                <Check className="h-3.5 w-3.5" />
+                              </button>
+                              <button onClick={cancelEditField} className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-muted/40" title="Cancel">
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              {value ? (
+                                hrefFor ? (
+                                  <a
+                                    href={hrefFor(value)}
+                                    {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                                    className="min-w-0 flex-1 truncate text-foreground/80 hover:text-primary hover:underline"
+                                    title={value}
+                                  >
+                                    {external ? value.replace(/^https?:\/\//, '').replace(/\/$/, '') : value}
+                                  </a>
+                                ) : (
+                                  <span className="min-w-0 flex-1 truncate text-foreground/80" title={value}>{value}</span>
+                                )
+                              ) : (
+                                <span className="min-w-0 flex-1 truncate italic text-muted-foreground/40">Not set</span>
+                              )}
+                              <button
+                                onClick={() => startEditField(field, value)}
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted-foreground/40 transition-colors hover:text-foreground"
+                                title={`Edit ${label.toLowerCase()}`}
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                            </>
+                          )}
                         </li>
-                      ))}
-                    </ul>
-                  )}
+                      );
+                    })}
+                  </ul>
                 </section>
               );
             })()}
