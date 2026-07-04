@@ -204,7 +204,7 @@ Deno.serve(async (req) => {
       // Can't send the claim link → drop it out of the queue so it can't block,
       // and surface why. Operator can re-queue once the site exists.
       await service.from("outreach_leads").update({
-        status: "not_contacted", whatsapp_delivery_status: "no_claim_link",
+        status: "not_contacted", whatsapp_delivery_status: "no_claim_link", contact_method: null,
       }).eq("id", lead.id);
       return json({ ok: true, skipped: "no_claim_link", lead_id: lead.id, business: lead.business_name, ...statusPayload });
     }
@@ -215,7 +215,7 @@ Deno.serve(async (req) => {
     const toNumber = toWhatsAppNumber(lead.phone as string, lead.country as string | null);
     if (!toNumber) {
       await service.from("outreach_leads").update({
-        status: "not_contacted", whatsapp_delivery_status: "bad_number",
+        status: "not_contacted", whatsapp_delivery_status: "bad_number", contact_method: null,
       }).eq("id", lead.id);
       return json({ ok: true, skipped: "bad_number", lead_id: lead.id, business: lead.business_name, ...statusPayload });
     }

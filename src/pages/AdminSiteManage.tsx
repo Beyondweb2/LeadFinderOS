@@ -274,7 +274,7 @@ export default function AdminSiteManage() {
         const restored = leadInfo.previous_status ?? "not_contacted";
         const { error } = await sb
           .from("outreach_leads")
-          .update({ status: restored, previous_status: null, queued_at: null })
+          .update({ status: restored, previous_status: null, queued_at: null, contact_method: null })
           .eq("id", leadInfo.id);
         if (error) throw error;
         setLeadInfo({ ...leadInfo, status: restored, previous_status: null });
@@ -288,6 +288,7 @@ export default function AdminSiteManage() {
             queued_at: new Date().toISOString(),
             whatsapp_template: waTemplate,
             whatsapp_attempts: 0, // fresh retries (e.g. re-queuing a whatsapp_failed lead)
+            contact_method: "whatsapp", // attribute to WhatsApp immediately (cleared on cancel / permanent fail)
           })
           .eq("id", leadInfo.id);
         if (error) throw error;

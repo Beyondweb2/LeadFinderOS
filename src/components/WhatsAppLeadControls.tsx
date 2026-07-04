@@ -30,6 +30,7 @@ export function WhatsAppLeadControls({
           status: lead.previous_status ?? 'not_contacted',
           previous_status: null,
           queued_at: null,
+          contact_method: null, // clear the WhatsApp tag set at queue-time
         });
       } else {
         await onUpdate(lead.id, {
@@ -38,6 +39,7 @@ export function WhatsAppLeadControls({
           queued_at: new Date().toISOString(),
           whatsapp_template: template || 'booking_page_intro',
           whatsapp_attempts: 0, // fresh retries (e.g. re-queuing a whatsapp_failed lead)
+          contact_method: 'whatsapp', // attribute to WhatsApp immediately
         });
       }
     } finally {

@@ -31,7 +31,10 @@ export function leadFailurePatch(
 ): Record<string, unknown> {
   const attempts = (currentAttempts ?? 0) + 1;
   if (classifyFailure(code) === "permanent") {
-    return { status: "no_whatsapp", whatsapp_delivery_status: "no_whatsapp", whatsapp_attempts: attempts };
+    // Not a WhatsApp number → dequeue AND drop the WhatsApp tag (re-contactable by
+    // SMS/call/email, so it shouldn't stay attributed to WhatsApp). Temporary-retry
+    // branch below keeps status 'queued', so contact_method stays 'whatsapp' there.
+    return { status: "no_whatsapp", whatsapp_delivery_status: "no_whatsapp", whatsapp_attempts: attempts, contact_method: null };
   }
   if (attempts >= MAX_WHATSAPP_ATTEMPTS) {
     return { status: "whatsapp_failed", whatsapp_delivery_status: "failed", whatsapp_attempts: attempts };
