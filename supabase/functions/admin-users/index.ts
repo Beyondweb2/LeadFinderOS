@@ -213,6 +213,82 @@ serve(async (req) => {
       return jsonResponse({ users, page, per_page: perPage, total }, 200, corsHeaders, rlHeaders);
     }
 
+    // ===================== LIST CLIENTS (claimed-site customers) =====================
+    // The INVERSE of list_users' operator filter: a CLIENT owns a generated_sites row
+    // (owner_id set by claim_generated_site) AND has NO CRM footprint (no added leads,
+    // no searches) — so staff test-claims (barber-owner WITH footprint) are excluded,
+    // exactly mirroring the operators rule above.
+    if (action === 'list_clients') {
+      // All auth accounts (same paginated loop as list_users) → email lookup.
+      const allAuthUsers: any[] = [];
+      for (let p = 1; p <= 50; p++) {
+        const { data: authData, error: authError } = await serviceClient.auth.admin.listUsers({ page: p, perPage: 1000 });
+        if (authError) {
+          console.error('[ADMIN-USERS] listUsers error (clients):', authError.message);
+          return jsonResponse({ error: 'Failed to fetch users', details: authError.message }, 500, corsHeaders, rlHeaders);
+        }
+        const batch = authData?.users || [];
+        allAuthUsers.push(...batch);
+        if (batch.length < 1000) break;
+      }
+      const emailById = new Map<string, string>(allAuthUsers.map((u: any) => [u.id, u.email || 'N/A']));
+
+      // Footprint signals: added leads (owner) + searches. A client has NONE.
+      // Also lead_id → business_name so a claimed site shows the real business name.
+      const leadsRes = await serviceClient.from('outreach_leads').select('id, user_id, business_name');
+      const addedCountMap = new Map<string, number>();
+      const businessNameByLead = new Map<string, string>();
+      for (const l of ((leadsRes as any).data || [])) {
+        addedCountMap.set(l.user_id, (addedCountMap.get(l.user_id) || 0) + 1);
+        if (l.business_name) businessNameByLead.set(l.id, l.business_name);
+      }
+      const metricsRes = await serviceClient.from('user_metrics').select('user_id, search_count');
+      const searchCountById = new Map<string, number>(
+        ((metricsRes as any).data || []).map((m: any) => [m.user_id, m.search_count || 0]),
+      );
+
+      // Sites owned by a claimant. Group by owner, keeping the most-recently-claimed
+      // site per owner (a barber normally owns one).
+      const sitesRes = await serviceClient
+        .from('generated_sites')
+        .select('owner_id, lead_id, site_name, share_token, is_paid, claimed_at, addon_interest_at, content');
+      const bestByOwner = new Map<string, any>();
+      for (const s of ((sitesRes as any).data || [])) {
+        const ownerId = s.owner_id as string | null;
+        if (!ownerId) continue;
+        const prev = bestByOwner.get(ownerId);
+        if (!prev || new Date(s.claimed_at ?? 0).getTime() > new Date(prev.claimed_at ?? 0).getTime()) {
+          bestByOwner.set(ownerId, s);
+        }
+      }
+
+      const clients = [];
+      for (const [ownerId, s] of bestByOwner) {
+        const hasFootprint = (addedCountMap.get(ownerId) || 0) > 0 || (searchCountById.get(ownerId) || 0) > 0;
+        if (hasFootprint) continue; // barber-owner who also uses the CRM = staff test-claim, not a client
+        const content = (s.content && typeof s.content === 'object') ? s.content as { businessName?: string } : null;
+        const businessName =
+          (s.lead_id ? businessNameByLead.get(s.lead_id) : undefined) ||
+          content?.businessName ||
+          s.site_name ||
+          '(unknown)';
+        clients.push({
+          user_id: ownerId,
+          email: emailById.get(ownerId) || 'N/A',
+          business_name: businessName,
+          site_name: s.site_name ?? null,
+          share_token: s.share_token ?? null,
+          claimed_at: s.claimed_at ?? null,
+          is_paid: !!s.is_paid,
+          addon_interest_at: s.addon_interest_at ?? null,
+        });
+      }
+      // Newest claims first (undated last).
+      clients.sort((a, b) => new Date(b.claimed_at ?? 0).getTime() - new Date(a.claimed_at ?? 0).getTime());
+
+      return jsonResponse({ clients, total: clients.length }, 200, corsHeaders, rlHeaders);
+    }
+
     // ===================== USER EVENTS =====================
     if (action === 'user_events') {
       const targetUserId = body.user_id;
