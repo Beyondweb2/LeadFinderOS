@@ -95,7 +95,7 @@ export function WhatsAppLeadControls({
             {queued ? 'Remove from queue' : 'Add to WhatsApp queue'}
           </Button>
           {queued && (
-            <p className="mt-1.5 text-center text-[10px] text-sky-400">In the queue — sends within the daily 7am–7pm UK window (max 10/day).</p>
+            <p className="mt-1.5 text-center text-[10px] text-sky-400">In the queue — sends within the daily 7am–7pm UK window (max 20/day).</p>
           )}
         </>
       )}
