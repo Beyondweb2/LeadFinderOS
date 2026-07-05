@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
     // Oldest queued lead with a phone.
     const { data: lead } = await service
       .from("outreach_leads")
-      .select("id, business_name, phone, country, whatsapp_template, whatsapp_attempts")
+      .select("id, business_name, phone, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered")
       .eq("status", "queued")
       .not("phone", "is", null)
       .order("queued_at", { ascending: true })
@@ -191,10 +191,11 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!lead) return json({ ok: true, skipped: "empty_queue", ...statusPayload });
 
-    // Resolve the lead's claim link (the {{2}} variable).
+    // Resolve the lead's claim link (the {{2}} variable). Also pull first_opened_at
+    // (no extra round-trip) as durable proof-of-reach for the no_whatsapp guard below.
     const { data: site } = await service
       .from("generated_sites")
-      .select("share_token")
+      .select("share_token, first_opened_at")
       .eq("lead_id", lead.id)
       .order("created_at", { ascending: false })
       .limit(1)
@@ -289,9 +290,16 @@ Deno.serve(async (req) => {
       // Failure (permanent no_whatsapp OR temporary retry). Shared routing so the
       // processor and the status webhook behave identically: 131026 → no_whatsapp
       // (dequeued); otherwise retry to the back of the queue up to the cap, then
-      // 'whatsapp_failed'.
+      // 'whatsapp_failed'. Guard: a permanent failure on a lead with PROOF of prior
+      // reach (ever delivered/read, site opened, or a current delivered/read status)
+      // must NOT flip it to no_whatsapp — this is a spurious/follow-up failure. A
+      // brand-new lead failing on its first send has none of these → still no_whatsapp.
+      const hasPriorSuccess =
+        lead.whatsapp_ever_delivered === true ||
+        !!site?.first_opened_at ||
+        ["delivered", "read"].includes((lead.whatsapp_delivery_status as string) ?? "");
       await service.from("outreach_leads")
-        .update(leadFailurePatch(failCode, (lead.whatsapp_attempts as number) ?? 0, nowIso))
+        .update(leadFailurePatch(failCode, (lead.whatsapp_attempts as number) ?? 0, nowIso, hasPriorSuccess))
         .eq("id", lead.id);
     }
 

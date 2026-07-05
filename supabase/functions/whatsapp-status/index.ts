@@ -106,21 +106,44 @@ Deno.serve(async (req) => {
 
             const { data: lead } = await service
               .from("outreach_leads")
-              .select("id, whatsapp_attempts")
+              .select("id, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered")
               .eq("whatsapp_message_id", wamid)
               .maybeSingle();
             if (!lead) continue;
 
             if (status === "failed") {
               const code = typeof st?.errors?.[0]?.code === "number" ? st.errors[0].code : undefined;
-              await service.from("outreach_leads")
-                .update(leadFailurePatch(code, (lead.whatsapp_attempts as number) ?? 0, nowIso))
-                .eq("id", lead.id);
-              console.log(`[whatsapp-status] failed (code ${code ?? "?"}) for lead ${lead.id}`);
+              // ONE-WAY RATCHET: a lead already delivered/read is proven-reachable — a
+              // late / out-of-order 'failed' for the same message must NOT overwrite it.
+              const already = lead.whatsapp_delivery_status;
+              if (already === "delivered" || already === "read") {
+                console.log(`[whatsapp-status] ignoring late 'failed' (code ${code ?? "?"}) — already ${already} for lead ${lead.id}`);
+              } else {
+                // Prior success = ever delivered/read, OR the lead's site was opened
+                // (durable proof the link was received; survives a re-send that resets
+                // whatsapp_delivery_status). One lookup by lead_id.
+                let hasPriorSuccess = lead.whatsapp_ever_delivered === true;
+                if (!hasPriorSuccess) {
+                  const { data: openedSite } = await service
+                    .from("generated_sites")
+                    .select("id")
+                    .eq("lead_id", lead.id)
+                    .not("first_opened_at", "is", null)
+                    .limit(1)
+                    .maybeSingle();
+                  hasPriorSuccess = !!openedSite;
+                }
+                await service.from("outreach_leads")
+                  .update(leadFailurePatch(code, (lead.whatsapp_attempts as number) ?? 0, nowIso, hasPriorSuccess))
+                  .eq("id", lead.id);
+                console.log(`[whatsapp-status] failed (code ${code ?? "?"}) for lead ${lead.id} — hasPriorSuccess=${hasPriorSuccess}`);
+              }
             } else if (status === "delivered" || status === "read") {
-              // Real delivery confirmation — record it; keep the lead Contacted.
+              // Real delivery confirmation — record it; keep the lead Contacted. Also
+              // set the durable whatsapp_ever_delivered flag (set-once true; never
+              // unset) so a later follow-up failure can't wrongly flip the lead.
               await service.from("outreach_leads")
-                .update({ whatsapp_delivery_status: status })
+                .update({ whatsapp_delivery_status: status, whatsapp_ever_delivered: true })
                 .eq("id", lead.id);
             }
             handled++;
