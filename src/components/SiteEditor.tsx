@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, X, Sparkles, Instagram } from "lucide-react";
-import { enrichSocials, fetchInstagramPhotos } from "@/hooks/useEnrichBusiness";
+import { Loader2, Plus, X, Sparkles, Images } from "lucide-react";
+import { enrichSocials, fetchSocialPhotos } from "@/hooks/useEnrichBusiness";
 import { SiteImagePicker, type SiteImagePickerHandle } from "@/components/SiteImagePicker";
 import type { BarberSiteContent, BarberService, BarberOpeningHours } from "@/templates/barber/types";
 import type { Json } from "@/integrations/supabase/types";
@@ -101,7 +101,7 @@ export function SiteEditor({
   const [textDirty, setTextDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [enrichingSocials, setEnrichingSocials] = useState(false);
-  const [addingIgPhotos, setAddingIgPhotos] = useState(false);
+  const [pullingSocials, setPullingSocials] = useState(false);
 
   const anyDirty = textDirty || pickerDirty;
 
@@ -177,7 +177,7 @@ export function SiteEditor({
   // overrides lets a programmatic caller persist freshly-fetched values in the SAME
   // write without waiting for a setState flush (React state is async — reading
   // facebookUrl/imagePool right after setState is stale). Used by the Enrich-socials
-  // button (FB/IG) and the Add-Instagram-photos button (imagePool).
+  // button (FB/IG) and the Pull-social-photos button (imagePool).
   const handleSave = async (
     overrides?: { facebookUrl?: string; instagramUrl?: string; imagePool?: string[] },
     opts?: { silentToast?: boolean },
@@ -223,7 +223,7 @@ export function SiteEditor({
         // https://; blank → undefined (key dropped on save → no icon, honesty).
         facebookUrl: normalizeSocialUrl(overrides?.facebookUrl ?? facebookUrl),
         instagramUrl: normalizeSocialUrl(overrides?.instagramUrl ?? instagramUrl),
-        // imagePool override (Add-Instagram-photos): persist the merged pool. Absent →
+        // imagePool override (Pull-social-photos): persist the merged pool. Absent →
         // the spread `...site.content` above preserves the existing pool untouched.
         ...(overrides?.imagePool ? { imagePool: overrides.imagePool } : {}),
       };
@@ -296,46 +296,51 @@ export function SiteEditor({
     }
   };
 
-  // "Add Instagram photos": on-demand IG-only image pull. Scrapes the business's IG
-  // post images (resolving the profile on the fly if needed) and MERGES them into the
-  // pool (content.imagePool) — union + dedupe, never removing existing pool images —
-  // then saves so the picker shows them to drag in. Best-effort: IG scraping is flaky,
-  // so empty is framed as "none found", not an error.
-  const handleAddInstagramPhotos = async () => {
+  // "Pull social photos": on-demand FB + IG image pull. Scrapes both profiles' post
+  // images (resolving them on the fly if needed) and MERGES into the pool
+  // (content.imagePool) — EXISTING FIRST, then FB, then IG, dedupe, cap 60 — so Maps
+  // photos are never trimmed out and the steadier source (FB) survives if the cap
+  // trims. Only ADDs; never removes existing pool images or placed slots. Best-effort:
+  // either source may return nothing, framed as "none found", not an error.
+  const handlePullSocialPhotos = async () => {
     if (!scanContext?.leadId) return;
-    setAddingIgPhotos(true);
+    setPullingSocials(true);
     try {
-      const res = await fetchInstagramPhotos({
+      const res = await fetchSocialPhotos({
         leadId: scanContext.leadId,
         placeId: scanContext.placeId ?? null,
-        // Pass the known site IG URL (if the operator/Enrich-socials set one) so the
-        // edge scrapes it directly; else it discovers one.
+        // Pass known site URLs (if the operator/Enrich-socials set them) so the edge
+        // scrapes them directly; else it discovers them.
+        facebookUrl: facebookUrl.trim() || null,
         instagramUrl: instagramUrl.trim() || null,
       });
       if (res.limitReached) {
         toast({ title: "Daily enrichment limit reached", description: "Try again tomorrow.", variant: "destructive" });
         return;
       }
-      // Merge into the pool: keep every existing image, add new IG ones, dedupe, cap 40
-      // (matches generate's pool cap). Never overwrites/removes existing pool images.
+      // Merge: existing first (Maps never trimmed), then FB, then IG; dedupe; cap 60
+      // (social top-up, higher than generate's 40 so a Maps-heavy pool still gets room).
       const existing = (site.content.imagePool ?? []).filter((u): u is string => typeof u === "string" && !!u);
-      const merged = Array.from(new Set([...existing, ...res.photos])).slice(0, 40);
+      const merged = Array.from(new Set([...existing, ...res.facebookPhotos, ...res.instagramPhotos])).slice(0, 60);
       const addedCount = merged.length - existing.length;
 
       if (addedCount > 0) {
         // Persist the merged pool through the shared save path (silent — our own toast).
         await handleSave({ imagePool: merged }, { silentToast: true });
-        toast({ title: `Added ${addedCount} Instagram photo${addedCount === 1 ? "" : "s"}`, description: "Drag them from the pool into a slot, then Save." });
-      } else if (!res.igFound) {
-        toast({ title: "No Instagram profile found", description: "Couldn't resolve an Instagram profile for this business. Try Enrich socials first, or add the URL above." });
+        toast({
+          title: `Added ${addedCount} photo${addedCount === 1 ? "" : "s"}`,
+          description: `Facebook ${res.facebookPhotos.length}, Instagram ${res.instagramPhotos.length}. Drag them from the pool into a slot, then Save.`,
+        });
+      } else if (!res.fbFound && !res.igFound) {
+        toast({ title: "No Facebook or Instagram found", description: "Couldn't resolve a social profile for this business. Try Enrich socials first, or add the URLs above." });
       } else {
-        // Profile resolved but no (new) images — IG scraping is best-effort/flaky.
-        toast({ title: "No new Instagram photos found", description: "The profile returned no new images this time — try again later." });
+        // Profile(s) resolved but no (new) images — social scraping is best-effort/flaky.
+        toast({ title: "No new social photos found", description: "Profiles may be private or limited — try again later." });
       }
     } catch (e) {
-      toast({ title: "Add Instagram photos failed", description: (e as Error).message, variant: "destructive" });
+      toast({ title: "Pull social photos failed", description: (e as Error).message, variant: "destructive" });
     } finally {
-      setAddingIgPhotos(false);
+      setPullingSocials(false);
     }
   };
 
@@ -581,15 +586,15 @@ export function SiteEditor({
           <CardTitle className="text-lg">Photos &amp; logo</CardTitle>
         </CardHeader>
         <CardContent>
-          {/* On-demand IG image pull → merges into the pool below (best-effort; may
+          {/* On-demand FB + IG image pull → merges into the pool below (best-effort; may
               find nothing). Needs a linked lead. */}
           {scanContext?.leadId && (
             <div className="mb-4 flex items-center gap-2">
-              <Button variant="outline" size="sm" onClick={handleAddInstagramPhotos} disabled={addingIgPhotos || saving}>
-                {addingIgPhotos ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Instagram className="h-4 w-4 mr-2" />}
-                Add Instagram photos
+              <Button variant="outline" size="sm" onClick={handlePullSocialPhotos} disabled={pullingSocials || saving}>
+                {pullingSocials ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Images className="h-4 w-4 mr-2" />}
+                Pull social photos
               </Button>
-              <span className="text-xs text-muted-foreground">Pulls post images from the business's Instagram into the pool — may find none.</span>
+              <span className="text-xs text-muted-foreground">Pulls Facebook + Instagram photos into the pool — may find none.</span>
             </div>
           )}
           <SiteImagePicker
