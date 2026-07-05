@@ -134,11 +134,15 @@ export async function mapsEnrich(
   const target = input.googleMapsUrl
     ? { startUrls: [{ url: input.googleMapsUrl }] }
     : { placeIds: [input.placeId] };
-  // photosOnly (9a): lean add-ons so the detail-page scrape isn't also doing
-  // contacts+socials+webResults (the slow part that pushes photo-heavy places past
-  // the timeout). Full add-ons (9b default) surface FB/IG/contacts/webResults.
+  // photosOnly (9a): lean add-ons — drop the HEAVY extras (contacts + web-results;
+  // web-results triggers a separate web search) so the detail-page scrape stays fast.
+  // KEEP scrapeSocialMediaProfiles: it reads FB/IG off the SAME detail page already
+  // scraped for photos (no extra actor run / negligible runtime), and the 9a→9b
+  // :maps_enrich cache dedup means these socials feed 9b's social-discovery cascade —
+  // without them, newly-generated sites lose Facebook/Instagram. Full add-ons (9b
+  // default) additionally surface contacts/web-results.
   const addOns = input.photosOnly
-    ? { scrapeContacts: false, includeWebResults: false }
+    ? { scrapeContacts: false, includeWebResults: false, scrapeSocialMediaProfiles: { facebooks: true, instagrams: true } }
     : {
         scrapeContacts: true,
         scrapeSocialMediaProfiles: { facebooks: true, instagrams: true },
