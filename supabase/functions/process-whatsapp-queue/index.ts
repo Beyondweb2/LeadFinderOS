@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { classifyFailure, leadFailurePatch } from "../_shared/whatsapp-failure.ts";
+import { renderTemplateBody } from "../_shared/whatsapp-send.ts";
 
 // process-whatsapp-queue — the WhatsApp outreach processor.
 //
@@ -183,7 +184,7 @@ Deno.serve(async (req) => {
     // Oldest queued lead with a phone.
     const { data: lead } = await service
       .from("outreach_leads")
-      .select("id, business_name, phone, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered")
+      .select("id, business_name, phone, country, whatsapp_template, whatsapp_attempts, whatsapp_delivery_status, whatsapp_ever_delivered, user_id")
       .eq("status", "queued")
       .not("phone", "is", null)
       .order("queued_at", { ascending: true })
@@ -286,6 +287,30 @@ Deno.serve(async (req) => {
         whatsapp_delivery_status: deliveryStatus,
         whatsapp_attempts: attempts,
       }).eq("id", lead.id);
+
+      // Log the outbound row in whatsapp_messages so this send shows in the Inbox
+      // thread AND resolveOwner's most-recent-outbound match can attribute a future
+      // reply to the exact lead (+ its campaign, derived via lead_id). Mirrors
+      // send-whatsapp-message's shape. Campaign is NOT stored (no such column —
+      // derived via lead_id). NON-BLOCKING: the WhatsApp message is already sent by
+      // now; a failed log must never throw / retry / double-send — log and move on.
+      try {
+        const { error: msgErr } = await service.from("whatsapp_messages").insert({
+          direction: "outbound",
+          user_id: (lead.user_id as string | null) ?? null, // the lead's owner (inbox ownership + reply attribution)
+          lead_id: lead.id,
+          phone: toNumber,                                   // the number actually messaged (E.164 digits)
+          body: renderTemplateBody(templateName, lead.business_name as string, claimUrl),
+          message_type: "template",
+          template_name: templateName,
+          wa_message_id: messageId,                          // null on a simulated (TEST_MODE) send
+          status: deliveryStatus,                            // 'sent' | 'simulated'
+          test_mode: testMode,
+        });
+        if (msgErr) console.error(`[whatsapp] outbound message-log insert failed (non-blocking, ${lead.id}):`, (msgErr as { message?: string }).message);
+      } catch (e) {
+        console.error(`[whatsapp] outbound message-log insert threw (non-blocking, ${lead.id}):`, (e as Error).message);
+      }
     } else {
       // Failure (permanent no_whatsapp OR temporary retry). Shared routing so the
       // processor and the status webhook behave identically: 131026 → no_whatsapp
