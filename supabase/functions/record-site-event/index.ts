@@ -111,11 +111,43 @@ Deno.serve(async (req) => {
     };
 
     if (event === "open") {
+      // Capture BEFORE the update: site.first_opened_at is the pre-update, set-once
+      // value → truthy only on the very FIRST open.
+      const isFirstOpen = !site.first_opened_at;
       await service.from("generated_sites").update({
         first_opened_at: site.first_opened_at ?? nowIso,
         open_count: (site.open_count ?? 0) + 1,
       }).eq("id", site.id);
       await service.from("site_events").insert({ site_id: site.id, event_type: "open", meta });
+
+      // FIRST open only → give the linked CRM lead a same-day follow-up TASK for the
+      // operator (a next_action, NOT an auto-send; no status change). Service role
+      // bypasses RLS (barber is anon, not the CRM owner). Mirrors the addon_interest
+      // auto-pipeline below. NON-BLOCKING: the open is already recorded above; a
+      // failure here must never break it.
+      if (isFirstOpen && site.lead_id) {
+        try {
+          const { data: lead } = await service
+            .from("outreach_leads")
+            .select("status, next_action")
+            .eq("id", site.lead_id)
+            .maybeSingle();
+          // Gate 1 — active leads only: skip dead/terminal (no tasks for them).
+          const DEAD = ["not_interested", "payment_received", "bounced", "closed", "completed"];
+          // Gate 2 — protect a 'respond to their reply' task: never overwrite send_draft
+          // with a generic follow-up.
+          if (lead && !DEAD.includes(lead.status as string) && lead.next_action !== "send_draft") {
+            const today = new Date().toISOString().slice(0, 10); // UTC, matching addon_interest
+            await service.from("outreach_leads").update({
+              next_action: "follow_up",
+              next_action_date: today,
+            }).eq("id", site.lead_id);
+          }
+        } catch (e) {
+          console.error("[record-site-event] first-open follow-up failed (non-blocking):", (e as Error).message);
+        }
+      }
+
       return json({ ok: true, event: "open" });
     }
 
