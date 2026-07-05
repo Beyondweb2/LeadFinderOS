@@ -156,47 +156,57 @@ export async function enrichSocials(params: {
   };
 }
 
-/** What the on-demand IG-images pull returns to the site editor's "Add Instagram
- *  photos" button. `photos` are IG post image URLs (expiring CDN links — re-hosted
- *  only when the operator drags one into a slot and saves). Best-effort: IG scraping
- *  is flaky, so `photos: []` with `igFound:true` means "profile found, no images
- *  this time", and `igFound:false` means "no Instagram profile resolved". */
-export interface InstagramPhotosResult {
-  photos: string[];
+/** What the on-demand social-photos pull returns to the site editor's "Pull social
+ *  photos" button. `facebookPhotos`/`instagramPhotos` are FB/IG post image URLs
+ *  (expiring CDN links — re-hosted only when the operator drags one into a slot and
+ *  saves). Best-effort: scraping is flaky (IG especially), so a `*Found:true` with an
+ *  empty array means "profile found, no images this time"; `*Found:false` means "no
+ *  profile resolved". */
+export interface SocialPhotosResult {
+  facebookPhotos: string[];
+  instagramPhotos: string[];
+  fbFound: boolean;
   igFound: boolean;
+  facebookUrl: string | null;
   instagramUrl: string | null;
   limitReached?: boolean;
 }
 
 /**
- * Thin caller of enrich-business in `ig_images_only` mode: resolves the lead's IG
- * profile (stored `instagram_url` if any, else fresh discovery) and scrapes ONLY its
- * post images — no Maps/FB scrape. Named to avoid clashing with the edge-side
- * fetchInstagramPhotos (in _shared/enrichment/socialImages.ts). Used by the site
- * editor to merge IG images into content.imagePool.
+ * Thin caller of enrich-business in `social_images_only` mode: resolves the lead's FB
+ * + IG profiles (stored URLs if any, else fresh discovery) and scrapes BOTH their post
+ * images — no Maps scrape, no FB contacts. Used by the site editor to merge social
+ * images into content.imagePool. (Distinct from the edge-side fetchFacebookPhotos /
+ * fetchInstagramPhotos in _shared/enrichment/socialImages.ts.)
  */
-export async function fetchInstagramPhotos(params: {
+export async function fetchSocialPhotos(params: {
   leadId: string;
   placeId?: string | null;
+  facebookUrl?: string | null;
   instagramUrl?: string | null;
-}): Promise<InstagramPhotosResult> {
+}): Promise<SocialPhotosResult> {
   const { data, error } = await supabase.functions.invoke('enrich-business', {
     body: {
       lead_id: params.leadId,
       place_id: params.placeId ?? null,
-      // Pass the known IG URL so the edge can scrape it directly (skips discovery).
+      // Pass known URLs so the edge can scrape them directly (skips discovery).
+      facebook_url: params.facebookUrl ?? null,
       instagram_url: params.instagramUrl ?? null,
-      ig_images_only: true, // IG-only scrape; implies force (fresh, cache-bypassing)
+      social_images_only: true, // FB + IG photo scrape; implies force (fresh, cache-bypassing)
     },
   });
   if (error) throw error;
   if (data?.limit_reached) {
-    return { photos: [], igFound: false, instagramUrl: null, limitReached: true };
+    return { facebookPhotos: [], instagramPhotos: [], fbFound: false, igFound: false, facebookUrl: null, instagramUrl: null, limitReached: true };
   }
-  if (!data?.success) throw new Error(data?.error ?? 'Instagram enrich failed');
+  if (!data?.success) throw new Error(data?.error ?? 'Social enrich failed');
+  const strArr = (v: unknown): string[] => Array.isArray(v) ? v.filter((u): u is string => typeof u === 'string') : [];
   return {
-    photos: Array.isArray(data.instagramPhotos) ? data.instagramPhotos.filter((u: unknown) => typeof u === 'string') : [],
+    facebookPhotos: strArr(data.facebookPhotos),
+    instagramPhotos: strArr(data.instagramPhotos),
+    fbFound: !!data.fbFound,
     igFound: !!data.igFound,
+    facebookUrl: data.facebookUrl ?? null,
     instagramUrl: data.instagramUrl ?? null,
   };
 }

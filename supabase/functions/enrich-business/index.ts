@@ -161,8 +161,9 @@ interface EnrichResult {
   lineType: string;
   imagePool: string[];
   poolBreakdown: { maps: number; facebook: number; instagram: number };
-  /** IG post images scraped this run (subset of imagePool). Surfaced separately so
-   *  the ig_images_only "Add Instagram photos" caller can merge IG-only into the pool. */
+  /** FB / IG post images scraped this run (subset of imagePool). Surfaced separately
+   *  so the social_images_only "Pull social photos" caller can merge them into the pool. */
+  fbPhotos: string[];
   igPhotos: string[];
   match: { title: string | null; address: string | null; similarity: number; lowConfidence: boolean };
 }
@@ -215,15 +216,16 @@ Deno.serve(async (req) => {
     const existingFacebook: string = body.facebook_url ?? "";
     const existingInstagram: string = body.instagram_url ?? "";
     const website: string = body.website ?? "";
-    // ig_images_only: on-demand "Add Instagram photos" mode — resolve the IG profile
-    // (stored, else discover), scrape ONLY its post images, skip the Maps-pool + FB
-    // scrapes. Implies force (fresh discovery, not stale cache). Additive: the normal
-    // response fields are still returned; the mode only adds instagramPhotos/igFound.
-    const igImagesOnly: boolean = body.ig_images_only === true;
+    // social_images_only: on-demand "Pull social photos" mode — resolve the FB + IG
+    // profiles (stored, else discover), scrape BOTH their post images, skip the Maps
+    // photo pool + the FB contacts scrape (images only). Implies force (fresh
+    // discovery, not stale cache). Additive: the normal response fields are still
+    // returned; the mode only adds facebook/instagramPhotos + fb/igFound.
+    const socialImagesOnly: boolean = body.social_images_only === true;
     // force/refresh: on-demand re-run that bypasses BOTH caches so it does fresh
     // FULL web-results social discovery (see the two `force` guards below). Default
     // off → normal cached behaviour is unchanged for every existing caller.
-    const force: boolean = body.force === true || body.refresh === true || igImagesOnly;
+    const force: boolean = body.force === true || body.refresh === true || socialImagesOnly;
     if (!leadId) return json({ error: "lead_id required" }, 400);
 
     const service = createClient(
@@ -439,21 +441,23 @@ Deno.serve(async (req) => {
         let fbPhotos: string[] = [];
         let igPhotos: string[] = [];
         if (apifyToken) {
-          // ig_images_only: run ONLY the IG photo scrape (skip both FB actors) to keep
-          // it Instagram-only and cheap. Default mode is unchanged (FB + IG in parallel).
+          // social_images_only: skip FB CONTACTS (images only) but run BOTH photo
+          // scrapes. Default mode is unchanged (FB contacts + FB photos + IG photos).
+          // Per-source cap 15 in mode (top-up), 20 in the default full enrich.
+          const photoMax = socialImagesOnly ? 15 : 20;
           const [fbContacts, fbP, igP] = await Promise.all([
-            !igImagesOnly && fbUrl ? fetchFacebookContacts(fbUrl, { token: apifyToken, timeoutMs: 25_000 }) : Promise.resolve({ email: null, website: null }),
-            !igImagesOnly && fbUrl ? fetchFacebookPhotos(fbUrl, { token: apifyToken, max: 20, timeoutMs: 25_000 }) : Promise.resolve([]),
-            igUrl ? fetchInstagramPhotos(igUrl, { token: apifyToken, max: 20, timeoutMs: 25_000 }) : Promise.resolve([]),
+            !socialImagesOnly && fbUrl ? fetchFacebookContacts(fbUrl, { token: apifyToken, timeoutMs: 25_000 }) : Promise.resolve({ email: null, website: null }),
+            fbUrl ? fetchFacebookPhotos(fbUrl, { token: apifyToken, max: photoMax, timeoutMs: 25_000 }) : Promise.resolve([]),
+            igUrl ? fetchInstagramPhotos(igUrl, { token: apifyToken, max: photoMax, timeoutMs: 25_000 }) : Promise.resolve([]),
           ]);
           fbEmail = fbContacts.email;
           fbPhotos = fbP;
           igPhotos = igP;
         }
 
-        // ig_images_only: pool is IG-only (skip the Maps photo pool build). Default
-        // mode keeps the full Maps ∪ FB ∪ IG pool exactly as before.
-        const mapsPhotos = igImagesOnly ? [] : (place?.imageUrls ?? []);
+        // social_images_only: pool is socials-only (skip the Maps photo pool build).
+        // Default mode keeps the full Maps ∪ FB ∪ IG pool exactly as before.
+        const mapsPhotos = socialImagesOnly ? [] : (place?.imageUrls ?? []);
         const imagePool = Array.from(
           new Set([...mapsPhotos, ...fbPhotos, ...igPhotos]),
         ).slice(0, 40);
@@ -485,6 +489,7 @@ Deno.serve(async (req) => {
           lineType,
           imagePool,
           poolBreakdown,
+          fbPhotos,
           igPhotos,
           match: {
             title: place?.title ?? null,
@@ -526,11 +531,14 @@ Deno.serve(async (req) => {
       cached: outcome.cached,
       applied: !r.match.lowConfidence,
       ...r,
-      // Additive fields for the ig_images_only "Add Instagram photos" caller (present
-      // in every response, harmless to other callers): the IG images scraped this run,
-      // whether an IG profile was resolved, and the resolved URL.
+      // Additive fields for the social_images_only "Pull social photos" caller (present
+      // in every response, harmless to other callers): the FB + IG images scraped this
+      // run, whether each profile was resolved, and the resolved URLs.
+      facebookPhotos: r.fbPhotos ?? [],
       instagramPhotos: r.igPhotos ?? [],
+      fbFound: !!r.facebook,
       igFound: !!r.instagram,
+      facebookUrl: r.facebook ?? null,
       instagramUrl: r.instagram ?? null,
     });
   } catch (e) {
