@@ -128,6 +128,8 @@ export async function fetchFacebookPhotos(
       { facebook_urls: [{ url: pageUrl }], photos_count: opts.max ?? 20 },
       { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
     );
+    // DIAGNOSTIC (temp): how many items the actor returned for this URL.
+    console.log(`[socialImages] FB photos: url=${pageUrl} items=${Array.isArray(items) ? items.length : 'n/a'}`);
     // One PRIMARY image per photo item: scan the item, drop avatars/thumbnails, and
     // keep its largest crop; dedupeLargest then collapses same-photo duplicates.
     const primaries: string[] = [];
@@ -137,6 +139,13 @@ export async function fetchFacebookPhotos(
       const candidates = [...urls].filter((u) => !isNoiseImage(u));
       if (!candidates.length) continue;
       primaries.push(candidates.reduce((a, b) => (imgWidth(b) > imgWidth(a) ? b : a)));
+    }
+    // DIAGNOSTIC (temp): how many primaries were extracted from the items.
+    console.log(`[socialImages] FB photos: extracted=${primaries.length} from items=${Array.isArray(items) ? items.length : 'n/a'}`);
+    // DIAGNOSTIC (temp): items came back but nothing extracted → dump the raw shape
+    // so we can see the actor's real output fields / URL form.
+    if (items.length > 0 && primaries.length === 0) {
+      console.log(`[socialImages] FB photos RAW keys=${JSON.stringify(Object.keys((items[0] as Record<string, unknown>) ?? {}))} sample=${JSON.stringify(items[0]).slice(0, 600)}`);
     }
     return dedupeLargest(primaries).slice(0, opts.max ?? 20);
   } catch (e) {
