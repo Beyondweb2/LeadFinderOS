@@ -116,7 +116,7 @@ export async function fetchFacebookContacts(
 /** Facebook page photos via facebook-photos-scraper (verified input keys). */
 export async function fetchFacebookPhotos(
   pageUrl: string,
-  opts: { token: string; max?: number; timeoutMs?: number },
+  opts: { token: string; max?: number; timeoutMs?: number; retry?: { on429?: boolean; onAbort?: boolean } },
 ): Promise<string[]> {
   if (!pageUrl) return [];
   try {
@@ -126,10 +126,8 @@ export async function fetchFacebookPhotos(
       // not bare strings (verified against the actor's public build schema; bare
       // strings are rejected HTTP 400 "do not contain valid URLs").
       { facebook_urls: [{ url: pageUrl }], photos_count: opts.max ?? 20 },
-      { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
+      { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000, retry: opts.retry },
     );
-    // DIAGNOSTIC (temp): how many items the actor returned for this URL.
-    console.log(`[socialImages] FB photos: url=${pageUrl} items=${Array.isArray(items) ? items.length : 'n/a'}`);
     // One PRIMARY image per photo item: scan the item, drop avatars/thumbnails, and
     // keep its largest crop; dedupeLargest then collapses same-photo duplicates.
     const primaries: string[] = [];
@@ -139,13 +137,6 @@ export async function fetchFacebookPhotos(
       const candidates = [...urls].filter((u) => !isNoiseImage(u));
       if (!candidates.length) continue;
       primaries.push(candidates.reduce((a, b) => (imgWidth(b) > imgWidth(a) ? b : a)));
-    }
-    // DIAGNOSTIC (temp): how many primaries were extracted from the items.
-    console.log(`[socialImages] FB photos: extracted=${primaries.length} from items=${Array.isArray(items) ? items.length : 'n/a'}`);
-    // DIAGNOSTIC (temp): items came back but nothing extracted → dump the raw shape
-    // so we can see the actor's real output fields / URL form.
-    if (items.length > 0 && primaries.length === 0) {
-      console.log(`[socialImages] FB photos RAW keys=${JSON.stringify(Object.keys((items[0] as Record<string, unknown>) ?? {}))} sample=${JSON.stringify(items[0]).slice(0, 600)}`);
     }
     return dedupeLargest(primaries).slice(0, opts.max ?? 20);
   } catch (e) {
@@ -157,14 +148,14 @@ export async function fetchFacebookPhotos(
 /** Instagram profile/post images via instagram-scraper (verified input keys). */
 export async function fetchInstagramPhotos(
   profileUrl: string,
-  opts: { token: string; max?: number; timeoutMs?: number },
+  opts: { token: string; max?: number; timeoutMs?: number; retry?: { on429?: boolean; onAbort?: boolean } },
 ): Promise<string[]> {
   if (!profileUrl) return [];
   try {
     const { items } = await runApifyActor(
       IG_SCRAPER_ACTOR,
       { directUrls: [profileUrl], resultsType: "posts", resultsLimit: opts.max ?? 20 },
-      { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000 },
+      { token: opts.token, timeoutMs: opts.timeoutMs ?? 90_000, retry: opts.retry },
     );
     // Only the POST media (displayUrl / images[] / carousel childPosts) — NOT a deep
     // scan, which used to scoop owner + commenter profile pics (the s150x150 avatars).
