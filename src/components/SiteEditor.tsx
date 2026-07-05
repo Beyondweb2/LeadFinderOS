@@ -8,7 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, X } from "lucide-react";
+import { Loader2, Plus, X, Sparkles } from "lucide-react";
+import { enrichSocials } from "@/hooks/useEnrichBusiness";
 import { SiteImagePicker, type SiteImagePickerHandle } from "@/components/SiteImagePicker";
 import type { BarberSiteContent, BarberService, BarberOpeningHours } from "@/templates/barber/types";
 import type { Json } from "@/integrations/supabase/types";
@@ -99,6 +100,7 @@ export function SiteEditor({
 
   const [textDirty, setTextDirty] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [enrichingSocials, setEnrichingSocials] = useState(false);
 
   const anyDirty = textDirty || pickerDirty;
 
@@ -171,7 +173,13 @@ export function SiteEditor({
     setTextDirty(true);
   };
 
-  const handleSave = async () => {
+  // socialOverrides lets a programmatic caller (the Enrich-socials button) persist
+  // freshly-fetched FB/IG in the SAME write without waiting for a setState flush
+  // (React state is async — reading facebookUrl right after setFacebookUrl is stale).
+  const handleSave = async (
+    socialOverrides?: { facebookUrl?: string; instagramUrl?: string },
+    opts?: { silentToast?: boolean },
+  ) => {
     setSaving(true);
     try {
       const cleanedServices: BarberService[] = services
@@ -211,8 +219,8 @@ export function SiteEditor({
         accentColor: accentColor || undefined,
         // Manual SITE socials → SocialLinks (header+footer). Trim + auto-prepend
         // https://; blank → undefined (key dropped on save → no icon, honesty).
-        facebookUrl: normalizeSocialUrl(facebookUrl),
-        instagramUrl: normalizeSocialUrl(instagramUrl),
+        facebookUrl: normalizeSocialUrl(socialOverrides?.facebookUrl ?? facebookUrl),
+        instagramUrl: normalizeSocialUrl(socialOverrides?.instagramUrl ?? instagramUrl),
       };
 
       // Re-host placed pool images + upload any picked files (singles, logo,
@@ -231,11 +239,55 @@ export function SiteEditor({
       setTextDirty(false);
       setPickerDirty(false);
       onSaved?.(finalContent);
-      toast({ title: "Saved", description: "All changes saved." });
+      if (!opts?.silentToast) toast({ title: "Saved", description: "All changes saved." });
     } catch (e) {
       toast({ title: "Save failed", description: (e as Error).message, variant: "destructive" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  // "Enrich socials": on-demand FULL web-results discovery for this lead. Fills the
+  // FB/IG fields ONLY when empty (never overwrites a value the operator set), using
+  // the values the cascade actually ATTACHED (res.facebook/instagram — location-matched
+  // / Maps-listing / name-gated), NEVER the unconfirmed *Suggestion results. Auto-saves
+  // via the shared handleSave with fresh overrides (avoids stale-state reads).
+  const handleEnrichSocials = async () => {
+    if (!scanContext?.leadId) return;
+    setEnrichingSocials(true);
+    try {
+      const res = await enrichSocials({
+        leadId: scanContext.leadId,
+        placeId: scanContext.placeId ?? null,
+        businessName: scanContext.businessName ?? null,
+      });
+      if (res.limitReached) {
+        toast({ title: "Daily enrichment limit reached", description: "Try again tomorrow.", variant: "destructive" });
+        return;
+      }
+      // Fill empty-only; keep any value already in the field.
+      const added: string[] = [];
+      let nextFb = facebookUrl;
+      let nextIg = instagramUrl;
+      if (!facebookUrl.trim() && res.facebook) { nextFb = res.facebook; setFacebookUrl(res.facebook); added.push("Facebook"); }
+      if (!instagramUrl.trim() && res.instagram) { nextIg = res.instagram; setInstagramUrl(res.instagram); added.push("Instagram"); }
+
+      if (added.length) {
+        setTextDirty(true);
+        // Persist through the shared save path with the fresh values (silent — we show
+        // our own "Added …" toast below instead of the generic "Saved").
+        await handleSave({ facebookUrl: nextFb, instagramUrl: nextIg }, { silentToast: true });
+        toast({ title: `Added ${added.join(" + ")}`, description: "Saved to the site." });
+      } else if (res.facebookSuggestion || res.instagramSuggestion) {
+        // Found something, but not confident enough to auto-attach (not location-matched).
+        toast({ title: "Found possible matches but not confident", description: "None added — verify manually if needed." });
+      } else {
+        toast({ title: "Found nothing new", description: "No confident Facebook/Instagram discovered." });
+      }
+    } catch (e) {
+      toast({ title: "Enrich socials failed", description: (e as Error).message, variant: "destructive" });
+    } finally {
+      setEnrichingSocials(false);
     }
   };
 
@@ -438,6 +490,17 @@ export function SiteEditor({
             Shown as Facebook/Instagram icons in your site's header &amp; footer. Leave a field blank to show no icon.
             These override anything auto-discovery added to the site.
           </p>
+          {/* On-demand FULL web-results social discovery. Fills EMPTY fields only with
+              confident (location-matched) results, then auto-saves. Needs a linked lead. */}
+          {scanContext?.leadId && (
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={handleEnrichSocials} disabled={enrichingSocials || saving}>
+                {enrichingSocials ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                Enrich socials
+              </Button>
+              <span className="text-xs text-muted-foreground">Finds Facebook/Instagram from Google — fills empty fields only.</span>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Facebook URL</Label>
             <Input
@@ -488,7 +551,7 @@ export function SiteEditor({
         <span className={`text-sm ${anyDirty ? "text-amber-500" : "text-muted-foreground"}`}>
           {anyDirty ? "You have unsaved changes" : "All changes saved"}
         </span>
-        <Button onClick={handleSave} disabled={saving || !anyDirty}>
+        <Button onClick={() => handleSave()} disabled={saving || !anyDirty}>
           {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
           Save all changes
         </Button>
