@@ -28,9 +28,18 @@ export function leadFailurePatch(
   code: number | undefined,
   currentAttempts: number,
   nowIso: string,
+  hasPriorSuccess = false,
 ): Record<string, unknown> {
   const attempts = (currentAttempts ?? 0) + 1;
   if (classifyFailure(code) === "permanent") {
+    // A permanent 131026 is only a genuine "not on WhatsApp" when we have NO proof
+    // the lead was ever reached. If it WAS reached before (whatsapp_ever_delivered,
+    // or its site was opened), this is a spurious/late/follow-up failure — do NOT
+    // regress status to no_whatsapp and do NOT clear contact_method. Just record the
+    // attempt + the blip; OMITTING `status` leaves the lead's current status intact.
+    if (hasPriorSuccess) {
+      return { whatsapp_attempts: attempts, whatsapp_delivery_status: "failed" };
+    }
     // Not a WhatsApp number → dequeue AND drop the WhatsApp tag (re-contactable by
     // SMS/call/email, so it shouldn't stay attributed to WhatsApp). Temporary-retry
     // branch below keeps status 'queued', so contact_method stays 'whatsapp' there.
