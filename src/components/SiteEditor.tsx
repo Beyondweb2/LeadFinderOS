@@ -79,6 +79,9 @@ export function SiteEditor({
   const pickerRef = useRef<SiteImagePickerHandle>(null);
   const [pickerDirty, setPickerDirty] = useState(false);
 
+  // SITE-only business name (content.businessName) — the displayed site name; NOT the
+  // lead's CRM business_name (kept separate). Editable so a long Maps name can be trimmed.
+  const [businessName, setBusinessName] = useState("");
   const [heroHeadline, setHeroHeadline] = useState("");
   const [tagline, setTagline] = useState("");
   const [about, setAbout] = useState("");
@@ -108,6 +111,7 @@ export function SiteEditor({
   // Seed local edit state from the loaded site (once per site id).
   useEffect(() => {
     const c = site.content || ({} as BarberSiteContent);
+    setBusinessName(c.businessName ?? "");
     setHeroHeadline(c.heroHeadline ?? "");
     setTagline(c.tagline ?? "");
     setAbout(c.about ?? "");
@@ -205,6 +209,9 @@ export function SiteEditor({
       // dropped.
       const base: BarberSiteContent = {
         ...site.content,
+        // SITE-only name. Guard: never persist an empty name (the type requires it and
+        // an empty value breaks the wordmark/title) — blank falls back to the current name.
+        businessName: businessName.trim() || site.content.businessName,
         heroHeadline: heroHeadline.trim(),
         tagline: tagline.trim(),
         about: about.trim(),
@@ -352,6 +359,11 @@ export function SiteEditor({
           <CardTitle className="text-lg">Text content</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Business name</Label>
+            <Input value={businessName} onChange={(e) => { setBusinessName(e.target.value); setTextDirty(true); }} />
+            <p className="text-xs text-muted-foreground">Shown across the site. If you shorten it, also check the About text below — it may repeat the original name.</p>
+          </div>
           <div className="space-y-1.5">
             <Label>Hero headline</Label>
             <Input value={heroHeadline} onChange={(e) => { setHeroHeadline(e.target.value); setTextDirty(true); }} />
