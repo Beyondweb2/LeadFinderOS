@@ -161,6 +161,9 @@ interface EnrichResult {
   lineType: string;
   imagePool: string[];
   poolBreakdown: { maps: number; facebook: number; instagram: number };
+  /** IG post images scraped this run (subset of imagePool). Surfaced separately so
+   *  the ig_images_only "Add Instagram photos" caller can merge IG-only into the pool. */
+  igPhotos: string[];
   match: { title: string | null; address: string | null; similarity: number; lowConfidence: boolean };
 }
 
@@ -212,10 +215,15 @@ Deno.serve(async (req) => {
     const existingFacebook: string = body.facebook_url ?? "";
     const existingInstagram: string = body.instagram_url ?? "";
     const website: string = body.website ?? "";
+    // ig_images_only: on-demand "Add Instagram photos" mode — resolve the IG profile
+    // (stored, else discover), scrape ONLY its post images, skip the Maps-pool + FB
+    // scrapes. Implies force (fresh discovery, not stale cache). Additive: the normal
+    // response fields are still returned; the mode only adds instagramPhotos/igFound.
+    const igImagesOnly: boolean = body.ig_images_only === true;
     // force/refresh: on-demand re-run that bypasses BOTH caches so it does fresh
     // FULL web-results social discovery (see the two `force` guards below). Default
     // off → normal cached behaviour is unchanged for every existing caller.
-    const force: boolean = body.force === true || body.refresh === true;
+    const force: boolean = body.force === true || body.refresh === true || igImagesOnly;
     if (!leadId) return json({ error: "lead_id required" }, 400);
 
     const service = createClient(
@@ -431,9 +439,11 @@ Deno.serve(async (req) => {
         let fbPhotos: string[] = [];
         let igPhotos: string[] = [];
         if (apifyToken) {
+          // ig_images_only: run ONLY the IG photo scrape (skip both FB actors) to keep
+          // it Instagram-only and cheap. Default mode is unchanged (FB + IG in parallel).
           const [fbContacts, fbP, igP] = await Promise.all([
-            fbUrl ? fetchFacebookContacts(fbUrl, { token: apifyToken, timeoutMs: 25_000 }) : Promise.resolve({ email: null, website: null }),
-            fbUrl ? fetchFacebookPhotos(fbUrl, { token: apifyToken, max: 20, timeoutMs: 25_000 }) : Promise.resolve([]),
+            !igImagesOnly && fbUrl ? fetchFacebookContacts(fbUrl, { token: apifyToken, timeoutMs: 25_000 }) : Promise.resolve({ email: null, website: null }),
+            !igImagesOnly && fbUrl ? fetchFacebookPhotos(fbUrl, { token: apifyToken, max: 20, timeoutMs: 25_000 }) : Promise.resolve([]),
             igUrl ? fetchInstagramPhotos(igUrl, { token: apifyToken, max: 20, timeoutMs: 25_000 }) : Promise.resolve([]),
           ]);
           fbEmail = fbContacts.email;
@@ -441,7 +451,9 @@ Deno.serve(async (req) => {
           igPhotos = igP;
         }
 
-        const mapsPhotos = place?.imageUrls ?? [];
+        // ig_images_only: pool is IG-only (skip the Maps photo pool build). Default
+        // mode keeps the full Maps ∪ FB ∪ IG pool exactly as before.
+        const mapsPhotos = igImagesOnly ? [] : (place?.imageUrls ?? []);
         const imagePool = Array.from(
           new Set([...mapsPhotos, ...fbPhotos, ...igPhotos]),
         ).slice(0, 40);
@@ -473,6 +485,7 @@ Deno.serve(async (req) => {
           lineType,
           imagePool,
           poolBreakdown,
+          igPhotos,
           match: {
             title: place?.title ?? null,
             address: place?.address ?? null,
@@ -513,6 +526,12 @@ Deno.serve(async (req) => {
       cached: outcome.cached,
       applied: !r.match.lowConfidence,
       ...r,
+      // Additive fields for the ig_images_only "Add Instagram photos" caller (present
+      // in every response, harmless to other callers): the IG images scraped this run,
+      // whether an IG profile was resolved, and the resolved URL.
+      instagramPhotos: r.igPhotos ?? [],
+      igFound: !!r.instagram,
+      instagramUrl: r.instagram ?? null,
     });
   } catch (e) {
     console.error("[enrich-business] error:", (e as Error).message);
