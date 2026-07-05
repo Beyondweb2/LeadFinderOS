@@ -155,3 +155,48 @@ export async function enrichSocials(params: {
     instagramSuggestion: data.instagramSuggestion ?? null,
   };
 }
+
+/** What the on-demand IG-images pull returns to the site editor's "Add Instagram
+ *  photos" button. `photos` are IG post image URLs (expiring CDN links — re-hosted
+ *  only when the operator drags one into a slot and saves). Best-effort: IG scraping
+ *  is flaky, so `photos: []` with `igFound:true` means "profile found, no images
+ *  this time", and `igFound:false` means "no Instagram profile resolved". */
+export interface InstagramPhotosResult {
+  photos: string[];
+  igFound: boolean;
+  instagramUrl: string | null;
+  limitReached?: boolean;
+}
+
+/**
+ * Thin caller of enrich-business in `ig_images_only` mode: resolves the lead's IG
+ * profile (stored `instagram_url` if any, else fresh discovery) and scrapes ONLY its
+ * post images — no Maps/FB scrape. Named to avoid clashing with the edge-side
+ * fetchInstagramPhotos (in _shared/enrichment/socialImages.ts). Used by the site
+ * editor to merge IG images into content.imagePool.
+ */
+export async function fetchInstagramPhotos(params: {
+  leadId: string;
+  placeId?: string | null;
+  instagramUrl?: string | null;
+}): Promise<InstagramPhotosResult> {
+  const { data, error } = await supabase.functions.invoke('enrich-business', {
+    body: {
+      lead_id: params.leadId,
+      place_id: params.placeId ?? null,
+      // Pass the known IG URL so the edge can scrape it directly (skips discovery).
+      instagram_url: params.instagramUrl ?? null,
+      ig_images_only: true, // IG-only scrape; implies force (fresh, cache-bypassing)
+    },
+  });
+  if (error) throw error;
+  if (data?.limit_reached) {
+    return { photos: [], igFound: false, instagramUrl: null, limitReached: true };
+  }
+  if (!data?.success) throw new Error(data?.error ?? 'Instagram enrich failed');
+  return {
+    photos: Array.isArray(data.instagramPhotos) ? data.instagramPhotos.filter((u: unknown) => typeof u === 'string') : [],
+    igFound: !!data.igFound,
+    instagramUrl: data.instagramUrl ?? null,
+  };
+}
