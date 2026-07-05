@@ -390,8 +390,8 @@ export default function AdminSiteManage() {
           The admin-only "Barber access" card is slotted between images and save. */}
       <SiteEditor
         site={site}
-        scanContext={leadInfo?.website ? {
-          website: leadInfo.website,
+        scanContext={leadInfo?.id ? {
+          website: leadInfo.website ?? "",
           placeId: leadInfo.place_id ?? null,
           businessName: leadInfo.business_name ?? null,
           leadId: leadInfo.id,

@@ -212,6 +212,10 @@ Deno.serve(async (req) => {
     const existingFacebook: string = body.facebook_url ?? "";
     const existingInstagram: string = body.instagram_url ?? "";
     const website: string = body.website ?? "";
+    // force/refresh: on-demand re-run that bypasses BOTH caches so it does fresh
+    // FULL web-results social discovery (see the two `force` guards below). Default
+    // off → normal cached behaviour is unchanged for every existing caller.
+    const force: boolean = body.force === true || body.refresh === true;
     if (!leadId) return json({ error: "lead_id required" }, 400);
 
     const service = createClient(
@@ -224,6 +228,13 @@ Deno.serve(async (req) => {
     const hasPlaceRef = !!(placeId || googleMapsUrl);
 
     const cacheKey = `${placeId || googleMapsUrl || `lead:${leadId}`}:business_enrich`;
+
+    // force (a): drop the business_enrich cache row so runEnrichSource's read misses
+    // and it re-runs fresh (cap-check + usage + cache-write all still apply, so the
+    // row is repopulated). Only on an explicit on-demand refresh; never the default.
+    if (force) {
+      try { await service.from("enrichment_cache").delete().eq("cache_key", cacheKey); } catch { /* best-effort */ }
+    }
 
     const outcome = await runEnrichSource<EnrichResult>({
       service,
@@ -244,18 +255,24 @@ Deno.serve(async (req) => {
         let place: NormalizedPlace | null = null;
         if (apifyToken && hasPlaceRef) {
           const mapsCacheKey = `${placeId || googleMapsUrl}:maps_enrich`;
-          try {
-            const { data: cachedMaps } = await service
-              .from("enrichment_cache")
-              .select("result, expires_at")
-              .eq("cache_key", mapsCacheKey)
-              .maybeSingle();
-            if (cachedMaps?.result && (!cachedMaps.expires_at || new Date(cachedMaps.expires_at as string) > new Date())) {
-              place = cachedMaps.result as NormalizedPlace;
-              console.log(`[enrich-business] Maps: reused :maps_enrich cache (no 2nd compass run) place=${place?.title ?? "∅"}`);
+          // force (b): SKIP the :maps_enrich reuse. Generate's 9a caches a photosOnly
+          // place (socials yes, but includeWebResults:false → no webResults), so reusing
+          // it would starve web-results discovery. Forcing runs our OWN mapsEnrich below
+          // with full add-ons (includeWebResults:true). Non-force path is unchanged.
+          if (!force) {
+            try {
+              const { data: cachedMaps } = await service
+                .from("enrichment_cache")
+                .select("result, expires_at")
+                .eq("cache_key", mapsCacheKey)
+                .maybeSingle();
+              if (cachedMaps?.result && (!cachedMaps.expires_at || new Date(cachedMaps.expires_at as string) > new Date())) {
+                place = cachedMaps.result as NormalizedPlace;
+                console.log(`[enrich-business] Maps: reused :maps_enrich cache (no 2nd compass run) place=${place?.title ?? "∅"}`);
+              }
+            } catch (e) {
+              console.error("[enrich-business] maps cache read failed (non-blocking):", (e as Error).message);
             }
-          } catch (e) {
-            console.error("[enrich-business] maps cache read failed (non-blocking):", (e as Error).message);
           }
           if (!place) {
             try {

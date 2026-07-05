@@ -101,3 +101,57 @@ export function useEnrichBusiness(
 
   return { enrich, enriching, limitReached };
 }
+
+/** What the socials-focused, on-demand enrich returns to a caller (the site editor's
+ *  "Enrich socials" button). `facebook`/`instagram` are the values the cascade actually
+ *  ATTACHED (location-matched / Maps-listing / name-gated) — never the unconfirmed
+ *  *Suggestion values, which are surfaced separately for the operator to eyeball. */
+export interface EnrichSocialsResult {
+  facebook: string | null;
+  instagram: string | null;
+  facebookMethod: string | null;
+  instagramMethod: string | null;
+  facebookSuggestion: { url: string; reason: string } | null;
+  instagramSuggestion: { url: string; reason: string } | null;
+  limitReached?: boolean;
+}
+
+/**
+ * Thin, lead-identity-only caller of enrich-business with `force:true` — runs FRESH
+ * FULL web-results social discovery (bypasses both caches server-side) and RETURNS the
+ * discovered socials. Distinct from useEnrichBusiness (which is lead-centric: writes the
+ * lead + toasts). Used by the site editor, which only has lead identifiers, not a full
+ * OutreachLead, and wants the returned values to fill the SITE content fields.
+ */
+export async function enrichSocials(params: {
+  leadId: string;
+  placeId?: string | null;
+  googleMapsUrl?: string | null;
+  businessName?: string | null;
+}): Promise<EnrichSocialsResult> {
+  const { data, error } = await supabase.functions.invoke('enrich-business', {
+    body: {
+      lead_id: params.leadId,
+      place_id: params.placeId ?? null,
+      google_maps_url: params.googleMapsUrl ?? null,
+      business_name: params.businessName ?? null,
+      force: true, // fresh full web-results discovery (server bypasses both caches)
+    },
+  });
+  if (error) throw error;
+  if (data?.limit_reached) {
+    return {
+      facebook: null, instagram: null, facebookMethod: null, instagramMethod: null,
+      facebookSuggestion: null, instagramSuggestion: null, limitReached: true,
+    };
+  }
+  if (!data?.success) throw new Error(data?.error ?? 'Enrich failed');
+  return {
+    facebook: data.facebook ?? null,
+    instagram: data.instagram ?? null,
+    facebookMethod: data.facebookMethod ?? null,
+    instagramMethod: data.instagramMethod ?? null,
+    facebookSuggestion: data.facebookSuggestion ?? null,
+    instagramSuggestion: data.instagramSuggestion ?? null,
+  };
+}
