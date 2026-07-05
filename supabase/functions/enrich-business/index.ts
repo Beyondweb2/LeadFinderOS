@@ -445,10 +445,16 @@ Deno.serve(async (req) => {
           // scrapes. Default mode is unchanged (FB contacts + FB photos + IG photos).
           // Per-source cap 15 in mode (top-up), 20 in the default full enrich.
           const photoMax = socialImagesOnly ? 15 : 20;
+          // On-demand social pull only: a more generous 45s timeout + one bounded
+          // retry (on 429/5xx OR abort) so a transient blip auto-recovers instead of
+          // returning empty. NOT on the generation path — generation keeps 25s + no
+          // retry (undefined) so it can't add latency / 504 pressure to 9a/9b.
+          const photoTimeoutMs = socialImagesOnly ? 45_000 : 25_000;
+          const photoRetry = socialImagesOnly ? { on429: true, onAbort: true } : undefined;
           const [fbContacts, fbP, igP] = await Promise.all([
             !socialImagesOnly && fbUrl ? fetchFacebookContacts(fbUrl, { token: apifyToken, timeoutMs: 25_000 }) : Promise.resolve({ email: null, website: null }),
-            fbUrl ? fetchFacebookPhotos(fbUrl, { token: apifyToken, max: photoMax, timeoutMs: 25_000 }) : Promise.resolve([]),
-            igUrl ? fetchInstagramPhotos(igUrl, { token: apifyToken, max: photoMax, timeoutMs: 25_000 }) : Promise.resolve([]),
+            fbUrl ? fetchFacebookPhotos(fbUrl, { token: apifyToken, max: photoMax, timeoutMs: photoTimeoutMs, retry: photoRetry }) : Promise.resolve([]),
+            igUrl ? fetchInstagramPhotos(igUrl, { token: apifyToken, max: photoMax, timeoutMs: photoTimeoutMs, retry: photoRetry }) : Promise.resolve([]),
           ]);
           fbEmail = fbContacts.email;
           fbPhotos = fbP;
