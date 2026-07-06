@@ -7,6 +7,11 @@ import { CampaignPicker } from '@/components/CampaignPicker';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { isFreshLead } from '@/lib/leadStatus';
 
 import { supabase } from '@/integrations/supabase/client';
 import { useLeadSearchContext } from '@/contexts/LeadSearchContext';
@@ -27,7 +32,7 @@ const ASK_CAMPAIGN_KEY = 'lf_ask_campaign_each_time';
 
 const Index = () => {
   const { leads, isLoading, search, retryLastSearch, exportToCsv, searchError, searchNotice, expanded, setWebsiteOverride, regionMeta, regionDowngraded } = useLeadSearchContext();
-  const { addLead: addToOutreach, isInOutreach } = useOutreach();
+  const { addLead: addToOutreach, isInOutreach, leads: crmLeads, removeFreshLead, refetch: refetchCrm } = useOutreach();
   const { searchEnrichment, patchEnrichment, getEnrichment } = useSearchEnrichment();
   const { markAsChecked, isChecked } = useCheckedBusinesses();
   const { toast } = useToast();
@@ -181,6 +186,42 @@ const Index = () => {
     if (pendingAdd?.kind === 'bulk') { bulkResolverRef.current?.({ added: 0, skipped: 0 }); bulkResolverRef.current = null; }
     setPendingAdd(null);
   }, [pendingAdd]);
+
+  // ── Remove-from-CRM (FRESH leads only) ──────────────────────────────────────
+  // Match a search result to its ACTIVE CRM lead row (mirrors addLead's dedup:
+  // google_maps_url OR business_name OR place_id). Returns whether it's in the CRM,
+  // whether it's still fresh (removable), and the row id — LeadsTable renders from this.
+  const getCrmState = useCallback((lead: Lead): { inCrm: boolean; isFresh: boolean; crmLeadId: string | null } => {
+    const match = crmLeads.find(
+      (l) =>
+        (lead.googleMapsUrl && l.google_maps_url === lead.googleMapsUrl) ||
+        l.business_name === lead.name ||
+        (lead.id && (l as { place_id?: string | null }).place_id === lead.id),
+    );
+    if (!match) return { inCrm: false, isFresh: false, crmLeadId: null };
+    return { inCrm: true, isFresh: isFreshLead(match), crmLeadId: match.id };
+  }, [crmLeads]);
+
+  // Remove confirm dialog (fresh leads). Holds the pending lead id + name.
+  const [pendingRemove, setPendingRemove] = useState<{ id: string; name: string } | null>(null);
+  const handleRequestRemove = useCallback((leadId: string, name: string) => {
+    setPendingRemove({ id: leadId, name });
+  }, []);
+  const handleConfirmRemove = useCallback(async () => {
+    const p = pendingRemove;
+    setPendingRemove(null);
+    if (!p) return;
+    const res = await removeFreshLead(p.id);
+    // Click-time guard tripped: the lead was actioned since page load. Tell the user
+    // and refresh so the button flips to the disabled "In CRM" state.
+    if (!res.ok && res.reason === 'not_fresh') {
+      toast({
+        title: 'This lead has been contacted',
+        description: 'Manage it on the Outreach page — it can no longer be removed here.',
+      });
+      await refetchCrm();
+    }
+  }, [pendingRemove, removeFreshLead, refetchCrm, toast]);
 
   // Bulk "Add all with emails": the Targeted results that have a found email AND
   // aren't already in Outreach. Recomputes as emails are found / leads are added, so
@@ -425,6 +466,8 @@ const Index = () => {
                 onExport={exportToCsv}
                 onAddToOutreach={handleRowAdd}
                 addCampaignTooltip={addCampaignTooltip}
+                getCrmState={getCrmState}
+                onRemoveFromCrm={handleRequestRemove}
                 isInOutreach={isInOutreach}
                 searchEnrichment={searchEnrichment}
                 onEnrichPatch={patchEnrichment}
@@ -484,6 +527,29 @@ const Index = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Remove-from-CRM confirm — only offered for FRESH leads. The DELETE itself is
+          re-guarded against live data in removeFreshLead, so a lead actioned since
+          page load is refused there even if this dialog was open. */}
+      <AlertDialog open={!!pendingRemove} onOpenChange={(open) => { if (!open) setPendingRemove(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove {pendingRemove?.name ?? 'this lead'} from your CRM?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This can't be undone. It's untouched (no message sent, no notes), so nothing is lost — you can add it again later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmRemove}
+              className="bg-red-600 text-white hover:bg-red-700"
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -7,6 +7,26 @@ import type { LeadStatus, OutreachLead } from '@/types/outreach';
 
 const CONTACT_METHOD_STATUSES: LeadStatus[] = ['whatsapp', 'sms', 'facebook_msg', 'sent_initial_text', 'sent_voice_note'];
 
+/** A lead is FRESH/untouched — safe to remove from the CRM (Find Leads Remove
+ *  toggle) — only when it's a brand-new add with NO action signals: still
+ *  not_contacted, never messaged/queued, no contact method, no notes, no next
+ *  action, no attempts, not tracked. SHARED so the UI (button state) and the hook
+ *  (click-time delete guard) agree exactly. Accepts a loose subset of the row. */
+export function isFreshLead(l: Partial<Pick<OutreachLead,
+  'status' | 'whatsapp_sent_at' | 'whatsapp_delivery_status' | 'whatsapp_message_id'
+  | 'contact_method' | 'notes' | 'queued_at' | 'next_action'
+  | 'last_outreach_attempt_at' | 'outreach_attempts' | 'is_potential_work'>> | null | undefined): boolean {
+  if (!l) return false;
+  return l.status === 'not_contacted'
+    && !l.whatsapp_sent_at && !l.whatsapp_delivery_status && !l.whatsapp_message_id
+    && !l.contact_method
+    && !(l.notes && l.notes.trim())
+    && !l.queued_at
+    && (l.next_action === 'none' || !l.next_action)
+    && !l.last_outreach_attempt_at && !((l.outreach_attempts ?? 0) > 0)
+    && !l.is_potential_work;
+}
+
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
